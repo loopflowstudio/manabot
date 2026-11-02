@@ -319,6 +319,7 @@ class PlayerTurnHistoryView(ProtocolModel):
     permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class LegacyCardView(ProtocolModel):

@@ -255,6 +255,12 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
         parts.append("had a land enter under their control")
     if count := history.cards_drawn:
         parts.append(f"drew {count} card{'' if count == 1 else 's'}")
+    if history.bent:
+        kinds = ("water", "earth", "fire", "air")
+        bent = ", ".join(
+            kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
+        )
+        parts.append(f"bent {bent}")
     return "; ".join(parts)
 
 

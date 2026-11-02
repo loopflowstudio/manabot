@@ -177,6 +177,7 @@
         history.permanents_sacrificed && `sacrificed ${history.permanents_sacrificed} permanent${history.permanents_sacrificed === 1 ? '' : 's'}`,
         history.land_entered && 'a land entered',
         history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
+        history.bent && `bent ${['water', 'earth', 'fire', 'air'].filter((_, index) => (history.bent ?? 0) & (1 << index)).join(', ')}`,
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}

@@ -3544,6 +3544,13 @@
           "title": "Attacked",
           "type": "boolean"
         },
+        "bent": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Bent",
+          "type": "integer"
+        },
         "cards_drawn": {
           "default": 0,
           "maximum": 4294967295,

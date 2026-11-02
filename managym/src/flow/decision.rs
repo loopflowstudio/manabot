@@ -1169,6 +1169,9 @@ impl Game {
                 if let Some(key) = payment.spends {
                     self.spend_once_each_turn(key);
                 }
+                if matches!(payment.remaining, PaymentCost::Waterbend { .. }) {
+                    self.record_bending(payment.player, crate::flow::turn::Bending::Water);
+                }
                 let effects = std::mem::take(&mut payment.if_paid);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);

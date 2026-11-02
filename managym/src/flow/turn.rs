@@ -90,6 +90,25 @@ pub struct PlayerTurnHistory {
     /// Cards this player drew ("your Nth card each turn").
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub cards_drawn: u32,
+    /// The kinds of bending this player has done: one bit per [`Bending`]
+    /// ("if you've done all four this turn").
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub bent: u8,
+}
+
+/// A kind of bending (CR 701.65–701.68 and firebending, CR 702.187); its
+/// value is its bit in [`PlayerTurnHistory::bent`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[repr(u8)]
+pub enum Bending {
+    Water = 1,
+    Earth = 2,
+    Fire = 4,
+    Air = 8,
+}
+
+impl Bending {
+    pub const ALL: [Bending; 4] = [Bending::Water, Bending::Earth, Bending::Fire, Bending::Air];
 }
 
 #[derive(Clone, Debug, serde::Serialize)]

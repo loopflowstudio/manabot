@@ -13940,3 +13940,52 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
         "under your control"
     );
 }
+
+/// Each bending draws a card; once all four are done this turn Avatar Aang
+/// transforms. Aang, Master of Elements makes spells cost {W}{U}{B}{R}{G}
+/// less (reducing generic too), and at each upkeep may transform back for
+/// 4 life, four cards, four counters and 4 damage to each opponent.
+#[test]
+fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
+    let mut s = five_color_setup(&["Avatar Aang", "Aang's Iceberg", "Gray Ogre"]);
+    let aang = s.force_permanent_on_battlefield(0, "Avatar Aang");
+    let aang_card = card_of(&s, aang);
+    let iceberg = s.force_permanent_on_battlefield(0, "Aang's Iceberg");
+    // Earth, fire and air already this turn; waterbending completes all four.
+    s.game_mut().state.turn.history[0].bent = 0b1110;
+    s.set_player_mana_pool(0, "3");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    activate(&mut s, iceberg, 0);
+    if s.action_space().kind == ActionSpaceKind::Waterbend {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    resolve_everything(&mut s);
+    assert_eq!(s.game().state.turn.history[0].bent, 0b1111);
+    assert_eq!(
+        s.zone_size(0, ZoneType::Hand),
+        hand + 1,
+        "draws for the waterbend"
+    );
+    assert_eq!(
+        s.game().state.cards[aang_card].name,
+        "Aang, Master of Elements"
+    );
+
+    s.set_player_mana_pool(0, "");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    assert!(
+        castable(&mut s, ogre),
+        "{{2}}{{R}} less {{W}}{{U}}{{B}}{{R}}{{G}} is free"
+    );
+
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let (life, hand) = (s.life(0), s.zone_size(0, ZoneType::Hand));
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(s.game().state.cards[aang_card].name, "Avatar Aang");
+    assert_eq!(s.life(0), life + 4);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 4);
+    assert_eq!(counters_of(&s, aang, CounterKind::PlusOnePlusOne), 4);
+    s.assert_life(1, 16);
+}

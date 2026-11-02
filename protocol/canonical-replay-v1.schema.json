@@ -1730,6 +1730,13 @@
           "description": "Declared one or more attackers (raid; CR 508.1). Creatures put onto\nthe battlefield attacking were never declared and do not count.",
           "type": "boolean"
         },
+        "bent": {
+          "description": "The kinds of bending this player has done: one bit per [`Bending`]\n(\"if you've done all four this turn\").",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
         "cards_drawn": {
           "description": "Cards this player drew (\"your Nth card each turn\").",
           "type": "integer",

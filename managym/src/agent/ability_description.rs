@@ -136,6 +136,10 @@ fn condition_description(condition: &TriggerCondition) -> String {
             subject_description(subject)
         ),
         TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),
+        TriggerCondition::BeginningOfEachUpkeep => "At the beginning of each upkeep".into(),
+        TriggerCondition::YouBend => {
+            "Whenever you waterbend, earthbend, firebend, or airbend".into()
+        }
         TriggerCondition::BeginningOfYourCombat => "At the beginning of your combat".into(),
         TriggerCondition::BeginningOfYourEndStep => "At the beginning of your end step".into(),
         TriggerCondition::YourAttackingCreatureTriggers => "Whenever a creature you control attacking causes a triggered ability of that creature to trigger".into(),
@@ -209,6 +213,9 @@ fn condition_text(condition: &Condition) -> String {
             format!("you have {count} or more unspent mana")
         }
         Condition::AttackedThisTurn => "you attacked this turn".into(),
+        Condition::BentAllFourThisTurn => {
+            "you've waterbent, earthbent, firebent and airbent this turn".into()
+        }
         Condition::LandEnteredThisTurn => {
             "a land entered the battlefield under your control this turn".into()
         }

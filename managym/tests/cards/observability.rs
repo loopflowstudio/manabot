@@ -42,8 +42,8 @@ use managym::{
             PERMANENT_DIM, PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX,
             PERMANENT_GRANTED_LAND_INDEX, PERMANENT_ONCE_EACH_TURN_INDEX,
             PERMANENT_TIMESTAMP_INDEX, PLAYER_ADDITIONAL_COMBATS_INDEX, PLAYER_ATTACKED_INDEX,
-            PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_EXTRA_TURNS_INDEX, PLAYER_HAND_ONLY_INDEX,
-            PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
+            PLAYER_BENT_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_EXTRA_TURNS_INDEX,
+            PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
             PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
             PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
         },
@@ -377,7 +377,7 @@ fn affected_witnesses() -> [AffectedSpec; 8] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 20] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 21] {
     let TurnState {
         active_player: _,
         turn_number: _,
@@ -401,6 +401,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 20] {
         permanents_sacrificed: _,
         land_entered: _,
         cards_drawn: _,
+        bent: _,
     } = history[0];
     [
         ("active_player", Seen::Player(1, 2)),
@@ -442,6 +443,10 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 20] {
         (
             "history.cards_drawn",
             Seen::Player(PLAYER_CARDS_DRAWN_INDEX, PLAYER_CARDS_DRAWN_INDEX + 1),
+        ),
+        (
+            "history.bent",
+            Seen::Player(PLAYER_BENT_INDEX, PLAYER_BENT_INDEX + 4),
         ),
         (
             "history.attacked",
@@ -1025,6 +1030,8 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         }
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
+        TriggerCondition::BeginningOfEachUpkeep => "TriggerCondition::BeginningOfEachUpkeep",
+        TriggerCondition::YouBend => "TriggerCondition::YouBend",
         TriggerCondition::YouCastNthSpellThisTurn { .. } => {
             "TriggerCondition::YouCastNthSpellThisTurn"
         }
@@ -1099,6 +1106,8 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::YourAttackingCreatureTriggers,
         TriggerCondition::Chapter { chapter: 2 },
         TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
+        TriggerCondition::BeginningOfEachUpkeep,
+        TriggerCondition::YouBend,
         TriggerCondition::WhileSourceAttacking {
             condition: Box::new(TriggerCondition::YouCastSpell {
                 predicate: CardPredicate::default(),
@@ -1123,6 +1132,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::ControlsMatching { .. } => "Condition::ControlsMatching",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
+        Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
         Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
         Condition::AnyOf(_) => "Condition::AnyOf",
@@ -1154,6 +1164,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
+        Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
@@ -1371,6 +1382,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "war_balloon_flies_once_it_has_three_fire_counters",
         ),
+        StaticAbility::SpellsCostLessMana(_) => witnessed(
+            "StaticAbility::SpellsCostLessMana",
+            Seen::Actions("casts are offered at the reduced cost"),
+            "Aang, Master of Elements",
+            "tla",
+            "avatar_aang_draws_on_each_bending_and_transforms_after_all_four",
+        ),
         StaticAbility::UntapsDuringOtherUntapSteps => witnessed(
             "StaticAbility::UntapsDuringOtherUntapSteps",
             Seen::Via("the permanent's tapped column after another player's untap step"),
@@ -1544,6 +1562,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         }),
         StaticAbility::CreatureWithNamesakes(8),
         StaticAbility::UntapsDuringOtherUntapSteps,
+        StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
             types: vec![CardType::Land],
@@ -1987,6 +2006,7 @@ fn turn_history_moves_each_players_named_column() {
         match field {
             "turn_number" => turn.turn_number += 1,
             "history.cards_drawn" => history.cards_drawn += 1,
+            "history.bent" => history.bent = 0b0101,
             "history.attacked" => history.attacked = true,
             "history.permanents_sacrificed" => history.permanents_sacrificed = 2,
             "history.land_entered" => history.land_entered = true,
@@ -2494,6 +2514,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         permanents_sacrificed => [column(Player, PLAYER_SACRIFICED_INDEX)],
         land_entered => [column(Player, PLAYER_LAND_ENTERED_INDEX)],
         cards_drawn => [column(Player, PLAYER_CARDS_DRAWN_INDEX)],
+        bent => [Columns(Player, PLAYER_BENT_INDEX, 4)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, 0, 7)],

@@ -139,6 +139,11 @@ pub enum GameEvent {
         total: i32,
         by: PlayerId,
     },
+    /// A player bent (waterbend, earthbend, firebend or airbend).
+    Bent {
+        player: PlayerId,
+        kind: crate::flow::turn::Bending,
+    },
     /// A player scried (CR 701.22).
     Scried {
         player: PlayerId,

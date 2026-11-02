@@ -85,3 +85,8 @@ here; main carries their outcomes.
 - Fire Lord Sozin: targets are chosen as the trigger goes on the stack and X
   is then their total mana value, paid or declined at resolution — the
   reverse of "pay {X}, when you do choose targets", with the same outcomes.
+- Bending events: "you waterbend" fires once per paid waterbend cost (spell,
+  activation or resolution payment), "you firebend" once per resolved
+  until-end-of-combat mana (firebending's only source), "you earthbend" and
+  "you airbend" once per resolved instruction. The turn history keeps the four
+  kinds as bits (`PlayerTurnHistory.bent`, four player columns).

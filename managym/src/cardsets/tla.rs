@@ -67,6 +67,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         allies_at_last(),
         appa_loyal_sky_bison(),
         appa_steadfast_guardian(),
+        avatar_aang(),
         avatar_destiny(),
         avatar_enthusiasts(),
         avatar_s_wrath(),
@@ -1142,6 +1143,96 @@ fn appa_steadfast_guardian() -> CardDefinition {
             },
         ],
         text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn avatar_aang() -> CardDefinition {
+    let text_box = "Flying, firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhenever you waterbend, earthbend, firebend, or airbend, draw a card. Then if you've done all four this turn, transform Avatar Aang.";
+    let back_text = "Flying\nSpells you cast cost {W}{U}{B}{R}{G} less to cast. (This can reduce generic costs.)\nAt the beginning of each upkeep, you may transform Aang, Master of Elements. If you do, you gain 4 life, draw four cards, put four +1/+1 counters on him, and he deals 4 damage to each opponent.";
+
+    CardDefinition {
+        key: "tla.avatar_aang",
+        scryfall_id: "fe29e909-50e9-4f04-b1a3-2cc5d7e3efe8",
+        name: "Avatar Aang".into(),
+        mana_cost: Some(ManaCost::parse("{R}{G}{W}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+        power: Some(4),
+        toughness: Some(4),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RR"),
+                    until_end_of_combat: true,
+                }],
+            },
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouBend,
+                effects: vec![
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                    Effect::If {
+                        condition: Condition::BentAllFourThisTurn,
+                        then: vec![Effect::TransformSource],
+                        otherwise: vec![],
+                    },
+                ],
+            },
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Aang, Master of Elements".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into(), "Ally".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            statics: vec![StaticAbility::SpellsCostLessMana(ManaCost::parse(
+                "{W}{U}{B}{R}{G}",
+            ))],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BeginningOfEachUpkeep,
+                effects: vec![Effect::Modal {
+                    modes: vec![
+                        vec![
+                            Effect::TransformSource,
+                            Effect::GainLife { amount: 4 },
+                            Effect::DrawCards {
+                                count: EffectValue::Fixed(4),
+                            },
+                            Effect::PutCountersOnSource {
+                                count: EffectValue::Fixed(4),
+                                kind: CounterKind::PlusOnePlusOne,
+                            },
+                            Effect::DealDamageToPlayer {
+                                player: PlayerSelector::EachOpponent,
+                                amount: EffectValue::Fixed(4),
+                            },
+                        ],
+                        vec![],
+                    ],
+                }],
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
         ..Default::default()
     }
 }

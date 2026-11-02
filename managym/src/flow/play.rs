@@ -202,6 +202,10 @@ impl Game {
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
             for ability in &self.state.cards[permanent.card].statics {
+                if let StaticAbility::SpellsCostLessMana(reduction) = ability {
+                    cost = cost.reduced_by(reduction);
+                    continue;
+                }
                 let StaticAbility::SpellsCostLess(reduction) = ability else {
                     continue;
                 };
@@ -1575,6 +1579,7 @@ impl Game {
         alternative: Option<ManaCost>,
         waterbent: u8,
     ) -> Result<(), AgentError> {
+        let waterbend = self.payment_waterbend_generic(player, &payment) > 0;
         let cost = self
             .payment_mana_cost(player, &payment, alternative.as_ref())
             .reduced_generic(waterbent);
@@ -1584,6 +1589,9 @@ impl Game {
         self.spend_mana(player, &cost)?;
         if let Some(selected) = sacrifice {
             self.sacrifice_permanent(selected);
+        }
+        if waterbend {
+            self.record_bending(player, crate::flow::turn::Bending::Water);
         }
         self.pending_choice = None;
         match payment {

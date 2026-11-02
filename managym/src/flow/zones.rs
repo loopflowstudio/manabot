@@ -676,6 +676,13 @@ impl Game {
         true
     }
 
+    /// `player` bent: record the kind in their turn history and emit the
+    /// event "whenever you waterbend, earthbend, firebend, or airbend" reads.
+    pub(crate) fn record_bending(&mut self, player: PlayerId, kind: crate::flow::turn::Bending) {
+        self.state.turn.history[player.0].bent |= kind as u8;
+        self.emit(GameEvent::Bent { player, kind });
+    }
+
     /// Transform a double-faced permanent (CR 701.28a): it turns over and
     /// stays the same object, keeping its counters, damage, attachments and
     /// combat status (CR 712.9). Returns false for anything else, which

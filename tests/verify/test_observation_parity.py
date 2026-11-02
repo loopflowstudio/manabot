@@ -491,7 +491,7 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     assert effects[2, FACT_SOURCE_INDEX] == theirs.registry_key + 1
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
-        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 2, 1],
+        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1],
     )
     assert actual["agent_cards"][0, CARD_DIM - 1] == 1
     v4 = env.encode_observation(obs, 4)

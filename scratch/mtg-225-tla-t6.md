@@ -51,7 +51,7 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | The Rise of Sozin // Fire Lord Sozin | supported; name choice as a resolution Modal |
 | Aang, Swift Savior // Aang and La | supported; airbends spells, transforms in place |
 | Aang, at the Crossroads // Aang, Destined Savior | supported; next-upkeep delayed transform |
-| Avatar Aang // Aang, Master of Elements | |
+| Avatar Aang // Aang, Master of Elements | supported; bending events and four-kind history |
 | Bender's Waterskin | supported |
 | Bumi, Unleashed | supported; additional land-creature combat |
 | Koh, the Face Stealer | |

@@ -965,8 +965,9 @@ impl Game {
                 match self.present_primary_target(frame) {
                     Some(Target::Permanent(id)) => self.airbend_permanent(id),
                     Some(Target::StackSpell(card)) => self.airbend_spell(card),
-                    _ => {}
+                    _ => return None,
                 }
+                self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
                 None
             }
             Effect::AirbendAll { predicate } => {
@@ -981,8 +982,12 @@ impl Game {
                         Some(*id) != exempt && self.permanent_matches_predicate(*id, predicate)
                     })
                     .collect();
+                let bent = !chosen.is_empty();
                 for id in chosen {
                     self.airbend_permanent(id);
+                }
+                if bent {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
                 }
                 None
             }
@@ -1913,6 +1918,7 @@ impl Game {
                 ) {
                     return None;
                 }
+                self.record_bending(frame.controller, crate::flow::turn::Bending::Earth);
                 // Delayed trigger: when it dies or is exiled, return it to
                 // the battlefield tapped (CR 603.7 one-shot).
                 self.add_delayed_trigger(DelayedTrigger {
@@ -2015,6 +2021,10 @@ impl Game {
                     player.combat_mana_pool.add(mana);
                 } else {
                     player.mana_pool.add(mana);
+                }
+                // Mana until end of combat is firebending's (CR 702.187a).
+                if *until_end_of_combat {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
                 }
                 None
             }

@@ -1158,6 +1158,9 @@ pub struct PyPlayerTurnHistory {
     pub land_entered: bool,
     #[pyo3(get, set)]
     pub cards_drawn: u32,
+    /// Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
+    #[pyo3(get, set)]
+    pub bent: u8,
 }
 
 #[cfg(feature = "python")]
@@ -1177,6 +1180,7 @@ impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
             permanents_sacrificed: value.permanents_sacrificed,
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
+            bent: value.bent,
         }
     }
 }
@@ -1189,6 +1193,7 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             permanents_sacrificed: value.permanents_sacrificed,
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
+            bent: value.bent,
         }
     }
 }

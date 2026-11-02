@@ -69,8 +69,10 @@ PLAYER_ATTACKED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
 PLAYER_SACRIFICED_INDEX = PLAYER_ATTACKED_INDEX + 1
 PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
 PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
+# Bending done this turn: water, earth, fire, air.
+PLAYER_BENT_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
 # Extra turns this player will take after this one.
-PLAYER_EXTRA_TURNS_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
+PLAYER_EXTRA_TURNS_INDEX = PLAYER_BENT_INDEX + 4
 # Additional combat phases still to come this turn (active player's row).
 PLAYER_ADDITIONAL_COMBATS_INDEX = PLAYER_EXTRA_TURNS_INDEX + 1
 PLAYER_DIM = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
@@ -651,6 +653,8 @@ class ObservationEncoder:
             arr[PLAYER_SACRIFICED_INDEX] = float(history.permanents_sacrificed) / 10.0
             arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
             arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
+            for index in range(4):
+                arr[PLAYER_BENT_INDEX + index] = float(bool(history.bent & (1 << index)))
             arr[PLAYER_EXTRA_TURNS_INDEX] = float(player.extra_turns)
             arr[PLAYER_ADDITIONAL_COMBATS_INDEX] = float(player.additional_combats)
 

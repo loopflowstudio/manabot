@@ -211,6 +211,25 @@ impl ManaCost {
 
     /// Reduce the generic component by `amount`, floored at zero
     /// (affinity-style cost reduction, waterbend payments).
+    /// This cost less `reduction` (CR 601.2f): each colored symbol removes
+    /// one of that color, or one generic when none of that color is left;
+    /// generic in `reduction` removes generic.
+    pub fn reduced_by(&self, reduction: &ManaCost) -> ManaCost {
+        let mut out = self.clone();
+        let generic = Color::Generic as usize;
+        for (slot, count) in reduction.cost.iter().enumerate() {
+            for _ in 0..*count {
+                if slot != generic && out.cost[slot] > 0 {
+                    out.cost[slot] -= 1;
+                } else {
+                    out.cost[generic] = out.cost[generic].saturating_sub(1);
+                }
+            }
+        }
+        out.update_mana_value();
+        out
+    }
+
     pub fn reduced_generic(&self, amount: u8) -> ManaCost {
         self.with_generic(self.generic().saturating_sub(amount))
     }

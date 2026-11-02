@@ -1366,7 +1366,7 @@ impl Observation {
     pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
-            GameEvent::PermanentSacrificed { .. } => Vec::new(),
+            GameEvent::PermanentSacrificed { .. } | GameEvent::Bent { .. } => Vec::new(),
             GameEvent::CardRevealed { owner, definition } => {
                 let mut data =
                     Self::build_event_data(EventType::CardRevealed, None, None, 0, Some(*owner));

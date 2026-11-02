@@ -128,6 +128,11 @@ pub enum TriggerCondition {
     },
     /// "At the beginning of your upkeep."
     BeginningOfYourUpkeep,
+    /// "At the beginning of each upkeep."
+    BeginningOfEachUpkeep,
+    /// "Whenever you waterbend, earthbend, firebend, or airbend": once per
+    /// bending instruction or waterbend payment.
+    YouBend,
     BeginningOfYourCombat,
     BeginningOfYourEndStep,
     /// "Whenever a creature you control attacking causes a triggered ability
@@ -209,6 +214,9 @@ pub enum Condition {
     AttackedThisTurn,
     /// "if a land entered the battlefield under your control this turn".
     LandEnteredThisTurn,
+    /// "if you've done all four this turn": waterbent, earthbent, firebent
+    /// and airbent.
+    BentAllFourThisTurn,
     /// "if you've sacrificed `count` or more permanents this turn".
     SacrificedThisTurnAtLeast {
         count: u32,
@@ -287,6 +295,7 @@ impl Condition {
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
+            | Condition::BentAllFourThisTurn
             | Condition::SacrificedThisTurnAtLeast { .. } => false,
         }
     }

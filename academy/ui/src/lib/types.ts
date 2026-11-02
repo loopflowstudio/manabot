@@ -144,6 +144,8 @@ export interface PlayerTurnHistory {
   permanents_sacrificed?: number;
   land_entered?: boolean;
   cards_drawn?: number;
+  /** Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8. */
+  bent?: number;
 }
 
 export interface PlayerState {

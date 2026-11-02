@@ -547,6 +547,8 @@ class PlayerTurnHistory:
     permanents_sacrificed: int
     land_entered: bool
     cards_drawn: int
+    # Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
+    bent: int
 
 class RestrictedMana:
     spells: List[str]

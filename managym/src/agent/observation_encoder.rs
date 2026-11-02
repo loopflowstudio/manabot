@@ -27,7 +27,9 @@ pub const PLAYER_ATTACKED_INDEX: usize = PLAYER_KEEPS_RED_MANA_INDEX + 1;
 pub const PLAYER_SACRIFICED_INDEX: usize = PLAYER_ATTACKED_INDEX + 1;
 pub const PLAYER_LAND_ENTERED_INDEX: usize = PLAYER_SACRIFICED_INDEX + 1;
 pub const PLAYER_CARDS_DRAWN_INDEX: usize = PLAYER_LAND_ENTERED_INDEX + 1;
-pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
+/// Bending done this turn: water, earth, fire, air.
+pub const PLAYER_BENT_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
+pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_BENT_INDEX + 4;
 pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
 pub const PLAYER_DIM: usize = PLAYER_ADDITIONAL_COMBATS_INDEX + 1;
 pub const LEGACY_CARD_DIM: usize = 41;
@@ -797,6 +799,9 @@ fn encode_player_features(
         out[PLAYER_SACRIFICED_INDEX] = history.permanents_sacrificed as f32 / 10.0;
         out[PLAYER_LAND_ENTERED_INDEX] = bool_to_f32(history.land_entered);
         out[PLAYER_CARDS_DRAWN_INDEX] = history.cards_drawn as f32 / 10.0;
+        for (index, kind) in crate::flow::turn::Bending::ALL.into_iter().enumerate() {
+            out[PLAYER_BENT_INDEX + index] = bool_to_f32(history.bent & kind as u8 != 0);
+        }
         out[PLAYER_EXTRA_TURNS_INDEX] = player.extra_turns as f32;
         out[PLAYER_ADDITIONAL_COMBATS_INDEX] = player.additional_combats as f32;
     }

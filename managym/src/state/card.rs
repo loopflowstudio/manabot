@@ -639,6 +639,10 @@ pub enum StaticAbility {
     /// A triggered ability this card grants while on the battlefield
     /// ("Other Allies you control have prowess").
     TriggeredGrant(StaticTriggeredGrant),
+    /// "Spells you cast cost [mana] less to cast" (CR 601.2f): each colored
+    /// symbol reduces that color, or generic mana when the cost has none of
+    /// it ("This can reduce generic costs").
+    SpellsCostLessMana(ManaCost),
     /// "Untap this during each other player's untap step" (CR 502.3): it
     /// untaps in its controller's opponents' untap steps as well as theirs.
     UntapsDuringOtherUntapSteps,

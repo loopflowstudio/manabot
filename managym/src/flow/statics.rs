@@ -1069,6 +1069,7 @@ impl Game {
             }
             Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
+            Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
             }

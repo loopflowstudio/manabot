@@ -4513,5 +4513,35 @@
     "colors": [
       "B"
     ]
+  },
+  "Avatar Aang": {
+    "name": "Avatar Aang",
+    "mana_cost": "{R}{G}{W}{U}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Transform",
+      "Firebending"
+    ],
+    "oracle_text": "Flying, firebending 2\nWhenever you waterbend, earthbend, firebend, or airbend, draw a card. Then if you've done all four this turn, transform Avatar Aang.",
+    "colors": [
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Aang, Master of Elements": {
+    "name": "Aang, Master of Elements",
+    "type_line": "Legendary Creature — Avatar Ally",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nSpells you cast cost {W}{U}{B}{R}{G} less to cast. (This can reduce generic costs.)\nAt the beginning of each upkeep, you may transform Aang, Master of Elements. If you do, you gain 4 life, draw four cards, put four +1/+1 counters on him, and he deals 4 damage to each opponent.",
+    "colors": []
   }
 }

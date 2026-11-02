@@ -536,6 +536,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "permanents_sacrificed": "sacrificed",
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
+        "bent": "bent",
     },
     managym.Player: {
         "id": "the player's alias",

@@ -1234,6 +1234,15 @@ impl Game {
                     && self.state.card_to_permanent[*card]
                         .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
             }
+            (
+                TriggerCondition::BeginningOfEachUpkeep,
+                GameEvent::StepStarted {
+                    step: StepKind::Upkeep,
+                },
+            ) => true,
+            (TriggerCondition::YouBend, GameEvent::Bent { player, .. }) => {
+                *player == source_controller
+            }
             (TriggerCondition::WhileSourceAttacking { condition }, _) => {
                 self.state.card_to_permanent[source_card]
                     .and_then(|id| self.state.permanents[id].as_ref())
