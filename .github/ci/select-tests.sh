@@ -2,7 +2,7 @@
 # Select independent CI jobs from NUL-delimited changed paths. Unknown inputs
 # run everything; docs and unrelated packages do not fan out into browser tests.
 set -euo pipefail
-jobs=(rust python_unit integration academy_integration protocol_v1 semantic_conformance frontend clean_machine_play)
+jobs=(rust python_unit integration academy_integration protocol_v1 semantic_conformance frontend clean_machine_play engine_budget)
 for job in "${jobs[@]}"; do declare "$job=false"; done
 select_jobs() { local job; for job in "$@"; do printf -v "$job" true; done; }
 all() { select_jobs "${jobs[@]}"; }
@@ -17,6 +17,9 @@ else
         all ;;
       .github/workflows/manabot-integration.yml) select_jobs integration ;;
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
+      .github/workflows/engine-budget.yml|managym/examples/bench_*.rs|managym/examples/curated/*|managym/perf/*)
+        select_jobs engine_budget ;;
+      scripts/engine_budget.py) select_jobs python_unit engine_budget ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
       scripts/audit_rules.py|docs/rules/audit-2026-10/*)
         select_jobs python_unit ;;

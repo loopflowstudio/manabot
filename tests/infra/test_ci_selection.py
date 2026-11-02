@@ -19,6 +19,7 @@ JOBS = {
     "semantic_conformance",
     "frontend",
     "clean_machine_play",
+    "engine_budget",
 }
 
 
@@ -67,6 +68,12 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
         (".github/workflows/ci.yml", JOBS),
         (".github/ci/select-tests.sh", JOBS),
         (".github/workflows/manabot-integration.yml", {"integration"}),
+        (".github/workflows/engine-budget.yml", {"engine_budget"}),
+        ("managym/examples/bench_steps.rs", {"engine_budget"}),
+        ("managym/examples/curated/mod.rs", {"engine_budget"}),
+        ("managym/perf/baseline.json", {"engine_budget"}),
+        ("managym/examples/export_study_index.rs", JOBS),
+        ("scripts/engine_budget.py", {"python_unit", "engine_budget"}),
         ("unknown-new-package/code.py", JOBS),
     ],
 )

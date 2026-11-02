@@ -1,0 +1,104 @@
+name: Engine Budget
+
+# Release-build engine benchmarks on a runner of their own, so nothing else on
+# the machine shares the measurement: Search-64 replies (bench_search) and
+# headless steps per second (bench_steps) against managym/perf/baseline.json.
+# CI calls this for pull requests and main; a manual dispatch with `measure`
+# benchmarks another commit with this workflow's benchmarks and records it
+# without comparing, which is how a baseline or a historical commit is
+# measured on the same runner profile (docs/development.md, Engine
+# performance budget).
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      measure:
+        description: Commit or branch to measure with this ref's benchmarks (empty compares this ref against its baseline)
+        default: ''
+
+jobs:
+  budget:
+    name: Engine Budget
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      MEASURE: ${{ inputs.measure || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the commit to measure
+        if: env.MEASURE != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MEASURE }}
+          path: measured
+
+      - name: Carry this ref's benchmarks into the measured tree
+        if: env.MEASURE != ''
+        run: |
+          rm -rf measured/managym/examples/curated
+          cp -R managym/examples/curated measured/managym/examples/curated
+          cp managym/examples/bench_search.rs managym/examples/bench_steps.rs measured/managym/examples/
+          echo "ENGINE_DIR=measured/managym" >> "$GITHUB_ENV"
+          echo "MEASURED_COMMIT=$(git -C measured rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Use this ref
+        if: env.MEASURE == ''
+        run: |
+          echo "ENGINE_DIR=managym" >> "$GITHUB_ENV"
+          echo "MEASURED_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ env.ENGINE_DIR }} -> target
+          key: engine-budget
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+          enable-cache: false
+
+      - name: Build benchmarks
+        run: cargo build --release --locked --manifest-path "$ENGINE_DIR/Cargo.toml" --example bench_search --example bench_steps
+
+      - name: Headless steps per second
+        run: |
+          mkdir -p .cache/engine-budget
+          "$ENGINE_DIR/target/release/examples/bench_steps" | tee .cache/engine-budget/bench_steps.jsonl
+
+      - name: Search-64 replies
+        run: '"$ENGINE_DIR/target/release/examples/bench_search" | tee .cache/engine-budget/bench_search.jsonl'
+
+      - name: Record the measurement
+        run: |
+          {
+            echo "## Engine budget measurement"
+            echo
+            echo "Commit \`$MEASURED_COMMIT\` on \`${RUNNER_OS}\` \`$(uname -m)\`, $(nproc) CPUs, $(lscpu | sed -n 's/^Model name: *//p' | head -1)"
+            echo
+            echo '```'
+            cat .cache/engine-budget/bench_steps.jsonl .cache/engine-budget/bench_search.jsonl
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare against the committed baseline
+        if: env.MEASURE == ''
+        run: |
+          uv run --no-project --python 3.12 python scripts/engine_budget.py compare \
+            --search .cache/engine-budget/bench_search.jsonl \
+            --steps .cache/engine-budget/bench_steps.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-budget${{ env.MEASURE != '' && format('-{0}', env.MEASURED_COMMIT) || '' }}
+          path: .cache/engine-budget
+          if-no-files-found: warn

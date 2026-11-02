@@ -149,6 +149,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v1` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
+| Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps` against `managym/perf/baseline.json`) |
 
 Semantic-kernel conformance is recorded as manifest seeds plus a per-case
 `trace_sha256` in `evidence.json` ([conformance](../conformance/README.md)). A
@@ -177,6 +178,7 @@ neither skipped nor succeeded.
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/` | Python unit, integration |
+| `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 
@@ -190,6 +192,49 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 `card-evaluation.yml` (manual) verifies 1024 native games with
 `manabot.eval.cards verify` (see [evaluation](evaluation.md)).
 `release.yml` is described next.
+
+## Engine performance budget
+
+`Engine Budget` builds two release benchmarks on a GitHub-hosted runner of
+their own and compares them with `managym/perf/baseline.json`:
+
+- `managym/examples/bench_search.rs`: Search-64 replies (16 worlds x 4
+  rollouts) on the curated UR Lessons versus GW Allies matchup, seeds 1-3,
+  40 decisions each. Budget lines: worst reply, summed total, and the search
+  digest of each seed.
+- `managym/examples/bench_steps.rs`: headless steps per second, 512 seeded
+  games of the same matchup with both seats uniformly random over the legal
+  actions and native trivial-decision skipping. Budget lines: steps per
+  second, step count and the digest over every decision.
+
+A timing more than 10% slower than the baseline, or a digest that differs,
+fails the PR. A speedup that changes search results therefore fails until the
+baseline moves. Timings are compared only within the runner profile named in
+the baseline; a laptop figure is never a baseline, and the job's step summary
+and `engine-budget` artifact keep every measurement.
+
+**Moving the baseline.** A PR that changes rules reaching these decks, or
+accepts a measured cost, re-records the file from a CI measurement and says
+why in the commit:
+
+```bash
+gh workflow run engine-budget.yml --ref <branch> -f measure=<commit>   # or let the PR's Engine Budget run measure
+gh run download <run-id> --name engine-budget --dir .cache/engine-budget
+uv run scripts/engine_budget.py record \
+  --search .cache/engine-budget/bench_search.jsonl \
+  --steps .cache/engine-budget/bench_steps.jsonl \
+  --commit <commit> --date <YYYY-MM-DD> \
+  --run https://github.com/loopflowstudio/manabot/actions/runs/<run-id> \
+  --reason "<why the budget moves>"
+```
+
+The `measure` dispatch input benchmarks any commit reachable from origin with
+the dispatched ref's benchmarks and records the result in the step summary
+without comparing, so a historical commit can be measured on the same profile.
+Run the benchmarks locally only as a smoke check:
+`cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
+(and `bench_steps`). Never add load to make a measurement move
+([TESTING.md](../TESTING.md)).
 
 ## Releases
 

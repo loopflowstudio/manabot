@@ -1,0 +1,37 @@
+{
+  "runner": "provisional: local macOS laptop under load, release",
+  "tolerance": 0.1,
+  "recorded": {
+    "commit": "4c8324a59516b9738fe55f925ea35ecbb28e369c",
+    "date": "2026-11-02",
+    "run": "https://github.com/loopflowstudio/manabot/actions",
+    "reason": "Provisional local smoke figures (loaded laptop); replaced by the CI runner measurement before review."
+  },
+  "bench_search": {
+    "worst_s": 12.229,
+    "total_s": 280.926,
+    "seeds": {
+      "1": {
+        "worst_s": 12.229,
+        "total_s": 116.883,
+        "digest": 3929171216812047577
+      },
+      "2": {
+        "worst_s": 7.685,
+        "total_s": 77.756,
+        "digest": 4710253461277237463
+      },
+      "3": {
+        "worst_s": 8.464,
+        "total_s": 86.287,
+        "digest": 8287291947930727881
+      }
+    }
+  },
+  "bench_steps": {
+    "steps_per_s": 8754.5,
+    "steps": 99923,
+    "games": 512,
+    "digest": 12247096877573042301
+  }
+}

@@ -464,3 +464,29 @@ requirement, it needs its own Task.
   state write already passes `TrackedState::deref_mut`, so a derived index
   cannot drift, and the measured cost is small. Revisit only if profiles show
   index rebuilds dominating.
+
+## MTG-237 (engine budget), 2026-11-02 — headless choices
+
+- The headless steps/s workload is native (`Env::step`, both seats uniformly
+  random over legal actions, 512 seeded games, skip_trivial on), not the
+  rul-9 Python semantic-Command path (its runner was deleted in #343). It
+  measures the engine the training environment steps, builds in the same
+  cargo invocation as `bench_search` and needs no extension build in the job.
+  Its steps/s is therefore not comparable with rul-9's 588.5 (Python,
+  semantic Commands); the baseline is its own.
+- Digests are asserted identical for both workloads, so any rules change
+  reaching the curated decks (or the deal) moves the baseline deliberately
+  with a reason, as the review asked for search results. The random-play
+  digest is more sensitive than the search digest: it sees every legal-action
+  count. Expected cost: one `record` per rules PR touching these cards.
+- The budget runs as a `ci.yml` job via `workflow_call` so the Tests Result
+  aggregate owns it and docs-only PRs skip it; every job is its own VM, which
+  is the quiet runner. `ubuntu-24.04` is pinned rather than `ubuntu-latest` so
+  the baseline's hardware profile does not move with the label.
+- A laptop figure is never the baseline: timings are only compared within the
+  runner profile named in the file. GitHub-hosted runner generations vary, so
+  the 10% tolerance may flake; if it does, the tolerance or the measure (best
+  of N) moves with evidence, not by widening silently.
+- T6's head (`2c1ba169f`) is unpushed, so measuring it on CI needs its commit
+  reachable from origin; pushed as a plain ref under `refs/engine-budget/`
+  for the dispatch and deleted afterwards (not a branch, no PR).
