@@ -538,3 +538,9 @@ requirement, it needs its own Task.
   contains the `reference/` run, which `record` ignores; `record` takes the
   tolerance from the committed file, which always exists, rather than
   defaulting it.
+- Third concept review (2026-11-02): running the candidate before the
+  reference on the one VM is assumed not to bias the comparison beyond what
+  the 10% tolerance absorbs (two runs of one engine on separate EPYC 7763
+  machines agreed within 2.5%); the order exists so a run whose reference
+  cannot build with the change's benchmarks still records its candidate.
+  Reverse it only with evidence that order matters.

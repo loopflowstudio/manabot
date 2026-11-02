@@ -56,7 +56,7 @@ not a latency budget.
   and costs one recording per such PR; accepted as the price of (3). A kept
   speedup is the third reason to move the reference (concept review).
 
-## Concept reviews (2026-11-02, headless; 5c8b0f2db and c8cbc5421)
+## Concept reviews (2026-11-02, headless; 5c8b0f2db, c8cbc5421 and the third below)
 
 Source: Jack Heart's Performance section ("the PR fails if worst reply or
 total exceeds the recorded baseline by more than 10%; a PR that moves the
@@ -81,6 +81,31 @@ settled by the accepted decisions, with no open product choice:
   recorded commit are one durable commit. Detect Changes still diffs the
   merge commit. The `measure` and push paths were never affected, which is
   why the T4 recording and the validating dispatch passed.
+- Third (after a91e930ef; next implement direction, not yet in code): the
+  job builds and runs the reference *before* it runs the candidate, so when
+  the reference commit does not compile with this ref's benchmarks (the
+  `Env` surface change the docs already name, which they say "must keep the
+  reference commit compiling with the new benchmarks or move the reference
+  in the same PR") the job stops at "Build the reference benchmarks", the
+  candidate is never measured, and the artifact is empty. That PR cannot
+  move the reference through its own run; its only way is a `measure`
+  dispatch of its head, which the docs reserve for commits without a PR.
+  "Every run is a recording of its candidate" implies the opposite order:
+  build and run the candidate, write `measurement.json`, then build and run
+  the reference and compare. Then any run whose candidate builds is a
+  recording, including this one, and the documented sentence holds through
+  the ordinary adoption. The reference's output moves from the "Record the
+  measurement" summary block to after the reference runs. Order on one VM is
+  not a bias the 10% tolerance notices (two runs of one engine agreed within
+  2.5%); questions.md records the assumption. Two clarifications of the same
+  contract: the three reasons to move the reference are really "a digest
+  moved" (rules reaching the decks *or* the workload itself: the benchmarks
+  or the curated lists, which `curated/mod.rs` already says change only with
+  the baseline), an accepted cost, and a kept speedup; and compare's
+  "baseline file" row should not send the reader to "re-record from the
+  reference commit", since the adoption in the footer (record this run) is
+  the recovery for that failure too, whichever of a workload change or a
+  hand-edited file caused it.
 
 Checked paths: PASS table and merge; 12% slower with matching digests (fix,
 or record the head and cite the delta from the failing run); a baseline whose
@@ -89,6 +114,20 @@ from the reference commit" before any timing row; a noisy VM is the
 counterexample to 10%, and re-running the job is the recovery when digests
 match and the engine did not change. Open for later evidence, not this Task:
 the 10% figure and whether a dedicated runner is worth buying.
+
+## Next implement direction (third concept review)
+
+1. `engine-budget.yml`: order the steps candidate build, candidate run,
+   measurement (candidate block of the summary), reference build, reference
+   run (its summary block), compare, upload. No new inputs or flags.
+2. `docs/development.md` and the `AGENTS.md` bullet: the reasons to move the
+   reference are a moved digest (a rules change reaching these decks, or a
+   change to the benchmarks or curated lists), an accepted cost, or a kept
+   speedup; a reference that no longer builds with the change's benchmarks
+   is recorded from the PR's own run like any other move.
+3. `scripts/engine_budget.py`: the "baseline file" row's failure text names
+   the fact ("digests do not describe the reference") and leaves the
+   recovery to the footer; keep its test.
 
 ## Status (reconciled 2026-11-02, compress after the candidate-ref change)
 
@@ -105,8 +144,9 @@ trigger CI. Main moved to 29660d00c (docs/ARCHITECTURE.md and scratch only),
 merged at 49765237c; the reference 4c8324a59 still describes the engine
 (checked 2026-11-02).
 
-Remains: publication, owned by the caller: open the PR with the T4/T5/T6
-figures in its body; the PR run confirms path selection on `pull_request`,
+Remains: the next implement direction above (step order, reasons wording,
+one failure text), then publication, owned by the caller: open the PR with
+the T4/T5/T6 figures in its body; the PR run confirms path selection on `pull_request`,
 the PR-head checkout, the flagless compare step and that the artifact's
 `measurement.json` names the PR head; the first main run after merge confirms
 the push path; the `measure` path wants one dispatch before the next
