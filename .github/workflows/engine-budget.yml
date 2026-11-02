@@ -2,12 +2,14 @@ name: Engine Budget
 
 # Release-build engine benchmarks on a runner of their own, so nothing else on
 # the machine shares the measurement: Search-64 replies (bench_search) and
-# headless steps per second (bench_steps) against managym/perf/baseline.json.
-# CI calls this for pull requests and main; `measure` (CI's dispatch input,
-# or this workflow's once it is on main) benchmarks another commit with this
-# ref's benchmarks and records it without comparing, which is how a baseline
-# or a historical commit is measured on the same runner profile
-# (docs/development.md, Engine performance budget).
+# headless steps per second (bench_steps). GitHub-hosted runners land on
+# different CPU generations, so wall time is never compared across runs: the
+# job rebuilds the reference commit named in managym/perf/baseline.json with
+# this ref's benchmarks, runs both on this machine and holds the candidate to
+# the reference within the tolerance and both to the committed digests.
+# `measure` (CI's dispatch input, or this workflow's once it is on main)
+# benchmarks another commit with this ref's benchmarks and records it without
+# comparing (docs/development.md, Engine performance budget).
 
 on:
   workflow_call:
@@ -18,18 +20,30 @@ on:
   workflow_dispatch:
     inputs:
       measure:
-        description: Commit or branch to measure with this ref's benchmarks (empty compares this ref against its baseline)
+        description: Commit or branch to measure with this ref's benchmarks (empty compares this ref against its reference)
         default: ''
 
 jobs:
   budget:
     name: Engine Budget
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       MEASURE: ${{ inputs.measure || '' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Choose the candidate and the reference
+        run: |
+          if [ -n "$MEASURE" ]; then
+            echo "ENGINE_DIR=measured/managym" >> "$GITHUB_ENV"
+            echo "REFERENCE=" >> "$GITHUB_ENV"
+            printf 'WORKSPACES=measured/managym -> target\n' >> "$GITHUB_ENV"
+          else
+            echo "ENGINE_DIR=managym" >> "$GITHUB_ENV"
+            echo "REFERENCE=$(jq -r .reference.commit managym/perf/baseline.json)" >> "$GITHUB_ENV"
+            printf 'WORKSPACES<<EOF\nmanagym -> target\nreference/managym -> target\nEOF\n' >> "$GITHUB_ENV"
+          fi
 
       - name: Check out the commit to measure
         if: env.MEASURE != ''
@@ -38,20 +52,26 @@ jobs:
           ref: ${{ env.MEASURE }}
           path: measured
 
-      - name: Carry this ref's benchmarks into the measured tree
-        if: env.MEASURE != ''
-        run: |
-          rm -rf measured/managym/examples/curated
-          cp -R managym/examples/curated measured/managym/examples/curated
-          cp managym/examples/bench_search.rs managym/examples/bench_steps.rs measured/managym/examples/
-          echo "ENGINE_DIR=measured/managym" >> "$GITHUB_ENV"
-          echo "MEASURED_COMMIT=$(git -C measured rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Check out the reference commit
+        if: env.REFERENCE != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REFERENCE }}
+          path: reference
 
-      - name: Use this ref
-        if: env.MEASURE == ''
+      - name: Carry this ref's benchmarks into the other tree
         run: |
-          echo "ENGINE_DIR=managym" >> "$GITHUB_ENV"
-          echo "MEASURED_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
+          for tree in measured reference; do
+            [ -d "$tree/managym" ] || continue
+            rm -rf "$tree/managym/examples/curated"
+            cp -R managym/examples/curated "$tree/managym/examples/curated"
+            cp managym/examples/bench_search.rs managym/examples/bench_steps.rs "$tree/managym/examples/"
+          done
+          if [ -n "$MEASURE" ]; then
+            echo "MEASURED_COMMIT=$(git -C measured rev-parse HEAD)" >> "$GITHUB_ENV"
+          else
+            echo "MEASURED_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -59,8 +79,7 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            ${{ env.ENGINE_DIR }} -> target
+          workspaces: ${{ env.WORKSPACES }}
           key: engine-budget
 
       - name: Setup uv
@@ -69,33 +88,51 @@ jobs:
           python-version: '3.12'
           enable-cache: false
 
-      - name: Build benchmarks
+      - name: Build the candidate benchmarks
         run: cargo build --release --locked --manifest-path "$ENGINE_DIR/Cargo.toml" --example bench_search --example bench_steps
 
-      - name: Headless steps per second
+      - name: Build the reference benchmarks
+        if: env.REFERENCE != ''
+        run: cargo build --release --locked --manifest-path reference/managym/Cargo.toml --example bench_search --example bench_steps
+
+      - name: Run the reference
+        if: env.REFERENCE != ''
+        run: |
+          mkdir -p .cache/engine-budget/reference
+          reference/managym/target/release/examples/bench_steps | tee .cache/engine-budget/reference/bench_steps.jsonl
+          reference/managym/target/release/examples/bench_search | tee .cache/engine-budget/reference/bench_search.jsonl
+
+      - name: Run the candidate
         run: |
           mkdir -p .cache/engine-budget
           "$ENGINE_DIR/target/release/examples/bench_steps" | tee .cache/engine-budget/bench_steps.jsonl
-
-      - name: Search-64 replies
-        run: '"$ENGINE_DIR/target/release/examples/bench_search" | tee .cache/engine-budget/bench_search.jsonl'
+          "$ENGINE_DIR/target/release/examples/bench_search" | tee .cache/engine-budget/bench_search.jsonl
 
       - name: Record the measurement
         run: |
           {
             echo "## Engine budget measurement"
             echo
-            echo "Commit \`$MEASURED_COMMIT\` on \`${RUNNER_OS}\` \`$(uname -m)\`, $(nproc) CPUs, $(lscpu | sed -n 's/^Model name: *//p' | head -1)"
+            echo "Runner \`${RUNNER_OS}\` \`$(uname -m)\`, $(nproc) CPUs, $(lscpu | sed -n 's/^Model name: *//p' | head -1)"
             echo
+            if [ -n "$REFERENCE" ]; then
+              echo "Reference \`$REFERENCE\`:"
+              echo '```'
+              cat .cache/engine-budget/reference/bench_steps.jsonl .cache/engine-budget/reference/bench_search.jsonl
+              echo '```'
+            fi
+            echo "Candidate \`$MEASURED_COMMIT\`:"
             echo '```'
             cat .cache/engine-budget/bench_steps.jsonl .cache/engine-budget/bench_search.jsonl
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Compare against the committed baseline
-        if: env.MEASURE == ''
+      - name: Compare the candidate with the reference
+        if: env.REFERENCE != ''
         run: |
           uv run --no-project --python 3.12 python scripts/engine_budget.py compare \
+            --reference-search .cache/engine-budget/reference/bench_search.jsonl \
+            --reference-steps .cache/engine-budget/reference/bench_steps.jsonl \
             --search .cache/engine-budget/bench_search.jsonl \
             --steps .cache/engine-budget/bench_steps.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
 

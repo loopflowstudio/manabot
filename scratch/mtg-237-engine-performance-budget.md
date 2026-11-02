@@ -8,8 +8,10 @@ Design from Jack Heart's concept review of 2026-11-02 (Performance section,
 - `Engine Budget` CI job (`.github/workflows/engine-budget.yml`, called from
   `ci.yml`, selected by the engine, the benchmarks, the baseline and the
   comparator) builds `bench_search` and `bench_steps` in release on a runner
-  of its own and fails the PR when a timing is more than 10% slower than
-  `managym/perf/baseline.json` or a digest differs.
+  of its own, rebuilds the reference commit of `managym/perf/baseline.json`
+  with the same benchmarks on that runner, and fails the PR when the
+  candidate is more than 10% slower than the reference or a digest differs
+  (runner CPU models vary too much for absolute numbers; see questions.md).
 - `bench_search`: unchanged workload (seeds 1-3, 40 decisions, 16x4 flat
   search), summary now sums totals. `bench_steps`: 512 seeded random-legal
   games of the curated matchup through `Env::reset`/`step` with skip_trivial,
@@ -29,5 +31,6 @@ not a latency budget.
 
 ## Status
 
-Implemented 2026-11-02. Baseline and the T4/T5/T6 measurements come from CI
-dispatches (see questions.md for the measurement record).
+Implemented 2026-11-02. Reference 4c8324a59 recorded from CI run 41517623999;
+T4/T5/T6 figures in docs/development.md. Full CI on the branch validates the
+A/B path before review.

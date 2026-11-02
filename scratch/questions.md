@@ -483,10 +483,15 @@ requirement, it needs its own Task.
   aggregate owns it and docs-only PRs skip it; every job is its own VM, which
   is the quiet runner. `ubuntu-24.04` is pinned rather than `ubuntu-latest` so
   the baseline's hardware profile does not move with the label.
-- A laptop figure is never the baseline: timings are only compared within the
-  runner profile named in the file. GitHub-hosted runner generations vary, so
-  the 10% tolerance may flake; if it does, the tolerance or the measure (best
-  of N) moves with evidence, not by widening silently.
+- Counterexample to the design's committed absolute numbers (2026-11-02): the
+  four dispatches landed on three CPU models (EPYC 7763, Xeon 6973P-C, EPYC
+  9V74) and the identical T4 engine spread 6.8k-10.3k steps/s between them,
+  far outside 10%. The comparison is therefore A/B on one machine: the job
+  rebuilds the reference commit with the change's benchmarks and compares
+  the candidate to that fresh run; the file holds the reference commit,
+  digests and its recorded figures. Two EPYC 7763 runs of one engine agreed
+  within 2.5%, so 10% stands for now. Jack Heart's review decides whether to
+  keep this reading of "committed baseline".
 - T6's head (`2c1ba169f`) is unpushed, so measuring it on CI needs its commit
   reachable from origin; pushed as a plain ref under `refs/engine-budget/`
   for the dispatch and deleted afterwards (not a branch, no PR).

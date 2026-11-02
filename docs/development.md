@@ -149,7 +149,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v1` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
-| Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps` against `managym/perf/baseline.json`) |
+| Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
 
 Semantic-kernel conformance is recorded as manifest seeds plus a per-case
 `trace_sha256` in `evidence.json` ([conformance](../conformance/README.md)). A
@@ -197,7 +197,8 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 ## Engine performance budget
 
 `Engine Budget` builds two release benchmarks on a GitHub-hosted runner of
-their own and compares them with `managym/perf/baseline.json`:
+their own and compares a change with the reference commit named in
+`managym/perf/baseline.json`:
 
 - `managym/examples/bench_search.rs`: Search-64 replies (16 worlds x 4
   rollouts) on the curated UR Lessons versus GW Allies matchup, seeds 1-3,
@@ -208,15 +209,24 @@ their own and compares them with `managym/perf/baseline.json`:
   actions and native trivial-decision skipping. Budget lines: steps per
   second, step count and the digest over every decision.
 
-A timing more than 10% slower than the baseline, or a digest that differs,
-fails the PR. A speedup that changes search results therefore fails until the
-baseline moves. Timings are compared only within the runner profile named in
-the baseline; a laptop figure is never a baseline, and the job's step summary
-and `engine-budget` artifact keep every measurement.
+GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
+the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
+Intel Xeon 6973P-C (2026-11-02), so wall time is never compared across runs.
+The job checks out the reference commit, builds it with the change's
+benchmarks, runs reference then candidate on the one machine, and fails the
+PR when the candidate is more than 10% slower than the reference on any
+timing or either run's digests differ from the committed ones. Two runs of
+one engine on separate EPYC 7763 machines agreed within 2.5%. A speedup that
+changes search results therefore fails until the reference moves, and so
+does a baseline file whose digests no longer describe its reference commit.
+The job's step summary and `engine-budget` artifact keep every measurement;
+the figures in the file are the reference's own recording, for orientation
+only.
 
-**Moving the baseline.** A PR that changes rules reaching these decks, or
-accepts a measured cost, re-records the file from a CI measurement and says
-why in the commit:
+**Moving the reference.** A PR that changes rules reaching these decks, or
+accepts a measured cost, re-records the file from a CI measurement of the new
+reference commit (reachable from origin; a PR head stays fetchable after a
+squash merge) and says why in the commit:
 
 ```bash
 gh workflow run ci.yml --ref <branch> -f measure=<commit>   # Engine Budget only, records without comparing
@@ -226,15 +236,30 @@ uv run scripts/engine_budget.py record \
   --steps .cache/engine-budget/bench_steps.jsonl \
   --commit <commit> --date <YYYY-MM-DD> \
   --run https://github.com/loopflowstudio/manabot/actions/runs/<run-id> \
-  --reason "<why the budget moves>"
+  --runner "GitHub-hosted ubuntu-24.04, <CPU from the step summary> (4 vCPU), release" \
+  --reason "<why the reference moves>"
 ```
 
 The `measure` dispatch input (on `ci.yml`, which then selects only Engine
 Budget) benchmarks any commit reachable from origin with the dispatched ref's
 benchmarks and records the result in the step summary without comparing, so a
-historical commit can be measured on the same profile. A PR's own Engine
-Budget run also uploads its measurement as the `engine-budget` artifact.
-Run the benchmarks locally only as a smoke check:
+historical commit can be measured on the same profile. The benchmarks use
+only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
+`flat_mc_scores`); a change to that surface must keep the reference commit
+compiling with the new benchmarks or move the reference in the same PR.
+
+Measured once on 2026-11-02 with these benchmarks (steps/s; worst Search-64
+reply; total over 3 seeds x 40 decisions), each on its own runner:
+
+| Commit | CPU | steps/s | worst reply | total |
+|---|---|---:|---:|---:|
+| T4 main `4c8324a59` (reference) | AMD EPYC 7763 | 6819.5 | 13.807 s | 408.9 s |
+| T5 head `836042c07` | Intel Xeon 6973P-C | 10285.9 | 9.976 s | 273.9 s |
+| T6 head `2c1ba169f` | AMD EPYC 9V74 | 8883.1 | 10.651 s | 310.9 s |
+
+The three rows are on three CPU models, so they rank the runners, not the
+commits; all three reproduce the reference digests. Run the benchmarks
+locally only as a smoke check:
 `cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
 (and `bench_steps`). Never add load to make a measurement move
 ([TESTING.md](../TESTING.md)).

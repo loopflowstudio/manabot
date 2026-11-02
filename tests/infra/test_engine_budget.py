@@ -1,4 +1,4 @@
-"""The engine budget fails a measured slowdown or a changed digest, never a speedup."""
+"""The engine budget fails a same-runner slowdown or a changed digest, never a speedup."""
 
 from __future__ import annotations
 
@@ -28,9 +28,14 @@ def _module() -> ModuleType:
 budget = _module()
 
 BASE = {
-    "runner": "ubuntu-24.04 GitHub-hosted, release",
     "tolerance": 0.10,
-    "recorded": {"commit": "abc123def", "date": "2026-11-02", "run": "https://x", "reason": "test"},
+    "reference": {
+        "commit": "abc123def456",
+        "date": "2026-11-02",
+        "run": "https://x",
+        "runner": "ubuntu-24.04 GitHub-hosted, AMD EPYC 7763 (4 vCPU), release",
+        "reason": "test",
+    },
     "bench_search": {
         "worst_s": 10.0,
         "total_s": 300.0,
@@ -46,13 +51,14 @@ BASE = {
 
 def _write_results(
     directory: Path,
+    name: str,
     *,
     scale: float = 1.0,
     search_digests: tuple[int, int, int] = (11, 22, 33),
     steps_digest: int = 44,
 ) -> tuple[Path, Path]:
     """Benchmark output lines where `scale` multiplies every duration."""
-    search = directory / "bench_search.jsonl"
+    search = directory / f"{name}_search.jsonl"
     lines = []
     for seed, worst, digest in zip((1, 2, 3), (8.0, 10.0, 9.0), search_digests):
         lines.append(
@@ -69,7 +75,7 @@ def _write_results(
         )
     lines.append(json.dumps({"worst_overall_s": 10.0 * scale, "total_overall_s": 300.0 * scale}))
     search.write_text("\n".join(lines) + "\n")
-    steps = directory / "bench_steps.jsonl"
+    steps = directory / f"{name}_steps.jsonl"
     steps.write_text(
         json.dumps(
             {
@@ -86,10 +92,20 @@ def _write_results(
     return search, steps
 
 
-def _compare(tmp_path: Path, **results: object) -> tuple[int, str]:
+def _compare(
+    tmp_path: Path,
+    *,
+    reference_scale: float = 1.4,
+    reference_digests: tuple[int, int, int] = (11, 22, 33),
+    **candidate: object,
+) -> tuple[int, str]:
+    """A slower runner than the recording (reference at 1.4x) hosts both runs."""
     baseline = tmp_path / "baseline.json"
     baseline.write_text(json.dumps(BASE))
-    search, steps = _write_results(tmp_path, **results)  # type: ignore[arg-type]
+    reference_search, reference_steps = _write_results(
+        tmp_path, "reference", scale=reference_scale, search_digests=reference_digests
+    )
+    search, steps = _write_results(tmp_path, "candidate", **candidate)  # type: ignore[arg-type]
     completed = subprocess.run(
         [
             sys.executable,
@@ -97,6 +113,10 @@ def _compare(tmp_path: Path, **results: object) -> tuple[int, str]:
             "compare",
             "--baseline",
             str(baseline),
+            "--reference-search",
+            str(reference_search),
+            "--reference-steps",
+            str(reference_steps),
             "--search",
             str(search),
             "--steps",
@@ -108,43 +128,51 @@ def _compare(tmp_path: Path, **results: object) -> tuple[int, str]:
     return completed.returncode, completed.stdout + completed.stderr
 
 
-def test_within_tolerance_passes(tmp_path: Path) -> None:
-    code, output = _compare(tmp_path, scale=1.05)
+def test_within_tolerance_on_a_slower_runner_passes(tmp_path: Path) -> None:
+    code, output = _compare(tmp_path, scale=1.4 * 1.05)
     assert code == 0, output
     assert "PASS" in output
+    assert "| search worst reply | 14.000 s | 14.700 s | ok |" in output
 
 
 def test_speedup_passes(tmp_path: Path) -> None:
-    code, output = _compare(tmp_path, scale=0.5)
+    code, output = _compare(tmp_path, scale=0.7)
     assert code == 0, output
 
 
 def test_twenty_percent_slowdown_fails(tmp_path: Path) -> None:
-    """The controlled fixture: the same workload reported 20% slower everywhere."""
-    code, output = _compare(tmp_path, scale=1.2)
+    """The controlled fixture: the candidate reported 20% slower than the reference."""
+    code, output = _compare(tmp_path, scale=1.4 * 1.2)
     assert code == 1, output
-    assert "| search worst reply | 10.000 s | 12.000 s | over 11.000 s (+10%) |" in output
-    assert "| search total | 300.000 s | 360.000 s | over 330.000 s (+10%) |" in output
-    assert "| steps throughput | 5000.0/s | 4166.7/s | under 4545.5/s (-10%) |" in output
+    assert "| search worst reply | 14.000 s | 16.800 s | over 15.400 s (+10%) |" in output
+    assert "| search total | 420.000 s | 504.000 s | over 462.000 s (+10%) |" in output
+    assert "| steps throughput | 3571.4/s | 2976.2/s | under 3246.7/s (-10%) |" in output
     assert "FAIL: 3 check(s)" in output
 
 
 def test_changed_search_digest_fails_even_when_faster(tmp_path: Path) -> None:
     code, output = _compare(tmp_path, scale=0.8, search_digests=(11, 23, 33))
     assert code == 1, output
-    assert "| search seed 2 digest | 22 | 23 | differs |" in output
+    assert "| candidate search seed 2 digest | 22 | 23 | differs |" in output
     assert "FAIL: 1 check(s)" in output
 
 
 def test_changed_steps_digest_fails_even_when_faster(tmp_path: Path) -> None:
     code, output = _compare(tmp_path, scale=0.8, steps_digest=45)
     assert code == 1, output
-    assert "| steps digest | 44 | 45 | differs |" in output
+    assert "| candidate steps digest | 44 | 45 | differs |" in output
 
 
-def test_record_writes_the_baseline_with_its_reason(tmp_path: Path) -> None:
+def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
+    code, output = _compare(tmp_path, scale=1.4, reference_digests=(11, 22, 34))
+    assert code == 1, output
+    assert "| baseline file | abc123def | digests differ | re-record from the reference commit |" in output
+    assert "| reference search seed 3 digest | 33 | 34 | differs |" in output
+
+
+def test_record_writes_the_reference_with_its_reason(tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
-    search, steps = _write_results(tmp_path, scale=1.3)
+    search, steps = _write_results(tmp_path, "reference", scale=1.3)
     assert (
         budget.main(
             [
@@ -161,22 +189,23 @@ def test_record_writes_the_baseline_with_its_reason(tmp_path: Path) -> None:
                 "2026-11-03",
                 "--run",
                 "https://github.com/loopflowstudio/manabot/actions/runs/1",
+                "--runner",
+                "ubuntu-24.04 GitHub-hosted, AMD EPYC 7763 (4 vCPU), release",
                 "--reason",
                 "T6 adds Sagas to the curated decks",
-                "--runner",
-                "ubuntu-24.04 GitHub-hosted, release",
             ]
         )
         == 0
     )
     recorded = json.loads(baseline.read_text())
-    assert recorded["recorded"]["reason"] == "T6 adds Sagas to the curated decks"
+    assert recorded["reference"]["reason"] == "T6 adds Sagas to the curated decks"
+    assert recorded["reference"]["commit"] == "0123456789abcdef"
     assert recorded["tolerance"] == 0.10
     assert recorded["bench_search"]["worst_s"] == 13.0
     assert recorded["bench_search"]["total_s"] == 390.0
     assert recorded["bench_steps"]["steps_per_s"] == pytest.approx(5000.0 / 1.3, abs=0.1)
-    # Recording again keeps the runner and tolerance unless moved deliberately.
-    search, steps = _write_results(tmp_path, scale=1.0)
+    # Recording again keeps the tolerance unless moved deliberately.
+    search, steps = _write_results(tmp_path, "reference", scale=1.0)
     budget.main(
         [
             "record",
@@ -192,24 +221,25 @@ def test_record_writes_the_baseline_with_its_reason(tmp_path: Path) -> None:
             "2026-11-04",
             "--run",
             "https://github.com/loopflowstudio/manabot/actions/runs/2",
+            "--runner",
+            "ubuntu-24.04 GitHub-hosted, Intel Xeon 6973P-C (4 vCPU), release",
             "--reason",
             "indexed effect records",
         ]
     )
     again = json.loads(baseline.read_text())
-    assert again["runner"] == "ubuntu-24.04 GitHub-hosted, release"
-    assert again["recorded"]["commit"] == "fedcba9876543210"
+    assert again["tolerance"] == 0.10
+    assert again["reference"]["commit"] == "fedcba9876543210"
     assert again["bench_search"]["worst_s"] == 10.0
 
 
 def test_committed_baseline_is_complete() -> None:
-    """The committed file names its runner, commit, run and reason."""
+    """The committed file names a reachable reference, its runner, run and reason."""
     baseline = budget.load_baseline(BASELINE)
-    assert baseline["runner"]
     assert baseline["tolerance"] == 0.10
-    recorded = baseline["recorded"]
-    assert len(recorded["commit"]) >= 9 and recorded["run"].startswith("https://")
-    assert recorded["reason"]
+    reference = baseline["reference"]
+    assert len(reference["commit"]) == 40 and reference["run"].startswith("https://")
+    assert reference["runner"] and reference["reason"]
     assert set(baseline["bench_search"]["seeds"]) == {"1", "2", "3"}
     assert baseline["bench_steps"]["games"] == 512
     assert baseline["bench_steps"]["steps_per_s"] > 0
