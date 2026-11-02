@@ -539,3 +539,10 @@ requirement, it needs its own Task.
   agreed within 2.5%); the order exists so a run whose reference cannot build
   with the change's benchmarks still records its candidate. Reverse it only
   with evidence that order matters.
+- Fourth headless concept review at 078d37ef4: interpret the Task's "score
+  digests" literally as preserving the ordered action scores, not just the
+  winning action. This follows the accepted correctness requirement; it is
+  not new approval from Jack Heart. The counterexample and next implement
+  direction are in the working design. Keep all completed workflow work and
+  historical measurements; a new digest needs a new recording, not rewritten
+  historical evidence. No open product choice; no shipping approval.

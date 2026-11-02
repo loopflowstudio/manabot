@@ -56,7 +56,7 @@ not a latency budget.
   and costs one recording per such PR; accepted as the price of (3). A kept
   speedup is the third reason to move the reference (concept review).
 
-## Concept reviews (2026-11-02, headless; 5c8b0f2db, c8cbc5421, aab658e7e)
+## Concept reviews (2026-11-02, headless)
 
 Source: Jack Heart's Performance section ("the PR fails if worst reply or
 total exceeds the recorded baseline by more than 10%; a PR that moves the
@@ -88,6 +88,37 @@ settled by the accepted decisions, with no open product choice:
   lists), an accepted cost or a kept speedup; compare's "baseline file" row
   says "digests do not describe the reference" and leaves recovery to the
   footer.
+- Fourth (reviewed at 078d37ef4; proposed implementation, not yet built):
+  the Task's score-preservation check currently protects only the chosen
+  action and simulation count. `bench_search` folds
+  `result.simulations + best` into `scores_digest`, never `result.scores`.
+  With identical simulation counts, scores `[0.75, 0.25]` changing to
+  `[0.875, 0.125]` leave the chosen action, game trajectory and digest
+  unchanged. A faster but incorrect evaluation can therefore pass. The
+  accepted requirement (Jack Heart's Task brief: "Score digests are asserted
+  identical ... so a speedup that changes search results fails") settles
+  this without a new product choice: preserve every action's score in order
+  at every measured decision, together with decision boundaries and the
+  existing simulation/choice evidence. Keep the workload, timings, 10%
+  tolerance, same-runner comparison and artifact adoption interaction.
+
+  Next implement direction: make the benchmark's digest cover the ordered
+  score vector with a deterministic encoding, and prove with a controlled
+  fixture that changing a losing score while preserving the winner and
+  simulation count changes the digest. Also prove identical results repeat
+  and changed digests fail even for a speedup. No engine/API redesign is
+  needed: `FlatMcResult.scores` already owns the data; the comparator and
+  baseline can keep their integer-digest shape. Describe this scope in the
+  existing usage docs. Re-record the reference through a real CI artifact
+  with a reason for the benchmark digest change; do not calculate replacement
+  baseline digests by hand or reinterpret old measurements. The existing
+  T4/T5/T6 timings remain dated evidence from the earlier digest, not proof
+  of full-score equality. Label that limitation when retaining their table.
+  Normal recovery is the existing download → `record --reason` → commit →
+  rerun path. The next PR proof must show that the strengthened digests match
+  the recorded reference and that the candidate artifact still survives a
+  reference-build failure. Outcome: design clarified; implementation work
+  remains; no unresolved product choice.
 
 Checked paths: PASS table and merge; 12% slower with matching digests (fix,
 or record the head and cite the delta from the failing run); a baseline whose
@@ -109,7 +140,8 @@ Main moved to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at
 49765237c; the reference 4c8324a59 still describes the engine (checked
 2026-11-02).
 
-Remains: publication, owned by the caller: open the PR with the T4/T5/T6
+Remains: the fourth review's score-digest correction and CI recording, then
+publication, owned by the caller: open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on `pull_request`,
 the PR-head checkout, the candidate-first order with its two summary blocks,
 the flagless compare step and that the artifact's `measurement.json` names
