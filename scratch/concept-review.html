@@ -3,11 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T5 Concept Review</title>
+<title>T5 Concept Review — after 1a/2a</title>
 <style>
 :root{--bg:#fbfaf7;--fg:#1d1b18;--muted:#6b665e;--rule:#e2ddd3;--code:#f2efe8;--accent:#8a4b12;--add:#e6f2e3;--addfg:#205a1c;--del:#f6e3e0;--delfg:#7d2418;--prop:#2f5d8a}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17161a;--fg:#e8e5df;--muted:#9b968d;--rule:#2e2c31;--code:#222126;--accent:#e0a35c;--add:#1d3320;--addfg:#a8dba0;--del:#3a2020;--delfg:#f0aaa0;--prop:#8bb8e6}}
-:root[data-theme="dark"]{--bg:#17161a;--fg:#e8e5df;--muted:#9b968d;--rule:#2e2c31;--code:#222126;--accent:#e0a35c;--add:#1d3320;--addfg:#a8dba0;--del:#3a2020;--delfg:#f0aaa0;--prop:#8bb8e6}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,"Iowan Old Style",serif}
 main{max-width:780px;margin:0 auto;padding:40px 16px 80px}
@@ -24,8 +23,8 @@ pre code{background:none;padding:0}
 .flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid var(--rule);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
 .flow>div{padding:10px 10px 10px 0;border-bottom:1px solid var(--rule)}
 .flow .h{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-.prop{color:var(--prop)}
-.tag{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--prop);text-transform:uppercase;letter-spacing:.06em}
+.tag{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--prop);text-transform:uppercase;letter-spacing:.06em;margin-left:6px}
+.tag.done{color:var(--addfg)}
 ol.q>li{margin-bottom:14px}
 ol.q ol{list-style:lower-alpha;margin-top:4px}
 @media (max-width:640px){.flow{grid-template-columns:1fr}.flow .h{display:none}.flow>div:nth-child(3n+1){padding-top:16px;font-weight:600}}
@@ -34,82 +33,55 @@ ol.q ol{list-style:lower-alpha;margin-top:4px}
 </head>
 <body>
 <main>
-<h1>Who decides “legendary”?</h1>
-<div class="meta">Task MTG-224 (TLA T5) · concept-review with Jack Heart · 2026-11-02 · head <code>2df025c20</code> (PR #405)<br>
-Built from <code>managym/src/flow/statics.rs</code>, <code>flow/sba.rs</code>, <code>agent/observation.rs</code>, <code>state/effect.rs</code>, <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code></div>
+<h1>One view decides every characteristic</h1>
+<div class="meta">Task MTG-224 (TLA T5) · concept-review, headless, after Jack Heart's 1a/2a · 2026-11-02 · local head <code>889948346</code> (PR #405, pushed head <code>e8fd88eed</code>)<br>
+Built from <code>managym/src/flow/statics.rs</code>, <code>flow/sba.rs</code>, <code>agent/observation.rs</code>, <code>tests/cards/observability.rs</code>, <code>manabot/managym/experience_projection.py</code>, <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code></div>
 
-<p class="lead">The decision I need: should “is legendary” become a field of the layered characteristics view that the legend rule and the policy both read? Or does T5 ship with two readers that only agree because every way a permanent loses legendary today is through a copy?</p>
-
-<p>You accepted this rule for T5: <em>a permanent with modified characteristics is always seen as modified</em>. Copy, exceptions and layered records compose, and the policy sees the result. T5 meets that rule for every characteristic except one.</p>
+<p class="lead">No decision is needed. Jack Heart's 1a and 2a are implemented: the legend rule and every battlefield card-row field read the same layered view, and a compile-time guard classifies each field as layered or printed. The one remaining mismatch is a name, not a behavior, and it belongs to a protocol follow-up rather than to T5.</p>
 
 <h2>The interaction</h2>
+<p>Ran and Shaw's copy enters as a nonlegendary token. A person in Academy sees two Ran and Shaws on the battlefield and the note "copy of Ran and Shaw, except isn't legendary". The policy sees the copy's card row with column 39 clear, and the legend rule leaves both alone. Later, an effect that says "isn't legendary" until end of turn (a record, not a copy) applies to a legendary creature. Every observer must agree with the rule that spares it.</p>
+
+<h2>Actions → concepts → APIs</h2>
 <div class="flow">
-  <div class="h">Action</div><div class="h">Concept</div><div class="h">API that decides</div>
-  <div>Cast a 5th Dragon with Ran and Shaw out</div><div>Token copy, except “isn't legendary”</div><div><code>create_token_copy</code> writes copiable values into the definition and records <code>Card.copy</code></div>
-  <div>State-based actions check the legend rule</div><div>Layer-4 supertype</div><div><code>permanent_is_legendary</code> (sba.rs)</div>
-  <div>Policy, LLM text and tokens look at the board</div><div>“legendary yes/no”</div><div><code>CardData.is_legendary</code>: printed supertypes</div>
-  <div class="prop">Proposed: any reader asks</div><div class="prop">One layered value</div><div class="prop"><code>characteristics(id).is_legendary</code></div>
+<div class="h">A person or policy does</div><div class="h">The concept</div><div class="h">The API that answers</div>
+<div>Looks at a permanent's name, types, legendary, P/T, keywords, ward, Ally, Lesson</div><div>Its <em>characteristics after continuous effects</em> (one layered view)</div><div><code>Game::characteristics(id)</code> → <code>Characteristics { name, types, is_legendary, subtypes, keywords, ward, power, toughness, … }</code></div>
+<div>The engine applies the legend rule</div><div>Same view</div><div><code>legend_groups</code> reads <code>characteristics(id).is_legendary</code> <span class="tag done">implemented</span></div>
+<div>A viewer reads the card row of a battlefield card</div><div>Same view, printed only for identity and costs</div><div><code>Observation::card_data</code> overrides <code>printed_card_data</code> with the view <span class="tag done">implemented</span></div>
+<div>Someone adds a field to <code>CardData</code></div><div>It must be layered or printed by definition</div><div><code>CardSource</code> guard: exhaustive destructure in <code>observability.rs</code>, 9 layered, 11 printed with a reason <span class="tag done">implemented</span></div>
+<div>A viewer reads the card row off the battlefield</div><div>The printed card</div><div><code>printed_card_data</code>; <code>card_rows_off_the_battlefield_read_the_printed_card</code></div>
 </div>
 
-<h2>Today: two readers, one layered view that leaves legendary out</h2>
-<pre><code>    pub(crate) fn permanent_is_legendary(&amp;self, id: PermanentId) -&gt; bool {
-        ...
-        self.state.cards[permanent.card]
-            .supertypes
-            .iter()
-            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
-            &amp;&amp; !self
-                .effects_on(id)
-                .any(|effect| effect.modification == Modification::Nonlegendary)
-    }</code></pre>
-<div class="cap">managym/src/flow/sba.rs · <code>Game::permanent_is_legendary</code> · 2df025c20 · L16–27 (omission marked)</div>
+<h2>Before and after</h2>
+<pre><code><span class="del">- Game::permanent_is_legendary(id)   // flow/sba.rs: copiable supertypes minus a record</span>
+<span class="del">- CardData.is_legendary = card.is_legendary()   // printed supertypes only</span>
+<span class="add">+ Characteristics.is_legendary   // layer 4, one owner</span>
+<span class="add">+ legend_groups → characteristics(id).is_legendary</span>
+<span class="add">+ card_data (battlefield) → view.name, power, toughness, is_legendary, Ally, Lesson, ward, types, keywords</span>
+<span class="add">+ CardSource::{Layered, Printed(reason)} for all 20 CardData fields</span></code></pre>
+<div class="cap">Directed proof: <code>a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together</code>; every layered field is shown moving under a record in <code>layered_card_fields_read_characteristics_on_the_battlefield</code>, and no printed field moves.</div>
 
-<pre><code>            is_legendary: card
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("legendary")),
-            // A characteristic-setting effect replaces a permanent's types.
-            is_ally: match game.state.card_to_permanent[card_id] {
-                Some(permanent) if zone == ZoneType::Battlefield =&gt; {
-                    game.characteristics(permanent).has_subtype("Ally")
-                }
-                _ =&gt; card.has_subtype("Ally"),
-            },</code></pre>
-<div class="cap">managym/src/agent/observation.rs · <code>card_data</code> · 2df025c20 · L1160–1170. <code>is_ally</code> already reads the layered view on the battlefield; <code>is_legendary</code> doesn't.</div>
-
-<p><strong>Counterexample.</strong> Any effect that says “target legendary creature isn't legendary until end of turn” is an <code>ApplyContinuous</code> record of <code>Modification::Nonlegendary</code>, and that variant already exists. The legend rule then spares the permanent, but column 39, the text (“legendary yes”) and the tokens still say legendary. No card does this yet, so the two readers agree only by coincidence.</p>
-
-<h2>Proposed <span class="tag">not implemented</span></h2>
-<pre><code> pub struct Characteristics {
-     pub name: String,
-     ...
-     pub is_creature: bool,
-<span class="add">+    /// Layer 4: copiable supertypes, unless a `Nonlegendary` record removes it.
-+    pub is_legendary: bool,
-</span>     pub is_land: bool,</code></pre>
-<div class="cap">managym/src/flow/statics.rs · <code>Characteristics</code> · illustrative diff against 2df025c20 L106–122</div>
-<pre><code><span class="del">-            if self.permanent_is_legendary(id) {
-</span><span class="add">+            if self.characteristics(id).is_legendary {
-</span></code></pre>
-<div class="cap">flow/sba.rs · <code>legend_groups</code> · illustrative; <code>permanent_is_legendary</code> is deleted</div>
-<p><code>CardData.is_legendary</code> would read the layered value on the battlefield, the same way <code>is_ally</code> does, and the printed value everywhere else. Widths, tokens and text wording stay the same. To prove it: one directed test applies a non-copy <code>Nonlegendary</code> record and checks the legend rule, column 39 and the text line together.</p>
-
-<h2>Already settled, not reopened</h2>
+<h2>Settled by the decisions, recorded so no one reopens them</h2>
 <ul>
-<li>Writing copiable values into the definition when the copy is created is correct (token copies don't follow later changes to their source). <code>Card.copy</code> keeps the inputs, so the policy can see them.</li>
-<li>“Sacrificed this turn” has one owner, T4's <code>PlayerTurnHistory</code>, and every sacrifice goes through <code>sacrifice_permanent</code>.</li>
-<li><code>CreatureWithNamesakes</code> stays as is (your call). The new “Catalog-scale types” Task already proposes replacing it.</li>
+<li><strong>Rules text and mana cost stay printed.</strong> Both are characteristics, but no <code>Modification</code> changes them, and a copy carries them materialized in its definition. The guard's reasons say so. The first effect that changes either one moves it into <code>Characteristics</code>; that is when 2a's "add it to the view" clause applies.</li>
+<li><strong>Two <code>name</code> fields, two facts.</strong> The permanent row's <code>name</code> is the "set by an Aura" marker (a fact row); the card row's <code>name</code> is the layered name. T3's shape, unchanged.</li>
+<li><strong>Not folded:</strong> <code>CreatureWithCounters</code> and <code>CreatureWithNamesakes</code> wait for a third self-animation condition.</li>
 </ul>
+
+<h2>The one mismatch left <span class="tag">follow-up, not T5</span></h2>
+<p>The Academy projection carries <code>base_power</code> and <code>base_toughness</code>, read from the card row. Since 2a the card row is layered on the battlefield, so they equal <code>power</code> and <code>toughness</code> there. Nothing reads them for a printed value; the comment that promised a "4/4 (2/2)" display never had a consumer. The name now overstates what the field holds, and it is required in the four protocol v1 schemas, so renaming or dropping it is a protocol change. The realign documented the current meaning and re-recorded the fixture; the choice is listed for Jack Heart under Remaining in the working design.</p>
+<pre><code>"power": permanent.power,            # layered
+"base_power": card.power,            # the card row: layered on the battlefield since 2a
+<span class="del">- # printed value, for a "4/4 (2/2)" display   (no component ever read it)</span></code></pre>
 
 <h2>Questions</h2>
 <ol class="q">
-<li>Legendary as a layered characteristic:
-  <ol><li>Do it in T5 before merge (small: one field, one deleted function, one test). <em>My recommendation.</em></li>
-  <li>Merge T5 as is, and do it in the first PR that adds a non-copy “isn't legendary” effect.</li>
-  <li>Fold it into the Catalog-scale types Task, with the other supertypes.</li></ol></li>
-<li>Same question for every observation field: should each <code>CardData</code> flag for a battlefield card read <code>characteristics()</code> by rule, guarded in <code>observability.rs</code>?
-  <ol><li>Yes, make it the rule now.</li>
-  <li>No, fix flags one at a time as cards need them.</li></ol></li>
+<li>None block T5. For the protocol follow-up on <code>base_power</code> / <code>base_toughness</code>, which of these should the separate Task take?
+<ol>
+<li>Keep the fields as the card row's value (current, documented).</li>
+<li>Add a printed-P/T accessor to the engine and make the fields printed again.</li>
+<li>Drop the fields from the projection and the four schemas.</li>
+</ol></li>
 </ol>
 </main>
 </body>

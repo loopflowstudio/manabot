@@ -1,12 +1,15 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, PR #405 open, no review yet, head `e8fd88eed`, main
-`29660d00c` merged, 0 behind): implemented, demoed through native Commands
-and the LLM/Academy text path, synced onto main (T3's squash, the
-characteristics cache and T4). All three cards are defined and supported.
-Jack Heart's concept-review decisions 1a and 2a (below) are implemented
-(`16e28c304`) and compressed (`924e520b4`); CI on the head is the gate's
-pending check (Remaining). Shipping is stopped per Jack Heart's latest steer
+Status (2026-11-02, PR #405 open, no review yet, local head `889948346`,
+PR head `e8fd88eed` until gate pushes the realign commit, main `29660d00c`
+merged, 0 behind): implemented, demoed through native Commands and the
+LLM/Academy text path, synced onto main (T3's squash, the characteristics
+cache and T4). All three cards are defined and supported. Jack Heart's
+concept-review decisions 1a and 2a (below) are implemented (`16e28c304`),
+compressed (`924e520b4`) and realigned (`889948346`: the choice-navigation
+fixture re-recorded for layered card rows); the headless concept review
+after them found nothing further to change (below). CI at the pushed head
+is the gate's pending check (Remaining). Shipping is stopped per Jack Heart's latest steer
 f39fef34 ("run the graph through gate. Shipping stays stopped: no merge").
 The Task record shows "Auto-Ship approved by Session … for Jack Heart
 2026-11-02T21:35:52Z" and the Graph "running from land --wait-and-fix"; the
@@ -199,6 +202,41 @@ yet, add it to `Characteristics` instead of reading the printed card.
   (earthbent lands, anthem creatures), and realign re-recorded it
   (Remaining). The kernel, authored-match, demo and trigger-order receipts
   held.
+
+## Concept review after 1a/2a — 2026-11-02 (headless, at `889948346`)
+
+Page: `scratch/concept-review.html` (regenerated). Checked the accepted
+decisions against the implemented change. Nothing to change; no product
+choice is open for T5. The decisions imply the following, recorded so a
+later agent does not reopen them:
+
+- **One reader per characteristic, verified.** `Characteristics` carries
+  name, types, legendary, subtypes, keywords, ward, P/T and abilities;
+  `legend_groups` and `card_data` both read it, and `permanent_is_legendary`
+  is gone. The `CardSource` guard classifies all 20 `CardData` fields (9
+  layered, 11 printed with a reason). `WORLDS.md`, `managym/README.md` and
+  the `Card` stub state the rule in the same words.
+- **Rules text and mana cost stay printed, with a trigger to move them.**
+  Both are characteristics (CR 109.3), but no `Modification` changes them;
+  a copy carries the copied values because `create_token_copy` materializes
+  them into the definition, so the printed card is the layered value. The
+  guard's reasons say so. The first vocabulary entry that changes either one
+  (a cost-setting or text-changing effect) must add it to `Characteristics`
+  and reclassify the field as `Layered`; 2a's "add it to the view instead of
+  reading the printed card" applies at that moment, not before.
+- **`PermanentData.name` and the card row's `name` are different facts.**
+  The permanent row's `name` is the "set by an Aura" marker (a fact row);
+  the card row's `name` is the layered name every viewer reads. T3's shape,
+  not T5's; stated in `questions.md`.
+- **`base_power` / `base_toughness` are not a T5 choice.** The projection's
+  fields read the card row, so on the battlefield they equal `power` /
+  `toughness` since 2a; no UI, test or training reader uses them for a
+  printed value, and the comment that promised a "4/4 (2/2)" display never
+  had a consumer. The name now overstates what the field holds, and it is a
+  required field in the four protocol v1 schemas, so renaming or dropping it
+  is a protocol change for a separate Task (Remaining lists the three
+  options). The accepted T5 outcome (three cards, observed through the
+  shared contract) does not depend on it.
 
 ## Sync onto main — 2026-11-02 (steer 6eae1230)
 

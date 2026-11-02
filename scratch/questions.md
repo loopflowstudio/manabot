@@ -124,3 +124,18 @@ here; main carries their outcomes.
   Remaining). Memory bullet corrected: evidence under active effects does move.
 - `/verify` was not run before the realign commit, as for every T5 commit:
   that Loopflow skill checks a merged change, and shipping is stopped.
+
+## T5 concept review after 1a/2a — 2026-11-02 (headless)
+
+- Rules text and mana cost are CR characteristics but have no modifying
+  `Modification`, and a copy carries them materialized in its definition, so
+  `text_box` and `mana_cost` stay `Printed` in the `CardSource` guard with
+  that reason. The first effect that changes either moves it into
+  `Characteristics`; 2a's "add it to the view" clause applies then.
+- The projection's `base_power` / `base_toughness` (layered on the
+  battlefield since 2a, nothing reads them for a printed value) are a
+  protocol follow-up for Jack Heart, not a T5 product choice; the step
+  reports "nothing to change" rather than Blocked, since the PR waits for
+  Jack Heart's review in any case and shipping is stopped.
+- The realign commit `889948346` is local; PR #405's head is still
+  `e8fd88eed`. This step publishes nothing; gate pushes.
