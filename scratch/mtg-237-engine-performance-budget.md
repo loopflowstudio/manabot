@@ -32,11 +32,11 @@ Design from Jack Heart's concept review of 2026-11-02 (Performance section,
 
 ## Delete — do not maintain
 
-Replace the winner/simulation-only `scores_digest` fold in `bench_search`
-with one ordered full-score digest. Preserve the workload, choice, timings,
-integer output shape and simulation/choice evidence. No parallel legacy
-digest or compatibility path. The Clean-machine Play 120 s wait stays a
-launch proof, not a latency budget.
+Completed in e5615edcc: the winner/simulation-only `scores_digest` fold in
+`bench_search` is gone. One ordered full-score digest preserves the workload,
+choice, timings, integer output shape and simulation/choice evidence. No
+legacy path or remaining deletion target. The Clean-machine Play 120 s wait
+stays a launch proof, not a latency budget.
 
 ## Decisions
 
@@ -59,62 +59,33 @@ launch proof, not a latency budget.
   and costs one recording per such PR; accepted as the price of (3). A kept
   speedup is the third reason to move the reference (concept review).
 
-## Concept reviews (2026-11-02, headless)
+## Review constraints (2026-11-02, headless)
 
-Source: Jack Heart's Performance section ("the PR fails if worst reply or
-total exceeds the recorded baseline by more than 10%; a PR that moves the
-baseline records why; a headless steps/s workload alongside it; measure T4
-and T5 once"; purpose "a CI budget keeps it gone"; order of work "each lands
-with its bench_search delta in the PR body"). Each review found a mismatch
-settled by the accepted decisions, with no open product choice:
+Jack Heart's Performance section asks for a 10% budget, deliberate baseline
+moves, a headless steps/s workload, one-time T4/T5 measurements and each PR's
+bench_search delta. The completed reviews enforce these constraints:
 
-- First (fixed in 45f1b4627): moving the reference needed a second `measure`
-  dispatch and a seven-flag command, and keeping a speedup was not a
-  documented move. Now every run is a recording of its candidate
-  (`measurement.json`; `record --reason`; three documented reasons;
-  `measure` confined to commits without a PR), so MTG-236's PRs record their
-  head and the gain is budgeted.
-- Second (fixed in 2f3fe99e1): on `pull_request` the default checkout is
-  GitHub's ephemeral `refs/pull/N/merge`, which a later run cannot fetch. The
-  job checks out `github.event.pull_request.head.sha || github.sha`, so the
-  measured tree and the recorded commit are one durable commit. Detect
-  Changes still diffs the merge commit; `measure` and push were never
-  affected (the T4 recording and the validating dispatch passed).
-- Third (fixed in 644eab3b0): the reference was built before the candidate,
-  so a reference that no longer compiled with this ref's benchmarks (the
-  `Env` surface change the docs name) left an empty artifact and that PR
-  could not adopt its own run. Now the candidate is built, run and recorded
-  first (its summary block), then the reference (its block), then compare
-  and upload. Order on one VM is assumed not to bias the 10% tolerance
-  (questions.md). Same commit: the reasons to move the reference name a
-  moved digest (rules reaching the decks, or the benchmarks or curated
-  lists), an accepted cost or a kept speedup; compare's "baseline file" row
-  says "digests do not describe the reference" and leaves recovery to the
-  footer.
-- Fourth (reviewed at 078d37ef4; fixed in e5615edcc):
-  the Task's score-preservation check currently protects only the chosen
-  action and simulation count. `bench_search` folds
-  `result.simulations + best` into `scores_digest`, never `result.scores`.
-  With identical simulation counts, scores `[0.75, 0.25]` changing to
-  `[0.875, 0.125]` leave the chosen action, game trajectory and digest
-  unchanged. A faster but incorrect evaluation can therefore pass. The
-  accepted requirement (Jack Heart's Task brief: "Score digests are asserted
-  identical ... so a speedup that changes search results fails") settles
-  this without a new product choice: preserve every action's score in order
-  at every measured decision, together with decision boundaries and the
-  existing simulation/choice evidence. Keep the workload, timings, 10%
-  tolerance, same-runner comparison and artifact adoption interaction.
+- Every job records its candidate with `measurement.json`; a PR adopts its
+  own artifact using `record --reason`. Record moved digests, accepted costs
+  or kept speedups. Reserve `measure` dispatch for commits without a PR.
+- Measure the durable PR head, never GitHub's ephemeral merge commit.
+- Build, run and record the candidate before building the reference so an
+  incompatible reference still leaves an adoptable artifact. Compare's
+  baseline-file row distinguishes reference digest drift from candidate cost.
+- Preserve every ordered action score and decision boundary, plus simulation
+  count and chosen action. The old fold missed changed losing scores when
+  the winner and simulation count stayed fixed, allowing incorrect speedups.
+  The Task's correctness requirement settles this without a new product choice.
 
-  Implemented with length-framed little-endian IEEE-754 score bits and
-  separate simulation/choice words in BLAKE3 (first 64 bits retain the
-  integer output shape). Controlled fixtures preserve repeatability and
-  detect changed losing scores, action order, decision boundaries and
-  simulation/choice changes. Existing comparator coverage rejects changed
-  digests even during speedups. CI artifact 41540798745 records the new
-  reference through `record --reason`; old T4/T5/T6 measurements retain
-  their documented winner-only digest limitation. PR proof of matching
-  strengthened digests and candidate recovery after reference-build failure
-  remains with gate/CI. No unresolved product choice.
+The full review history and counterexamples remain at
+`311218a02:scratch/mtg-237-engine-performance-budget.md` (workflow fixes through
+078d37ef4, full-score fix e5615edcc). The surviving digest uses length-framed
+little-endian IEEE-754 score bits in BLAKE3, keeping its first 64 bits as the
+integer output. Controlled fixtures check repeatability, losing-score changes,
+action order, decision boundaries and simulation/choice changes. Comparator
+fixtures reject changed digests even during speedups. Historical T4/T5/T6
+measurements retain their winner-only digest limitation; the new recording and
+remaining proof belong to Status below.
 
 Checked paths: PASS table and merge; 12% slower with matching digests (fix,
 or record the head and cite the delta from the failing run); a baseline whose
@@ -158,7 +129,12 @@ GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
 steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: focused debug `cargo test --example bench_search -j 2` → 4 passed;
-`uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q`
-→ 57 passed; `cargo fmt --check` and focused Clippy clean (2026-11-02). Full affected suites
-and PR verification remain with gate/CI.
+Reply timings are sorted in place after summing: their original order is no
+longer used, so a cloned vector adds no information. Digest bytes, measured
+work and the baseline remain unchanged.
+
+Check (2026-11-02): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml --example bench_search -j 2`
+→ 4 passed; `cargo fmt --manifest-path managym/Cargo.toml --check` and
+`git diff --check` clean. Reused implement's 57 comparator/CI-selection passes
+and focused Clippy result; full affected suites and PR verification belong
+to gate/CI. `lf context` confirms memory and scratch remain under both limits.

@@ -73,16 +73,15 @@ fn main() {
             }
         }
         let total: f64 = replies.iter().sum();
-        let mut sorted = replies.clone();
-        sorted.sort_by(f64::total_cmp);
-        let worst = *sorted.last().unwrap();
+        replies.sort_by(f64::total_cmp);
+        let worst = *replies.last().unwrap();
         worst_overall = worst_overall.max(worst);
         total_overall += total;
         let scores_digest = scores_digest(&digest);
         println!(
             "{{\"seed\":{seed},\"decisions\":{},\"worst_s\":{worst:.3},\"median_s\":{:.3},\"total_s\":{total:.3},\"digest\":{scores_digest}}}",
             replies.len(),
-            sorted[sorted.len() / 2],
+            replies[replies.len() / 2],
         );
     }
     println!("{{\"worst_overall_s\":{worst_overall:.3},\"total_overall_s\":{total_overall:.3}}}");

@@ -216,8 +216,8 @@ their own and compares a change with the reference commit named in
 GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
 the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
 Intel Xeon 6973P-C (2026-11-02), so wall time is never compared across runs.
-The job builds and runs the candidate, then checks out the reference commit,
-builds it with the change's benchmarks and runs it on the one machine, and
+The job builds and runs the candidate, then builds the reference commit
+with the change's benchmarks and runs it on the one machine, and
 fails the PR when the candidate is more than 10% slower than the reference on
 any timing or either run's digests differ from the committed ones (two runs
 of one engine on separate EPYC 7763 machines agreed within 2.5%). So a
