@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil | `world` (the default pack): every defined card (266 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (266 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -155,6 +155,27 @@ control enough permanents with its name. Joo Dee, One of Many, Ran and Shaw
 and Phoenix Fleet Airship are supported (266 in `world`). Observations add a
 permanent's `copy`; the policy input adds `Copy` and `CopyException` fact
 rows.
+
+Task MTG-225 (TLA batch T6) extends w17 with Sagas and transforming
+double-faced cards. A back face is its own definition row, registered right
+after its front; a permanent shows it while transformed (CR 712.8), keeps its
+object identity when it transforms (CR 712.9), turns front face up as it
+leaves the battlefield, and has its front face's mana value (CR 712.8e). A
+copy of a double-faced permanent has both faces and is transformed if the
+original is (CR 707.8a). Sagas enter with a lore counter, gain one as their
+controller's precombat main phase begins, trigger each chapter a lore counter
+crosses and are sacrificed once their final chapter has left the stack (CR
+714). Extra turns (CR 500.7) and additional combat phases that may limit
+their attackers (CR 500.8) are scheduled on the turn state. Bending events
+(waterbend payments, earthbend, firebending mana, airbend) join the turn
+history, a spell on the stack can be airbent, spell costs can be reduced by
+colored mana that also reduces generic (CR 601.2f), and a permanent can have
+another card's activated and triggered abilities through an effect record.
+All 16 T6 cards are supported (330 supported definitions in `world`). The
+policy input adds player columns for the four bending kinds, extra turns and
+additional combats (67 → 73) and a card column for "until the end of your next
+turn" play permissions (55 → 56); decision code 23 is the each-player
+exile choice.
 
 Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.
