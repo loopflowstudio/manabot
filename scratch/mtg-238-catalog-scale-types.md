@@ -1,5 +1,23 @@
 # MTG-238: catalog-scale types
 
+## Current direction — 2026-11-02, publication order changed
+
+Jack Heart directed MTG-238 to go first. This supersedes the earlier hold for
+MTG-225 and the stacking prerequisite below. Sync onto main, complete the
+approved batch, validate and publish one PR for review without waiting for T6.
+Main now includes T5 (`a8abf01b1`), so the Phoenix Fleet Airship namesakes
+conversion belongs here. T6 will integrate the crate move afterward.
+
+A read of `lf sync --manual` found overlapping T5 edits in the moved rules
+types, static characteristics, observations and regenerated w17 fixtures.
+That exploratory merge was aborted without discarding branch work; the Task
+Graph resumes at sync to resolve it. Preserve T5's effective-characteristics,
+copy and Nonlegendary behavior while applying the new keyword and type-grant
+APIs. Regenerate current-world evidence for the combined tree and run the
+required debug/release, extension, Python and arena-admission checks. Prior
+green results below predate this integration. Stop for review after publication;
+this direction does not authorize auto-merge.
+
 Task: sparse counters, keyword enum, card-set crate, animation as a record,
 `CreatureWithNamesakes` as a counted predicate.
 Base: main `29660d00c` (T4 plus the ARCHITECTURE owners rename, merged in
