@@ -481,6 +481,10 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
         Effect::UntapAll { .. } => "Effect::UntapAll",
         Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
+        Effect::DestroyAll { .. } => "Effect::DestroyAll",
+        Effect::NameAndExileFromTargetPlayer { .. } => "Effect::NameAndExileFromTargetPlayer",
+        Effect::ExileNamed { .. } => "Effect::ExileNamed",
+        Effect::PayTargetsManaValue { .. } => "Effect::PayTargetsManaValue",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::PutCountersOnTriggeringPermanent { .. } => {
             "Effect::PutCountersOnTriggeringPermanent"
@@ -598,7 +602,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 113;
+const EFFECT_VARIANTS: usize = 117;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -909,6 +913,17 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::EachPlayerChoosesToExile {
             predicate: CardPredicate::creature(),
+        },
+        Effect::DestroyAll {
+            predicate: CardPredicate::creature(),
+        },
+        Effect::NameAndExileFromTargetPlayer { count: 4 },
+        Effect::ExileNamed {
+            name: "Gray Ogre".into(),
+            count: 4,
+        },
+        Effect::PayTargetsManaValue {
+            if_paid: vec![Effect::Discard],
         },
         Effect::GainControl {
             player: PlayerSelector::You,

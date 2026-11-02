@@ -1580,6 +1580,82 @@ impl Game {
                 frame.controller = *player;
                 None
             }
+            Effect::DestroyAll { predicate } => {
+                let doomed: Vec<_> = [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
+                    .filter_map(|id| self.permanent_object_ref(id))
+                    .collect();
+                for object in doomed {
+                    self.destroy_object(object);
+                }
+                None
+            }
+            Effect::NameAndExileFromTargetPlayer { count } => {
+                // Every name a deck may hold; names are public knowledge.
+                let names: std::collections::BTreeSet<String> = self
+                    .state
+                    .content
+                    .definition_entries()
+                    .filter(|(id, definition)| {
+                        !definition.is_token
+                            && !definition.key.is_empty()
+                            && self.state.content.front_face(*id).is_none()
+                    })
+                    .map(|(_, definition)| definition.name.clone())
+                    .collect();
+                Some(Decision::Modal {
+                    player: frame.controller,
+                    modes: names
+                        .into_iter()
+                        .map(|name| {
+                            vec![Effect::ExileNamed {
+                                name,
+                                count: *count,
+                            }]
+                        })
+                        .collect(),
+                })
+            }
+            Effect::ExileNamed { name, count } => {
+                let Some(Target::Player(player)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                let found: Vec<CardId> = [ZoneType::Graveyard, ZoneType::Hand, ZoneType::Library]
+                    .into_iter()
+                    .flat_map(|zone| self.state.zones.zone_cards(zone, player).clone())
+                    .filter(|card| self.state.cards[*card].name == *name)
+                    .take(*count)
+                    .collect();
+                self.emit(GameEvent::LibrarySearched {
+                    player: frame.controller,
+                });
+                for card in found {
+                    self.move_card(card, ZoneType::Exile);
+                }
+                self.shuffle_library(player);
+                None
+            }
+            Effect::PayTargetsManaValue { if_paid } => {
+                let total: u32 = frame
+                    .active_targets()
+                    .into_iter()
+                    .filter_map(|target| match target.target {
+                        Target::GraveyardCard(object) => Some(CardId::from(object.entity)),
+                        _ => None,
+                    })
+                    .map(|card| u32::from(self.card_mana_value(card)))
+                    .sum();
+                Some(Decision::Payment(PaymentProgress::new(
+                    frame.controller,
+                    PaymentCost::Mana(
+                        crate::state::mana::ManaCost::default().with_generic(total.min(255) as u8),
+                    ),
+                    if_paid.clone(),
+                    Vec::new(),
+                )))
+            }
             Effect::EachPlayerChoosesToExile { predicate } => self.choose_to_exile(
                 frame.controller,
                 frame.controller,
@@ -2178,6 +2254,13 @@ impl Game {
                         (predicate, true)
                     }
                     TargetSpec::GraveyardCard { predicate } => (predicate, false),
+                    TargetSpec::GraveyardCardOpponentOwns { predicate } => {
+                        let card = CardId::from(object.entity);
+                        if self.state.cards[card].owner == controller {
+                            return false;
+                        }
+                        (predicate, false)
+                    }
                     _ => return false,
                 };
                 let card = CardId::from(object.entity);

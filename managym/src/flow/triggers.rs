@@ -576,12 +576,14 @@ impl Game {
                 .filter_map(|card| self.current_object_ref(*card))
                 .map(Target::GraveyardCard)
                 .collect(),
-            TargetSpec::GraveyardCard { .. } => [PlayerId(0), PlayerId(1)]
-                .into_iter()
-                .flat_map(|player| self.state.zones.zone_cards(ZoneType::Graveyard, player))
-                .filter_map(|card| self.current_object_ref(*card))
-                .map(Target::GraveyardCard)
-                .collect(),
+            TargetSpec::GraveyardCard { .. } | TargetSpec::GraveyardCardOpponentOwns { .. } => {
+                [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.state.zones.zone_cards(ZoneType::Graveyard, player))
+                    .filter_map(|card| self.current_object_ref(*card))
+                    .map(Target::GraveyardCard)
+                    .collect()
+            }
             TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }

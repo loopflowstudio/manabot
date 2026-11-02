@@ -87,3 +87,10 @@ Decision: the content-pack simplification is part of T6, not a separate Task.
   and ignores pack structure); every directed card test and
   `tests/cards/observability.rs` pass; `world_identity_names_the_version_and_card_digest`
   still holds; `CARD_DEFINITION_COUNT` equals the catalog length.
+
+## Follow-up Tasks launched (Jack Heart, 2026-11-02)
+
+From the guide's proposed items 6–9, all in the engine wave, all running:
+MTG-235 effect vocabulary (ObjectSelector), MTG-236 derived-state revisions and
+indexes, MTG-237 engine performance budget in CI, MTG-238 catalog-scale types.
+MTG-235/236/238 are briefed to stack on T6 when it publishes; MTG-237 is independent.

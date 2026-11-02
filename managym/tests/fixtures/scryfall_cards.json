@@ -4489,5 +4489,29 @@
       "R",
       "U"
     ]
+  },
+  "The Rise of Sozin": {
+    "name": "The Rise of Sozin",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Destroy all creatures.\nII — Choose a card name. Search target opponent's graveyard, hand, and library for up to four cards with that name and exile them. Then that player shuffles.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Lord Sozin": {
+    "name": "Fire Lord Sozin",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Firebending",
+      "Menace"
+    ],
+    "oracle_text": "Menace, firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\nWhenever Fire Lord Sozin deals combat damage to a player, you may pay {X}. When you do, put any number of target creature cards with total mana value X or less from that player's graveyard onto the battlefield under your control.",
+    "colors": [
+      "B"
+    ]
   }
 }

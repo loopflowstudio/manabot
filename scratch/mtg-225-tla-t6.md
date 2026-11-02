@@ -48,7 +48,7 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | The Legend of Kyoshi // Avatar Kyoshi | supported; directed test |
 | The Legend of Roku // Avatar Roku | supported; directed test |
 | The Legend of Yangchen // Avatar Yangchen | supported; decision code 23 (choose to exile) |
-| The Rise of Sozin // Fire Lord Sozin | |
+| The Rise of Sozin // Fire Lord Sozin | supported; name choice as a resolution Modal |
 | Aang, Swift Savior // Aang and La | supported; airbends spells, transforms in place |
 | Aang, at the Crossroads // Aang, Destined Savior | supported; next-upkeep delayed transform |
 | Avatar Aang // Aang, Master of Elements | |

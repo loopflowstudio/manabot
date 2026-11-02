@@ -400,6 +400,10 @@ fn target_description(t: &TargetSpec) -> String {
             "{} from a graveyard",
             predicate_description(predicate, "card")
         ),
+        TargetSpec::GraveyardCardOpponentOwns { predicate } => format!(
+            "{} from that player's graveyard",
+            predicate_description(predicate, "card")
+        ),
         TargetSpec::Permanent { predicate } => predicate_description(predicate, "permanent"),
         TargetSpec::Player => "player".into(),
         TargetSpec::Opponent => "opponent".into(),
@@ -643,6 +647,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
                 predicate_description(predicate, "creatures")
             ),
         },
+        DestroyAll { predicate } => format!("Destroy all {}", predicate_description(predicate, "permanents")),
+        NameAndExileFromTargetPlayer { count } => format!("Choose a card name. Search target opponent's graveyard, hand, and library for up to {count} cards with that name and exile them. Then that player shuffles"),
+        ExileNamed { name, count } => format!("Exile up to {count} cards named {name} from that player's graveyard, hand, and library, then they shuffle"),
+        PayTargetsManaValue { if_paid } => format!("You may pay X, the total mana value of the targets. If you do, {}", effects_description(if_paid)),
         EachPlayerChoosesToExile { predicate } => format!(
             "Starting with you, each player chooses up to one {} from among permanents your opponents control. Exile those permanents",
             predicate_description(predicate, "permanent")

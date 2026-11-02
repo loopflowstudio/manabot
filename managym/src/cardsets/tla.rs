@@ -16,7 +16,7 @@ use crate::state::{
         StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
         TriggeredManaAbility,
     },
-    mana::{Color, Mana, ManaCost, ManaUse},
+    mana::{Color, Colors, Mana, ManaCost, ManaUse},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -278,6 +278,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         the_legend_of_yangchen(),
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
+        the_rise_of_sozin(),
         the_spirit_oasis(),
         the_unagi_of_kyoshi_island(),
         the_walls_of_ba_sing_se(),
@@ -9639,6 +9640,89 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
             ..Default::default()
         }],
         text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn the_rise_of_sozin() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter.)\nI — Destroy all creatures.\nII — Choose a card name. Search target opponent's graveyard, hand, and library for up to four cards with that name and exile them. Then that player shuffles.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.";
+    let back_text = "Menace, firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\nWhenever Fire Lord Sozin deals combat damage to a player, you may pay {X}. When you do, put any number of target creature cards with total mana value X or less from that player's graveyard onto the battlefield under your control.";
+    let their_creature_card = || TargetSpec::GraveyardCardOpponentOwns {
+        predicate: CardPredicate::creature(),
+    };
+
+    CardDefinition {
+        key: "tla.the_rise_of_sozin",
+        scryfall_id: "14eadf46-90c2-4376-8183-6a922a60174d",
+        name: "The Rise of Sozin".into(),
+        mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(
+                1,
+                vec![Effect::DestroyAll {
+                    predicate: CardPredicate::creature(),
+                }],
+            ),
+            chapter(
+                2,
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Opponent),
+                    effects: vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
+                }],
+            ),
+            chapter(3, return_transformed()),
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Fire Lord Sozin".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            color_override: Some(Colors::from_iter([Color::Black])),
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords {
+                menace: true,
+                ..Default::default()
+            },
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Attacks {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RRR"),
+                        until_end_of_combat: true,
+                    }],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            min: 0,
+                            max: TargetRequirement::ANY_NUMBER,
+                            ..TargetRequirement::one(their_creature_card())
+                        },
+                        effects: vec![Effect::PayTargetsManaValue {
+                            if_paid: vec![Effect::ForEachTarget {
+                                effects: vec![Effect::ReturnGraveyardTarget {
+                                    target: their_creature_card(),
+                                    to: GraveyardReturn::Battlefield,
+                                }],
+                            }],
+                        }],
+                    }],
+                },
+            ],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
         ..Default::default()
     }
 }

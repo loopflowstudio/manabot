@@ -13855,3 +13855,88 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
     }
     s.assert_life(1, 11);
 }
+
+/// I destroys all creatures; II names a card and exiles up to four with
+/// that name from the opponent's graveyard, hand and library; Fire Lord
+/// Sozin's combat damage returns creature cards from that player's
+/// graveyard for their total mana value.
+#[test]
+fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
+    let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Craw Wurm"]);
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let (mine_card, theirs_card) = (card_of(&s, mine), card_of(&s, theirs));
+    let saga = enter_saga(&mut s, "The Rise of Sozin");
+    let card = card_of(&s, saga);
+    assert_eq!(zone_of(&s, mine_card), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Graveyard));
+
+    s.force_card_in_hand(1, "Gray Ogre");
+    next_main_phase(&mut s);
+    target_opponent(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let names = s.action_space().actions.len();
+    assert!(names > 200, "every card name in the world: {names}");
+    let ogre_mode = s
+        .game()
+        .state
+        .content
+        .definition_entries()
+        .filter(|(id, d)| {
+            !d.is_token && !d.key.is_empty() && s.game().state.content.front_face(*id).is_none()
+        })
+        .map(|(_, d)| d.name.clone())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .position(|name| name == "Gray Ogre")
+        .unwrap();
+    choose_mode(&mut s, ogre_mode);
+    settle(&mut s);
+    let exiled = |s: &Scenario| {
+        s.game()
+            .state
+            .zones
+            .zone_cards(ZoneType::Exile, PlayerId(1))
+            .iter()
+            .filter(|c| s.game().state.cards[**c].name == "Gray Ogre")
+            .count()
+    };
+    assert_eq!(exiled(&s), 4, "up to four, from hand and library");
+
+    next_main_phase(&mut s);
+    settle(&mut s);
+    let sozin = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(s.game().state.cards[card].name, "Fire Lord Sozin");
+    clear_summoning_sickness(&mut s, sozin);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, sozin);
+    s.advance_until(
+        |sc| sc.action_space().kind == ActionSpaceKind::ChooseTarget,
+        "the combat damage trigger asks for targets".into(),
+    );
+    let object = s.game().current_object_ref(theirs_card).unwrap();
+    assert!(
+        !offered_targets(&s).contains(&Target::GraveyardCard(
+            s.game().current_object_ref(mine_card).unwrap()
+        )),
+        "that player's graveyard only"
+    );
+    assert!(s.choose_target(Target::GraveyardCard(object)));
+    if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    }
+    s.set_player_mana_pool(0, "6");
+    s.pass_priority();
+    s.pass_priority();
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Battlefield));
+    let wurm = s.game().state.card_to_permanent[theirs_card].unwrap();
+    assert_eq!(
+        permanent(&s, wurm).controller,
+        PlayerId(0),
+        "under your control"
+    );
+}

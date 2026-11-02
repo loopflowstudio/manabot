@@ -589,6 +589,28 @@ pub enum Effect {
     EachPlayerChoosesToExile {
         predicate: CardPredicate,
     },
+    /// "Destroy all [predicate] permanents."
+    DestroyAll {
+        predicate: CardPredicate,
+    },
+    /// "Choose a card name. Search [the target player]'s graveyard, hand and
+    /// library for up to `count` cards with that name and exile them. Then
+    /// that player shuffles." The name is a resolution choice among the
+    /// world's card names (one mode each, `ExileNamed`).
+    NameAndExileFromTargetPlayer {
+        count: usize,
+    },
+    /// The named choice of `NameAndExileFromTargetPlayer`: exile up to
+    /// `count` cards named `name`, from graveyard, then hand, then library.
+    ExileNamed {
+        name: String,
+        count: usize,
+    },
+    /// "You may pay {X}. When you do, [if_paid]" with X the total mana value
+    /// of the frame's chosen targets: paying it runs `if_paid` on them.
+    PayTargetsManaValue {
+        if_paid: Vec<Effect>,
+    },
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
@@ -1136,6 +1158,10 @@ pub enum TargetSpec {
     GraveyardCard {
         predicate: CardPredicate,
     },
+    /// "[predicate] card from that player's graveyard": an opponent's.
+    GraveyardCardOpponentOwns {
+        predicate: CardPredicate,
+    },
     Player,
     Opponent,
     Permanent {
@@ -1424,6 +1450,10 @@ impl Effect {
             | Effect::AdditionalCombatPhase { .. }
             | Effect::UntapAll { .. }
             | Effect::EachPlayerChoosesToExile { .. }
+            | Effect::DestroyAll { .. }
+            | Effect::NameAndExileFromTargetPlayer { .. }
+            | Effect::ExileNamed { .. }
+            | Effect::PayTargetsManaValue { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::ExileSourceAndReturn { .. }
             | Effect::PutCountersOnCreatedToken { .. }

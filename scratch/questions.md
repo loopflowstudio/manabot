@@ -78,3 +78,10 @@ here; main carries their outcomes.
   once it applies (attack offers).
 - Yangchen II's "you may have target opponent draw three" is a resolution
   `Modal` (draw both / nothing) inside its target clause, not a new variant.
+- The Rise of Sozin II: the card name is a resolution `Modal`, one mode per
+  deck-eligible name in the world (front faces, no tokens or fixtures). The
+  search exiles as many as it finds up to four (graveyard, hand, library)
+  rather than offering to find fewer.
+- Fire Lord Sozin: targets are chosen as the trigger goes on the stack and X
+  is then their total mana value, paid or declined at resolution — the
+  reverse of "pay {X}, when you do choose targets", with the same outcomes.
