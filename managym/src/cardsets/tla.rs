@@ -52,6 +52,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         aang_s_iceberg(),
         aang_s_journey(),
+        aang_swift_savior(),
         aang_the_last_airbender(),
         abandon_attachments(),
         abandoned_air_temple(),
@@ -77,6 +78,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         barrels_of_blasting_jelly(),
         beetle_headed_merchants(),
         beifong_s_bounty_hunters(),
+        bender_s_waterskin(),
         benevolent_river_spirit(),
         bitter_work(),
         boar_q_pine(),
@@ -418,6 +420,82 @@ fn aang_s_journey() -> CardDefinition {
         ],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}"))],
         text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn aang_swift_savior() -> CardDefinition {
+    let text_box = "Flash\nFlying\nWhen Aang enters, airbend up to one other target creature or spell. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWaterbend {8}: Transform Aang.";
+    let back_text = "Reach, trample\nWhenever Aang and La attack, put a +1/+1 counter on each tapped creature you control.";
+
+    CardDefinition {
+        key: "tla.aang_swift_savior",
+        scryfall_id: "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4",
+        name: "Aang, Swift Savior".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(3),
+        keywords: Keywords {
+            flash: true,
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement {
+                    min: 0,
+                    another: true,
+                    ..TargetRequirement::one(TargetSpec::CreatureOrSpell)
+                },
+                effects: vec![Effect::Airbend {
+                    target: TargetSpec::CreatureOrSpell,
+                }],
+            }],
+        }],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            waterbend: true,
+            mana_cost: ManaCost::parse("{8}"),
+            effects: vec![Effect::TransformSource],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Aang and La, Ocean's Fury".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into(), "Spirit".into(), "Ally".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords {
+                reach: true,
+                trample: true,
+                ..Default::default()
+            },
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::PutCountersOnEachMatching {
+                    count: EffectValue::Fixed(1),
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        tapped: true,
+                        ..Default::default()
+                    },
+                    other: false,
+                }],
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
         ..Default::default()
     }
 }
@@ -1489,6 +1567,26 @@ fn beifong_s_bounty_hunters() -> CardDefinition {
                 count: EffectValue::TriggeringPower,
                 target: TargetSpec::LandYouControl,
             }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn bender_s_waterskin() -> CardDefinition {
+    let text_box = "Untap this artifact during each other player's untap step.\n{T}: Add one mana of any color.";
+
+    CardDefinition {
+        key: "tla.bender_s_waterskin",
+        scryfall_id: "6d4a1712-d19e-4475-9614-a0b1af4da610",
+        name: "Bender's Waterskin".into(),
+        mana_cost: Some(ManaCost::parse("{3}")),
+        types: CardTypes::new([CardType::Artifact]),
+        statics: vec![StaticAbility::UntapsDuringOtherUntapSteps],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            effects: vec![one_mana_of_any_color(None)],
+            ..Default::default()
         }],
         text_box: text_box.into(),
         ..Default::default()

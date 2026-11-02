@@ -585,7 +585,9 @@ impl Game {
             TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
-            TargetSpec::Spell | TargetSpec::SpellOrPermanent { .. } => self
+            TargetSpec::Spell
+            | TargetSpec::SpellOrPermanent { .. }
+            | TargetSpec::CreatureOrSpell => self
                 .state
                 .stack_objects
                 .iter()
@@ -626,6 +628,7 @@ impl Game {
                 | TargetSpec::LandYouControl
                 | TargetSpec::PermanentOpponentControls { .. }
                 | TargetSpec::SpellOrPermanent { .. }
+                | TargetSpec::CreatureOrSpell
         ) {
             for player in [PlayerId(0), PlayerId(1)] {
                 for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {

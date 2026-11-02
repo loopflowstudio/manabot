@@ -64,3 +64,7 @@ here; main carries their outcomes.
 - Extra turns are observed as a per-player count (player column
   `PLAYER_EXTRA_TURNS_INDEX`, player width +1); the resume order is not a
   column.
+- A transformed permanent's mana value is its front face's (CR 712.8e),
+  read by `Card::mana_value_cost` for predicates and targets.
+- Airbending a spell exiles it from the stack with the {2} recast grant
+  (Aang, Swift Savior's "creature or spell").

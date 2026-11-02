@@ -26,6 +26,9 @@ pub struct CardPredicate {
     /// "attacking": only permanents declared as attackers this combat.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    /// "tapped": only permanents are tapped.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tapped: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -94,7 +97,11 @@ impl CardPredicate {
     /// `added_types` are card types the object has in addition to its printed
     /// types (an animated land's creature type, a granted land type).
     pub fn matches(&self, card: &Card, power: i32, added_types: &[CardType]) -> bool {
-        if self.with_counter || self.attacking || (self.flying && !card.keywords.flying) {
+        if self.with_counter
+            || self.attacking
+            || self.tapped
+            || (self.flying && !card.keywords.flying)
+        {
             return false;
         }
         if self.token.is_some_and(|token| token != card.is_token) {
@@ -158,8 +165,7 @@ impl CardPredicate {
         }
         if let Some(min_mana_value) = self.min_mana_value {
             let mana_value = card
-                .mana_cost
-                .as_ref()
+                .mana_value_cost()
                 .map(|cost| cost.mana_value)
                 .unwrap_or(0);
             if mana_value < min_mana_value {

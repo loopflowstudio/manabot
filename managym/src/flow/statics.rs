@@ -1331,6 +1331,9 @@ impl Game {
         if predicate.with_counter && permanent.counter_count(CounterKind::PlusOnePlusOne) <= 0 {
             return false;
         }
+        if predicate.tapped && !permanent.tapped {
+            return false;
+        }
         if predicate.attacking
             && !self
                 .state
@@ -1360,6 +1363,7 @@ impl Game {
             flying: false,
             with_counter: false,
             attacking: false,
+            tapped: false,
             subtype: None,
             subtypes_any: Vec::new(),
             not_subtypes: Vec::new(),

@@ -4345,5 +4345,44 @@
     "colors": [
       "B"
     ]
+  },
+  "Bender's Waterskin": {
+    "name": "Bender's Waterskin",
+    "mana_cost": "{3}",
+    "type_line": "Artifact",
+    "keywords": [],
+    "oracle_text": "Untap this artifact during each other player's untap step.\n{T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Aang, Swift Savior": {
+    "name": "Aang, Swift Savior",
+    "mana_cost": "{1}{W}{U}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Airbend",
+      "Transform",
+      "Flash",
+      "Waterbend"
+    ],
+    "oracle_text": "Flash\nFlying\nWhen Aang enters, airbend up to one other target creature or spell. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWaterbend {8}: Transform Aang.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Aang and La, Ocean's Fury": {
+    "name": "Aang and La, Ocean's Fury",
+    "type_line": "Legendary Creature — Avatar Spirit Ally",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Reach",
+      "Trample"
+    ],
+    "oracle_text": "Reach, trample\nWhenever Aang and La attack, put a +1/+1 counter on each tapped creature you control.",
+    "colors": []
   }
 }

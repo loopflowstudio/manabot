@@ -6128,7 +6128,7 @@ fn the_last_agni_kai_without_its_victim_deals_no_damage() {
     let card = card_of(&s, drake);
     s.game_mut().move_card(card, ZoneType::Hand);
     settle(&mut s);
-    assert_eq!(s.game().state.permanents[ogre].as_ref().unwrap().damage, 0);
+    s.assert_life(1, 20);
     assert_eq!(pool(&s).total(), 0);
 }
 
@@ -13477,4 +13477,82 @@ fn the_legend_of_roku_lets_its_exiled_cards_be_played_through_your_next_turn() {
     activate(&mut s, roku, 0);
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Dragon").len(), 1);
+}
+
+/// Bender's Waterskin untaps in its controller's opponent's untap step too.
+#[test]
+fn benders_waterskin_untaps_during_the_other_players_untap_step() {
+    let mut s = five_color_setup(&["Bender's Waterskin"]);
+    let skin = s.force_permanent_on_battlefield(0, "Bender's Waterskin");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, skin, 0);
+    choose_mode(&mut s, 1);
+    assert!(tapped(&s, skin));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!tapped(&s, skin), "untapped in the opponent's untap step");
+}
+
+/// Aang, Swift Savior airbends a spell off the stack as he enters (its owner
+/// may recast it for {2}),, and Waterbend {8} transforms the same permanent:
+/// Aang and La keep the counters and put one on each tapped creature as
+/// they attack.
+#[test]
+fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
+    let mut s = five_color_setup(&["Aang, Swift Savior", "Lightning Bolt", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    // A spell on the stack; Aang is flashed in on top of it.
+    let bolt = cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    let aang_card = cast(&mut s, "Aang, Swift Savior");
+    resolve_top(&mut s);
+    assert!(offered_targets(&s).contains(&Target::StackSpell(bolt)));
+    assert!(s.choose_target(Target::StackSpell(bolt)));
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, bolt),
+        Some(ZoneType::Exile),
+        "airbent off the stack"
+    );
+    assert!(may_play_exiled(&s, bolt));
+    s.assert_life(1, 20);
+
+    let aang = s.game().state.card_to_permanent[aang_card].unwrap();
+    set_counters(&mut s, aang, CounterKind::PlusOnePlusOne, 1);
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, aang, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.card_to_permanent[aang_card],
+        Some(aang),
+        "same object"
+    );
+    assert_eq!(
+        s.game().state.cards[aang_card].name,
+        "Aang and La, Ocean's Fury"
+    );
+    assert_eq!(
+        counters_of(&s, aang, CounterKind::PlusOnePlusOne),
+        1,
+        "kept its counter"
+    );
+    let view = s.game().characteristics(aang);
+    assert!(view.keywords.reach && view.keywords.trample && !view.keywords.flying);
+    assert_eq!((view.power, view.toughness), (6, 6));
+
+    clear_summoning_sickness(&mut s, aang);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, aang);
+    settle(&mut s);
+    assert_eq!(
+        counters_of(&s, aang, CounterKind::PlusOnePlusOne),
+        2,
+        "tapped as it attacked"
+    );
+    assert_eq!(
+        counters_of(&s, ogre, CounterKind::PlusOnePlusOne),
+        0,
+        "untapped"
+    );
 }

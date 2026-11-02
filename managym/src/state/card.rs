@@ -639,6 +639,9 @@ pub enum StaticAbility {
     /// A triggered ability this card grants while on the battlefield
     /// ("Other Allies you control have prowess").
     TriggeredGrant(StaticTriggeredGrant),
+    /// "Untap this during each other player's untap step" (CR 502.3): it
+    /// untaps in its controller's opponents' untap steps as well as theirs.
+    UntapsDuringOtherUntapSteps,
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -971,6 +974,15 @@ impl Card {
             copy: None,
             definition,
             front: None,
+        }
+    }
+
+    /// Its mana cost for mana value: a transformed permanent's is its front
+    /// face's (CR 712.8e).
+    pub fn mana_value_cost(&self) -> Option<&ManaCost> {
+        match &self.front {
+            Some((_, front)) => front.mana_cost.as_ref(),
+            None => self.mana_cost.as_ref(),
         }
     }
 

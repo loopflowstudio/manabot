@@ -1116,6 +1116,8 @@ pub enum TargetSpec {
     SpellOrPermanent {
         min_mana_value: u8,
     },
+    /// "target creature or spell".
+    CreatureOrSpell,
     /// "target creature you control" — relative to the caster/controller.
     CreatureYouControl,
     /// "target creature an opponent controls".

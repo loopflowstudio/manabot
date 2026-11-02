@@ -229,6 +229,7 @@ impl Game {
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);
+                self.untap_during_other_untap_steps(active);
                 None
             }
             StepKind::Main => {

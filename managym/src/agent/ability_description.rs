@@ -262,6 +262,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         token,
         with_counter,
         attacking,
+        tapped,
         subtypes_any,
         not_subtypes,
         supertype,
@@ -276,6 +277,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         min_mana_value,
     } = p;
     let mut terms = Vec::new();
+    if *tapped {
+        terms.push("tapped".into());
+    }
     if *flying {
         terms.push("flying".into());
     }
@@ -391,6 +395,7 @@ fn target_description(t: &TargetSpec) -> String {
         TargetSpec::Creature => "creature".into(),
         TargetSpec::CreatureOrPlayer => "creature or player".into(),
         TargetSpec::Spell => "spell".into(),
+        TargetSpec::CreatureOrSpell => "creature or spell".into(),
         TargetSpec::SpellOrAbilityWithSingleTarget => {
             "spell or ability with a single target".into()
         }

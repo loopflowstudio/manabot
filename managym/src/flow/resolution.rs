@@ -942,8 +942,10 @@ impl Game {
                 None
             }
             Effect::Airbend { .. } => {
-                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
-                    self.airbend_permanent(id);
+                match self.present_primary_target(frame) {
+                    Some(Target::Permanent(id)) => self.airbend_permanent(id),
+                    Some(Target::StackSpell(card)) => self.airbend_spell(card),
+                    _ => {}
                 }
                 None
             }
@@ -2096,7 +2098,7 @@ impl Game {
             Target::StackSpell(card) => {
                 self.find_spell_on_stack_index(card).is_some()
                     && match spec {
-                        TargetSpec::Spell => true,
+                        TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
                         TargetSpec::SpellOrPermanent { min_mana_value } => {
                             self.card_mana_value(card) >= *min_mana_value
                         }
@@ -2192,6 +2194,7 @@ impl Game {
             TargetSpec::CreatureYouControl => {
                 permanent.controller == controller && self.characteristics(id).is_creature
             }
+            TargetSpec::CreatureOrSpell => self.characteristics(id).is_creature,
             TargetSpec::CreatureOpponentControls => {
                 permanent.controller != controller && self.characteristics(id).is_creature
             }
@@ -2208,7 +2211,7 @@ impl Game {
     /// The card's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn card_mana_value(&self, card: CardId) -> u8 {
-        let Some(cost) = self.state.cards[card].mana_cost.as_ref() else {
+        let Some(cost) = self.state.cards[card].mana_value_cost() else {
             return 0;
         };
         let x = match self

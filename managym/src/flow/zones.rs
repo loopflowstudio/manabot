@@ -214,6 +214,27 @@ impl Game {
         self.invalidate_mana_cache(player);
     }
 
+    /// Untap the other players' permanents that untap during each other
+    /// player's untap step (Bender's Waterskin), unless they've lost that
+    /// ability.
+    pub(crate) fn untap_during_other_untap_steps(&mut self, active: PlayerId) {
+        let other = PlayerId(1 - active.0);
+        for permanent_id in self.battlefield_permanents(other) {
+            let card = self.state.permanents[permanent_id].as_ref().map(|p| p.card);
+            let Some(card) = card else { continue };
+            let untaps = self.state.cards[card]
+                .statics
+                .iter()
+                .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
+            if untaps && !self.characteristics(permanent_id).abilities_lost {
+                if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                    permanent.untap();
+                }
+                self.invalidate_mana_cache(other);
+            }
+        }
+    }
+
     pub(crate) fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {

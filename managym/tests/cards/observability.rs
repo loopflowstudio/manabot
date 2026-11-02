@@ -1318,6 +1318,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "war_balloon_flies_once_it_has_three_fire_counters",
         ),
+        StaticAbility::UntapsDuringOtherUntapSteps => witnessed(
+            "StaticAbility::UntapsDuringOtherUntapSteps",
+            Seen::Via("the permanent's tapped column after another player's untap step"),
+            "Bender's Waterskin",
+            "tla",
+            "benders_waterskin_untaps_during_the_other_players_untap_step",
+        ),
         StaticAbility::CreatureWithNamesakes(_) => witnessed(
             "StaticAbility::CreatureWithNamesakes",
             Seen::Via("the animated permanent column once the namesakes are controlled"),
@@ -1483,6 +1490,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             count: 3,
         }),
         StaticAbility::CreatureWithNamesakes(8),
+        StaticAbility::UntapsDuringOtherUntapSteps,
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
             types: vec![CardType::Land],

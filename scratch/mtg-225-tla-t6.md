@@ -47,10 +47,10 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | The Legend of Roku // Avatar Roku | supported; directed test |
 | The Legend of Yangchen // Avatar Yangchen | |
 | The Rise of Sozin // Fire Lord Sozin | |
-| Aang, Swift Savior // Aang and La | |
+| Aang, Swift Savior // Aang and La | supported; airbends spells, transforms in place |
 | Aang, at the Crossroads // Aang, Destined Savior | |
 | Avatar Aang // Aang, Master of Elements | |
-| Bender's Waterskin | |
+| Bender's Waterskin | supported |
 | Bumi, Unleashed | |
 | Koh, the Face Stealer | |
 | Ember Island Production | |

@@ -126,6 +126,16 @@ impl Game {
         });
     }
 
+    /// Airbend a spell (CR 701.65a): it leaves the stack for exile, and its
+    /// owner may cast that card for {2}; a copy ceases to exist (CR 707.10a).
+    pub(crate) fn airbend_spell(&mut self, card: CardId) {
+        let owner = self.state.cards[card].owner;
+        self.exile_with_play_grant(card, |object| ExileCastGrant {
+            cost: Some(ManaCost::parse(AIRBEND_COST)),
+            ..ExileCastGrant::new(object, owner)
+        });
+    }
+
     /// "Exile the top `count` cards of your library. You may play them
     /// [this turn | until the end of your next turn]."
     pub(crate) fn exile_top_cards_to_play(

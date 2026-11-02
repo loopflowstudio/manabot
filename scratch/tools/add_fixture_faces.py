@@ -39,7 +39,16 @@ for path in sys.argv[1:]:
     if faces and card.get("layout") == "transform":
         for face in faces:
             text = face.get("oracle_text", "")
-            keywords = [k for k in card["keywords"] if re.search(rf"\b{re.escape(k)}\b", text)]
+            listed = {
+                item.split(" ")[0].lower()
+                for line in text.split("\n")
+                for item in line.split(", ")
+            }
+            keywords = [
+                k
+                for k in card["keywords"]
+                if re.search(rf"\b{re.escape(k)}\b", text) or k.lower() in listed
+            ]
             fixture[face["name"]] = entry(face, keywords)
     else:
         fixture[card["name"]] = entry(card, card["keywords"])
