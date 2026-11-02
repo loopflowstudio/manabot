@@ -1,9 +1,9 @@
 """Re-record the w17 choice-navigation positions in place by offer label."""
 
 import json
+from pathlib import Path
 import subprocess
 import tempfile
-from pathlib import Path
 
 from academy.server import GameSession
 import managym
