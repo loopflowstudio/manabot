@@ -308,11 +308,8 @@ def record(args: argparse.Namespace) -> int:
     candidate = read_run(args.artifact)
     # The tolerance is a decision of its own, edited in the file; a new
     # recording keeps it.
-    tolerance = (
-        load_baseline(args.baseline)["tolerance"] if args.baseline.exists() else 0.10
-    )
     baseline = Baseline(
-        tolerance=tolerance,
+        tolerance=load_baseline(args.baseline)["tolerance"],
         reference=Reference(**measurement, reason=args.reason),
         bench_search=candidate.search,
         bench_steps=candidate.steps,

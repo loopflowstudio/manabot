@@ -56,79 +56,54 @@ not a latency budget.
   and costs one recording per such PR; accepted as the price of (3). A kept
   speedup is the third reason to move the reference (concept review).
 
-## Concept review (2026-11-02, headless) and the one design change
+## Concept reviews (2026-11-02, headless; 5c8b0f2db and c8cbc5421)
 
 Source: Jack Heart's Performance section ("the PR fails if worst reply or
 total exceeds the recorded baseline by more than 10%; a PR that moves the
 baseline records why; a headless steps/s workload alongside it; measure T4
 and T5 once"; purpose "a CI budget keeps it gone"; order of work "each lands
-with its bench_search delta in the PR body").
+with its bench_search delta in the PR body"). Both reviews found a mismatch
+settled by the accepted decisions, with no open product choice:
 
-The mismatch found: every compare run already measured the candidate with
-exactly the output `record` consumed, yet moving the reference needed a
-second `measure` dispatch and a seven-flag command, and the purpose case
-(keeping a speedup) was not a documented move. Two concepts stood where the
-contract needs one: *every Engine Budget run is a recording of its
-candidate; a PR adopts one by committing it with a reason.* Implemented in
-45f1b4627: `measurement.json` in the artifact, `record --reason` from a
-downloaded artifact directory, three documented reasons to move the
-reference (rules change reaching the decks, accepted cost, kept speedup; so
-MTG-236's PRs record their head and the gain is budgeted), `measure` confined
-to commits without a PR.
+- First (fixed in 45f1b4627): moving the reference needed a second `measure`
+  dispatch and a seven-flag command, and keeping a speedup was not a
+  documented move. Now *every Engine Budget run is a recording of its
+  candidate; a PR adopts one by committing it with a reason*: the artifact's
+  `measurement.json`, `record --reason`, three documented reasons (rules
+  change reaching the decks, accepted cost, kept speedup; so MTG-236's PRs
+  record their head and the gain is budgeted), `measure` confined to commits
+  without a PR.
+- Second (fixed in 2f3fe99e1): on `pull_request` the default checkout is
+  GitHub's ephemeral `refs/pull/N/merge`, so a recording from a PR run would
+  name a commit the next run's "Check out the other commit" cannot fetch.
+  The job now checks out `github.event.pull_request.head.sha || github.sha`
+  (PR head; pushed or dispatched SHA otherwise), so the measured tree and the
+  recorded commit are one durable commit. Detect Changes still diffs the
+  merge commit. The `measure` and push paths were never affected, which is
+  why the T4 recording and the validating dispatch passed.
 
 Checked paths: PASS table and merge; 12% slower with matching digests (fix,
 or record the head and cite the delta from the failing run); a baseline whose
 digests no longer describe its reference fails as "baseline file: re-record
-from the reference commit" before any timing row. A noisy VM is the
-counterexample to 10%; re-running the job is the recovery when digests match
-and the engine did not change. Open for later evidence, not this Task: the
-10% figure and whether a dedicated runner is worth buying.
+from the reference commit" before any timing row; a noisy VM is the
+counterexample to 10%, and re-running the job is the recovery when digests
+match and the engine did not change. Open for later evidence, not this Task:
+the 10% figure and whether a dedicated runner is worth buying.
 
-## Second concept review (2026-11-02, headless, after compress)
-
-Walked the adopt-your-own-run path end to end with the implemented workflow.
-It fails at the step nobody has run yet: on `pull_request`, CI checks out
-`refs/pull/N/merge` (Detect Changes diffs `HEAD^1 HEAD` against that merge
-commit), so the Engine Budget candidate is the merge commit and
-`measurement.json` names its SHA. GitHub regenerates that commit whenever the
-PR head or main moves; it is not a durable identity, so a baseline recorded
-from a PR run would name a commit the next run's "Check out the other
-commit" cannot fetch, and the comparison the design promises (the recording
-commit's own run passes against it; main's first run after merge rebuilds
-it) is not available. The `measure` dispatch and the push-to-main path are
-unaffected (they resolve a real commit), which is why the T4 recording and
-the validating dispatch run passed.
-
-Settled by the accepted decision "every run is a recording of its candidate":
-the candidate is a durable commit. Implemented (2026-11-02, implement after
-the review): the job's first checkout takes
-`github.event.pull_request.head.sha || github.sha` (PR head on
-`pull_request`, pushed SHA on `push`, dispatched ref's SHA on
-`workflow_dispatch`), so the candidate tree, its benchmarks and
-`measurement.json`'s commit (still the checked-out tree's `rev-parse HEAD`,
-for `measure` the other checkout) are one durable commit. docs/development.md
-now says the recorded commit is the PR head and that re-running the job is
-the recovery when both digests match and the engine did not change. Detect
-Changes still diffs the merge commit; only the measured tree moved. Confirmed
-locally by actionlint; the `pull_request` path itself runs first on the PR.
-
-No open product choice. The two read decisions (A/B against a committed
-reference commit; native `Env::step` random play) stand as recorded above,
-awaiting the PR review.
-
-## Status (reconciled 2026-11-02, realign after compress)
+## Status (reconciled 2026-11-02, compress after the candidate-ref change)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
 Reference 4c8324a59 recorded from CI run 41517623999; full CI validated by
 workflow_dispatch run 41527511986 at 07512aa8c (Engine Budget A/B included).
-Later commits (script simplification, one `other` checkout, the
-`measurement.json`/`record --reason` design change, and the compress pass
-that made both commands read run directories so compare's four file flags
-became two directory defaults) have passed tests and actionlint locally but
-not CI: the branch has no PR and branch pushes do not trigger CI. Main moved
-to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at 49765237c;
-the reference 4c8324a59 still describes the engine (checked 2026-11-02).
+Later commits (script simplification, one `other` checkout, the recording
+design change, run-directory reading, the PR-head checkout, and this compress
+pass: the checkout ref inlined, the measured commit local to the measurement
+step, `record` taking the tolerance from the file only) have passed tests and
+actionlint locally but not CI: the branch has no PR and branch pushes do not
+trigger CI. Main moved to 29660d00c (docs/ARCHITECTURE.md and scratch only),
+merged at 49765237c; the reference 4c8324a59 still describes the engine
+(checked 2026-11-02).
 
 Remains: publication, owned by the caller: open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on `pull_request`,
@@ -143,4 +118,4 @@ GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
 steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean (2026-11-02, implement, after the candidate-ref change).
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean, ruff clean (2026-11-02, compress).

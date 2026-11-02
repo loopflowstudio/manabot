@@ -13,13 +13,14 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/engine_budget.py"
 BASELINE = ROOT / "managym/perf/baseline.json"
 
+RUNNER = "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release"
 BASE = {
     "tolerance": 0.10,
     "reference": {
         "commit": "abc123def456",
         "date": "2026-11-02",
         "run": "https://x",
-        "runner": "ubuntu-24.04 GitHub-hosted, AMD EPYC 7763 (4 vCPU), release",
+        "runner": RUNNER,
         "reason": "test",
     },
     "bench_search": {
@@ -33,7 +34,6 @@ BASE = {
     },
     "bench_steps": {"steps_per_s": 5000.0, "steps": 99923, "games": 512, "digest": 44},
 }
-RUNNER = "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release"
 
 
 def _run(*args: str | Path) -> tuple[int, str]:
@@ -185,6 +185,7 @@ def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
 
 def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(BASE))
     artifact = _write_artifact(
         tmp_path / "first", commit="0123456789abcdef", runner=RUNNER, scale=1.3
     )
@@ -201,13 +202,12 @@ def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> 
         "runner": RUNNER,
         "reason": "T6 adds Sagas to the curated decks",
     }
-    assert recorded["tolerance"] == 0.10
     assert recorded["bench_search"]["worst_s"] == 13.0
     assert recorded["bench_search"]["total_s"] == 390.0
     assert recorded["bench_steps"]["steps_per_s"] == pytest.approx(
         5000.0 / 1.3, abs=0.1
     )
-    # Recording again keeps the tolerance; only an edit of the file moves it.
+    # The tolerance is the file's own; only an edit of the file moves it.
     artifact = _write_artifact(
         tmp_path / "second",
         commit="fedcba9876543210",
@@ -228,6 +228,7 @@ def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> 
 def test_record_refuses_a_directory_without_a_measurement(tmp_path: Path) -> None:
     """Hand-assembled output is not a recording: the job's measurement.json names the run."""
     baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(BASE))
     artifact = _write_run(tmp_path / "artifact")
     code, output = _run(
         "record", "--baseline", baseline, "--artifact", artifact, "--reason", "x"
@@ -235,7 +236,7 @@ def test_record_refuses_a_directory_without_a_measurement(tmp_path: Path) -> Non
     assert code == 1, output
     assert "not an Engine Budget artifact" in output
     assert "gh run download <run-id> --name engine-budget" in output
-    assert not baseline.exists()
+    assert json.loads(baseline.read_text()) == BASE
 
 
 def test_committed_baseline_is_complete() -> None:

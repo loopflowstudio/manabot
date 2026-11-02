@@ -523,30 +523,18 @@ requirement, it needs its own Task.
 - T6's head (`2c1ba169f`) is unpushed, so measuring it on CI needs its commit
   reachable from origin; pushed as a plain ref under `refs/engine-budget/`
   for the dispatch and deleted afterwards (not a branch, no PR).
-- Realign, concept review and implement (2026-11-02, headless, `code`
-  graph): `.lf/wave/engine/MEMORY.md` stays unwritten because no step so far
-  maintains `.lf/wave/`; the proposal is in the plan. The two formerly draft
-  decisions (A/B against a committed reference commit; native `Env::step`
-  random play) are read as implied by the accepted outcome plus the runner
-  evidence, so the review did not return Blocked; Jack Heart's PR review
-  is where they are confirmed or reversed (not yet held: no PR exists). One design change: the reference is recorded from the PR's
-  own compare run (artifact plus `record --reason`), a kept speedup being a
-  documented reason to move it; `measure` stays for commits without a PR.
-  The artifact is named `engine-budget` in both modes (the run id identifies
-  a measurement). `measurement.json` carries the full `lscpu` model name
-  rather than the hand-shortened "AMD EPYC 7763" of the first recording; the
-  string is orientation only, never compared. Compare's FAIL hint leaves
-  `<run-id>` as a placeholder instead of reading `GITHUB_RUN_ID`, so the line
-  reads the same in CI and in tests.
-- Compress (2026-11-02, headless): `compare` and `record` read run
-  directories with the job's fixed file names instead of four file flags,
-  with the job's own paths as defaults; the uploaded artifact therefore also
-  contains the `reference/` run, which `record` ignores.
-- Second concept review (2026-11-02, headless, after compress): on
-  `pull_request` the job's candidate is the ephemeral `refs/pull/N/merge`
-  commit, so a baseline recorded from a PR's own run would name a SHA later
-  checkouts cannot rebuild. Read as implied by the accepted "every run is a
-  recording of its candidate": the candidate is the PR head (durable via
-  `refs/pull/N/head`), measured and named as such; recorded in the plan as
-  the next implement direction. Not a product choice; the design's reading
-  of "committed baseline" is unchanged.
+- Headless steps of the `code` graph (2026-11-02): `.lf/wave/engine/MEMORY.md`
+  stays unwritten because no step so far maintains `.lf/wave/`; the proposal
+  is in the plan. The two formerly draft decisions (A/B against a committed
+  reference commit; native `Env::step` random play) are read as implied by the
+  accepted outcome plus the runner evidence, so no review returned Blocked;
+  Jack Heart's PR review is where they are confirmed or reversed (no PR yet).
+  Both concept reviews' findings and fixes are in the plan (commits 5c8b0f2db,
+  c8cbc5421). Small readings made along the way: the artifact is named
+  `engine-budget` in both modes (the run id identifies a measurement);
+  `measurement.json` carries the full `lscpu` model name, orientation only,
+  never compared; compare's FAIL hint leaves `<run-id>` as a placeholder so
+  the line reads the same in CI and in tests; the uploaded artifact also
+  contains the `reference/` run, which `record` ignores; `record` takes the
+  tolerance from the committed file, which always exists, rather than
+  defaulting it.

@@ -1,20 +1,17 @@
 name: Engine Budget
 
-# Release-build engine benchmarks on a runner of their own, so nothing else on
-# the machine shares the measurement: Search-64 replies (bench_search) and
-# headless steps per second (bench_steps). GitHub-hosted runners land on
-# different CPU generations, so wall time is never compared across runs: the
-# job rebuilds the reference commit named in managym/perf/baseline.json with
-# this ref's benchmarks, runs both on this machine and holds the candidate to
-# the reference within the tolerance and both to the committed digests. Every
-# run is a recording of its candidate: the `engine-budget` artifact holds both
-# outputs and a measurement.json a PR adopts with `scripts/engine_budget.py
-# record --reason`. So the candidate is a durable commit: the PR head on
-# pull_request (the default checkout is GitHub's ephemeral merge commit, which
-# a later run cannot fetch), the pushed SHA on push, the dispatched ref's SHA
-# on workflow_dispatch. `measure` (CI's dispatch input, or this workflow's once
-# it is on main) records a commit that has no PR with this ref's benchmarks,
-# without comparing (docs/development.md, Engine performance budget).
+# Release-build engine benchmarks on a runner of their own: Search-64 replies
+# (bench_search) and headless steps per second (bench_steps). GitHub-hosted
+# runners land on different CPU generations, so wall time is never compared
+# across runs: the job rebuilds the reference commit named in
+# managym/perf/baseline.json with this ref's benchmarks, runs both on this
+# machine and holds the candidate to the reference within the tolerance and
+# both to the committed digests. Every run is a recording of its candidate:
+# the `engine-budget` artifact holds both outputs and a measurement.json a PR
+# adopts with `scripts/engine_budget.py record --reason`, so the candidate is
+# a durable commit (the PR head, not GitHub's ephemeral merge commit). `measure`
+# records a commit that has no PR with this ref's benchmarks, without
+# comparing (docs/development.md, Engine performance budget).
 
 on:
   workflow_call:
@@ -35,11 +32,12 @@ jobs:
     timeout-minutes: 90
     env:
       MEASURE: ${{ inputs.measure || '' }}
-      CANDIDATE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
+      # The PR head on pull_request (the default checkout is the merge commit,
+      # which a later run cannot fetch), the pushed or dispatched SHA otherwise.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.CANDIDATE_REF }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # One other commit is built with this ref's benchmarks: the measured
       # commit, which is then the candidate with no reference, or the
@@ -73,7 +71,6 @@ jobs:
           rm -rf other/managym/examples/curated
           cp -R managym/examples/curated other/managym/examples/curated
           cp managym/examples/bench_search.rs managym/examples/bench_steps.rs other/managym/examples/
-          echo "MEASURED_COMMIT=$(git -C "$CANDIDATE" rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -116,8 +113,9 @@ jobs:
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          COMMIT="$(git -C "$CANDIDATE" rev-parse HEAD)"
           RUNNER="GitHub-hosted ubuntu-24.04, $(lscpu | sed -n 's/^Model name: *//p' | head -1) ($(nproc) vCPU), release"
-          jq -n --arg commit "$MEASURED_COMMIT" --arg date "$(date -u +%F)" --arg run "$RUN_URL" --arg runner "$RUNNER" \
+          jq -n --arg commit "$COMMIT" --arg date "$(date -u +%F)" --arg run "$RUN_URL" --arg runner "$RUNNER" \
             '{commit: $commit, date: $date, run: $run, runner: $runner}' | tee .cache/engine-budget/measurement.json
           {
             echo "## Engine budget measurement"
@@ -130,7 +128,7 @@ jobs:
               cat .cache/engine-budget/reference/bench_steps.jsonl .cache/engine-budget/reference/bench_search.jsonl
               echo '```'
             fi
-            echo "Candidate \`$MEASURED_COMMIT\`:"
+            echo "Candidate \`$COMMIT\`:"
             echo '```'
             cat .cache/engine-budget/bench_steps.jsonl .cache/engine-budget/bench_search.jsonl
             echo '```'

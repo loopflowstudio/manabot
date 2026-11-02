@@ -229,9 +229,7 @@ reaching these decks moved a digest; a measured cost is accepted; or a
 speedup is kept, so later slowdowns are budgeted against the faster engine
 rather than allowed back up to the old reference. The PR body cites the delta
 from the run it adopts; the recording commit's own run then compares the same
-engine with that reference and passes. On a pull request the job checks out
-and records the PR head, never GitHub's ephemeral merge commit, so the recorded
-commit is one a later run can fetch. When both digests match and the engine
+engine with that reference and passes. When both digests match and the engine
 did not change, a failure is runner noise: re-run the job.
 
 ```bash
@@ -239,10 +237,12 @@ gh run download <run-id> --name engine-budget --dir .cache/engine-budget
 uv run scripts/engine_budget.py record --reason "<why the reference moves>"
 ```
 
-The reference commit must stay reachable from origin (a PR head stays
-fetchable after a squash merge). The benchmarks use only the stable `Env`
-surface (`new`, `reset`, `step`, `action_count`, `is_game_over`,
-`winner_index`, `flat_mc_scores`); a change to that surface must keep the
+The reference commit must stay reachable from origin: on a pull request the
+job checks out and records the PR head, never GitHub's ephemeral merge
+commit, and a PR head stays fetchable after a squash merge. The benchmarks
+use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
+`is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
+must keep the
 reference commit compiling with the new benchmarks or move the reference in
 the same PR. For a commit that has no PR, the `measure` dispatch input on
 `ci.yml` selects only Engine Budget, benchmarks that commit with the
