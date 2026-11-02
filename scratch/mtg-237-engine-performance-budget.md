@@ -32,5 +32,5 @@ not a latency budget.
 ## Status
 
 Implemented 2026-11-02. Reference 4c8324a59 recorded from CI run 41517623999;
-T4/T5/T6 figures in docs/development.md. Full CI on the branch validates the
-A/B path before review.
+T4/T5/T6 figures in docs/development.md. Full CI on the branch (run 41527511986,
+head 07512aa8c) passed, Engine Budget A/B included.
