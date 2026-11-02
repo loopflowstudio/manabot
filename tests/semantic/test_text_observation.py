@@ -552,7 +552,6 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "sideboard_counts": "Initial sideboard",
         "remaining_sideboard_counts": "Owned outside-game candidates",
         "keeps_red_mana": "Keeps unspent red mana",
-        "turn_history": "This turn:",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
         "restricted_mana": "Restricted mana for",

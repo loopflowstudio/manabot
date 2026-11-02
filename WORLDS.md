@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil | `world` (the default pack): every defined card (266 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil | `world` (the default pack): every defined card (314 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -149,10 +149,10 @@ effects, and a departed source is copied as it last existed. A copy carries
 its copy effect (`CopyEffect`: the printed definition at the chain's root and
 its exceptions, CR 707.9b), whose exceptions are `Modification` values such as
 `Nonlegendary`, the same vocabulary as continuous-effect records. It adds
-surveil (CR 701.25) as a select-into-graveyard choice, a static condition on
-sacrifices this turn (T4's turn history), and a Vehicle that is an artifact creature while you
-control enough permanents with its name. Joo Dee, One of Many, Ran and Shaw
-and Phoenix Fleet Airship are supported (266 in `world`). Observations add a
+surveil (CR 701.25) as a select-into-graveyard choice, an end-step self-copy
+trigger conditioned on T4's sacrifice history, and a Vehicle that is an artifact
+creature while you control enough permanents with its name. Joo Dee, One of Many, Ran and Shaw
+and Phoenix Fleet Airship are supported (314 in `world`). Observations add a
 permanent's `copy`; the policy input adds `Copy` and `CopyException` fact
 rows.
 

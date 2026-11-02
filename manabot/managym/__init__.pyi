@@ -524,9 +524,8 @@ class Player:
     sideboard_counts: Dict[int, int]
     remaining_sideboard_counts: Dict[int, int]
     keeps_red_mana: bool
-    # What this player has done this turn.
-    turn_history: PlayerTurnHistory
     no_maximum_hand_size: bool
+    # What this player has done this turn.
     turn_history: PlayerTurnHistory
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]

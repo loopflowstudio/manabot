@@ -1,7 +1,7 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, re-gated after the sync, PR #405 open, mergeable, no review
-yet): implemented, demoed through native Commands and the LLM/Academy text path,
+Status (2026-11-02, gated at the green synced head, PR #405 open, mergeable, no
+review yet): implemented, demoed through native Commands and the LLM/Academy text path,
 synced onto main at `4c8324a59` (T3's squash, the characteristics cache and T4)
 and re-recorded: the authored-match parity receipt's source hashes, the
 trigger-order root digests and the two Academy precision demos (digests only;
@@ -118,9 +118,12 @@ line were refreshed.
 
 ## Remaining
 
-- Jack Heart's review of PR #405. No merge. The re-gate (2026-11-02, below)
-  re-recorded every stale digest the sync left; the next CI run on the
-  re-record commit should be green in every selected job.
+- Jack Heart's review of PR #405. No merge. CI run 41511227714 on
+  `836042c07` passed every selected job (Rust, Python unit, both
+  conformance, Clean-machine Play, Academy UI, Academy Integration,
+  Integration main and long). The gate at that head (2026-11-02, below)
+  removed three sync duplicates and corrected the supported-card count; its
+  commit is the head to review.
 - Known, not fixed: `tests/sim/test_rollout.py::TestBatchedSampler::test_selects_valid_actions_only`
   fills every float buffer with noise, which the fact and definition checks
   reject. CI does not select the file.
@@ -138,6 +141,30 @@ line were refreshed.
 
 ## Checks
 
+- 2026-11-02 (gate at the green head `836042c07`, headless): the diff
+  against main carries no leftovers (no debug output, TODOs or transient
+  comments). The sync had duplicated three lines, which this gate removed:
+  `Player.turn_history` in `manabot/managym/__init__.pyi`, the
+  `turn_history` spread in `experience_projection._serialize_player` (the
+  second entry overwrote the first, so serialized output is unchanged) and
+  the `turn_history` label key in `tests/semantic/test_text_observation.py`.
+  Rust and TypeScript reject such duplicates at compile time, and clippy and
+  svelte-check pass in CI, so only Python carried them. The engine reports
+  314 supported definitions in `world` (`set_cards` over every set file: 257
+  TLA eligible, 4 TLA unsupported, 1 `ths` unsupported, 57 others), not the
+  266 the branch had stated (main's 263 was stale before T5, below), so
+  `WORLDS.md` and the PR body now say 314; the PR body's turn-history
+  bullets now claim only T5's own change (the projection, Python
+  construction and singular wording), since the field, column and
+  `Condition` are main's. `WORLDS.md` no longer lists "a static condition
+  on sacrifices this turn" as a T5 addition. Checks: `ruff check` and
+  `ruff format --check` on the three Python files; `uv run --extra dev
+  pytest tests/semantic/test_text_observation.py
+  tests/verify/test_observation_parity.py
+  tests/academy/test_recorded_attempts.py
+  tests/semantic/test_current_content.py -q` (70 passed, 53 s). No Rust,
+  fixture or frontend source changed, so the suites recorded below keep
+  their results.
 - 2026-11-02 (re-gate after the sync, headless): rebuilt the extension from
   the synced tree. The authored-match authority receipt regenerated
   byte-identical (`081bbbe7…`), so its SHA pins and `TERMINAL_STATE` stay.

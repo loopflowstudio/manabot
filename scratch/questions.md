@@ -46,3 +46,14 @@ here; main carries their outcomes.
   T4's `intervening_if`. Decision codes keep main's numbering, Surveil is 22.
 - Singular wording ("sacrificed 1 permanent", "drew 1 card") replaced main's
   test expectation "drew 1 cards"; no retained fixture holds that text.
+
+## T5 gate at the green head — 2026-11-02 (headless)
+
+- The supported-card count in `WORLDS.md` was derived by addition (main's
+  263 plus three), but the engine counts 314 eligible definitions. Main's
+  figure was already stale: T3 recorded 236, T4 added 75 cards and T5 three,
+  which is the 314 `set_cards` reports. The gate corrected the branch's
+  statements to the measured number and did not touch main's history.
+- `/verify` was not run before the gate commit, as for earlier T5 commits:
+  that Loopflow skill checks a merged change and finishes the Task, and
+  shipping is stopped.

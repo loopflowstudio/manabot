@@ -304,11 +304,6 @@ def _serialize_player(
             else {}
         ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
-        **(
-            {"turn_history": turn_history}
-            if (turn_history := _turn_history(player.turn_history))
-            else {}
-        ),
         **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
