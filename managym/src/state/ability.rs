@@ -49,6 +49,11 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// The inner condition only while the source permanent is attacking
+    /// ("whenever you cast a spell while Fire Lord Azula is attacking").
+    WhileSourceAttacking {
+        condition: Box<TriggerCondition>,
+    },
     /// "Whenever you cast your Nth spell each turn" (CR 603.2): the spell is
     /// the Nth its controller cast this turn.
     YouCastNthSpellThisTurn {
@@ -1275,6 +1280,8 @@ impl Effect {
             Effect::TargetClause { effects, .. } => {
                 effects.iter().any(Effect::asks_triggering_spell)
             }
+            // "Copy that spell": the cast spell is the context.
+            Effect::CopyTriggeringObject => true,
             _ => false,
         }
     }

@@ -129,6 +129,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fancy_footwork(),
         fatal_fissure(),
         fated_firepower(),
+        fire_lord_azula(),
         fire_lord_zuko(),
         fire_nation_attacks(),
         fire_nation_cadets(),
@@ -3484,6 +3485,45 @@ fn fated_firepower() -> CardDefinition {
             },
             ReplacementEffect::OpponentDamagePlusCounters {
                 kind: CounterKind::Fire,
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn fire_lord_azula() -> CardDefinition {
+    let text_box = "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhenever you cast a spell while Fire Lord Azula is attacking, copy that spell. You may choose new targets for the copy. (A copy of a permanent spell becomes a token.)";
+
+    CardDefinition {
+        key: "tla.fire_lord_azula",
+        scryfall_id: "bc6146bf-f0c6-4557-af6a-74c643d5fc01",
+        name: "Fire Lord Azula".into(),
+        mana_cost: Some(ManaCost::parse("{1}{U}{B}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Noble".into()],
+        power: Some(4),
+        toughness: Some(4),
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RR"),
+                    until_end_of_combat: true,
+                }],
+            },
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::WhileSourceAttacking {
+                    condition: Box::new(TriggerCondition::YouCastSpell {
+                        predicate: CardPredicate::default(),
+                    }),
+                },
+                effects: vec![Effect::CopyTriggeringObject],
             },
         ],
         text_box: text_box.into(),

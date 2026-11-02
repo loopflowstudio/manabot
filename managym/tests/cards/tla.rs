@@ -13815,3 +13815,43 @@ fn the_legend_of_yangchen_exiles_chosen_permanents_and_airbends_on_the_second_sp
     settle(&mut s);
     assert_eq!(zone_of(&s, target_card), Some(ZoneType::Exile), "airbent");
 }
+
+/// While Fire Lord Azula attacks, each spell its controller casts is copied
+/// (the copy may keep its targets); before she attacks, nothing is.
+#[test]
+fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
+    let mut s = five_color_setup(&["Fire Lord Azula", "Lightning Bolt"]);
+    let azula = s.force_permanent_on_battlefield(0, "Fire Lord Azula");
+    clear_summoning_sickness(&mut s, azula);
+    cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    assert!(
+        s.game().state.pending_triggers.is_empty(),
+        "not attacking yet"
+    );
+    settle(&mut s);
+    s.assert_life(1, 17);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, azula);
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.set_player_mana_pool(0, "R");
+    cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    // The copy keeps the opponent as its target.
+    for _ in 0..10 {
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            if has_action(&s, |a| matches!(a, Action::Decline { .. })) {
+                choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+            } else {
+                target_opponent(&mut s);
+            }
+        } else if s.game().state.stack_objects.is_empty() {
+            break;
+        } else {
+            s.pass_priority();
+        }
+    }
+    s.assert_life(1, 11);
+}

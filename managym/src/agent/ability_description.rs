@@ -142,6 +142,10 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::BeginningOfYourFirstMainPhase => {
             "At the beginning of your first main phase".into()
         }
+        TriggerCondition::WhileSourceAttacking { condition } => format!(
+            "{} while this is attacking",
+            condition_description(condition)
+        ),
         TriggerCondition::YouCastNthSpellThisTurn { n } => {
             format!("Whenever you cast your spell number {n} each turn")
         }

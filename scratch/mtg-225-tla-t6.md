@@ -56,7 +56,7 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | Bumi, Unleashed | supported; additional land-creature combat |
 | Koh, the Face Stealer | |
 | Ember Island Production | supported; copies the face that's up, transformed |
-| Fire Lord Azula | |
+| Fire Lord Azula | supported; spells cast while attacking are copied |
 | Foggy Swamp Visions | supported |
 
 ## Delete — do not maintain

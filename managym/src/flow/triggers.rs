@@ -1232,6 +1232,18 @@ impl Game {
                     && self.state.card_to_permanent[*card]
                         .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
             }
+            (TriggerCondition::WhileSourceAttacking { condition }, _) => {
+                self.state.card_to_permanent[source_card]
+                    .and_then(|id| self.state.permanents[id].as_ref())
+                    .is_some_and(|source| source.attacking)
+                    && self.trigger_condition_fires(
+                        condition,
+                        source_card,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             (
                 TriggerCondition::YouCastNthSpellThisTurn { n },
                 GameEvent::SpellCast { card, .. },

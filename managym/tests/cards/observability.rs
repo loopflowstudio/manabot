@@ -1009,6 +1009,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::YourAttackingCreatureTriggers"
         }
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
+        TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
         TriggerCondition::YouCastNthSpellThisTurn { .. } => {
             "TriggerCondition::YouCastNthSpellThisTurn"
         }
@@ -1083,6 +1084,11 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::YourAttackingCreatureTriggers,
         TriggerCondition::Chapter { chapter: 2 },
         TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
+        TriggerCondition::WhileSourceAttacking {
+            condition: Box::new(TriggerCondition::YouCastSpell {
+                predicate: CardPredicate::default(),
+            }),
+        },
     ]
 }
 
