@@ -120,10 +120,14 @@ Unresolved product choices: none. What remains is delivery (below).
   run here was made with load averages of 12-70 from other sessions, so the
   absolute thresholds are unverified; the recorded CPU-second delta is the
   evidence so far. Never induce load; a CI runner or an idle laptop is fine.
-- **Publish** with the delta in the PR body. The brief asked for a delta per
-  item; items 1-4 landed in one commit (`884090f1b`) plus a fold (`86af3387f`),
-  so only the aggregate delta exists. Per-item deltas would need four
-  separate builds; proposed: report the aggregate unless Jack Heart asks.
+- Published 2026-11-02 as PR #411
+  (https://github.com/loopflowstudio/manabot/pull/411), ready for review,
+  with the aggregate CPU-second delta and the unverified quiet-machine
+  threshold in the body. Items 1-4 landed in one commit (`884090f1b`) plus a
+  fold (`86af3387f`), so only the aggregate delta exists; per-item deltas
+  would need four separate builds. Load was 21-30 at publication, so the
+  quiet-machine bench is still outstanding. Not merged; merge and Task
+  completion are separate steps.
 - **Ordering against T5 and T6.** The brief said to start after MTG-225 (T6)
   published; T6 is still an unpublished worktree
   (`manabot.mtg-225-tla-t6-sagas`, head `d344572db`, same base) and T5 is
