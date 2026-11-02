@@ -15,9 +15,9 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
-3. **`src/state/`**: the canonical match-state hash over the rules vocabulary and
-   game-state types of the sibling `managym-state` crate (`state/`), re-exported
-   here as `managym::state`
+3. **`state/`**: the `managym-state` crate — rules vocabulary and game-state
+   types (cards, zones, mana, effects), re-exported here as `managym::state`;
+   **`src/state/`** adds players, decks and the canonical match-state hash
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
    and their tests, reached by the engine only through `managym_cards::catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens

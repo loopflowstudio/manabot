@@ -72,19 +72,23 @@ impl Counters {
     /// Add `delta` counters of `kind`, clamped at zero. Returns whether the
     /// count changed.
     pub fn change(&mut self, kind: CounterKind, delta: i32) -> bool {
-        let old = self.get(kind);
-        let new = old.saturating_add(delta).max(0);
-        if new == old {
-            return false;
-        }
         match self.0.binary_search_by_key(&kind, |(present, _)| *present) {
-            Ok(index) if new == 0 => {
-                self.0.remove(index);
+            Ok(index) => {
+                let old = self.0[index].1;
+                let new = old.saturating_add(delta).max(0);
+                if new == 0 {
+                    self.0.remove(index);
+                } else {
+                    self.0[index].1 = new;
+                }
+                new != old
             }
-            Ok(index) => self.0[index].1 = new,
-            Err(index) => self.0.insert(index, (kind, new)),
+            Err(index) if delta > 0 => {
+                self.0.insert(index, (kind, delta));
+                true
+            }
+            Err(_) => false,
         }
-        true
     }
 
     /// The kinds present, with their counts, in `CounterKind` order.

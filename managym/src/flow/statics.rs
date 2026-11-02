@@ -627,7 +627,7 @@ impl Game {
                     .as_ref()
                     .is_none_or(|condition| self.check_static_condition(condition, controller))
                 {
-                    keywords = keywords.union(&grant.keywords);
+                    keywords = keywords.union(grant.keywords);
                 }
             }
         }
@@ -648,7 +648,7 @@ impl Game {
                             self.check_static_condition(condition, controller)
                         })
                     {
-                        keywords = keywords.union(&grant.keywords);
+                        keywords = keywords.union(grant.keywords);
                     }
                 }
             }
@@ -1228,8 +1228,8 @@ impl Game {
         sources: &[StaticSource],
     ) -> Keywords {
         self.recorded_keywords_with(permanent_id, lost)
-            .union(&self.static_keyword_bonus(permanent_id, lost, sources))
-            .without(&self.lost_keywords(permanent_id))
+            .union(self.static_keyword_bonus(permanent_id, lost, sources))
+            .without(self.lost_keywords(permanent_id))
     }
 
     /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
@@ -1302,7 +1302,7 @@ impl Game {
         for effect in self.effects_on(permanent_id) {
             if let Modification::AddKeywords(granted) = &effect.modification {
                 if effect.follows(lost) {
-                    keywords = keywords.union(granted);
+                    keywords = keywords.union(*granted);
                 }
             }
         }

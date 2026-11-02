@@ -162,7 +162,7 @@ impl Game {
                 Modification::LoseKeywords(keywords) => Some(keywords),
                 _ => None,
             })
-            .fold(Keywords::default(), |lost, keywords| lost.union(&keywords))
+            .fold(Keywords::default(), Keywords::union)
     }
 
     /// "If it would die this turn, exile it instead."

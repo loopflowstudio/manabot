@@ -188,7 +188,7 @@ by player width. Learning schema 10 adds the `delayed_trigger` object role (the
 trigger's source definition programs); tokens derive from the definitions, so
 new `Effect` variants and card fields appear in them without a schema change. Viewers see an opponent's
 foretold card only as an exile count, in JSON, text and tensor alike.
-`managym/tests/cards/observability.rs` names each field's columns and tokens.
+`managym/cards/tests/cards/observability.rs` names each field's columns and tokens.
 Action shapes are unchanged.
 
 `conformance/semantic-kernel-w17-v1` trace evidence, the authored-match receipt and

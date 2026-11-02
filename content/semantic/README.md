@@ -3,7 +3,7 @@
 Every current card is one Rust function in the file of the set that first
 printed it, under [`managym/cards/src/`](../../managym/cards/src/)
 (`tla.rs`, `stx.rs`, `lea.rs`, …), returning the engine's own
-[`CardDefinition`](../../managym/src/state/card.rs) written with its rules types
+[`CardDefinition`](../../managym/state/src/card.rs) written with its rules types
 (`Ability`, `Effect`, `TargetSpec`, `TriggerCondition`, …). That value is the
 card: the engine runs it, the pool describes it and the policy reads it. There
 is no second card vocabulary, compiler or IR for current content. Each

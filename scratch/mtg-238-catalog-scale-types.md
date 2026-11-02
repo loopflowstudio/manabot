@@ -121,3 +121,9 @@ tests/semantic` 494 passed after the capture-keyword fix and receipt rewrite.
 Release `cargo test` and the arena-admission suite in CLAUDE.md are gate's.
 Third pass (2026-11-02): no code change; `cargo fmt --check` and the debug
 `definitions` / `observability` card tests (47) pass on the checkpointed tree.
+Compress (2026-11-02): `Counters::change` is one binary search, `Keywords`
+set operations take values like its other methods, `Keywords::of` is a fold,
+live doc pointers name the moved paths; serialization is untouched, so no
+digest moves. `cargo fmt --check`, clippy `-D warnings` and debug `cargo test
+--no-fail-fast` green across the three crates (484 card tests); the extension
+rebuild, Python suite and release `cargo test` stay with gate.

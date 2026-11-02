@@ -205,14 +205,12 @@ pub struct Keywords(u64);
 
 impl Keywords {
     /// Exactly these keywords.
-    pub const fn of(keywords: &[Keyword]) -> Self {
-        let mut bits = 0;
-        let mut index = 0;
-        while index < keywords.len() {
-            bits |= keywords[index].bit();
-            index += 1;
-        }
-        Keywords(bits)
+    pub fn of(keywords: &[Keyword]) -> Self {
+        Keywords(
+            keywords
+                .iter()
+                .fold(0, |bits, keyword| bits | keyword.bit()),
+        )
     }
 
     pub fn has(self, keyword: Keyword) -> bool {
@@ -237,12 +235,12 @@ impl Keywords {
     }
 
     /// These keywords less those in `removed`.
-    pub fn without(&self, removed: &Keywords) -> Keywords {
+    pub fn without(self, removed: Keywords) -> Keywords {
         Keywords(self.0 & !removed.0)
     }
 
     /// Keyword-set union (printed keywords plus until-EOT grants).
-    pub fn union(&self, other: &Keywords) -> Keywords {
+    pub fn union(self, other: Keywords) -> Keywords {
         Keywords(self.0 | other.0)
     }
 }
