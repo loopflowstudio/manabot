@@ -8,12 +8,13 @@
 
 use std::{
     collections::BTreeMap,
+    fmt,
     sync::{Arc, OnceLock},
 };
 
 use super::fixtures;
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, PaymentCost, TriggerCondition, TriggerSubject},
     card::{Card, CardDefId, CardDefinition},
     game_object::{ObjectId, PlayerId},
 };
@@ -37,7 +38,7 @@ pub struct ContentPackManifest {
     pub definitions: Vec<ContentPackDefinitionManifest>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ContentPack {
     pub schema_version: u32,
     pack_key: Option<String>,
@@ -45,6 +46,20 @@ pub struct ContentPack {
     definitions: Vec<Arc<CardDefinition>>,
     digest: OnceLock<String>,
     public_definitions: OnceLock<Vec<serde_json::Value>>,
+}
+
+/// Omits the lazy `digest` and `public_definitions` caches: they derive from
+/// the definitions, and the default pack is shared across threads, so printing
+/// them would make a match's `Debug` depend on when another reader filled them.
+impl fmt::Debug for ContentPack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ContentPack")
+            .field("schema_version", &self.schema_version)
+            .field("pack_key", &self.pack_key)
+            .field("cards_by_name", &self.cards_by_name)
+            .field("definitions", &self.definitions)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Legacy Rust name retained for conformance callers. Match state owns a
@@ -144,10 +159,11 @@ impl ContentPack {
         self.digest.take();
         self.public_definitions.take();
         // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
-        // becomes the target of a spell an opponent controls, counter it
-        // unless that player pays [cost]."
+        // becomes the target of a spell or ability an opponent controls,
+        // counter it unless that player pays [cost]."
         if let Some(ward_cost) = definition.ward().cloned() {
             definition.abilities.push(Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::BecomesTargeted {
                     subject: TriggerSubject::This,
                 },
@@ -212,7 +228,8 @@ impl ContentPack {
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": card.keywords, "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
-                            "ward": card.ward(), "is_token": card.is_token,
+                            "ward": card.ward().map(PaymentCost::mana_cost),
+                            "is_token": card.is_token,
                         })
                     })
                     .collect()

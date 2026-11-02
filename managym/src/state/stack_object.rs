@@ -1,5 +1,5 @@
 use super::ability::Effect;
-use super::card::CardDefId;
+use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -36,6 +36,17 @@ pub struct ActivatedAbilityOnStack {
     pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    /// The exact object the source Aura or Equipment was attached to when
+    /// the ability was activated, before costs such as sacrificing it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attached: Option<ObjectRef>,
+    /// The announced value of X (CR 602.2b, 601.2b).
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// For an ability granted by an attached permanent: that exact object and
+    /// its grant, fixed at activation (`ability_index` names the grantee's list).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_by: Option<AbilityGrant>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -53,6 +64,12 @@ pub struct TriggeredAbilityOnStack {
     /// reference (e.g. the spell that targeted a warded permanent).
     pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
+    /// The trigger's player ("they": the caster of the triggering spell).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player: Option<PlayerId>,
+    /// The ability's X (`PendingTrigger::x`).
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
     /// Delayed triggers resolve these effects instead of looking up
     /// `Card::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
@@ -79,6 +96,32 @@ impl StackObject {
             StackObject::Spell(spell) => spell.controller,
             StackObject::ActivatedAbility(ability) => ability.controller,
             StackObject::TriggeredAbility(triggered) => triggered.controller,
+        }
+    }
+
+    /// The object as a target: a spell by its card, an ability by its id.
+    pub fn as_target(&self) -> Target {
+        match self {
+            StackObject::Spell(spell) => Target::StackSpell(spell.card),
+            object => Target::StackAbility(object.id()),
+        }
+    }
+
+    /// The spell's card, or the card whose ability this is.
+    pub fn source_card(&self) -> CardId {
+        match self {
+            StackObject::Spell(spell) => spell.card,
+            StackObject::ActivatedAbility(ability) => ability.source_card,
+            StackObject::TriggeredAbility(triggered) => triggered.source_card,
+        }
+    }
+
+    /// The exact source object of an ability; spells have none.
+    pub fn source_ref(&self) -> Option<ObjectRef> {
+        match self {
+            StackObject::Spell(_) => None,
+            StackObject::ActivatedAbility(ability) => Some(ability.source_ref),
+            StackObject::TriggeredAbility(triggered) => triggered.source_ref,
         }
     }
 

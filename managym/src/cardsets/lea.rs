@@ -1,6 +1,8 @@
 //! Limited Edition Alpha.
+use crate::state::ability::AffectedSpec;
+use crate::state::effect::Modification;
 use crate::state::{
-    ability::{Effect, TargetRequirement, TargetSpec},
+    ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, ManaAbility,
     },
@@ -39,7 +41,9 @@ fn ancestral_recall() -> CardDefinition {
         name: "Ancestral Recall".into(),
         mana_cost: Some(ManaCost::parse("{U}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::DrawCards { count: 3 }],
+        spell_effects: vec![Effect::DrawCards {
+            count: EffectValue::Fixed(3),
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -184,10 +188,12 @@ fn lightning_bolt() -> CardDefinition {
             target: TargetSpec::CreatureOrPlayer,
         }],
         targeting: vec![TargetRequirement {
+            shares_creature_type: false,
             spec: TargetSpec::CreatureOrPlayer,
             min: 1,
             max: 1,
             another: false,
+            max_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -307,10 +313,10 @@ fn shivan_dragon() -> CardDefinition {
         },
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{R}"),
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 0,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 0),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),

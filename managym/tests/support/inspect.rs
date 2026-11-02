@@ -8,8 +8,9 @@ use managym::{
     flow::turn::{PhaseKind, StepKind},
     state::{
         card::Keywords,
+        effect::Modification,
         game_object::{CardId, PermanentId, PlayerId},
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         target::Target,
         zone::ZoneType,
@@ -254,7 +255,11 @@ pub fn card_of(s: &Scenario, id: PermanentId) -> CardId {
 }
 
 pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
-    permanent(s, id).plus1_counters
+    permanent(s, id).counter_count(CounterKind::PlusOnePlusOne)
+}
+
+pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
+    permanent(s, id).counter_count(kind)
 }
 
 pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
@@ -262,13 +267,28 @@ pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
 }
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
-    let permanent = permanent(s, id);
-    permanent.effective_keywords(&s.game().state.cards[permanent.card])
+    s.game().characteristics(id).keywords
+}
+
+/// The summed +power/+toughness of the permanent's `ModifyPt` records
+/// (layer 7c effects from resolved spells and abilities).
+pub fn pt_modifications(s: &Scenario, id: PermanentId) -> (i32, i32) {
+    s.game()
+        .effects_on(id)
+        .filter_map(|effect| match effect.modification {
+            Modification::ModifyPt { power, toughness } => Some((power, toughness)),
+            _ => None,
+        })
+        .fold((0, 0), |(p, t), (dp, dt)| (p + dp, t + dt))
 }
 
 // ---------------------------------------------------------------------------
 // Offered actions and the command contract
 // ---------------------------------------------------------------------------
+
+pub fn has_action(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> bool {
+    s.action_space().actions.iter().any(predicate)
+}
 
 pub fn can_cast(s: &Scenario, id: CardId) -> bool {
     s.action_space()

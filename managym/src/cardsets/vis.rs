@@ -22,6 +22,7 @@ fn man_o_war() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },

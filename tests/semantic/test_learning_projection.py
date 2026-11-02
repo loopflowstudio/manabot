@@ -93,6 +93,7 @@ def _fake_observation(card_ids: list[int], *, hidden_marker: str = "a"):
             SimpleNamespace(kind=1, source_card_registry_key=card_ids[0]),
             SimpleNamespace(kind=0, source_card_registry_key=card_ids[1]),
         ],
+        continuation=[],
         # The projector must never inspect this private-state stand-in.
         opponent_hidden_hand=hidden_marker,
     )
@@ -249,7 +250,11 @@ def test_projection_uses_only_viewer_objects_and_batches_with_stable_masks():
 
     empty = pack.project_observation(
         SimpleNamespace(
-            agent_cards=[], agent_sideboard=[], opponent_cards=[], stack_objects=[]
+            agent_cards=[],
+            agent_sideboard=[],
+            opponent_cards=[],
+            stack_objects=[],
+            continuation=[],
         ),
         identity_mode="semantic_only",
     )
@@ -389,3 +394,21 @@ def test_learning_schema_rejects_the_pre_sideboard_contract(tmp_path: Path) -> N
     path.write_text(json.dumps(schema), encoding="utf-8")
     with pytest.raises(UnknownSchemaError, match="got 1"):
         LearningSchema.load(path)
+
+
+def test_waiting_delayed_trigger_projects_its_source_programs() -> None:
+    pack = BoundSemanticPack.bind(_manifest())
+    card_ids = sorted(pack.definition_row_by_card_def_id)[:2]
+    observation = _fake_observation(card_ids)
+    observation.continuation = [
+        SimpleNamespace(kind=1, source=SimpleNamespace(definition=card_ids[1])),
+        SimpleNamespace(kind=10, source=SimpleNamespace(definition=card_ids[0])),
+    ]
+    projection = pack.project_observation(observation, identity_mode="semantic_only")
+    role = pack.schema.object_roles["delayed_trigger"]
+    delayed = projection.object_roles == role
+    assert delayed.sum() == 1
+    assert projection.object_slots[delayed].tolist() == [1]
+    assert projection.object_definition_rows[delayed].tolist() == [
+        pack.definition_row(card_ids[0])
+    ]

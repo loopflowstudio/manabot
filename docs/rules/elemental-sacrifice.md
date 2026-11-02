@@ -48,7 +48,7 @@ evidence retains its stronger recorded-command binding.
 
 ## Directed behavior
 
-`managym/tests/rules/sacrifice_cards.rs` exercises ordinary actions and semantic
+`managym/tests/cards/` (one file per set) exercises ordinary actions and semantic
 Commands, including stale rejection, replay equality and nested exact rollback.
 
 | Cards | Directed rules |

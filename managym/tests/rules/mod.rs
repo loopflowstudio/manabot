@@ -12,6 +12,7 @@ pub mod cr_601_casting;
 pub mod cr_602_activated_abilities;
 pub mod cr_603_triggers;
 pub mod cr_608_resolution;
+pub mod cr_613_continuous_effects;
 pub mod cr_614_replacement;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;

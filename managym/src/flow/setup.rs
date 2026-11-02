@@ -9,7 +9,7 @@ use crate::{
     cards::content_pack::{default_content_pack, ContentPack},
     cards::content_pack_for_match,
     flow::{
-        game::{Game, GameState},
+        game::{Game, GameState, TrackedState},
         priority::PriorityState,
         turn::TurnState,
     },
@@ -132,7 +132,8 @@ impl Game {
         }
 
         let mut game = Self {
-            state: GameState {
+            statics_cache: Default::default(),
+            state: TrackedState::new(GameState {
                 cards,
                 permanents: PermanentVec::default(),
                 card_to_permanent,
@@ -152,13 +153,14 @@ impl Game {
                 trigger_placement: None,
                 delayed_triggers: Vec::new(),
                 exile_links: Vec::new(),
+                effects: Vec::new(),
                 cast_permissions: Default::default(),
                 suspended_decision: None,
                 trigger_enqueue_counter: 0,
                 rng,
                 id_gen,
                 content,
-            },
+            }),
             policy_history: Default::default(),
             skip_trivial,
             current_action_space: None,

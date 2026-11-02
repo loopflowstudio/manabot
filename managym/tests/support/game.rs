@@ -14,9 +14,10 @@ use managym::{
     flow::turn::StepKind,
     state::{
         ability::Ability,
+        effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         player::PlayerConfig,
         zone::ZoneType,
     },
@@ -184,6 +185,15 @@ impl Scenario {
 /// Advances to player 0's main phase, empties both hands, and gives each
 /// player twenty generic and four of each colored mana.
 pub fn five_color_setup(names: &[&str]) -> Scenario {
+    let mut s = five_color_unfunded_setup(names);
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    s.set_player_mana_pool(1, "20WWWWUUUUBBBBRRRRGGGG");
+    s
+}
+
+/// [`five_color_setup`] without floating mana: tests pay costs from lands
+/// they play.
+pub fn five_color_unfunded_setup(names: &[&str]) -> Scenario {
     let mut deck: BTreeMap<String, usize> = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
         .into_iter()
         .map(|name| (name.into(), 16))
@@ -195,8 +205,6 @@ pub fn five_color_setup(names: &[&str]) -> Scenario {
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().scenario_clear_hand(PlayerId(0));
     s.game_mut().scenario_clear_hand(PlayerId(1));
-    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
-    s.set_player_mana_pool(1, "20WWWWUUUUBBBBRRRRGGGG");
     s
 }
 
@@ -219,6 +227,15 @@ pub fn clear_hand(s: &mut Scenario, player: usize) {
             .zones
             .move_card(card, PlayerId(player), ZoneType::Library);
     }
+}
+
+/// Move player 0's library copy into the hand through the zone-change
+/// authority and refresh priority.
+pub fn move_to_hand(s: &mut Scenario, name: &str) -> CardId {
+    let id = library_card(s, 0, name);
+    s.game_mut().move_card(id, ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    id
 }
 
 /// Put a fresh library copy into the hand — `force_card_in_hand` re-finds the
@@ -363,6 +380,47 @@ pub fn ready(s: &mut Scenario, name: &str) {
         .unwrap()
         .summoning_sick = false;
     s.game_mut().scenario_refresh_priority().unwrap();
+}
+
+/// Record an until-end-of-turn continuous effect on a permanent, as a
+/// resolving spell of player 0 would.
+pub fn until_end_of_turn(s: &mut Scenario, id: PermanentId, modification: Modification) {
+    let affected = s
+        .game()
+        .affected_permanent(id)
+        .expect("permanent on the battlefield");
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        modification,
+        EffectDuration::EndOfTurn,
+    );
+}
+
+/// Record a continuous effect on a player.
+pub fn player_effect(
+    s: &mut Scenario,
+    player: usize,
+    modification: Modification,
+    duration: EffectDuration,
+) {
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(player),
+        [Affected::Player(PlayerId(player))],
+        modification,
+        duration,
+    );
+}
+
+/// Set a permanent's counters of one kind, without events (scenario setup).
+pub fn set_counters(s: &mut Scenario, id: PermanentId, kind: CounterKind, count: i32) {
+    let permanent = s.game_mut().state.permanents[id]
+        .as_mut()
+        .expect("permanent on the battlefield");
+    let current = permanent.counter_count(kind);
+    permanent.change_counters(kind, count - current);
 }
 
 pub fn inject_ability(s: &mut Scenario, card_id: CardId, ability: Ability) {

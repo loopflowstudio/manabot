@@ -99,6 +99,10 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
     match target {
         Target::Player(player) => HistoryReference::Player(player),
         Target::StackSpell(card) => card_reference(game, card),
+        Target::StackAbility(id) => game
+            .stack_ability_source(id)
+            .map(|card| card_reference(game, card))
+            .unwrap_or(HistoryReference::Unavailable),
         Target::GraveyardCard(object) => card_reference(game, CardId::from(object.entity)),
         Target::Permanent(id) => game
             .permanent_object_ref(id)
@@ -196,6 +200,15 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             0,
             source_reference(game, *by),
             vec![card_reference(game, *card)],
+        ),
+        // The countered ability is gone; its source card stands for it.
+        GameEvent::AbilityCountered {
+            source_card, by, ..
+        } => (
+            Countered,
+            0,
+            source_reference(game, *by),
+            vec![source_reference(game, Some(*source_card))],
         ),
         _ => return,
     };

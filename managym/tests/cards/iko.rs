@@ -1,7 +1,7 @@
 //! Tests for cards filed in `src/cardsets/iko.rs`, in card order.
 
 use crate::support::{
-    game::five_color_setup,
+    game::{five_color_setup, until_end_of_turn},
     inspect::permanent_named,
     play::{
         activate_first, cast, choose, pass_until, play_and_settle, select_card, settle,
@@ -10,7 +10,10 @@ use crate::support::{
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
-    state::{game_object::PlayerId, zone::ZoneType},
+    state::{
+        card::Keywords, effect::Modification, game_object::PlayerId, permanent::CounterKind,
+        zone::ZoneType,
+    },
 };
 
 #[test]
@@ -50,7 +53,7 @@ fn bastion_uses_a_sacrificed_lands_last_known_creature_type() {
     let land = s.force_permanent_on_battlefield(0, "Forest");
     let source = s.game_mut().state.permanents[land].as_mut().unwrap();
     source.animated = true;
-    source.plus1_counters = 1;
+    source.change_counters(CounterKind::PlusOnePlusOne, 1);
     let card = source.card;
     cast(&mut s, "Cycle of Renewal");
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -67,11 +70,14 @@ fn weaponize_keeps_its_exact_damage_source_after_removal() {
     let weapon = play_and_settle(&mut s, "Weaponize the Monsters");
     let fodder = play_and_settle(&mut s, "Callous Inspector");
     let source = permanent_named(&s, "Weaponize the Monsters");
-    s.game_mut().state.permanents[source]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .lifelink = true;
+    until_end_of_turn(
+        &mut s,
+        source,
+        Modification::AddKeywords(Keywords {
+            lifelink: true,
+            ..Default::default()
+        }),
+    );
     activate_first(&mut s, source);
     target_opponent(&mut s);
     select_card(&mut s, fodder);

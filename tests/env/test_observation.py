@@ -241,6 +241,7 @@ class TestObservationEncoder:
             "known_hand",
             "decklists",
             "relations",
+            "facts",
         }
 
     def test_encode_observation(

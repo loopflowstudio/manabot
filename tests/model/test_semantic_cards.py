@@ -42,7 +42,9 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     # The outside rows otherwise have identical bounded features. Their
     # distinct executable programs must affect actual retrieval scores.
     assert len(set(logits[0, take].detach().tolist())) == 3
-    logits[0, take[0]].backward()
+    # Sum the take logits: at this width a single logit can sit at a dead
+    # activation and carry no gradient on its own.
+    logits[0, take].sum().backward()
     assert agent.semantic_cards.token_embedding.weight.grad.abs().sum() > 0
 
     retrieval = contract.frame.find_verb("learn_take_lesson")

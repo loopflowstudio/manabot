@@ -16,6 +16,17 @@ Only current-world (w17) corpora with executable consumers stay in source:
 - `public-commitment-parity-w17-v1/` — Academy public-commitment parity
   (`scripts/verify-public-commitment-parity`).
 
+Any change to w17 card content moves its content digest, so every corpus above
+is re-recorded together. The authored-match receipt's SHA-256 is pinned as
+`AUTHORITY_SHA256` in `academy/authored_match_parity.py` and
+`academy/public_commitment_parity.py`, and its terminal state as
+`TERMINAL_STATE`. Update those pins, then run
+`uv run --extra dev python -m academy.authored_match_parity write` and
+`uv run --extra dev python -m academy.public_commitment_parity write`; the
+latter needs the RUL-9 measurement from the artifact store. The same digest
+binds `academy/fixtures/*-w17.json` and the belief v3 receipt pins in
+`tests/belief/test_state.py`.
+
 Earlier worlds' corpora (semantic-kernel w8–w15, authored-match and parity v1
 through w11, public-commitment-parity-v1, the Learn w4 cohorts) are archived
 byte-for-byte in S3 under `experiments/data/archive/conformance/`; see the

@@ -5,9 +5,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
+        trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
         ability::PaymentCost,
@@ -18,11 +20,19 @@ use crate::{
     },
 };
 
-/// Policy inputs v2/v3/v4: up to 64 relation rows, 32/33 floats per row. Overflow is an
-/// admission error, never truncation. Zero is padding/absence for selectors.
+/// Policy inputs v2/v3/v4/v5: up to 64 relation rows, 32/33/49 floats per row.
+/// Overflow is an admission error, never truncation. Zero is padding/absence
+/// for selectors. Validity stays at column 31 in every width.
 pub const RELATION_ROWS: usize = 64;
 pub const LEGACY_RELATION_DIM: usize = 32;
 pub const RELATION_DIM: usize = 33;
+/// V5 appends the frame's X (column 33), its granted keywords (34..48, in
+/// `KeywordData` field order) and a waiting delayed trigger's "this turn"
+/// (48) after v4's eligibility column.
+pub const RELATION_DIM_V5: usize = 49;
+pub const RELATION_X_INDEX: usize = 33;
+pub const RELATION_KEYWORDS_INDEX: usize = 34;
+pub const RELATION_THIS_TURN_INDEX: usize = RELATION_KEYWORDS_INDEX + KEYWORD_COUNT;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
@@ -55,14 +65,17 @@ pub struct ManaOutput {
 }
 
 /// Public stack entries precede the viewer's private announcement/resolution
-/// frames. Parent indices retain interrupted payment relationships.
+/// frames; public waiting delayed triggers follow them. Parent indices retain
+/// interrupted payment relationships.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
     /// 1 spell, 2 activated stack ability, 3 triggered stack ability,
     /// 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger,
-    /// 8 trigger being placed, 9 two-pass placement cursor.
+    /// 8 trigger being placed, 9 two-pass placement cursor, 10 waiting
+    /// delayed trigger (CR 603.7; `decision` names its event, see
+    /// [`delayed_event_code`]).
     pub kind: u8,
     pub decision: u8,
     pub parent: Option<usize>,
@@ -84,6 +97,35 @@ pub struct ContinuationFrame {
     pub can_decline: bool,
     pub mana_outputs: Vec<ManaOutput>,
     pub resolutions_this_turn: u32,
+    /// The announced value of X (CR 107.3) of the spell or ability this frame
+    /// casts, activates or resolves; zero when it has none.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// Keywords a static grants this spell on the stack (a Lesson's lifelink),
+    /// in `KeywordData` field order.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_keywords: [bool; KEYWORD_COUNT],
+    /// A waiting delayed trigger that ends in this turn's cleanup step if it
+    /// has not fired.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub this_turn: bool,
+}
+
+/// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
+/// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the next end
+/// step, 5 its controller next casts a matching spell.
+pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
+    match event {
+        DelayedTriggerEvent::Leaves {
+            or_exiled: false, ..
+        } => 1,
+        DelayedTriggerEvent::Leaves {
+            or_exiled: true, ..
+        } => 2,
+        DelayedTriggerEvent::CreatureDies => 3,
+        DelayedTriggerEvent::NextEndStep { .. } => 4,
+        DelayedTriggerEvent::YouCastSpell(_) => 5,
+    }
 }
 
 impl ContinuationFrame {
@@ -170,6 +212,10 @@ impl Game {
                     VisibleReference::default()
                 }
             }
+            Target::StackAbility(id) => self
+                .stack_ability_source(id)
+                .map(|card| self.card_reference(card, viewer))
+                .unwrap_or_default(),
             Target::GraveyardCard(object) => self.visible_reference(object, viewer),
         }
     }
@@ -199,16 +245,59 @@ impl Game {
         for object in self.state.stack_objects.iter().rev() {
             frames.push(self.stack_frame(object, viewer));
         }
-        if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
-            || self.is_game_over()
+        if self.current_action_space.as_ref().and_then(|s| s.player) == Some(viewer)
+            && !self.is_game_over()
         {
-            return frames;
+            self.append_private_frames(viewer, &mut frames);
         }
+        frames.extend(
+            self.state
+                .delayed_triggers
+                .iter()
+                .map(|trigger| self.delayed_trigger_frame(trigger, viewer)),
+        );
+        frames
+    }
+
+    /// A waiting delayed trigger is public: its source, controller, event,
+    /// watched object or remembered context, and whether it lasts this turn.
+    fn delayed_trigger_frame(
+        &self,
+        trigger: &DelayedTrigger,
+        viewer: PlayerId,
+    ) -> ContinuationFrame {
+        let mut source = trigger
+            .source_ref
+            .map(|r| self.visible_reference(r, viewer))
+            .unwrap_or_default();
+        source.definition = Some(self.state.cards[trigger.source_card].definition_id.0);
+        let context = match &trigger.event {
+            DelayedTriggerEvent::Leaves { watched, .. } => {
+                Some(self.visible_reference(*watched, viewer))
+            }
+            DelayedTriggerEvent::NextEndStep { context } => {
+                context.map(|t| self.target_reference(t, viewer))
+            }
+            DelayedTriggerEvent::CreatureDies | DelayedTriggerEvent::YouCastSpell(_) => None,
+        };
+        ContinuationFrame {
+            kind: 10,
+            decision: delayed_event_code(&trigger.event),
+            controller: trigger.controller.0,
+            source,
+            context,
+            this_turn: trigger.this_turn,
+            ..ContinuationFrame::default()
+        }
+    }
+
+    /// The acting viewer's announcement, resolution and placement frames.
+    fn append_private_frames(&self, viewer: PlayerId, frames: &mut Vec<ContinuationFrame>) {
         if let Some(pending) = &self.pending_choice {
             frames.push(self.announcement_frame(pending, viewer));
         }
         if let Some(suspended) = &self.state.suspended_decision {
-            self.append_suspended_frames(suspended, viewer, &mut frames);
+            self.append_suspended_frames(suspended, viewer, frames);
         }
         if let Some(placement) = &self.state.trigger_placement {
             let parent = frames.len();
@@ -228,7 +317,7 @@ impl Game {
                     .source_ref
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(trigger.source_lki.map_or(
+                source.definition = Some(trigger.source_lki.as_ref().map_or(
                     self.state.cards[trigger.source_card].definition_id.0,
                     |lki| lki.definition_id.0,
                 ));
@@ -261,7 +350,6 @@ impl Game {
                 });
             }
         }
-        frames
     }
 
     pub(crate) fn trigger_action_frame(
@@ -298,11 +386,16 @@ impl Game {
                 frame.source = self.card_reference(spell.card, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
+                frame.x = spell.x;
+                frame.granted_keywords =
+                    KeywordData::from_keywords(&self.spell_keywords(spell.card, spell.controller))
+                        .flags();
                 &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
                 frame.source = self.visible_reference(ability.source_ref, viewer);
+                frame.x = ability.x;
                 &[]
             }
             StackObject::TriggeredAbility(ability) => {
@@ -353,6 +446,7 @@ impl Game {
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
@@ -360,6 +454,7 @@ impl Game {
             PendingChoice::SpellMode { card, cast, .. } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
             }
             PendingChoice::KickerChoice { card, .. } | PendingChoice::AnnounceX { card, .. } => {
                 frame.source = self.card_reference(*card, viewer)
@@ -367,14 +462,38 @@ impl Game {
             PendingChoice::ActivatedTarget {
                 source,
                 ability_index,
+                chosen,
+                ..
+            } => {
+                frame.source = self.activation_reference(*source, viewer);
+                frame.ability = Some(*ability_index);
+                frame.active_clause = Some(0);
+                frame.targets = self.clause_targets(chosen, &[], viewer);
+            }
+            PendingChoice::DiscardPayment {
+                source,
+                ability_index,
                 ..
             }
-            | PendingChoice::DiscardPayment {
+            | PendingChoice::TapPayment {
                 source,
                 ability_index,
                 ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
+                frame.ability = Some(*ability_index);
+            }
+            PendingChoice::ActivationX {
+                permanent,
+                ability_index,
+                ..
+            }
+            | PendingChoice::Crew {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                 frame.ability = Some(*ability_index);
             }
             PendingChoice::Waterbend {
@@ -420,6 +539,7 @@ impl Game {
                         .unwrap_or_default()
                 }),
             kicked: effect.kicked,
+            x: effect.x,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
             targets: effect
@@ -463,7 +583,10 @@ impl Game {
                 } => {
                     frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                     frame.ability = Some(*ability_index);
-                    frame.cost(&self.activated_abilities_for(*permanent)[*ability_index].mana_cost);
+                    frame.cost(
+                        &self.characteristics(*permanent).activated_abilities[*ability_index]
+                            .mana_cost,
+                    );
                     (2, resume.as_deref())
                 }
                 Decision::ManaChoice {
@@ -480,9 +603,14 @@ impl Game {
                         .collect();
                     (3, resume.as_deref())
                 }
-                Decision::Sacrifice { .. } => (4, None),
+                Decision::Sacrifice { optional, .. } => {
+                    frame.can_decline = optional.is_some();
+                    (4, None)
+                }
                 Decision::SelectMilled { .. } => (5, None),
-                Decision::SearchBasicLand { .. } => (6, None),
+                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => {
+                    (6, None)
+                }
                 Decision::OptionalDiscardDraw { .. } => (7, None),
                 Decision::Scry { .. } => (8, None),
                 Decision::LookAndSelect { .. } => (9, None),
@@ -493,8 +621,11 @@ impl Game {
                 Decision::SearchDistinctLands { .. } => (14, None),
                 Decision::OpponentSplitsRevealed { .. } => (15, None),
                 Decision::DiscardFromRevealedHand { .. } => (16, None),
-                Decision::CastWithoutPaying { .. } => (17, None),
+                Decision::CastDuringResolution { .. } => (17, None),
                 Decision::ExileLinked { .. } => (18, None),
+                Decision::DistributeCounters { .. } => (19, None),
+                Decision::KeepCreatures { .. } => (20, None),
+                Decision::Retarget { .. } => (21, None),
             };
             frame.decision = kind;
             frames.push(frame);
@@ -517,9 +648,11 @@ impl Game {
                 mode,
                 targets,
                 target_req_indices,
+                ..
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
@@ -527,9 +660,11 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                x,
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
+                frame.x = *x;
                 frame.targets = self.clause_targets(targets, &[], viewer);
             }
         }
@@ -545,6 +680,27 @@ pub fn encode_into(
     out: &mut [f32],
 ) -> Result<(), super::observation_encoder::ObservationEncodeError> {
     use super::observation_encoder::ObservationEncodeError;
+    let dim = out.len() / RELATION_ROWS;
+    if ![LEGACY_RELATION_DIM, RELATION_DIM, RELATION_DIM_V5].contains(&dim)
+        || out.len() != RELATION_ROWS * dim
+    {
+        return Err(ObservationEncodeError::InvalidLength {
+            field: "relations",
+            expected: RELATION_ROWS * RELATION_DIM_V5,
+            actual: out.len(),
+        });
+    }
+    // Waiting delayed triggers are v5 facts; frozen v2-v4 inputs keep their
+    // rows. They follow every other frame, so no index moves.
+    let frames = if dim == RELATION_DIM_V5 {
+        frames
+    } else {
+        let shown = frames
+            .iter()
+            .position(|f| f.kind == 10)
+            .unwrap_or(frames.len());
+        &frames[..shown]
+    };
     let count: usize = frames
         .iter()
         .map(|f| {
@@ -562,14 +718,6 @@ pub fn encode_into(
             actual: count,
         });
     }
-    let dim = out.len() / RELATION_ROWS;
-    if ![LEGACY_RELATION_DIM, RELATION_DIM].contains(&dim) || out.len() != RELATION_ROWS * dim {
-        return Err(ObservationEncodeError::InvalidLength {
-            field: "relations",
-            expected: RELATION_ROWS * RELATION_DIM,
-            actual: out.len(),
-        });
-    }
     out.fill(0.0);
     let mut rows = out.chunks_exact_mut(dim);
     let link = |reference: VisibleReference| {
@@ -581,7 +729,7 @@ pub fn encode_into(
     let definition =
         |reference: VisibleReference| reference.definition.map_or(0.0, |id| (id + 1) as f32);
     for (index, frame) in frames.iter().enumerate() {
-        let mut header = [0.0; RELATION_DIM];
+        let mut header = [0.0; RELATION_DIM_V5];
         header[0] = 1.0;
         header[1] = (index + 1) as f32;
         header[2] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
@@ -605,6 +753,11 @@ pub fn encode_into(
         header[28] = frame.decision as f32;
         header[30] = frame.resolutions_this_turn as f32;
         header[31] = 1.0;
+        header[RELATION_X_INDEX] = f32::from(frame.x);
+        for (index, granted) in frame.granted_keywords.iter().enumerate() {
+            header[RELATION_KEYWORDS_INDEX + index] = f32::from(*granted);
+        }
+        header[RELATION_THIS_TURN_INDEX] = f32::from(frame.this_turn);
         rows.next().unwrap().copy_from_slice(&header[..dim]);
         let mut reference_row = |kind: f32,
                                  reference: VisibleReference,
@@ -614,7 +767,7 @@ pub fn encode_into(
             let row = rows.next().unwrap();
             row.copy_from_slice(&header[..dim]);
             row[0] = kind;
-            if dim == RELATION_DIM {
+            if dim >= RELATION_DIM {
                 row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
             }
             row[22] = (clause + 1) as f32;

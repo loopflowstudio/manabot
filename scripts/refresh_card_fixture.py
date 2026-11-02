@@ -100,6 +100,7 @@ def oracle_cards() -> dict[str, dict]:
             "double_faced_token",
             "emblem",
             "art_series",
+            "front_card",
         ):
             continue
         by_name.setdefault(card["name"], card)

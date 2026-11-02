@@ -15,7 +15,7 @@ from manabot.belief import (
     ViewerDecision,
     ViewerHistory,
 )
-from manabot.env.observation import RELATION_ROWS, ObservationSpace
+from manabot.env.observation import FACT_DIM, FACT_ROWS, RELATION_ROWS, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 
@@ -105,6 +105,11 @@ def fixture_torch_observation() -> dict[str, torch.Tensor]:
         "semantic_cards": torch.zeros((batch, 2, encoder.cards_per_player)),
         "known_hand": torch.zeros((batch, 2, encoder.cards_per_player, 2)),
         "relations": torch.zeros((batch, RELATION_ROWS, encoder.relation_dim)),
+        **(
+            {"facts": torch.zeros((batch, FACT_ROWS, FACT_DIM))}
+            if encoder.shows_everything
+            else {}
+        ),
     }
     observation["actions"][0, 0, 0] = 1.0
     observation["actions"][0, 1, 1] = 1.0

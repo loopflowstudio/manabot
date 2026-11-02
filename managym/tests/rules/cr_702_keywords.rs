@@ -1,11 +1,20 @@
 use std::collections::BTreeMap;
 
 use managym::{
-    agent::action::{Action, ActionType},
+    agent::action::{Action, ActionSpaceKind, ActionType},
     flow::turn::StepKind,
+    state::{
+        ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+        game_object::{PermanentId, PlayerId, Target},
+        zone::ZoneType,
+    },
 };
 
-use crate::support::game::*;
+use crate::support::{
+    game::*,
+    inspect::{card_of, find_owned_card_off_battlefield, permanent},
+    play::{activate_first, pass_until, select_card},
+};
 
 /// CR 702.9 — Creatures with flying can't be blocked except by flying/reach creatures.
 #[test]
@@ -613,4 +622,118 @@ fn cr_702_deathtouch_card_still_uses_normal_actions() {
     s.force_card_in_hand(0, "Typhoid Rats");
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
+}
+
+/// Player 1's Weaponize the Monsters (with a Gray Ogre to sacrifice) faces
+/// player 0's Waterfall Aerialist, which has ward {2}.
+fn ward_ability_setup(seed: u64) -> (Scenario, PermanentId) {
+    let both = deck(&[
+        ("Island", 20),
+        ("Waterfall Aerialist", 8),
+        ("Weaponize the Monsters", 8),
+        ("Gray Ogre", 8),
+    ]);
+    let mut s = Scenario::new(both.clone(), both, seed);
+    let aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
+    s.force_permanent_on_battlefield(1, "Weaponize the Monsters");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    s.advance_to_active_step(1, StepKind::Main);
+    (s, aerialist)
+}
+
+fn activate_weaponize_at(s: &mut Scenario, player: usize, victim: PermanentId, mana: &str) {
+    let weapon = s.battlefield_permanents_named(player, "Weaponize the Monsters")[0];
+    let ogre = s.battlefield_permanents_named(player, "Gray Ogre")[0];
+    s.set_player_mana_pool(player, mana);
+    activate_first(s, weapon);
+    assert!(s.choose_target(Target::Permanent(victim)));
+    select_card(s, card_of(s, ogre));
+}
+
+/// CR 702.21a — ward triggers for an opponent's activated ability too, and
+/// declining its payment counters the ability.
+#[test]
+fn cr_702_ward_counters_an_opponents_activated_ability_unless_paid() {
+    let (mut s, aerialist) = ward_ability_setup(70221);
+    activate_weaponize_at(&mut s, 1, aerialist, "2");
+    assert_eq!(
+        s.game().state.stack_objects.len(),
+        2,
+        "ward above the ability"
+    );
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    assert!(
+        s.game().state.stack_objects.is_empty(),
+        "the ability was countered"
+    );
+    assert_eq!(permanent(&s, aerialist).damage, 0);
+}
+
+#[test]
+fn cr_702_ward_paid_lets_the_ability_resolve() {
+    let (mut s, aerialist) = ward_ability_setup(70222);
+    activate_weaponize_at(&mut s, 1, aerialist, "4");
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    s.pass_priority();
+    s.pass_priority();
+    assert!(
+        s.game().state.permanents[aerialist].is_none(),
+        "2 damage kills it"
+    );
+}
+
+/// CR 702.21a — a triggered ability an opponent controls is also an ability.
+#[test]
+fn cr_702_ward_counters_an_opponents_triggered_ability() {
+    let (mut s, aerialist) = ward_ability_setup(70223);
+    let ogre = find_owned_card_off_battlefield(&s, 1, "Gray Ogre");
+    inject_ability(
+        &mut s,
+        ogre,
+        Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::DealDamage {
+                amount: 2,
+                target: TargetSpec::Creature,
+            }],
+        },
+    );
+    s.game_mut().move_card(ogre, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(aerialist)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(permanent(&s, aerialist).damage, 0);
+}
+
+/// CR 702.21a — only opponents' abilities trigger ward.
+#[test]
+fn cr_702_ward_ignores_its_controllers_own_ability() {
+    let both = deck(&[
+        ("Island", 20),
+        ("Waterfall Aerialist", 8),
+        ("Weaponize the Monsters", 8),
+        ("Gray Ogre", 8),
+    ]);
+    let mut s = Scenario::new(both.clone(), both, 70224);
+    let aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
+    s.force_permanent_on_battlefield(0, "Weaponize the Monsters");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::Main);
+    activate_weaponize_at(&mut s, 0, aerialist, "2");
+    assert_eq!(s.game().state.stack_objects.len(), 1);
 }

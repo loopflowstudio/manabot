@@ -164,7 +164,7 @@ impl Game {
             foretold: true,
             ..ExileCastGrant::new(object, player)
         });
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
         Ok(())
     }
 

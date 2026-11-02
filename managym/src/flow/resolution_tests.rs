@@ -7,9 +7,11 @@ use crate::{
     agent::action::Action,
     flow::game::Game,
     state::{
-        ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
+        ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keywords},
+        effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         player::PlayerConfig,
         predicate::CardPredicate,
         stack_object::{ActivatedAbilityOnStack, StackObject, TriggeredAbilityOnStack},
@@ -96,6 +98,9 @@ fn stack(
                 source_ref,
                 ability_index: 0,
                 targets,
+                attached: None,
+                x: 0,
+                granted_by: None,
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
@@ -109,7 +114,9 @@ fn stack(
             targets,
             target_req_indices: indices,
             context: None,
+            player: None,
             inline_effects: Some(effects),
+            x: 0,
         }),
         Entry::Spell => unreachable!(),
     };
@@ -130,12 +137,30 @@ fn damage() -> Effect {
     }
 }
 
+fn hexproof_keywords() -> Keywords {
+    Keywords {
+        hexproof: true,
+        ..Default::default()
+    }
+}
+
+/// Grant (or remove the grant of) hexproof until end of turn.
 fn hexproof(game: &mut Game, id: PermanentId, value: bool) {
-    game.state.permanents[id]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .hexproof = value;
+    let grant = Modification::AddKeywords(hexproof_keywords());
+    let affected = game.affected_permanent(id).unwrap();
+    if value {
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            grant,
+            EffectDuration::EndOfTurn,
+        );
+    } else {
+        game.state
+            .effects
+            .retain(|effect| effect.affected != affected || effect.modification != grant);
+    }
 }
 
 fn pause() -> Effect {
@@ -156,13 +181,10 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clones() {
                 vec![clause(
                     TargetSpec::Creature,
                     vec![
-                        Effect::GrantKeywordsToTarget {
-                            keywords: Keywords {
-                                hexproof: true,
-                                ..Default::default()
-                            },
-                            target: TargetSpec::Creature,
-                        },
+                        Effect::until_end_of_turn(
+                            AffectedSpec::Target(TargetSpec::Creature),
+                            Modification::AddKeywords(hexproof_keywords()),
+                        ),
                         pause(),
                         damage(),
                     ],
@@ -171,13 +193,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clones() {
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert!(
-                game.state.permanents[victim]
-                    .as_ref()
-                    .unwrap()
-                    .temp_keywords
-                    .hexproof
-            );
+            assert!(game.characteristics(victim).keywords.hexproof);
             assert_eq!(game.state.permanents[victim].as_ref().unwrap().damage, 0);
             let space = game.suspended_decision_action_space().unwrap();
             let choice = space
@@ -291,6 +307,7 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
                         TargetSpec::Creature,
                         vec![Effect::PutCounters {
                             count: 2,
+                            kind: CounterKind::PlusOnePlusOne,
                             target: TargetSpec::Creature,
                         }],
                     ),
@@ -304,7 +321,7 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
             game.resolve_top_of_stack();
             let permanent = game.state.permanents[victim].as_ref().unwrap();
             assert_eq!(permanent.damage, 0);
-            assert_eq!(permanent.plus1_counters, 2);
+            assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
             assert_eq!(game.state.cards[permanent.card].owner, owner);
         }
     }
@@ -337,6 +354,7 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
                         },
                         Effect::PutCounters {
                             count: 2,
+                            kind: CounterKind::PlusOnePlusOne,
                             target: spec,
                         },
                     ],
@@ -347,7 +365,7 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
             game.resolve_top_of_stack();
             let permanent = game.state.permanents[land].as_ref().unwrap();
             assert!(permanent.animated);
-            assert_eq!(permanent.plus1_counters, 3);
+            assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 3);
         }
     }
 }
@@ -443,12 +461,12 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                     vec![
                         Effect::ReturnGraveyardTarget {
                             target: spec.clone(),
-                            tapped_onto_battlefield: false,
+                            to: crate::state::ability::GraveyardReturn::Hand,
                         },
                         pause(),
                         Effect::ReturnGraveyardTarget {
                             target: spec,
-                            tapped_onto_battlefield: false,
+                            to: crate::state::ability::GraveyardReturn::Hand,
                         },
                     ],
                 )],
@@ -531,7 +549,6 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
         let mut encodings = Vec::new();
         for legal in [true, false] {
             let (mut game, first, second) = fixture(controller);
-            hexproof(&mut game, first, !legal);
             stack(
                 &mut game,
                 Entry::Spell,
@@ -539,19 +556,33 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
                 vec![
                     clause(
                         TargetSpec::Creature,
-                        vec![Effect::GrantKeywordsToTarget {
-                            keywords: Keywords {
-                                hexproof: true,
-                                ..Default::default()
-                            },
-                            target: TargetSpec::Creature,
-                        }],
+                        vec![Effect::until_end_of_turn(
+                            AffectedSpec::Target(TargetSpec::Creature),
+                            Modification::AddKeywords(hexproof_keywords()),
+                        )],
                     ),
                     clause(TargetSpec::Creature, vec![pause(), damage()]),
                 ],
                 vec![Target::Permanent(first), Target::Permanent(second)],
                 vec![0, 1],
             );
+            if !legal {
+                // The first target gains the same hexproof record in response,
+                // so the present state matches the legal case's after its
+                // grant resolves.
+                let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
+                    unreachable!()
+                };
+                let bolt = spell.card;
+                let affected = game.affected_permanent(first).unwrap();
+                game.apply_continuous(
+                    Some(bolt),
+                    controller,
+                    [affected],
+                    Modification::AddKeywords(hexproof_keywords()),
+                    EffectDuration::EndOfTurn,
+                );
+            }
             // Public stack targets have not been evaluated yet.
             assert!(game
                 .continuation_frames(controller)
@@ -587,7 +618,7 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             .unwrap()
             .relations;
             for (row, old) in native
-                .as_chunks::<33>()
+                .as_chunks::<{ crate::agent::continuation::RELATION_DIM_V5 }>()
                 .0
                 .iter()
                 .zip(legacy.as_chunks::<32>().0)
@@ -595,7 +626,7 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
                 assert_eq!(&row[..32], old);
             }
             let target_rows = native
-                .as_chunks::<33>()
+                .as_chunks::<{ crate::agent::continuation::RELATION_DIM_V5 }>()
                 .0
                 .iter()
                 .filter(|r| r[0] == 2.0 && r[3] == 5.0)
@@ -614,4 +645,116 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
     if let Ok(path) = std::env::var("RESOLUTION_ELIGIBILITY_EVIDENCE") {
         std::fs::write(path, serde_json::to_string_pretty(&evidence).unwrap()).unwrap();
     }
+}
+
+/// Effect::CounterSpell counters spells only: given an ability as its
+/// object (a trigger context), it leaves the ability on the stack.
+#[test]
+fn counter_spell_cannot_affect_an_ability() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    let source = game
+        .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+        .unwrap();
+    let source_card = game.state.permanents[source].as_ref().unwrap().card;
+    let id = game.state.id_gen.next_id();
+    game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        id,
+        controller: PlayerId(0),
+        source_card,
+        source_ref: game.permanent_object_ref(source),
+        source_lki: None,
+        source_definition_id: game.state.cards[source_card].definition_id,
+        ability_index: 0,
+        targets: Vec::new(),
+        target_req_indices: Vec::new(),
+        context: Some(Target::StackAbility(ability)),
+        player: None,
+        inline_effects: Some(vec![Effect::CounterSpell {
+            target: TargetSpec::Spell,
+        }]),
+        x: 0,
+    }));
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.stack_objects.len(), 1);
+    assert_eq!(game.state.stack_objects[0].id(), ability);
+}
+
+/// Effect::CounterAbility removes the targeted ability from the stack and
+/// announces GameEvent::AbilityCountered; it offers no spell as a target.
+#[test]
+fn counter_ability_counters_an_ability_and_cannot_target_a_spell() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    let spec = TargetSpec::Ability;
+    assert_eq!(
+        game.legal_targets_for_spec(&spec, PlayerId(0)),
+        vec![Target::StackAbility(ability)]
+    );
+    stack(
+        &mut game,
+        Entry::Spell,
+        PlayerId(0),
+        vec![Effect::CounterAbility {
+            target: spec.clone(),
+        }],
+        vec![Target::StackAbility(ability)],
+        vec![0],
+    );
+    let Some(StackObject::Spell(counter)) = game.state.stack_objects.last() else {
+        panic!("the counter is a spell");
+    };
+    let counter = counter.card;
+    assert!(!game.target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
+    assert!(!game
+        .legal_targets_for_spec(&spec, PlayerId(0))
+        .contains(&Target::StackSpell(counter)));
+    game.drain_events();
+    game.resolve_top_of_stack();
+    assert!(game.state.stack_objects.is_empty());
+    assert!(game.drain_events().iter().any(|event| matches!(
+        event,
+        crate::flow::event::GameEvent::AbilityCountered { ability: countered, controller: PlayerId(1), by: Some(by), .. }
+            if *countered == ability && *by == counter
+    )));
+}
+
+/// Effect::CounterSpell cannot target an ability: no ability is offered or
+/// legal for its spell target.
+#[test]
+fn counter_spell_cannot_target_an_ability() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Triggered,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    assert!(game
+        .legal_targets_for_spec(&TargetSpec::Spell, PlayerId(0))
+        .is_empty());
+    assert!(!game.target_is_legal(
+        Target::StackAbility(ability),
+        &TargetSpec::Spell,
+        PlayerId(0)
+    ));
 }

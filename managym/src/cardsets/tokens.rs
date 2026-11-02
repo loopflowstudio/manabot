@@ -2,11 +2,12 @@
 //! with `is_token: true`, so copy effects treat tokens and cards alike. Each is
 //! keyed by name and carries the Scryfall id of its first token printing.
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, AffectedSpec, Effect, EffectValue, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes,
         Keywords, StaticAbility,
     },
+    effect::Modification,
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
 };
@@ -110,7 +111,9 @@ fn clue() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{2}"),
             sacrifice_source: true,
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
             ..Default::default()
         }],
         ..token(
@@ -140,6 +143,7 @@ fn dragon() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -196,16 +200,17 @@ fn monk() -> CardDefinition {
     );
     CardDefinition {
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         ..creature(base, 1, 1, [Color::Red])
     }
@@ -223,6 +228,7 @@ fn soldier() -> CardDefinition {
     );
     CardDefinition {
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },

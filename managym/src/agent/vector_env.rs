@@ -804,7 +804,7 @@ mod tests {
         // A later root may use a deck nobody registered before training began.
         // An unadmitted replacement fails before any game and keeps prior decks.
         let mut generated = deck("Island");
-        generated.deck.main.insert("Rocky Rebuke".into(), 1);
+        generated.deck.main.insert("Cat-Gator".into(), 1);
         assert!(vector
             .set_training_decks(vec![decks[0].clone(), generated])
             .is_err());

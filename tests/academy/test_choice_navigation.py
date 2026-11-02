@@ -76,3 +76,9 @@ def test_retained_choice_position(tmp_path: Path, family: str) -> None:
     )
     assert result["status"] == "rejected"
     assert session.env.state_digest() == position.digest
+
+
+@pytest.mark.parametrize("family", ["CHOOSE_TARGET", "DISCARD"])
+def test_filtered_positions_show_the_filter(family: str) -> None:
+    # choice-navigation.spec.ts filters these; ActionPanel shows the filter at 8 offers.
+    assert len(POSITIONS[family].frame.offers) >= 8

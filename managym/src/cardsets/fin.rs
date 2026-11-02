@@ -1,8 +1,9 @@
 //! Final Fantasy.
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -24,13 +25,17 @@ fn sazh_s_chocobo() -> CardDefinition {
         power: Some(0),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Land),
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::PutCountersOnSource { count: 1 }],
+            effects: vec![Effect::PutCountersOnSource {
+                count: EffectValue::Fixed(1),
+                kind: CounterKind::PlusOnePlusOne,
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()

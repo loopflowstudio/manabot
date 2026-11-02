@@ -44,7 +44,7 @@ impl Game {
     /// cast-plus-target has the same SBA, priority, tracking, and consistency
     /// behavior as the legacy positional path.
     pub(crate) fn finish_action_step(&mut self) -> bool {
-        self.state.priority.sba_done = false;
+        self.state.priority_mut().sba_done = false;
 
         let game_over = self.tick();
         if game_over {
@@ -154,8 +154,15 @@ impl Game {
         None
     }
 
+    /// Give the active player priority with no passes yet in the round, as
+    /// at a step's start and after any non-pass action (CR 117.3).
+    pub(crate) fn restart_priority_round(&mut self) {
+        let active = self.active_player();
+        self.state.priority_mut().start_round(active);
+    }
+
     fn on_step_start(&mut self, step: StepKind) {
-        self.state.priority.start_round(self.active_player());
+        self.restart_priority_round();
         if step == StepKind::Untap {
             let player = self.active_player();
             let event = GameEvent::TurnStarted {
@@ -344,7 +351,7 @@ impl Game {
             }
             StepKind::Cleanup => {
                 let player = self.active_player();
-                let unlimited = self.state.players[player.0].no_maximum_hand_size
+                let unlimited = self.has_no_maximum_hand_size_effect(player)
                     || self.battlefield_permanents(player).iter().any(|id| {
                         let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
                         self.state.cards[permanent.card]
@@ -360,12 +367,13 @@ impl Game {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
                         player,
                         remaining: 1,
+                        then: None,
                     });
                     return self.suspended_decision_action_space();
                 }
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
-                self.clear_temporary_modifiers();
+                self.end_turn_modifiers();
                 None
             }
             _ => None,
@@ -392,11 +400,11 @@ impl Game {
             }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
-                self.state.priority.start_round(self.active_player());
+                self.restart_priority_round();
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
-                    self.state.priority.on_non_pass_action(self.active_player());
+                    self.restart_priority_round();
                     continue;
                 }
                 return None;
@@ -406,7 +414,7 @@ impl Game {
 
             if self.skip_trivial && !self.can_player_act(player) {
                 let next = self.next_player(player);
-                self.state.priority.on_pass(next);
+                self.state.priority_mut().on_pass(next);
                 continue;
             }
 

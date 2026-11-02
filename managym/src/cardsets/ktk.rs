@@ -1,4 +1,6 @@
 //! Khans of Tarkir.
+use crate::state::ability::AffectedSpec;
+use crate::state::effect::Modification;
 use crate::state::{
     ability::{Ability, Effect, TriggerCondition},
     card::{CardDefinition, CardType, CardTypes, Keywords},
@@ -27,16 +29,17 @@ fn monastery_swiftspear() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
