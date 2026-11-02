@@ -134,7 +134,27 @@ having modified abilities") against how the code reads one characteristic.
   `Card.copy` records its inputs for observation.
   `PlayerTurnHistory` has one owner.
 
-Open for Jack Heart: questions 1 and 2 on the page.
+**Decided by Jack Heart (2026-11-02): 1a, 2a.**
+
+1a. Do it in T5, before merge. `Characteristics.is_legendary` (layer 4:
+copiable supertypes unless a `Nonlegendary` record removes it) becomes the
+one authority. Delete `permanent_is_legendary`; the legend rule reads
+`characteristics(id).is_legendary`.
+
+2a. Make it a rule: every `CardData` field that states a characteristic of a
+battlefield card reads `Game::characteristics()`. Off the battlefield, fields
+keep reading the printed card. `tests/cards/observability.rs` enforces this.
+For each `CardData` field it records whether the field is layered (and reads
+characteristics on the battlefield) or printed by definition (identity, token,
+costs paid when casting), so a new field must be classified before it
+compiles. Apply the rule to every current field, including subtypes such as
+Lesson and abilities such as ward. When a characteristic has no layered value
+yet, add it to `Characteristics` instead of reading the printed card.
+
+Next proof: a directed test that applies a non-copy `Nonlegendary` record and
+checks the legend rule, v5 column 39 and the LLM text line together. Add
+equivalents for any other flag the rule changes. Native and Python encoders
+stay at parity, widths don't change, and debug `cargo test` passes.
 
 ## Sync onto main — 2026-11-02 (steer 6eae1230)
 
