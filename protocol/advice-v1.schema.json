@@ -2431,6 +2431,11 @@
           "title": "This Turn",
           "type": "boolean"
         },
+        "through_next_turn": {
+          "default": false,
+          "title": "Through Next Turn",
+          "type": "boolean"
+        },
         "waterbend": {
           "default": false,
           "title": "Waterbend",
@@ -2819,6 +2824,13 @@
           },
           "title": "Exile",
           "type": "array"
+        },
+        "extra_turns": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Extra Turns",
+          "type": "integer"
         },
         "graveyard": {
           "items": {

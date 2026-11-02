@@ -4,12 +4,9 @@ Status (2026-11-02): implementing. Brief: Task MTG-225 (16 cards, allocation
 `planned_pr: T6`); direction in [t6-direction.md](t6-direction.md). One
 cohesive PR, then stop for Jack Heart's review.
 
-Base: T6 develops on main `4c8324a59` (T3 + T4, which T6 needs for delayed
-triggers and turn history). T5 #405 was mid-sync onto main at start (96
-conflicted files); merge T5's synced head when it publishes, so T6 stays
-stacked on T5 and the merge carries only T5-vs-T6 conflicts. The T5-dependent
-cards (copies: Ember Island Production, Foggy Swamp Visions; Fire Lord Azula's
-spell copies) wait for that merge.
+Base: T6 started on main `4c8324a59` (T3 + T4) while T5 #405 synced onto
+main, then merged T5's synced head `836042c07` (2026-11-02, four small
+conflicts), so it is stacked on T5 with T5's copy effects available.
 
 ## Model
 
@@ -46,8 +43,8 @@ spell copies) wait for that merge.
 | Leaves from the Vine | supported; directed tests |
 | The Cave of Two Lovers | supported; directed tests |
 | The Legend of Kuruk // Avatar Kuruk | supported; transform reentry, Spirits, extra turn |
-| The Legend of Kyoshi // Avatar Kyoshi | |
-| The Legend of Roku // Avatar Roku | |
+| The Legend of Kyoshi // Avatar Kyoshi | supported; directed test |
+| The Legend of Roku // Avatar Roku | supported; directed test |
 | The Legend of Yangchen // Avatar Yangchen | |
 | The Rise of Sozin // Fire Lord Sozin | |
 | Aang, Swift Savior // Aang and La | |
@@ -56,15 +53,19 @@ spell copies) wait for that merge.
 | Bender's Waterskin | |
 | Bumi, Unleashed | |
 | Koh, the Face Stealer | |
-| Ember Island Production | after T5 merge |
-| Fire Lord Azula | after T5 merge |
-| Foggy Swamp Visions | after T5 merge |
+| Ember Island Production | |
+| Fire Lord Azula | |
+| Foggy Swamp Visions | |
 
 ## Delete — do not maintain
 
-- Nothing yet: faces and Sagas are new capabilities.
+- `Effect::ExileTopCardPlayThisTurn`: replaced by `ExileTopCardsToPlay {
+  count, until: PlayWindow }`. Done.
 
 ## Checks
 
 - 2026-11-02: debug `cargo test --tests` green except Scryfall fixture (fixed) and
   semantic-kernel w17 evidence (content digest moved; re-record at gate).
+- 2026-11-02 (after T5 merge, extension rebuilt): debug lib/cards/conformance/
+  rules targets green; pytest tests/semantic tests/env + parity 276 passed;
+  experience protocol 14 passed. Academy UI checks not run (no node_modules).
