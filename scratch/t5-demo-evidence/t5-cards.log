@@ -1,0 +1,20 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running tests/cards.rs (managym/target/debug/deps/cards-304ca39256566211)
+
+running 13 tests
+test tla::joo_dee_surveil_choices_name_what_they_do ... ok
+test tla::phoenix_fleet_airship_copies_itself_as_it_last_existed_after_leaving ... ok
+test tla::phoenix_fleet_airship_crews_with_one_power ... ok
+test tla::ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities ... ok
+test tla::ran_and_shaw_copy_ignores_the_sources_status_counters_and_effects ... ok
+test tla::joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself ... ok
+test tla::ran_and_shaw_copy_records_its_copy_effect_and_exception ... ok
+test tla::joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature ... ok
+test tla::phoenix_fleet_airship_copies_itself_at_your_end_step_only_after_a_sacrifice ... ok
+test tla::ran_and_shaw_firebend_and_pump_only_the_dragons_present_until_end_of_turn ... ok
+test tla::phoenix_fleet_airship_is_a_creature_while_you_control_eight ... ok
+test tla::joo_dee_activates_only_as_a_sorcery ... ok
+test tla::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 488 filtered out; finished in 0.01s
+

@@ -1,0 +1,38 @@
+=== Ran and Shaw ===
+Stage: priority. Choose an explicit legal offer to commit one decision -> Cast C1 (Ran and Shaw)
+Stage: legend rule. Choose which legendary permanent to keep.          -> Select C7 (Ran and Shaw)
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: legend rule. Choose which legendary permanent to keep.          -> Select C9 (Ran and Shaw)
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+    You: life 20; active yes; viewer yes; library 30; hand 0; battlefield 7; graveyard 4; stack 0; exile 0; command 0.
+    C10 (Ran and Shaw) [D2]: controller You; power/toughness 4/4; damage 0; tapped no; summoning sick no; +1/+1 counters 0; animated no; holds exile link no; cannot be blocked this turn no; exile if dies this turn no; effective keywords flying; unlisted effective keywords false.
+    C11 (Ran and Shaw) [D2]: controller You; power/toughness 4/4; damage 0; tapped no; summoning sick yes; +1/+1 counters 0; animated no; holds exile link no; cannot be blocked this turn no; exile if dies this turn no; effective keywords flying; copy of D2, except isn't legendary; unlisted effective keywords false.
+=== Phoenix Fleet Airship ===
+Stage: priority. Choose an explicit legal offer to commit one decision -> Activate ability of C2 (Joo Dee, One of Many); ability 1
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: surveil. Choose inspected cards to put into your graveyard; dec -> Decline / finish the offered choice C3 (Joo Dee, One of Many). Native description: Keep on
+Stage: resolution sacrifice. Choose a permanent to sacrifice as a reso -> Select C2 (Joo Dee, One of Many). Native description: Sacrifice Joo Dee, One of Many
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+Stage: priority. Choose an explicit legal offer to commit one decision -> Pass priority
+    Turn 1. Phase: ending. Step: end.
+    This turn: sacrificed 1 permanent.
+    C3 (Phoenix Fleet Airship) [D2]: controller You; power/toughness 4/4; damage 0; tapped no; summoning sick no; +1/+1 counters 0; animated no; holds exile link no; cannot be blocked this turn no; exile if dies this turn no; effective keywords flying; unlisted effective keywords false.
+    C5 (Phoenix Fleet Airship) [D2]: controller You; power/toughness 4/4; damage 0; tapped no; summoning sick yes; +1/+1 counters 0; animated no; holds exile link no; cannot be blocked this turn no; exile if dies this turn no; effective keywords flying; copy of D2; unlisted effective keywords false.
+    Stage: priority. Choose an explicit legal offer to commit one decision.

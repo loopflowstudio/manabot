@@ -1,11 +1,13 @@
 # T5 (a7234f): permanent copying — plan and status
 
-As of 2026-11-02, local and published PR #405 head is `933798396`;
+As of 2026-11-02, local and published PR #405 head is `1de85f7aa`;
 main `29660d00c` is merged and remains the upstream head. Joo Dee, One of Many,
 Ran and Shaw, and Phoenix Fleet Airship are defined and supported. Implementation and the
 native Command / LLM text demos are complete. The choice-navigation repair
-and updated PR description are published. Current-head acceptance remains
-with gate; pending CI is not a green result.
+and updated PR description are published. Gate is complete: CI run 41541743395
+passed at that head, and the local regression/CI-selection additions passed
+their focused checks. Those gate additions remain uncommitted; runtime code is
+unchanged. See the gate results below for exact scope and skips.
 
 **Shipping is stopped.** Jack Heart's latest steer f39fef34 says to run the
 Graph through gate, then stop for review: no merge. The Task's recorded
@@ -169,12 +171,11 @@ no documentation or skill-instruction redesign is needed for this outcome.
 
 ## Remaining
 
-- Gate acceptance at the current head remains open. CI run 41540970453 at
-  `933798396` was pending at inspection; Release packages 41540970371 was
-  running. Prior-head Academy UI success resolves the fixture failure but
-  does not certify the whole current head. Existing debug, clippy and Python
-  evidence below is reusable where the source is unchanged; missing
-  current-head acceptance and any new failures belong to gate/CI.
+- Gate completed at published head `1de85f7aa`: all required CI jobs and
+  aggregate Tests Result passed in run 41541743395. Local additions improve
+  copy-fact parity coverage and select that bounded test in CI; their focused
+  checks passed. Preserve these additions and the preceding demo evidence in
+  the next authorized checkpoint/publication. No production repair remains.
 - Open for Jack Heart: the projection's `base_power` / `base_toughness`
   were documented as printed values for a "4/4 (2/2)" display; with the
   card row layered they equal `power` / `toughness` on the battlefield, and
@@ -213,3 +214,86 @@ text-renderer test; format/lint were clean. Reconciliation changes context only
 and adds no new runtime claim.
 
 Check: `git diff --check` — passed; `lf context` — memory and scratch within both token and byte limits; current-head acceptance deferred to gate/CI.
+
+## Gate at `1de85f7aa` — 2026-11-02
+
+Comparison: checkout base/main `29660d00c` through HEAD, plus the existing
+demo note and its untracked evidence. The latest commit changes context only;
+native inputs still match the rebuilt extension at `e8fd88eed` (the Python
+projection has only a comment change since that build).
+The repository selector (`git diff --no-renames --name-only -z 29660d00c HEAD |
+bash .github/ci/select-tests.sh`) selects all eight CI job groups. It has no
+local result cache. CI run 41541743395 is exercising this exact published head;
+full native suites, full model/integration suites and headless release browser
+coverage remain with that run rather than being duplicated locally.
+
+Planned focused checks, selected before execution:
+
+- `managym/src/{flow,state,agent}` and native tests: retain the same-head demo's
+  51 observability and 13 card witnesses; run continuation unit tests and
+  `cr_613_continuous_effects` in optimized debug, then cargo fmt and all-target,
+  all-feature clippy with two build jobs. These cover the continuation bound,
+  layered legend rule and static correctness beyond the card demo.
+- `manabot/env/observation.py`, native bindings, text, experience projections,
+  fixtures and changed belief test: run focused observation/parity/continuation,
+  content, forced-choice, protocol, choice/trigger, Learn setup and belief
+  tests. Retain the same-head demo's text-consumer evidence. Add the mandated
+  current-world admission/monitoring/choice-separability and active-training
+  checks because rules and policy-input facts reach those consumers.
+- Academy notes, types, player history and decision labels: run focused Vitest
+  notes/protocol/label tests and Svelte type checking; CI owns the built release
+  browser cases, including the previously failing choice-navigation cases.
+- Changed Python and stubs: Ruff lint and format checks; final diff whitespace
+  check. No configured Python type-check command is present in CI.
+
+No merge, Task completion, new work, or Wave-memory change is part of this gate.
+
+Review found no production defect. The all-fields encoder-parity witness did
+not exercise copies: extend it with a nonlegendary exception and a two-keyword
+exception, asserting the copy's object/source joins, indefinite duration and
+timestamp rank alongside native/Python equality. This is an injected boundary
+test, complementing the native copy rules witnesses rather than claiming a
+second rules proof. CI previously omitted this module: the integration workflow
+now selects this single bounded test by node id. Runtime code, extension inputs
+and retained evidence are unchanged.
+
+Local results (current tree, no timeout or deferred local check):
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib agent::continuation` — 5 passed. Its first invocation's completion was not captured; the immediate cached rerun above supplies the result.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --test rules_tests cr_613_continuous_effects` — 6 passed, debug assertions enabled.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml -j 2 --all-targets --all-features -- -D warnings` — passed.
+- `cargo fmt --manifest-path managym/Cargo.toml --check` — passed.
+- `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/env/test_observation.py tests/verify/test_observation_parity.py tests/verify/test_continuation_input.py tests/semantic/test_current_content.py tests/env/test_skip_forced_decisions.py tests/academy/test_experience_protocol.py tests/academy/test_choice_navigation.py tests/academy/test_trigger_order.py tests/academy/test_learn_setup.py tests/belief/test_state.py tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py tests/training/test_active_training.py -q --durations=10` — 218 passed in 102.85s, including the expanded copy-fact parity witness. Longest case: ordinary native/Python observation parity, 28.47s; no timeout.
+- `npm --prefix academy/ui test -- --run src/lib/permanent-notes.test.ts src/lib/decision-labels.test.ts src/lib/protocol-conformance.test.ts` — 14 passed.
+- `npm --prefix academy/ui run check` — 0 errors, 0 warnings (Node emitted a dependency deprecation notice).
+- `uv run --extra dev ruff check manabot/env/observation.py manabot/managym/__init__.pyi manabot/managym/experience.py manabot/managym/experience_projection.py manabot/semantic/text_observation.py tests/belief/test_state.py tests/semantic/test_text_observation.py tests/verify/test_observation_parity.py` — passed.
+- `uv run --extra dev ruff format --check` with those same eight paths — passed after formatting only the expanded parity test.
+- `uv run --extra dev pytest tests/infra/test_ci_selection.py -q` — 40 passed after the workflow selection edit.
+- `uv run --extra dev pytest --collect-only -q tests/env/test_observation.py tests/verify/test_observation_parity.py::test_v5_encodes_every_observed_permanent_and_card_field_in_parity` — 55 collected, including the new CI selection alongside its observation consumer suite.
+
+The same-head demo retains 51 observability, 13 T5 card and 47 text/choice
+consumer passes in `scratch/t5-demo.md`.
+
+Final CI result: [run 41541743395](https://github.com/loopflowstudio/manabot/actions/runs/41541743395)
+**passed at `1de85f7aa`**, including every selected job and Tests Result. Debug
+Rust includes 501 card passes and 141 rules passes (2 existing ignored rules
+tests). Academy's built, headless release browser suite passed 25 and skipped
+2 cases requiring a local card-art cache or retained checkpoint; these skips
+are not claimed as passes. All 22 frontend unit-test files and Svelte checking
+passed. Both integration groups, evaluation Perf proof, training smoke,
+protocol, semantic conformance and clean-machine play passed. Release package
+and install checks also passed; package publication was skipped.
+
+The main integration stage took 10m10s and its evaluation stage 9m04s. Both
+completed successfully without a timeout; their slower duration is not a
+controlled performance comparison. The preceding heads' cancelled CI runs
+remain historical, not substitute acceptance.
+
+`git diff --check` and `lf context` passed; scratch and memory stay within their
+configured limits. No server or watcher was started. All local test/build
+commands have exited. This gate added only the parity witness, its CI node
+selection and these notes; the existing uncommitted demo evidence was preserved.
+The new test/workflow changes are locally verified, not part of the cited CI
+head. No commit, push, merge, auto-merge, Task completion or Wave-memory edit
+was performed. PR #405 remains open with `autoMergeRequest: null`, awaiting
+Jack Heart's review.

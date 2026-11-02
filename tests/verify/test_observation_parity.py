@@ -9,6 +9,8 @@ import pytest
 from manabot.env.observation import (
     CARD_DIM,
     CARD_PERMISSION_INDEX,
+    FACT_COPY,
+    FACT_COPY_EXCEPTION,
     FACT_DURATION_INDEX,
     FACT_EFFECT,
     FACT_ID_INDEX,
@@ -446,6 +448,20 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     grant.duration, grant.timestamp = "EndOfTurn", base + 2
     grant.source_registry_key = theirs.registry_key
     mine.effects = [pump, grant]
+    # Copy exceptions share the modification vocabulary, but have their own
+    # fact kind and use the copied permanent's timestamp and definition join.
+    copy = managym.CopyEffect()
+    copy.name, copy.registry_key = "Forest", theirs.registry_key
+    nonlegendary = managym.ContinuousEffect()
+    nonlegendary.modification = "Nonlegendary"
+    nonlegendary.duration, nonlegendary.timestamp = "Indefinite", mine.id
+    nonlegendary.source_registry_key = theirs.registry_key
+    keywords = managym.ContinuousEffect()
+    keywords.modification, keywords.keywords = "AddKeywords", ["flying", "trample"]
+    keywords.duration, keywords.timestamp = "Indefinite", mine.id
+    keywords.source_registry_key = theirs.registry_key
+    copy.exceptions = [nonlegendary, keywords]
+    mine.copy = copy
     mine.dealt_damage_this_turn = True
     obs.agent_permanents = [mine]
     agent = obs.agent
@@ -475,10 +491,18 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
         row[27:PERMANENT_DIM], [1, 0, 0, 0.4, host + 1, 1, host + 1, 1, 1, 1, 1]
     )
     # Fact rows, in order: counters, added subtypes, set name and creature
-    # type, used abilities, then effect records (one row per keyword).
+    # type, used abilities, copy and its exceptions, then effect records
+    # (one row per keyword).
     facts = actual["facts"]
     kinds = facts[facts[:, FACT_VALID_INDEX] == 1, FACT_KIND_INDEX].tolist()
-    assert kinds == [1, 1, 1, 2, 2, 2, 3, 4, 5, 5, 6, 6, 6, 6]
+    assert kinds == [1, 1, 1, 2, 2, 2, 3, 4, 5, 5, 7, 8, 8, 8, 6, 6, 6, 6]
+    copies = facts[np.isin(facts[:, FACT_KIND_INDEX], [FACT_COPY, FACT_COPY_EXCEPTION])]
+    np.testing.assert_array_equal(copies[:, FACT_OBJECT_INDEX], [own + 1] * 4)
+    np.testing.assert_array_equal(
+        copies[:, FACT_SOURCE_INDEX], [theirs.registry_key + 1] * 4
+    )
+    np.testing.assert_array_equal(copies[:, FACT_ORDER_INDEX], [1] * 4)
+    np.testing.assert_array_equal(copies[:, FACT_DURATION_INDEX], [2] * 4)
     effects = facts[facts[:, FACT_KIND_INDEX] == FACT_EFFECT]
     # The agent's player row comes first; its record is the latest.
     np.testing.assert_allclose(

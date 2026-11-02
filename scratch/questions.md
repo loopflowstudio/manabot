@@ -38,7 +38,9 @@ protocol decision by Jack Heart. This is not a T5 blocker.
 
 The choice-navigation re-record (`889948346`) preserves recorded offer ids
 when labels repeat, keeping original state digests and offer order. It is
-published; Academy UI passed at `bbb5101eb` (CI 41539137476). Whole-head
-acceptance at `933798396` remains with gate/CI.
+published; Academy UI passed at `bbb5101eb` (CI 41539137476). Gate subsequently
+confirmed all required CI at `1de85f7aa` (run 41541743395), plus local copy-fact
+parity coverage and its CI selection. The latter remain uncommitted; see the
+design's gate results for commands and evidence boundaries.
 Shipping remains stopped by steer f39fef34; `/verify` is not a pre-merge check
 because that skill finishes delivered Tasks.

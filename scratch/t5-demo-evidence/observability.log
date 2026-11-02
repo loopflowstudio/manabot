@@ -1,0 +1,59 @@
+   Compiling managym v0.2.0 (/Users/jack/src/manabot.a7234f-tla-t5-permanent/managym)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.52s
+     Running tests/cards.rs (managym/target/debug/deps/cards-304ca39256566211)
+
+running 51 tests
+test observability::an_intervening_if_reaches_the_learning_tokens ... ok
+test observability::card_rows_off_the_battlefield_read_the_printed_card ... ok
+test observability::a_later_record_has_a_later_order_than_an_earlier_one ... ok
+test observability::attacking_creatures_differ_from_idle_ones_at_column_27 ... ok
+test observability::airbend_permission_reaches_both_viewers_tensors ... ok
+test observability::a_toph_granted_land_shows_in_its_card_row_and_the_v5_granted_column ... ok
+test observability::announced_x_reaches_the_stack_card_row ... ok
+test observability::a_stunned_tapped_creature_differs_from_an_unstunned_one_only_in_v5 ... ok
+test observability::a_creature_that_lost_its_abilities_differs_only_in_v5 ... ok
+test observability::a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together ... ok
+test observability::blocking_one_attacker_differs_from_blocking_another_only_in_v5 ... ok
+test observability::a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers ... ok
+test observability::a_spent_exhaust_ability_differs_from_an_unused_one_only_in_v5 ... ok
+test observability::cant_be_blocked_if_removes_blocks_from_the_action_tensor ... ok
+test observability::each_permanent_status_moves_its_named_column ... ok
+test observability::every_delayed_trigger_event_has_its_own_relation_code ... ok
+test observability::every_keyword_reaches_its_relation_column ... ok
+test observability::a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires ... ok
+test observability::every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed ... ok
+test observability::every_permanent_and_player_field_names_where_it_is_seen ... ok
+test observability::every_condition_reaches_the_learning_tokens ... ok
+test observability::each_added_subtype_reaches_a_fact_row ... ok
+test observability::equipment_on_one_creature_differs_from_equipment_on_another_only_in_v5 ... ok
+test observability::every_continuous_effect_variant_reaches_the_learning_tokens ... ok
+test observability::foretold_and_hand_cards_never_reach_the_opponents_encoding ... ok
+test observability::foretold_card_and_permission_reach_only_the_owner ... ok
+test observability::hand_only_lock_reaches_both_viewers_tensors ... ok
+test observability::every_trigger_condition_and_ability_reaches_the_learning_tokens ... ok
+test observability::granted_firebending_reaches_its_permanent_column_and_an_effect_row ... ok
+test observability::each_modification_reaches_an_effect_fact_row_with_its_duration_and_order ... ok
+test observability::honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host ... ok
+test observability::kept_red_mana_and_no_hand_size_reach_the_player_rows_only_in_v5 ... ok
+test observability::every_effect_variant_reaches_the_learning_tokens ... ok
+test observability::each_counter_kind_reaches_a_fact_row ... ok
+test observability::lo_and_li_grant_lifelink_to_a_lesson_on_the_stack_in_v5 ... ok
+test observability::opponent_hidden_cards_do_not_reach_the_viewer_tensor ... ok
+test observability::player_life_and_mana_move_their_named_columns ... ok
+test observability::restricted_mana_is_encoded_by_spending_subtype ... ok
+test observability::sorcery_timing_reaches_the_activated_ability_tokens ... ok
+test observability::sacrifices_this_turn_reach_the_player_row_only_in_v5 ... ok
+test observability::no_maximum_hand_size_keeps_the_hand_count_column_through_cleanup ... ok
+test observability::every_static_and_cost_variant_reaches_the_learning_tokens ... ok
+test observability::turn_history_moves_each_players_named_column ... ok
+test observability::stack_x_one_and_three_differ_only_in_v5 ... ok
+test observability::turn_number_and_seat_reach_the_player_rows ... ok
+test observability::printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens ... ok
+test observability::layered_card_fields_read_characteristics_on_the_battlefield ... ok
+test observability::tensor_visible_statics_and_costs_move_their_named_columns ... ok
+test observability::every_static_and_cost_variant_names_a_real_card_and_its_behavior_test ... ok
+test observability::every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics ... ok
+test observability::learning_tokens_never_carry_names_or_printed_text ... ok
+
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 450 filtered out; finished in 0.01s
+
