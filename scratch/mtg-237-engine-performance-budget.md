@@ -40,13 +40,14 @@ not a latency budget.
 - Accepted (Task brief, Jack Heart, 2026-11-02): both workloads budgeted at
   10% against a committed file; digests asserted identical; a 20% slowdown
   fixture; one-time T4/T5/T6 measurement; `uv` only; no induced load.
-- Implied by the accepted outcome (concept review 2026-11-02), confirmed in
-  Jack Heart's PR review: "committed baseline" is read as a
+- Implied by the accepted outcome (concept review 2026-11-02); not yet
+  confirmed by Jack Heart, whose PR review decides it (no PR exists yet):
+  "committed baseline" is read as a
   committed *reference commit* rebuilt and measured A/B on the same runner,
   not committed absolute numbers. Evidence: one engine spread 6.8k-10.3k
   steps/s across three runner CPU models (far outside 10%); two runs on one
   model agreed within 2.5%. The file's figures are orientation only.
-- Implied by the accepted purpose (same review), confirmed in the PR review:
+- Implied by the accepted purpose (same review), pending the same PR review:
   the headless workload is native `Env::step`
   random-legal play (512 games, skip_trivial), not the rul-9 Python
   semantic-Command runner (deleted in #343). Its steps/s is its own
@@ -83,7 +84,7 @@ counterexample to 10%; re-running the job is the recovery when digests match
 and the engine did not change. Open for later evidence, not this Task: the
 10% figure and whether a dedicated runner is worth buying.
 
-## Status (reconciled 2026-11-02, compress pass)
+## Status (reconciled 2026-11-02, realign after compress)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
@@ -93,8 +94,9 @@ Later commits (script simplification, one `other` checkout, the
 `measurement.json`/`record --reason` design change, and the compress pass
 that made both commands read run directories so compare's four file flags
 became two directory defaults) have passed tests and actionlint locally but
-not CI: the branch has no PR and branch pushes do not trigger CI. Main has
-not moved past the base 4c8324a59 (checked 2026-11-02).
+not CI: the branch has no PR and branch pushes do not trigger CI. Main moved
+to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at 49765237c;
+the reference 4c8324a59 still describes the engine (checked 2026-11-02).
 
 Remains (publication, owned by the caller): open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on `pull_request`,
@@ -108,4 +110,4 @@ GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
 steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean (2026-11-02, compress pass).
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean (2026-11-02, realign).

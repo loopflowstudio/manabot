@@ -529,7 +529,7 @@ requirement, it needs its own Task.
   decisions (A/B against a committed reference commit; native `Env::step`
   random play) are read as implied by the accepted outcome plus the runner
   evidence, so the review did not return Blocked; Jack Heart's PR review
-  confirms them. One design change: the reference is recorded from the PR's
+  is where they are confirmed or reversed (not yet held: no PR exists). One design change: the reference is recorded from the PR's
   own compare run (artifact plus `record --reason`), a kept speedup being a
   documented reason to move it; `measure` stays for commits without a PR.
   The artifact is named `engine-budget` in both modes (the run id identifies
