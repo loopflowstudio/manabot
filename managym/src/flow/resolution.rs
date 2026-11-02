@@ -1276,22 +1276,12 @@ impl Game {
                 }
                 None
             }
-            Effect::CreateNonlegendaryCopy => {
-                let source = frame.source?;
-                let original = &self.state.cards[source];
-                let mut copy = original.clone();
-                copy.id = self.state.id_gen.next_id();
-                copy.owner = frame.controller;
-                copy.is_token = true;
-                copy.supertypes
-                    .retain(|supertype| !supertype.eq_ignore_ascii_case("legendary"));
-                let id = CardId(self.state.cards.len());
-                self.state.cards.push(copy);
-                self.state.card_to_permanent.push(None);
-                self.state
-                    .object_incarnations
-                    .push(crate::state::game_object::Incarnation::INITIAL);
-                self.move_card(id, ZoneType::Battlefield);
+            Effect::CreateTokenCopy { exceptions } => {
+                let exceptions = exceptions
+                    .iter()
+                    .map(|exception| exception.resolve(|value| self.effect_value(value, frame)))
+                    .collect();
+                self.create_token_copy(frame.source?, frame.controller, exceptions);
                 None
             }
             Effect::OptionalPayment {
@@ -1675,6 +1665,13 @@ impl Game {
                     remaining,
                     top: Vec::new(),
                     bottom: Vec::new(),
+                })
+            }
+            Effect::Surveil { count } => {
+                let looked = self.library_top(frame.controller, *count);
+                (!looked.is_empty()).then_some(Decision::Surveil {
+                    player: frame.controller,
+                    looked,
                 })
             }
             Effect::LookAndSelect {

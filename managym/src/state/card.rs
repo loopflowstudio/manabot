@@ -617,6 +617,11 @@ pub enum StaticAbility {
     CreatureWithCounters(CounterThreshold),
     /// A type grant this card projects while on the battlefield.
     TypeGrant(StaticTypeGrant),
+    /// "As long as you control N or more permanents named [this card's
+    /// name], this is an artifact creature" (CR 613.1d; Phoenix Fleet
+    /// Airship). Relative to its own name, so no name enters the rules
+    /// vocabulary.
+    CreatureWithNamesakes(u32),
     /// "This creature can attack as though it didn't have defender" while
     /// the condition holds for its controller (Platypus-Bear).
     AttacksDespiteDefender(Condition),
@@ -862,6 +867,13 @@ impl CardDefinition {
         })
     }
 
+    pub fn creature_with_namesakes(&self) -> Option<u32> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CreatureWithNamesakes(count) => Some(*count),
+            _ => None,
+        })
+    }
+
     pub fn attacks_despite_defender(&self) -> Option<&Condition> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::AttacksDespiteDefender(condition) => Some(condition),
@@ -935,6 +947,9 @@ pub struct Card {
     /// the numeric representation of `definition_id`.
     pub registry_key: ObjectId,
     pub owner: PlayerId,
+    /// The copy effect that made this object a copy (CR 707.2); its
+    /// definition is then the copiable values that effect produced.
+    pub copy: Option<crate::state::effect::CopyEffect>,
     definition: Arc<CardDefinition>,
     /// The front face's row while the back face is up (CR 712.8): set by
     /// [`Card::transform`], cleared as the card leaves the battlefield.
@@ -953,6 +968,7 @@ impl Card {
             definition_id,
             registry_key: ObjectId(definition_id.0),
             owner,
+            copy: None,
             definition,
             front: None,
         }

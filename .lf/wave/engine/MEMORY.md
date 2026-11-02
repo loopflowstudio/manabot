@@ -174,6 +174,33 @@ preserves accepted decisions, dated proof limits and source history.
 - **Intelligence:** policy, search algorithms, teacher data, and evaluation.
 - **Study:** human-facing retry, reveal, comparison, and branch navigation.
 
+## TLA batches (T1–T5, 2026-10-28 to 2026-11-02)
+
+- Jack Heart (2026-10-28/29) accepted the TLA delivery as seven card batches
+  plus decklist import, authored as typed Rust `CardDefinition`s in their set
+  file with support by definition (no qualification gate). Each merge requires
+  Jack Heart's review; CI runs `cargo test` in debug, so release-only green is
+  not evidence. `CLAUDE.md` carries the standing authoring and observation rules.
+- Jack Heart's T5 design review (2026-10-30, comment 10a31948): a permanent
+  copy is layer-1 data (`Card.copy: CopyEffect { of, exceptions }`) whose
+  exceptions share the continuous-effect `Modification` vocabulary, observed
+  generically as fact rows and tokens (`FactKind::Copy`, `CopyException`), never
+  as tensor-only identity bits. New open-ended state keeps following this shape.
+- `ContinuationFrame.decision` means an obligation code only for kind-6 frames
+  (trigger ordering class for 7/8, placement group for 9). `continuation.rs`
+  owns `decision_code` and `MAX_DECISION_CODE`; the Python label table is
+  tested against that bound. A text-only consumer gap of this kind is invisible
+  to the tensor path and surfaced only in the headless LLM-path demo.
+- Syncing a branch that was stacked on a since-squashed parent: merge with the
+  parent's pre-squash head as the base so only the branch's own diff meets
+  main (T5 met ~60 hunks instead of ~1465). World-content changes re-record w17
+  evidence in place: the semantic kernel, authored-match receipt and parity
+  pins, public-commitment parity, Academy demos, choice navigation and
+  trigger-order fixtures; only hashes and digests should move. Until the
+  Academy demos are re-recorded, `play_demo.py` rejects their digest before
+  any decision is offered, so the Playwright decision-surface spec fails in
+  CI as a symptom of the stale demo, not a UI defect.
+
 ## Open tensions
 
 - Migrate current Academy match/revision/replay bookkeeping into managym without

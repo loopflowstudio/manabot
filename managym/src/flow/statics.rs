@@ -1167,6 +1167,41 @@ impl Game {
             .and_then(|p| p.as_ref())
             .is_some_and(|permanent| permanent.animated_creature(&self.state.cards[permanent.card]))
             || self.becomes_artifact_creature(permanent_id)
+            || self.creature_with_namesakes(permanent_id)
+    }
+
+    /// `StaticAbility::CreatureWithNamesakes`: its controller controls
+    /// enough permanents with its name (layer 4; names come from layers 1–3,
+    /// which no type computation affects).
+    fn creature_with_namesakes(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        let Some(count) = self.state.cards[permanent.card].creature_with_namesakes() else {
+            return false;
+        };
+        if self.ability_loss_timestamp(permanent_id).is_some() {
+            return false;
+        }
+        let name = self.name_stage(permanent_id);
+        self.battlefield_permanents(permanent.controller)
+            .into_iter()
+            .filter(|&id| self.name_stage(id) == name)
+            .count() as u32
+            >= count
+    }
+
+    /// The name after layers 1–3: the card's (copied) name, or the latest
+    /// characteristic-setting Aura's (CR 613.7e). Matches the view's `name`.
+    fn name_stage(&self, permanent_id: PermanentId) -> &str {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return "";
+        };
+        let attachments = self.attachments_on(permanent_id);
+        match self.latest_setter(attachments.into_iter()) {
+            Some((_, set)) => &set.named,
+            None => &self.state.cards[permanent.card].name,
+        }
     }
 
     /// Layer 6 keywords: printed keywords, keyword counters and animation

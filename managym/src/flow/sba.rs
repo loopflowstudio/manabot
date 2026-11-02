@@ -5,6 +5,7 @@ use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
         ability::{Ability, TriggerCondition},
+        effect::Modification,
         game_object::{CardId, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -13,6 +14,21 @@ use crate::{
 };
 
 impl Game {
+    /// Layer 4 supertype: its copiable values' legendary supertype, unless a
+    /// `Modification::Nonlegendary` record removes it.
+    pub(crate) fn permanent_is_legendary(&self, id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[id].as_ref() else {
+            return false;
+        };
+        self.state.cards[permanent.card]
+            .supertypes
+            .iter()
+            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
+            && !self
+                .effects_on(id)
+                .any(|effect| effect.modification == Modification::Nonlegendary)
+    }
+
     /// Duplicate legendary names, grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<CardId>> {
         let mut groups = Vec::new();
@@ -20,12 +36,7 @@ impl Game {
             let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
             for id in self.battlefield_permanents(player) {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                let card = &self.state.cards[permanent.card];
-                if card
-                    .supertypes
-                    .iter()
-                    .any(|kind| kind.eq_ignore_ascii_case("legendary"))
-                {
+                if self.permanent_is_legendary(id) {
                     names
                         .entry(self.characteristics(id).name.clone())
                         .or_default()

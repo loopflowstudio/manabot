@@ -120,9 +120,9 @@ checkpoints or experiment evidence.
   permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds a
   `facts` block (128 × 12, one row per `FactKind` fact about a player or
   permanent). Open-ended vocabularies (counter kinds, added subtypes, set
-  names, used abilities, continuous-effect records) are fact kinds, never
-  columns. Preserve the frozen widths and derive buffers from
-  `ObservationSpace`.
+  names, used abilities, continuous-effect records, copy effects and their
+  exceptions) are fact kinds, never columns. Preserve the frozen widths and
+  derive buffers from `ObservationSpace`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.
@@ -144,7 +144,7 @@ checkpoints or experiment evidence.
   `uv venv --python 3.12`.
 - After changing Rust under `managym/src`, rebuild from the repository root so
   uv uses the pinned root environment instead of creating a nested venv:
-  `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
+  `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
   `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS

@@ -29,7 +29,7 @@ use managym::{
         },
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
+            ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
             RestrictedManaData, SideboardCardData, StackObjectData, StackTargetData, TurnData,
             KEYWORD_COUNT,
         },
@@ -242,6 +242,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         Modification::BecomeArtifactCreature => {
             ("Modification::BecomeArtifactCreature", Seen::Permanent(8))
         }
+        Modification::Nonlegendary => (
+            "Modification::Nonlegendary",
+            Seen::Via("Effect or CopyException fact rows; a copy's card row is_legendary"),
+        ),
         Modification::AddKeywords(_) => (
             "Modification::AddKeywords",
             Seen::Via("keyword_columns: effective keywords"),
@@ -307,6 +311,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     vec![
         permanent(Modification::AddSubtypes(vec!["Ally".into()])),
         permanent(Modification::BecomeArtifactCreature),
+        permanent(Modification::Nonlegendary),
         permanent(Modification::AddKeywords(Keywords {
             flying: true,
             ..Default::default()
@@ -332,7 +337,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 16;
+const MODIFICATION_VARIANTS: usize = 17;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -456,7 +461,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 18] {
 /// must be named here (and given a witness below).
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
-        Effect::CreateNonlegendaryCopy => "Effect::CreateNonlegendaryCopy",
+        Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
         Effect::TransformSource => "Effect::TransformSource",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
@@ -499,6 +504,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
+        Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
         Effect::PutTopCardsInHand { .. } => "Effect::PutTopCardsInHand",
         Effect::Learn => "Effect::Learn",
@@ -575,7 +581,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 109;
+const EFFECT_VARIANTS: usize = 110;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -588,7 +594,9 @@ fn effect_witnesses() -> Vec<Effect> {
         }]
     };
     vec![
-        Effect::CreateNonlegendaryCopy,
+        Effect::CreateTokenCopy {
+            exceptions: vec![Modification::Nonlegendary],
+        },
         Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 1)),
         Effect::PutCountersOnTriggeringPermanent { count: 1 },
         Effect::OptionalPayment {
@@ -703,6 +711,7 @@ fn effect_witnesses() -> Vec<Effect> {
             }),
         },
         Effect::Scry { count: 1 },
+        Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
             reveal: false,
             look: EffectValue::Fixed(3),
@@ -1309,6 +1318,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "war_balloon_flies_once_it_has_three_fire_counters",
         ),
+        StaticAbility::CreatureWithNamesakes(_) => witnessed(
+            "StaticAbility::CreatureWithNamesakes",
+            Seen::Via("the animated permanent column once the namesakes are controlled"),
+            "Phoenix Fleet Airship",
+            "tla",
+            "phoenix_fleet_airship_is_a_creature_while_you_control_eight",
+        ),
         StaticAbility::TypeGrant(_) => witnessed(
             "StaticAbility::TypeGrant",
             Seen::Via("the granted permanents' card type columns"),
@@ -1466,6 +1482,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             kind: CounterKind::Fire,
             count: 3,
         }),
+        StaticAbility::CreatureWithNamesakes(8),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
             types: vec![CardType::Land],
@@ -1809,6 +1826,25 @@ fn set_keyword(keywords: &mut Keywords, name: &str) {
         other => panic!("unknown keyword {other}"),
     };
     *flag = true;
+}
+
+#[test]
+fn sorcery_timing_reaches_the_activated_ability_tokens() {
+    let definition = CardDefinition {
+        name: "Witness".into(),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            sorcery_timing: true,
+            effects: vec![Effect::Surveil { count: 1 }],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let tokens = tokens_of(&definition);
+    let at = tokens
+        .iter()
+        .position(|token| *token == (TokenKind::Field, name_value("sorcery_timing")))
+        .expect("sorcery_timing token");
+    assert_eq!(tokens[at + 1], (TokenKind::Boolean, 1));
 }
 
 #[test]
@@ -2310,6 +2346,8 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::SetCreatureType => "PermanentData.creature_types",
         FactKind::UsedAbility => "PermanentData.used_abilities",
         FactKind::Effect => "ContinuousEffectData.modification",
+        FactKind::Copy => "PermanentData.copy",
+        FactKind::CopyException => "CopyData.exceptions",
     }
 }
 
@@ -2493,6 +2531,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         used_abilities => [Fact(FactKind::UsedAbility)],
         effects => [Rows("Effect fact rows, ContinuousEffectData below")],
         timestamp => [column(Permanent, PERMANENT_TIMESTAMP_INDEX)],
+        copy => [Fact(FactKind::Copy)],
+    }));
+    fields.extend(encoding!(CopyData {
+        registry_key => [Join(Facts, FACT_SOURCE_INDEX)],
+        name => [Definition],
+        exceptions => [Fact(FactKind::CopyException)],
     }));
     fields.extend(encoding!(ContinuousEffectData {
         modification => [Fact(FactKind::Effect), Columns(Facts, FACT_ID_INDEX, 2)],
@@ -3433,6 +3477,28 @@ fn kept_red_mana_and_no_hand_size_reach_the_player_rows_only_in_v5() {
     }
 }
 
+#[test]
+fn sacrifices_this_turn_reach_the_player_row_only_in_v5() {
+    let (baseline, _) = ogre_state();
+    let (mut changed, _) = ogre_state();
+    // Sacrifice-count bookkeeping itself is covered by Phoenix Fleet
+    // Airship's tests; this checks only the encoding.
+    changed.game_mut().state.turn.history[1].permanents_sacrificed = 1;
+    let (before, after) = (encoded(&baseline, 0, 5), encoded(&changed, 0, 5));
+    assert_eq!(
+        (
+            before.opponent_player[PLAYER_SACRIFICED_INDEX],
+            after.opponent_player[PLAYER_SACRIFICED_INDEX]
+        ),
+        (0.0, 0.1)
+    );
+    assert_eq!(
+        flat(&encoded(&baseline, 0, 4)),
+        flat(&encoded(&changed, 0, 4)),
+        "v4 has no history column"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Cast permissions, restricted mana and announced X
 // ---------------------------------------------------------------------------
@@ -3657,6 +3723,48 @@ fn each_modification_reaches_an_effect_fact_row_with_its_duration_and_order() {
             &facts_about(&s, 1, opponent_index),
             FactKind::Effect,
             name_value(name),
+        );
+    }
+}
+
+#[test]
+fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
+    let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
+    for _ in 0..3 {
+        let lesson = library_card(&s, 0, "Waterbending Lesson");
+        s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    }
+    cast(&mut s, "Ran and Shaw");
+    settle(&mut s);
+    let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
+    let is_token = |id: PermanentId| s.game().state.cards[card_of(&s, id)].is_token;
+    let token = *dragons.iter().find(|id| is_token(**id)).unwrap();
+    let source = *dragons.iter().find(|id| !is_token(**id)).unwrap();
+    let key = s.game().state.cards[card_of(&s, source)].registry_key.0 as f32;
+    for viewer in [0, 1] {
+        let rows = facts_about(&s, viewer, object_index(&s, viewer, token));
+        let copy = fact_row(&rows, FactKind::Copy, name_value("CopyEffect"));
+        assert_eq!(
+            copy[FACT_SOURCE_INDEX],
+            key + 1.0,
+            "joined to the copied definition"
+        );
+        assert!(
+            copy[FACT_ORDER_INDEX] > 0.0,
+            "ordered by the copy's timestamp"
+        );
+        let exception = fact_row(
+            &rows,
+            FactKind::CopyException,
+            name_value("Modification::Nonlegendary"),
+        );
+        assert_eq!(exception[FACT_SOURCE_INDEX], key + 1.0);
+        let original = facts_about(&s, viewer, object_index(&s, viewer, source));
+        assert!(
+            original
+                .iter()
+                .all(|row| row[FACT_KIND_INDEX] != FactKind::Copy as u8 as f32),
+            "the original is not a copy"
         );
     }
 }

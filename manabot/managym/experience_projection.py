@@ -175,11 +175,13 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
+        "copy_of": _copy(permanent.copy),
     }
     return {key: value for key, value in values.items() if value is not None}
 
 
 def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
+    """What a player has done this turn, absent facts omitted."""
     values = {
         "attacked": history.attacked,
         "permanents_sacrificed": history.permanents_sacrificed,
@@ -187,6 +189,14 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "cards_drawn": history.cards_drawn,
     }
     return {key: value for key, value in values.items() if value}
+
+
+def _copy(copy: managym.CopyEffect | None) -> dict[str, Any] | None:
+    """The copy effect that made a permanent a copy, or None for an original."""
+    if copy is None:
+        return None
+    exceptions = _effects(copy.exceptions)
+    return {"name": copy.name, **({"exceptions": exceptions} if exceptions else {})}
 
 
 def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
@@ -296,6 +306,11 @@ def _serialize_player(
             else {}
         ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
+        **(
+            {"turn_history": turn_history}
+            if (turn_history := _turn_history(player.turn_history))
+            else {}
+        ),
         **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],

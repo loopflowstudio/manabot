@@ -114,7 +114,9 @@ FACT_SET_NAME = 3
 FACT_SET_CREATURE_TYPE = 4
 FACT_USED_ABILITY = 5
 FACT_EFFECT = 6
-FACT_KINDS = 6
+FACT_COPY = 7
+FACT_COPY_EXCEPTION = 8
+FACT_KINDS = 8
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 
@@ -415,21 +417,22 @@ class ObservationEncoder:
             ident: int,
             values: Tuple[float, float],
             detail: int = 0,
-            effect: managym.ContinuousEffect | None = None,
+            provenance: tuple[float, int, int | None] | None = None,
         ) -> None:
+            """One row; `provenance` is an effect's (duration, timestamp,
+            source registry key), as native `Fact.effect`."""
             row = np.zeros(FACT_DIM, dtype=np.float32)
             row[FACT_OBJECT_INDEX] = self.object_to_index.get(obj, -1) + 1
             row[FACT_KIND_INDEX] = kind
             row[FACT_ID_INDEX : FACT_ID_INDEX + 2] = _split_id(ident)
             row[FACT_DETAIL_INDEX : FACT_DETAIL_INDEX + 2] = _split_id(detail)
             row[FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2] = values
-            if effect is not None:
-                row[FACT_DURATION_INDEX] = (
-                    1.0 if effect.duration == "EndOfTurn" else 2.0
-                )
-                row[FACT_ORDER_INDEX] = ranks[effect.timestamp]
-                if effect.source_registry_key is not None:
-                    row[FACT_SOURCE_INDEX] = effect.source_registry_key + 1
+            if provenance is not None:
+                duration, timestamp, source = provenance
+                row[FACT_DURATION_INDEX] = duration
+                row[FACT_ORDER_INDEX] = ranks[timestamp]
+                if source is not None:
+                    row[FACT_SOURCE_INDEX] = source + 1
             row[FACT_VALID_INDEX] = 1.0
             rows.append(row)
 
@@ -458,6 +461,41 @@ class ObservationEncoder:
                 push(perm.id, FACT_SET_CREATURE_TYPE, token(creature_type), (1.0, 0.0))
             for index in perm.used_abilities:
                 push(perm.id, FACT_USED_ABILITY, index, (1.0, 0.0))
+
+        def push_modification(
+            obj: int, kind: int, effect: managym.ContinuousEffect
+        ) -> None:
+            ident = token(f"Modification::{effect.modification}")
+            amount = effect.power if effect.power is not None else effect.amount
+            values = (
+                (amount or 0) / 10.0,
+                (effect.toughness or 0) / 10.0,
+            )
+            details = [
+                *(token(name) for name in (*effect.keywords, *effect.subtypes)),
+                *(
+                    [token(f"Color::{effect.color}")]
+                    if effect.color is not None
+                    else []
+                ),
+            ] or [0]
+            duration = 1.0 if effect.duration == "EndOfTurn" else 2.0
+            provenance = (duration, effect.timestamp, effect.source_registry_key)
+            for detail in details:
+                push(obj, kind, ident, values, detail, provenance)
+
+        for perm in permanents:
+            if perm.copy is None:
+                continue
+            push(
+                perm.id,
+                FACT_COPY,
+                token("CopyEffect"),
+                (0.0, 0.0),
+                provenance=(2.0, _timestamp(perm), perm.copy.registry_key),
+            )
+            for exception in perm.copy.exceptions:
+                push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
         holders = [
             (obs.agent.id, obs.agent.effects),
             (obs.opponent.id, obs.opponent.effects),
@@ -465,22 +503,7 @@ class ObservationEncoder:
         ]
         for obj, effects in holders:
             for effect in effects:
-                ident = token(f"Modification::{effect.modification}")
-                amount = effect.power if effect.power is not None else effect.amount
-                values = (
-                    (amount or 0) / 10.0,
-                    (effect.toughness or 0) / 10.0,
-                )
-                details = [
-                    *(token(name) for name in (*effect.keywords, *effect.subtypes)),
-                    *(
-                        [token(f"Color::{effect.color}")]
-                        if effect.color is not None
-                        else []
-                    ),
-                ] or [0]
-                for detail in details:
-                    push(obj, FACT_EFFECT, ident, values, detail, effect)
+                push_modification(obj, FACT_EFFECT, effect)
         if len(rows) > FACT_ROWS:
             raise ValueError(
                 f"observation capacity exceeded: facts {len(rows)} > {FACT_ROWS}"

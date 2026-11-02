@@ -169,9 +169,9 @@
     <p class="type-caption py-1" data-testid="turn-history">
       {label} this turn: {[
         history.attacked && 'attacked',
-        history.permanents_sacrificed && `sacrificed ${history.permanents_sacrificed} permanents`,
+        history.permanents_sacrificed && `sacrificed ${history.permanents_sacrificed} permanent${history.permanents_sacrificed === 1 ? '' : 's'}`,
         history.land_entered && 'a land entered',
-        history.cards_drawn && `drew ${history.cards_drawn} cards`,
+        history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}

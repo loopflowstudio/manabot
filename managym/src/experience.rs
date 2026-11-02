@@ -459,6 +459,19 @@ pub struct LegacyPermanentView {
     /// Continuous effects on it, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,
+    /// The copy effect that made it a copy (CR 707.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy_of: Option<CopyView>,
+}
+
+/// A copy effect: the printed card it copies and the exceptions that are
+/// part of its copiable values (CR 707.9b), in application order.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CopyView {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<ContinuousEffectView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

@@ -6,7 +6,8 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        effect::{Affected, ContinuousEffect, Modification},
+        card::CardDefId,
+        effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
         permanent::{CounterKind, Permanent},
@@ -402,25 +403,85 @@ impl PermanentData {
     }
 }
 
+/// The copy effect that made a permanent a copy (CR 707.2). The
+/// permanent's definition is already the copiable values it produced.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CopyData {
+    /// The printed definition at the root of the copy chain.
+    pub registry_key: i32,
+    pub name: String,
+    /// Exceptions that are part of its copiable values (CR 707.9b), in the
+    /// order they applied: modifications with the copied definition as
+    /// source, the permanent's own timestamp and an `Indefinite` duration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<ContinuousEffectData>,
+}
+
+impl CopyData {
+    fn new(game: &Game, copy: &CopyEffect, timestamp: i32) -> Self {
+        Self {
+            registry_key: copy.of.0 as i32,
+            name: game
+                .state
+                .content
+                .definition(copy.of)
+                .map(|definition| definition.name.clone())
+                .unwrap_or_default(),
+            exceptions: copy
+                .exceptions
+                .iter()
+                .map(|exception| {
+                    ContinuousEffectData::of_modification(
+                        game,
+                        exception,
+                        "Indefinite".into(),
+                        Some(copy.of),
+                        timestamp,
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
 impl ContinuousEffectData {
     fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+        Self::of_modification(
+            game,
+            &effect.modification,
+            format!("{:?}", effect.duration),
+            effect.source,
+            effect.timestamp.0 as i32,
+        )
+    }
+
+    /// One modification with its provenance: a record's, or a copy
+    /// exception's (`CopyData`).
+    fn of_modification(
+        game: &Game,
+        modification: &Modification,
+        duration: String,
+        source: Option<CardDefId>,
+        timestamp: i32,
+    ) -> Self {
         let mut data = Self {
             modification: String::new(),
-            duration: format!("{:?}", effect.duration),
-            source_registry_key: effect.source.map(|id| id.0 as i32),
-            source_name: effect
-                .source
+            duration,
+            source_registry_key: source.map(|id| id.0 as i32),
+            source_name: source
                 .and_then(|id| game.state.content.definition(id))
                 .map(|definition| definition.name.clone()),
-            timestamp: effect.timestamp.0 as i32,
+            timestamp,
             ..Default::default()
         };
-        data.modification = match &effect.modification {
+        data.modification = match modification {
             Modification::AddSubtypes(subtypes) => {
                 data.subtypes = subtypes.clone();
                 "AddSubtypes"
             }
             Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
+            Modification::Nonlegendary => "Nonlegendary",
             Modification::AddKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
                 "AddKeywords"
@@ -558,6 +619,9 @@ pub struct PermanentData {
     /// with (an attachment renews it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy; absent for an original.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<CopyData>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1076,6 +1140,10 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
+            copy: game.state.cards[permanent.card]
+                .copy
+                .as_ref()
+                .map(|copy| CopyData::new(game, copy, permanent.timestamp.0 as i32)),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
