@@ -3,14 +3,18 @@ name: Engine Budget
 # Release-build engine benchmarks on a runner of their own, so nothing else on
 # the machine shares the measurement: Search-64 replies (bench_search) and
 # headless steps per second (bench_steps) against managym/perf/baseline.json.
-# CI calls this for pull requests and main; a manual dispatch with `measure`
-# benchmarks another commit with this workflow's benchmarks and records it
-# without comparing, which is how a baseline or a historical commit is
-# measured on the same runner profile (docs/development.md, Engine
-# performance budget).
+# CI calls this for pull requests and main; `measure` (CI's dispatch input,
+# or this workflow's once it is on main) benchmarks another commit with this
+# ref's benchmarks and records it without comparing, which is how a baseline
+# or a historical commit is measured on the same runner profile
+# (docs/development.md, Engine performance budget).
 
 on:
   workflow_call:
+    inputs:
+      measure:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       measure:

@@ -160,7 +160,8 @@ job does.
 
 **Selection.** Detect Changes pipes the NUL-delimited diff (`--no-renames`, so
 both sides of a rename) into `.github/ci/select-tests.sh`. Manual dispatch, an
-unknown base, an empty diff or an unknown path selects everything. Tests Result
+unknown base, an empty diff or an unknown path selects everything; a dispatch
+with `measure` selects only Engine Budget. Tests Result
 fails if detection failed, a selected job did not succeed, or an unselected job
 neither skipped nor succeeded.
 
@@ -218,8 +219,8 @@ accepts a measured cost, re-records the file from a CI measurement and says
 why in the commit:
 
 ```bash
-gh workflow run engine-budget.yml --ref <branch> -f measure=<commit>   # or let the PR's Engine Budget run measure
-gh run download <run-id> --name engine-budget --dir .cache/engine-budget
+gh workflow run ci.yml --ref <branch> -f measure=<commit>   # Engine Budget only, records without comparing
+gh run download <run-id> --name engine-budget-<commit> --dir .cache/engine-budget
 uv run scripts/engine_budget.py record \
   --search .cache/engine-budget/bench_search.jsonl \
   --steps .cache/engine-budget/bench_steps.jsonl \
@@ -228,9 +229,11 @@ uv run scripts/engine_budget.py record \
   --reason "<why the budget moves>"
 ```
 
-The `measure` dispatch input benchmarks any commit reachable from origin with
-the dispatched ref's benchmarks and records the result in the step summary
-without comparing, so a historical commit can be measured on the same profile.
+The `measure` dispatch input (on `ci.yml`, which then selects only Engine
+Budget) benchmarks any commit reachable from origin with the dispatched ref's
+benchmarks and records the result in the step summary without comparing, so a
+historical commit can be measured on the same profile. A PR's own Engine
+Budget run also uploads its measurement as the `engine-budget` artifact.
 Run the benchmarks locally only as a smoke check:
 `cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
 (and `bench_steps`). Never add load to make a measurement move
