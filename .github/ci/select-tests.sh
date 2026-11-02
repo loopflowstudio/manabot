@@ -24,6 +24,7 @@ else
         all ;;
       .github/workflows/manabot-integration.yml) select_jobs integration ;;
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
+      managym/examples/bench_search.rs) select_jobs rust engine_budget ;;
       .github/workflows/engine-budget.yml|managym/examples/bench_*.rs|managym/examples/curated/*|managym/perf/*)
         select_jobs engine_budget ;;
       scripts/engine_budget.py) select_jobs python_unit engine_budget ;;

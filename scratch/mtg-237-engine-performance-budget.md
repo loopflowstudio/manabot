@@ -32,8 +32,11 @@ Design from Jack Heart's concept review of 2026-11-02 (Performance section,
 
 ## Delete — do not maintain
 
-Nothing is replaced. The Clean-machine Play 120 s wait stays a launch proof,
-not a latency budget.
+Replace the winner/simulation-only `scores_digest` fold in `bench_search`
+with one ordered full-score digest. Preserve the workload, choice, timings,
+integer output shape and simulation/choice evidence. No parallel legacy
+digest or compatibility path. The Clean-machine Play 120 s wait stays a
+launch proof, not a latency budget.
 
 ## Decisions
 
@@ -88,7 +91,7 @@ settled by the accepted decisions, with no open product choice:
   lists), an accepted cost or a kept speedup; compare's "baseline file" row
   says "digests do not describe the reference" and leaves recovery to the
   footer.
-- Fourth (reviewed at 078d37ef4; proposed implementation, not yet built):
+- Fourth (reviewed at 078d37ef4; implementation in progress):
   the Task's score-preservation check currently protects only the chosen
   action and simulation count. `bench_search` folds
   `result.simulations + best` into `scores_digest`, never `result.scores`.
@@ -128,7 +131,7 @@ re-running the job is the recovery when digests match and the engine did not
 change. Open for later evidence, not this Task: the 10% figure and whether a
 dedicated runner is worth buying.
 
-## Status (reconciled 2026-11-02, after the third-review implement)
+## Status (reconciled 2026-11-02, fourth-review implement)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
@@ -140,7 +143,16 @@ Main moved to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at
 49765237c; the reference 4c8324a59 still describes the engine (checked
 2026-11-02).
 
-Remains: the fourth review's score-digest correction and CI recording, then
+Implemented: length-framed little-endian score bits, simulation count and
+chosen action feed BLAKE3, truncated to the existing u64 output. Controlled
+example tests cover repeated results, a changed losing score with the same
+winner and simulation count, action order, decision boundaries and retained
+simulation/choice evidence. `test = true` includes them in ordinary CI
+`cargo test`; benchmark-only edits select the Rust job too. No engine
+source or workload changed. Historical timings now
+state their original digest limitation.
+
+Remains: the new CI recording, then
 publication, owned by the caller: open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on `pull_request`,
 the PR-head checkout, the candidate-first order with its two summary blocks,
@@ -155,4 +167,7 @@ GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
 steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean, ruff clean (2026-11-02, compress after the third review: the workflow gates the reference steps on `measure` directly and lists both cache workspaces statically; no `REFERENCE`/`WORKSPACES` variables).
+Check: focused debug `cargo test --example bench_search -j 2` → 4 passed;
+`uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q`
+→ 57 passed; `cargo fmt --check` clean (2026-11-02). Full affected suites
+and PR verification remain with gate/CI.

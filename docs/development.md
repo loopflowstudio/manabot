@@ -179,7 +179,7 @@ neither skipped nor succeeded.
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/` | Python unit, integration |
-| `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`scripts/engine_budget.py` also Python unit) |
+| `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 
@@ -203,7 +203,11 @@ their own and compares a change with the reference commit named in
 - `managym/examples/bench_search.rs`: Search-64 replies (16 worlds x 4
   rollouts) on the curated UR Lessons versus GW Allies matchup, seeds 1-3,
   40 decisions each. Budget lines: worst reply, summed total, and the search
-  digest of each seed.
+  digest of each seed. The search digest covers every action score in legal
+  order, with each decision framed by its action count, simulation count and
+  chosen index. Scores use exact IEEE-754 bits in little-endian order; the
+  integer digest is the first 64 bits of BLAKE3. A changed losing score fails
+  even when the winner and simulation count stay the same.
 - `managym/examples/bench_steps.rs`: headless steps per second, 512 seeded
   games of the same matchup with both seats uniformly random over the legal
   actions and native trivial-decision skipping. Budget lines: steps per
@@ -252,17 +256,20 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-Measured once on 2026-11-02 with these benchmarks (steps/s; worst Search-64
+Measured once on 2026-11-02 with the original search digest (steps/s; worst Search-64
 reply; total over 3 seeds x 40 decisions), each on its own runner:
 
 | Commit | CPU | steps/s | worst reply | total |
 |---|---|---:|---:|---:|
-| T4 main `4c8324a59` (reference) | AMD EPYC 7763 | 6819.5 | 13.807 s | 408.9 s |
+| T4 main `4c8324a59` (original reference) | AMD EPYC 7763 | 6819.5 | 13.807 s | 408.9 s |
 | T5 head `836042c07` | Intel Xeon 6973P-C | 10285.9 | 9.976 s | 273.9 s |
 | T6 head `2c1ba169f` | AMD EPYC 9V74 | 8883.1 | 10.651 s | 310.9 s |
 
 The three rows are on three CPU models, so they rank the runners, not the
-commits; all three reproduce the reference digests. Run the benchmarks
+commits. All three reproduced the original digests, but that search digest
+covered only simulation counts and winning actions, not every action score.
+These historical timings do not prove full-score equality. The committed
+baseline is recorded separately with the strengthened digest. Run the benchmarks
 locally only as a smoke check:
 `cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
 (and `bench_steps`). Never add load to make a measurement move

@@ -1,4 +1,4 @@
-"""The engine budget fails a same-runner slowdown or a changed digest, never a speedup."""
+"""The budget rejects slowdowns and changed digests, including during speedups."""
 
 from __future__ import annotations
 
