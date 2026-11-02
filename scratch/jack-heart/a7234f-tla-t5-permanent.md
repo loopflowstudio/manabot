@@ -1,11 +1,14 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, HEAD `39dd86190`, PR #405 open, mergeable, no review yet): implemented,
-demoed through native Commands and the LLM/Academy text path, and synced onto
-main at `4c8324a59` (T3's squash, the characteristics cache and T4). All three
-cards are defined and supported. The post-sync concept review found nothing to
-change and no open product choice (below). Shipping is stopped per Jack Heart's
-steer 6eae1230: the PR waits for Jack Heart's review; no merge.
+Status (2026-11-02, re-gated after the sync, PR #405 open, mergeable, no review
+yet): implemented, demoed through native Commands and the LLM/Academy text path,
+synced onto main at `4c8324a59` (T3's squash, the characteristics cache and T4)
+and re-recorded: the authored-match parity receipt's source hashes, the
+trigger-order root digests and the two Academy precision demos (digests only;
+the same revisions). All three cards are defined and supported. The post-sync
+concept review found nothing to change and no open product choice (below).
+Shipping is stopped per Jack Heart's steer 6eae1230: the PR waits for Jack
+Heart's review; no merge.
 
 Two accepted models from T3 (`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`)
 are the base this builds on: continuous effects as records
@@ -115,28 +118,9 @@ line were refreshed.
 
 ## Remaining
 
-- Gate (re-gate per steer 6eae1230): re-record whatever the sync left stale
-  among the authored-match receipt and its SHA pins in both parity modules,
-  authored-match parity, public-commitment parity, Academy demos, choice
-  navigation and trigger-order fixtures; then debug `cargo test`, clippy,
-  focused Python suites and frontend checks. Confirmed stale on 2026-11-02 (digests only): the
-  authored-match receipt (`test_checked_authored_match_parity_receipt`), the
-  trigger-order root digests (`test_survival_orders_cross_consumers`, 2 cases)
-  and the Academy precision demos (`test_decision_surface`, 3 cases). Choice
-  navigation, authored-match authority, Learn evidence, belief state and
-  learning, and continuation input already pass; public-commitment parity
-  is unchecked since the sync. CI on `1e9fd2d7c` (2026-11-02): Rust, Python
-  unit, conformance and Clean-machine Play passed; **Academy UI failed** on the
-  three Playwright `decision-surface.spec.ts` Precision cases because
-  `play_demo.py` rejects the diverged precision demo digest before any
-  decision is offered, so the decision surface never appears. Same cause as
-  the three stale `test_decision_surface` cases; re-recording the demos fixes
-  both. Integration (long) passed; Integration (main) failed only the two
-  `test_survival_orders_cross_consumers` digests above (858 passed). Every CI
-  failure on the synced tree is therefore a stale digest the gate re-records;
-  nothing else is red. CI on `9bf9c1928` (scratch-only change) was running at
-  the 2026-11-02 realign and is expected to repeat that result.
-- Jack Heart's review of PR #405. No merge.
+- Jack Heart's review of PR #405. No merge. The re-gate (2026-11-02, below)
+  re-recorded every stale digest the sync left; the next CI run on the
+  re-record commit should be green in every selected job.
 - Known, not fixed: `tests/sim/test_rollout.py::TestBatchedSampler::test_selects_valid_actions_only`
   fills every float buffer with noise, which the fact and definition checks
   reject. CI does not select the file.
@@ -154,6 +138,21 @@ line were refreshed.
 
 ## Checks
 
+- 2026-11-02 (re-gate after the sync, headless): rebuilt the extension from
+  the synced tree. The authored-match authority receipt regenerated
+  byte-identical (`081bbbe7…`), so its SHA pins and `TERMINAL_STATE` stay.
+  `python -m academy.authored_match_parity write` moved only `relevant_source`
+  hashes; `public_commitment_parity verify` passed (142 commands, 69
+  commitments, 0 gaps). Re-recorded `trigger-order-w17.json` (content digest
+  `92b2f506…`, root `7073b445…`) from `manabot.verify.trigger_order.root` and
+  the precision demos with `scratch/tools/regen_play_demos.py` (revisions 30
+  and 66 unchanged; the manifest gains the three cards in name order).
+  Release Playwright (`npm run test:e2e:release`, ports 8031/5191): 25 passed,
+  2 skipped (deck-browser art cache and checkpoint cases, environment-gated),
+  including the three decision-surface Precision cases CI had failed. The
+  receipt suites (authored-match authority and parity, choice navigation,
+  trigger order, Learn evidence and setup, decision surface, belief state and
+  learning, continuation input): 72 passed.
 - 2026-11-02 (realign after the concept review, HEAD `9bf9c1928`): `gh run
   view 41507203990 --json jobs` on `1e9fd2d7c`: Rust, Python unit, both
   conformance, Clean-machine Play, Academy Integration and Integration (long)
