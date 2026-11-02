@@ -1,6 +1,6 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, HEAD `628608323`, PR #405 open, mergeable): implemented,
+Status (2026-11-02, HEAD `9bf9c1928`, PR #405 open, mergeable, no review yet): implemented,
 demoed through native Commands and the LLM/Academy text path, and synced onto
 main at `4c8324a59` (T3's squash, the characteristics cache and T4). All three
 cards are defined and supported. The post-sync concept review found nothing to
@@ -129,7 +129,11 @@ Nothing to change; no product choice is open.
   `play_demo.py` rejects the diverged precision demo digest before any
   decision is offered, so the decision surface never appears. Same cause as
   the three stale `test_decision_surface` cases; re-recording the demos fixes
-  both. Integration (main, long) were still running.
+  both. Integration (long) passed; Integration (main) failed only the two
+  `test_survival_orders_cross_consumers` digests above (858 passed). Every CI
+  failure on the synced tree is therefore a stale digest the gate re-records;
+  nothing else is red. CI on `9bf9c1928` (scratch-only change) was running at
+  the 2026-11-02 realign and is expected to repeat that result.
 - Jack Heart's review of PR #405. No merge.
 - Known, not fixed: `tests/sim/test_rollout.py::TestBatchedSampler::test_selects_valid_actions_only`
   fills every float buffer with noise, which the fact and definition checks
@@ -148,6 +152,12 @@ Nothing to change; no product choice is open.
 
 ## Checks
 
+- 2026-11-02 (realign after the concept review, HEAD `9bf9c1928`): `gh run
+  view 41507203990 --json jobs` on `1e9fd2d7c`: Rust, Python unit, both
+  conformance, Clean-machine Play, Academy Integration and Integration (long)
+  passed; Academy UI and Integration (main) failed on the stale digests named
+  under Remaining. Main is unchanged since the sync (`origin/main` =
+  `4c8324a59`); no rerun of local suites.
 - 2026-11-02 (realign, HEAD `1e9fd2d7c`): `uv run --extra dev pytest
   tests/model/test_action_identity.py -q` passed (25), confirming the CI
   diagnosis above. The receipt suites

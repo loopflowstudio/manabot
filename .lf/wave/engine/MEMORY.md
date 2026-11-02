@@ -196,7 +196,10 @@ preserves accepted decisions, dated proof limits and source history.
   main (T5 met ~60 hunks instead of ~1465). World-content changes re-record w17
   evidence in place: the semantic kernel, authored-match receipt and parity
   pins, public-commitment parity, Academy demos, choice navigation and
-  trigger-order fixtures; only hashes and digests should move.
+  trigger-order fixtures; only hashes and digests should move. Until the
+  Academy demos are re-recorded, `play_demo.py` rejects their digest before
+  any decision is offered, so the Playwright decision-surface spec fails in
+  CI as a symptom of the stale demo, not a UI defect.
 
 ## Open tensions
 
