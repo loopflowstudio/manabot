@@ -2,7 +2,37 @@
 
 Inherited Wave rename, decklist, TLA, evaluation and characteristics notes are
 historical context at `460732f81:scratch/questions.md`; they select no MTG-237
-work. The current Task decisions follow.
+work. Main's newer decklist decisions and the current Task decisions follow.
+
+## MTG-216 (decklist disclosure) — 2026-10-30, implementation (headless)
+
+Jack Heart accepted one open/closed option, default open (supersedes the
+kickoff's four-way assumption). Reversible choices made while implementing:
+
+- No player-row "known" flag: an open main deck is never empty, so all-zero
+  `decklists` rows mean closed. The player width is untouched (67 after the
+  sync with main's T4 v5 widening) and the native width-binding rule is
+  unchanged.
+- No separate Python `DecklistHidden` class: refusals are `AgentError`
+  ("decklist closed: …"). `Game::determinize` and
+  `HiddenHandConstraints::for_viewer` assert; `Env` entry points check first.
+- Search refusal at match build lists observation-only kinds
+  (`checkpoint`, `heuristic`, `random`, `scripted_greedy`); every other kind is
+  refused in closed matches. Academy refuses its search villain in closed games.
+- Decklist pooling is semantic-pack only, like `known_hand`; generic-model
+  policies ignore the `decklists` buffer. Adding `decklist_projection` changes
+  the v5 semantic `ActorCritic` parameters, so v5 semantic checkpoints saved
+  before this change fail strict load (open world; none frozen).
+- Disclosure is not part of `world_binding` or deck identity: a checkpoint can
+  play both modes, and in a closed game it sees zero opponent rows.
+- `Deck.player()` (training deck pools) seats an open decklist; it takes no
+  disclosure argument. Closed games come from `MatchConfig.decklists` or
+  Academy only.
+- `canonical_replay`/`study` privacy validators do not check decklist maps:
+  frames carry no disclosure, and the engine projection is the authority.
+
+Inherited evaluation, MTG-17x/18x and card-evaluation notes (none select T4
+work) are at `ee42a8685:scratch/questions.md`, above "TLA direct-Rust decisions".
 
 ## MTG-237 (engine budget), 2026-11-02 — headless choices
 

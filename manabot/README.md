@@ -57,7 +57,9 @@ horizon. The regime is that study's exact tested recipe; it requires CUDA.
 Build named curated matches with `MatchConfig.authored(pack_key, hero_deck,
 villain_deck)` so both main decks and sideboards come from managym's compiled
 setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
-require positive integer counts. `Match.swapped()` moves both lists together;
+require positive integer counts. `MatchConfig.decklists` is `"open"` (default:
+both players know each other's main deck and sideboard) or `"closed"`; search
+players cannot play closed matches. `Match.swapped()` moves both lists together;
 `Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
 
 
@@ -100,7 +102,8 @@ For the compiled Allies/Lessons matchup, use
 `ModelConfig(world="ur-lessons-vs-gw-allies")`. The ordinary model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
-public definition minima, not hidden hand slots. Selected compiled checkpoints
+public definition minima, not hidden hand slots, and v5 `decklists` rows hold
+each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
