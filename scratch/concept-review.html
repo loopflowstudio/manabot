@@ -26,7 +26,7 @@
 <body><main>
 <header>
   <h1>T5 concept review: permanent copying, after the main sync</h1>
-  <p>Task a7234f · step: concept review (headless) · 2026-11-02 · HEAD <code>628608323</code> · PR #405</p>
+  <p>Task a7234f · step: concept review (headless) · 2026-11-02 · HEAD <code>39dd86190</code> (re-run; code unchanged since <code>628608323</code>) · PR #405</p>
   <p>Built from <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code>, <code>managym/src/cardsets/tla.rs</code>, <code>managym/src/state/effect.rs</code>, <code>managym/src/flow/zones.rs</code>, <code>managym/src/flow/sba.rs</code>, <code>managym/src/flow/statics.rs</code>, <code>managym/src/flow/resolution.rs</code>, <code>managym/src/agent/observation.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>academy/ui/src/lib/permanent-notes.ts</code>, <code>managym/tests/cards/observability.rs</code>, the #405 check run</p>
 </header>
 
@@ -77,7 +77,7 @@ Ability::Triggered {
 </div>
 
 <h2>CI evidence for gate (not a concept)</h2>
-<p>Check run on <code>1e9fd2d7c</code>: Rust, Python unit, Protocol and Semantic Kernel conformance, Academy Integration and Clean-machine Play passed. <strong>Academy UI failed</strong>: the three Playwright <code>decision-surface.spec.ts</code> Precision cases time out waiting for <code>decision-surface</code>. <code>academy/play_demo.py</code> raises when the recorded precision demo digest diverges before a Command, so no decision is ever offered. This is the stale precision demo already listed under Remaining (<code>test_decision_surface</code>, 3 cases); re-recording the demos fixes both. Integration (main, long) were still running.</p>
+<p>Check run on <code>1e9fd2d7c</code>: Rust, Python unit, Protocol and Semantic Kernel conformance, Academy Integration and Clean-machine Play passed. <strong>Academy UI failed</strong>: the three Playwright <code>decision-surface.spec.ts</code> Precision cases time out waiting for <code>decision-surface</code>. <code>academy/play_demo.py</code> raises when the recorded precision demo digest diverges before a Command, so no decision is ever offered. This is the stale precision demo already listed under Remaining (<code>test_decision_surface</code>, 3 cases); re-recording the demos fixes both. Integration (main, long) were still running. At this re-run (2026-11-02) the check run on <code>9bf9c1928</code> had the same jobs passed and Academy UI and both Integration jobs still pending; main is still <code>4c8324a59</code>, so the diagnosis stands and nothing in it is a concept question.</p>
 
 <h2>Questions</h2>
 <ol>

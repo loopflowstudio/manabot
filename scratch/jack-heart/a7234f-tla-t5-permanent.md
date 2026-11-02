@@ -1,6 +1,6 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, HEAD `9bf9c1928`, PR #405 open, mergeable, no review yet): implemented,
+Status (2026-11-02, HEAD `39dd86190`, PR #405 open, mergeable, no review yet): implemented,
 demoed through native Commands and the LLM/Academy text path, and synced onto
 main at `4c8324a59` (T3's squash, the characteristics cache and T4). All three
 cards are defined and supported. The post-sync concept review found nothing to
@@ -79,7 +79,9 @@ vocabularies as v5 fact rows (`FactKind`).
 ## Concept review after the sync — 2026-11-02 (headless)
 
 Checked the accepted model against the synced tree (`scratch/concept-review.html`).
-Nothing to change; no product choice is open.
+Nothing to change; no product choice is open. Re-run at `39dd86190` after the
+realign: no code or main change since, same outcome; the page's header and CI
+line were refreshed.
 
 - One owner per fact survived the sync: a copy is `Card.copy` and the root
   definition; "sacrificed this turn" is T4's `PlayerTurnHistory`, read by
