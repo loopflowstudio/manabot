@@ -204,7 +204,7 @@ def test_record_writes_the_reference_with_its_reason(tmp_path: Path) -> None:
     assert recorded["bench_steps"]["steps_per_s"] == pytest.approx(
         5000.0 / 1.3, abs=0.1
     )
-    # Recording again keeps the tolerance unless moved deliberately.
+    # Recording again keeps the tolerance; only an edit of the file moves it.
     search, steps = _write_results(tmp_path, "reference", scale=1.0)
     code, output = _record(
         baseline,

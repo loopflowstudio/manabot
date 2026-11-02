@@ -256,13 +256,11 @@ def compare(args: argparse.Namespace) -> int:
 
 
 def record(args: argparse.Namespace) -> int:
-    tolerance = args.tolerance
-    if tolerance is None:
-        tolerance = (
-            load_baseline(args.baseline)["tolerance"]
-            if args.baseline.exists()
-            else 0.10
-        )
+    # The tolerance is a decision of its own, edited in the file; a new
+    # recording keeps it.
+    tolerance = (
+        load_baseline(args.baseline)["tolerance"] if args.baseline.exists() else 0.10
+    )
     baseline = Baseline(
         tolerance=tolerance,
         reference=Reference(
@@ -321,9 +319,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     record_command.add_argument(
         "--reason", required=True, help="why the reference moves"
-    )
-    record_command.add_argument(
-        "--tolerance", type=float, help="allowed slowdown fraction; kept when omitted"
     )
     record_command.set_defaults(handler=record)
     args = parser.parse_args(argv)

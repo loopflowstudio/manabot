@@ -52,8 +52,14 @@ Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
 Reference 4c8324a59 recorded from CI run 41517623999. Full CI validated by
 workflow_dispatch run 41527511986 at 07512aa8c (Engine Budget A/B included).
-The later script simplification b734238c4 is pushed and passes its tests
-locally; CI has not run on that head yet.
+Since then: the script simplification b734238c4, and the compress pass of
+2026-11-02 that gave the workflow one `other` checkout (the measured commit
+or the reference, chosen once; `CANDIDATE`/`REFERENCE` paths replace
+`ENGINE_DIR`/`MEASURE` branching in every later step) and dropped `record`'s
+unused `--tolerance` flag (the tolerance is edited in the file). Both pass
+the tests locally and actionlint; CI has not run on this head. The PR run
+covers the compare path; the `measure` path is unexercised since the rewrite
+and wants one dispatch before the next re-record (gate/CI).
 
 Remains (publication, owned by the caller): open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on the

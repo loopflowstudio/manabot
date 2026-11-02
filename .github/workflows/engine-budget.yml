@@ -33,45 +33,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Choose the candidate and the reference
+      # One other commit is built with this ref's benchmarks: the measured
+      # commit, which is then the candidate with no reference, or the
+      # reference commit this ref is compared with.
+      - name: Choose the candidate and the other commit
         run: |
           if [ -n "$MEASURE" ]; then
-            echo "ENGINE_DIR=measured/managym" >> "$GITHUB_ENV"
-            echo "REFERENCE=" >> "$GITHUB_ENV"
-            printf 'WORKSPACES=measured/managym -> target\n' >> "$GITHUB_ENV"
+            {
+              echo "OTHER=$MEASURE"
+              echo "CANDIDATE=other/managym"
+              echo "REFERENCE="
+              printf 'WORKSPACES=other/managym -> target\n'
+            } >> "$GITHUB_ENV"
           else
-            echo "ENGINE_DIR=managym" >> "$GITHUB_ENV"
-            echo "REFERENCE=$(jq -r .reference.commit managym/perf/baseline.json)" >> "$GITHUB_ENV"
-            printf 'WORKSPACES<<EOF\nmanagym -> target\nreference/managym -> target\nEOF\n' >> "$GITHUB_ENV"
+            {
+              echo "OTHER=$(jq -r .reference.commit managym/perf/baseline.json)"
+              echo "CANDIDATE=managym"
+              echo "REFERENCE=other/managym"
+              printf 'WORKSPACES<<EOF\nmanagym -> target\nother/managym -> target\nEOF\n'
+            } >> "$GITHUB_ENV"
           fi
 
-      - name: Check out the commit to measure
-        if: env.MEASURE != ''
+      - name: Check out the other commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.MEASURE }}
-          path: measured
-
-      - name: Check out the reference commit
-        if: env.REFERENCE != ''
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.REFERENCE }}
-          path: reference
+          ref: ${{ env.OTHER }}
+          path: other
 
       - name: Carry this ref's benchmarks into the other tree
         run: |
-          for tree in measured reference; do
-            [ -d "$tree/managym" ] || continue
-            rm -rf "$tree/managym/examples/curated"
-            cp -R managym/examples/curated "$tree/managym/examples/curated"
-            cp managym/examples/bench_search.rs managym/examples/bench_steps.rs "$tree/managym/examples/"
-          done
-          if [ -n "$MEASURE" ]; then
-            echo "MEASURED_COMMIT=$(git -C measured rev-parse HEAD)" >> "$GITHUB_ENV"
-          else
-            echo "MEASURED_COMMIT=$GITHUB_SHA" >> "$GITHUB_ENV"
-          fi
+          rm -rf other/managym/examples/curated
+          cp -R managym/examples/curated other/managym/examples/curated
+          cp managym/examples/bench_search.rs managym/examples/bench_steps.rs other/managym/examples/
+          echo "MEASURED_COMMIT=$(git -C "$CANDIDATE" rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -89,24 +83,24 @@ jobs:
           enable-cache: false
 
       - name: Build the candidate benchmarks
-        run: cargo build --release --locked --manifest-path "$ENGINE_DIR/Cargo.toml" --example bench_search --example bench_steps
+        run: cargo build --release --locked --manifest-path "$CANDIDATE/Cargo.toml" --example bench_search --example bench_steps
 
       - name: Build the reference benchmarks
         if: env.REFERENCE != ''
-        run: cargo build --release --locked --manifest-path reference/managym/Cargo.toml --example bench_search --example bench_steps
+        run: cargo build --release --locked --manifest-path "$REFERENCE/Cargo.toml" --example bench_search --example bench_steps
 
       - name: Run the reference
         if: env.REFERENCE != ''
         run: |
           mkdir -p .cache/engine-budget/reference
-          reference/managym/target/release/examples/bench_steps | tee .cache/engine-budget/reference/bench_steps.jsonl
-          reference/managym/target/release/examples/bench_search | tee .cache/engine-budget/reference/bench_search.jsonl
+          "$REFERENCE/target/release/examples/bench_steps" | tee .cache/engine-budget/reference/bench_steps.jsonl
+          "$REFERENCE/target/release/examples/bench_search" | tee .cache/engine-budget/reference/bench_search.jsonl
 
       - name: Run the candidate
         run: |
           mkdir -p .cache/engine-budget
-          "$ENGINE_DIR/target/release/examples/bench_steps" | tee .cache/engine-budget/bench_steps.jsonl
-          "$ENGINE_DIR/target/release/examples/bench_search" | tee .cache/engine-budget/bench_search.jsonl
+          "$CANDIDATE/target/release/examples/bench_steps" | tee .cache/engine-budget/bench_steps.jsonl
+          "$CANDIDATE/target/release/examples/bench_search" | tee .cache/engine-budget/bench_search.jsonl
 
       - name: Record the measurement
         run: |
@@ -116,7 +110,7 @@ jobs:
             echo "Runner \`${RUNNER_OS}\` \`$(uname -m)\`, $(nproc) CPUs, $(lscpu | sed -n 's/^Model name: *//p' | head -1)"
             echo
             if [ -n "$REFERENCE" ]; then
-              echo "Reference \`$REFERENCE\`:"
+              echo "Reference \`$OTHER\`:"
               echo '```'
               cat .cache/engine-budget/reference/bench_steps.jsonl .cache/engine-budget/reference/bench_search.jsonl
               echo '```'
