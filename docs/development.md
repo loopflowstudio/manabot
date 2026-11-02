@@ -219,32 +219,32 @@ timing or either run's digests differ from the committed ones. Two runs of
 one engine on separate EPYC 7763 machines agreed within 2.5%. A speedup that
 changes search results therefore fails until the reference moves, and so
 does a baseline file whose digests no longer describe its reference commit.
-The job's step summary and `engine-budget` artifact keep every measurement;
-the figures in the file are the reference's own recording, for orientation
-only.
+Every run is a recording of its candidate: the `engine-budget` artifact holds
+both outputs and a `measurement.json` naming the candidate commit, date, run
+and runner CPU, and the step summary repeats them. The figures in the file
+are the reference's own recording, for orientation only.
 
-**Moving the reference.** A PR that changes rules reaching these decks, or
-accepts a measured cost, re-records the file from a CI measurement of the new
-reference commit (reachable from origin; a PR head stays fetchable after a
-squash merge) and says why in the commit:
+**Moving the reference.** A PR adopts its own Engine Budget run as the
+reference and says why in the commit, for one of three reasons: a rules
+change reaching these decks moved a digest; a measured cost is accepted; or a
+speedup is kept, so later slowdowns are budgeted against the faster engine
+rather than allowed back up to the old reference. The PR body cites the delta
+from the run it adopts; the recording commit's own run then compares the same
+engine with that reference and passes.
 
 ```bash
-gh workflow run ci.yml --ref <branch> -f measure=<commit>   # Engine Budget only, records without comparing
-gh run download <run-id> --name engine-budget-<commit> --dir .cache/engine-budget
-uv run scripts/engine_budget.py record \
-  --search .cache/engine-budget/bench_search.jsonl \
-  --steps .cache/engine-budget/bench_steps.jsonl \
-  --commit <commit> --date <YYYY-MM-DD> \
-  --run https://github.com/loopflowstudio/manabot/actions/runs/<run-id> \
-  --runner "GitHub-hosted ubuntu-24.04, <CPU from the step summary> (4 vCPU), release" \
-  --reason "<why the reference moves>"
+gh run download <run-id> --name engine-budget --dir .cache/engine-budget
+uv run scripts/engine_budget.py record --reason "<why the reference moves>"
 ```
 
-The `measure` dispatch input (on `ci.yml`, which then selects only Engine
-Budget) benchmarks any commit reachable from origin with the dispatched ref's
-benchmarks and records the result in the step summary without comparing, so a
-historical commit can be measured on the same profile. The benchmarks use
-only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
+The reference commit must stay reachable from origin (a PR head stays
+fetchable after a squash merge). The `measure` dispatch input (on `ci.yml`,
+which then selects only Engine Budget) is for a commit that has no PR: it
+benchmarks any commit reachable from origin with the dispatched ref's
+benchmarks and uploads the same artifact without comparing, so a historical
+commit can be measured on the same profile
+(`gh workflow run ci.yml --ref <branch> -f measure=<commit>`). The benchmarks
+use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
 `is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
 must keep the reference commit compiling with the new benchmarks or move the
 reference in the same PR.

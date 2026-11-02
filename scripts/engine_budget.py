@@ -13,9 +13,11 @@ measured 6.8k and 10.3k steps/s on two of them), so wall time is never
 compared across runs. CI rebuilds the reference commit with the current
 benchmarks on the same runner and ``compare`` holds the candidate to the
 reference's fresh timings within the tolerance, and both to the committed
-digests. ``record`` rewrites the file from a reference measurement with the
-commit, run and reason that move it. Stdlib only, so CI runs it without
-syncing the project.
+digests. Every run uploads its candidate measurement as the ``engine-budget``
+artifact (both outputs plus ``measurement.json`` naming the commit, date, run
+and runner); ``record`` rewrites the file from a downloaded artifact with the
+reason that moves the reference. Stdlib only, so CI runs it without syncing
+the project.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from typing import Any, TypedDict, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "managym/perf/baseline.json"
+ARTIFACT = ROOT / ".cache/engine-budget"
 
 
 class SearchSeed(TypedDict):
@@ -50,11 +53,16 @@ class StepsResult(TypedDict):
     digest: int
 
 
-class Reference(TypedDict):
+class Measurement(TypedDict):
+    """What the job writes beside its candidate output as ``measurement.json``."""
+
     commit: str
     date: str
     run: str
     runner: str
+
+
+class Reference(Measurement):
     reason: str
 
 
@@ -120,6 +128,23 @@ def read_steps(path: Path) -> StepsResult:
 def load_baseline(path: Path) -> Baseline:
     # The file is written by ``record`` below, so its shape is trusted.
     return cast(Baseline, json.loads(path.read_text()))
+
+
+def read_measurement(path: Path) -> Measurement:
+    """The job's ``measurement.json``; a hand-made directory fails by name."""
+    if not path.is_file():
+        raise SystemExit(
+            f"{path}: not an Engine Budget artifact (download one with "
+            "`gh run download <run-id> --name engine-budget --dir "
+            f"{path.parent}`)"
+        )
+    row = json.loads(path.read_text())
+    return Measurement(
+        commit=str(row["commit"]),
+        date=str(row["date"]),
+        run=str(row["run"]),
+        runner=str(row["runner"]),
+    )
 
 
 def _slower(name: str, reference: float, measured: float, tolerance: float) -> Check:
@@ -220,8 +245,11 @@ def render(baseline: Baseline, rows: list[Check]) -> str:
     if failed:
         lines.append(
             f"FAIL: {failed} check(s) outside the budget. A deliberate change "
-            "re-records managym/perf/baseline.json with `scripts/engine_budget.py "
-            "record` and states why (docs/development.md, Engine performance budget)."
+            "adopts this run as the reference: `gh run download <run-id> --name "
+            "engine-budget --dir .cache/engine-budget`, then `uv run "
+            'scripts/engine_budget.py record --reason "<why>"` and commit '
+            "managym/perf/baseline.json (docs/development.md, Engine performance "
+            "budget)."
         )
     else:
         lines.append("PASS: within the recorded budget.")
@@ -256,6 +284,8 @@ def compare(args: argparse.Namespace) -> int:
 
 
 def record(args: argparse.Namespace) -> int:
+    """Adopt a downloaded artifact's candidate as the reference."""
+    measurement = read_measurement(args.artifact / "measurement.json")
     # The tolerance is a decision of its own, edited in the file; a new
     # recording keeps it.
     tolerance = (
@@ -263,18 +293,12 @@ def record(args: argparse.Namespace) -> int:
     )
     baseline = Baseline(
         tolerance=tolerance,
-        reference=Reference(
-            commit=args.commit,
-            date=args.date,
-            run=args.run,
-            runner=args.runner,
-            reason=args.reason,
-        ),
-        bench_search=read_search(args.search),
-        bench_steps=read_steps(args.steps),
+        reference=Reference(**measurement, reason=args.reason),
+        bench_search=read_search(args.artifact / "bench_search.jsonl"),
+        bench_steps=read_steps(args.artifact / "bench_steps.jsonl"),
     )
     args.baseline.write_text(json.dumps(baseline, indent=2) + "\n")
-    print(f"Recorded {args.baseline} at {args.commit[:9]}: {args.reason}")
+    print(f"Recorded {args.baseline} at {measurement['commit'][:9]}: {args.reason}")
     return 0
 
 
@@ -296,26 +320,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     compare_command.set_defaults(handler=compare)
     record_command = commands.add_parser(
-        "record", help="rewrite the baseline from a reference measurement"
+        "record",
+        help="rewrite the baseline from a downloaded Engine Budget artifact",
     )
     record_command.add_argument("--baseline", type=Path, default=BASELINE)
     record_command.add_argument(
-        "--search", type=Path, required=True, help="reference bench_search output"
-    )
-    record_command.add_argument(
-        "--steps", type=Path, required=True, help="reference bench_steps output"
-    )
-    record_command.add_argument(
-        "--commit", required=True, help="reference commit, reachable from origin"
-    )
-    record_command.add_argument(
-        "--date", required=True, help="ISO date of the measurement"
-    )
-    record_command.add_argument(
-        "--run", required=True, help="CI run URL of the measurement"
-    )
-    record_command.add_argument(
-        "--runner", required=True, help="runner and CPU the figures came from"
+        "--artifact",
+        type=Path,
+        default=ARTIFACT,
+        help="directory `gh run download --name engine-budget` wrote to",
     )
     record_command.add_argument(
         "--reason", required=True, help="why the reference moves"

@@ -17,12 +17,15 @@ Design from Jack Heart's concept review of 2026-11-02 (Performance section,
   games of the curated matchup through `Env::reset`/`step` with skip_trivial,
   ~100k steps, one digest over every decision. Decks shared in
   `examples/curated/mod.rs`.
-- `scripts/engine_budget.py compare|record` (stdlib only; `record` rewrites
-  the baseline with commit, date, run URL and reason). Tests in
-  `tests/infra/test_engine_budget.py` include the 20% slowdown fixture.
-- Manual dispatch with `measure=<commit>` benchmarks another commit with this
-  ref's benchmarks and records it without comparing: the one-time T4/T5/T6
-  measurement and the way a baseline is taken on the runner profile.
+- `scripts/engine_budget.py compare|record` (stdlib only). Every job run
+  uploads one `engine-budget` artifact: both outputs plus `measurement.json`
+  (candidate commit, ISO date, run URL, runner CPU); `record --reason`
+  rewrites the baseline from a downloaded artifact directory (default
+  `.cache/engine-budget`). Tests in `tests/infra/test_engine_budget.py`
+  include the 20% slowdown fixture and recording from an artifact.
+- Manual dispatch with `measure=<commit>` benchmarks a commit that has no PR
+  with this ref's benchmarks and uploads the same artifact without
+  comparing: the one-time T4/T5/T6 measurement.
 
 ## Delete — do not maintain
 
@@ -97,7 +100,8 @@ all. Two concepts (measure, record) stand where the contract needs one:
 *every Engine Budget run is a recording of its candidate; a PR adopts one by
 committing it with a reason.*
 
-**Next implement direction (design changed; code untouched here).**
+**Implement direction (design changed in the concept review; implemented
+2026-11-02, see Status).**
 
 - The job writes `measurement.json` beside the two `.jsonl` files in both
   modes (candidate commit, ISO date, run URL, runner description from the
@@ -110,8 +114,8 @@ committing it with a reason.*
 - "Moving the reference" lists three reasons with one procedure, from the
   PR's own compare run: a rules change reaching the decks, an accepted cost,
   a speedup to keep (MTG-236's PRs record their head so the gain is
-  budgeted). The recording commit's CI run compares the head with itself and
-  passes; the earlier run keeps the delta the PR body cites.
+  budgeted). The recording commit's CI run compares the same engine with that
+  reference and passes; the earlier run keeps the delta the PR body cites.
 - `measure=<commit>` stays only for measuring a commit that has no PR (the
   historical T4/T5/T6 use); the docs say so and stop presenting it as the
   re-record path.
@@ -134,30 +138,33 @@ and accepted.
 whether a dedicated runner is ever worth buying are open questions for
 later evidence, not decisions this Task needs.
 
-## Status (reconciled 2026-11-02, second pass)
+## Status (reconciled 2026-11-02, third pass)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
 Reference 4c8324a59 recorded from CI run 41517623999. Full CI validated by
 workflow_dispatch run 41527511986 at 07512aa8c (Engine Budget A/B included).
-Since then: the script simplification b734238c4, and the compress pass of
-2026-11-02 that gave the workflow one `other` checkout (the measured commit
-or the reference, chosen once; `CANDIDATE`/`REFERENCE` paths replace
-`ENGINE_DIR`/`MEASURE` branching in every later step) and dropped `record`'s
-unused `--tolerance` flag (the tolerance is edited in the file). The second
-reconciliation completed the documented benchmark `Env` surface
-(`is_game_over`, `winner_index`, which `bench_steps` calls). Main has not
-moved past the base 4c8324a59 (checked 2026-11-02), so nothing upstream
-changes the approach. Tests and actionlint pass locally; CI has not run on
-this head because the branch has no PR and branch pushes do not trigger CI.
-The PR run covers the compare path; the `measure` path is unexercised since
-the rewrite and wants one dispatch before the next re-record (gate/CI).
+Since then: the script simplification b734238c4; the compress pass that gave
+the workflow one `other` checkout and dropped `record`'s unused
+`--tolerance`; the second reconciliation that completed the documented `Env`
+surface; and the implement pass of 2026-11-02 that carried out the concept
+review's direction: the job writes `measurement.json` beside the two
+`.jsonl` files in both modes and uploads one `engine-budget` artifact (the
+`-<commit>` suffix in measure mode is gone), `record` takes `--artifact`
+(default `.cache/engine-budget`) and `--reason` only, compare's FAIL line
+names the two-command path, and the docs list the three reasons to move the
+reference and confine `measure` to commits without a PR. Main has not moved
+past the base 4c8324a59 (checked 2026-11-02). Tests and actionlint pass
+locally; CI has not run on this head because the branch has no PR and branch
+pushes do not trigger CI. The PR run covers the compare path and writes the
+first real `measurement.json`; the `measure` path is unexercised since the
+rewrite and wants one dispatch before the next historical measurement
+(gate/CI).
 
 Remains (publication, owned by the caller): open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on the
-`pull_request` event, and the first main run after merge confirms the push
-path. Before that, the implement iteration the concept review asks for:
-recording from the PR's own compare run (artifact plus `record --reason`).
+`pull_request` event and the artifact's `measurement.json`, and the first
+main run after merge confirms the push path.
 
 Proposed Wave memory, not written: engine speed now has a CI budget relative
 to a committed reference commit; GitHub runner wall time is not comparable
@@ -166,4 +173,4 @@ on EPYC 7763. Left in scratch because no step so far maintains Wave memory and t
 reading is confirmed in Jack Heart's PR review; write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 55 passed (2026-11-02, head 675a2e623 plus the docs edit).
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean (2026-11-02, implement pass).

@@ -118,20 +118,21 @@ def _compare(
     )  # fmt: skip
 
 
-def _record(
-    baseline: Path, search: Path, steps: Path, *, commit: str, runner: str, reason: str
-) -> tuple[int, str]:
-    return _run(
-        "record",
-        "--baseline", baseline,
-        "--search", search,
-        "--steps", steps,
-        "--commit", commit,
-        "--date", "2026-11-03",
-        "--run", "https://github.com/loopflowstudio/manabot/actions/runs/1",
-        "--runner", runner,
-        "--reason", reason,
-    )  # fmt: skip
+def _write_artifact(directory: Path, *, commit: str, runner: str, scale: float) -> Path:
+    """What `gh run download --name engine-budget` leaves: both outputs and measurement.json."""
+    directory.mkdir()
+    _write_results(directory, "bench", scale=scale)
+    (directory / "measurement.json").write_text(
+        json.dumps(
+            {
+                "commit": commit,
+                "date": "2026-11-03",
+                "run": "https://github.com/loopflowstudio/manabot/actions/runs/1",
+                "runner": runner,
+            }
+        )
+    )
+    return directory
 
 
 def test_within_tolerance_on_a_slower_runner_passes(tmp_path: Path) -> None:
@@ -158,6 +159,7 @@ def test_twenty_percent_slowdown_fails(tmp_path: Path) -> None:
         "| steps throughput | 3571.4/s | 2976.2/s | under 3246.7/s (-10%) |" in output
     )
     assert "FAIL: 3 check(s)" in output
+    assert "record --reason" in output
 
 
 def test_changed_search_digest_fails_even_when_faster(tmp_path: Path) -> None:
@@ -183,21 +185,25 @@ def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
     assert "| reference search seed 3 digest | 33 | 34 | differs |" in output
 
 
-def test_record_writes_the_reference_with_its_reason(tmp_path: Path) -> None:
+def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
-    search, steps = _write_results(tmp_path, "reference", scale=1.3)
-    code, output = _record(
-        baseline,
-        search,
-        steps,
-        commit="0123456789abcdef",
-        runner="ubuntu-24.04 GitHub-hosted, AMD EPYC 7763 (4 vCPU), release",
-        reason="T6 adds Sagas to the curated decks",
+    runner = "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release"
+    artifact = _write_artifact(
+        tmp_path / "first", commit="0123456789abcdef", runner=runner, scale=1.3
     )
+    code, output = _run(
+        "record", "--baseline", baseline, "--artifact", artifact,
+        "--reason", "T6 adds Sagas to the curated decks",
+    )  # fmt: skip
     assert code == 0, output
     recorded = json.loads(baseline.read_text())
-    assert recorded["reference"]["reason"] == "T6 adds Sagas to the curated decks"
-    assert recorded["reference"]["commit"] == "0123456789abcdef"
+    assert recorded["reference"] == {
+        "commit": "0123456789abcdef",
+        "date": "2026-11-03",
+        "run": "https://github.com/loopflowstudio/manabot/actions/runs/1",
+        "runner": runner,
+        "reason": "T6 adds Sagas to the curated decks",
+    }
     assert recorded["tolerance"] == 0.10
     assert recorded["bench_search"]["worst_s"] == 13.0
     assert recorded["bench_search"]["total_s"] == 390.0
@@ -205,20 +211,34 @@ def test_record_writes_the_reference_with_its_reason(tmp_path: Path) -> None:
         5000.0 / 1.3, abs=0.1
     )
     # Recording again keeps the tolerance; only an edit of the file moves it.
-    search, steps = _write_results(tmp_path, "reference", scale=1.0)
-    code, output = _record(
-        baseline,
-        search,
-        steps,
+    artifact = _write_artifact(
+        tmp_path / "second",
         commit="fedcba9876543210",
-        runner="ubuntu-24.04 GitHub-hosted, Intel Xeon 6973P-C (4 vCPU), release",
-        reason="indexed effect records",
+        runner="GitHub-hosted ubuntu-24.04, Intel Xeon 6973P-C (4 vCPU), release",
+        scale=1.0,
     )
+    code, output = _run(
+        "record", "--baseline", baseline, "--artifact", artifact,
+        "--reason", "indexed effect records",
+    )  # fmt: skip
     assert code == 0, output
     again = json.loads(baseline.read_text())
     assert again["tolerance"] == 0.10
     assert again["reference"]["commit"] == "fedcba9876543210"
     assert again["bench_search"]["worst_s"] == 10.0
+
+
+def test_record_refuses_a_directory_without_a_measurement(tmp_path: Path) -> None:
+    """Hand-assembled output is not a recording: the job's measurement.json names the run."""
+    baseline = tmp_path / "baseline.json"
+    _write_results(tmp_path, "bench")
+    code, output = _run(
+        "record", "--baseline", baseline, "--artifact", tmp_path, "--reason", "x"
+    )
+    assert code == 1, output
+    assert "not an Engine Budget artifact" in output
+    assert "gh run download <run-id> --name engine-budget" in output
+    assert not baseline.exists()
 
 
 def test_committed_baseline_is_complete() -> None:

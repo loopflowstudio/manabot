@@ -510,3 +510,12 @@ requirement, it needs its own Task.
   `record --reason`), with a kept speedup as a documented reason to move the
   reference. `measure` stays for commits without a PR. Wave memory still
   unwritten: this step does not maintain `.lf/wave/`.
+- Implement (2026-11-02, headless, `code` graph): the artifact is named
+  `engine-budget` in both modes (the measure mode's `-<commit>` suffix is
+  dropped) so the documented download command has one form; the run id
+  already identifies a measurement. `measurement.json` carries the full
+  `lscpu` model name (e.g. "AMD EPYC 7763 64-Core Processor") rather than
+  the hand-shortened "AMD EPYC 7763" of the first recording; the string is
+  orientation only, never compared. Compare's FAIL hint leaves `<run-id>`
+  as a placeholder instead of reading `GITHUB_RUN_ID`, so the line reads the
+  same in CI and in tests.

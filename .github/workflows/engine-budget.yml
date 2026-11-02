@@ -6,10 +6,12 @@ name: Engine Budget
 # different CPU generations, so wall time is never compared across runs: the
 # job rebuilds the reference commit named in managym/perf/baseline.json with
 # this ref's benchmarks, runs both on this machine and holds the candidate to
-# the reference within the tolerance and both to the committed digests.
-# `measure` (CI's dispatch input, or this workflow's once it is on main)
-# benchmarks another commit with this ref's benchmarks and records it without
-# comparing (docs/development.md, Engine performance budget).
+# the reference within the tolerance and both to the committed digests. Every
+# run is a recording of its candidate: the `engine-budget` artifact holds both
+# outputs and a measurement.json a PR adopts with `scripts/engine_budget.py
+# record --reason`. `measure` (CI's dispatch input, or this workflow's once it
+# is on main) records a commit that has no PR with this ref's benchmarks,
+# without comparing (docs/development.md, Engine performance budget).
 
 on:
   workflow_call:
@@ -102,12 +104,19 @@ jobs:
           "$CANDIDATE/target/release/examples/bench_steps" | tee .cache/engine-budget/bench_steps.jsonl
           "$CANDIDATE/target/release/examples/bench_search" | tee .cache/engine-budget/bench_search.jsonl
 
+      # measurement.json names what `record` adopts: the candidate commit,
+      # the day, this run and the machine the figures came from.
       - name: Record the measurement
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          RUNNER="GitHub-hosted ubuntu-24.04, $(lscpu | sed -n 's/^Model name: *//p' | head -1) ($(nproc) vCPU), release"
+          jq -n --arg commit "$MEASURED_COMMIT" --arg date "$(date -u +%F)" --arg run "$RUN_URL" --arg runner "$RUNNER" \
+            '{commit: $commit, date: $date, run: $run, runner: $runner}' | tee .cache/engine-budget/measurement.json
           {
             echo "## Engine budget measurement"
             echo
-            echo "Runner \`${RUNNER_OS}\` \`$(uname -m)\`, $(nproc) CPUs, $(lscpu | sed -n 's/^Model name: *//p' | head -1)"
+            echo "Runner \`${RUNNER_OS}\` \`$(uname -m)\`, $RUNNER"
             echo
             if [ -n "$REFERENCE" ]; then
               echo "Reference \`$OTHER\`:"
@@ -130,10 +139,10 @@ jobs:
             --search .cache/engine-budget/bench_search.jsonl \
             --steps .cache/engine-budget/bench_steps.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload benchmark output
+      - name: Upload the measurement
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: engine-budget${{ env.MEASURE != '' && format('-{0}', env.MEASURED_COMMIT) || '' }}
+          name: engine-budget
           path: .cache/engine-budget
           if-no-files-found: warn
