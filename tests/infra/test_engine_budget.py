@@ -2,30 +2,16 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
 import sys
-from types import ModuleType
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/engine_budget.py"
 BASELINE = ROOT / "managym/perf/baseline.json"
-
-
-def _module() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("engine_budget", SCRIPT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["engine_budget"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-budget = _module()
 
 BASE = {
     "tolerance": 0.10,
@@ -49,6 +35,13 @@ BASE = {
 }
 
 
+def _run(*args: str | Path) -> tuple[int, str]:
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), *map(str, args)], capture_output=True, text=True
+    )
+    return completed.returncode, completed.stdout + completed.stderr
+
+
 def _write_results(
     directory: Path,
     name: str,
@@ -59,21 +52,22 @@ def _write_results(
 ) -> tuple[Path, Path]:
     """Benchmark output lines where `scale` multiplies every duration."""
     search = directory / f"{name}_search.jsonl"
-    lines = []
-    for seed, worst, digest in zip((1, 2, 3), (8.0, 10.0, 9.0), search_digests):
-        lines.append(
-            json.dumps(
-                {
-                    "seed": seed,
-                    "decisions": 40,
-                    "worst_s": round(worst * scale, 3),
-                    "median_s": 2.0,
-                    "total_s": round(100.0 * scale, 3),
-                    "digest": digest,
-                }
-            )
+    lines = [
+        json.dumps(
+            {
+                "seed": seed,
+                "decisions": 40,
+                "worst_s": round(worst * scale, 3),
+                "median_s": 2.0,
+                "total_s": round(100.0 * scale, 3),
+                "digest": digest,
+            }
         )
-    lines.append(json.dumps({"worst_overall_s": 10.0 * scale, "total_overall_s": 300.0 * scale}))
+        for seed, worst, digest in zip((1, 2, 3), (8.0, 10.0, 9.0), search_digests)
+    ]
+    lines.append(
+        json.dumps({"worst_overall_s": 10.0 * scale, "total_overall_s": 300.0 * scale})
+    )
     search.write_text("\n".join(lines) + "\n")
     steps = directory / f"{name}_steps.jsonl"
     steps.write_text(
@@ -97,7 +91,9 @@ def _compare(
     *,
     reference_scale: float = 1.4,
     reference_digests: tuple[int, int, int] = (11, 22, 33),
-    **candidate: object,
+    scale: float = 1.0,
+    search_digests: tuple[int, int, int] = (11, 22, 33),
+    steps_digest: int = 44,
 ) -> tuple[int, str]:
     """A slower runner than the recording (reference at 1.4x) hosts both runs."""
     baseline = tmp_path / "baseline.json"
@@ -105,27 +101,37 @@ def _compare(
     reference_search, reference_steps = _write_results(
         tmp_path, "reference", scale=reference_scale, search_digests=reference_digests
     )
-    search, steps = _write_results(tmp_path, "candidate", **candidate)  # type: ignore[arg-type]
-    completed = subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "compare",
-            "--baseline",
-            str(baseline),
-            "--reference-search",
-            str(reference_search),
-            "--reference-steps",
-            str(reference_steps),
-            "--search",
-            str(search),
-            "--steps",
-            str(steps),
-        ],
-        capture_output=True,
-        text=True,
+    search, steps = _write_results(
+        tmp_path,
+        "candidate",
+        scale=scale,
+        search_digests=search_digests,
+        steps_digest=steps_digest,
     )
-    return completed.returncode, completed.stdout + completed.stderr
+    return _run(
+        "compare",
+        "--baseline", baseline,
+        "--reference-search", reference_search,
+        "--reference-steps", reference_steps,
+        "--search", search,
+        "--steps", steps,
+    )  # fmt: skip
+
+
+def _record(
+    baseline: Path, search: Path, steps: Path, *, commit: str, runner: str, reason: str
+) -> tuple[int, str]:
+    return _run(
+        "record",
+        "--baseline", baseline,
+        "--search", search,
+        "--steps", steps,
+        "--commit", commit,
+        "--date", "2026-11-03",
+        "--run", "https://github.com/loopflowstudio/manabot/actions/runs/1",
+        "--runner", runner,
+        "--reason", reason,
+    )  # fmt: skip
 
 
 def test_within_tolerance_on_a_slower_runner_passes(tmp_path: Path) -> None:
@@ -144,9 +150,13 @@ def test_twenty_percent_slowdown_fails(tmp_path: Path) -> None:
     """The controlled fixture: the candidate reported 20% slower than the reference."""
     code, output = _compare(tmp_path, scale=1.4 * 1.2)
     assert code == 1, output
-    assert "| search worst reply | 14.000 s | 16.800 s | over 15.400 s (+10%) |" in output
+    assert (
+        "| search worst reply | 14.000 s | 16.800 s | over 15.400 s (+10%) |" in output
+    )
     assert "| search total | 420.000 s | 504.000 s | over 462.000 s (+10%) |" in output
-    assert "| steps throughput | 3571.4/s | 2976.2/s | under 3246.7/s (-10%) |" in output
+    assert (
+        "| steps throughput | 3571.4/s | 2976.2/s | under 3246.7/s (-10%) |" in output
+    )
     assert "FAIL: 3 check(s)" in output
 
 
@@ -166,67 +176,45 @@ def test_changed_steps_digest_fails_even_when_faster(tmp_path: Path) -> None:
 def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
     code, output = _compare(tmp_path, scale=1.4, reference_digests=(11, 22, 34))
     assert code == 1, output
-    assert "| baseline file | abc123def | digests differ | re-record from the reference commit |" in output
+    assert (
+        "| baseline file | abc123def | digests differ | re-record from the reference commit |"
+        in output
+    )
     assert "| reference search seed 3 digest | 33 | 34 | differs |" in output
 
 
 def test_record_writes_the_reference_with_its_reason(tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
     search, steps = _write_results(tmp_path, "reference", scale=1.3)
-    assert (
-        budget.main(
-            [
-                "record",
-                "--baseline",
-                str(baseline),
-                "--search",
-                str(search),
-                "--steps",
-                str(steps),
-                "--commit",
-                "0123456789abcdef",
-                "--date",
-                "2026-11-03",
-                "--run",
-                "https://github.com/loopflowstudio/manabot/actions/runs/1",
-                "--runner",
-                "ubuntu-24.04 GitHub-hosted, AMD EPYC 7763 (4 vCPU), release",
-                "--reason",
-                "T6 adds Sagas to the curated decks",
-            ]
-        )
-        == 0
+    code, output = _record(
+        baseline,
+        search,
+        steps,
+        commit="0123456789abcdef",
+        runner="ubuntu-24.04 GitHub-hosted, AMD EPYC 7763 (4 vCPU), release",
+        reason="T6 adds Sagas to the curated decks",
     )
+    assert code == 0, output
     recorded = json.loads(baseline.read_text())
     assert recorded["reference"]["reason"] == "T6 adds Sagas to the curated decks"
     assert recorded["reference"]["commit"] == "0123456789abcdef"
     assert recorded["tolerance"] == 0.10
     assert recorded["bench_search"]["worst_s"] == 13.0
     assert recorded["bench_search"]["total_s"] == 390.0
-    assert recorded["bench_steps"]["steps_per_s"] == pytest.approx(5000.0 / 1.3, abs=0.1)
+    assert recorded["bench_steps"]["steps_per_s"] == pytest.approx(
+        5000.0 / 1.3, abs=0.1
+    )
     # Recording again keeps the tolerance unless moved deliberately.
     search, steps = _write_results(tmp_path, "reference", scale=1.0)
-    budget.main(
-        [
-            "record",
-            "--baseline",
-            str(baseline),
-            "--search",
-            str(search),
-            "--steps",
-            str(steps),
-            "--commit",
-            "fedcba9876543210",
-            "--date",
-            "2026-11-04",
-            "--run",
-            "https://github.com/loopflowstudio/manabot/actions/runs/2",
-            "--runner",
-            "ubuntu-24.04 GitHub-hosted, Intel Xeon 6973P-C (4 vCPU), release",
-            "--reason",
-            "indexed effect records",
-        ]
+    code, output = _record(
+        baseline,
+        search,
+        steps,
+        commit="fedcba9876543210",
+        runner="ubuntu-24.04 GitHub-hosted, Intel Xeon 6973P-C (4 vCPU), release",
+        reason="indexed effect records",
     )
+    assert code == 0, output
     again = json.loads(baseline.read_text())
     assert again["tolerance"] == 0.10
     assert again["reference"]["commit"] == "fedcba9876543210"
@@ -235,7 +223,7 @@ def test_record_writes_the_reference_with_its_reason(tmp_path: Path) -> None:
 
 def test_committed_baseline_is_complete() -> None:
     """The committed file names a reachable reference, its runner, run and reason."""
-    baseline = budget.load_baseline(BASELINE)
+    baseline = json.loads(BASELINE.read_text())
     assert baseline["tolerance"] == 0.10
     reference = baseline["reference"]
     assert len(reference["commit"]) == 40 and reference["run"].startswith("https://")

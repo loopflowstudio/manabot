@@ -25,7 +25,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import sys
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "managym/perf/baseline.json"
@@ -67,33 +67,34 @@ class Baseline(TypedDict):
 
 @dataclass(frozen=True)
 class Check:
-    """One budget line: ``fails`` is empty when the measurement is within it."""
+    """One budget line: ``failure`` is empty when the measurement is within it."""
 
     name: str
     expected: str
     measured: str
-    fails: str
+    failure: str
 
 
-def _lines(path: Path) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for line in path.read_text().splitlines():
-        if line.startswith("{"):
-            rows.append(json.loads(line))
-    return rows
+def _lines(path: Path) -> list[dict[str, Any]]:
+    """The JSON objects in benchmark output; cargo's own lines are skipped."""
+    return [
+        json.loads(line)
+        for line in path.read_text().splitlines()
+        if line.startswith("{")
+    ]
 
 
 def read_search(path: Path) -> SearchResult:
     """Fold ``bench_search`` output into the baseline shape (summed totals)."""
-    seeds: dict[str, SearchSeed] = {}
-    for row in _lines(path):
-        if "seed" not in row:
-            continue
-        seeds[str(row["seed"])] = SearchSeed(
-            worst_s=float(str(row["worst_s"])),
-            total_s=float(str(row["total_s"])),
-            digest=int(str(row["digest"])),
+    seeds = {
+        str(row["seed"]): SearchSeed(
+            worst_s=float(row["worst_s"]),
+            total_s=float(row["total_s"]),
+            digest=int(row["digest"]),
         )
+        for row in _lines(path)
+        if "seed" in row
+    }
     if not seeds:
         raise SystemExit(f"{path}: no per-seed bench_search lines")
     return SearchResult(
@@ -109,28 +110,16 @@ def read_steps(path: Path) -> StepsResult:
         raise SystemExit(f"{path}: expected one bench_steps summary line")
     row = rows[0]
     return StepsResult(
-        steps_per_s=float(str(row["steps_per_s"])),
-        steps=int(str(row["steps"])),
-        games=int(str(row["games"])),
-        digest=int(str(row["digest"])),
+        steps_per_s=float(row["steps_per_s"]),
+        steps=int(row["steps"]),
+        games=int(row["games"]),
+        digest=int(row["digest"]),
     )
 
 
 def load_baseline(path: Path) -> Baseline:
-    data = json.loads(path.read_text())
-    return Baseline(
-        tolerance=float(data["tolerance"]),
-        reference=Reference(**data["reference"]),
-        bench_search=SearchResult(
-            worst_s=float(data["bench_search"]["worst_s"]),
-            total_s=float(data["bench_search"]["total_s"]),
-            seeds={
-                seed: SearchSeed(**values)
-                for seed, values in data["bench_search"]["seeds"].items()
-            },
-        ),
-        bench_steps=StepsResult(**data["bench_steps"]),
-    )
+    # The file is written by ``record`` below, so its shape is trusted.
+    return cast(Baseline, json.loads(path.read_text()))
 
 
 def _slower(name: str, reference: float, measured: float, tolerance: float) -> Check:
@@ -153,9 +142,13 @@ def _faster(name: str, reference: float, measured: float, tolerance: float) -> C
     )
 
 
-def _same(name: str, expected: int, measured: int) -> Check:
+def _same(name: str, expected: int | None, measured: int | None) -> Check:
+    """A digest or count that must match; ``None`` is a seed one side lacks."""
     return Check(
-        name, str(expected), str(measured), "" if expected == measured else "differs"
+        name,
+        "absent" if expected is None else str(expected),
+        "absent" if measured is None else str(measured),
+        "" if expected == measured else "differs",
     )
 
 
@@ -164,32 +157,21 @@ def digest_checks(
 ) -> list[Check]:
     """Both workloads reproduce the committed digests, seed set included."""
     expected_seeds = baseline["bench_search"]["seeds"]
-    result: list[Check] = []
-    for seed in sorted(set(expected_seeds) | set(search["seeds"]), key=int):
-        expected = expected_seeds.get(seed)
-        actual = search["seeds"].get(seed)
-        if expected is None or actual is None:
-            result.append(
-                Check(
-                    f"{label} search seed {seed} digest",
-                    "absent" if expected is None else str(expected["digest"]),
-                    "absent" if actual is None else str(actual["digest"]),
-                    "seed set differs",
-                )
-            )
-        else:
-            result.append(
-                _same(f"{label} search seed {seed} digest", expected["digest"], actual["digest"])
-            )
     expected_steps = baseline["bench_steps"]
-    result.extend(
-        [
-            _same(f"{label} steps games", expected_steps["games"], steps["games"]),
-            _same(f"{label} steps count", expected_steps["steps"], steps["steps"]),
-            _same(f"{label} steps digest", expected_steps["digest"], steps["digest"]),
-        ]
-    )
-    return result
+    checks = [
+        _same(
+            f"{label} search seed {seed} digest",
+            expected_seeds[seed]["digest"] if seed in expected_seeds else None,
+            search["seeds"][seed]["digest"] if seed in search["seeds"] else None,
+        )
+        for seed in sorted(set(expected_seeds) | set(search["seeds"]), key=int)
+    ]
+    checks += [
+        _same(f"{label} steps games", expected_steps["games"], steps["games"]),
+        _same(f"{label} steps count", expected_steps["steps"], steps["steps"]),
+        _same(f"{label} steps digest", expected_steps["digest"], steps["digest"]),
+    ]
+    return checks
 
 
 def timing_checks(
@@ -201,9 +183,21 @@ def timing_checks(
 ) -> list[Check]:
     """Candidate timings against the reference measured on the same machine."""
     return [
-        _slower("search worst reply", reference_search["worst_s"], search["worst_s"], tolerance),
-        _slower("search total", reference_search["total_s"], search["total_s"], tolerance),
-        _faster("steps throughput", reference_steps["steps_per_s"], steps["steps_per_s"], tolerance),
+        _slower(
+            "search worst reply",
+            reference_search["worst_s"],
+            search["worst_s"],
+            tolerance,
+        ),
+        _slower(
+            "search total", reference_search["total_s"], search["total_s"], tolerance
+        ),
+        _faster(
+            "steps throughput",
+            reference_steps["steps_per_s"],
+            steps["steps_per_s"],
+            tolerance,
+        ),
     ]
 
 
@@ -217,15 +211,15 @@ def render(baseline: Baseline, rows: list[Check]) -> str:
         "| Check | Reference | Candidate | Result |",
         "|---|---:|---:|---|",
     ]
-    for row in rows:
-        lines.append(
-            f"| {row.name} | {row.expected} | {row.measured} | {row.fails or 'ok'} |"
-        )
-    failed = [row for row in rows if row.fails]
+    lines += [
+        f"| {row.name} | {row.expected} | {row.measured} | {row.failure or 'ok'} |"
+        for row in rows
+    ]
+    failed = sum(1 for row in rows if row.failure)
     lines.append("")
     if failed:
         lines.append(
-            f"FAIL: {len(failed)} check(s) outside the budget. A deliberate change "
+            f"FAIL: {failed} check(s) outside the budget. A deliberate change "
             "re-records managym/perf/baseline.json with `scripts/engine_budget.py "
             "record` and states why (docs/development.md, Engine performance budget)."
         )
@@ -241,7 +235,7 @@ def compare(args: argparse.Namespace) -> int:
     search = read_search(args.search)
     steps = read_steps(args.steps)
     rows = digest_checks("reference", baseline, reference_search, reference_steps)
-    if any(row.fails for row in rows):
+    if any(row.failure for row in rows):
         # The committed digests do not describe the reference commit, so the
         # file is wrong, not the candidate; say so before any timing.
         rows.insert(
@@ -253,20 +247,24 @@ def compare(args: argparse.Namespace) -> int:
                 "re-record from the reference commit",
             ),
         )
-    rows.extend(digest_checks("candidate", baseline, search, steps))
-    rows.extend(
-        timing_checks(baseline["tolerance"], reference_search, reference_steps, search, steps)
+    rows += digest_checks("candidate", baseline, search, steps)
+    rows += timing_checks(
+        baseline["tolerance"], reference_search, reference_steps, search, steps
     )
     print(render(baseline, rows))
-    return 1 if any(row.fails for row in rows) else 0
+    return 1 if any(row.failure for row in rows) else 0
 
 
 def record(args: argparse.Namespace) -> int:
-    previous = load_baseline(args.baseline) if args.baseline.exists() else None
+    tolerance = args.tolerance
+    if tolerance is None:
+        tolerance = (
+            load_baseline(args.baseline)["tolerance"]
+            if args.baseline.exists()
+            else 0.10
+        )
     baseline = Baseline(
-        tolerance=args.tolerance
-        if args.tolerance is not None
-        else (previous["tolerance"] if previous else 0.10),
+        tolerance=tolerance,
         reference=Reference(
             commit=args.commit,
             date=args.date,
@@ -286,24 +284,47 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
     compare_command = commands.add_parser(
-        "compare", help="candidate output against the reference commit's output from the same runner"
+        "compare",
+        help="candidate output against the reference commit's output from the same runner",
     )
     compare_command.add_argument("--baseline", type=Path, default=BASELINE)
     compare_command.add_argument("--reference-search", type=Path, required=True)
     compare_command.add_argument("--reference-steps", type=Path, required=True)
-    compare_command.add_argument("--search", type=Path, required=True, help="candidate bench_search output")
-    compare_command.add_argument("--steps", type=Path, required=True, help="candidate bench_steps output")
+    compare_command.add_argument(
+        "--search", type=Path, required=True, help="candidate bench_search output"
+    )
+    compare_command.add_argument(
+        "--steps", type=Path, required=True, help="candidate bench_steps output"
+    )
     compare_command.set_defaults(handler=compare)
-    record_command = commands.add_parser("record", help="rewrite the baseline from a reference measurement")
+    record_command = commands.add_parser(
+        "record", help="rewrite the baseline from a reference measurement"
+    )
     record_command.add_argument("--baseline", type=Path, default=BASELINE)
-    record_command.add_argument("--search", type=Path, required=True, help="reference bench_search output")
-    record_command.add_argument("--steps", type=Path, required=True, help="reference bench_steps output")
-    record_command.add_argument("--commit", required=True, help="reference commit, reachable from origin")
-    record_command.add_argument("--date", required=True, help="ISO date of the measurement")
-    record_command.add_argument("--run", required=True, help="CI run URL of the measurement")
-    record_command.add_argument("--runner", required=True, help="runner and CPU the figures came from")
-    record_command.add_argument("--reason", required=True, help="why the reference moves")
-    record_command.add_argument("--tolerance", type=float, help="allowed slowdown fraction; kept when omitted")
+    record_command.add_argument(
+        "--search", type=Path, required=True, help="reference bench_search output"
+    )
+    record_command.add_argument(
+        "--steps", type=Path, required=True, help="reference bench_steps output"
+    )
+    record_command.add_argument(
+        "--commit", required=True, help="reference commit, reachable from origin"
+    )
+    record_command.add_argument(
+        "--date", required=True, help="ISO date of the measurement"
+    )
+    record_command.add_argument(
+        "--run", required=True, help="CI run URL of the measurement"
+    )
+    record_command.add_argument(
+        "--runner", required=True, help="runner and CPU the figures came from"
+    )
+    record_command.add_argument(
+        "--reason", required=True, help="why the reference moves"
+    )
+    record_command.add_argument(
+        "--tolerance", type=float, help="allowed slowdown fraction; kept when omitted"
+    )
     record_command.set_defaults(handler=record)
     args = parser.parse_args(argv)
     return int(args.handler(args))
