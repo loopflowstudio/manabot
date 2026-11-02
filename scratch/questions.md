@@ -85,3 +85,15 @@ disclosure fields. Navigation prefixes, offer IDs and state digests stay fixed;
 recompute derived frame hashes for the combined projections. Reconcile the
 current authored-match parity receipt's source manifest with the merged source,
 then verify the unchanged command tape and behavioral evidence.
+
+The first focused run passed all navigation cases but found stale parity viewer
+hashes. The producer confirms that only `viewer_observation_sha256` and
+`viewer_state_sha256` differ: combined layered P/T and decklist projections
+require new hashes. State witnesses, command tape, transitions, presentation,
+and stale-object proof remain identical. Refreshed those derived hashes from
+the producer; no behavioral assertion was relaxed.
+
+Focused verification: navigation plus authored-match parity initially reported
+9 passed / 1 stale receipt; after correcting only the derived viewer hashes,
+the failed parity test passed (1 passed). The advice schema equals its Pydantic
+producer. Native extension rebuilt and replaced atomically. No push or landing.
