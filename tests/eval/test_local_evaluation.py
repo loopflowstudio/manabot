@@ -22,7 +22,6 @@ from manabot.eval.evaluation import (
     evaluation_status,
 )
 from manabot.eval.local import checkpoint_request, main as local_main
-from manabot.eval.models import EvaluationContract
 from manabot.eval.results import EvaluationRow
 from manabot.eval.serving_benchmark import Panel, _panel_worker, _select_profile_roots
 from manabot.infra.files import atomic_json, exclusive_file_lock
@@ -31,6 +30,7 @@ from manabot.sim.execution import EvalExecution
 from manabot.sim.match import play_game
 from manabot.sim.replay import read_trace, write_trace
 from manabot.sim.serving_protocol import InferenceRuntime
+from tests.eval.arena_fixture import arena_fixture
 from tests.eval.test_batched_eval import fixture_policy
 
 
@@ -60,9 +60,7 @@ def _request(
 
 
 def _anchor_request(seeds: tuple[int, ...] = (101,)) -> EvaluationRequest:
-    contract = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    )
+    contract = arena_fixture()
     return EvaluationRequest(
         key=contract.key,
         candidate=contract.anchors[0],

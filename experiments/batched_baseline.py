@@ -21,7 +21,7 @@ def batched_baseline() -> TrainingRegime:
         world=managym.WORLD_VERSION,
         match=selected_match(),
         agent=ModelConfig(
-            semantic_pack=PACK, value_aggregation="masked_mean", attention_layers=2
+            world=PACK, value_aggregation="masked_mean", attention_layers=2
         ),
         stages=[
             TrainSelfPlay(

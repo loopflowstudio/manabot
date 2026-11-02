@@ -15,10 +15,10 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
 from manabot.belief.sampling_data import _digest
 from manabot.belief.state import ViewerHistory
+from manabot.infra.identity import file_sha256
 from manabot.sim.search.local_update import (
     LocalUpdatePlayer,
     LocalUpdateReceipt,

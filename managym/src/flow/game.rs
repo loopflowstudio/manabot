@@ -1,7 +1,12 @@
 // game.rs
 // Core game structs: GameState and Game.
 
-use std::{cell::RefCell, collections::BTreeMap, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use rand_chacha::ChaCha8Rng;
 
@@ -14,11 +19,10 @@ use crate::{
         combat::CombatState,
         decision::SuspendedResolution,
         event::GameEvent,
-        event_log::{CowStats, EventLog},
         priority::PriorityState,
+        statics::StaticsCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
         turn::TurnState,
-        undo::UndoJournal,
     },
     state::{
         game_object::{
@@ -47,16 +51,19 @@ pub struct GameState {
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub events: EventLog,
-    pub pending_events: EventLog,
-    pub observation_events: EventLog,
+    pub events: Vec<GameEvent>,
+    pub pending_events: Vec<GameEvent>,
+    pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub trigger_placement: Option<TriggerPlacement>,
-    /// One-shot delayed triggers (earthbend returns) watching specific
-    /// cards' next departure from the battlefield.
+    /// Delayed triggered abilities (CR 603.7) waiting for their events, in
+    /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Continuous effects from resolved spells and abilities, in timestamp
+    /// order (`state::effect`).
+    pub effects: Vec<crate::state::effect::ContinuousEffect>,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
     pub cast_permissions: CastPermissions,
     /// A resolution paused on a mid-resolution player decision.
@@ -91,6 +98,10 @@ pub struct CastChoices {
     /// timing and zone permissions don't apply (CR 608.2g).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
+    /// Cast, paying its costs, as a resolving effect directs ("you may
+    /// cast"): timing and zone permissions don't apply (CR 608.2g).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub resolving: bool,
 }
 
 /// A fully announced spell or activation waiting for selected costs.
@@ -108,6 +119,9 @@ pub enum Payment {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        /// The announced value of X (CR 602.2b, 601.2b).
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        x: u8,
     },
 }
 
@@ -127,10 +141,21 @@ pub enum PendingChoice {
         payment: Box<Payment>,
         cost: Box<crate::state::card::SacrificeCost>,
     },
+    /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
+    /// `chosen` holds those already selected for its single clause.
     ActivatedTarget {
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
+        chosen: Vec<Target>,
+    },
+    /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
+    /// control" activation cost.
+    TapPayment {
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
@@ -153,6 +178,13 @@ pub enum PendingChoice {
         #[serde(flatten)]
         cast: CastChoices,
     },
+    /// Announcing the value of X for an activated ability (CR 602.2b,
+    /// 601.2b) before its waterbend cost is paid.
+    ActivationX {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    },
     SpellMode {
         player: PlayerId,
         card: CardId,
@@ -173,6 +205,15 @@ pub enum PendingChoice {
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
     },
+    /// Paying a crew cost (CR 702.122a): tap other untapped creatures one
+    /// at a time until their total power reaches the crew number.
+    Crew {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+        /// Power still owed; the cost is paid once it reaches zero.
+        remaining_power: i32,
+    },
     /// Paying a waterbend cost (an ability's, or a spell's additional or
     /// alternative cost): tap artifacts/creatures for {1} each, then pay the
     /// remainder with mana.
@@ -186,6 +227,60 @@ pub enum PendingChoice {
     },
 }
 
+/// `GameState` with a revision that every mutable access advances. State
+/// can change only through `DerefMut` and the untracked accessors below, so a
+/// value derived from state at one revision is current while the revision is
+/// unchanged; `StaticsCache` keys on it. A mutable borrow that writes nothing
+/// still advances it.
+#[derive(Clone)]
+pub struct TrackedState {
+    state: GameState,
+    revision: u64,
+}
+
+impl TrackedState {
+    pub(crate) fn new(state: GameState) -> Self {
+        Self { state, revision: 0 }
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Priority, which no permanent's characteristics read; writing it keeps
+    /// the revision (debug builds check every cached view on read).
+    pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
+        &mut self.state.priority
+    }
+
+    /// The game RNG, which no permanent's characteristics read.
+    pub(crate) fn rng_mut(&mut self) -> &mut ChaCha8Rng {
+        &mut self.state.rng
+    }
+}
+
+/// Formats as the state alone: the revision is bookkeeping, not game state.
+impl std::fmt::Debug for TrackedState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.state.fmt(f)
+    }
+}
+
+impl Deref for TrackedState {
+    type Target = GameState;
+
+    fn deref(&self) -> &GameState {
+        &self.state
+    }
+}
+
+impl DerefMut for TrackedState {
+    fn deref_mut(&mut self) -> &mut GameState {
+        self.revision += 1;
+        &mut self.state
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CombatDamagePass {
     FirstStrike,
@@ -197,7 +292,10 @@ pub(crate) enum CombatDamagePass {
 pub struct Game {
     /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
-    pub state: GameState,
+    pub state: TrackedState,
+    /// Characteristics and static sources derived from `state` at its current
+    /// revision. Never cloned or hashed.
+    pub(crate) statics_cache: RefCell<StaticsCache>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
@@ -217,13 +315,13 @@ pub struct Game {
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
-    pub(crate) undo: Option<UndoJournal>,
 }
 
 impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
+            statics_cache: Default::default(),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
@@ -232,7 +330,6 @@ impl Clone for Game {
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
-            undo: None,
             card_capture: None,
         }
     }
@@ -240,82 +337,6 @@ impl Clone for Game {
 
 impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
-        self.journal_observation_events();
-        self.state.observation_events.take_vec()
-    }
-
-    pub(crate) fn admit_page_cow_root(&mut self) {
-        self.state.events.make_paged_root();
-        self.state.pending_events.make_paged_root();
-        self.state.observation_events.make_paged_root();
-    }
-
-    pub(crate) fn page_cow_fork(&self, stats: Arc<CowStats>) -> Self {
-        let GameState {
-            cards,
-            permanents,
-            card_to_permanent,
-            object_incarnations,
-            object_lki,
-            players,
-            zones,
-            turn,
-            priority,
-            stack_objects,
-            combat,
-            mana_cache,
-            events,
-            pending_events,
-            observation_events,
-            pending_triggers,
-            trigger_placement,
-            delayed_triggers,
-            exile_links,
-            cast_permissions,
-            suspended_decision,
-            trigger_enqueue_counter,
-            rng,
-            id_gen,
-            content,
-        } = &self.state;
-        Self {
-            state: GameState {
-                cards: cards.clone(),
-                permanents: permanents.clone(),
-                card_to_permanent: card_to_permanent.clone(),
-                object_incarnations: object_incarnations.clone(),
-                object_lki: object_lki.clone(),
-                players: players.clone(),
-                zones: zones.clone(),
-                turn: turn.clone(),
-                priority: priority.clone(),
-                stack_objects: stack_objects.clone(),
-                combat: combat.clone(),
-                mana_cache: mana_cache.clone(),
-                events: events.fork_shared(stats.clone()),
-                pending_events: pending_events.fork_shared(stats.clone()),
-                observation_events: observation_events.fork_shared(stats),
-                pending_triggers: pending_triggers.clone(),
-                trigger_placement: trigger_placement.clone(),
-                delayed_triggers: delayed_triggers.clone(),
-                exile_links: exile_links.clone(),
-                cast_permissions: cast_permissions.clone(),
-                suspended_decision: suspended_decision.clone(),
-                trigger_enqueue_counter: *trigger_enqueue_counter,
-                rng: rng.clone(),
-                id_gen: id_gen.clone(),
-                content: content.clone(),
-            },
-            policy_history: self.policy_history.clone(),
-            skip_trivial: self.skip_trivial,
-            current_action_space: self.current_action_space.clone(),
-            decision_epoch: self.decision_epoch,
-            semantic_object_candidates: self.semantic_object_candidates.clone(),
-            pending_choice: self.pending_choice.clone(),
-            skip_trivial_count: self.skip_trivial_count,
-            trackers: self.trackers.clone(),
-            undo: None,
-            card_capture: None,
-        }
+        std::mem::take(&mut self.state.observation_events)
     }
 }

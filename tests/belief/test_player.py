@@ -11,14 +11,14 @@ from manabot.belief.likelihood import (
     FrozenPolicyLikelihood,
     LikelihoodResult,
     _matching_offer_indexes,
-    file_sha256,
 )
-from manabot.belief.player import ExactRangePlayer, UniformRangePlayer
+from manabot.belief.player import ExactRangePlayer, RangeSampling
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.search.flat_mc import play_games
-from manabot.sim.search.teacher1_evidence import _fresh_env
+from tests.belief.fresh_env import fresh_env
 
 
 class NeutralLikelihood:
@@ -33,7 +33,7 @@ class NeutralLikelihood:
 
 
 def test_python_authority_exposes_only_canonical_exact_world_materialization() -> None:
-    engine = _fresh_env(79)._engine
+    engine = fresh_env(79)._engine
 
     assert hasattr(engine, "possible_world_space_json")
     assert hasattr(engine, "materialize_possible_world")
@@ -138,11 +138,16 @@ def test_frozen_likelihood_fails_closed_on_checkpoint_hash(tmp_path: Path) -> No
 
 
 def test_belief_and_prior_use_identical_canonical_search_path() -> None:
-    env = _fresh_env(83)
+    env = fresh_env(83)
     viewer = int(env._engine.current_agent_index())
     likelihood = NeutralLikelihood()
     belief = ExactRangePlayer(1, likelihood=likelihood, seed=109)
-    prior = UniformRangePlayer(1, likelihood=likelihood, seed=109)
+    prior = ExactRangePlayer(
+        1,
+        likelihood=likelihood,
+        sampling=RangeSampling.COMPATIBLE_PRIOR,
+        seed=109,
+    )
     belief.start_game(env, viewer)
     prior.start_game(env, viewer)
 
@@ -157,7 +162,7 @@ def test_belief_and_prior_use_identical_canonical_search_path() -> None:
 
 
 def test_player_emits_authoritative_revision_bound_command() -> None:
-    env = _fresh_env(89)
+    env = fresh_env(89)
     viewer = int(env._engine.current_agent_index())
     player = ExactRangePlayer(1, likelihood=NeutralLikelihood(), seed=127)
     player.start_game(env, viewer)
@@ -174,7 +179,7 @@ def test_player_emits_authoritative_revision_bound_command() -> None:
 
 
 def test_player_archives_canonical_history_at_game_boundary() -> None:
-    env = _fresh_env(95)
+    env = fresh_env(95)
     viewer = int(env._engine.current_agent_index())
     player = ExactRangePlayer(1, likelihood=NeutralLikelihood(), seed=130)
     player.start_game(env, viewer)
@@ -189,7 +194,7 @@ def test_player_archives_canonical_history_at_game_boundary() -> None:
 
 
 def test_player_tracks_opponent_pass_from_semantic_receipt() -> None:
-    env = _fresh_env(97)
+    env = fresh_env(97)
     viewer = int(env._engine.current_agent_index())
     player = ExactRangePlayer(1, likelihood=NeutralLikelihood(), seed=131)
     player.start_game(env, viewer)

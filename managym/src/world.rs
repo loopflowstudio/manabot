@@ -25,6 +25,23 @@ pub const WORLD_VERSION: &str = "w17";
 /// every set, with the default pack's `CardDefId`s and digest.
 pub const WORLD_POOL: &str = "world";
 
+/// What decks and checkpoints bind: the rules world and the digest of its
+/// cards, which changes whenever any card definition changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorldIdentity {
+    pub world_version: String,
+    pub card_digest: String,
+}
+
+/// The installed world's identity.
+pub fn world_identity() -> Result<WorldIdentity, ContentError> {
+    let pool = content_pool(WORLD_POOL)?;
+    Ok(WorldIdentity {
+        world_version: pool.world_version,
+        card_digest: pool.content_digest,
+    })
+}
+
 /// Whether this world supports `name` for deck entry. Unknown names are
 /// unsupported rather than errors.
 pub fn supports_card(name: &str) -> Result<bool, ContentError> {
@@ -90,6 +107,14 @@ mod tests {
             "Forest",
         ];
         assert_eq!(unsupported_cards(deck).unwrap(), ["Water Tribe Rallier"]);
+    }
+
+    #[test]
+    fn world_identity_names_the_version_and_card_digest() {
+        let identity = world_identity().unwrap();
+        assert_eq!(identity.world_version, WORLD_VERSION);
+        let content = crate::cards::pool_content(WORLD_POOL).unwrap();
+        assert_eq!(identity.card_digest, content.content_digest());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Manage the Fly-hosted Manabot apps (mirrors kata/deploy/kata-fly.sh):
-# the landing site (fantasia-website) and hosted play (academy-play).
+# the manabot.gg site (fantasia-website) and hosted play (academy-play).
 # DNS lives in Cloudflare; the API token comes from Doppler (manabot/prd).
 
 set -euo pipefail

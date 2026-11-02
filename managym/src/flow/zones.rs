@@ -3,12 +3,16 @@
 
 use crate::{
     flow::{
+        decision::Decision,
         event::GameEvent,
         game::{CastChoices, Game},
         proposed_event::{ProposedEvent, ZoneEntry},
+        trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
+        card::{CardDefId, Restriction, StaticAbility},
+        game_object::{CardId, Incarnation, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
         stack_object::{SpellOnStack, StackObject},
@@ -17,6 +21,20 @@ use crate::{
 };
 
 impl Game {
+    pub(crate) fn set_known_hand_count(
+        &mut self,
+        player: PlayerId,
+        definition: CardDefId,
+        count: u32,
+    ) {
+        let known = &mut self.state.players[player.0].known_hand;
+        if count == 0 {
+            known.remove(&definition);
+        } else {
+            known.insert(definition, count);
+        }
+    }
+
     /// A sacrifice is a committed event distinct from destruction (CR 701.21
     /// and 701.8 in the September 25, 2026 rules). Indestructible does not
     /// prevent it; the departing object's controller pays this cost.
@@ -29,9 +47,40 @@ impl Game {
         let card = source.card;
         let controller = source.controller;
         let sources = self.snapshot_trigger_sources();
+        self.state.turn.history[controller.0].permanents_sacrificed += 1;
         self.emit(GameEvent::PermanentSacrificed { card, controller });
         self.process_game_events_with_sources(&sources);
         self.move_card(card, ZoneType::Graveyard);
+    }
+
+    /// Tapped creatures the opponent of `player` controls.
+    pub(crate) fn tapped_opponent_creatures(&self, player: PlayerId) -> Vec<PermanentId> {
+        self.battlefield_permanents(PlayerId(1 - player.0))
+            .into_iter()
+            .filter(|id| {
+                self.permanent_is_battlefield_creature(*id)
+                    && self.state.permanents[*id]
+                        .as_ref()
+                        .is_some_and(|permanent| permanent.tapped)
+            })
+            .collect()
+    }
+
+    /// The next placement of `remaining` counters, if any remain and a
+    /// tapped opposing creature can receive one.
+    pub(crate) fn distribute_counters(
+        &self,
+        player: PlayerId,
+        kind: CounterKind,
+        remaining: usize,
+    ) -> Option<Decision> {
+        (remaining > 0 && !self.tapped_opponent_creatures(player).is_empty()).then_some(
+            Decision::DistributeCounters {
+                player,
+                kind,
+                remaining,
+            },
+        )
     }
 
     pub(crate) fn sacrifice_candidates(
@@ -62,6 +111,16 @@ impl Game {
             predicate.card_type = Some(crate::state::card::CardType::Land);
             predicate.supertype = Some("basic".into());
         }
+        self.library_search_candidates(player, &predicate)
+    }
+
+    /// Library cards matching `predicate`, in a stable order independent of
+    /// library order.
+    pub(crate) fn library_search_candidates(
+        &self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+    ) -> Vec<CardId> {
         let mut candidates: Vec<CardId> = self
             .state
             .zones
@@ -72,6 +131,13 @@ impl Game {
             .collect();
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
         candidates
+    }
+
+    pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
+        let state = &mut *self.state;
+        state
+            .zones
+            .shuffle(ZoneType::Library, player, &mut state.rng);
     }
 
     /// Reveal before moving; public hand knowledge retains definition counts,
@@ -131,9 +197,15 @@ impl Game {
             .collect()
     }
 
+    /// The untap step (CR 502.3), less permanents a static effect keeps
+    /// from untapping during it.
     pub(crate) fn untap_all_permanents(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            self.journal_permanent(permanent_id);
+            if self.has_restriction(permanent_id, Restriction::DoesntUntap)
+                || self.doesnt_untap(permanent_id)
+            {
+                continue;
+            }
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.untap();
             }
@@ -143,7 +215,6 @@ impl Game {
 
     pub(crate) fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            self.journal_permanent(permanent_id);
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.summoning_sick = false;
             }
@@ -153,7 +224,6 @@ impl Game {
     pub fn draw_cards(&mut self, player: PlayerId, amount: usize) {
         for _ in 0..amount {
             if self.state.zones.size(ZoneType::Library, player) == 0 {
-                self.journal_player(player);
                 self.state.players[player.0].drew_when_empty = true;
                 break;
             }
@@ -166,11 +236,10 @@ impl Game {
                 if let Some(capture) = &mut self.card_capture {
                     capture.drawing = None;
                 }
-                self.journal_turn();
-                self.state.turn.cards_drawn_this_turn[player.0] += 1;
+                self.state.turn.history[player.0].cards_drawn += 1;
                 self.emit(GameEvent::CardDrawn {
                     player,
-                    nth_this_turn: self.state.turn.cards_drawn_this_turn[player.0],
+                    nth_this_turn: self.state.turn.history[player.0].cards_drawn,
                 });
             }
         }
@@ -180,7 +249,6 @@ impl Game {
     /// untapped-to-tapped transition (CR 603.10-style "becomes tapped").
     /// Returns whether the permanent transitioned.
     pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
-        self.journal_permanent(permanent_id);
         let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
             return false;
         };
@@ -221,18 +289,23 @@ impl Game {
 
     fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
         let produced = self.tap_mana_bonus(tapped, controller);
-        self.journal_player(controller);
         self.state.players[controller.0].mana_pool.add(&produced);
     }
 
     /// Create a token from a registered token definition under `controller`'s
     /// control. Tokens are full cards in `GameState::cards`; state-based
     /// actions remove them once they leave the battlefield (CR 704.5d).
-    pub fn create_token(&mut self, name: &str, controller: PlayerId, tapped_and_attacking: bool) {
+    /// Returns the token's permanent, absent if it did not stay on the battlefield.
+    pub fn create_token(
+        &mut self,
+        name: &str,
+        controller: PlayerId,
+        tapped_and_attacking: bool,
+    ) -> Option<PermanentId> {
         let object_id = self.state.id_gen.next_id();
         let Some(card) = self.state.content.instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
-            return;
+            return None;
         };
         debug_assert!(card.is_token, "created token must be a token definition");
 
@@ -251,13 +324,11 @@ impl Game {
 
         if tapped_and_attacking {
             if let Some(permanent_id) = self.state.card_to_permanent[card_id] {
-                self.journal_permanent(permanent_id);
                 if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                     permanent.attacking = true;
                 }
                 // A token put onto the battlefield attacking joins combat but
                 // was never declared, so no attack triggers fire (CR 508.4a).
-                self.journal_combat();
                 if let Some(combat) = self.state.combat.as_mut() {
                     combat.attackers.push(permanent_id);
                     combat.attacker_to_blockers.entry(permanent_id).or_default();
@@ -265,6 +336,7 @@ impl Game {
             }
         }
         self.invalidate_mana_cache(controller);
+        self.state.card_to_permanent[card_id]
     }
 
     /// Count permanents a player controls matching a predicate (e.g.
@@ -297,9 +369,6 @@ impl Game {
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
-        self.journal_pending_event_append();
-        self.journal_observation_event_append();
-        self.journal_event_append();
         self.state.pending_events.push(event.clone());
         self.state.observation_events.push(event.clone());
         self.state.events.push(event);
@@ -310,7 +379,6 @@ impl Game {
     /// Presentation projection consumes these facts; policy encoders filter
     /// their event types.
     pub(crate) fn emit_observation_event(&mut self, event: GameEvent) {
-        self.journal_observation_event_append();
         self.state.observation_events.push(event);
     }
 
@@ -325,16 +393,17 @@ impl Game {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
         self.move_card(card, ZoneType::Stack);
-        self.journal_stack();
+        let id = self.state.id_gen.next_id();
+        let source_definition_id = self.state.cards[card].definition_id;
         self.state
             .stack_objects
             .push(StackObject::Spell(SpellOnStack {
-                id: self.state.id_gen.next_id(),
+                id,
                 card,
                 controller,
                 cast_from,
                 flashback,
-                source_definition_id: self.state.cards[card].definition_id,
+                source_definition_id,
                 targets,
                 target_req_indices,
                 kicked: cast.kicked,
@@ -344,12 +413,10 @@ impl Game {
     }
 
     pub(crate) fn push_to_stack(&mut self, stack_object: StackObject) {
-        self.journal_stack();
         self.state.stack_objects.push(stack_object);
     }
 
     pub(crate) fn pop_stack(&mut self) -> Option<StackObject> {
-        self.journal_stack();
         self.state.stack_objects.pop()
     }
 
@@ -431,12 +498,10 @@ impl Game {
         }
 
         if old_zone == Some(ZoneType::Battlefield) {
-            self.journal_card_to_permanent(card);
             if let Some(permanent_id) = self.state.card_to_permanent[card].take() {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
                     event_controller = permanent.controller;
                 }
-                self.journal_permanent(permanent_id);
                 self.state.permanents[permanent_id] = None;
             }
         }
@@ -444,20 +509,20 @@ impl Game {
         if let Some(lki) = departing_lki {
             self.record_object_lki(lki);
         }
-        let was_cast =
-            old_zone == Some(ZoneType::Stack) && self.find_spell_on_stack_index(card).is_some();
-        if old_zone == Some(ZoneType::Stack) {
-            if let Some(index) = self.find_spell_on_stack_index(card) {
-                self.journal_stack();
-                self.state.stack_objects.remove(index);
-            }
-        }
+        let cast_spell = (old_zone == Some(ZoneType::Stack))
+            .then(|| self.find_spell_on_stack_index(card))
+            .flatten()
+            .map(|index| self.state.stack_objects.remove(index));
+        let was_cast = cast_spell.is_some();
+        let cast_x = match cast_spell {
+            Some(StackObject::Spell(spell)) => spell.x,
+            _ => 0,
+        };
 
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
-        self.journal_zone_move(card);
         self.state.zones.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
@@ -466,14 +531,17 @@ impl Game {
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
             permanent.controller = holder;
             permanent.was_cast = was_cast;
+            permanent.cast_x = cast_x;
             permanent.tapped = entry.tapped;
-            permanent.plus1_counters = entry.plus_one_counters.max(0);
+            permanent.counters = entry.counters;
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
+            if self.state.cards[card].types.is_land() {
+                self.state.turn.history[holder.0].land_entered = true;
+            }
             if self.state.card_to_permanent.len() <= card.0 {
                 self.state.card_to_permanent.resize(card.0 + 1, None);
             }
-            self.journal_card_to_permanent(card);
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
@@ -494,57 +562,93 @@ impl Game {
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_ref, to_zone);
         }
+        // An attachment that grants or removes abilities changes the mana
+        // its creature's controller, possibly the opponent, can produce.
+        let card_def = &self.state.cards[card];
+        if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
+            && (card_def.attached_characteristics().is_some()
+                || card_def.attached_grants().next().is_some()
+                || card_def
+                    .statics
+                    .iter()
+                    .any(|ability| matches!(ability, StaticAbility::SetsLandType(_))))
+        {
+            self.invalidate_mana_cache(PlayerId(0));
+            self.invalidate_mana_cache(PlayerId(1));
+        }
         true
     }
 
-    /// Leave-the-battlefield bookkeeping: fire one-shot delayed triggers
-    /// (earthbend returns) and end "exiled until this leaves" durations
+    /// Give `controller` control of a battlefield permanent (CR 108.4): it
+    /// moves to their battlefield without changing zones, and has not been
+    /// under their control continuously since their turn began (CR 302.6).
+    /// "For as long as you control" effects of its previous controller end.
+    pub(crate) fn change_control(&mut self, permanent_id: PermanentId, controller: PlayerId) {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return;
+        };
+        if permanent.controller == controller {
+            return;
+        }
+        let (card, previous) = (permanent.card, permanent.controller);
+        let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
+        permanent.controller = controller;
+        permanent.summoning_sick = true;
+        permanent.attacking = false;
+        self.state
+            .zones
+            .move_card(card, controller, ZoneType::Battlefield);
+        self.invalidate_mana_cache(previous);
+        self.invalidate_mana_cache(controller);
+        if let Some(object) = self.permanent_object_ref(permanent_id) {
+            self.end_effects_for_control_change(object, controller);
+        }
+    }
+
+    /// Leave-the-battlefield bookkeeping: fire delayed triggers watching the
+    /// object (earthbend returns) and end "exiled until this leaves" durations
     /// (Jailer links — the exiled card returns immediately, no stack).
     fn handle_leaves_battlefield(&mut self, departing_ref: Option<ObjectRef>, to_zone: ZoneType) {
-        // Delayed triggers watching this card fire on dies/exiled and are
-        // dropped otherwise (they watched this battlefield stint only).
-        let watching: Vec<_> = {
-            self.journal_delayed_triggers();
-            let mut kept = Vec::new();
-            let mut fired = Vec::new();
-            for trigger in std::mem::take(&mut self.state.delayed_triggers) {
-                if departing_ref.is_some_and(|object_ref| trigger.watched == object_ref) {
-                    fired.push(trigger);
-                } else if departing_ref
-                    .is_some_and(|object_ref| trigger.watched.entity == object_ref.entity)
-                {
-                    // The watched incarnation is already gone. Never retarget
-                    // a delayed trigger to a later object of the same entity.
-                } else {
-                    kept.push(trigger);
-                }
+        // Delayed triggers watching this object fire as it dies (or is
+        // exiled, for earthbend) and are dropped otherwise: they watched this
+        // battlefield stint only.
+        let watches = |trigger: &DelayedTrigger| match trigger.event {
+            DelayedTriggerEvent::Leaves { watched, .. } => {
+                departing_ref.is_some_and(|object_ref| watched.entity == object_ref.entity)
             }
-            self.state.delayed_triggers = kept;
-            fired
+            _ => false,
         };
-        if matches!(to_zone, ZoneType::Graveyard | ZoneType::Exile) {
+        if self.state.delayed_triggers.iter().any(watches) {
+            let (watching, kept): (Vec<_>, Vec<_>) =
+                std::mem::take(&mut self.state.delayed_triggers)
+                    .into_iter()
+                    .partition(watches);
+            self.state.delayed_triggers = kept;
+            let departed = departing_ref
+                .and_then(|object_ref| self.object_lki(object_ref))
+                .map(|lki| Target::Permanent(lki.permanent));
             for trigger in watching {
-                match trigger.kind {
-                    crate::flow::trigger::DelayedTriggerKind::ReturnToBattlefieldTapped => {
-                        if let Some(source_lki) = self.object_lki(trigger.watched).copied() {
-                            self.enqueue_delayed_trigger(
-                                trigger.watched,
-                                source_lki,
-                                trigger.controller,
-                                vec![
-                                    crate::state::ability::Effect::ReturnSourceToBattlefieldTapped,
-                                ],
-                            );
-                        }
-                    }
+                let DelayedTriggerEvent::Leaves { watched, or_exiled } = trigger.event else {
+                    continue;
+                };
+                // Never retarget a delayed trigger to a later object of the
+                // same entity.
+                if Some(watched) == departing_ref
+                    && (to_zone == ZoneType::Graveyard || (or_exiled && to_zone == ZoneType::Exile))
+                {
+                    self.fire_delayed_trigger(&trigger, departed);
                 }
             }
+        }
+
+        // CR 400.7: continuous effects on the departing object end.
+        if let Some(object) = departing_ref {
+            self.end_effects_on(object);
         }
 
         // "Until this creature leaves the battlefield" durations end now:
         // linked exiled cards return under their owners' control.
         let ended: Vec<_> = {
-            self.journal_exile_links();
             let mut kept = Vec::new();
             let mut ended = Vec::new();
             for link in std::mem::take(&mut self.state.exile_links) {
@@ -557,7 +661,7 @@ impl Game {
             self.state.exile_links = kept;
             ended
         };
-        for link in ended {
+        for link in ended.into_iter().filter(|link| link.returns) {
             let owner = self.state.cards[link.exiled_card].owner;
             if self
                 .state
@@ -624,5 +728,34 @@ impl Game {
             .stack_objects
             .iter()
             .position(|object| matches!(object, StackObject::Spell(spell) if spell.card == card))
+    }
+
+    /// The stack position of the activated or triggered ability `id`.
+    pub(crate) fn find_ability_on_stack_index(&self, id: ObjectId) -> Option<usize> {
+        self.state
+            .stack_objects
+            .iter()
+            .position(|object| !matches!(object, StackObject::Spell(_)) && object.id() == id)
+    }
+
+    /// The card whose ability `id` is on the stack.
+    pub(crate) fn stack_ability_source(&self, id: ObjectId) -> Option<CardId> {
+        let index = self.find_ability_on_stack_index(id)?;
+        match &self.state.stack_objects[index] {
+            StackObject::ActivatedAbility(ability) => Some(ability.source_card),
+            StackObject::TriggeredAbility(triggered) => Some(triggered.source_card),
+            StackObject::Spell(_) => None,
+        }
+    }
+
+    /// The controller of `card` while it is a spell on the stack.
+    pub(crate) fn stack_spell_controller(&self, card: CardId) -> Option<PlayerId> {
+        self.state
+            .stack_objects
+            .iter()
+            .find_map(|object| match object {
+                StackObject::Spell(spell) if spell.card == card => Some(spell.controller),
+                _ => None,
+            })
     }
 }

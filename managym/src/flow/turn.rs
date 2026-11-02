@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::state::game_object::PlayerId;
+use crate::state::game_object::{ObjectRef, PlayerId};
+
+/// A once-each-turn use: the exact source object and its ability index.
+pub type OnceEachTurnKey = (ObjectRef, usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
@@ -46,18 +49,51 @@ pub const PHASE_STEPS: [&[StepKind]; 5] = [
     &[StepKind::End, StepKind::Cleanup],
 ];
 
+/// What one player has done this turn, for conditions that read turn history
+/// ("if you attacked this turn", "your second card each turn"). The owner of
+/// every such fact: the turn reset, the state hash and the policy's player
+/// row all read this struct.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct PlayerTurnHistory {
+    /// Declared one or more attackers (raid; CR 508.1). Creatures put onto
+    /// the battlefield attacking were never declared and do not count.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacked: bool,
+    /// Permanents this player sacrificed (CR 701.21).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub permanents_sacrificed: u32,
+    /// A land entered the battlefield under this player's control.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub land_entered: bool,
+    /// Cards this player drew ("your Nth card each turn").
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub cards_drawn: u32,
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
     pub active_player: PlayerId,
     pub turn_number: u32,
     pub lands_played: u32,
     pub spells_cast: [Vec<crate::state::game_object::CardId>; 2],
-    /// Cards drawn by each player this turn (for "your Nth card each turn"
-    /// triggers). Resets every turn.
-    pub cards_drawn_this_turn: [u32; 2],
-    /// Once-per-turn limits are recorded at collection, by exact source object.
+    /// Each player's history this turn, by player index. Resets every turn.
+    pub history: [PlayerTurnHistory; 2],
+    /// Once-each-turn uses by exact source object and ability index: a
+    /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
+    /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub ability_triggers_this_turn: BTreeMap<(crate::state::game_object::ObjectRef, usize), u32>,
+    pub ability_triggers_this_turn: BTreeMap<OnceEachTurnKey, u32>,
     /// Times each triggered ability `(card index, ability index)` has
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.
@@ -76,7 +112,7 @@ impl TurnState {
             turn_number: 1,
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
-            cards_drawn_this_turn: [0, 0],
+            history: Default::default(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
             current_phase: 0,
@@ -136,7 +172,7 @@ impl TurnState {
         // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
-        self.cards_drawn_this_turn = [0, 0];
+        self.history = Default::default();
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();

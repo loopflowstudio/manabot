@@ -170,8 +170,8 @@ fn triggered_abilities_emit_observable_trigger_events() {
         matches!(
             event,
             GameEvent::AbilityTriggered {
-                source_card: _,
                 controller: PlayerId(0),
+                ..
             }
         )
     }));

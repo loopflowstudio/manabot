@@ -22,6 +22,7 @@ fn tireless_provisioner() -> CardDefinition {
         power: Some(3),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Land),
@@ -34,11 +35,13 @@ fn tireless_provisioner() -> CardDefinition {
                         token_name: "Food".into(),
                         count: 1,
                         tapped_and_attacking: false,
+                        attach_source: false,
                     }],
                     vec![Effect::CreateToken {
                         token_name: "Treasure".into(),
                         count: 1,
                         tapped_and_attacking: false,
+                        attach_source: false,
                     }],
                 ],
             }],

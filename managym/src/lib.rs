@@ -1,5 +1,4 @@
 pub mod agent;
-pub mod benchmark;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_allocations;
 pub mod canonical_replay;
@@ -12,6 +11,7 @@ mod decision_context;
 pub mod experience;
 pub mod flow;
 pub mod infra;
+pub mod match_fixtures;
 pub mod possible_worlds;
 pub mod python;
 pub mod search_state;
@@ -20,8 +20,7 @@ pub mod study;
 pub mod world;
 
 pub use agent::env::Env;
-pub use agent::vector_env::VectorEnv;
 pub use flow::game::Game;
-pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
+pub use state::hash::MATCH_STATE_HASH_VERSION;
 pub use state::player::PlayerConfig;
 pub use world::WORLD_VERSION;

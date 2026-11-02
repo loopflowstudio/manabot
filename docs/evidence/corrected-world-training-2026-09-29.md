@@ -4,7 +4,7 @@ This record preserves the decisions and dated evidence for
 [Bind training to the corrected Learn/Lesson world · ETU-81](https://linear.app/loopflow/issue/ETU-81).
 Jack Heart requested the Task on 2026-09-29 and asked for it to run without
 his review; he reviews the combined result in the comparison Task's design
-review. The [operator guide](../local-trained-challenger.md) owns the
+review. The [operator guide](../academy.md#playing-a-trained-challenger) owns the
 repeatable commands. Local `.runs/` paths locate original evidence; a
 repository clone does not contain them.
 

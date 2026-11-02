@@ -37,9 +37,8 @@ def reference(path: Path) -> ArtifactReference:
     }
 
 
-@pytest.fixture
-def producer(tmp_path: Path) -> TrainingRun:
-    recipe = TrainingRegime(
+def recipe(updates: int) -> TrainingRegime:
+    return TrainingRegime(
         id="portable-test",
         world=managym.WORLD_VERSION,
         match=MatchConfig(
@@ -54,7 +53,7 @@ def producer(tmp_path: Path) -> TrainingRun:
             TrainSelfPlay(
                 id="fit",
                 operation="train_self_play",
-                updates=2,
+                updates=updates,
                 execution=Execution(
                     device=os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
                 ),
@@ -69,8 +68,12 @@ def producer(tmp_path: Path) -> TrainingRun:
             )
         ],
     )
+
+
+@pytest.fixture
+def producer(tmp_path: Path) -> TrainingRun:
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        return execution.execute_regime(recipe, 197, tmp_path / "producer", store)
+        return execution.execute_regime(recipe(2), 197, tmp_path / "producer", store)
 
 
 def continuation(parent: TrainingRun, export: Path, endpoint: int) -> TrainingRegime:
@@ -272,3 +275,150 @@ def test_historical_wire_digest_and_next_iteration(
     assert (
         Path(state.artifacts["parent_run"]["path"]).read_bytes() == export.read_bytes()
     )
+
+
+@pytest.fixture
+def interrupted(tmp_path: Path) -> TrainingRun:
+    """A parent with per-update monitoring exports, retained as interrupted.
+
+    The status is the synthetic part, standing in for a watchdog kill after
+    update 3; a raw-only import reads only the record and one monitoring export.
+    """
+    with VerifyStore(tmp_path / "interrupted.sqlite") as store:
+        execution.execute_regime(
+            recipe(3), 197, tmp_path / "interrupted", store, checkpoint_updates=1
+        )
+    export = tmp_path / "interrupted/run.json"
+    payload = json.loads(export.read_text())
+    payload["status"] = payload["stages"][0]["status"] = "interrupted"
+    payload["error"] = "TimeoutError: training resource wall deadline exceeded"
+    execution.atomic_json(export, payload)
+    return TrainingRun.model_validate(payload)
+
+
+def from_monitoring(
+    parent: Path, run: TrainingRun, update: int, endpoint: int
+) -> TrainingRegime:
+    continued = recipe(endpoint)
+    stage = continued.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    (receipt,) = [c for c in run.monitoring_checkpoints if c.updates == update]
+    assert receipt.artifact is not None
+    stage.learning_state = LearningStateImport(
+        source_run=reference(parent),
+        source_stage="fit",
+        raw=receipt.artifact,
+        monitoring_update=update,
+    )
+    return continued
+
+
+def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
+    tmp_path: Path,
+    interrupted: TrainingRun,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "interrupted/run.json"
+    continued = from_monitoring(parent, interrupted, 2, 4)
+    receipt = interrupted.monitoring_checkpoints[1]
+    assert receipt.artifact is not None
+    expected, _ = load_checkpoint(receipt.artifact["path"])
+    seeded: list[dict[str, torch.Tensor]] = []
+    original_update_ema = execution.update_ema
+
+    def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
+        if not seeded:
+            seeded.append(
+                {k: v.detach().cpu().clone() for k, v in averaged.state_dict().items()}
+            )
+        original_update_ema(averaged, learner, rate)
+
+    monkeypatch.setattr(execution, "update_ema", checked_ema)
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        run = execution.execute_regime(continued, 197, tmp_path / "continued", store)
+    assert run.status == "completed" and run.updates_through() == 4
+    # The EMA starts as the monitoring export's raw weights.
+    for key, value in expected.state_dict().items():
+        torch.testing.assert_close(seeded[0][key], value, rtol=0, atol=0)
+    record = run.stages[0]
+    origin = record.learning_state_origin
+    assert origin is not None and origin.reset == ("ema", "optimizer")
+    assert origin.iteration == 2 and origin.run_id == interrupted.id
+    for name in ("games", "learner_transitions", "optimizer_exposures"):
+        assert getattr(origin, name) == getattr(receipt, name)
+    assert origin.optimizer_updates == receipt.optimizer_updates
+    assert set(record.inputs) == {"learning_state/source_run", "learning_state/raw"}
+    # Fresh Adam: its step counters count only this segment's optimizer steps.
+    final = torch.load(record.artifacts["optimizer"]["path"], weights_only=True)
+    assert record.optimizer_updates is not None
+    assert {s["step"].item() for s in final["state"].values()} <= {
+        float(record.optimizer_updates)
+    }
+
+
+@pytest.mark.parametrize("fault", ["receipt", "bytes", "completed_roles", "finished"])
+def test_raw_only_import_requires_the_declared_monitoring_export(
+    tmp_path: Path, interrupted: TrainingRun, fault: str
+) -> None:
+    parent = tmp_path / "interrupted/run.json"
+    if fault == "completed_roles":
+        with pytest.raises(ValueError, match="raw alone"):
+            LearningStateImport(
+                source_run=reference(parent),
+                source_stage="fit",
+                raw=interrupted.stages[0].artifacts["raw"],
+                ema=interrupted.stages[0].artifacts["ema"],
+                monitoring_update=2,
+            )
+        return
+    continued = from_monitoring(parent, interrupted, 2, 4)
+    stage = continued.stages[0]
+    assert isinstance(stage, TrainSelfPlay) and stage.learning_state is not None
+    if fault == "receipt":
+        stage.learning_state.monitoring_update = 3
+    elif fault == "bytes":
+        # The final raw export is not the monitoring export at update 2.
+        stage.learning_state.raw = interrupted.stages[0].artifacts["raw"]
+    else:
+        payload = json.loads(parent.read_text())
+        payload["status"] = payload["stages"][0]["status"] = "failed"
+        execution.atomic_json(parent, payload)
+        stage.learning_state.source_run = reference(parent)
+    out = tmp_path / "admit"
+    out.mkdir()
+    with pytest.raises(ValueError):
+        admit_learning_state(stage, continued, out)
+
+
+def test_wall_bounded_stage_pauses_with_learner_state_a_successor_continues(
+    tmp_path: Path,
+) -> None:
+    bounded = recipe(5)
+    watchdog = min(bounded.wall_seconds, bounded.stages[0].execution.wall_seconds)
+    # A reserve just inside the watchdog: no second update ever fits.
+    reserve = watchdog - 1e-3
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        run = execution.execute_regime(
+            bounded, 197, tmp_path / "bounded", store, stop_reserve_seconds=reserve
+        )
+        record = run.stages[0]
+        assert run.status == record.status == "paused"
+        assert run.updates_through() == 1
+        assert {"raw", "ema", "optimizer"} <= set(record.artifacts)
+        assert run.selected_artifact == record.artifacts["raw"]
+        successor = execution.execute_regime(
+            continuation(run, tmp_path / "bounded/run.json", 3),
+            197,
+            tmp_path / "successor",
+            store,
+        )
+    assert successor.status == "completed" and successor.updates_through() == 3
+    with pytest.raises(ValueError, match="wall-bounded"):
+        with VerifyStore(tmp_path / "other.sqlite") as store:
+            execution.execute_regime(
+                bounded,
+                197,
+                tmp_path / "refused",
+                store,
+                stop_reserve_seconds=watchdog,
+            )

@@ -8,8 +8,9 @@ use managym::{
     flow::turn::{PhaseKind, StepKind},
     state::{
         card::Keywords,
+        effect::Modification,
         game_object::{CardId, PermanentId, PlayerId},
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         target::Target,
         zone::ZoneType,
@@ -254,7 +255,11 @@ pub fn card_of(s: &Scenario, id: PermanentId) -> CardId {
 }
 
 pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
-    permanent(s, id).plus1_counters
+    permanent(s, id).counter_count(CounterKind::PlusOnePlusOne)
+}
+
+pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
+    permanent(s, id).counter_count(kind)
 }
 
 pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
@@ -262,13 +267,28 @@ pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
 }
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
-    let permanent = permanent(s, id);
-    permanent.effective_keywords(&s.game().state.cards[permanent.card])
+    s.game().characteristics(id).keywords
+}
+
+/// The summed +power/+toughness of the permanent's `ModifyPt` records
+/// (layer 7c effects from resolved spells and abilities).
+pub fn pt_modifications(s: &Scenario, id: PermanentId) -> (i32, i32) {
+    s.game()
+        .effects_on(id)
+        .filter_map(|effect| match effect.modification {
+            Modification::ModifyPt { power, toughness } => Some((power, toughness)),
+            _ => None,
+        })
+        .fold((0, 0), |(p, t), (dp, dt)| (p + dp, t + dt))
 }
 
 // ---------------------------------------------------------------------------
 // Offered actions and the command contract
 // ---------------------------------------------------------------------------
+
+pub fn has_action(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> bool {
+    s.action_space().actions.iter().any(predicate)
+}
 
 pub fn can_cast(s: &Scenario, id: CardId) -> bool {
     s.action_space()
@@ -320,12 +340,10 @@ pub fn zone_of(s: &Scenario, card: CardId) -> Option<ZoneType> {
 }
 
 /// Exercise every offered atomic continuation through the real Command
-/// authority, with an independent replay and a nested exact-fork rollback.
+/// authority, with an independent replay; every legal action and a follow-up
+/// step run on exact forks that leave the source untouched.
 pub fn assert_choice_contract(s: &Scenario) {
-    use managym::{
-        decision::Command,
-        search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
-    };
+    use managym::{decision::Command, search_state::witness};
     let root = witness(s.game());
     let frame = s.game().semantic_decision_frame().unwrap();
     assert_eq!(frame.offers.len(), s.action_space().actions.len());
@@ -347,36 +365,12 @@ pub fn assert_choice_contract(s: &Scenario) {
         assert!(branch.execute_semantic_command(&command).is_err());
         assert_eq!(witness(&branch), after);
     }
-    let driver = ClonePlusUndoDriver::default();
     for index in 0..s.action_space().actions.len() {
-        let mut branch = driver.fork_exact(s.game());
-        let mark = driver.mark(&mut branch);
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_action_hash: None,
-                    expected_state_hash: None,
-                },
-            )
-            .unwrap();
-        let inner = driver.mark(&mut branch);
+        let mut branch = s.game().clone();
+        branch.step(index).unwrap();
         if !branch.action_space().unwrap().actions.is_empty() {
-            driver
-                .apply(
-                    &mut branch,
-                    BenchCommand {
-                        action_index: 0,
-                        expected_action_hash: None,
-                        expected_state_hash: None,
-                    },
-                )
-                .unwrap();
+            branch.step(0).unwrap();
         }
-        driver.rollback(&mut branch, inner);
-        driver.rollback(&mut branch, mark);
-        assert_eq!(driver.witness(&branch), root);
     }
     assert_eq!(witness(s.game()), root);
 }

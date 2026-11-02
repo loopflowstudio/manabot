@@ -344,7 +344,7 @@ required; arena replay alone does not satisfy that acceptance.
 Experiment, TrainingRun/VerifyStore and the arena retain execution authority.
 Create-once editable notebook cells generate read-only HTML with live progress,
 strength and freshness; W&B is a metric projection. The existing
-[S3 contract](../docs/training-monitoring.md#s3-model-and-artifact-storage) and
+[S3 contract](../docs/training.md#monitoring) and
 `manabot/training/artifacts.py` own private model publication and verified readback.
 The contract is now located; mini credentials and actual archival remain unverified.
 Model publication is explicit for stopped/completed runs, not a new live recovery

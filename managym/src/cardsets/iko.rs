@@ -1,6 +1,6 @@
 //! Ikoria: Lair of Behemoths.
 use crate::state::{
-    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, EffectValue, TargetSpec, TriggerCondition, TriggerSubject},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, SacrificeCost},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -21,6 +21,7 @@ fn bastion_of_remembrance() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -28,16 +29,20 @@ fn bastion_of_remembrance() -> CardDefinition {
                     token_name: "Human Soldier".into(),
                     count: 1,
                     tapped_and_attacking: false,
+                    attach_source: false,
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::AnyYouControl(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::DrainLife { amount: 1 }],
+                effects: vec![Effect::DrainLife {
+                    amount: EffectValue::Fixed(1),
+                }],
             },
         ],
         text_box: text_box.into(),

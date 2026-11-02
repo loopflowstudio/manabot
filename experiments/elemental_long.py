@@ -16,12 +16,16 @@ evaluation design:
 - `recipe` — the frozen recipe to an update target and watchdog;
 - `stage_parent` / `segment_job` — a parent's exports as Etude inputs, and the
   segment that continues them;
+- `stage_monitoring` — the declared raw-only alternative for a parent that was
+  interrupted before its final exports (w3, amendment 2026-10-25): one of its
+  monitoring exports, with EMA := raw and a fresh Adam;
 - `rated_updates` — the checkpoints that are evaluated and rated;
 - `heuristic_games` — the 10×10 heuristic grid (full or declared subset) for one;
 - `h2h_schedule` / `pair_design` — the cross-checkpoint games and pairing graph.
 
     uv run python -m experiments.elemental_long stage --parent DIR \
-        --storage r2://BUCKET --prefix mtg183/w2 --out continuation.json
+        --storage r2://BUCKET --prefix mtg183/w2 --out continuation.json \
+        [--monitoring-update N]
     uv run python -m experiments.elemental_long segment \
         --continuation continuation.json --updates N --hours H --max-usd D \
         --revision COMMIT --out job.json
@@ -44,7 +48,7 @@ from experiments.elemental_grid import DECKS, Game, schedule
 from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.training.records import TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import ArtifactReference, TrainingRegime, TrainSelfPlay
 
 ROOT = Path(__file__).resolve().parents[1]
 REGIME = ROOT / "experiments/regimes/elemental-long-183-v1.json"
@@ -78,9 +82,7 @@ def stage_parent(parent: Path, storage: Storage, prefix: str) -> LearnerContinua
     the continuation starts at the record's absolute update. An object already
     under its key is kept only when its digest matches.
     """
-    run = TrainingRun.model_validate_json((parent / "run.json").read_bytes())
-    if run.seed != SEED or [s.id for s in run.stages] != [STAGE]:
-        raise ValueError("parent is not an MTG-183 self-play window")
+    run = _parent_run(parent)
     if run.status not in {"completed", "paused"}:
         raise ValueError(f"parent did not finish its window: {run.status}")
     folder = f"{prefix.strip('/')}/"
@@ -88,24 +90,75 @@ def stage_parent(parent: Path, storage: Storage, prefix: str) -> LearnerContinua
     staged = {}
     for role, name in _PARENT_FILES.items():
         path = parent / name
-        sha256, size = file_sha256(path), path.stat().st_size
         if role != "source_run":
-            published = run.stages[0].artifacts.get(role)
-            if published is None or (published["sha256"], published["bytes"]) != (
-                sha256,
-                size,
-            ):
-                raise ValueError(f"{name} differs from the parent's published {role}")
-        key = folder + name
-        if key in existing:
-            if hashlib.sha256(storage.get(key)).hexdigest() != sha256:
-                raise ValueError(f"{key} already holds other bytes")
-        else:
-            storage.put_file(key, path)
-        staged[role] = StagedExport(key=key, sha256=sha256, bytes=size)
+            _check_published(path, run.stages[0].artifacts.get(role), role)
+        staged[role] = _stage_file(storage, existing, folder + name, path)
     return LearnerContinuation(
         from_update=run.updates_through(), source_stage=STAGE, **staged
     )
+
+
+def stage_monitoring(
+    parent: Path, storage: Storage, prefix: str, update: int
+) -> LearnerContinuation:
+    """Upload an interrupted parent's run record and raw export at `update`.
+
+    `parent` holds the interrupted attempt's `run.json` and the monitoring
+    export its receipt at `update` names (by file name); the bytes must match
+    that receipt. The continuation declares the raw-only discontinuity.
+    """
+    run = _parent_run(parent)
+    if run.status != "interrupted":
+        raise ValueError(
+            f"a finished parent continues from its final exports: {run.status}"
+        )
+    receipts = [c for c in run.monitoring_checkpoints if c.updates == update]
+    if len(receipts) != 1 or receipts[0].artifact is None:
+        raise ValueError(f"parent has no monitoring export at update {update}")
+    published = receipts[0].artifact
+    path = parent / Path(published["path"]).name
+    _check_published(path, published, "monitoring raw")
+    folder = f"{prefix.strip('/')}/"
+    existing = set(storage.keys(folder))
+    return LearnerContinuation(
+        from_update=update,
+        source_stage=STAGE,
+        source_run=_stage_file(
+            storage, existing, folder + "run.json", parent / "run.json"
+        ),
+        raw=_stage_file(storage, existing, folder + path.name, path),
+        from_monitoring=True,
+    )
+
+
+def _parent_run(parent: Path) -> TrainingRun:
+    run = TrainingRun.model_validate_json((parent / "run.json").read_bytes())
+    if run.seed != SEED or [s.id for s in run.stages] != [STAGE]:
+        raise ValueError("parent is not an MTG-183 self-play window")
+    return run
+
+
+def _check_published(
+    path: Path, published: ArtifactReference | None, role: str
+) -> None:
+    if published is None or (published["sha256"], published["bytes"]) != (
+        file_sha256(path),
+        path.stat().st_size,
+    ):
+        raise ValueError(f"{path.name} differs from the parent's published {role}")
+
+
+def _stage_file(
+    storage: Storage, existing: set[str], key: str, path: Path
+) -> StagedExport:
+    """Upload `path` under `key`; an existing object is kept only if identical."""
+    sha256 = file_sha256(path)
+    if key in existing:
+        if hashlib.sha256(storage.get(key)).hexdigest() != sha256:
+            raise ValueError(f"{key} already holds other bytes")
+    else:
+        storage.put_file(key, path)
+    return StagedExport(key=key, sha256=sha256, bytes=path.stat().st_size)
 
 
 def recipe(
@@ -236,7 +289,7 @@ def h2h_schedule_sha256() -> str:
 
 H2H_SCHEDULE_SHA256 = "27f22397b3462d2856784726d953b2a4c05a44be6b595085d04cf664cc0a7f60"
 
-Role = Literal["consecutive", "reference", "endpoint", "held-out"]
+Role = Literal["consecutive", "reference", "endpoint", "held-out", "halving"]
 
 
 @dataclass(frozen=True)
@@ -283,6 +336,11 @@ def main() -> None:
     stage.add_argument("--storage", required=True)
     stage.add_argument("--prefix", required=True)
     stage.add_argument("--out", type=Path, required=True)
+    stage.add_argument(
+        "--monitoring-update",
+        type=int,
+        help="continue an interrupted parent from its raw export at this update",
+    )
     segment = sub.add_parser("segment", help="write a continuation's Etude job")
     segment.add_argument("--continuation", type=Path, required=True)
     segment.add_argument("--updates", type=int, required=True)
@@ -292,8 +350,13 @@ def main() -> None:
     segment.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "stage":
-        continuation = stage_parent(
-            args.parent, storage_from_uri(args.storage), args.prefix
+        storage = storage_from_uri(args.storage)
+        continuation = (
+            stage_parent(args.parent, storage, args.prefix)
+            if args.monitoring_update is None
+            else stage_monitoring(
+                args.parent, storage, args.prefix, args.monitoring_update
+            )
         )
         args.out.write_text(continuation.model_dump_json(indent=2) + "\n")
         print(f"continues from update {continuation.from_update}")

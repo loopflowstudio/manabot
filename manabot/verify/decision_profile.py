@@ -38,7 +38,7 @@ import torch
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.env.single_agent_env import RandomPolicy, build_opponent_policy
+from manabot.env.opponents import RandomPolicy, build_opponent_policy
 from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,

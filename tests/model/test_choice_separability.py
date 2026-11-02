@@ -18,6 +18,7 @@ from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
     ACTION_TYPE_DIM,
     PERMANENT_DEFINITION_INDEX,
+    PERMANENT_TIMESTAMP_INDEX,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
@@ -275,8 +276,10 @@ def _remove_discriminant(
     elif case.name in {"look_select", "learn_discard"}:
         erased["semantic_cards"].zero_()
     elif case.name in {"block_target", "waterbend"}:
+        # Policy input v5 also orders permanents by timestamp (CR 613.7).
         for key in ("agent_permanents", "opponent_permanents"):
             erased[key][..., PERMANENT_DEFINITION_INDEX] = 0
+            erased[key][..., PERMANENT_TIMESTAMP_INDEX] = 0
     elif case.name == "block_decline":
         erased["actions"][..., ACTION_DECLARED_INDEX] = 0
         erased["action_focus"][..., 1:] = -1

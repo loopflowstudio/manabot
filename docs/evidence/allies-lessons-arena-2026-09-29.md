@@ -101,7 +101,7 @@ compute and a protocol fixed before scoring. A one-block bootstrap is plumbing
 evidence, not useful statistical uncertainty. The existing historical contracts,
 checkpoints and receipts were not regenerated.
 
-The [operator workflow](../local-trained-challenger.md#evaluate-the-selected-matchup)
+The [operator workflow](../academy.md#playing-a-trained-challenger)
 owns repeatable commands and candidate registration requirements. No external
 publication, Task closure or strength claim was performed in this implementation
 step.

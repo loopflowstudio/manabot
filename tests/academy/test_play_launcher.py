@@ -241,7 +241,7 @@ def test_native_import_reports_the_extension_abi_and_path():
     }
 
 
-def test_locked_play_runtime_covers_and_imports_live_advice_dependencies():
+def test_locked_play_runtime_covers_and_imports_its_dependencies():
     project = tomllib.loads((play.ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     group = project["dependency-groups"]["play-runtime"]
     names = {

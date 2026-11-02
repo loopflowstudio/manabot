@@ -13,10 +13,12 @@ use crate::{
     flow::{
         event::GameEvent,
         game::{CastChoices, Game},
+        turn::OnceEachTurnKey,
     },
     state::{
-        ability::{Effect, LinkedGrant, PaymentCost},
-        game_object::{CardId, ObjectId, ObjectRef, PlayerId, Target},
+        ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -29,8 +31,14 @@ pub enum FrameFinalize {
     /// Abilities: nothing to clean up.
     None,
     /// Spells: remove the stack object, then put the card into the
-    /// battlefield (permanents) or graveyard.
-    Spell { card: CardId },
+    /// battlefield (permanents) or graveyard. A resolving Aura spell enters
+    /// attached to `attach_to`, the object its attach instruction chose
+    /// (CR 303.4f).
+    Spell {
+        card: CardId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attach_to: Option<ObjectRef>,
+    },
 }
 
 /// A chosen target's clause and eligibility at resolution start (CR 608.2b).
@@ -60,14 +68,36 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
-    /// The resolving spell's announced X (0 for abilities).
+    /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
+    /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
+    /// creature, read by a later "the excess damage dealt this way".
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub excess_damage: i32,
+    /// The cards the resolution's latest discard moved ("this way").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub this_way: Vec<CardId>,
+    /// The token this resolution created last ("that token").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<PermanentId>,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
     /// Trigger-context object (e.g. the spell that targeted a warded
-    /// permanent) — used as the primary target when none was chosen.
+    /// permanent) — used as the primary target when none was chosen. For an
+    /// activated ability of an Aura or Equipment, the object it was attached to.
     pub context_target: Option<Target>,
+    /// The trigger's player ("they": the caster of the triggering spell).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triggering_player: Option<PlayerId>,
+    /// The exact object that granted the resolving ability (CR 400.7: once
+    /// it leaves the battlefield, references to it find nothing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grantor: Option<ObjectRef>,
+    /// The printed index of the resolving triggered ability on its source,
+    /// which keys its "do this only once each turn" use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ability: Option<usize>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub finalize: FrameFinalize,
@@ -109,6 +139,14 @@ pub struct PaymentProgress {
     pub waterbend_paid: Vec<ObjectRef>,
     pub if_paid: Vec<Effect>,
     pub if_declined: Vec<Effect>,
+    /// The once-each-turn option (exact source, ability index) paying
+    /// spends ("Do this only once each turn").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spends: Option<OnceEachTurnKey>,
+    /// The spell or ability declining counters ("counter it unless that
+    /// player pays"): ward answers both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counters_on_decline: Option<Target>,
 }
 
 impl PaymentProgress {
@@ -124,6 +162,8 @@ impl PaymentProgress {
             waterbend_paid: Vec::new(),
             if_paid,
             if_declined,
+            spends: None,
+            counters_on_decline: None,
         }
     }
 
@@ -132,15 +172,35 @@ impl PaymentProgress {
     }
 }
 
-/// Where a `CastWithoutPaying` decision's candidates come from.
+/// The optional part of a `Decision::Sacrifice` ("you may sacrifice ... If
+/// you do, ...").
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum FreeCastOffer {
+pub struct OptionalSacrifice {
+    /// The source permanent of an "another" sacrifice, never a candidate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<PermanentId>,
+    /// Runs only after a sacrifice.
+    pub then: Vec<Effect>,
+}
+
+/// Where a `CastDuringResolution` decision's candidates come from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ResolutionCastOffer {
     /// Spells in the deciding player's hand matching `predicate`, read when
     /// offered (Yue, the Moon Spirit).
     Hand { predicate: CardPredicate },
     /// One exiled card, put into its owner's hand if not cast (Solstice
     /// Revelations).
     Exiled { card: CardId },
+    /// The top card of the deciding player's library, which they have looked
+    /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
+    LibraryTop { card: CardId },
+    /// Cards matching `predicate` the deciding player owns that are exiled
+    /// with the exact `source` (Boiling Rock Rioter).
+    ExiledWith {
+        source: ObjectRef,
+        predicate: CardPredicate,
+    },
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -152,7 +212,7 @@ pub enum Decision {
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
-        permanent: crate::state::game_object::PermanentId,
+        permanent: PermanentId,
         ability_index: usize,
         resume: Option<Box<Decision>>,
     },
@@ -164,11 +224,25 @@ pub enum Decision {
     Sacrifice {
         player: PlayerId,
         predicate: CardPredicate,
+        /// Set for "you may sacrifice ... If you do": declining is allowed.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        optional: Option<OptionalSacrifice>,
+    },
+    /// Place one of `remaining` `kind` counters on a tapped creature an
+    /// opponent of `player` controls; candidates are read at each placement.
+    DistributeCounters {
+        player: PlayerId,
+        kind: CounterKind,
+        remaining: usize,
     },
     SelectMilled {
         player: PlayerId,
         cards: Vec<CardId>,
         if_declined: Vec<Effect>,
+        /// The chosen card goes to the battlefield under `player`'s control
+        /// rather than to their hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
     },
     /// Candidates come from the current library, not stored or pinned cards.
     SearchBasicLand {
@@ -186,6 +260,12 @@ pub enum Decision {
         to_hand: bool,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         selected: Vec<CardId>,
+    },
+    /// "Search your library for a [predicate] card, reveal it, put it into
+    /// your hand, then shuffle." Candidates come from the current library.
+    SearchLibraryToHand {
+        player: PlayerId,
+        predicate: CardPredicate,
     },
     /// Discard up to `remaining` more cards; then draw `count` per discard.
     OptionalDiscardDraw {
@@ -243,11 +323,20 @@ pub enum Decision {
         revealed: Vec<CardId>,
         remaining: usize,
     },
-    /// "You may cast [a spell] without paying its mana cost" while an effect
-    /// resolves (CR 608.2g): choose a candidate from `offer`, or decline.
-    CastWithoutPaying {
+    /// "You may cast [a spell] (without paying its mana cost)" while an
+    /// effect resolves (CR 608.2g): choose a candidate from `offer`, or
+    /// decline. Timing and zone permissions don't apply.
+    CastDuringResolution {
         player: PlayerId,
-        offer: FreeCastOffer,
+        offer: ResolutionCastOffer,
+        /// The caster pays the spell's costs ("you may cast"); otherwise it
+        /// is cast without paying its mana cost.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        paid: bool,
+        /// The once-each-turn option (exact source, ability index) casting
+        /// spends ("Do this only once each turn"); declining keeps it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spends: Option<OnceEachTurnKey>,
     },
     /// `player` exiles a matching card from `owner`'s graveyard or a
     /// nontoken permanent `owner` controls (or declines, when `up_to`);
@@ -275,6 +364,28 @@ pub enum Decision {
     Discard {
         player: PlayerId,
         remaining: usize,
+        /// Set for "you may discard a card. If you do, [then]": declining
+        /// is allowed, and `then` runs only after the discard.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        then: Option<Vec<Effect>>,
+    },
+    /// `player` chooses another creature they control to keep, within
+    /// `max_total_power` with those already `kept` (by both players), or
+    /// stops; once the nonactive player stops, every other creature is
+    /// sacrificed.
+    KeepCreatures {
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    },
+    /// `player` chooses a new target for slot `slot` of the stack object
+    /// (CR 115.7), or keeps the current one when `may_keep` ("you may
+    /// choose new targets for the copy"); later slots follow.
+    Retarget {
+        player: PlayerId,
+        object: Target,
+        slot: usize,
+        may_keep: bool,
     },
     /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
     LegendRule {
@@ -298,12 +409,16 @@ impl Decision {
             Decision::Payment(payment) => payment.player,
             Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
-            | Decision::Sacrifice { player, .. } => *player,
+            | Decision::Sacrifice { player, .. }
+            | Decision::KeepCreatures { player, .. }
+            | Decision::Retarget { player, .. }
+            | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
+            | Decision::SearchLibraryToHand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
-            | Decision::CastWithoutPaying { player, .. }
+            | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
@@ -324,15 +439,23 @@ impl Decision {
             Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
-            | Decision::Sacrifice { .. } => &[],
+            | Decision::Sacrifice { .. }
+            | Decision::KeepCreatures { .. }
+            | Decision::Retarget { .. }
+            | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
+            Decision::CastDuringResolution {
+                offer: ResolutionCastOffer::LibraryTop { card },
+                ..
+            } => std::slice::from_ref(card),
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
+            | Decision::SearchLibraryToHand { .. }
             | Decision::DiscardFromRevealedHand { .. }
-            | Decision::CastWithoutPaying { .. }
+            | Decision::CastDuringResolution { .. }
             | Decision::ExileLinked { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
@@ -364,6 +487,113 @@ pub struct SuspendedResolution {
 }
 
 impl Game {
+    /// Record that the exact source took its ability's once-each-turn option.
+    pub(crate) fn spend_once_each_turn(&mut self, key: OnceEachTurnKey) {
+        *self
+            .state
+            .turn
+            .ability_triggers_this_turn
+            .entry(key)
+            .or_default() += 1;
+    }
+
+    /// The creatures a pending `Decision::KeepCreatures` may add: its
+    /// player's, not yet kept, within the power bound with that player's
+    /// kept creatures.
+    pub(crate) fn keep_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
+        let Decision::KeepCreatures {
+            player,
+            max_total_power,
+            kept,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let total: i32 = kept
+            .iter()
+            .filter(|id| {
+                self.state.permanents[**id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == *player)
+            })
+            .map(|id| self.characteristics(*id).power)
+            .sum();
+        self.battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| {
+                self.characteristics(*id).is_creature
+                    && !kept.contains(id)
+                    && total + self.characteristics(*id).power <= *max_total_power
+            })
+            .collect()
+    }
+
+    /// Ask `player` to keep a creature, moving on to the nonactive player
+    /// (and finally sacrificing the rest) when `player` has no candidate.
+    pub(crate) fn keep_creatures(
+        &mut self,
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    ) -> Option<Decision> {
+        let decision = Decision::KeepCreatures {
+            player,
+            max_total_power,
+            kept,
+        };
+        if !self.keep_candidates(&decision).is_empty() {
+            return Some(decision);
+        }
+        let Decision::KeepCreatures { kept, .. } = decision else {
+            unreachable!()
+        };
+        self.stop_keeping_creatures(player, max_total_power, kept)
+    }
+
+    /// `player` has stopped keeping creatures: the nonactive player chooses
+    /// next, or every unkept creature is sacrificed.
+    fn stop_keeping_creatures(
+        &mut self,
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    ) -> Option<Decision> {
+        if player == self.active_player() {
+            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept);
+        }
+        self.sacrifice_unkept_creatures(&kept);
+        None
+    }
+
+    /// Sacrifice every creature not in `kept`, as one event.
+    fn sacrifice_unkept_creatures(&mut self, kept: &[PermanentId]) {
+        let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
+            .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+            .filter(|id| self.characteristics(*id).is_creature && !kept.contains(id))
+            .collect();
+        for id in doomed {
+            self.sacrifice_permanent(id);
+        }
+    }
+
+    /// The permanents a pending `Decision::Sacrifice` may select.
+    pub(crate) fn sacrifice_decision_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
+        let Decision::Sacrifice {
+            player,
+            predicate,
+            optional,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let excluded = optional.as_ref().and_then(|optional| optional.excluded);
+        self.sacrifice_candidates(*player, predicate)
+            .into_iter()
+            .filter(|id| Some(*id) != excluded)
+            .collect()
+    }
+
     fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
         cards
             .iter()
@@ -380,9 +610,15 @@ impl Game {
                 resolutions_this_turn: 0,
                 kicked: false,
                 x: 0,
+                excess_damage: 0,
+                created: None,
+                this_way: Vec::new(),
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
+                triggering_player: None,
+                grantor: None,
+                ability: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
             },
@@ -392,6 +628,18 @@ impl Game {
 
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
+    /// Suspend the resolution on `next`, or resume its frame when there is
+    /// no further decision.
+    fn continue_resolution(&mut self, mut suspended: SuspendedResolution, next: Option<Decision>) {
+        match next {
+            Some(decision) => {
+                suspended.decision = decision;
+                self.state.suspended_decision = Some(suspended);
+            }
+            None => self.run_frame(suspended.frame),
+        }
+    }
+
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while let Some(effect) = frame.queue.pop_front() {
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
@@ -403,7 +651,7 @@ impl Game {
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
-        if let FrameFinalize::Spell { card } = frame.finalize {
+        if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
             // A spell that exiled itself ("Exile Avatar's Wrath") has
             // already left the stack (CR 608.2n).
             if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
@@ -416,9 +664,21 @@ impl Game {
                         ZoneType::Battlefield,
                         crate::flow::proposed_event::ZoneEntry {
                             controller: Some(frame.controller),
+                            x: frame.x,
                             ..Default::default()
                         },
                     );
+                    if let Some(permanent_id) = self.state.card_to_permanent[card] {
+                        if attach_to.is_some() {
+                            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                                permanent.attached_to = attach_to;
+                            }
+                            // The Aura's grants change the enchanted
+                            // creature's mana abilities, whoever controls it.
+                            self.invalidate_mana_cache(PlayerId(0));
+                            self.invalidate_mana_cache(PlayerId(1));
+                        }
+                    }
                 } else {
                     self.move_card(card, ZoneType::Graveyard);
                 }
@@ -426,7 +686,7 @@ impl Game {
             self.emit(GameEvent::SpellResolved { card });
         }
         // A resolution completed: restart the priority round (CR 117.3b).
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
     }
 
     /// The action space for the pending mid-resolution decision, if any.
@@ -490,16 +750,59 @@ impl Game {
                     })
                     .collect(),
             },
-            Decision::Sacrifice { player, predicate } => ActionSpace {
+            Decision::Sacrifice {
+                player, optional, ..
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.sacrifice_candidates(*player, predicate)
+                    self.sacrifice_decision_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
-                    false,
+                    optional.is_some(),
                 ),
+                focus: source_focus,
+            },
+            Decision::Retarget {
+                player, may_keep, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: self
+                    .retarget_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|target| Action::ChooseTarget {
+                        player: *player,
+                        target,
+                    })
+                    .chain(may_keep.then_some(Action::Decline { player: *player }))
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::KeepCreatures { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.keep_candidates(&suspended.decision)
+                        .into_iter()
+                        .map(|id| self.state.permanents[id].as_ref().unwrap().card),
+                    true,
+                ),
+                focus: source_focus,
+            },
+            Decision::DistributeCounters { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .tapped_opponent_creatures(*player)
+                    .into_iter()
+                    .map(|id| Action::SelectCard {
+                        player: *player,
+                        card: self.state.permanents[id].as_ref().unwrap().card,
+                    })
+                    .collect(),
                 focus: source_focus,
             },
             Decision::SearchBasicLand {
@@ -513,6 +816,16 @@ impl Game {
                 actions: select_cards(
                     *player,
                     self.basic_land_search_candidates(*player, subtype, *to_hand),
+                    true,
+                ),
+                focus: source_focus,
+            },
+            Decision::SearchLibraryToHand { player, predicate } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.library_search_candidates(*player, predicate),
                     true,
                 ),
                 focus: source_focus,
@@ -546,8 +859,8 @@ impl Game {
                     actions: select_cards(*player, cards, *up_to),
                 }
             }
-            Decision::CastWithoutPaying { player, .. } => {
-                let cards = self.free_cast_candidates(&suspended.decision);
+            Decision::CastDuringResolution { player, .. } => {
+                let cards = self.resolution_cast_candidates(&suspended.decision);
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
@@ -574,7 +887,11 @@ impl Game {
                             .zone_cards(ZoneType::Hand, *player)
                             .iter()
                             .copied(),
-                        matches!(suspended.decision, Decision::OptionalDiscardDraw { .. }),
+                        matches!(
+                            suspended.decision,
+                            Decision::OptionalDiscardDraw { .. }
+                                | Decision::Discard { then: Some(_), .. }
+                        ),
                     ),
                     focus: source_focus,
                 }
@@ -742,12 +1059,33 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(error);
                 }
+                if let Some(key) = payment.spends {
+                    self.spend_once_each_turn(key);
+                }
                 let effects = std::mem::take(&mut payment.if_paid);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (
+                Decision::Sacrifice {
+                    optional: Some(_), ..
+                },
+                Action::Decline { .. },
+            ) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
+                match payment.counters_on_decline {
+                    Some(Target::StackSpell(card)) => {
+                        self.counter_spell(card, suspended.frame.source)
+                    }
+                    Some(Target::StackAbility(id)) => {
+                        self.counter_ability(id, suspended.frame.source)
+                    }
+                    _ => {}
+                }
                 let effects = std::mem::take(&mut payment.if_declined);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
@@ -762,7 +1100,6 @@ impl Game {
                 Action::ChooseMode { mode, .. },
             ) => {
                 let mana = &choices[*mode];
-                self.journal_player(*player);
                 self.state.players[player.0].mana_pool.add(mana);
                 if let Some(resume) = resume.take() {
                     suspended.decision = *resume;
@@ -771,13 +1108,13 @@ impl Game {
                 } else {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
-                    self.state.priority.on_non_pass_action(*player);
+                    self.state.priority_mut().on_non_pass_action(*player);
                 }
                 Ok(())
             }
-            (Decision::Sacrifice { player, predicate }, Action::SelectCard { card, .. }) => {
+            (Decision::Sacrifice { .. }, Action::SelectCard { card, .. }) => {
                 let selected = self
-                    .sacrifice_candidates(*player, predicate)
+                    .sacrifice_decision_candidates(&suspended.decision)
                     .into_iter()
                     .find(|id| {
                         self.state.permanents[*id]
@@ -789,7 +1126,107 @@ impl Game {
                     return Err(AgentError("illegal sacrifice selection".into()));
                 };
                 self.sacrifice_permanent(selected);
+                if let Decision::Sacrifice {
+                    optional: Some(optional),
+                    ..
+                } = &mut suspended.decision
+                {
+                    let then = std::mem::take(&mut optional.then);
+                    suspended.frame.prepend_effects(then.into_iter());
+                }
                 self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::KeepCreatures { .. }, Action::SelectCard { card, .. }) => {
+                let candidates = self.keep_candidates(&suspended.decision);
+                let selected =
+                    self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal creature to keep".into()));
+                };
+                let Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                } = &mut suspended.decision
+                else {
+                    unreachable!()
+                };
+                kept.push(selected);
+                let (player, max_total_power, kept) =
+                    (*player, *max_total_power, std::mem::take(kept));
+                let next = self.keep_creatures(player, max_total_power, kept);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::Retarget {
+                    player,
+                    object,
+                    slot,
+                    may_keep,
+                },
+                Action::ChooseTarget { target, .. },
+            ) => {
+                let (player, object, slot, may_keep) = (*player, *object, *slot, *may_keep);
+                if !self
+                    .retarget_candidates(&suspended.decision)
+                    .contains(target)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal new target".into()));
+                }
+                self.change_stack_target(object, slot, *target);
+                let next = self
+                    .next_retarget(player, object, slot + 1, may_keep)
+                    .filter(|_| may_keep);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::Retarget {
+                    player,
+                    object,
+                    slot,
+                    may_keep: true,
+                },
+                Action::Decline { .. },
+            ) => {
+                let next = self.next_retarget(*player, *object, *slot + 1, true);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                },
+                Action::Decline { .. },
+            ) => {
+                let kept = std::mem::take(kept);
+                let next = self.stop_keeping_creatures(*player, *max_total_power, kept);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::DistributeCounters {
+                    player,
+                    kind,
+                    remaining,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let selected = self.state.card_to_permanent[*card]
+                    .filter(|id| self.tapped_opponent_creatures(*player).contains(id));
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal counter recipient".into()));
+                };
+                self.put_counters(selected, *kind, 1, *player);
+                let next = self.distribute_counters(*player, *kind, *remaining - 1);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -840,10 +1277,7 @@ impl Game {
                         self.put_on_bottom_of_library(card);
                     }
                 }
-                self.journal_zones();
-                self.state
-                    .zones
-                    .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                self.shuffle_library(player);
                 if untap_if_lands.is_some_and(|minimum| {
                     self.battlefield_permanents(player)
                         .into_iter()
@@ -861,7 +1295,6 @@ impl Game {
                 }) {
                     for card in selected {
                         if let Some(id) = self.state.card_to_permanent[*card] {
-                            self.journal_permanent(id);
                             if let Some(permanent) = self.state.permanents[id].as_mut() {
                                 permanent.untap();
                             }
@@ -869,6 +1302,25 @@ impl Game {
                     }
                     self.invalidate_mana_cache(player);
                 }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchLibraryToHand { player, predicate },
+                Action::SelectCard { .. } | Action::Decline { .. },
+            ) => {
+                let player = *player;
+                if let Action::SelectCard { card, .. } = action {
+                    if !self
+                        .library_search_candidates(player, predicate)
+                        .contains(card)
+                    {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("not a matching card in library".into()));
+                    }
+                    self.reveal_card_to_hand(*card, player);
+                }
+                self.shuffle_library(player);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -900,21 +1352,35 @@ impl Game {
                     }
                 }
                 if *discarded > 0 {
-                    let count = *count * *discarded;
-                    suspended
-                        .frame
-                        .queue
-                        .push_front(Effect::DrawCards { count });
+                    let count = (*count * *discarded) as i32;
+                    suspended.frame.queue.push_front(Effect::DrawCards {
+                        count: EffectValue::Fixed(count),
+                    });
                 }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::Discard { player, remaining }, Action::SelectCard { card, .. }) => {
+            (Decision::Discard { then: Some(_), .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::Discard {
+                    player,
+                    remaining,
+                    then,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
                 self.move_card(*card, ZoneType::Graveyard);
+                suspended.frame.this_way.push(*card);
+                if let Some(then) = then.take() {
+                    suspended.frame.prepend_effects(then.into_iter());
+                }
                 *remaining -= 1;
                 if *remaining == 0
                     || self
@@ -953,7 +1419,6 @@ impl Game {
                     top.push(*card);
                 }
                 if remaining.is_empty() {
-                    self.journal_zones();
                     let library = self.state.zones.zone_cards_mut(ZoneType::Library, *player);
                     library.retain(|card| !looked.contains(card));
                     for card in bottom.iter().rev() {
@@ -1073,23 +1538,33 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { .. }, Action::SelectCard { card, .. }) => {
+            (Decision::CastDuringResolution { .. }, Action::SelectCard { card, .. }) => {
                 if !self
-                    .free_cast_candidates(&suspended.decision)
+                    .resolution_cast_candidates(&suspended.decision)
                     .contains(card)
                 {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
                 }
+                if let Decision::CastDuringResolution {
+                    spends: Some(key), ..
+                } = suspended.decision
+                {
+                    self.spend_once_each_turn(key);
+                }
                 // The cast is the effect's last instruction: finish the
                 // resolution, then cast the chosen card onto the stack.
                 let (player, card) = (suspended.decision.player(), *card);
+                let paid = matches!(
+                    suspended.decision,
+                    Decision::CastDuringResolution { paid: true, .. }
+                );
                 self.run_frame(suspended.frame);
                 debug_assert!(
                     self.state.suspended_decision.is_none(),
-                    "a free cast ends its resolving effect"
+                    "a cast during resolution ends its resolving effect"
                 );
-                self.begin_free_cast(player, card)
+                self.begin_resolution_cast(player, card, paid)
             }
             (
                 Decision::ExileLinked {
@@ -1116,8 +1591,8 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { player, offer }, Action::Decline { .. }) => {
-                if let FreeCastOffer::Exiled { card } = offer {
+            (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
+                if let ResolutionCastOffer::Exiled { card } = offer {
                     self.reveal_card_to_hand(*card, *player);
                 }
                 self.run_frame(suspended.frame);
@@ -1158,17 +1633,31 @@ impl Game {
                         },
                     );
                 }
-                self.journal_zones();
-                self.state
-                    .zones
-                    .shuffle(ZoneType::Library, owner, &mut self.state.rng);
+                self.shuffle_library(owner);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
-                if cards.contains(card) =>
-            {
-                self.reveal_card_to_hand(*card, *player);
+            (
+                Decision::SelectMilled {
+                    player,
+                    cards,
+                    to_battlefield,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) if cards.contains(card) => {
+                if *to_battlefield {
+                    self.move_card_with_entry(
+                        *card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller: Some(*player),
+                            ..Default::default()
+                        },
+                    );
+                } else {
+                    self.reveal_card_to_hand(*card, *player);
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1271,6 +1760,15 @@ impl Game {
             .collect()
     }
 
+    /// The top card of `player`'s library.
+    pub(crate) fn library_top_card(&self, player: PlayerId) -> Option<CardId> {
+        self.state
+            .zones
+            .zone_cards(ZoneType::Library, player)
+            .last()
+            .copied()
+    }
+
     /// The cards an `ExileLinked` decision may exile: matching graveyard
     /// cards, or the cards of matching nontoken permanents `owner` controls.
     pub(crate) fn linked_exile_candidates(&self, decision: &Decision) -> Vec<CardId> {
@@ -1302,19 +1800,26 @@ impl Game {
         }
     }
 
-    /// The cards a `CastWithoutPaying` decision offers: hand spells matching
+    /// The cards a `CastDuringResolution` decision offers: hand spells matching
     /// its predicate (one per definition, so resampled copies stay
     /// consistent) or the exiled card, each castable for free right now.
-    pub(crate) fn free_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::CastWithoutPaying { player, offer } = decision else {
+    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::CastDuringResolution {
+            player,
+            offer,
+            paid,
+            ..
+        } = decision
+        else {
             return Vec::new();
         };
         let free = CastChoices {
-            free: true,
+            free: !paid,
+            resolving: *paid,
             ..Default::default()
         };
         let mut candidates: Vec<CardId> = match offer {
-            FreeCastOffer::Hand { predicate } => self
+            ResolutionCastOffer::Hand { predicate } => self
                 .state
                 .zones
                 .zone_cards(ZoneType::Hand, *player)
@@ -1325,13 +1830,36 @@ impl Game {
                     card.types.is_castable() && predicate.matches_card(card)
                 })
                 .collect(),
-            FreeCastOffer::Exiled { card } => self
+            ResolutionCastOffer::Exiled { card } => self
                 .state
                 .zones
                 .contains(*card, ZoneType::Exile, *player)
                 .then_some(*card)
                 .into_iter()
                 .collect(),
+            ResolutionCastOffer::ExiledWith { source, predicate } => self
+                .state
+                .exile_links
+                .iter()
+                .filter(|link| link.source == *source)
+                .map(|link| link.exiled_card)
+                .filter(|card| {
+                    let definition = &self.state.cards[*card];
+                    self.state.zones.contains(*card, ZoneType::Exile, *player)
+                        && definition.types.is_castable()
+                        && predicate.matches_card(definition)
+                })
+                .collect(),
+            ResolutionCastOffer::LibraryTop { card } => (self
+                .state
+                .zones
+                .zone_cards(ZoneType::Library, *player)
+                .last()
+                == Some(card)
+                && self.state.cards[*card].types.is_castable())
+            .then_some(*card)
+            .into_iter()
+            .collect(),
         };
         candidates.retain(|card| self.can_cast_with(*player, *card, free));
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
@@ -1401,10 +1929,7 @@ impl Game {
         };
         let player = *player;
         if selected.is_empty() {
-            self.journal_zones();
-            self.state
-                .zones
-                .shuffle(ZoneType::Library, player, &mut self.state.rng);
+            self.shuffle_library(player);
             self.run_frame(suspended.frame);
             return;
         }
@@ -1422,7 +1947,6 @@ impl Game {
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         let owner = self.state.cards[card].owner;
         // A reorder within one zone, so the zone-move inverse does not apply.
-        self.journal_zones();
         let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
         if let Some(index) = library.iter().position(|c| *c == card) {
             library.remove(index);
@@ -1433,7 +1957,7 @@ impl Game {
     /// Put the given library cards on the bottom of their owners' libraries
     /// in a random order.
     pub(crate) fn bottom_in_random_order(&mut self, mut cards: Vec<CardId>) {
-        cards.shuffle(&mut self.state.rng);
+        cards.shuffle(self.state.rng_mut());
         for card in cards {
             self.put_on_bottom_of_library(card);
         }
@@ -1457,14 +1981,7 @@ fn action_player(action: &Action) -> Option<PlayerId> {
 #[cfg(test)]
 mod learn_tests {
     use super::*;
-    use crate::{
-        decision::Command,
-        search_state::{
-            witness, BenchCommand, BranchDriver, ClonePlusUndoDriver, DensePageCowUndoDriver,
-            FullCloneDriver,
-        },
-        state::player::PlayerConfig,
-    };
+    use crate::{decision::Command, search_state::witness, state::player::PlayerConfig};
     use std::collections::BTreeMap;
 
     fn counts(entries: &[(&str, usize)]) -> BTreeMap<String, usize> {
@@ -1495,9 +2012,15 @@ mod learn_tests {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            excess_damage: 0,
+            created: None,
+            this_way: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
+            grantor: None,
+            ability: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,
         });
@@ -1811,13 +2334,14 @@ mod learn_tests {
         assert_eq!(witness(&source), before);
     }
 
-    fn rollback_retrieval<D: BranchDriver<State = Game>>(driver: D) {
+    #[test]
+    fn learn_retrieval_forks_and_rolls_back_outside_inventory() {
         let mut source = game(&[("Firebending Lesson", 2)]);
         learn(&mut source);
         let source_witness = witness(&source);
-        let mut branch = driver.fork_exact(&source);
-        let sibling = driver.fork_exact(&source);
-        let mark = driver.mark(&mut branch);
+        let mut branch = source.clone();
+        let sibling = source.clone();
+        let mark = branch.clone();
         let action_index = branch
             .action_space()
             .unwrap()
@@ -1825,42 +2349,18 @@ mod learn_tests {
             .iter()
             .position(|action| matches!(action, Action::LearnTakeLesson { .. }))
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(action_index).unwrap();
         let retrieved = witness(&branch);
-        let nested = driver.mark(&mut branch);
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: 0,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
-        driver.rollback(&mut branch, nested);
+        let nested = branch.clone();
+        branch.step(0).unwrap();
+        branch = nested;
         assert_eq!(witness(&branch), retrieved);
-        driver.rollback(&mut branch, mark);
+        branch = mark;
         assert_eq!(witness(&branch), source_witness);
         assert_eq!(witness(&source), source_witness);
         assert_eq!(witness(&sibling), source_witness);
     }
 
-    #[test]
-    fn learn_retrieval_forks_and_rolls_back_outside_inventory() {
-        rollback_retrieval(FullCloneDriver);
-        rollback_retrieval(ClonePlusUndoDriver::default());
-        rollback_retrieval(DensePageCowUndoDriver::default());
-    }
     #[test]
     fn learn_reveal_is_ordered_public_definition_and_known_hand_is_not_a_hand_leak() {
         use crate::agent::observation::{EventEntityKind, EventType, Observation};
@@ -2139,7 +2639,8 @@ mod learn_tests {
         assert!(game.state.players[0].known_hand.is_empty());
     }
 
-    fn rollback_knowledge<D: BranchDriver<State = Game>>(driver: D) {
+    #[test]
+    fn learn_nested_knowledge_and_search_fork_preserve_retained_roots() {
         let mut source = small_known_hand_game();
         learn(&mut source);
         source
@@ -2151,25 +2652,16 @@ mod learn_tests {
             .queue
             .push_back(Effect::Learn);
         let before = witness(&source);
-        let mut branch = driver.fork_exact(&source);
-        let sibling = driver.fork_exact(&source);
-        let outer = driver.mark(&mut branch);
+        let mut branch = source.clone();
+        let sibling = source.clone();
+        let outer = branch.clone();
         let card = branch.state.players[0].sideboard[0];
         let index = branch.action_space().unwrap().actions.iter().position(|action|
             matches!(action, Action::LearnDiscard { card: chosen, .. } if *chosen == card)).unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(index).unwrap();
         assert!(branch.state.players[0].known_hand.is_empty());
         let departed = witness(&branch);
-        let inner = driver.mark(&mut branch);
+        let inner = branch.clone();
         let index = branch
             .action_space()
             .unwrap()
@@ -2177,39 +2669,15 @@ mod learn_tests {
             .iter()
             .position(|action| matches!(action, Action::LearnTakeLesson { .. }))
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(index).unwrap();
         assert_eq!(branch.state.players[0].known_hand.values().sum::<u32>(), 1);
         branch.determinize(PlayerId(1), 22);
-        driver.rollback(&mut branch, inner);
-        assert!(
-            witness(&branch) == departed,
-            "nested rollback: {}",
-            std::any::type_name::<D>()
-        );
-        driver.rollback(&mut branch, outer);
-        assert!(
-            witness(&branch) == before,
-            "outer rollback: {}",
-            std::any::type_name::<D>()
-        );
+        branch = inner;
+        assert!(witness(&branch) == departed, "nested restore");
+        branch = outer;
+        assert!(witness(&branch) == before, "outer restore");
         assert!(witness(&source) == before);
         assert!(witness(&sibling) == before);
-    }
-
-    #[test]
-    fn learn_nested_knowledge_and_search_rollback_preserve_retained_roots() {
-        rollback_knowledge(FullCloneDriver);
-        rollback_knowledge(ClonePlusUndoDriver::default());
-        rollback_knowledge(DensePageCowUndoDriver::default());
     }
 }
 
@@ -2217,10 +2685,7 @@ mod learn_tests {
 mod payment_tests {
     use super::*;
     use crate::{
-        search_state::{
-            witness, BenchCommand, BranchDriver, ClonePlusUndoDriver, DensePageCowUndoDriver,
-            FullCloneDriver,
-        },
+        search_state::witness,
         state::{
             mana::{Mana, ManaCost},
             player::PlayerConfig,
@@ -2248,16 +2713,28 @@ mod payment_tests {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            excess_damage: 0,
+            created: None,
+            this_way: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
+            grantor: None,
+            ability: None,
             queue: VecDeque::from([
                 Effect::OptionalPayment {
                     cost,
-                    if_paid: vec![Effect::DrawCards { count: 2 }],
-                    if_declined: vec![Effect::DrawCards { count: 1 }],
+                    if_paid: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(2),
+                    }],
+                    if_declined: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
                 },
-                Effect::DrawCards { count: 3 },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(3),
+                },
             ]),
             finalize: FrameFinalize::None,
         });
@@ -2319,54 +2796,30 @@ mod payment_tests {
     }
 
     #[test]
-    fn shared_payment_and_both_continuations_restore_through_nested_command_rollback() {
+    fn shared_payment_and_both_continuations_restore_across_nested_command_forks() {
         for cost in [
             PaymentCost::Mana(ManaCost::parse("{0}")),
             PaymentCost::Waterbend { generic: 0 },
         ] {
             let game = payment_game(cost);
             let root = witness(&game);
-            let driver = ClonePlusUndoDriver::default();
             for index in 0..game.action_space().unwrap().actions.len() {
-                let mut branch = driver.fork_exact(&game);
-                let outer = driver.mark(&mut branch);
-                driver
-                    .apply(
-                        &mut branch,
-                        BenchCommand {
-                            action_index: index,
-                            expected_action_hash: None,
-                            expected_state_hash: None,
-                        },
-                    )
-                    .unwrap();
-                let after_payment = driver.witness(&branch);
-                let inner = driver.mark(&mut branch);
-                driver
-                    .apply(
-                        &mut branch,
-                        BenchCommand {
-                            action_index: 0,
-                            expected_action_hash: None,
-                            expected_state_hash: None,
-                        },
-                    )
-                    .unwrap();
-                driver.rollback(&mut branch, inner);
-                assert_eq!(driver.witness(&branch), after_payment);
-                driver.rollback(&mut branch, outer);
-                assert_eq!(driver.witness(&branch), root);
+                let mut branch = game.clone();
+                let outer = branch.clone();
+                branch.step(index).unwrap();
+                let after_payment = witness(&branch);
+                let inner = branch.clone();
+                branch.step(0).unwrap();
+                branch = inner;
+                assert_eq!(witness(&branch), after_payment);
+                branch = outer;
+                assert_eq!(witness(&branch), root);
                 assert_eq!(witness(&game), root);
             }
         }
     }
 
-    fn apply_payment_action<D: BranchDriver<State = Game>>(
-        driver: &D,
-        game: &mut Game,
-        predicate: impl Fn(&Action) -> bool,
-    ) {
-        let before = witness(game);
+    fn apply_payment_action(game: &mut Game, predicate: impl Fn(&Action) -> bool) {
         let action_index = game
             .action_space()
             .unwrap()
@@ -2374,19 +2827,11 @@ mod payment_tests {
             .iter()
             .position(predicate)
             .expect("payment action is legal");
-        driver
-            .apply(
-                game,
-                BenchCommand {
-                    action_index,
-                    expected_action_hash: Some(before.legal_surface.hash),
-                    expected_state_hash: Some(before.authority.hash),
-                },
-            )
-            .unwrap();
+        game.step(action_index).unwrap();
     }
 
-    fn rollback_suspended_waterbend<D: BranchDriver<State = Game>>(driver: D) {
+    #[test]
+    fn partial_waterbend_and_paid_mana_choice_restore_across_nested_command_forks() {
         let player = PlayerId(0);
         let mut game = payment_game_with_deck(
             PaymentCost::Waterbend { generic: 2 },
@@ -2415,21 +2860,18 @@ mod payment_tests {
         let root = witness(&game);
         let before_hand = game.state.zones.size(ZoneType::Hand, player);
 
-        // Keep a divergent sibling alive throughout all nested rollbacks.
-        let mut sibling = driver.fork_exact(&game);
-        apply_payment_action(&driver, &mut sibling, |a| {
-            matches!(a, Action::Decline { .. })
-        });
+        // Keep a divergent sibling alive throughout all nested restores.
+        let mut sibling = game.clone();
+        apply_payment_action(&mut sibling, |a| matches!(a, Action::Decline { .. }));
         let sibling_witness = witness(&sibling);
         assert_eq!(
             sibling.state.zones.size(ZoneType::Hand, player),
             before_hand + 4
         );
 
-        let mut branch = driver.fork_exact(&game);
-        let outer = driver.mark(&mut branch);
+        let mut branch = game.clone();
+        let outer = branch.clone();
         apply_payment_action(
-            &driver,
             &mut branch,
             |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == waterbend),
         );
@@ -2448,9 +2890,9 @@ mod payment_tests {
             .iter()
             .any(|a| matches!(a, Action::Decline { .. })));
 
-        let inner = driver.mark(&mut branch);
+        let inner = branch.clone();
         let activate_prism = |a: &Action| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == prism);
-        apply_payment_action(&driver, &mut branch, activate_prism);
+        apply_payment_action(&mut branch, activate_prism);
         assert_eq!(branch.state.players[0].mana_pool.total(), 0);
         assert!(branch.state.permanents[prism].as_ref().unwrap().tapped);
         let modal_resolution = branch.state.suspended_decision.clone().unwrap();
@@ -2466,9 +2908,9 @@ mod payment_tests {
         assert_eq!(branch.action_space().unwrap().kind, ActionSpaceKind::Modal);
         let modal = witness(&branch);
 
-        let color_mark = driver.mark(&mut branch);
+        let color_mark = branch.clone();
         let choose_blue = |a: &Action| matches!(a, Action::ChooseMode { mode: 1, .. });
-        apply_payment_action(&driver, &mut branch, choose_blue);
+        apply_payment_action(&mut branch, choose_blue);
         assert_eq!(
             branch.state.suspended_decision,
             Some(partial_resolution.clone())
@@ -2484,9 +2926,7 @@ mod payment_tests {
             .iter()
             .any(|a| matches!(a, Action::Decline { .. })));
         let resumed = witness(&branch);
-        apply_payment_action(&driver, &mut branch, |a| {
-            matches!(a, Action::PayCost { .. })
-        });
+        apply_payment_action(&mut branch, |a| matches!(a, Action::PayCost { .. }));
         assert!(branch.state.suspended_decision.is_none());
         assert_eq!(
             branch.state.zones.size(ZoneType::Hand, player),
@@ -2495,33 +2935,24 @@ mod payment_tests {
         assert_eq!(branch.state.players[0].mana_pool.total(), 0);
         let completed = witness(&branch);
 
-        driver.rollback(&mut branch, color_mark);
+        branch = color_mark;
         assert_eq!(witness(&branch), modal);
         assert_eq!(branch.state.suspended_decision, Some(modal_resolution));
-        apply_payment_action(&driver, &mut branch, choose_blue);
+        apply_payment_action(&mut branch, choose_blue);
         assert_eq!(witness(&branch), resumed);
-        apply_payment_action(&driver, &mut branch, |a| {
-            matches!(a, Action::PayCost { .. })
-        });
+        apply_payment_action(&mut branch, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(witness(&branch), completed);
 
-        driver.rollback(&mut branch, inner);
+        branch = inner;
         assert_eq!(witness(&branch), partial);
         assert_eq!(branch.state.suspended_decision, Some(partial_resolution));
         assert!(!branch.state.permanents[prism].as_ref().unwrap().tapped);
         assert_eq!(branch.state.players[0].mana_pool, Mana::parse("1"));
-        apply_payment_action(&driver, &mut branch, activate_prism);
+        apply_payment_action(&mut branch, activate_prism);
         assert_eq!(witness(&branch), modal);
-        driver.rollback(&mut branch, outer);
+        branch = outer;
         assert_eq!(witness(&branch), root);
         assert_eq!(witness(&game), root);
         assert_eq!(witness(&sibling), sibling_witness);
-    }
-
-    #[test]
-    fn partial_waterbend_and_paid_mana_choice_restore_through_nested_command_rollback() {
-        rollback_suspended_waterbend(FullCloneDriver);
-        rollback_suspended_waterbend(ClonePlusUndoDriver::default());
-        rollback_suspended_waterbend(DensePageCowUndoDriver::default());
     }
 }

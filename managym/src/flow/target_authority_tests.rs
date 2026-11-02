@@ -5,13 +5,30 @@ use std::collections::BTreeMap;
 use crate::{
     flow::{game::Game, trigger::PendingTrigger},
     state::{
-        ability::{Effect, TargetRequirement, TargetSpec},
-        game_object::{CardId, PlayerId, Target},
+        ability::{Effect, EffectValue, PlayerSelector, TargetRequirement, TargetSpec},
+        card::Keywords,
+        effect::{EffectDuration, Modification},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         player::PlayerConfig,
         predicate::CardPredicate,
         zone::ZoneType,
     },
 };
+
+/// Hexproof until end of turn, as a resolved spell would grant it.
+fn grant_hexproof(game: &mut Game, id: PermanentId) {
+    let affected = game.affected_permanent(id).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::AddKeywords(Keywords {
+            hexproof: true,
+            ..Default::default()
+        }),
+        EffectDuration::EndOfTurn,
+    );
+}
 
 fn fixture() -> (Game, CardId, CardId, Target, Target) {
     let deck = BTreeMap::from([
@@ -68,7 +85,11 @@ fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
         id: crate::flow::trigger::TriggerId(order),
         ordering_class: crate::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
+        player: None,
+        chosen_modes: Vec::new(),
+        attacker: None,
         inline_effects: Some(effects),
+        x: 0,
     }
 }
 
@@ -290,7 +311,14 @@ fn audit_same_controller_triggers_require_an_order_choice() {
     let (mut game, bolt, _, _, _) = fixture();
     game.state.pending_triggers = vec![
         trigger(bolt, vec![Effect::GainLife { amount: 2 }], 0),
-        trigger(bolt, vec![Effect::DealDamageToController { amount: 2 }], 1),
+        trigger(
+            bolt,
+            vec![Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(2),
+            }],
+            1,
+        ),
     ];
     // At 2 life, the controller may stack damage below gain (survive at 2),
     // or gain below damage (lose at 0 before gain resolves): CR 603.3b,
@@ -312,7 +340,10 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
         let (mut game, source, _, _, _) = fixture();
         game.state.players[0].life = 2;
         let gain = vec![Effect::GainLife { amount: 2 }];
-        let damage = vec![Effect::DealDamageToController { amount: 2 }];
+        let damage = vec![Effect::DealDamageToPlayer {
+            player: PlayerSelector::You,
+            amount: EffectValue::Fixed(2),
+        }];
         game.state.pending_triggers = vec![trigger(source, gain, 0), trigger(source, damage, 1)];
         let choice = game.flush_triggers().unwrap();
         assert_eq!(choice.actions.len(), 2);
@@ -341,11 +372,7 @@ fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
     let Target::Permanent(id) = permanent else {
         unreachable!()
     };
-    game.state.permanents[id]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .hexproof = true;
+    grant_hexproof(&mut game, id);
     // CR 702.11b applies regardless of the wording used to target the object.
     // A creature-only restriction and a spell-or-permanent restriction must
     // both exclude this opposing Ogre; changing spec cannot bypass hexproof.
@@ -365,11 +392,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             .scenario_force_battlefield(owner, "Gray Ogre", true)
             .unwrap();
         let target = Target::Permanent(id);
-        game.state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .temp_keywords
-            .hexproof = true;
+        grant_hexproof(&mut game, id);
         for controller in [PlayerId(0), PlayerId(1)] {
             let own = controller == owner;
             let cases = [
@@ -421,11 +444,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
         let land = game
             .scenario_force_battlefield(owner, "Mountain", true)
             .unwrap();
-        game.state.permanents[land]
-            .as_mut()
-            .unwrap()
-            .temp_keywords
-            .hexproof = true;
+        grant_hexproof(&mut game, land);
         assert!(game.target_is_legal(Target::Permanent(land), &TargetSpec::LandYouControl, owner));
         assert!(!game.target_is_legal(
             Target::Permanent(land),
@@ -476,17 +495,9 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
             let second_card = game.state.permanents[second].as_ref().unwrap().card;
             // CR 608.2b: gaining hexproof after selection invalidates an opposing
             // target; remaining legal targets and untargeted instructions survive.
-            game.state.permanents[first]
-                .as_mut()
-                .unwrap()
-                .temp_keywords
-                .hexproof = true;
+            grant_hexproof(&mut game, first);
             if !mixed {
-                game.state.permanents[second]
-                    .as_mut()
-                    .unwrap()
-                    .temp_keywords
-                    .hexproof = true;
+                grant_hexproof(&mut game, second);
             }
             game.resolve_top_of_stack();
             assert!(game.state.permanents[first].is_some());
@@ -725,9 +736,9 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
 }
 
 #[test]
-fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
+fn trigger_order_target_resume_and_nested_fork_preserve_round() {
     use crate::agent::action::{Action, ActionSpaceKind};
-    use crate::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    use crate::search_state::witness;
     let (mut game, source, ..) = fixture();
     game.state.pending_triggers = vec![
         trigger(
@@ -744,19 +755,9 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
     game.state.pending_triggers[0].source_ref = game.current_object_ref(source);
     game.current_action_space = game.flush_triggers();
     let root = witness(&game);
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(&game);
-    let outer = driver.mark(&mut branch);
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: 0,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    let mut branch = game.clone();
+    let outer = branch.clone();
+    branch.step(0).unwrap();
     assert_eq!(
         branch.action_space().unwrap().kind,
         ActionSpaceKind::ChooseTarget
@@ -774,18 +775,9 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
         .unwrap()
         .instruction
         .contains("Lightning Bolt"));
-    let targeting = driver.witness(&branch);
-    let inner = driver.mark(&mut branch);
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: 0,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    let targeting = witness(&branch);
+    let inner = branch.clone();
+    branch.step(0).unwrap();
     assert_eq!(
         branch.action_space().unwrap().kind,
         ActionSpaceKind::OrderTriggers
@@ -797,10 +789,10 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
         .actions
         .iter()
         .all(|a| matches!(a, Action::ChooseTrigger { .. })));
-    driver.rollback(&mut branch, inner);
-    assert_eq!(driver.witness(&branch), targeting);
-    driver.rollback(&mut branch, outer);
-    assert_eq!(driver.witness(&branch), root);
+    branch = inner;
+    assert_eq!(witness(&branch), targeting);
+    branch = outer;
+    assert_eq!(witness(&branch), root);
     assert_eq!(witness(&game), root);
 }
 
@@ -811,12 +803,16 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let (mut game, source, ..) = fixture();
     game.state.cards[source].abilities = vec![
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DrawCards { count: 2 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(2),
+            }],
         },
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },

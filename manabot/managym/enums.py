@@ -94,6 +94,7 @@ class EventTypeEnum(IntEnum):
     PERMANENTS_DIED = 10
     TURN_STARTED = 11
     CARD_REVEALED = 12
+    ABILITY_COUNTERED = 13
 
 
 class EventEntityKindEnum(IntEnum):

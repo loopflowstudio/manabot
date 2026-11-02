@@ -13,7 +13,6 @@ import torch
 
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.eval.models import EvaluationContract
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -38,6 +37,7 @@ from manabot.training.state.game_errors import (
     replay_attempt,
 )
 import managym
+from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
     _payment_match,
@@ -537,9 +537,7 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
 
 
 def _arena_fixture() -> tuple[dict[str, Any], list[PlayerRegistration]]:
-    contract = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_text()
-    )
+    contract = arena_fixture()
     players = list(contract.anchors[:2])
     return {
         "match_id": "payment-failure-fixture",

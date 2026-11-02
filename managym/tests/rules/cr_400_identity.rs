@@ -11,7 +11,7 @@ use crate::support::inspect::owned_card;
 #[test]
 fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
     let mut s = Scenario::new(
-        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         deck(&[("Mountain", 40)]),
         400_701,
     );
@@ -47,10 +47,11 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         }),
         Err(ObjectLookupError::MissingEntity)
     );
-    let lki = *s
+    let lki = s
         .game()
         .object_lki(old_ref)
-        .expect("departing battlefield LKI");
+        .expect("departing battlefield LKI")
+        .clone();
     assert_eq!(lki.object_ref, old_ref);
     assert_eq!(lki.card, card);
     assert_eq!(lki.from_zone, ZoneType::Battlefield);
@@ -159,7 +160,7 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         .first()
         .expect("Dragonfly death trigger");
     assert_eq!(pending.source_ref, Some(old_ref));
-    let source_lki = pending.source_lki.expect("trigger source LKI");
+    let source_lki = pending.source_lki.clone().expect("trigger source LKI");
     assert_eq!(source_lki.object_ref, old_ref);
     assert_eq!(source_lki.controller, PlayerId(0));
     assert_eq!(source_lki.presentation_id, old_presentation);

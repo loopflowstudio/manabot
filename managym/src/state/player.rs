@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use super::{
     card::CardDefId,
+    deck::Deck,
     game_object::{CardId, ObjectId},
     mana::Mana,
 };
@@ -9,29 +10,29 @@ use super::{
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayerConfig {
     pub name: String,
-    pub decklist: BTreeMap<String, usize>,
-    pub sideboard: BTreeMap<String, usize>,
+    #[serde(flatten)]
+    pub deck: Deck,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_pack: Option<String>,
+    pub world: Option<String>,
 }
 
 impl PlayerConfig {
     pub fn new(name: impl Into<String>, decklist: BTreeMap<String, usize>) -> Self {
         Self {
             name: name.into(),
-            decklist,
-            sideboard: BTreeMap::new(),
-            content_pack: None,
+            deck: Deck::new(decklist, BTreeMap::new()),
+            world: None,
         }
     }
 
     pub fn with_sideboard(mut self, sideboard: BTreeMap<String, usize>) -> Self {
-        self.sideboard = sideboard;
+        self.deck.sideboard = sideboard;
         self
     }
 
     pub fn deck_list(&self) -> String {
-        self.decklist
+        self.deck
+            .main
             .iter()
             .map(|(name, qty)| format!("{} x{}", name, qty))
             .collect::<Vec<_>>()
@@ -51,9 +52,6 @@ pub struct Player {
     pub name: String,
     pub life: i32,
     pub drew_when_empty: bool,
-    /// "You have no maximum hand size for the rest of the game" (CR 402.2).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub no_maximum_hand_size: bool,
     pub alive: bool,
     pub mana_pool: Mana,
     /// Mana that lasts until end of combat (firebending) — persists across
@@ -72,7 +70,6 @@ impl Player {
             name: name.into(),
             life: 20,
             drew_when_empty: false,
-            no_maximum_hand_size: false,
             alive: true,
             mana_pool: Mana::default(),
             combat_mana_pool: Mana::default(),

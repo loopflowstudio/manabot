@@ -47,7 +47,7 @@ def _engine() -> tuple[managym.Env, managym.Observation]:
 def test_search_reaches_belief_and_public_history_consumers() -> None:
     engine, obs = _engine()
     pack = BoundSemanticPack.from_env(engine)
-    assert pack.schema.raw["schema_version"] == 9
+    assert pack.schema.raw["schema_version"] == 10
     assert len(pack.definition_row_by_card_def_id) == 51
     pack.pad_catalog()  # All programs fit the declared budget without truncation.
     wrong = deepcopy(engine.content_pack_manifest())
@@ -90,7 +90,7 @@ def test_search_reaches_belief_and_public_history_consumers() -> None:
     torch.set_num_threads(1)
     agent = ActorCritic(
         history_space,
-        ModelConfig(hidden_dim=16, semantic_pack=PACK, recent_events=True),
+        ModelConfig(hidden_dim=16, world=PACK, recent_events=True),
     )
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()

@@ -31,7 +31,7 @@ impl Game {
     /// Replace the game RNG with a fresh seeded stream (for reproducible
     /// playouts from cloned states).
     pub fn reseed(&mut self, seed: u64) {
-        self.state.rng = ChaCha8Rng::seed_from_u64(seed);
+        *self.state.rng_mut() = ChaCha8Rng::seed_from_u64(seed);
     }
 
     /// Sample one world consistent with `perspective`'s observation.
@@ -53,7 +53,6 @@ impl Game {
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
-        self.journal_zones();
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
         residual.extend(self.foretold_cards(opponent));
         residual.sort_unstable_by_key(|card| card.0);
@@ -66,9 +65,21 @@ impl Game {
         let library = residual.split_off(unknown_slots);
         known.extend(residual);
         self.state.zones.reassign_hidden(opponent, known, library);
+        // A top card the perspective may look at stays where it is.
+        let known_top = self
+            .library_top_card(perspective)
+            .filter(|_| self.looks_at_library_top(perspective));
         self.state
             .zones
             .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
+        if let Some(card) = known_top {
+            let library = self
+                .state
+                .zones
+                .zone_cards_mut(ZoneType::Library, perspective);
+            library.retain(|other| *other != card);
+            library.push(card);
+        }
 
         self.repin_revealed_library_cards();
         // An opponent's hidden hand can change under resampling. Rebuild
@@ -86,8 +97,9 @@ impl Game {
                                 | Decision::Discard { .. }
                                 | Decision::OptionalDiscardDraw { .. }
                                 | Decision::SearchBasicLand { .. }
+                                | Decision::SearchLibraryToHand { .. }
                                 | Decision::SearchDistinctLands { .. }
-                                | Decision::CastWithoutPaying { .. }
+                                | Decision::CastDuringResolution { .. }
                         )
             });
         if refresh {
@@ -186,7 +198,7 @@ impl Game {
             if action_count == 0 {
                 return Err(AgentError("random_playout: empty action space".to_string()));
             }
-            let index = self.state.rng.gen_range(0..action_count);
+            let index = self.state.rng_mut().gen_range(0..action_count);
             self.step(index)?;
             steps += 1;
         }

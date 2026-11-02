@@ -21,7 +21,6 @@ from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import elemental_roster
-from manabot.training.rollout.self_play import deck_identity
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -66,7 +65,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     torch.set_num_threads(1)
     agent = ActorCritic(
         ObservationSpace(),
-        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
     first = _collector(recovery, learning_seats=learning_seats)
     initial_pairs = first._env.current_matchup_indices()
@@ -97,9 +96,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         # native pair BEFORE auto-reset, not the pair in the returned observation.
         replay = _collector(recovery, learning_seats=learning_seats)
         expected: dict[str, dict[str, int]] = {}
-        identities = [
-            deck_identity(p.decklist, p.sideboard) for p in elemental_roster(_match())
-        ]
+        identities = [p.deck.identity for p in elemental_roster(_match())]
 
         def key(row: int, pair: tuple[int, int]) -> str:
             seat = "both" if learning_seats == "both" else str(row % 2)
@@ -157,7 +154,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
     assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 256
     agent = ActorCritic(
         ObservationSpace(),
-        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
     agent.world_binding = checkpoint_world(_match().to_rust(), ObservationSpace())
     assert len(agent.world_binding["setups"]) == 10
@@ -202,7 +199,7 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
         id="uniform-cpu-proof",
         match=_match().config.model_dump(),
     )
-    value["agent"].update(hidden_dim=8, semantic_pack=PACK, policy_film=False)
+    value["agent"].update(hidden_dim=8, world=PACK, policy_film=False)
     value["stages"] = value["stages"][:1]
     stage = value["stages"][0]
     stage.update(
@@ -215,7 +212,7 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     stage["execution"]["wall_seconds"] = 180
     stage["learning"].update(min_advantage=0, advantage_quantile=0)
     bad_input = deepcopy(value)
-    bad_input["agent"]["semantic_pack"] = "ur-lessons-vs-gw-allies"
+    bad_input["agent"]["world"] = "ur-lessons-vs-gw-allies"
     with pytest.raises(ValueError, match="complete Elemental policy input"):
         validate_regime(bad_input)
     recipe = validate_regime(value)
@@ -268,7 +265,7 @@ def test_uniform_crash_refill_retains_sampled_setups(
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
     agent = ActorCritic(
         ObservationSpace(),
-        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
     collector = SeatRoutedCollector(
         ObservationSpace(),

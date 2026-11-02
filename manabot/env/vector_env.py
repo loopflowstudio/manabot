@@ -15,7 +15,6 @@ from .match import Match, Reward
 from .observation import ObservationSpace
 
 VALID_OPPONENT_POLICIES = ("none", "passive", "random")
-OBSERVATION_BUFFER_DTYPES = {"action_focus": np.int32}
 
 
 class VectorEnv:

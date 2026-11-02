@@ -54,7 +54,7 @@ for humans and policies. No human-only payment workflow is introduced.
 World w11 and match-state hash version 8 identify changed serialized payment
 state and content. Old checkpoints are rejected; historical receipts, `erd1`
 addresses and previous conformance corpora are retained without rewriting.
-The original optional-payment replay evidence belongs to `conformance/semantic-kernel-w11-v1`;
+The original optional-payment replay evidence belongs to `experiments/data/archive/conformance/semantic-kernel-w11-v1`;
 current-runtime replay evidence belongs to `experiments/data/archive/conformance/semantic-kernel-w13-v1`.
 Native clone/undo and Command replay include payment progress, nested mana
 choices and contributed-object evidence. Recovery replays the ordinary Commands;
@@ -69,7 +69,7 @@ committed when declining is legal. No resolving frame or announced target list
 is replaced by a mana ability's empty rule frame.
 
 The repaired source has separate replay evidence at
-`conformance/semantic-kernel-w11-payment-v1`. The earlier w11 and w10 corpora
+`experiments/data/archive/conformance/semantic-kernel-w11-payment-v1`. The earlier w11 and w10 corpora
 retain their bytes and source meanings. The correction introduces no tensor or
 authored-content change relative to current w11 and makes no new scientific
 checkpoint compatibility claim.

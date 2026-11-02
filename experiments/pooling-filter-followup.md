@@ -17,7 +17,7 @@ quantile, actor_critic filter scope, semantic Allies/Lessons setup, four streams
 64 transitions per stream and one CPU thread. Recipes derive from the original
 committed screen plan; admission checks the entire resulting recipe, including
 all learning settings. History, categorical outcomes and action domain stay fixed.
-The existing source adaptations are documented in [Ataraxos fidelity](../docs/ataraxos.md).
+The existing source adaptations are documented in [Ataraxos fidelity](../docs/training.md#ataraxos).
 
 Prospective predictions: removing the floor increases token optimizer exposures
 by at least 50%, but the endpoint token floor effect minus masked floor effect

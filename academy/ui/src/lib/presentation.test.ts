@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  COMBAT_TO_TURN_PRESENTATION,
-  LIGHTNING_BOLT_PRESENTATION,
   presentationBeat,
-  presentationInspectorRows,
   validatePresentationEvents,
   validatePresentationTail,
   validatePresentationUpdate,
 } from './presentation';
 import { createPresentationPlayer } from './presentation.svelte';
+import { COMBAT_TO_TURN_PRESENTATION, LIGHTNING_BOLT_PRESENTATION } from './presentation-fixtures';
 
 describe('Lightning Bolt presentation fixture', () => {
   it('records cast, target, resolution, damage, and death as ordered semantic facts', () => {
@@ -30,17 +28,9 @@ describe('Lightning Bolt presentation fixture', () => {
     ).toBe(true);
   });
 
-  it('projects table and inspector copy from the same canonical events', () => {
+  it('projects table copy from the canonical events', () => {
     const tableBeats = LIGHTNING_BOLT_PRESENTATION.events.map((event) =>
       presentationBeat(event, LIGHTNING_BOLT_PRESENTATION.labels),
-    );
-    const inspectorRows = presentationInspectorRows(
-      LIGHTNING_BOLT_PRESENTATION.events,
-      LIGHTNING_BOLT_PRESENTATION.labels,
-    );
-
-    expect(inspectorRows.map(({ event: _event, causedBy: _causedBy, ...beat }) => beat)).toEqual(
-      tableBeats,
     );
     expect(tableBeats.map((beat) => beat.detail)).toEqual([
       'Hero casts Lightning Bolt.',
@@ -90,16 +80,12 @@ describe('Lightning Bolt presentation fixture', () => {
 });
 
 describe('curated combat-to-turn presentation fixture', () => {
-  it('keeps table, replay, and inspector on the same ordered semantic facts', () => {
+  it('keeps table and replay on the same ordered semantic facts', () => {
     const live = createPresentationPlayer();
     const replay = createPresentationPlayer();
     live.enqueue(COMBAT_TO_TURN_PRESENTATION.events, COMBAT_TO_TURN_PRESENTATION.labels);
     replay.load(COMBAT_TO_TURN_PRESENTATION);
 
-    const inspector = presentationInspectorRows(
-      COMBAT_TO_TURN_PRESENTATION.events,
-      COMBAT_TO_TURN_PRESENTATION.labels,
-    );
     expect(COMBAT_TO_TURN_PRESENTATION.events.map((event) => event.kind.kind)).toEqual([
       'attack_group',
       'blocked',
@@ -108,7 +94,6 @@ describe('curated combat-to-turn presentation fixture', () => {
       'died',
       'turn_started',
     ]);
-    expect(inspector.map((row) => row.event)).toEqual(COMBAT_TO_TURN_PRESENTATION.events);
 
     const liveBeats = [];
     const replayBeats = [];
@@ -197,8 +182,7 @@ describe('PresentationPlayer', () => {
     player.setReducedMotion(true);
     expect(player.effectiveDurationMs).toBe(duration);
     player.finishSequence();
-    expect(presentationInspectorRows(player.events, player.labels).map(row => row.detail))
-      .toEqual(presentationInspectorRows(COMBAT_TO_TURN_PRESENTATION.events, COMBAT_TO_TURN_PRESENTATION.labels).map(row => row.detail));
+    expect(player.events).toEqual(COMBAT_TO_TURN_PRESENTATION.events);
     player.togglePlayback();
     expect(player.playing).toBe(false);
   });

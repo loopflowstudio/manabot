@@ -7,6 +7,7 @@ use managym::{
     state::{
         card::ReplacementEffect,
         game_object::{PlayerId, Target},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -139,7 +140,7 @@ fn nonmatching_replacement_preserves_the_legacy_committed_trace() {
 #[test]
 fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     let mut s = Scenario::new(
-        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         deck(&[("Mountain", 40)]),
         614_004,
     );
@@ -148,7 +149,10 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     let old_ref = s.game().current_object_ref(card).expect("departing object");
     s.game_mut().state.cards[card].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithPlusOneCounters { count: 2 },
+        ReplacementEffect::EntersWithPlusOneCounters {
+            count: 2,
+            condition: None,
+        },
     ];
     let _ = s.drain_events();
 
@@ -159,7 +163,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         .as_ref()
         .expect("entered permanent facts");
     assert!(permanent.tapped);
-    assert_eq!(permanent.plus1_counters, 2);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
     assert_ne!(s.game().current_object_ref(card), Some(old_ref));
     assert!(s.drain_events().contains(&GameEvent::CardMoved {
         card,
@@ -180,7 +184,10 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
     let driver = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
     s.game_mut().state.cards[driver].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithPlusOneCounters { count: 2 },
+        ReplacementEffect::EntersWithPlusOneCounters {
+            count: 2,
+            condition: None,
+        },
     ];
     s.game_mut().move_card(driver, ZoneType::Graveyard);
     assert_eq!(s.game().state.card_to_permanent[driver], None);
@@ -192,5 +199,5 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
         .as_ref()
         .expect("mountain facts");
     assert!(!permanent.tapped);
-    assert_eq!(permanent.plus1_counters, 0);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 0);
 }

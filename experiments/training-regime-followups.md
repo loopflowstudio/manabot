@@ -14,7 +14,7 @@ or expensive allocation is authorized by their presence. Each requires frozen
 inputs and predictions, a separately approved cost cap, fresh evaluation deals,
 and retained failed attempts before scoring. Compound training (ETU-94, below)
 and the frozen-policy collection and belief fitting stages in item 4 now have
-bounded implementations. See [the sampler guide](../docs/belief-sampler.md) for
+bounded implementations. See [the sampler guide](../docs/search-and-beliefs.md#belief-sampler) for
 the latter; scientific allocations and acceptance comparisons remain unexecuted
 proposals.
 
@@ -110,7 +110,7 @@ number. No mechanism is retained solely because a single seed improved.
 
 ## ETU-95 implementation boundary (2026-10-04)
 
-The [local-search guide](../docs/local-policy-search.md) and executable
+The [local-search guide](../docs/search-and-beliefs.md#local-policy-search) and executable
 [`frozen_policy_local_update()`](recipes/frozen_policy_local_update.py)
 now cover frozen raw/EMA collection, viewer-safe rollouts, the two-KL local
 update, complete target receipts, hard/soft/allocation controls, and cumulative
@@ -156,7 +156,7 @@ ETU-94 implements a recurrent joint decoder, native lowering to canonical
 Commands, complete-game `train_compound`, ordinary checkpoint serving, and
 four `compound-decisions` study arms. Search/distillation/belief software now
 exists; their scientific comparisons remain future work. See
-[the execution contract](../docs/training-regimes.md#compound-decisions).
+[the execution contract](../docs/training.md#regimes-and-stages).
 
 The primary Ataraxos construction is now available in the
 [Nature methods and Extended Data Fig. 1](https://www.nature.com/articles/s41586-026-11036-y):
@@ -175,7 +175,7 @@ ablation. Grouped attacker declarations and single-target casts are supported.
 The original implementation kept blockers and payments separate. ETU-94/100
 subsequently delivered independent blockers and fixed-economics payment subsets,
 including support-preserving search. Dependent choices retain sequential native
-fallback; see the current [compound contract](../docs/training-regimes.md#compound-decisions).
+fallback; see the current [compound contract](../docs/training.md#regimes-and-stages).
 
 Keep gamma=1 and all non-estimator settings fixed. Predeclare the measured
 number of complete games/updates that fits each arm's same wall cap, report

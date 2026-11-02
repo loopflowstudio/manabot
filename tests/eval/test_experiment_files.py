@@ -36,7 +36,7 @@ EXPERIMENTS = ROOT / "experiments"
 
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
-    assert found == {"elemental", "seat_comparison", "two_seat"}
+    assert found == {"elemental", "mtg183-elemental-eval", "seat_comparison", "two_seat"}
 
 
 def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> None:
@@ -157,7 +157,13 @@ def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
         endpoint=500,
         segment_outcome="succeeded",
     )
-    expected = [match for unit in units(followed) for match in unit.matches]
+    # Halving pairs extend MTG-183's follower only, not the shared design.
+    expected = [
+        match
+        for unit in units(followed)
+        if unit.role != "halving"
+        for match in unit.matches
+    ]
 
     def renamed(names: tuple[str, ...]) -> tuple[str, ...]:
         # The follower names a checkpoint `uNNNNNN`; Etude by its file.

@@ -38,7 +38,7 @@ class AuthoredMatchup(StrictModel):
         )
         # Research packs can register more than two decks, so the cross pair
         # also needs explicit selection. Native membership checks still apply.
-        return setup.model_copy(update={"content_pack": self.pack_key})
+        return setup.model_copy(update={"world": self.pack_key})
 
 
 SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"

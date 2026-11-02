@@ -48,7 +48,7 @@ else
       manabot/*|tests/semantic/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
         select_jobs integration ;;
       website/*) select_jobs python_unit ;;
-      paper/*|wave/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;
+      paper/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;
       *) all ;;
     esac
   done

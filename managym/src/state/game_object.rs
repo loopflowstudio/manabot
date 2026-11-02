@@ -61,11 +61,30 @@ pub enum ObjectLookupError {
 /// This deliberately stores identity and mutable facts, not a cloned card
 /// definition. `definition_id` resolves through the match's immutable
 /// `ContentPack` and does not clone card semantics into mutable state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
     pub keywords: crate::state::card::Keywords,
+    /// Its creature types as it last existed (CR 608.2h), sorted; read when
+    /// a departed target's partners must share one (Secret Tunnel).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub creature_types: Vec<String>,
+    /// The battlefield slot it occupied, so a departed `Target::Permanent`
+    /// finds its last known information.
+    pub permanent: PermanentId,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
+    /// The object had lost all abilities, so it triggers nothing as it leaves.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// It had been dealt damage this turn.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
+    /// Its power as it last existed ("that creature's power").
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub power: i32,
+    /// Its counters as it last existed ("put its counters on ...").
+    #[serde(skip_serializing_if = "crate::state::permanent::Counters::is_empty")]
+    pub counters: crate::state::permanent::Counters,
     pub object_ref: ObjectRef,
     pub card: CardId,
     pub from_zone: ZoneType,
@@ -86,6 +105,8 @@ pub enum Target {
     Player(PlayerId),
     Permanent(PermanentId),
     StackSpell(CardId),
+    /// An activated or triggered ability on the stack, by its stack object id.
+    StackAbility(ObjectId),
     GraveyardCard(ObjectRef),
 }
 
@@ -181,9 +202,5 @@ impl IdGenerator {
 
     pub fn watermark(&self) -> u32 {
         self.next_id
-    }
-
-    pub(crate) fn restore(&mut self, watermark: u32) {
-        self.next_id = watermark;
     }
 }

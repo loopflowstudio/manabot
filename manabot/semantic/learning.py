@@ -23,7 +23,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # Explicit current packs shared by live-manifest and policy binding.
 CURRENT_PACK_KEYS = frozenset(
@@ -557,6 +557,18 @@ class BoundSemanticPack:
             card_def_id = int(stack_object.source_card_registry_key)
             definition_rows.append(self.definition_row(card_def_id))
             roles.append(stack_role)
+            slots.append(slot)
+            identity_ids.append(card_def_id)
+
+        # A waiting delayed trigger's effects are its source definition's
+        # programs (the Effect values that created it); slot is its frame.
+        delayed_role = self.schema.object_roles["delayed_trigger"]
+        for slot, frame in enumerate(observation.continuation):
+            if frame.kind != 10 or frame.source.definition is None:
+                continue
+            card_def_id = int(frame.source.definition)
+            definition_rows.append(self.definition_row(card_def_id))
+            roles.append(delayed_role)
             slots.append(slot)
             identity_ids.append(card_def_id)
 

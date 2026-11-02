@@ -95,13 +95,13 @@ fn targeted_combat_tricks_apply_through_play() {
             .unwrap();
         if name == "Octopus Form" {
             assert!(p.keywords.hexproof);
-            assert_eq!(s.game().effective_power(target), 6);
+            assert_eq!(s.game().characteristics(target).power, 6);
         } else {
             assert!(p.keywords.trample);
-            assert!(s.game().effective_power(target) > 5);
+            assert!(s.game().characteristics(target).power > 5);
         }
         if name == "Enthusiastic Study" {
-            assert_eq!(s.game().effective_power(target), 8);
+            assert_eq!(s.game().characteristics(target).power, 8);
         }
     }
 }
@@ -119,9 +119,7 @@ fn eyetwitch_and_poxbearer_deaths_keep_their_different_rewards() {
             "Pretending Poxbearers" => {
                 assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1)
             }
-            "Knowledge Seeker" => {
-                assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1)
-            }
+            "Knowledge Seeker" => assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1),
             _ => assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 0),
         }
     }
@@ -182,17 +180,16 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
 }
 
 #[test]
-fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
-    use managym::search_state::{BenchCommand, BranchDriver, ClonePlusUndoDriver};
+fn search_selection_or_decline_and_shuffle_restore_exactly_from_fork() {
+    use managym::search_state::witness;
     let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
     s.pass_priority();
     s.pass_priority();
     for select in [false, true] {
-        let driver = ClonePlusUndoDriver::default();
-        let root = driver.witness(s.game());
-        let mut branch = driver.fork_exact(s.game());
-        let mark = driver.mark(&mut branch);
+        let root = witness(s.game());
+        let mut branch = s.game().clone();
+        let mark = branch.clone();
         let index = branch
             .action_space()
             .unwrap()
@@ -206,20 +203,11 @@ fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
                 }
             })
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_action_hash: None,
-                    expected_state_hash: None,
-                },
-            )
-            .unwrap();
-        assert_ne!(driver.witness(&branch), root);
-        driver.rollback(&mut branch, mark);
-        assert_eq!(driver.witness(&branch), root);
-        assert_eq!(driver.witness(s.game()), root);
+        branch.step(index).unwrap();
+        assert_ne!(witness(&branch), root);
+        branch = mark;
+        assert_eq!(witness(&branch), root);
+        assert_eq!(witness(s.game()), root);
     }
 }
 

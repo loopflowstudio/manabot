@@ -933,8 +933,6 @@ impl PossibleWorldSpace {
     /// preserved. The viewer's unknown library order is shuffled from the
     /// same seed, as is the opponent's remaining library. Deterministic per
     /// `(source, world, seed)`.
-    /// No `journal_zones` call: the branch is an independent clone; undo is the
-    /// driver's job.
     pub fn materialize(
         &self,
         source: &Game,

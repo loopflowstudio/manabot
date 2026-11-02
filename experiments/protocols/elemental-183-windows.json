@@ -1,0 +1,1115 @@
+[
+ {
+  "updates": 0,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/1004ccdf46f373e833dadcb5278351a758e5328ed7c28049259c8c06be614688",
+   "sha256": "1004ccdf46f373e833dadcb5278351a758e5328ed7c28049259c8c06be614688",
+   "size_bytes": 1071702
+  },
+  "coordinates": {
+   "active_training_seconds": 0.0,
+   "environment_decisions": 0,
+   "games": 0,
+   "learner_transitions": 0,
+   "optimizer_exposures": 0,
+   "optimizer_updates": 0,
+   "segment_updates": 0,
+   "stage_id": "self-play",
+   "training_seconds": 0.0,
+   "updates": 0
+  }
+ },
+ {
+  "updates": 50,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/9da5cae53fe8537d7fcc4f9fef01fd84c9f57fc8728eda6c11f155f3170c5ade",
+   "sha256": "9da5cae53fe8537d7fcc4f9fef01fd84c9f57fc8728eda6c11f155f3170c5ade",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 1318.9688136551995,
+   "environment_decisions": 2307431,
+   "games": 13322,
+   "learner_transitions": 2307431,
+   "optimizer_exposures": 576877,
+   "optimizer_updates": 9033,
+   "segment_updates": 50,
+   "stage_id": "self-play",
+   "training_seconds": 1338.4629786129808,
+   "updates": 50
+  }
+ },
+ {
+  "updates": 100,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/8b43359ccf99b587d883ec882ce5b57e255db3bd3e22ca67e860aa788145a0b0",
+   "sha256": "8b43359ccf99b587d883ec882ce5b57e255db3bd3e22ca67e860aa788145a0b0",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 2560.176876031328,
+   "environment_decisions": 4498854,
+   "games": 26791,
+   "learner_transitions": 4498854,
+   "optimizer_exposures": 1124752,
+   "optimizer_updates": 17617,
+   "segment_updates": 100,
+   "stage_id": "self-play",
+   "training_seconds": 2615.508552089974,
+   "updates": 100
+  }
+ },
+ {
+  "updates": 150,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/71718a15631a52470d24ceaf61a0b2cde31c27441936ca0a90b238e7698f00ed",
+   "sha256": "71718a15631a52470d24ceaf61a0b2cde31c27441936ca0a90b238e7698f00ed",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 3994.486941042298,
+   "environment_decisions": 7175506,
+   "games": 40118,
+   "learner_transitions": 7175506,
+   "optimizer_exposures": 1793930,
+   "optimizer_updates": 28095,
+   "segment_updates": 150,
+   "stage_id": "self-play",
+   "training_seconds": 4090.016027197009,
+   "updates": 150
+  }
+ },
+ {
+  "updates": 200,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/2e404de54d1576d697ce6d0da39daf6a188a1577b216d0cfd4aaed3618e99413",
+   "sha256": "2e404de54d1576d697ce6d0da39daf6a188a1577b216d0cfd4aaed3618e99413",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 5307.436916688457,
+   "environment_decisions": 9547621,
+   "games": 53505,
+   "learner_transitions": 9547621,
+   "optimizer_exposures": 2386980,
+   "optimizer_updates": 37382,
+   "segment_updates": 200,
+   "stage_id": "self-play",
+   "training_seconds": 5465.641282121011,
+   "updates": 200
+  }
+ },
+ {
+  "updates": 250,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/9438b9eb90285262786b252a7d56b771acca653ded72747ad6e392fe5022e6e2",
+   "sha256": "9438b9eb90285262786b252a7d56b771acca653ded72747ad6e392fe5022e6e2",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 6594.395364252792,
+   "environment_decisions": 11863085,
+   "games": 66954,
+   "learner_transitions": 11863085,
+   "optimizer_exposures": 2965866,
+   "optimizer_updates": 46452,
+   "segment_updates": 250,
+   "stage_id": "self-play",
+   "training_seconds": 6805.060579847021,
+   "updates": 250
+  }
+ },
+ {
+  "updates": 300,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/b842d731f2efc6d70340266dd622a87fd35cc52a6faaf6d0e47f31312a6fdc97",
+   "sha256": "b842d731f2efc6d70340266dd622a87fd35cc52a6faaf6d0e47f31312a6fdc97",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 8115.1857895349385,
+   "environment_decisions": 14183231,
+   "games": 80315,
+   "learner_transitions": 14183231,
+   "optimizer_exposures": 3545923,
+   "optimizer_updates": 55536,
+   "segment_updates": 300,
+   "stage_id": "self-play",
+   "training_seconds": 8377.211839944008,
+   "updates": 300
+  }
+ },
+ {
+  "updates": 350,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/9dc4f1f1e8bce6b7e86fa1dc97a5dd4e382a899667659d5426c6d1e9c3761c46",
+   "sha256": "9dc4f1f1e8bce6b7e86fa1dc97a5dd4e382a899667659d5426c6d1e9c3761c46",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 9524.362833997002,
+   "environment_decisions": 16543810,
+   "games": 93647,
+   "learner_transitions": 16543810,
+   "optimizer_exposures": 4136085,
+   "optimizer_updates": 64776,
+   "segment_updates": 350,
+   "stage_id": "self-play",
+   "training_seconds": 9842.088063325966,
+   "updates": 350
+  }
+ },
+ {
+  "updates": 400,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/ce319d9f9fa243bee1fe9a6e7cddfc31277b718bbf9cbccdd9a6b6c687561a7b",
+   "sha256": "ce319d9f9fa243bee1fe9a6e7cddfc31277b718bbf9cbccdd9a6b6c687561a7b",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 10993.523783163866,
+   "environment_decisions": 19215521,
+   "games": 106926,
+   "learner_transitions": 19215521,
+   "optimizer_exposures": 4804031,
+   "optimizer_updates": 75237,
+   "segment_updates": 400,
+   "stage_id": "self-play",
+   "training_seconds": 11370.602690179017,
+   "updates": 400
+  }
+ },
+ {
+  "updates": 450,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/a49d020cf72f3026f137642350918eb443e21fde81bbf8eb1a85c618407aa384",
+   "sha256": "a49d020cf72f3026f137642350918eb443e21fde81bbf8eb1a85c618407aa384",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 12657.571398192958,
+   "environment_decisions": 21735810,
+   "games": 120130,
+   "learner_transitions": 21735810,
+   "optimizer_exposures": 5434121,
+   "optimizer_updates": 85102,
+   "segment_updates": 450,
+   "stage_id": "self-play",
+   "training_seconds": 13098.967000261997,
+   "updates": 450
+  }
+ },
+ {
+  "updates": 500,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/9213aef3fac3589ab9d49643a9d3d3cc4b10b7deee7ddb485f929a68d33d9c17",
+   "sha256": "9213aef3fac3589ab9d49643a9d3d3cc4b10b7deee7ddb485f929a68d33d9c17",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 14054.427943851566,
+   "environment_decisions": 24205428,
+   "games": 133380,
+   "learner_transitions": 24205428,
+   "optimizer_exposures": 6051543,
+   "optimizer_updates": 94771,
+   "segment_updates": 500,
+   "stage_id": "self-play",
+   "training_seconds": 14558.87025309098,
+   "updates": 500
+  }
+ },
+ {
+  "updates": 550,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/fd5333fc46b15ac9ee50ed97ee35825d4627bc446ef06c2067f2016dd33c4929",
+   "sha256": "fd5333fc46b15ac9ee50ed97ee35825d4627bc446ef06c2067f2016dd33c4929",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 15502.718677011377,
+   "environment_decisions": 26879618,
+   "games": 146589,
+   "learner_transitions": 26879618,
+   "optimizer_exposures": 6720110,
+   "optimizer_updates": 105233,
+   "segment_updates": 550,
+   "stage_id": "self-play",
+   "training_seconds": 16071.38951445499,
+   "updates": 550
+  }
+ },
+ {
+  "updates": 600,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/e8eab1cae44b0df5b9b2b5c6b87b702db8392dd1ae30bf40ea53a4642e87fd99",
+   "sha256": "e8eab1cae44b0df5b9b2b5c6b87b702db8392dd1ae30bf40ea53a4642e87fd99",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 17124.625104312494,
+   "environment_decisions": 29744524,
+   "games": 159769,
+   "learner_transitions": 29744524,
+   "optimizer_exposures": 7436354,
+   "optimizer_updates": 116447,
+   "segment_updates": 600,
+   "stage_id": "self-play",
+   "training_seconds": 17754.598154138017,
+   "updates": 600
+  }
+ },
+ {
+  "updates": 650,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/4666cf8b51204fe27751f3d87d2fa2c6a79b50df3471dbca2da0af69ef1ba429",
+   "sha256": "4666cf8b51204fe27751f3d87d2fa2c6a79b50df3471dbca2da0af69ef1ba429",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 18590.94174057315,
+   "environment_decisions": 32479154,
+   "games": 172978,
+   "learner_transitions": 32479154,
+   "optimizer_exposures": 8120030,
+   "optimizer_updates": 127156,
+   "segment_updates": 650,
+   "stage_id": "self-play",
+   "training_seconds": 19301.48332334397,
+   "updates": 650
+  }
+ },
+ {
+  "updates": 700,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/7ed036782cb986d9902681b940d4f05726c7132b606be9d8eaf4fe203c90b456",
+   "sha256": "7ed036782cb986d9902681b940d4f05726c7132b606be9d8eaf4fe203c90b456",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 20101.223468495125,
+   "environment_decisions": 35210840,
+   "games": 186268,
+   "learner_transitions": 35210840,
+   "optimizer_exposures": 8802969,
+   "optimizer_updates": 137848,
+   "segment_updates": 700,
+   "stage_id": "self-play",
+   "training_seconds": 20902.138219023996,
+   "updates": 700
+  }
+ },
+ {
+  "updates": 750,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/b54fadbb8cf8c73dd928161bd6aff3e3915983fc063cf40e0fd0298bb99c535d",
+   "sha256": "b54fadbb8cf8c73dd928161bd6aff3e3915983fc063cf40e0fd0298bb99c535d",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 21701.15378830285,
+   "environment_decisions": 37998079,
+   "games": 199506,
+   "learner_transitions": 37998079,
+   "optimizer_exposures": 9499798,
+   "optimizer_updates": 148758,
+   "segment_updates": 750,
+   "stage_id": "self-play",
+   "training_seconds": 22570.92761266901,
+   "updates": 750
+  }
+ },
+ {
+  "updates": 800,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/69fcb43f1c1459641ff262ca9cfa7e5f2fb3018f999c6657cbf71ce451fde4fd",
+   "sha256": "69fcb43f1c1459641ff262ca9cfa7e5f2fb3018f999c6657cbf71ce451fde4fd",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 23095.82019846188,
+   "environment_decisions": 40531833,
+   "games": 212822,
+   "learner_transitions": 40531833,
+   "optimizer_exposures": 10133256,
+   "optimizer_updates": 158678,
+   "segment_updates": 800,
+   "stage_id": "self-play",
+   "training_seconds": 24042.719341601012,
+   "updates": 800
+  }
+ },
+ {
+  "updates": 850,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/b26bfd0c8d7e5ffa63a31523c14ffcb7d37eb2bc4ec82774aa5bfde4a5592772",
+   "sha256": "b26bfd0c8d7e5ffa63a31523c14ffcb7d37eb2bc4ec82774aa5bfde4a5592772",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 24498.25884121668,
+   "environment_decisions": 42950873,
+   "games": 226191,
+   "learner_transitions": 42950873,
+   "optimizer_exposures": 10738035,
+   "optimizer_updates": 168148,
+   "segment_updates": 850,
+   "stage_id": "self-play",
+   "training_seconds": 25522.70234944299,
+   "updates": 850
+  }
+ },
+ {
+  "updates": 900,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/3cc89aa68f1d4470c848b2388a962191e367d9b3ae1a4992bad54a22d040e601",
+   "sha256": "3cc89aa68f1d4470c848b2388a962191e367d9b3ae1a4992bad54a22d040e601",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 26045.505017004733,
+   "environment_decisions": 45648455,
+   "games": 239463,
+   "learner_transitions": 45648455,
+   "optimizer_exposures": 11412452,
+   "optimizer_updates": 178709,
+   "segment_updates": 900,
+   "stage_id": "self-play",
+   "training_seconds": 27166.03097970801,
+   "updates": 900
+  }
+ },
+ {
+  "updates": 950,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/65013985322e588e250be2aa7f7fabc15bb52b6090b7a40a82add59be108beb2",
+   "sha256": "65013985322e588e250be2aa7f7fabc15bb52b6090b7a40a82add59be108beb2",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 27502.050027485704,
+   "environment_decisions": 48253561,
+   "games": 252703,
+   "learner_transitions": 48253561,
+   "optimizer_exposures": 12063744,
+   "optimizer_updates": 188903,
+   "segment_updates": 950,
+   "stage_id": "self-play",
+   "training_seconds": 28712.85006023897,
+   "updates": 950
+  }
+ },
+ {
+  "updates": 1000,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/60ab51fa142eeb06a10f410c13d231685fece309a94d91e08635c89f98f96812",
+   "sha256": "60ab51fa142eeb06a10f410c13d231685fece309a94d91e08635c89f98f96812",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 29137.438645013783,
+   "environment_decisions": 50865769,
+   "games": 265988,
+   "learner_transitions": 50865769,
+   "optimizer_exposures": 12716816,
+   "optimizer_updates": 199128,
+   "segment_updates": 1000,
+   "stage_id": "self-play",
+   "training_seconds": 30438.683665485005,
+   "updates": 1000
+  }
+ },
+ {
+  "updates": 1050,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/7ae4c79bc756eda4fb0f6189dd946c087433f3ed1e36d16868b4102b4bbba897",
+   "sha256": "7ae4c79bc756eda4fb0f6189dd946c087433f3ed1e36d16868b4102b4bbba897",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 30632.110668538488,
+   "environment_decisions": 53479645,
+   "games": 279313,
+   "learner_transitions": 53479645,
+   "optimizer_exposures": 13370305,
+   "optimizer_updates": 209359,
+   "segment_updates": 1050,
+   "stage_id": "self-play",
+   "training_seconds": 32066.174953465,
+   "updates": 1050
+  }
+ },
+ {
+  "updates": 1100,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/40ce2b937d1da4cfddec74549cace035e6a598ec260e8a5a9f33747886039304",
+   "sha256": "40ce2b937d1da4cfddec74549cace035e6a598ec260e8a5a9f33747886039304",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 32318.923094670754,
+   "environment_decisions": 56376173,
+   "games": 292540,
+   "learner_transitions": 56376173,
+   "optimizer_exposures": 14094455,
+   "optimizer_updates": 220694,
+   "segment_updates": 1100,
+   "stage_id": "self-play",
+   "training_seconds": 33856.571292329,
+   "updates": 1100
+  }
+ },
+ {
+  "updates": 1150,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/d290de6f75dd1503e9ddb7e5157eebd89d93c348cb63a640d32f7e957ee9776e",
+   "sha256": "d290de6f75dd1503e9ddb7e5157eebd89d93c348cb63a640d32f7e957ee9776e",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 34104.92974303104,
+   "environment_decisions": 59466684,
+   "games": 305723,
+   "learner_transitions": 59466684,
+   "optimizer_exposures": 14867100,
+   "optimizer_updates": 232790,
+   "segment_updates": 1150,
+   "stage_id": "self-play",
+   "training_seconds": 35764.365186005016,
+   "updates": 1150
+  }
+ },
+ {
+  "updates": 1200,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/29afaf1a5c68eee6d24db2f4d0fe6d902f481871a92d1568e69433ba8299a0b1",
+   "sha256": "29afaf1a5c68eee6d24db2f4d0fe6d902f481871a92d1568e69433ba8299a0b1",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 35853.98819947685,
+   "environment_decisions": 62523580,
+   "games": 318866,
+   "learner_transitions": 62523580,
+   "optimizer_exposures": 15631345,
+   "optimizer_updates": 244746,
+   "segment_updates": 1200,
+   "stage_id": "self-play",
+   "training_seconds": 37611.487433173985,
+   "updates": 1200
+  }
+ },
+ {
+  "updates": 1250,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/28982f312d0270e419fb9dd5617e49bebf429f39993a29f8264e514bc4962816",
+   "sha256": "28982f312d0270e419fb9dd5617e49bebf429f39993a29f8264e514bc4962816",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 37470.101913741906,
+   "environment_decisions": 65401766,
+   "games": 332016,
+   "learner_transitions": 65401766,
+   "optimizer_exposures": 16350912,
+   "optimizer_updates": 256012,
+   "segment_updates": 1250,
+   "stage_id": "self-play",
+   "training_seconds": 39337.43746067601,
+   "updates": 1250
+  }
+ },
+ {
+  "updates": 1300,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/68291f506291fbd8a3dc5b94cfd6724bb51c421b03c0403763cabebb3accb1ff",
+   "sha256": "68291f506291fbd8a3dc5b94cfd6724bb51c421b03c0403763cabebb3accb1ff",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 39155.31375621143,
+   "environment_decisions": 68368136,
+   "games": 345164,
+   "learner_transitions": 68368136,
+   "optimizer_exposures": 17092526,
+   "optimizer_updates": 267618,
+   "segment_updates": 1300,
+   "stage_id": "self-play",
+   "training_seconds": 41140.36612516601,
+   "updates": 1300
+  }
+ },
+ {
+  "updates": 1325,
+  "run": "mtg183-elemental-long-w1",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/65cb227da3c48714cf856fdc5f2eb80e053b8652ce01e962d2b24130b52232ec",
+   "sha256": "65cb227da3c48714cf856fdc5f2eb80e053b8652ce01e962d2b24130b52232ec",
+   "size_bytes": 1071166
+  },
+  "coordinates": {
+   "active_training_seconds": 39978.934457876254,
+   "environment_decisions": 69791768,
+   "games": 351768,
+   "learner_transitions": 69791768,
+   "optimizer_exposures": 17448444,
+   "optimizer_updates": 273187,
+   "segment_updates": 1325,
+   "stage_id": "self-play",
+   "training_seconds": 42034.288038991974,
+   "updates": 1325
+  }
+ },
+ {
+  "updates": 1350,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/404adce4f234843c2135bdc76aaac6b8b079be3c0ee7098132779c62524eeb6d",
+   "sha256": "404adce4f234843c2135bdc76aaac6b8b079be3c0ee7098132779c62524eeb6d",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 40818.57400292717,
+   "environment_decisions": 71191667,
+   "games": 358356,
+   "learner_transitions": 71191667,
+   "optimizer_exposures": 17798429,
+   "optimizer_updates": 278667,
+   "segment_updates": 25,
+   "stage_id": "self-play",
+   "training_seconds": 42884.17932246998,
+   "updates": 1350
+  }
+ },
+ {
+  "updates": 1400,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/5d7274880927b6166643fb89d1f6e2827f4af360870e348819f6f713e46715fb",
+   "sha256": "5d7274880927b6166643fb89d1f6e2827f4af360870e348819f6f713e46715fb",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 42407.80890586699,
+   "environment_decisions": 74026545,
+   "games": 371520,
+   "learner_transitions": 74026545,
+   "optimizer_exposures": 18507166,
+   "optimizer_updates": 289762,
+   "segment_updates": 75,
+   "stage_id": "self-play",
+   "training_seconds": 44496.80304290302,
+   "updates": 1400
+  }
+ },
+ {
+  "updates": 1450,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/59d90f6701e8bea05a69ae305f9d295b86303a55028edebd67e0b872ecd89707",
+   "sha256": "59d90f6701e8bea05a69ae305f9d295b86303a55028edebd67e0b872ecd89707",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 44022.17482157104,
+   "environment_decisions": 76844810,
+   "games": 384715,
+   "learner_transitions": 76844810,
+   "optimizer_exposures": 19211750,
+   "optimizer_updates": 300791,
+   "segment_updates": 125,
+   "stage_id": "self-play",
+   "training_seconds": 46148.04939233797,
+   "updates": 1450
+  }
+ },
+ {
+  "updates": 1500,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/46693051c9920cf85387079eb3513c8bad71db1b9349db9fe1fb2546e1828446",
+   "sha256": "46693051c9920cf85387079eb3513c8bad71db1b9349db9fe1fb2546e1828446",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 45700.73287405289,
+   "environment_decisions": 79786625,
+   "games": 397907,
+   "learner_transitions": 79786625,
+   "optimizer_exposures": 19947221,
+   "optimizer_updates": 312299,
+   "segment_updates": 175,
+   "stage_id": "self-play",
+   "training_seconds": 47868.85818478902,
+   "updates": 1500
+  }
+ },
+ {
+  "updates": 1550,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/250a02a45378c400883e8f133a403da2c5182b4b62b74e6c4038a16709c6cc41",
+   "sha256": "250a02a45378c400883e8f133a403da2c5182b4b62b74e6c4038a16709c6cc41",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 47423.38632457284,
+   "environment_decisions": 82807658,
+   "games": 411023,
+   "learner_transitions": 82807658,
+   "optimizer_exposures": 20702502,
+   "optimizer_updates": 324117,
+   "segment_updates": 225,
+   "stage_id": "self-play",
+   "training_seconds": 49627.03372091602,
+   "updates": 1550
+  }
+ },
+ {
+  "updates": 1600,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/082ba8a85c8000f9969514f73311b8737643820b44a7674be46bf9d50956e48f",
+   "sha256": "082ba8a85c8000f9969514f73311b8737643820b44a7674be46bf9d50956e48f",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 49214.646231996245,
+   "environment_decisions": 86024484,
+   "games": 424163,
+   "learner_transitions": 86024484,
+   "optimizer_exposures": 21506732,
+   "optimizer_updates": 336690,
+   "segment_updates": 275,
+   "stage_id": "self-play",
+   "training_seconds": 51474.27143571997,
+   "updates": 1600
+  }
+ },
+ {
+  "updates": 1650,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/adcd60d9c975957fb26fc895cd711d713fff6074514b15363f891c6df8d3bd71",
+   "sha256": "adcd60d9c975957fb26fc895cd711d713fff6074514b15363f891c6df8d3bd71",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 50819.58630192821,
+   "environment_decisions": 88871996,
+   "games": 437450,
+   "learner_transitions": 88871996,
+   "optimizer_exposures": 22218631,
+   "optimizer_updates": 347831,
+   "segment_updates": 325,
+   "stage_id": "self-play",
+   "training_seconds": 53144.63917151798,
+   "updates": 1650
+  }
+ },
+ {
+  "updates": 1700,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/d175308807a7eba85201e6643247f70b03d66f7d997be5c80d9a4f3f73aec972",
+   "sha256": "d175308807a7eba85201e6643247f70b03d66f7d997be5c80d9a4f3f73aec972",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 52397.08292601904,
+   "environment_decisions": 91521472,
+   "games": 450736,
+   "learner_transitions": 91521472,
+   "optimizer_exposures": 22881021,
+   "optimizer_updates": 358197,
+   "segment_updates": 375,
+   "stage_id": "self-play",
+   "training_seconds": 54786.93633989699,
+   "updates": 1700
+  }
+ },
+ {
+  "updates": 1750,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/a4dcd67155bee615095b23f3ae463324890cf144a1217b8cdcdbec0a678f485c",
+   "sha256": "a4dcd67155bee615095b23f3ae463324890cf144a1217b8cdcdbec0a678f485c",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 54186.43317022687,
+   "environment_decisions": 94370671,
+   "games": 463920,
+   "learner_transitions": 94370671,
+   "optimizer_exposures": 23593337,
+   "optimizer_updates": 369343,
+   "segment_updates": 425,
+   "stage_id": "self-play",
+   "training_seconds": 56639.65631836798,
+   "updates": 1750
+  }
+ },
+ {
+  "updates": 1800,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/7fe55dfd81efcb37dbcd8430e490989ff1fbcfa3dd91b8c8f4d80cf0890a8019",
+   "sha256": "7fe55dfd81efcb37dbcd8430e490989ff1fbcfa3dd91b8c8f4d80cf0890a8019",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 55987.37632742402,
+   "environment_decisions": 97160151,
+   "games": 477143,
+   "learner_transitions": 97160151,
+   "optimizer_exposures": 24290732,
+   "optimizer_updates": 380257,
+   "segment_updates": 475,
+   "stage_id": "self-play",
+   "training_seconds": 58515.27214916999,
+   "updates": 1800
+  }
+ },
+ {
+  "updates": 1850,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/fdad6d88b1e692d3bf498b9acaa31da39291496d04d4112b89306e27dfa2ccd0",
+   "sha256": "fdad6d88b1e692d3bf498b9acaa31da39291496d04d4112b89306e27dfa2ccd0",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 57523.535434295656,
+   "environment_decisions": 99699278,
+   "games": 490438,
+   "learner_transitions": 99699278,
+   "optimizer_exposures": 24925532,
+   "optimizer_updates": 390195,
+   "segment_updates": 525,
+   "stage_id": "self-play",
+   "training_seconds": 60118.92592372099,
+   "updates": 1850
+  }
+ },
+ {
+  "updates": 1900,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/f7d7106ef239d43b0c55fd766981083d58b4544cb95780c6444a9ade835bdf22",
+   "sha256": "f7d7106ef239d43b0c55fd766981083d58b4544cb95780c6444a9ade835bdf22",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 59112.23959870951,
+   "environment_decisions": 102471350,
+   "games": 503732,
+   "learner_transitions": 102471350,
+   "optimizer_exposures": 25618569,
+   "optimizer_updates": 401040,
+   "segment_updates": 575,
+   "stage_id": "self-play",
+   "training_seconds": 61767.18529924401,
+   "updates": 1900
+  }
+ },
+ {
+  "updates": 1950,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/6b95bbbad713c7a4b8cc008cfa9324698d00df2d53969dec1897bed14dcec1d8",
+   "sha256": "6b95bbbad713c7a4b8cc008cfa9324698d00df2d53969dec1897bed14dcec1d8",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 60733.01893507759,
+   "environment_decisions": 105305327,
+   "games": 516913,
+   "learner_transitions": 105305327,
+   "optimizer_exposures": 26327082,
+   "optimizer_updates": 412129,
+   "segment_updates": 625,
+   "stage_id": "self-play",
+   "training_seconds": 63468.801062275015,
+   "updates": 1950
+  }
+ },
+ {
+  "updates": 2000,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/78b7348dda4d1abf82d18b19f6b5f42ca9549513d4f2cef15e09d6fa73c66a5c",
+   "sha256": "78b7348dda4d1abf82d18b19f6b5f42ca9549513d4f2cef15e09d6fa73c66a5c",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 62684.97266048333,
+   "environment_decisions": 108169516,
+   "games": 530092,
+   "learner_transitions": 108169516,
+   "optimizer_exposures": 27043147,
+   "optimizer_updates": 423336,
+   "segment_updates": 675,
+   "stage_id": "self-play",
+   "training_seconds": 65503.017415535985,
+   "updates": 2000
+  }
+ },
+ {
+  "updates": 2050,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/e1db3edd3e1f72ce5a892eafffc15424e52e1f4773980f7895cebdad3badc79d",
+   "sha256": "e1db3edd3e1f72ce5a892eafffc15424e52e1f4773980f7895cebdad3badc79d",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 64299.14805681148,
+   "environment_decisions": 110969313,
+   "games": 543287,
+   "learner_transitions": 110969313,
+   "optimizer_exposures": 27743117,
+   "optimizer_updates": 434291,
+   "segment_updates": 725,
+   "stage_id": "self-play",
+   "training_seconds": 67204.41259810003,
+   "updates": 2050
+  }
+ },
+ {
+  "updates": 2100,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/e65766f2abe221781110f4824f88ca9e57ffbca2ea60eb2d1726ac8d39870b1c",
+   "sha256": "e65766f2abe221781110f4824f88ca9e57ffbca2ea60eb2d1726ac8d39870b1c",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 66184.83594721032,
+   "environment_decisions": 113765729,
+   "games": 556495,
+   "learner_transitions": 113765729,
+   "optimizer_exposures": 28442239,
+   "optimizer_updates": 445233,
+   "segment_updates": 775,
+   "stage_id": "self-play",
+   "training_seconds": 69177.06112146197,
+   "updates": 2100
+  }
+ },
+ {
+  "updates": 2150,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/dc21a096eae6147b529d1a54b91e34bba7c04a7afc437abb6b3066695ba86c03",
+   "sha256": "dc21a096eae6147b529d1a54b91e34bba7c04a7afc437abb6b3066695ba86c03",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 68106.44974064035,
+   "environment_decisions": 116620364,
+   "games": 569683,
+   "learner_transitions": 116620364,
+   "optimizer_exposures": 29155916,
+   "optimizer_updates": 456407,
+   "segment_updates": 825,
+   "stage_id": "self-play",
+   "training_seconds": 71186.44742448698,
+   "updates": 2150
+  }
+ },
+ {
+  "updates": 2200,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/2c48116f6ab38081effbc1be439bf5e8204c36715562e2567ad6ebd8cae31c46",
+   "sha256": "2c48116f6ab38081effbc1be439bf5e8204c36715562e2567ad6ebd8cae31c46",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 69685.8379685349,
+   "environment_decisions": 119359661,
+   "games": 582863,
+   "learner_transitions": 119359661,
+   "optimizer_exposures": 29840757,
+   "optimizer_updates": 467121,
+   "segment_updates": 875,
+   "stage_id": "self-play",
+   "training_seconds": 72868.77035127499,
+   "updates": 2200
+  }
+ },
+ {
+  "updates": 2250,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/521f817fb6990500c745726a9b13044f6f14e50f1b3733268c68cdb5ba990a0e",
+   "sha256": "521f817fb6990500c745726a9b13044f6f14e50f1b3733268c68cdb5ba990a0e",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 71208.79276146705,
+   "environment_decisions": 122000215,
+   "games": 596166,
+   "learner_transitions": 122000215,
+   "optimizer_exposures": 30500915,
+   "optimizer_updates": 477449,
+   "segment_updates": 925,
+   "stage_id": "self-play",
+   "training_seconds": 74486.27429233497,
+   "updates": 2250
+  }
+ },
+ {
+  "updates": 2300,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/260779093fca7a184f3e199c81e71368eca1f68cc6460ddffb8f08d492eafcaa",
+   "sha256": "260779093fca7a184f3e199c81e71368eca1f68cc6460ddffb8f08d492eafcaa",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 72802.29763173091,
+   "environment_decisions": 124804173,
+   "games": 609299,
+   "learner_transitions": 124804173,
+   "optimizer_exposures": 31201923,
+   "optimizer_updates": 488418,
+   "segment_updates": 975,
+   "stage_id": "self-play",
+   "training_seconds": 76180.956280932,
+   "updates": 2300
+  }
+ },
+ {
+  "updates": 2350,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/e483695d440c25873c71e6a86513f9ec0b7f49d0c847bc0c4f0e290511bf1272",
+   "sha256": "e483695d440c25873c71e6a86513f9ec0b7f49d0c847bc0c4f0e290511bf1272",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 74398.859027508,
+   "environment_decisions": 127589869,
+   "games": 622504,
+   "learner_transitions": 127589869,
+   "optimizer_exposures": 31898368,
+   "optimizer_updates": 499318,
+   "segment_updates": 1025,
+   "stage_id": "self-play",
+   "training_seconds": 77862.579050678,
+   "updates": 2350
+  }
+ },
+ {
+  "updates": 2400,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/2484dac09ef76613430fe89628823f4967cd6f75183cd9825300406ce0dc25bc",
+   "sha256": "2484dac09ef76613430fe89628823f4967cd6f75183cd9825300406ce0dc25bc",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 76007.06760718615,
+   "environment_decisions": 130371886,
+   "games": 635688,
+   "learner_transitions": 130371886,
+   "optimizer_exposures": 32593894,
+   "optimizer_updates": 510203,
+   "segment_updates": 1075,
+   "stage_id": "self-play",
+   "training_seconds": 79579.48976769898,
+   "updates": 2400
+  }
+ },
+ {
+  "updates": 2450,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/aafac3bc001feda015c6d129a6e56ac54182532fd564df2c84beb86f9f3e3199",
+   "sha256": "aafac3bc001feda015c6d129a6e56ac54182532fd564df2c84beb86f9f3e3199",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 77626.37089700258,
+   "environment_decisions": 133214258,
+   "games": 648912,
+   "learner_transitions": 133214258,
+   "optimizer_exposures": 33304507,
+   "optimizer_updates": 521322,
+   "segment_updates": 1125,
+   "stage_id": "self-play",
+   "training_seconds": 81301.90204961802,
+   "updates": 2450
+  }
+ },
+ {
+  "updates": 2500,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/e724ec11c87f56fe3b624f449bed4dbb9887257a9b4d607cb46be82d2500aa55",
+   "sha256": "e724ec11c87f56fe3b624f449bed4dbb9887257a9b4d607cb46be82d2500aa55",
+   "size_bytes": 1071367
+  },
+  "coordinates": {
+   "active_training_seconds": 79105.92126279155,
+   "environment_decisions": 135817068,
+   "games": 662175,
+   "learner_transitions": 135817068,
+   "optimizer_exposures": 33955231,
+   "optimizer_updates": 531513,
+   "segment_updates": 1175,
+   "stage_id": "self-play",
+   "training_seconds": 82894.05319024099,
+   "updates": 2500
+  }
+ },
+ {
+  "updates": 2534,
+  "run": "mtg183-elemental-long-w2",
+  "artifact": {
+   "uri": "r2://manabot/jobs/mtg183-elemental-long-w2/runtime/artifacts/sha256/745efa199676671de67abb3b4432c1899311a68b2a21e03494a86018baf31201",
+   "sha256": "745efa199676671de67abb3b4432c1899311a68b2a21e03494a86018baf31201",
+   "size_bytes": 1071166
+  },
+  "coordinates": {
+   "active_training_seconds": 80206.88205903646,
+   "environment_decisions": 137763273,
+   "games": 671133,
+   "learner_transitions": 137763273,
+   "optimizer_exposures": 34441795,
+   "optimizer_updates": 539129,
+   "segment_updates": 1209,
+   "stage_id": "self-play",
+   "training_seconds": 84068.051438433,
+   "updates": 2534
+  }
+ }
+]

@@ -7,11 +7,9 @@ from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldS
 import pytest
 import torch
 
-from manabot.belief import (
-    BeliefError,
-    ManabotPlayer,
-    belief_schema_from_engine,
-)
+from manabot.belief.encoding import belief_schema_from_engine
+from manabot.belief.range import BeliefError
+from manabot.belief.runtime import ManabotPlayer
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig

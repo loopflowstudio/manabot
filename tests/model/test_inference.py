@@ -44,7 +44,7 @@ def _policy(*, semantic: bool = True) -> PolicyFixture:
     config = recipe()
     config.agent.value_aggregation = "masked_mean"
     if not semantic:
-        config.agent.semantic_pack = None
+        config.agent.world = None
     space = ObservationSpace(config.observation)
     agent = ActorCritic(space, config.agent).eval()
     collector = SeatRoutedCollector(

@@ -30,7 +30,7 @@ def test_selected_leg_layout_preserves_cross_setups() -> None:
         else:
             deck = "ur_lessons" if leg < 6 else "gw_allies"
             assert decks == (deck, deck)
-            assert actual.content_pack == "ur-lessons-vs-gw-allies"
+            assert actual.world == "ur-lessons-vs-gw-allies"
     for leg in (-1, 8):
         with pytest.raises(ValueError, match="leg"):
             selected_decks(leg)
@@ -54,7 +54,7 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
         assert engine.content_pack_manifest() == expected
 
         configs = mirror.to_rust()
-        configs[0].content_pack = None
+        configs[0].world = None
         with pytest.raises(RuntimeError, match="explicit pack"):
             engine.reset(configs)
         with pytest.raises(ValueError, match="explicit content pack"):

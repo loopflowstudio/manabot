@@ -306,7 +306,7 @@ def test_real_arena_checkpoint_outcomes(
         match = matrix.match() if matrix else selected_match()
         space = ObservationSpace()
         config = ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         )
         torch.manual_seed(101)
         checkpoint = tmp_path / "untrained.pt"

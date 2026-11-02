@@ -11,7 +11,6 @@ import pytest
 
 from manabot.env.env import Env
 from manabot.eval.admission import register_anchor
-from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import file_sha256
 from manabot.sim import anchors
@@ -22,6 +21,7 @@ from manabot.sim.heuristic import (
     heuristic_source_paths,
     targeted_spells,
 )
+from tests.eval.arena_fixture import arena_fixture
 
 OWN, OPPONENT = 10, 20
 
@@ -200,6 +200,28 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Lost Days": None,
         "Sandbenders' Storm": None,
         "Zuko's Conviction": None,
+        # TLA T3: modal, distributed or attached effects (stun counters, Auras,
+        # conditional shrinks) the heuristic does not rate.
+        "Razor Rings": "harmful",
+        "Crashing Wave": None,
+        "Heartless Act": None,
+        "Honest Work": None,
+        "Path to Redemption": None,
+        "Swampsnare Trap": None,
+        "The Last Agni Kai": None,
+        "Watery Grasp": None,
+        # TLA T4: kicked, delayed-trigger and copy effects, rated by the
+        # target effects the derivation finds.
+        "Earth Rumble": "beneficial",
+        "Fatal Fissure": "beneficial",
+        "How to Start a Riot": "beneficial",
+        "Jet's Brainwashing": "beneficial",
+        "Price of Freedom": "harmful",
+        "Rocky Rebuke": "harmful",
+        "Sold Out": "harmful",
+        "Avatar Destiny": None,
+        "Bumi Bash": None,
+        "Redirect Lightning": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)
@@ -379,9 +401,7 @@ def test_v1_monitor_identity_is_unchanged_and_heuristic_has_its_own() -> None:
         == MonitorProtocol(opponent="scripted_greedy").model_dump()
     )
     assert "opponent" not in MonitorProtocol().model_dump()
-    candidate = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    ).anchors[0]
+    candidate = arena_fixture().anchors[0]
     scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
     heuristic = register_anchor(candidate, "heuristic", player_id="heuristic")
     assert scripted.source_sha256 == file_sha256(Path(anchors.__file__))

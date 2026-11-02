@@ -1,6 +1,6 @@
 //! Core Set 2020.
 use crate::state::{
-    ability::Effect,
+    ability::{Effect, EffectValue},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords},
     mana::ManaCost,
 };
@@ -28,7 +28,9 @@ fn spectral_sailor() -> CardDefinition {
         },
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}{U}"),
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

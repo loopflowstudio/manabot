@@ -26,14 +26,66 @@
   this Task changes no objective.
 - Second pass after implement: no further change; no live `.lf/wave/{intelligence,rules}`
   pointers remain.
+# Questions and assumptions
+
+Inherited evaluation, MTG-17x/18x and card-evaluation notes (none select T4
+work) are at `ee42a8685:scratch/questions.md`, above "TLA direct-Rust decisions".
 
 # TLA direct-Rust decisions
 
-Reversible operator choices made headless (2026-10-28 unless dated); each is
-noted in the PR. Jack Heart's 2026-10-29 direction superseded the qualification
-and pool-membership choices that were here (history: `be2b7586b:scratch/questions.md`).
+# Decklist assumptions
 
+Earlier entries (construction policy, limits, coordination with PR383/PR389,
+inherited MTG-207/MTG-193 notes) are recorded in the plan or at
+c1dd6c71c:scratch/questions.md.
+
+- Excluding mirrors from `uniform-distinct-v1` is an assumption; at least two
+  distinct lists are required. The policy is code-named, not a stored field.
+- Checkpoint `bc` extra still carries run_id/stage_id/regime_digest producer
+  links that predate this branch; producer admission depends on them. Moving
+  them to run records is a separate change.
+- 2026-10-30 (managym move): native parsing approximates Python's `casefold()`
+  with Unicode `to_lowercase()` and splits lines at `\r\n`, `\n` and `\r` only.
+  NFC uses the new `unicode-normalization` dependency. `DeckImport.document`
+  is now `.decklist`, and `Deck` serializes as `{decklist, sideboard}`, so the
+  unreleased `setup_id`/training-deck digests changed; `Deck.identity` keeps the
+  retained value. `ImportedMatch.pool` is a dict in Python.
+- 2026-10-30 (concept-review corrections): Academy's `GameConfig` is a
+  dataclass persisted through `asdict`/JSON, so it keeps each seat's source in
+  `Decklist` JSON form (`hero_source`/`villain_source: dict | None`) beside a new
+  `content_pack`, and reads it with `Decklist.from_dict` on load; `MatchConfig`
+  holds native `Decklist`s. The CLI now prints both `Deck.identity` values
+  instead of the deleted `setup_id`; the validate endpoint drops `setup_id`.
+  `validate_deck` compares only the re-admitted deck, so retained resolved
+  entries (card ids) are provenance and may go stale without rejecting.
+- 2026-10-30 (sync onto main fa5e13b23, #394 squashed): merged with the last
+  integrated #394 commit 86ebe9ccf as base so #394's later changes win. Deck
+  admission and decklists moved from the deleted `semantic` module into
+  `managym/src/cards/` (`deck_admission`, `decklist`); `content_pack_for_match`
+  lives in `cards/setups.rs`. `PoolIdentity` drops `compiled_semantics`;
+  `DeckEntry.semantic_key` is `key`; the pool key is `"world"`.
+- 2026-10-30 (1a/2a + deck source): authored packs still have `content_pool`
+  descriptors, because main's policy vocabulary (`bind_policy_catalog`,
+  `learning_catalog`, authored receipts) reads them; deck import and admission
+  never do. Removing those descriptors would change main's vocabulary binding,
+  so it is left for review rather than done here.
+- 2026-10-30: decks submitted to the world carry the selector value `"world"`
+  (`managym.WORLD_SETUP`), so an imported pair equal to an authored setup cannot
+  silently run on that pack. The selector itself is now `world` (renamed by
+  Jack Heart's decision; see the plan).
+- 2026-10-30: `UniformDecks` keeps the experiment's deck order (order selects
+  each seeded draw and is in the digest); duplicates reject rather than dedupe.
+  Native `set_training_decks` remains the one source implementation; a Python
+  per-stream queue waits for a second source (random generation).
+- 2026-10-30: the checkpoint world binding names the card digest `world_digest`
+  (the default pack's content digest); setup bindings keep `content_manifest`
+  because frozen checkpoints carry it.
 - Old worlds run from their recorded git revision; no in-process rules shims.
+- Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
+  JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
+  JSON shape and build tokens in `learning.py`.
+- 2026-10-29 (sync onto T1 `01e8f9975`): T1's test layout wins; v1–v4 stay
+  28 wide here and `attacking` is a v5 column (plan, item 26).
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on every definition. Since the one-representation
@@ -41,8 +93,20 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   in the default pack, because Rust integration tests and `manabot/verify` build
   games from it. `set_cards` is the set filter (pool key since renamed `"world"`).
   Undefined TLA cards are no longer listed as unsupported pool rows.
-- Not rewritten (dated evidence): the Academy curated pack `local_identity` values
-  keep pre-rename keys.
+- Academy curated pack `local_identity` values keep pre-rename keys (evidence).
+- Settled (Jack Heart, 2026-10-30, "1a, 2a"): T3 extends the open w17 and
+  policy input v5 in place; never w19/v6. Widths: player 63, card 55,
+  permanent 37 plus the facts block, relation 48 (v1–v4 keep 40 / 41 / 29).
+- Same merge: T2's `granted_firebending` replaces T3's `firebending`
+  observation field; T2's foretold column stands for `face_down` (T3's card
+  column is gone). T2's exhausted / once-each-turn counts and T3's
+  `used_abilities` indices both stay: the counts are T2's, the indices say
+  which ability is spent. Dropping one is a review question.
+- Same merge: T2's card conversion and tests win where both converted a T2
+  card; T3-only cards and tests are added. T3's refreshing `can_activate`
+  helper is `offers_ability`; T2's `can_activate[_card]` stand. T2's own notes
+  are at `d218e1dc2:scratch/87e012-tla-t2-casting.md` and
+  `d218e1dc2:scratch/questions.md`.
 
 Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/main@633dca159:scratch/questions.md`.
 
@@ -62,6 +126,8 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   (IR/source hashes) is gone; manifests carry `pack_key`; rows add
   `scryfall_id`; `IrError` is `ContentError`. `content_pool`/`pool_content`/
   `Eligibility` otherwise unchanged.
+- Superseded by main `10eeb1f55` (2026-10-30): the Python compiler is deleted
+  and pre-w17 corpora are archived under `experiments/data/archive/`.
 - 2026-10-29 (support reorg): tests that exercise several cards stay where
   they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
   Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
@@ -71,12 +137,9 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   Coordinate with f871a8 in one comment. (The v1 coverage gate was deleted by
   Task afbd6a.)
 
-- 2026-10-29 (assumption): superseded corpora now without consumers
-  (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
-  `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
-  to S3 is a separate publish step, not done here.
-  Superseded 2026-10-30 by Jack Heart's steer: afbd6a archived them (and w12–w14,
-  v1, learn-lesson-w4-v3) to `experiments/data/archive/conformance/`.
+- 2026-10-30: afbd6a archived the superseded corpora (w12–w15 kernels,
+  w11 authored match, v1, learn-lesson-w4-v3) to
+  `experiments/data/archive/conformance/` (Jack Heart's steer).
 - 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
   viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
   into hand); viewer 1 consumes the hero's Island discard (30) and
@@ -84,9 +147,139 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   1: 142}`; identity-stream parity still covers the whole tape. Task 3be183
   (engine wave) owns the transport and removing the bound. No xfail.
 
-Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
+## T3 (6875f0) assumptions — 2026-10-29
 
-## T2 (87e012) — 2026-10-29 operator choices
+T3's plan lives on its branch (`3cef39b8e:scratch/6875f0-tla-t3-characteristics.md`).
+
+- Conditional entry reads the card owner's battlefield.
+- Zookeeper's creature-type count excludes a fixed noncreature-subtype list.
+- Non-+1/+1 counters live in `Permanent.counters` (serialized only when present).
+- Heartless Act removes counters by a repeated resolution-time choice. Exhaust is
+  per incarnation; 702.177b "haven't activated" effects are not modeled.
+- Auras act on the object attached at activation (captured before costs). An Aura
+  put onto the battlefield uncast goes to the graveyard (303.4g not modeled).
+- Swampsnare Trap castability assumes the reduction if any legal target earns it;
+  targets that would leave the cost unpayable are not offered.
+- T3 slices 7–14 and item 16 card-level choices (Vehicles, mana, X, Lessons,
+  grants, Honest Work, tap authority, Secret Tunnel LKI): `636f90bf8:scratch/questions.md`.
+
+## T3 sync onto T2 (PR #398 head `16dfd3dbb`) — 2026-10-29
+
+T2's design and operator choices are at `16dfd3dbb:scratch/87e012-tla-t2-casting.md`
+and `16dfd3dbb:scratch/questions.md`; the ones this branch now builds on:
+`CastChoices` X, `ActivationSource`, `ActivatedAbilityDefinition.effects`,
+`Permanent::{activation_used, record_activation}`, `ManaUse`-keyed restricted
+mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
+
+- `with_counter` keeps T2's +1/+1 meaning (Hog-Monkey's text); `no_counters`
+  reads every kind. Card-only matching rejects `with_counter`/`attacking`.
+- Library-top casting is a `zone_cast_cost` case; `in_casting_zone` is gone.
+- An Aura entering attached invalidates both players' mana caches.
+- Crashing Wave (item 18): the stun counters are placed one at a time among
+  the tapped creatures an opponent controls at each placement, and all three
+  must be placed while any is eligible ("any number" of recipients, CR 601.2d
+  applied at resolution). The required waterbend {X} adds to the total cost,
+  not the mana value; a free cast still pays it with X = 0.
+- Item 19 (with Fire Nation Palace): Name/creature types appear only while an effect sets them; spell keyword
+  grants reach `Observation`, not the Academy stack view. `.pyi` now also lists `Permanent`'s
+  existing `exile_if_dies_this_turn` and `temp_subtypes`.
+- The intermittent "rejection must not mutate state" failures in
+  `structured_offers` / `structured_attacker_offers` were the shared default
+  `ContentPack`'s lazy caches in `Game`'s `Debug`; fixed at item 33.
+
+## Item 23 (policy input v5) — 2026-10-29
+
+- Effect-set name and creature types encode as one "characteristics set"
+  flag. Their values follow from the setter (Honest Work names "Humble
+  Merchant", a Citizen); the attachment join carries its definition to the
+  host. No definition carries the name, so a definition reference is impossible
+  without a name vocabulary in the native encoder.
+- Temporary subtypes: flags for the five basic land types and Construct (every
+  current grant besides v4's Avatar), then a count of any other, so none is
+  dropped silently.
+- `sideboard_counts` / `remaining_sideboard_counts`: the agent's remaining
+  copies are already outside rows; the opponent's sideboard looks like hidden
+  information that the `Observation` (and the LLM text's "Initial sideboard")
+  exposes. Not encoded in the tensor. Question for Jack Heart: is a
+  sideboard public in this format, or should the `Observation` hide it?
+- Event `from_zone`/`to_zone`/incarnations stay out of the v0 event tensor;
+  public history v1 (`policy_history_version` 1) encodes them.
+- Item 24 adds the state the `Observation` lacked (combat assignments, lost
+  abilities, spent activation limits, kept red mana, no maximum hand size).
+  Spent limits encode as flags for ability indices 0–3 plus a count of later
+  indices (no current card has more). `deathtouch_damage` and `was_cast` stay
+  unobserved: SBAs consume the first before any decision, and the second is
+  read only while its own entry resolves.
+
+## T2 notes at the second and third merges (heads `89e320c48`, `a5587df5a`) — 2026-10-29
+
+T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
+`d218e1dc2`: possible worlds v3 resample foretold cards (ordered slots,
+`P(m, F)` fill factor); belief priors are not yet foretold-aware.
+
+- 2026-10-30 (continuous effects as records), implement-time refinements of the
+  accepted model, reversible:
+  - A set fixed at resolution (CR 611.2c) is one record per object sharing a
+    timestamp, rather than a `Locked(Vec<ObjectRef>)` record, so every read
+    indexes by affected object.
+  - Durations are `EndOfTurn` and `Indefinite` only; `EndOfCombat`,
+    `UntilYourNextTurn` and `WhileSourceOnBattlefield` join when a card needs
+    one (no T3 card does). "Grant ability" stays the Equipment/Aura static.
+  - The timestamp clock is the object-id generator (a permanent's `id` is its
+    entering timestamp; attaching renews `Permanent.timestamp`).
+  - Rules effects (can't be blocked, exile if it would die, kept mana, hand
+    size) are not abilities, so losing all abilities does not end them.
+  - The Observation keeps `plus1_counters` (pre-T3 consumers) and `counters`
+    holds the other kinds, so they partition rather than duplicate.
+  - The model hashes fact ids into 4096 embedding buckets (collisions
+    possible); reusing the semantic-card token table for fact ids is a
+    follow-up if it matters.
+  - Ability descriptions of continuous effects are generated uniformly
+    (`continuous_description`), so some offer texts change wording
+    ("can't be blocked until end of turn").
+## T4 (488a40) assumptions — 2026-10-30
+
+- T4 extends the open world in place, like T3 (no checkpoint uses it). T3's
+  sync with main renamed that world w17 (one open world on main), so T4's
+  w18 evidence became w17 at the T3 sync of 2026-10-30. New cards change the
+  content digest, so w17 evidence is re-recorded once at gate.
+- T3 sync (2026-10-30): T4's temporary-modifier effects became continuous-
+  effect records. `ModifyTargetPlayerCreatures` is
+  `ApplyContinuous { affected: AffectedSpec::EachTargetPlayerControls(..) }`
+  (the affected set fixed as it resolves, CR 611.2c); its target spec is
+  `TargetSpec::Player`, so the variant holds only its predicate (clippy's
+  enum-size bound). `dealt_damage_this_turn` is permanent v5 column 36, after
+  T3's timestamp rank (rows 38 wide); T4's used-ability flag columns are gone
+  because T3 made used abilities fact rows.
+- `EffectValue::SourcePower` reads the source's current power and is 0 once
+  it has left the battlefield (LKI power is not captured); firebending X
+  resolves while its attacker is normally still present.
+- Count fields of `MillCards`, `SearchBasicLand`, `PutCountersOnEachMatching`
+  and (design review) `DrawCards` are `EffectValue`; no `*Value` siblings.
+- T4 card tests are appended at the end of `tests/cards/tla.rs`, after the
+  cross-card section, rather than interleaved in `cards()` order.
+- Slice 4: raid's intervening-if is not rechecked at resolution: attacking
+  this turn cannot be undone within the turn, and both raid triggers resolve
+  in the turn they fire.
+- Slice 4: `cards_drawn` joined the observed turn history beside the three
+  new facts (it was unobserved before); its column is v5 player 66.
+- Slice 4: `PlayerSelector::Target` holds a boxed spec (clippy's enum-size
+  bound); no card uses it yet. Amounts of `LoseLife`/`DealDamageToPlayer` are
+  `EffectValue`, like `DrawCards.count`.
+- Slice 4: a land entering is read from its printed card type as it enters.
+- Slice 3: The Earth King counts attacking power-4+ creatures as its search resolves ("that many"), not as declared; one removed in response lowers the count.
+- 2026-10-30 (sync): T4 reached main `10eeb1f55` through T3's merge
+  `3cef39b8e` rather than merging main itself, so T3's field conversion is the
+  only one. T4's part: Benevolent River Spirit's ward and required waterbend
+  as `StaticAbility::Ward`/`AdditionalCost::RequiredWaterbend`, Earth Rumble
+  Wrestlers' statics, T4's tokens dropped from `tla.rs` in favor of
+  `tokens.rs`, Bear and Monk off `TOKENS_AWAITING_PRODUCER`.
+- 2026-10-30 (concept review): intervening-if is checked as the trigger event
+  occurs and on resolution (CR 603.4), read as the steer's "when the trigger
+  would be put on the stack". Tolls of War's "during your turn" stays
+  `ActiveIf` (a state-limited trigger event, not an intervening-if).
+
+## T2 and afbd6a notes from main (merged 2026-10-30)
 
 - Printed flashback plus Iroh's grant: the grant's cost is used.
 - Synced onto T1's w17 (`8790821da`): T2's 51 cards were regenerated in engine
@@ -98,7 +291,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 - Card abilities use `ActivateCardAbility` (sharing `PriorityActivateAbility`);
   a discard-cost ability refers to its card's graveyard object after costs.
 - `lesson_mana` stays the total of any restriction; per-class detail is
-  `restricted_mana`. `PlayerVitals` ≤ 40 bytes, `UndoEntry` ≤ 72.
+  `restricted_mana`. `PlayerVitals` ≤ 40 bytes.
 - Avatar's Wrath's hand-only lock ends at its caster's next untap and blocks
   flashback too; mass airbend exiles one at a time.
 - Kicked Aang's Journey runs two searches (no TLA Shrine is defined yet).
@@ -126,21 +319,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 - Gaps: granted land plays of another
   player's card would enter under its owner (unreachable: no T2 grant lets a player play another player's land). (Academy's card face now prints
   and names exhausted / once-each-turn / granted firebending, text-5 wording.)
-- Possible worlds v3 (2026-10-29): foretold slots are ordered (each has its
-  own foretell turn), so the fill factor is `P(m, F)`, not `C(m, F)`; the
-  ratio is constant across worlds. Materialization picks the slot set
-  uniformly but keeps an already-foretold chosen card in place, so slot
-  assignment is not uniform over orderings. Not yet foretold-aware (follow-up
-  for belief owners): `PhysicalHandSampler`'s hypergeometric prior and
-  `BeliefState.draw_unknown`/hidden-draw convolution in `belief/range.py`
-  still treat every pool card as hand-or-library, as does the library
-  count row in `belief/encoding.py` (pool − hand).
-  2026-10-30 (concept review 4, 1b): the tracker's accounting now counts the
-  slot; which hand card was foretold is assumed uniform by count (MTG-215).
-- `rules_tests::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
-  failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
-  after a rejected stale submission); passes alone and in 7 later runs. It
-  touches no possible-world code; likely order/timing-dependent shared state.
+- Possible worlds v3 and the foretold-aware belief follow-ups (MTG-215) are
+  T2's: `a5587df5a:scratch/questions.md` and `a18902e0e:scratch/questions.md`.
 
 ## afbd6a (delete old world), 2026-10-30 — headless choices
 
@@ -179,3 +359,136 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   spare-mana and pump abilities. T2's nine new targeted spells are pinned in
   `test_heuristic.py`; the seven it cannot rate (airbend, linked exile, …) get
   polarity `None`, the documented neutral fallback.
+
+## 558daa (cull), 2026-10-30 — headless choices
+
+- Files touched by open PRs #383 #395 #399 #402 #403 were not edited (#403 has since merged; its files are listed as remaining work); their
+  candidates are listed as held in the plan. The authored-match parity receipt
+  (in #395/#399) was regenerated anyway because it hashes every Rust source.
+- Pre-existing: `academy.advice.ADVISOR_SOURCE_PATHS` names the missing
+  `manabot/sim/conditional_search.py`, so the two code-source advice fixtures
+  cannot verify their source bundle; editing `advice.py` changes no behavior.
+- `visual-references` archived with Doppler `manabot/prd` R2 credentials.
+- 2026-10-30 (second pass): the directive conditioned deleting
+  `semantic/policy.py` *and* the belief demo cluster on dropping `belief-demo`
+  without editing `cli.py` (#395). The condition concerns the demo only:
+  `semantic/policy.py` has no CLI path, so it was deleted; the demo cluster is held.
+- 2026-10-30: `belief/__init__.py` keeps a 15-name lazy map, against CLAUDE.md's
+  "re-export nothing", because `tests/belief/{support,test_state}.py` (#395) read it.
+
+## Selector rename assumption (2026-10-30, headless)
+
+New regimes/checkpoints serialize `world`; a run started before the rename
+cannot resume exactly because `regime_digest` hashes the dump (frozen evidence
+still loads and receipts verify). Chose not to hash under old keys there —
+reversible if mid-flight resumes matter.
+
+## T3 sync onto main `10eeb1f55` (afbd6a: statics and costs as variants), 2026-10-30
+
+- T3's new `CardDefinition` fields became variants, never fields:
+  `StaticAbility::{LookAtLibraryTop, CastFromLibraryTop, AttachedHas,
+  AttachedSetsCharacteristics, CostsLessIfTargets, KeywordGrant, Restriction,
+  CreatureWithCounters, TypeGrant, AttacksDespiteDefender}` and
+  `AdditionalCost::RequiredWaterbend` (Crashing Wave). Accessors on
+  `CardDefinition` read them; `AbilityGrant::index` indexes `attached_grants()`
+  (the `AttachedHas` variants in printed order). Each has a guard row, witness
+  card and behavior test in `observability.rs`.
+- Ability loss still gates main's `BlockRestriction` / `CantBeBlockedIf`
+  statics (T3's `has_lost_abilities` checks kept).
+- T3's Dragon and Monk definitions left `tla.rs` for main's `tokens.rs`
+  (main's Scryfall ids); Monk's prowess uses T3's continuous-effect record.
+- `manabot/sim/heuristic.py` reads `ApplyContinuous` as the targeted effect it
+  amounts to (`BuffTarget`, `GrantKeywordsToTarget`, …; a source P/T change is
+  `ModifyUntilEot`). T3's eight new targeted spells are pinned in
+  `test_heuristic.py`; seven are unrated (polarity `None`).
+- w17 evidence re-recorded in place (semantic kernel 14 cases / 3401
+  commands; authored-match receipt and parity 142 commands; public commitment
+  69 commitments, no gaps; Academy demos, choice navigation, trigger order).
+- 2026-10-30 (slice 5): Fire Lord Zuko's one printed ability with two
+  trigger events is two `Ability::Triggered` entries (no event is both a cast
+  and an entry from exile). Appa airbends its targets one at a time.
+  `CreatureDealsCombatDamageToPlayer` triggers read the creatures from the
+  damage step's batch; with first strike, the first-strike step's triggers
+  are matched after that step's state-based actions.
+- Realign repaired the stale `ModifyTriggeringPermanent` audit anchors (rules
+  400.7j, 608.2k now anchor `AffectedSpec::TriggeringPermanent`).
+- 2026-10-30 (slices 5–6, implement): "Whenever you put counters" reads the
+  placing player as the resolving instruction's controller; counters a
+  permanent enters with do not announce `CountersPut`. No effect surveils, so
+  Planetarium watches scries only. Earthbender Ascension's reflexive "if" is
+  asked as it would trigger, not again on resolution. A spent once-each-turn
+  option shows as the permanent's once-each-turn count, not by ability index.
+  A spell's own "when you do" has no source object yet (Earth Rumble waits).
+- 2026-10-30 (Rioter, PR review): "Tap an untapped Ally you control" is
+  `ActivatedAbilityDefinition.tap_cost: Option<CardPredicate>`, beside the
+  existing `discard_card`/`exhaust` cost fields (an activated-ability cost,
+  not a `CardDefinition` field); tokens carry it via serde. Waiting delayed
+  triggers are v5-only relation frames: v2–v4 tensors drop kind-10 frames so
+  frozen inputs keep their exact rows, while JSON/text show them for every
+  version. The learning role `delayed_trigger` is projected in
+  `BoundSemanticPack.project_observation`, the only learning-object
+  projection (no separate runtime object rows exist; checked 2026-10-30).
+
+## Characteristics view and CI fix — 2026-10-30
+
+- The Integration failure in `test_action_identity` (target cases) was v5's
+  timestamp-rank column (35), not the definition id, which stays at column 24
+  in every version; `identity_removed` now also zeroes it on v5 rows, as
+  `test_choice_separability` does. `choice_corpus`'s `without_definition` mutation is left as is:
+  it feeds a separability report, no test asserts a tie on it, and changing it
+  would change what that analysis measures.
+- `Game::characteristics(id)` (Jack Heart's steer 9bf48ffa) composes the
+  private layer stages once per call; it does not memoize across calls. Code
+  the layer computation itself reaches (static scopes, ability mana outputs via
+  `controller_value`, `permanent_is_battlefield_creature`) reads the private
+  stages, so computing a view never recurses into another view. A view
+  computes its shared layer inputs (`LayerBasis`) once; `attachments_on`
+  checks `attached_to` before scanning records. Debug `engine_tests` went
+  from 157 s (a18902e0e) to 102 s; a first cut without these ran 311 s.
+- `Characteristics.characteristics_set` keeps the Observation's
+  `name`/`creature_types` reported only when an Aura sets them.
+- Can't-be-blocked and exile-if-dies stay record queries (`flow/effects.rs`).
+
+## Sync onto T3's characteristics view — 2026-10-30
+
+- T4's Zhao land-type overwrite and static subtype grants join `LayerBasis`:
+  the overwrite contributes to the loss timestamp and its subtype, with static
+  type-grant subtypes, to `added_subtypes`; its mana ability still follows the
+  Aura grants. `ability_loss_timestamp` computes the loss without
+  `layer_basis` (no static scope), because `layer_basis` now reads
+  `static_sources`, which asks each source's loss. T4 callers of the removed
+  accessors read `Game::characteristics`.
+
+## CI fix 2026-10-30: Clean-machine Play timed out waiting on Search 64
+
+Assumption: the clean-machine proof's 30s wait for an action's update is a
+budget for the Search 64 opponent's reply, not a latency requirement. Local
+CPU-time measurements (seeds 1-3, first three hero moves) put some T4-branch
+replies at 25-40s versus 15-22s on main, on a loaded laptop; hosted runners are
+slower. Raised the wait to 120s and removed a duplicate `static_sources` pass
+from `layer_basis`. The remaining per-query cost of `Game::characteristics`
+(land-type overwrite and type-grant scans) is left to the characteristics
+lookup work (`mtg-234`). If Search 64 reply latency is itself a product
+requirement, it needs its own Task.
+
+- Clean-machine Play on `289bfbde3` timed out waiting for search-64's reply.
+  One UR Lessons vs GW Allies game (seed 0, hero plays land/cast/activate/pass
+  first): worst search-64 decision main `b73a6b5db` 3.1 s, `a18902e0e`
+  12.8 s, `289bfbde3` 16.7 s. Each view rebuilt static sources three times
+  and checked each source's ability loss through a full attachment scan, and
+  mana payment built three views per land. Static sources are now collected
+  once per view (including mana-ability grantors, which now also stop
+  granting when they lose their abilities), loss checks read records unless a
+  characteristic-setting Aura is attached, and card-property filters run before
+  views: 7.0 s. The rest of the gap to main is per-view scans
+  (`static_sources`, `attachments_on` in `layer_basis`) repeated for every
+  permanent each priority (SBA, payment model); MTG-234 closes it with a
+  per-revision static index and view cache.
+
+## MTG-234 — 2026-10-30
+
+- The static-source index is rebuilt lazily once per state revision rather
+  than maintained incrementally at each enter/leave/attach/detach site: every
+  state write already passes `TrackedState::deref_mut`, so a derived index
+  cannot drift, and the measured cost is small. Revisit only if profiles show
+  index rebuilds dominating.
