@@ -86,6 +86,12 @@ class MatchConfig(BaseConfig):
     villain_deck: dict[str, int] = Field(default_factory=_default_deck)
     hero_sideboard: dict[str, int] = Field(default_factory=dict)
     villain_sideboard: dict[str, int] = Field(default_factory=dict)
+    # Open decklists disclose each player's main deck and sideboard to the
+    # opponent; closed disclose neither. One setting covers both players.
+    # Omitted when open, so earlier configurations keep their identity.
+    decklists: Literal["open", "closed"] = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
 
     @model_validator(mode="after")
     def validate_sources(self) -> "MatchConfig":

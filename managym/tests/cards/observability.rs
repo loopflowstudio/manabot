@@ -198,12 +198,13 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
     ]
 }
 
-fn player_fields(player: &Player) -> [(&'static str, Seen); 11] {
+fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
     let Player {
         id: _,
         index: _,
         deck: _,
         sideboard: _,
+        disclosure: _,
         known_hand: _,
         name: _,
         life: _,
@@ -215,8 +216,18 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 11] {
     [
         ("id", Seen::Identity),
         ("index", Seen::Identity),
-        ("deck", Seen::Via("zone counts (library size)")),
-        ("sideboard", Seen::Via("sideboard cards and counts")),
+        (
+            "deck",
+            Seen::Via("decklists tensor (main and unseen counts)"),
+        ),
+        (
+            "sideboard",
+            Seen::Via("decklists tensor (sideboard counts)"),
+        ),
+        (
+            "disclosure",
+            Seen::Via("decklists tensor rows, all zero for a closed opponent"),
+        ),
         ("known_hand", Seen::Via("known_hand tensor")),
         ("name", Seen::Identity),
         ("life", Seen::Player(0, 1)),
@@ -2345,9 +2356,6 @@ macro_rules! encoding {
 
 const PERMISSION: usize = CARD_PERMISSION_INDEX;
 
-const HIDDEN_SIDEBOARD: &str = "the agent's remaining copies are outside rows of \
-    agent_cards and the ones in play are visible cards; the opponent's sideboard is \
-    hidden information (scratch/questions.md)";
 const HISTORY: &str = "zone and incarnation metadata belong to the public history rows \
     (policy_history_version 1); the v0 event tensor is frozen";
 
@@ -2392,8 +2400,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         restricted_mana => [Rows("restricted mana below")],
         hand_only_until => [column(Player, PLAYER_HAND_ONLY_INDEX)],
         known_hand => [Rows("known_hand")],
-        sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
-        remaining_sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
+        main_counts => [Rows("decklists")],
+        unseen_counts => [Rows("decklists")],
+        sideboard_counts => [Rows("decklists")],
+        remaining_sideboard_counts => [Rows("decklists")],
         keeps_red_mana => [column(Player, PLAYER_KEEPS_RED_MANA_INDEX)],
         no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
         effects => [Rows("Effect fact rows, ContinuousEffectData below")],

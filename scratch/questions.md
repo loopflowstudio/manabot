@@ -44,3 +44,44 @@ parity coverage and its CI selection. The latter remain uncommitted; see the
 design's gate results for commands and evidence boundaries.
 Shipping remains stopped by steer f39fef34; `/verify` is not a pre-merge check
 because that skill finishes delivered Tasks.
+
+## MTG-216 (decklist disclosure) — 2026-10-30, implementation (headless)
+
+Jack Heart accepted one open/closed option, default open (supersedes the
+kickoff's four-way assumption). Reversible choices made while implementing:
+
+- No player-row "known" flag: an open main deck is never empty, so all-zero
+  `decklists` rows mean closed. The player width is untouched (67 after the
+  sync with main's T4 v5 widening) and the native width-binding rule is
+  unchanged.
+- No separate Python `DecklistHidden` class: refusals are `AgentError`
+  ("decklist closed: …"). `Game::determinize` and
+  `HiddenHandConstraints::for_viewer` assert; `Env` entry points check first.
+- Search refusal at match build lists observation-only kinds
+  (`checkpoint`, `heuristic`, `random`, `scripted_greedy`); every other kind is
+  refused in closed matches. Academy refuses its search villain in closed games.
+- Decklist pooling is semantic-pack only, like `known_hand`; generic-model
+  policies ignore the `decklists` buffer. Adding `decklist_projection` changes
+  the v5 semantic `ActorCritic` parameters, so v5 semantic checkpoints saved
+  before this change fail strict load (open world; none frozen).
+- Disclosure is not part of `world_binding` or deck identity: a checkpoint can
+  play both modes, and in a closed game it sees zero opponent rows.
+- `Deck.player()` (training deck pools) seats an open decklist; it takes no
+  disclosure argument. Closed games come from `MatchConfig.decklists` or
+  Academy only.
+- `canonical_replay`/`study` privacy validators do not check decklist maps:
+  frames carry no disclosure, and the engine projection is the authority.
+
+Inherited evaluation, MTG-17x/18x and card-evaluation notes (none select T4
+work) are at `ee42a8685:scratch/questions.md`, above "TLA direct-Rust decisions".
+
+
+## Sync onto main 230b2f563 — 2026-11-02
+
+The design link above is absent in this checkout (removed with added scratch
+files at 2c6cdae5f); the retained assumptions supply the resolution context.
+Preserve T5's CopyView and layered battlefield P/T alongside main's decklist
+disclosure fields. Navigation prefixes, offer IDs and state digests stay fixed;
+recompute derived frame hashes for the combined projections. Reconcile the
+current authored-match parity receipt's source manifest with the merged source,
+then verify the unchanged command tape and behavioral evidence.
