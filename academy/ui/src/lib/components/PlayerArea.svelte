@@ -164,6 +164,11 @@
       {label} will take {player.extra_turns === 1 ? 'an extra turn' : `${player.extra_turns} extra turns`} after this one.
     </p>
   {/if}
+  {#if player.additional_combats}
+    <p class="type-caption py-1" data-testid="additional-combats">
+      {label} has {player.additional_combats === 1 ? 'an additional combat phase' : `${player.additional_combats} additional combat phases`} still to come this turn.
+    </p>
+  {/if}
   {#if player.turn_history}
     {@const history = player.turn_history}
     <p class="type-caption py-1" data-testid="turn-history">

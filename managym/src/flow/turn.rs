@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::state::game_object::{ObjectRef, PlayerId};
+use crate::state::{
+    game_object::{ObjectRef, PlayerId},
+    predicate::CardPredicate,
+};
 
 /// A once-each-turn use: the exact source object and its ability index.
 pub type OnceEachTurnKey = (ObjectRef, usize);
@@ -48,6 +51,14 @@ pub const PHASE_STEPS: [&[StepKind]; 5] = [
     &[StepKind::PostcombatMain],
     &[StepKind::End, StepKind::Cleanup],
 ];
+
+/// An additional combat phase this turn (CR 500.8).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AdditionalCombat {
+    /// Only matching creatures can attack during it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attackers: Option<CardPredicate>,
+}
 
 /// What one player has done this turn, for conditions that read turn history
 /// ("if you attacked this turn", "your second card each turn"). The owner of
@@ -106,6 +117,14 @@ pub struct TurnState {
     /// the one who would have played after the turn they interrupted.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resume_with: Option<PlayerId>,
+    /// Additional combat phases to follow the current one this turn (CR
+    /// 500.8), the most recently created last; each may limit its attackers.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub additional_combats: Vec<AdditionalCombat>,
+    /// During an additional combat phase that limits its attackers: which
+    /// creatures can attack ("only land creatures can attack").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub combat_attackers: Option<CardPredicate>,
     pub current_phase: usize,
     pub current_step: usize,
     pub step_initialized: bool,
@@ -125,6 +144,8 @@ impl TurnState {
             ability_triggers_this_turn: BTreeMap::new(),
             extra_turns: Vec::new(),
             resume_with: None,
+            additional_combats: Vec::new(),
+            combat_attackers: None,
             current_phase: 0,
             current_step: 0,
             step_initialized: false,
@@ -172,6 +193,14 @@ impl TurnState {
         }
 
         self.current_step = 0;
+        if self.current_phase_kind() == PhaseKind::Combat {
+            // CR 500.8: an additional combat phase follows this one.
+            if let Some(combat) = self.additional_combats.pop() {
+                self.combat_attackers = combat.attackers;
+                return;
+            }
+            self.combat_attackers = None;
+        }
         if self.current_phase + 1 < PHASE_STEPS.len() {
             self.current_phase += 1;
             return;

@@ -72,6 +72,10 @@ pub struct PlayerData {
     /// Extra turns this player will take after this one (CR 500.7).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,
+    /// Additional combat phases still to come this turn, on the active
+    /// player's row (CR 500.8).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub additional_combats: u32,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
@@ -918,6 +922,11 @@ impl Observation {
                 .iter()
                 .filter(|taker| **taker == player)
                 .count() as u32,
+            additional_combats: if game.active_player() == player {
+                game.state.turn.additional_combats.len() as u32
+            } else {
+                0
+            },
             effects: ContinuousEffectData::list(game, Some(Affected::Player(player))),
         }
     }

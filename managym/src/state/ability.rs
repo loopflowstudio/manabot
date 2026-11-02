@@ -563,6 +563,16 @@ pub enum Effect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         transformed: bool,
     },
+    /// "After this phase, there is an additional combat phase [in which
+    /// only `attackers` can attack]" (CR 500.8).
+    AdditionalCombatPhase {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attackers: Option<CardPredicate>,
+    },
+    /// "Untap all [predicate] you control."
+    UntapAll {
+        predicate: CardPredicate,
+    },
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
@@ -1387,6 +1397,8 @@ impl Effect {
             | Effect::TapSource
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::AdditionalCombatPhase { .. }
+            | Effect::UntapAll { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::ExileSourceAndReturn { .. }
             | Effect::PutCountersOnCreatedToken { .. }

@@ -28,7 +28,8 @@ pub const PLAYER_SACRIFICED_INDEX: usize = PLAYER_ATTACKED_INDEX + 1;
 pub const PLAYER_LAND_ENTERED_INDEX: usize = PLAYER_SACRIFICED_INDEX + 1;
 pub const PLAYER_CARDS_DRAWN_INDEX: usize = PLAYER_LAND_ENTERED_INDEX + 1;
 pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
-pub const PLAYER_DIM: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
+pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
+pub const PLAYER_DIM: usize = PLAYER_ADDITIONAL_COMBATS_INDEX + 1;
 pub const LEGACY_CARD_DIM: usize = 41;
 /// v5 card columns replace v4's trailing validity flag, which moves to the
 /// new last column: 13 cast-permission terms, then announced X. A face-down
@@ -797,6 +798,7 @@ fn encode_player_features(
         out[PLAYER_LAND_ENTERED_INDEX] = bool_to_f32(history.land_entered);
         out[PLAYER_CARDS_DRAWN_INDEX] = history.cards_drawn as f32 / 10.0;
         out[PLAYER_EXTRA_TURNS_INDEX] = player.extra_turns as f32;
+        out[PLAYER_ADDITIONAL_COMBATS_INDEX] = player.additional_combats as f32;
     }
 
     object_to_index.insert(player.id, *current_object_index);
@@ -1372,6 +1374,7 @@ mod tests {
                 keeps_red_mana: false,
                 turn_history: Default::default(),
                 extra_turns: 0,
+                additional_combats: 0,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
@@ -1401,6 +1404,7 @@ mod tests {
                 keeps_red_mana: false,
                 turn_history: Default::default(),
                 extra_turns: 0,
+                additional_combats: 0,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],

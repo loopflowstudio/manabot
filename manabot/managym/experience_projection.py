@@ -301,6 +301,11 @@ def _serialize_player(
         **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
         **({"extra_turns": player.extra_turns} if player.extra_turns else {}),
         **(
+            {"additional_combats": player.additional_combats}
+            if player.additional_combats
+            else {}
+        ),
+        **(
             {"turn_history": turn_history}
             if (turn_history := _turn_history(player.turn_history))
             else {}

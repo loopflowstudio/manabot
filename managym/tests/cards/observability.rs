@@ -41,10 +41,11 @@ use managym::{
             PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX, PERMANENT_DEALT_DAMAGE_INDEX,
             PERMANENT_DIM, PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX,
             PERMANENT_GRANTED_LAND_INDEX, PERMANENT_ONCE_EACH_TURN_INDEX,
-            PERMANENT_TIMESTAMP_INDEX, PLAYER_ATTACKED_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM,
-            PLAYER_EXTRA_TURNS_INDEX, PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX,
-            PLAYER_LAND_ENTERED_INDEX, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX,
-            PLAYER_SACRIFICED_INDEX, PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
+            PERMANENT_TIMESTAMP_INDEX, PLAYER_ADDITIONAL_COMBATS_INDEX, PLAYER_ATTACKED_INDEX,
+            PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_EXTRA_TURNS_INDEX, PLAYER_HAND_ONLY_INDEX,
+            PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
+            PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
+            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
         },
     },
     flow::{
@@ -376,7 +377,7 @@ fn affected_witnesses() -> [AffectedSpec; 8] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 18] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 20] {
     let TurnState {
         active_player: _,
         turn_number: _,
@@ -387,6 +388,8 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 18] {
         ability_resolutions_this_turn: _,
         extra_turns: _,
         resume_with: _,
+        additional_combats: _,
+        combat_attackers: _,
         current_phase: _,
         current_step: _,
         step_initialized: _,
@@ -420,6 +423,17 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 18] {
         (
             "extra_turns",
             Seen::Player(PLAYER_EXTRA_TURNS_INDEX, PLAYER_EXTRA_TURNS_INDEX + 1),
+        ),
+        (
+            "additional_combats",
+            Seen::Player(
+                PLAYER_ADDITIONAL_COMBATS_INDEX,
+                PLAYER_ADDITIONAL_COMBATS_INDEX + 1,
+            ),
+        ),
+        (
+            "combat_attackers",
+            Seen::Actions("attack offers omit creatures the additional combat excludes"),
         ),
         (
             "resume_with",
@@ -464,6 +478,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
         Effect::TransformSource => "Effect::TransformSource",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
+        Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
+        Effect::UntapAll { .. } => "Effect::UntapAll",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::PutCountersOnTriggeringPermanent { .. } => {
             "Effect::PutCountersOnTriggeringPermanent"
@@ -581,7 +597,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 110;
+const EFFECT_VARIANTS: usize = 112;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -883,6 +899,12 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::TransformSource,
         Effect::TakeExtraTurn,
+        Effect::AdditionalCombatPhase {
+            attackers: Some(CardPredicate::creature()),
+        },
+        Effect::UntapAll {
+            predicate: CardPredicate::creature(),
+        },
         Effect::GainControl {
             player: PlayerSelector::You,
             target: TargetSpec::Creature,
@@ -1939,6 +1961,9 @@ fn turn_history_moves_each_players_named_column() {
             "history.permanents_sacrificed" => history.permanents_sacrificed = 2,
             "history.land_entered" => history.land_entered = true,
             "extra_turns" => turn.extra_turns.push(PlayerId(0)),
+            "additional_combats" => turn
+                .additional_combats
+                .push(managym::flow::turn::AdditionalCombat { attackers: None }),
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -2432,6 +2457,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         effects => [Rows("Effect fact rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
         extra_turns => [column(Player, PLAYER_EXTRA_TURNS_INDEX)],
+        additional_combats => [column(Player, PLAYER_ADDITIONAL_COMBATS_INDEX)],
     }));
     fields.extend(encoding!(PlayerTurnHistory {
         attacked => [column(Player, PLAYER_ATTACKED_INDEX)],

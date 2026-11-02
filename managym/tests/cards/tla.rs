@@ -13634,3 +13634,55 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
     assert!(s.battlefield_permanents_named(0, "Craw Wurm").is_empty());
     assert_eq!(s.game().state.turn.history[0].permanents_sacrificed, 2);
 }
+
+/// Bumi earthbends 4 as he enters; his combat damage untaps your lands and
+/// adds a combat phase after this one in which only land creatures attack.
+#[test]
+fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
+    let mut s = five_color_setup(&["Bumi, Unleashed", "Gray Ogre"]);
+    let land = s.force_permanent_on_battlefield(0, "Mountain");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    let bumi_card = cast(&mut s, "Bumi, Unleashed");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(land)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, land, CounterKind::PlusOnePlusOne), 4);
+    let bumi = s.game().state.card_to_permanent[bumi_card].unwrap();
+    clear_summoning_sickness(&mut s, bumi);
+    s.game_mut().state.permanents[land].as_mut().unwrap().tapped = true;
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, bumi);
+    s.advance_until(
+        |sc| !sc.game().state.turn.additional_combats.is_empty(),
+        "Bumi's combat damage trigger resolves".into(),
+    );
+    settle(&mut s);
+    assert!(!tapped(&s, land), "untapped all lands");
+    s.advance_until(
+        |sc| {
+            sc.current_step() == StepKind::DeclareAttackers
+                && sc.game().state.turn.combat_attackers.is_some()
+        },
+        "the additional combat's declare attackers step".into(),
+    );
+    assert_eq!(s.active_player(), 0);
+    let offered: Vec<PermanentId> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::DeclareAttacker {
+                permanent,
+                attack: true,
+                ..
+            } => Some(*permanent),
+            _ => None,
+        })
+        .collect();
+    assert!(offered.contains(&land), "the land creature may attack");
+    assert!(!offered.contains(&ogre), "Gray Ogre may not");
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert!(s.game().state.turn.combat_attackers.is_none());
+}

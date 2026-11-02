@@ -61,3 +61,29 @@ lays out, with status marks (main / T6 tree / proposed):
   2/3/5, retire card-shaped predicates, the approved Oracle-text generator.
 Order proposed: T6 → engine budget → vocabulary → revisions → card-set crate → T7.
 None of the proposals is decided.
+
+## Accepted into T6 scope (Jack Heart, 2026-11-02): one catalog, no pack multiplicity
+
+Decision: the content-pack simplification is part of T6, not a separate Task.
+
+- A world has one card list. `ContentPack` keeps its two essential jobs,
+  stable `CardDefId` rows (name order, so w17's manifest and `registry_key`
+  values do not move) and `content_digest`, and loses multiplicity: one
+  process-wide catalog, built from `cardsets::catalog()`, which `WorldIdentity`
+  reads directly.
+- Remove the per-game pack plumbing that exists only for authored preset packs:
+  `ContentPack::from_definitions` with a `pack_key`, `pack_key` on player
+  configs, `admits(pack, player)`, the same-pack-for-both-players error, the
+  `CardRegistry` alias, and `pools()` as a map of packs. Authored presets in
+  `setups.rs` become decklists over the one pool. `content_pool("world")` and
+  `WORLD_POOL` collapse onto the catalog (keep the `"world"` name where frozen
+  evidence or the Python API reads it).
+- `Card.definition` may become `&'static CardDefinition` once there is one
+  catalog; `Arc<ContentPack>` on game state goes away. Back-face rows and
+  `back_face`/`front_face` hang off the catalog.
+- Ward lowering moves out of `register_card` into the definition constructor,
+  or is documented as the catalog's one normalization.
+- Invariants to prove: w17's `content_digest` is unchanged (it sorts by name
+  and ignores pack structure); every directed card test and
+  `tests/cards/observability.rs` pass; `world_identity_names_the_version_and_card_digest`
+  still holds; `CARD_DEFINITION_COUNT` equals the catalog length.

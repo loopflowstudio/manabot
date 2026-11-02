@@ -4406,5 +4406,21 @@
     "colors": [
       "B"
     ]
+  },
+  "Bumi, Unleashed": {
+    "name": "Bumi, Unleashed",
+    "mana_cost": "{3}{R}{G}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Trample",
+      "Earthbend"
+    ],
+    "oracle_text": "Trample\nWhen Bumi enters, earthbend 4.\nWhenever Bumi deals combat damage to a player, untap all lands you control. After this phase, there is an additional combat phase. Only land creatures can attack during that combat phase.",
+    "colors": [
+      "G",
+      "R"
+    ]
   }
 }

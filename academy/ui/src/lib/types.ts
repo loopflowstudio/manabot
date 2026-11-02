@@ -174,6 +174,8 @@ export interface PlayerState {
   turn_history?: PlayerTurnHistory;
   /** Extra turns this player will take after this one. */
   extra_turns?: number;
+  /** Additional combat phases still to come this turn. */
+  additional_combats?: number;
   /** Continuous effects on this player, in timestamp order. */
   effects?: ContinuousEffect[];
   hand: CardState[];

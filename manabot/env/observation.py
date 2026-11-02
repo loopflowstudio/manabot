@@ -71,7 +71,9 @@ PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
 PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
 # Extra turns this player will take after this one.
 PLAYER_EXTRA_TURNS_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
-PLAYER_DIM = PLAYER_EXTRA_TURNS_INDEX + 1
+# Additional combat phases still to come this turn (active player's row).
+PLAYER_ADDITIONAL_COMBATS_INDEX = PLAYER_EXTRA_TURNS_INDEX + 1
+PLAYER_DIM = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
@@ -650,6 +652,7 @@ class ObservationEncoder:
             arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
             arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
             arr[PLAYER_EXTRA_TURNS_INDEX] = float(player.extra_turns)
+            arr[PLAYER_ADDITIONAL_COMBATS_INDEX] = float(player.additional_combats)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1

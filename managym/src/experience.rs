@@ -530,6 +530,9 @@ pub struct LegacyPlayerView {
     /// Extra turns this player will take after this one.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,
+    /// Additional combat phases still to come this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub additional_combats: u32,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,

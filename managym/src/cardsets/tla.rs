@@ -87,6 +87,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         boomerang_basics(),
         bumi_bash(),
         bumi_king_of_three_trials(),
+        bumi_unleashed(),
         buzzard_wasp_colony(),
         callous_inspector(),
         canyon_crawler(),
@@ -1896,6 +1897,56 @@ fn bumi_king_of_three_trials() -> CardDefinition {
                 ],
             }],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn bumi_unleashed() -> CardDefinition {
+    let text_box = "Trample\nWhen Bumi enters, earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever Bumi deals combat damage to a player, untap all lands you control. After this phase, there is an additional combat phase. Only land creatures can attack during that combat phase.";
+    let lands = || CardPredicate {
+        card_type: Some(CardType::Land),
+        ..Default::default()
+    };
+
+    CardDefinition {
+        key: "tla.bumi_unleashed",
+        scryfall_id: "b20a5185-7e31-4fc9-be11-9423bfc389bf",
+        name: "Bumi, Unleashed".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+        power: Some(5),
+        toughness: Some(4),
+        keywords: Keywords {
+            trample: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(4),
+                    target: TargetSpec::LandYouControl,
+                }],
+            },
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![
+                    Effect::UntapAll { predicate: lands() },
+                    Effect::AdditionalCombatPhase {
+                        attackers: Some(lands()),
+                    },
+                ],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

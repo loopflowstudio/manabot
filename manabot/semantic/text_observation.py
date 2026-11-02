@@ -621,6 +621,11 @@ class _Renderer:
                 lines.append(
                     f"Will take {player.extra_turns} extra turn(s) after this one."
                 )
+            if player.additional_combats:
+                lines.append(
+                    f"Has {player.additional_combats} additional combat phase(s) "
+                    "still to come this turn."
+                )
             for effect in player.effects:
                 lines.append(f"Effect: {self._effect(effect)}.")
             for label, quantities in (

@@ -530,6 +530,8 @@ class Player:
     turn_history: PlayerTurnHistory
     # Extra turns this player will take after this one (CR 500.7).
     extra_turns: int
+    # Additional combat phases still to come this turn (active player only).
+    additional_combats: int
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]

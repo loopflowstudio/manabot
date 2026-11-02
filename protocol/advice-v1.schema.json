@@ -2790,6 +2790,13 @@
     "LegacyPlayerView": {
       "additionalProperties": false,
       "properties": {
+        "additional_combats": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Additional Combats",
+          "type": "integer"
+        },
         "battlefield": {
           "items": {
             "$ref": "#/$defs/LegacyPermanentView"

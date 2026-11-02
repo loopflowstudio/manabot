@@ -556,6 +556,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
         "extra_turns": "extra turn",
+        "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",

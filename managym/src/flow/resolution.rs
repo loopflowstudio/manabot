@@ -878,6 +878,26 @@ impl Game {
                 }
                 None
             }
+            Effect::AdditionalCombatPhase { attackers } => {
+                self.state
+                    .turn
+                    .additional_combats
+                    .push(crate::flow::turn::AdditionalCombat {
+                        attackers: attackers.clone(),
+                    });
+                None
+            }
+            Effect::UntapAll { predicate } => {
+                for id in self.battlefield_permanents(frame.controller) {
+                    if self.permanent_matches_predicate(id, predicate) {
+                        if let Some(permanent) = self.state.permanents[id].as_mut() {
+                            permanent.untap();
+                        }
+                    }
+                }
+                self.invalidate_mana_cache(frame.controller);
+                None
+            }
             Effect::TakeExtraTurn => {
                 self.state.turn.extra_turns.push(frame.controller);
                 None

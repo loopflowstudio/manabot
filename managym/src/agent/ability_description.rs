@@ -625,6 +625,14 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ExileSourceAndReturn { player, transformed } => format!("Exile this, then return it to the battlefield{} under the control of {}", if *transformed { " transformed" } else { "" }, player_description(player)),
         TransformSource => "Transform this".into(),
         TakeExtraTurn => "Take an extra turn after this one".into(),
+        AdditionalCombatPhase { attackers } => match attackers {
+            None => "After this phase, there is an additional combat phase".into(),
+            Some(predicate) => format!(
+                "After this phase, there is an additional combat phase. Only {} can attack during that combat phase",
+                predicate_description(predicate, "creatures")
+            ),
+        },
+        UntapAll { predicate } => format!("Untap all {} you control", predicate_description(predicate, "permanents")),
         GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
         ExileWithSource { target } => format!("Exile {}", target_description(target)),

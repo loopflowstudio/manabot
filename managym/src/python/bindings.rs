@@ -1050,6 +1050,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub extra_turns: u32,
     #[pyo3(get, set)]
+    pub additional_combats: u32,
+    #[pyo3(get, set)]
     pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
     pub combat_mana: i32,
@@ -1288,6 +1290,7 @@ impl From<PlayerData> for PyPlayer {
             keeps_red_mana: value.keeps_red_mana,
             turn_history: value.turn_history.into(),
             extra_turns: value.extra_turns,
+            additional_combats: value.additional_combats,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1321,6 +1324,7 @@ impl From<PyPlayer> for PlayerData {
             keeps_red_mana: value.keeps_red_mana,
             turn_history: value.turn_history.into(),
             extra_turns: value.extra_turns,
+            additional_combats: value.additional_combats,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,

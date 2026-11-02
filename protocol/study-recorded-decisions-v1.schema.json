@@ -1374,6 +1374,12 @@
     "LegacyPlayerView": {
       "type": "object",
       "properties": {
+        "additional_combats": {
+          "description": "Additional combat phases still to come this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "battlefield": {
           "type": "array",
           "items": {

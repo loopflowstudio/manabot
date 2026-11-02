@@ -1,6 +1,8 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling — plan
 
-Status (2026-11-02): implementing. Brief: Task MTG-225 (16 cards, allocation
+Status (2026-11-02): implementing. Jack Heart's steer (2026-11-02, comment
+b222da8f) adds the content-pack simplification to T6; see
+[t6-direction.md](t6-direction.md). Brief: Task MTG-225 (16 cards, allocation
 `planned_pr: T6`); direction in [t6-direction.md](t6-direction.md). One
 cohesive PR, then stop for Jack Heart's review.
 
@@ -51,7 +53,7 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | Aang, at the Crossroads // Aang, Destined Savior | |
 | Avatar Aang // Aang, Master of Elements | |
 | Bender's Waterskin | supported |
-| Bumi, Unleashed | |
+| Bumi, Unleashed | supported; additional land-creature combat |
 | Koh, the Face Stealer | |
 | Ember Island Production | supported; copies the face that's up, transformed |
 | Fire Lord Azula | |

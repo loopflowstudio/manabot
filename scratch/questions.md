@@ -73,3 +73,6 @@ here; main carries their outcomes.
 - Foggy Swamp Visions' "X target creature cards" offers up to X targets
   (`max_x`), not exactly X; "your next end step" uses the next end step, the
   same for a sorcery. Its heuristic polarity is pinned "harmful" (exile).
+- Additional combat phases are a stack on `TurnState` observed as a count on
+  the active player's row; a pending phase's attacker limit is visible only
+  once it applies (attack offers).
