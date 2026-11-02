@@ -201,7 +201,7 @@ fn restricted_trigger_rejects_low_value_spell_and_counters_legal_spell() {
     game.state.pending_triggers.push(trigger(
         bolt,
         vec![Effect::CounterSpell {
-            target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+            what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
         }],
         0,
     ));
@@ -224,9 +224,9 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
         bolt,
         vec![
             Effect::CounterSpell {
-                target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+                what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
             },
-            Effect::GainLife { amount: 7 },
+            Effect::gain_life(7),
         ],
         0,
     ));
@@ -250,9 +250,9 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
         source,
         vec![
             Effect::CounterSpell {
-                target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+                what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
             },
-            Effect::GainLife { amount: 7 },
+            Effect::gain_life(7),
         ],
         0,
     ));
@@ -291,7 +291,7 @@ fn trigger_target_distinctness_is_enforced_per_clause_at_submission() {
                 requirement: TargetRequirement::one(spec),
                 effects: vec![],
             },
-            Effect::GainLife { amount: 7 },
+            Effect::gain_life(7),
         ],
         0,
     ));
@@ -312,7 +312,7 @@ fn trigger_target_distinctness_is_enforced_per_clause_at_submission() {
 fn audit_same_controller_triggers_require_an_order_choice() {
     let (mut game, bolt, _, _, _) = fixture();
     game.state.pending_triggers = vec![
-        trigger(bolt, vec![Effect::GainLife { amount: 2 }], 0),
+        trigger(bolt, vec![Effect::gain_life(2)], 0),
         trigger(
             bolt,
             vec![Effect::DealDamageToPlayer {
@@ -341,7 +341,7 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
     for (gain_last, expected_life, expected_alive) in [(true, 2, true), (false, 0, false)] {
         let (mut game, source, _, _, _) = fixture();
         game.state.players[0].life = 2;
-        let gain = vec![Effect::GainLife { amount: 2 }];
+        let gain = vec![Effect::gain_life(2)];
         let damage = vec![Effect::DealDamageToPlayer {
             player: PlayerSelector::You,
             amount: EffectValue::Fixed(2),
@@ -480,7 +480,7 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
                         requirement: TargetRequirement::one(spec.clone()),
                         effects: vec![Effect::return_to_hand(ObjectSelector::Target(spec))],
                     },
-                    Effect::GainLife { amount: 7 },
+                    Effect::gain_life(7),
                 ],
                 0,
             );
@@ -532,7 +532,7 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
             source,
             vec![
                 Effect::return_to_hand(ObjectSelector::Target(spec.clone())),
-                Effect::GainLife { amount: 7 },
+                Effect::gain_life(7),
             ],
             0,
         );
@@ -568,15 +568,7 @@ fn trigger_order_all_three_occurrence_permutations_are_legal() {
     ] {
         let (mut game, source, ..) = fixture();
         game.state.pending_triggers = (0..3)
-            .map(|id| {
-                trigger(
-                    source,
-                    vec![Effect::GainLife {
-                        amount: id as i32 + 1,
-                    }],
-                    id,
-                )
-            })
+            .map(|id| trigger(source, vec![Effect::gain_life(id as i32 + 1)], id))
             .collect();
         for (position, id) in order[..2].iter().enumerate() {
             let space = game.flush_triggers().unwrap();
@@ -601,7 +593,7 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
     use crate::flow::trigger::{TriggerId, TriggerOrderingClass};
     for active in [PlayerId(0), PlayerId(1)] {
         let (mut game, source, ..) = fixture();
-        let ordinary = trigger(source, vec![Effect::GainLife { amount: 1 }], 0);
+        let ordinary = trigger(source, vec![Effect::gain_life(1)], 0);
         let mut batch = Vec::new();
         for group in 0..4 {
             for id in 0..2 {
@@ -628,7 +620,7 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
         });
         game.state
             .pending_triggers
-            .push(trigger(source, vec![Effect::GainLife { amount: 9 }], 99));
+            .push(trigger(source, vec![Effect::gain_life(9)], 99));
         for group in 0..4 {
             let space = game.flush_triggers().unwrap();
             let player = if group % 2 == 0 {
@@ -659,10 +651,10 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
     assert!(game.flush_triggers().is_none());
     game.state
         .pending_triggers
-        .push(trigger(source, vec![Effect::GainLife { amount: 1 }], 0));
+        .push(trigger(source, vec![Effect::gain_life(1)], 0));
     assert!(game.flush_triggers().is_none());
     game.state.pending_triggers = (1..66)
-        .map(|id| trigger(source, vec![Effect::GainLife { amount: 1 }], id))
+        .map(|id| trigger(source, vec![Effect::gain_life(1)], id))
         .collect();
     let space = game.flush_triggers().unwrap();
     assert_eq!(space.actions.len(), 65);
@@ -695,7 +687,7 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
 fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     use crate::agent::{observation::Observation, observation_encoder};
     let (mut game, source, other, ..) = fixture();
-    let mut first = trigger(source, vec![Effect::GainLife { amount: 1 }], 900);
+    let mut first = trigger(source, vec![Effect::gain_life(1)], 900);
     first.source_ref = game.current_object_ref(source);
     first.context = Some(Target::StackSpell(source));
     let mut second = first.clone();
@@ -743,12 +735,12 @@ fn trigger_order_target_resume_and_nested_fork_preserve_round() {
             source,
             vec![Effect::TargetClause {
                 requirement: TargetRequirement::one(TargetSpec::Player),
-                effects: vec![Effect::GainLife { amount: 1 }],
+                effects: vec![Effect::gain_life(1)],
             }],
             0,
         ),
-        trigger(source, vec![Effect::GainLife { amount: 2 }], 1),
-        trigger(source, vec![Effect::GainLife { amount: 3 }], 2),
+        trigger(source, vec![Effect::gain_life(2)], 1),
+        trigger(source, vec![Effect::gain_life(3)], 2),
     ];
     game.state.pending_triggers[0].source_ref = game.current_object_ref(source);
     game.current_action_space = game.flush_triggers();
@@ -814,7 +806,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 3 }],
+            effects: vec![Effect::gain_life(3)],
         },
     ];
     let mut dies = trigger(source, vec![], 0);

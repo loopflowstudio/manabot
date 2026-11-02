@@ -251,7 +251,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
         condition: TriggerCondition::Dies {
             subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
         },
-        effects: vec![Effect::GainLife { amount: 1 }],
+        effects: vec![Effect::gain_life(1)],
     };
     let mut expected_sources = Vec::new();
     for permanent_id in [first, second] {

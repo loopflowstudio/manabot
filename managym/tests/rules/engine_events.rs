@@ -16,7 +16,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
-        ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+        ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
         card::{BlockRestriction, CardType, StaticAbility},
         effect::Modification,
         game_object::PlayerId,
@@ -123,7 +123,7 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
             },
             effects: vec![Effect::CreateToken {
                 token_name: "Ally".to_string(),
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
                 attach_source: false,
             }],
@@ -166,7 +166,7 @@ fn one_or_more_attack_trigger_fires_once() {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -199,7 +199,7 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -230,7 +230,7 @@ fn becomes_tapped_fires_when_attacker_taps() {
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -264,7 +264,7 @@ fn vigilance_attacker_does_not_become_tapped() {
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -302,7 +302,7 @@ fn tapped_for_mana_trigger() {
             condition: TriggerCondition::TappedForMana {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -335,7 +335,7 @@ fn attack_tap_is_not_tapped_for_mana() {
             condition: TriggerCondition::TappedForMana {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -361,7 +361,7 @@ fn dies_trigger_fires_on_death() {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 
@@ -387,7 +387,7 @@ fn bounce_is_not_death() {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
     );
 

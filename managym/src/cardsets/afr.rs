@@ -1,6 +1,6 @@
 //! Adventures in the Forgotten Realms.
 use crate::state::{
-    ability::{Effect, EffectValue, TargetSpec},
+    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{AdditionalCost, CardDefinition, CardType, CardTypes, SacrificeCost},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -31,12 +31,7 @@ fn deadly_dispute() -> CardDefinition {
             Effect::DrawCards {
                 count: EffectValue::Fixed(2),
             },
-            Effect::CreateToken {
-                token_name: "Treasure".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Treasure", 1),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -52,8 +47,8 @@ fn power_word_kill() -> CardDefinition {
         name: "Power Word Kill".into(),
         mana_cost: Some(ManaCost::parse("{1}{B}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::Destroy {
-            target: TargetSpec::Permanent {
+        spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+            TargetSpec::Permanent {
                 predicate: CardPredicate {
                     not_subtypes: vec![
                         "Angel".into(),
@@ -65,7 +60,7 @@ fn power_word_kill() -> CardDefinition {
                     ..Default::default()
                 },
             },
-        }],
+        ))],
         text_box: text_box.into(),
         ..Default::default()
     }

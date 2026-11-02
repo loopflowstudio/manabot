@@ -472,10 +472,7 @@ impl Game {
             Effect::AddOneColorManaValue { amount } => {
                 let amount = self.controller_value(amount, controller).max(0) as usize;
                 if amount == 0 {
-                    return Some(Effect::AddMana {
-                        mana: Mana::default(),
-                        until_end_of_combat: false,
-                    });
+                    return Some(Effect::add_mana(Mana::default()));
                 }
                 Some(Effect::mana_choice(
                     ["W", "U", "B", "R", "G"].map(|color| Mana::parse(&color.repeat(amount))),

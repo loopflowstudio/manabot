@@ -64,8 +64,8 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser,
-            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector,
+            Ability, Condition, DelayedEvent, Effect, EffectValue, Except, LinkedChooser,
+            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector, Scope,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{
@@ -343,33 +343,6 @@ fn duration_code(duration: EffectDuration) -> f32 {
     }
 }
 
-/// The token each `AffectedSpec` contributes; no wildcard.
-fn affected_token(affected: &AffectedSpec) -> &'static str {
-    match affected {
-        AffectedSpec::You => "AffectedSpec::You",
-        AffectedSpec::Source => "AffectedSpec::Source",
-        AffectedSpec::Target(_) => "AffectedSpec::Target",
-        AffectedSpec::TriggeringPermanent => "AffectedSpec::TriggeringPermanent",
-        AffectedSpec::EachYouControl(_) => "AffectedSpec::EachYouControl",
-        AffectedSpec::EachMatching(_) => "AffectedSpec::EachMatching",
-        AffectedSpec::EachOpponentControls(_) => "AffectedSpec::EachOpponentControls",
-        AffectedSpec::EachTargetPlayerControls(_) => "AffectedSpec::EachTargetPlayerControls",
-    }
-}
-
-fn affected_witnesses() -> [AffectedSpec; 8] {
-    [
-        AffectedSpec::You,
-        AffectedSpec::Source,
-        AffectedSpec::Target(TargetSpec::Creature),
-        AffectedSpec::TriggeringPermanent,
-        AffectedSpec::EachYouControl(CardPredicate::creature()),
-        AffectedSpec::EachMatching(CardPredicate::creature()),
-        AffectedSpec::EachOpponentControls(CardPredicate::creature()),
-        AffectedSpec::EachTargetPlayerControls(CardPredicate::creature()),
-    ]
-}
-
 /// The token each `ObjectSelector` contributes; no wildcard.
 fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
@@ -380,12 +353,13 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
+        ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 9] {
+fn selector_witnesses() -> [ObjectSelector; 10] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -394,15 +368,33 @@ fn selector_witnesses() -> [ObjectSelector; 9] {
         ObjectSelector::CreatedThisWay,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
-        ObjectSelector::Chosen {
-            predicate: CardPredicate::creature(),
-            another: true,
-        },
+        ObjectSelector::You,
+        ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {
-            of: AffectedSpec::EachYouControl(CardPredicate::creature()),
-            another: false,
+            of: Scope::YouControl,
+            predicate: CardPredicate::creature(),
+            except: None,
+            max_mana_value: Some(Box::new(EffectValue::X)),
         },
     ]
+}
+
+/// The token each `Scope` of an `Each` selector contributes; no wildcard.
+fn scope_token(scope: Scope) -> &'static str {
+    match scope {
+        Scope::YouControl => "Scope::YouControl",
+        Scope::OpponentsControl => "Scope::OpponentsControl",
+        Scope::Battlefield => "Scope::Battlefield",
+        Scope::TargetPlayerControls => "Scope::TargetPlayerControls",
+    }
+}
+
+/// The token each `Except` contributes; no wildcard.
+fn except_token(except: Except) -> &'static str {
+    match except {
+        Except::This => "Except::This",
+        Except::Target => "Except::Target",
+    }
 }
 
 /// The token each `PlayerSelector` contributes; no wildcard.
@@ -516,18 +508,13 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
         Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
         Effect::OptionalDiscardDraw { .. } => "Effect::OptionalDiscardDraw",
-        Effect::DiscardTargetPlayer { .. } => "Effect::DiscardTargetPlayer",
         Effect::Destroy { .. } => "Effect::Destroy",
-        Effect::Discard => "Effect::Discard",
-        Effect::DealDamageValue { .. } => "Effect::DealDamageValue",
+        Effect::Discard { .. } => "Effect::Discard",
         Effect::If { .. } => "Effect::If",
         Effect::DealDamage { .. } => "Effect::DealDamage",
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
         Effect::DrawCards { .. } => "Effect::DrawCards",
         Effect::LoseLife { .. } => "Effect::LoseLife",
-        Effect::MassDamage { .. } => "Effect::MassDamage",
-        Effect::DamageOpponentCreatures { .. } => "Effect::DamageOpponentCreatures",
-        Effect::CreateTokensValue { .. } => "Effect::CreateTokensValue",
         Effect::CreateToken { .. } => "Effect::CreateToken",
         Effect::PutCounters { .. } => "Effect::PutCounters",
         Effect::PutCountersFrom { .. } => "Effect::PutCountersFrom",
@@ -550,7 +537,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::AddMana { .. } => "Effect::AddMana",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::Airbend { .. } => "Effect::Airbend",
-        Effect::AirbendAll { .. } => "Effect::AirbendAll",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
         Effect::ExileTopCardPlayThisTurn => "Effect::ExileTopCardPlayThisTurn",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
@@ -565,7 +551,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
         Effect::WhenYouDo { .. } => "Effect::WhenYouDo",
         Effect::TriggerModes { .. } => "Effect::TriggerModes",
-        Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
         Effect::DistributeCountersToTappedOpponentCreatures { .. } => {
             "Effect::DistributeCountersToTappedOpponentCreatures"
@@ -581,9 +566,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
         Effect::CounterAbility { .. } => "Effect::CounterAbility",
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
-        Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
-        Effect::AddManaValue { .. } => "Effect::AddManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
         Effect::SearchLibraryToHand { .. } => "Effect::SearchLibraryToHand",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
@@ -591,7 +574,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 79;
+const EFFECT_VARIANTS: usize = 70;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -605,7 +588,7 @@ fn effect_witnesses() -> Vec<Effect> {
     };
     vec![
         Effect::CreateNonlegendaryCopy,
-        Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 1)),
+        Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
         Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
         Effect::PutCountersFrom {
             from: ObjectSelector::Triggering,
@@ -629,7 +612,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::OptionalPayment {
             cost: PaymentCost::Waterbend { generic: 2 },
             if_paid: draw(),
-            if_declined: vec![Effect::Discard],
+            if_declined: vec![Effect::discard()],
         },
         Effect::DealDamageToPlayer {
             player: PlayerSelector::You,
@@ -660,46 +643,27 @@ fn effect_witnesses() -> Vec<Effect> {
             to_hand: false,
         },
         Effect::OptionalDiscardDraw { count: 1, up_to: 1 },
-        Effect::DiscardTargetPlayer {
-            count: 1,
-            target: TargetSpec::Opponent,
-        },
-        Effect::Destroy { target: target() },
-        Effect::Discard,
-        Effect::DealDamageValue {
-            amount: value(),
-            target: target(),
+        Effect::destroy(ObjectSelector::Target(target())),
+        Effect::Discard {
+            what: ObjectSelector::Target(TargetSpec::Opponent),
+            count: 2,
         },
         Effect::If {
             condition: Condition::YourTurn,
             then: draw(),
             otherwise: vec![],
         },
-        Effect::DealDamage {
-            amount: 1,
-            target: target(),
-        },
+        Effect::deal_damage(value(), ObjectSelector::Target(target())),
         Effect::CounterSpell {
-            target: TargetSpec::Spell,
+            what: ObjectSelector::Target(TargetSpec::Spell),
         },
         Effect::DrawCards { count: value() },
         Effect::LoseLife {
             player: PlayerSelector::TriggeringPlayer,
             amount: EffectValue::Fixed(2),
         },
-        Effect::MassDamage { amount: 1 },
-        Effect::DamageOpponentCreatures { amount: 1 },
-        Effect::CreateTokensValue {
-            token_name: "Clue".into(),
-            count: value(),
-        },
-        Effect::CreateToken {
-            token_name: "Clue".into(),
-            count: 1,
-            tapped_and_attacking: false,
-            attach_source: false,
-        },
-        Effect::GainLife { amount: 1 },
+        Effect::create_tokens("Clue", value()),
+        Effect::gain_life(value()),
         Effect::OnNthResolutionThisTurn {
             n: 2,
             effect: Box::new(Effect::DrawCards {
@@ -717,7 +681,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::PutTopCardsInHand { count: 1 },
         Effect::Learn,
         Effect::Modal {
-            modes: vec![draw(), vec![Effect::Discard]],
+            modes: vec![draw(), vec![Effect::discard()]],
         },
         Effect::CounterUnlessPays {
             cost: PaymentCost::Mana(ManaCost::parse("{2}")),
@@ -725,25 +689,20 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::TargetCreaturesDealPowerDamageToLastTarget,
         Effect::Earthbend {
             count: EffectValue::Fixed(1),
-            target: TargetSpec::LandYouControl,
+            what: ObjectSelector::Target(TargetSpec::LandYouControl),
         },
         Effect::AddMana {
             mana: Mana::parse("R"),
+            amount: EffectValue::ExcessDamage,
             until_end_of_combat: true,
         },
         Effect::ForEachTarget { effects: draw() },
         Effect::Airbend {
-            target: TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Land],
-                    ..Default::default()
-                },
-            },
-        },
-        Effect::AirbendAll {
-            predicate: CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
+            what: ObjectSelector::Each {
+                of: Scope::Battlefield,
+                predicate: CardPredicate::creature(),
+                except: Some(Except::Target),
+                max_mana_value: None,
             },
         },
         Effect::OpponentsCastOnlyFromHand,
@@ -804,9 +763,6 @@ fn effect_witnesses() -> Vec<Effect> {
             unchosen: false,
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
         },
-        Effect::DestroyCreaturesLosingAbilities {
-            max_mana_value: EffectValue::X,
-        },
         Effect::AttachSourceTo {
             target: TargetSpec::CreatureYouControl,
         },
@@ -816,11 +772,11 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::CreateDelayedTrigger {
             event: DelayedEvent::CreatureDiesThisTurn,
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
         Effect::ForPlayer {
             player: PlayerSelector::TargetController,
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
@@ -828,11 +784,11 @@ fn effect_witnesses() -> Vec<Effect> {
             predicate: CardPredicate::creature(),
         },
         Effect::MayDiscard {
-            then: vec![Effect::Discard],
+            then: vec![Effect::discard()],
         },
         Effect::GainControl {
             player: PlayerSelector::You,
-            target: TargetSpec::Creature,
+            what: ObjectSelector::Target(TargetSpec::Creature),
             duration: EffectDuration::EndOfTurn,
         },
         Effect::CopyTriggeringObject,
@@ -843,18 +799,10 @@ fn effect_witnesses() -> Vec<Effect> {
             target: TargetSpec::SpellOrAbilityWithSingleTarget,
         },
         Effect::CounterAbility {
-            target: TargetSpec::Ability,
-        },
-        Effect::GainLifeValue {
-            amount: EffectValue::ExcessDamage,
+            what: ObjectSelector::Target(TargetSpec::Ability),
         },
         Effect::AddOneColorManaValue {
             amount: EffectValue::GreatestSharedCreatureType,
-        },
-        Effect::AddManaValue {
-            mana: Mana::parse("R"),
-            amount: EffectValue::ExcessDamage,
-            until_end_of_combat: true,
         },
         Effect::FightLastTarget,
         Effect::SearchLibraryToHand {
@@ -1430,7 +1378,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             ability: Box::new(Ability::Triggered {
                 condition: TriggerCondition::YouScry,
                 intervening_if: None,
-                effects: vec![Effect::Discard],
+                effects: vec![Effect::discard()],
             }),
         }),
     ]
@@ -1567,7 +1515,7 @@ fn every_condition_reaches_the_learning_tokens() {
     for condition in witnesses {
         let tokens = tokens_of(&spell(vec![Effect::If {
             condition: condition.clone(),
-            then: vec![Effect::Discard],
+            then: vec![Effect::discard()],
             otherwise: vec![],
         }]));
         let expected = (TokenKind::Variant, name_value(condition_token(&condition)));
@@ -1582,7 +1530,7 @@ fn an_intervening_if_reaches_the_learning_tokens() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::AttackedThisTurn),
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         }],
         ..Default::default()
     };
@@ -1637,9 +1585,9 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
     );
     for (on_player, modification) in witnesses {
         let affected = if on_player {
-            AffectedSpec::You
+            ObjectSelector::You
         } else {
-            AffectedSpec::Source
+            ObjectSelector::This
         };
         let effect = Effect::ApplyContinuous {
             affected,
@@ -1655,7 +1603,7 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
     }
     for duration in [EffectDuration::EndOfTurn, EffectDuration::Indefinite] {
         let effect = Effect::ApplyContinuous {
-            affected: AffectedSpec::Source,
+            affected: ObjectSelector::This,
             modification: Modification::CantBeBlocked,
             duration,
         };
@@ -1663,17 +1611,38 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         assert!(tokens_of(&spell(vec![effect])).contains(&(TokenKind::Variant, name_value(&name))));
         assert!(duration_code(duration) > 0.0);
     }
-    for affected in affected_witnesses() {
-        let name = affected_token(&affected);
+    let scopes = [
+        Scope::YouControl,
+        Scope::OpponentsControl,
+        Scope::Battlefield,
+        Scope::TargetPlayerControls,
+    ];
+    let excepts = [None, Some(Except::This), Some(Except::Target)];
+    for (scope, except) in scopes.into_iter().zip(excepts.into_iter().cycle()) {
+        let affected = ObjectSelector::Each {
+            of: scope,
+            predicate: CardPredicate::creature(),
+            except,
+            max_mana_value: None,
+        };
         let effect = Effect::ApplyContinuous {
             affected,
             modification: Modification::CantBeBlocked,
             duration: EffectDuration::EndOfTurn,
         };
+        let tokens = tokens_of(&spell(vec![effect]));
+        let name = scope_token(scope);
         assert!(
-            tokens_of(&spell(vec![effect])).contains(&(TokenKind::Variant, name_value(name))),
+            tokens.contains(&(TokenKind::Variant, name_value(name))),
             "{name}"
         );
+        if let Some(except) = except {
+            let name = except_token(except);
+            assert!(
+                tokens.contains(&(TokenKind::Variant, name_value(name))),
+                "{name}"
+            );
+        }
     }
 }
 

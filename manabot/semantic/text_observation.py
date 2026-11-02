@@ -91,7 +91,7 @@ _STAGES = frozenset(
         "declare_blockers",
         "mana_payment",
         "mana_color",
-        "resolution_sacrifice",
+        "resolution_choice",
         "private_search",
         "learn",
         "private_inspection",

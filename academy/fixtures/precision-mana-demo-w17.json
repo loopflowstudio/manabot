@@ -16,7 +16,7 @@
   "manifest": {
     "world_version": "w17",
     "schema_version": 1,
-    "content_digest": "053be3a981ee20334b1cf9360fccac9448f6340e6894ffc12d85b2f294b987db",
+    "content_digest": "2d2ece022b70e328bce1a284b7e2230a54c25d04ff500aaa229484034228f2cc",
     "pack_key": null,
     "definitions": [
       {
@@ -1339,277 +1339,277 @@
   },
   "prefix": [
     {
-      "before_digest": "04ff7dfc2c6cfdeea1e40f3b11b498aaad38de7ef8235d886388c88b79d062a5",
+      "before_digest": "ccda18a17dd2c5f15d56936dd08dfcf7ab1ca6282a06e7ff44ee6ad4e2b884e1",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "1b163508d0a0e63855dca821320187695f4c13c1e0f03858462487432ac935c3",
+      "before_digest": "48e6d73e254d5aee893ed7c532fe3a694ad025fa34a6fdd17cc3bc20cd712341",
       "offer_id": 0,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "87080b3b9c6f4466ffb58aa045d035821943159f67365abf53180d923b1edb8a",
+      "before_digest": "a60dc42a57244f2d462a3ba11f022d8af07594f1afd3ae7d8b955b950ff8e315",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "5ff500c279070d025a7f5257772d55b75b5acbdf580e4ee668d8fe910747b9ee",
+      "before_digest": "7b1691f270701cb1a160696f8bb14359088d6b637d537015619d6d93c772ae65",
       "offer_id": 0,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "0a0116c12d7a22d2a83b2e7fc89720708c1358a5fc516d6edc3725adb3b3c110",
+      "before_digest": "7b680be86c9e001ba6f28cc9de73e379d5eaa6cf8ad70a5bfcafd3a08565e437",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "dfdc508ec649417544df8f90ae713a19bb777f5fb147e150959bc638554f3850",
+      "before_digest": "88bc9797d0b388131c9d7841a85eb755767c4ef6df5282a09f2026b8be9d3ec2",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2588e975ab5666354c5a7457b03ec1a4277ba1c7fd3478d262d68531cc57f853",
+      "before_digest": "c21904b4308a6b9bd8b7df95c4d1bd8d90f1aab83ce5bbda319caaae716c3eb2",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "74594544573a38b650cf65e041e4ddf55eb7dbeba56dabd89c311e9b47934c95",
+      "before_digest": "b71ff25cd62bb4e7195285819881e739bcb77bbca830b969ee66bd8eb453d9bc",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "5212710f5efbb47882c990fdc1f9eb1c69362710f3b8892bb0ee7af2534be412",
+      "before_digest": "34d4f00b08bf3f0f0f338a51c459667c05ec0d5bea29de1619b453ea15f7ed40",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "9078b8b3c364cb37feb6aed8e775cc0b835aa30cecc85981e9c0010325967a5a",
+      "before_digest": "ae038ab3398ea0d7b2b14e95164907d96da3a2a7c571b632031a949ca890b428",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2517928cf6534aa2871d3ee276061afe3cafe2819751287020e5d101be7575fa",
+      "before_digest": "eb303344244c15a308bee518ce83e3260540ea9a40c4a59698b7f617138ac137",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "4b04321ec2219061968b8f0a2823ebdd58f29140b1aef2f8b4e71740d3e5783f",
+      "before_digest": "3fbe16eaf364a7a7474cd85e787476016825206f9980f53ca801091b445c81b4",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "e6a4b9b70fcdfdaae1c96606853a49280e9b4ca19a55cd200152a591f1615bfc",
+      "before_digest": "35339fd974092900be14ac92f2e08f1f3067cec5085599789b6dad1982aab635",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "87e4e51d6c3f49f9241efcee82eda490231f07f8bbede881f50aad093aa1bc00",
+      "before_digest": "7e46a8cc75b885ab1f25731faf1b271bb4e0f8bb7c3b472d3825289dbe9e2487",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "8eb4db251b1bc6806d25c96e13a4278b623c2f582b1049ef9a57978f57c509bb",
+      "before_digest": "62f7a9f9654fc427c83eaf9c8d3fbb4ffb478a50b5f2dbd0778f882c690862a6",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "bc54988923d196294a6e3065ef9a302ca6c7d2118ed3487249840599ea63fea9",
+      "before_digest": "ca60b339083912f09ef221ac4984662a08e8ade73655e0adf0032e32c58eeebd",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "4d385599631e9cd22dd8b926e410901afd846cab70b2b4f7a5eaa0e1303290bb",
+      "before_digest": "0ee34152da5736744d185df2edbeaf897d56bd27d3a974238838f3890a88452e",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "fca62cefc87bdd6a79baf06c16bb056c658f73019219e991bfb5795cd115068a",
+      "before_digest": "0ad31675453b9043e4f415e72dcbc75fd54b2a53c571c9531aeba03a82970513",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "bba444b3a85d84696409cc2ce7389dc5ee6260ba94850859b6179fe7b7524ead",
+      "before_digest": "692e3da61cdd425c6d70951b2138f75850a900c62c21b7ba9e93b19d4cd3d01a",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "43b62019e21d886ec037b6929a6c8c20d12685c25427cbb08bd59334a956bed8",
+      "before_digest": "079ff56a19877105755b9cf7a1b76ba0296880fbd68065df853ae4f3507a605e",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "cce5a54f57218048f57615264b7cc94f64c971fb24b76b2771041c0c34cb4450",
+      "before_digest": "af6ec83e7a191e3b24eab4adbc041f144ca1523c6cd831452602c02bf1ce0f40",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "6136fb9256f3aaf76b0347eab340bce0162933afd276b90c5bfcd2513a970414",
+      "before_digest": "4989d093032e797444024858220ef2e9427ef9bcc93c6ab007a475f763cfe9be",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ca2b242f35471ed7148acb7fe721b1f6f99cc1842df22efd7af0123c7f9d8e6d",
+      "before_digest": "ddb16537fbf0c4ea69cb9ad77bf4f6d8ac88e4df749661c191c7322fcb9ef3f3",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "0bb4a578b7fe693b11e5f79c9b533ad6a201a353d876f02918112dd33617f17f",
+      "before_digest": "167e8e271af8784744904a62a767a310cdd6e143db5b6ebad63c9a70e01506e1",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "eb9628394a6eaff2b7a9f342d8e8eb60144db4879e933425aa9ab78c0eb5270a",
+      "before_digest": "899710f11902e2a5bf1ee898b427448fa4e0a26673498973c4e7fa6a9a92296f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "5984ec858f7c7dab505354f5f5ade5478aa06d662fa07f8fe9cfedce24251a55",
+      "before_digest": "833e7ba76feb7d8c56458ff936cc2de8529250804bf3d43bc360b798091e276e",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "aeb656a8a481db6661aef64668b6b9ed419ad1da4f03b3b3a3dfa78648e8f6e3",
+      "before_digest": "ed0a131a3c81456f0a1a6387075dcbc37c153cba66054634fb8c81912656e1d9",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "e81577b8ea208cb6b78d38e094ccba59e39a9d9f139129a099c051d21212b6b6",
+      "before_digest": "9d744fff67103d6c328f53b26c819a3e7ee989b4358507e29ce4a051b35304c3",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "22f34932333620253d239302f090eddd09299f5bc2a967424651044996db57e1",
+      "before_digest": "ca5fc1392e0bc86ae023d38f16ef22b9d28e4483bd613110c262755e5d602fa8",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "c910c92dc64619f049155ad3e0ae2666ae59c6c97ef86c8706f33b1b9cf6749e",
+      "before_digest": "b3ed2f00a4bbf4457c354f196205b91e3e13aeb5cabbcc4891b5285fa5a7f4ce",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "3777a9994076f2cf02396101071435eaf0105697ec14b064cb8f83564a9302cd",
+      "before_digest": "04e25d456aa1c69d5f1da3daed8ebb5b9223bad1fa1a5f533da8c48b04619633",
       "offer_id": 1,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "13e469371bf77499d85fd6fec07bbb12affda0c5883f28fa8f9d83abfbfc7ef5",
+      "before_digest": "c44157fd1890ed37d0a5cd8f58992099f77af2c4975403b886c27687b874f1c5",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "83d7bcf3b03506ae96064933d4992fe4ef823710d15cc8df60c7d92e7031964c",
+      "before_digest": "86288e211d8531a70aa0515ce8b7780f9b49e5e7e8fe100a729f56023f7d6d59",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "08c0c8db112f80c5a37e3af0cfc9ef7b9128ea9f93c1b76a509eb3f5f4e92273",
+      "before_digest": "c57a2fae54ed81b0cf363e75a12c776db1118aaab579dae2de4812bde6bdffe3",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "070cfd9cd3ead1801f02ae50c100f1b1afbe37c9bdaa8023c446816ecbc70bb5",
+      "before_digest": "24e7802a04eee2a8ec9530de52a4f34a16dc790b5e4e151ebc76cc54bdbce189",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "e47cce9645a3d94a04bbc2af372534b32844220d84330ffe15dc26c46bf06c4c",
+      "before_digest": "af6bfbf3383b0c06607bd86ec9dac1c436ad7b488370d62a81c5de6168c0c498",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "eaebce67079b5abe3d4cb14c27094e58f5b0f108b671815c4f8ae206df48da37",
+      "before_digest": "1c4434d3610eef096bfbabce4b9cf931d64bae441c72d3fa69d0f76bf5a8a499",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "57e0cefc2a01ead05921b16cd42bc30cbc9dfb26bfd067da8ebdc25a90b06c66",
+      "before_digest": "bed25373e39f06325327c71bf96b70ab5aebcb712c88897658f66ef5c9c78ff3",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "c1c8ac6b69f44bc50101a087649bd44915caf87cd4923277391bedc2bb604191",
+      "before_digest": "4e2241602e686fc7a2a335c54774e63192c95ad3b134c4ff7e08f08fb36764d7",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "41bb44d20473fd83d7735877946ade10fa2a4078f3c970442cba3432c1c69bb2",
+      "before_digest": "547973e1e28802f62d7c351c06e9ca8fc3006c59e6a97481b0de1d6b4bc03e69",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "1f6fb36499a650394fe6b5da6d8c33bbc49a9b7e703419bde4bc3f9ff9d5bfab",
+      "before_digest": "d7b956459a8d1d10119509bb2263c35c25fe24f38a458d2aa9ea6b53dde0e169",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "f64b38a8dc1504d4e3fa0df4f6025f51354f6bb98371f0942b01a2a20c9023a5",
+      "before_digest": "d823807945ccf3fd83633db5613fb6a813837e1e54a0f87dd9c95e9bea45fbeb",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "fd1e5c9f0281731de8c6464cd75837105897742dc517de836a621e3659d13293",
+      "before_digest": "6ef203d2d533830a61618595533e063141ca65e416131a03ff01ccbf6b790f45",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "35507b190780c963eedb07d40d164fe17775215c938ac30e7c2fbd801de3f19d",
+      "before_digest": "123370fbc9625ccb7b2663f58ec394da12b78ed4e9d8b2e9772e5fc2408734f9",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "1c49a69299337cfc46b64160ccf75f0131884edfc27324d143766abad7697416",
+      "before_digest": "3846b07f428a1b00f6e984bafc778acd7b0924eb3ace859afd82997212cbeea0",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "7f2278678a4deefa6fd406b7bc96b0338043407f00d9f60c8ca555bc1faa43b0",
+      "before_digest": "055d9d2d6aef41188a1e0e3c6a761b170b573915164c603318c28acd6c9c263f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "53df69300d1f62d9efc2f0c9b1da8eb1349f5387f3bd230db40e46028f9c5483",
+      "before_digest": "26c8d35411e59be7d9b7527cd102fbff62a0258cb01a1daeb3c37e8d6c381403",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "8ff5a1df3617e533386caf94047efb26033430d64e28c098c255155270f8f6ec",
+      "before_digest": "2d3dcd054142d5d8e1b3832bbde8391704a0775bb2f4ad495b53c50c49a3ff88",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "3492a3e0301b9cea90dc09135aaa59626bd679bddc8c321a201e53b948d2e21d",
+      "before_digest": "cbf18fc7f3116f71b61fd300b38c22843dd76f201888dd14bd58c308aa385cd5",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "f132846ed11a00abe21980bed88fecedda8296a8e36d3db3bafc3809220fb28e",
+      "before_digest": "c6000d0872e0cd338484a377de1f24b4b0d6bb9aebe5b2b6349d420b4559f775",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "d8b04443b3a99dd58f5fa53478f9d0b1ab294a6d27f3b7d3bed8315b06bf955c",
+      "before_digest": "85b7a45f5ccc8d804ff0c30529e65419b7d9fa355a247cf1e2776ac46e03c47f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2fd740bc15092af8ed29c50b06a346fe8ad659fbb7a0b95f6575e5f51cbada62",
+      "before_digest": "e692134eea15d2fabd2d21b69f435f5deca432d824bcecd123d9fab23a1a9adb",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "7e7a9c2a622b2f73dd7a4758c5185334600424097be2ced8eb16b4a3bbefb036",
+      "before_digest": "2c6c5e63a1ab977ae740cbd725541db9be0961c7abb1b6b50be53efc262ce1b8",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "94ffec3ee26f05745f9ff97fd79adc2f28b30c157c4e2b0f72ef6a02482cdb92",
+      "before_digest": "ddf43d85b4f2338966df1d6455619cbed3811e1f1372578a2017a281099b8aaf",
       "offer_id": 1,
       "label": "Play Swamp"
     }
   ],
-  "decision_digest": "ed4ddfb67d29988e1d99339a38fd40fcc86a26b39c1aa90f44a1fa1817a81f29",
+  "decision_digest": "2779eb770afece14de3ba92e8800fc50fd7f1c444daa2d3d87cc5e5d30965fe9",
   "decision_revision": 66,
   "decision_kind": "PRIORITY"
 }

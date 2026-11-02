@@ -268,17 +268,27 @@ A change that lasts until end of turn, or for any other duration, is an
 `flow/effects.rs`), never a new `Permanent` or `Player` field.
 
 An `Effect` is a verb over an `ObjectSelector` (`This`, `Target(spec)`,
-`Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `Chosen`,
-`Each { of }`), never a `<Verb><Object>` variant: `PutCounters { on }`,
-`Sacrifice { what }`, `Move { what, to }`, `Tap { what }`. One resolver,
-`Game::select`, names the objects (last known information for `This` after
-the source leaves); a verb that depends on which object it hit is an `If`
-composition, and "if you do" is `Condition::Moved` over the frame's latest
-`Move` or `Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Use
-the constructors (`Effect::exile`, `return_to_hand`, `put_counters`,
-`sacrifice_this`, `may_sacrifice`, `if_you_do`) in card code and write the
-full `Effect::Move { .. }` literal only for `under`, `with_counter` or
-`linked`.
+`Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `You`,
+`Chosen { predicate, except }`, `Each { of: Scope, predicate, except,
+max_mana_value }`), never a `<Verb><Object>` or `<Verb>All` variant:
+`PutCounters { on }`, `Sacrifice { what }`, `Move { what, to }`, `Tap { what }`,
+`Destroy { what }`, `DealDamage { amount, what }`, `ApplyContinuous { affected }`.
+"Each creature" is the verb over `Each`; "all other" is `except: Target`;
+"another" is `except: This`. One resolver, `Game::select`, names the objects
+(last known information for `This` after the source leaves); `Chosen` suspends
+the instruction on `Decision::ChooseObject` for any verb ("tap a creature you
+control"); a verb that depends on which object it hit is an `If` composition,
+and "if you do" is `Condition::Moved` over the frame's latest `Move` or
+`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Amounts are
+`EffectValue` (`Fixed(n)` or read at resolution); a verb never has a
+`<Verb>Value` twin. Use the constructors (`Effect::exile`, `return_to_hand`,
+`put_counters`, `destroy`, `deal_damage`, `gain_life`, `discard`,
+`create_tokens`, `add_mana`, `sacrifice_this`, `may_sacrifice`, `if_you_do`,
+`ObjectSelector::each_you_control`, `chosen`) in card code and write the full
+`Effect::Move { .. }` literal only for `under`, `with_counter` or `linked`.
+A stack ability is no card object, so `CounterAbility` reads the clause's
+`Target` directly; `Destroy` over several objects is one simultaneous event
+with pre-batch trigger sources.
 
 Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as

@@ -1496,13 +1496,13 @@
     "400.7j": {
       "status": "partial",
       "scope": "Untargeted triggering-permanent context and exile links retain related objects across selected actions.",
-      "authority": "managym/src/state/ability.rs:AffectedSpec::TriggeringPermanent; managym/src/flow/resolution.rs:Effect::Move (LinkedExile::UntilSourceLeaves); managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "authority": "managym/src/state/ability.rs:ObjectSelector::Triggering; managym/src/flow/resolution.rs:Effect::Move (LinkedExile::UntilSourceLeaves); managym/src/flow/zones.rs:handle_leaves_battlefield",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "ExileLink retains exiled CardId only; leave/reenter-exile tracking remains unproved. General cost-moved objects and multi-zone effects need exact destination identity.",
       "anchors": [
-        "managym/src/state/ability.rs::TriggeringPermanent",
+        "managym/src/state/ability.rs::ObjectSelector::Triggering",
         "managym/src/flow/resolution.rs::Effect::Move",
         "managym/src/flow/zones.rs::handle_leaves_battlefield"
       ]
@@ -2293,14 +2293,14 @@
     },
     "608.2f": {
       "status": "partial",
-      "scope": "MassDamage gathers battlefield permanents and applies damage before returning to priority.",
-      "authority": "managym/src/flow/resolution.rs:MassDamage; managym/src/flow/decision.rs:run_frame",
+      "scope": "DealDamage over an Each selector gathers battlefield permanents and applies damage before returning to priority.",
+      "authority": "managym/src/flow/resolution.rs:Effect::DealDamage (ObjectSelector::Each); managym/src/flow/decision.rs:run_frame",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "Mutations are serialized; general simultaneous action groups, controller ordering and snapshot-dependent interactions are unproved.",
       "anchors": [
-        "managym/src/flow/resolution.rs::MassDamage",
+        "managym/src/flow/resolution.rs::Effect::DealDamage",
         "managym/src/flow/decision.rs::run_frame"
       ]
     },
@@ -2362,14 +2362,14 @@
     "608.2k": {
       "status": "partial",
       "scope": "Triggering-permanent continuous effects and counters use stored event context without imposing a fresh predicate.",
-      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/resolution.rs:AffectedSpec::TriggeringPermanent",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/resolution.rs:ObjectSelector::Triggering",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "Exact permanent slot prevents following reentry; changed-characteristic response and cost-referenced objects not independently witnessed.",
       "anchors": [
         "managym/src/flow/triggers.rs::check_triggers_for_event",
-        "managym/src/flow/resolution.rs::AffectedSpec::TriggeringPermanent"
+        "managym/src/flow/resolution.rs::ObjectSelector::Triggering"
       ]
     },
     "608.2m": {

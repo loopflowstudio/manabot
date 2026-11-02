@@ -603,7 +603,7 @@ impl Game {
                         .collect();
                     (3, resume.as_deref())
                 }
-                Decision::Sacrifice { optional, .. } => {
+                Decision::ChooseObject { optional, .. } => {
                     frame.can_decline = *optional;
                     (4, None)
                 }

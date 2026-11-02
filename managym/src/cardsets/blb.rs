@@ -1,8 +1,7 @@
 //! Bloomburrow.
-use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
-    ability::{Effect, TargetSpec},
+    ability::{Effect, ObjectSelector, TargetSpec},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -22,15 +21,10 @@ fn savor() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(-2, -2),
             ),
-            Effect::CreateToken {
-                token_name: "Food".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Food", 1),
         ],
         text_box: text_box.into(),
         ..Default::default()

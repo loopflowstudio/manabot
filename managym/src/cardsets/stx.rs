@@ -1,5 +1,4 @@
 //! Strixhaven: School of Mages.
-use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
     ability::{
@@ -63,11 +62,11 @@ fn enthusiastic_study() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(3, 1),
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::AddKeywords(Keywords {
                     trample: true,
                     ..Default::default()
@@ -171,10 +170,7 @@ fn igneous_inspiration() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::DealDamage {
-                amount: 3,
-                target: TargetSpec::CreatureOrPlayer,
-            },
+            Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::CreatureOrPlayer)),
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {

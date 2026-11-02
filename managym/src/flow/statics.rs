@@ -1411,10 +1411,7 @@ impl Game {
             if let Some((_, mana)) = BASIC_LAND_TYPES.iter().find(|(name, _)| *name == subtype) {
                 abilities.push(ActivatedAbilityDefinition {
                     tap_source: true,
-                    effects: vec![Effect::AddMana {
-                        mana: Mana::parse(mana),
-                        until_end_of_combat: false,
-                    }],
+                    effects: vec![Effect::add_mana(Mana::parse(mana))],
                     ..Default::default()
                 });
             }
@@ -1492,10 +1489,7 @@ impl Game {
             .collect();
         match colors.as_slice() {
             [] => None,
-            [mana] => Some(Effect::AddMana {
-                mana: mana.clone(),
-                until_end_of_combat: false,
-            }),
+            [mana] => Some(Effect::add_mana(mana.clone())),
             _ => Some(Effect::mana_choice(colors)),
         }
     }

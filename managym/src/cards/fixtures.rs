@@ -18,7 +18,7 @@ pub(super) fn crossroads_of_destiny() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::GainLife { amount: 3 }],
+                vec![Effect::gain_life(3)],
                 vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 }],

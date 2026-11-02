@@ -393,7 +393,8 @@ impl PaymentCost {
 
 /// Which objects a verb acts on, read as the instruction resolves
 /// (`Game::select`). A verb acts only on the objects it can: counters, taps
-/// and sacrifices need battlefield permanents, a move any card object.
+/// and sacrifices need battlefield permanents, a move any card object, a
+/// continuous effect a permanent or the player `You` names.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ObjectSelector {
     /// The source: the exact permanent, graveyard card or spell the ability
@@ -417,30 +418,103 @@ pub enum ObjectSelector {
     /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
     /// they now exist ("then return it to the battlefield").
     Moved,
+    /// The resolving player ("you"), as whom a continuous effect affects
+    /// ("you have no maximum hand size"), damage, or discard. Object-only
+    /// verbs find nothing because a player is not a card object.
+    You,
     /// A permanent the resolving player controls matching [predicate],
-    /// chosen by them as the instruction resolves ("sacrifice a creature");
-    /// `another` excludes the source. Only `Sacrifice` offers the choice.
+    /// chosen by them as the instruction resolves ("sacrifice a creature",
+    /// "tap a creature you control"); the instruction suspends on the choice
+    /// (`Decision::ChooseObject`) and runs over it.
     Chosen {
         predicate: CardPredicate,
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        another: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        except: Option<Except>,
     },
-    /// Every battlefield permanent the spec names, fixed as the instruction
-    /// resolves ("each creature you control"); `another` excludes the
-    /// source.
+    /// Every battlefield permanent in `of` matching [predicate], fixed as
+    /// the instruction resolves ("each creature you control", "all other
+    /// creatures"); `max_mana_value` bounds the mana value as it resolves
+    /// ("with mana value X or less").
     Each {
-        of: AffectedSpec,
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        another: bool,
+        of: Scope,
+        predicate: CardPredicate,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        except: Option<Except>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_mana_value: Option<Box<EffectValue>>,
     },
 }
 
+/// Whose battlefield permanents an [`ObjectSelector::Each`] ranges over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Scope {
+    /// Permanents the resolving player controls.
+    YouControl,
+    /// Permanents the resolving player's opponents control.
+    OpponentsControl,
+    /// Every permanent on the battlefield.
+    Battlefield,
+    /// Permanents the frame's primary target player controls ("creatures
+    /// target player controls").
+    TargetPlayerControls,
+}
+
+/// The one permanent a `Chosen` or `Each` selector leaves out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Except {
+    /// "another": the source permanent.
+    This,
+    /// "all other": the clause's chosen target (Avatar's Wrath).
+    Target,
+}
+
 impl ObjectSelector {
+    /// "Each [predicate] you control".
+    pub fn each_you_control(predicate: CardPredicate) -> Self {
+        Self::each(Scope::YouControl, predicate)
+    }
+
+    /// "Each [predicate]" on the battlefield.
+    pub fn each(of: Scope, predicate: CardPredicate) -> Self {
+        Self::Each {
+            of,
+            predicate,
+            except: None,
+            max_mana_value: None,
+        }
+    }
+
+    /// "Each other [predicate] you control".
+    pub fn each_other_you_control(predicate: CardPredicate) -> Self {
+        Self::Each {
+            of: Scope::YouControl,
+            predicate,
+            except: Some(Except::This),
+            max_mana_value: None,
+        }
+    }
+
+    /// "A [predicate] you control", chosen as the instruction resolves.
+    pub fn chosen(predicate: CardPredicate) -> Self {
+        Self::Chosen {
+            predicate,
+            except: None,
+        }
+    }
+
+    /// "Another [predicate] you control", chosen as the instruction resolves.
+    pub fn another_chosen(predicate: CardPredicate) -> Self {
+        Self::Chosen {
+            predicate,
+            except: Some(Except::This),
+        }
+    }
+
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Self::Target(spec) => Some(spec),
             Self::Each {
-                of: AffectedSpec::EachTargetPlayerControls(_),
+                of: Scope::TargetPlayerControls,
                 ..
             } => Some(&TARGET_PLAYER),
             Self::This
@@ -449,9 +523,15 @@ impl ObjectSelector {
             | Self::CreatedThisWay
             | Self::Grantor
             | Self::Moved
+            | Self::You
             | Self::Chosen { .. }
             | Self::Each { .. } => None,
         }
+    }
+
+    /// Whether the selector asks the resolving player to choose.
+    pub fn is_chosen(&self) -> bool {
+        matches!(self, Self::Chosen { .. })
     }
 }
 
@@ -491,10 +571,10 @@ pub enum LinkedGrant {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
     /// A continuous effect from this resolution (CR 611): `modification`
-    /// for `affected`, lasting `duration`. The record's amounts are read as
-    /// it resolves.
+    /// for each permanent `affected` names, or for the player `You` names,
+    /// the set fixed as it resolves (CR 611.2c); amounts are read then.
     ApplyContinuous {
-        affected: AffectedSpec,
+        affected: ObjectSelector,
         modification: Modification<EffectValue>,
         duration: EffectDuration,
     },
@@ -543,17 +623,11 @@ pub enum Effect {
         linked: Option<LinkedExile>,
     },
     /// Tap each permanent `what` names.
-    Tap {
-        what: ObjectSelector,
-    },
+    Tap { what: ObjectSelector },
     /// Untap each permanent `what` names.
-    Untap {
-        what: ObjectSelector,
-    },
+    Untap { what: ObjectSelector },
     /// Remove every counter from each permanent `from` names.
-    RemoveAllCounters {
-        from: ObjectSelector,
-    },
+    RemoveAllCounters { from: ObjectSelector },
     /// Copy the source's copiable characteristics, removing legendary.
     CreateNonlegendaryCopy,
     OptionalPayment {
@@ -562,15 +636,11 @@ pub enum Effect {
         if_declined: Vec<Effect>,
     },
     /// Each opponent loses `amount` life and you gain that much.
-    DrainLife {
-        amount: EffectValue,
-    },
+    DrainLife { amount: EffectValue },
     /// "Return up to one [predicate] card milled this way to the
     /// battlefield under your control": a choice among the cards the
     /// resolution's latest mill moved, still in the graveyard.
-    ReturnMilledThisWay {
-        predicate: CardPredicate,
-    },
+    ReturnMilledThisWay { predicate: CardPredicate },
     MillCards {
         count: EffectValue,
         /// The target player mills instead of the controller.
@@ -590,9 +660,7 @@ pub enum Effect {
         effects: Vec<Effect>,
     },
     /// Internal cursor emitted when clauses are lowered into a frame queue.
-    SelectTargetRequirement {
-        index: usize,
-    },
+    SelectTargetRequirement { index: usize },
     /// Search is a private choice that always shuffles, including failure to find.
     SearchBasicLand {
         subtype: Option<String>,
@@ -616,28 +684,24 @@ pub enum Effect {
         #[serde(skip_serializing_if = "is_one")]
         up_to: usize,
     },
-    DiscardTargetPlayer {
+    /// The player `what` names discards `count` cards, chosen by them.
+    Discard {
+        what: ObjectSelector,
+        #[serde(skip_serializing_if = "is_one")]
         count: usize,
-        target: TargetSpec,
     },
-    Destroy {
-        target: TargetSpec,
-    },
-    /// Airbend (CR 701.65): exile the target; its owner may cast that exact
-    /// exiled card for {2} rather than its mana cost.
-    Airbend {
-        target: TargetSpec,
-    },
-    /// "[player] gains control of [the target]" for `duration` (CR 613.1b).
+    /// Destroy each permanent `what` names (CR 701.7), as one simultaneous
+    /// event: leave-the-battlefield abilities look back at the permanents
+    /// as they all were before (CR 603.10a).
+    Destroy { what: ObjectSelector },
+    /// Airbend (CR 701.65) each permanent `what` names: exile it; its owner
+    /// may cast that exact exiled card for {2} rather than its mana cost.
+    Airbend { what: ObjectSelector },
+    /// "[player] gains control of [what]" for `duration` (CR 613.1b).
     GainControl {
         player: PlayerSelector,
-        target: TargetSpec,
+        what: ObjectSelector,
         duration: EffectDuration,
-    },
-    /// Airbend every battlefield permanent matching `predicate` other than
-    /// the clause's chosen target, if any.
-    AirbendAll {
-        predicate: CardPredicate,
     },
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
@@ -656,24 +720,18 @@ pub enum Effect {
     /// Exile cards from the top of your library until you exile a nonland
     /// card; you may cast it without paying its mana cost if its mana value
     /// is less than `below`, otherwise put it into your hand.
-    ExileUntilNonlandCastFree {
-        below: EffectValue,
-    },
+    ExileUntilNonlandCastFree { below: EffectValue },
     /// "Look at the top card of your library. You may cast that card without
     /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
     /// option.
     CastLibraryTopFree,
     /// You may cast a matching spell from your hand without paying its mana cost.
-    CastFromHandFree {
-        predicate: CardPredicate,
-    },
+    CastFromHandFree { predicate: CardPredicate },
     /// Shuffle your graveyard into your library.
     ShuffleGraveyardIntoLibrary,
     /// The target's owner chooses second from the top of their library or
     /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
-    OwnerPutsIntoLibrary {
-        target: TargetSpec,
-    },
+    OwnerPutsIntoLibrary { target: TargetSpec },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
     /// discards it.
@@ -684,32 +742,18 @@ pub enum Effect {
     /// Search for up to `count` land cards with different names; an
     /// opponent puts `opponent_picks` of them into the graveyard and the rest
     /// enter tapped (Elemental Teachings).
-    SearchLandsOpponentSplits {
-        count: usize,
-        opponent_picks: usize,
-    },
+    SearchLandsOpponentSplits { count: usize, opponent_picks: usize },
     /// Put the primary target into its owner's library, second from the top
     /// or on the bottom.
-    PlaceTargetInLibrary {
-        second_from_top: bool,
-    },
-    Discard,
-    DealDamageValue {
-        amount: EffectValue,
-        target: TargetSpec,
-    },
+    PlaceTargetInLibrary { second_from_top: bool },
     /// "You may [effects]. Do this only once each turn." Offered only while
     /// the exact source has not taken this ability's option this turn; only
     /// accepting spends it (the ability itself triggers every time).
-    MayOnceEachTurn {
-        effects: Vec<Effect>,
-    },
+    MayOnceEachTurn { effects: Vec<Effect> },
     /// A reflexive trigger (CR 603.12): "When you do, [effects]." It
     /// triggers where it appears, so it only runs if the instruction before
     /// it happened; its targets are chosen as it is put on the stack.
-    WhenYouDo {
-        effects: Vec<Effect>,
-    },
+    WhenYouDo { effects: Vec<Effect> },
     /// "If [condition], [then]; otherwise, [otherwise]", asked as this
     /// instruction resolves (CR 608.2c), of the resolving player and frame.
     If {
@@ -718,22 +762,24 @@ pub enum Effect {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         otherwise: Vec<Effect>,
     },
+    /// The source deals `amount` damage to each creature, permanent or
+    /// player `what` names (a `Target` selector may name a player),
+    /// `amount` read as the instruction resolves; the excess dealt to the
+    /// last creature is kept for a following "the excess damage".
     DealDamage {
-        amount: i32,
-        target: TargetSpec,
+        amount: EffectValue,
+        what: ObjectSelector,
     },
-    CounterSpell {
-        target: TargetSpec,
-    },
+    /// Counter each spell `what` names (CR 701.6a); abilities are not
+    /// affected.
+    CounterSpell { what: ObjectSelector },
     /// "Counter target activated or triggered ability" (CR 701.6b): the
     /// ability leaves the stack and does nothing; spells are not affected.
-    CounterAbility {
-        target: TargetSpec,
-    },
+    /// A stack ability is no card object, so the clause's chosen target is
+    /// read directly.
+    CounterAbility { what: ObjectSelector },
     /// Resolving player draws `count` cards, read at resolution. No target.
-    DrawCards {
-        count: EffectValue,
-    },
+    DrawCards { count: EffectValue },
     /// The selected players lose `amount` life (not damage, CR 119.3).
     LoseLife {
         player: PlayerSelector,
@@ -744,44 +790,25 @@ pub enum Effect {
         player: PlayerSelector,
         amount: EffectValue,
     },
-    /// Deal `amount` damage to each creature on the battlefield. No target.
-    /// Each creature with mana value at most `max_mana_value` loses all
-    /// abilities until end of turn, then those creatures are destroyed
-    /// simultaneously (Day of Black Sun).
-    DestroyCreaturesLosingAbilities {
-        max_mana_value: EffectValue,
-    },
-    MassDamage {
-        amount: i32,
-    },
-    DamageOpponentCreatures {
-        amount: i32,
-    },
-    CreateTokensValue {
-        token_name: String,
-        count: EffectValue,
-    },
     /// Create `count` tokens from the registered token definition
-    /// `token_name`, under the resolving player's control.
+    /// `token_name`, under the resolving player's control, `count` read as
+    /// the instruction resolves.
     CreateToken {
         token_name: String,
-        count: usize,
+        count: EffectValue,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
         /// "then attach this Equipment to it" (one token).
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
         attach_source: bool,
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
-    AttachSourceTo {
-        target: TargetSpec,
-    },
+    AttachSourceTo { target: TargetSpec },
     /// "Distribute `count` [kind] counters among any number of tapped
     /// creatures your opponents control": the controller places them one
     /// at a time, choosing among the eligible creatures at each placement.
-    DistributeCountersToTappedOpponentCreatures {
-        kind: CounterKind,
-        count: usize,
-    },
+    DistributeCountersToTappedOpponentCreatures { kind: CounterKind, count: usize },
     /// "[player] [effects]": the effects resolve with that player as "you"
     /// ("Its controller may search their library"), then the controller
     /// returns to the resolving one.
@@ -795,9 +822,7 @@ pub enum Effect {
     /// power `max_total_power` or less, then sacrifices all other creatures
     /// they control": the active player chooses first (CR 101.4), and the
     /// sacrifices are one event.
-    EachPlayerKeepsCreatures {
-        max_total_power: i32,
-    },
+    EachPlayerKeepsCreatures { max_total_power: i32 },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
     /// `effects` trigger from this spell or ability's source. Their targets
     /// are chosen as the delayed ability is put on the stack.
@@ -805,24 +830,15 @@ pub enum Effect {
         event: DelayedEvent,
         effects: Vec<Effect>,
     },
-    /// Resolving player gains `amount` life.
-    GainLife {
-        amount: i32,
-    },
-    GainLifeValue {
-        amount: EffectValue,
-    },
+    /// Resolving player gains `amount` life, read as the instruction
+    /// resolves.
+    GainLife { amount: EffectValue },
     /// Execute the inner effect only if this is the `n`th time this
     /// ability has resolved this turn ("if this is the second time this
     /// ability has resolved this turn, ...").
-    OnNthResolutionThisTurn {
-        n: u32,
-        effect: Box<Effect>,
-    },
+    OnNthResolutionThisTurn { n: u32, effect: Box<Effect> },
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
-    Scry {
-        count: usize,
-    },
+    Scry { count: usize },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your
     /// hand and the rest on the bottom of your library in a random order."
@@ -837,21 +853,15 @@ pub enum Effect {
     },
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
-    PutTopCardsInHand {
-        count: usize,
-    },
+    PutTopCardsInHand { count: usize },
     /// "You may discard a card. If you do, [then]."
-    MayDiscard {
-        then: Vec<Effect>,
-    },
+    MayDiscard { then: Vec<Effect> },
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
     /// "Change the target of target spell or ability with a single target"
     /// (CR 115.7): to another legal target, if there is one.
-    ChangeTarget {
-        target: TargetSpec,
-    },
+    ChangeTarget { target: TargetSpec },
     /// Learn, without a sideboard (1v1 constructed): "You may discard a
     /// card. If you do, draw a card."
     Learn,
@@ -873,62 +883,49 @@ pub enum Effect {
     },
     /// Spell-level modes are selected during casting. Within a resolving
     /// ability this remains a resolution-time choice.
-    Modal {
-        modes: Vec<Vec<Effect>>,
-    },
+    Modal { modes: Vec<Vec<Effect>> },
     /// "Counter [the spell or ability] unless its controller pays [cost]."
     /// It is the frame's primary target: either a chosen `TargetSpec::Spell`
     /// target (It'll Quench Ya!) or the trigger-context spell or ability
     /// (ward).
     /// Reports no target spec of its own — targeting is declared on the
     /// card (`CardDefinition::targeting`) when a choice is required.
-    CounterUnlessPays {
-        cost: PaymentCost,
-    },
+    CounterUnlessPays { cost: PaymentCost },
     /// Allies at Last: all chosen targets except the last each deal damage
     /// equal to their power to the last target. Targeting is declared on
     /// the card (`CardDefinition::targeting`).
     TargetCreaturesDealPowerDamageToLastTarget,
-    /// Earthbend N: target land you control becomes a 0/0 creature with
-    /// haste that's still a land; put `count` +1/+1 counters on it. A
-    /// delayed trigger returns it to the battlefield tapped when it dies
-    /// or is exiled.
+    /// Earthbend N: each land `what` names becomes a 0/0
+    /// creature with haste that's still a land; put `count` +1/+1 counters
+    /// on it. A delayed trigger returns it to the battlefield tapped when
+    /// it dies or is exiled.
     Earthbend {
         count: EffectValue,
-        target: TargetSpec,
+        what: ObjectSelector,
     },
     /// "You may cast a [predicate] spell from among cards you own exiled
     /// with this creature", paying its costs, as the effect resolves.
-    CastExiledWithSource {
-        predicate: CardPredicate,
-    },
-    /// Add mana to the resolving player's pool. `until_end_of_combat`
-    /// routes it to the combat pool (firebending — persists across combat
-    /// steps, empties at end of combat).
+    CastExiledWithSource { predicate: CardPredicate },
+    /// Add `mana` to the resolving player's pool `amount` times, `amount`
+    /// read at resolution (firebending X). `until_end_of_combat` routes it
+    /// to the combat pool (firebending — persists across combat steps,
+    /// empties at end of combat).
     AddMana {
         mana: Mana,
-        until_end_of_combat: bool,
-    },
-    /// "Add X mana of any one color", X read as the mana ability resolves.
-    AddOneColorManaValue {
-        amount: EffectValue,
-    },
-    /// Add `mana` `amount` times, `amount` read at resolution;
-    /// `until_end_of_combat` as for [`Effect::AddMana`] (firebending X).
-    AddManaValue {
-        mana: Mana,
+        #[serde(skip_serializing_if = "is_fixed_one")]
         amount: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         until_end_of_combat: bool,
     },
+    /// "Add X mana of any one color", X read as the mana ability resolves.
+    AddOneColorManaValue { amount: EffectValue },
+
     /// The first chosen creature fights the last (CR 701.14); records the
     /// excess damage dealt to the last.
     FightLastTarget,
     /// Search your library for a card matching `predicate`, reveal it, put
     /// it into your hand, then shuffle (CR 701.23).
-    SearchLibraryToHand {
-        predicate: CardPredicate,
-    },
+    SearchLibraryToHand { predicate: CardPredicate },
     /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
     /// controller picks a present kind or stops; with it set, one counter of
     /// that kind is removed and the choice repeats for `up_to - 1`.
@@ -940,9 +937,7 @@ pub enum Effect {
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
     /// creatures; they each get +2/+2"). Inner effects must not suspend.
-    ForEachTarget {
-        effects: Vec<Effect>,
-    },
+    ForEachTarget { effects: Vec<Effect> },
 }
 
 /// The event a delayed triggered ability created by
@@ -986,31 +981,7 @@ impl Modification<EffectValue> {
     }
 }
 
-/// Whom a resolving continuous effect affects. A set of permanents is fixed
-/// as the effect resolves (CR 611.2c).
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum AffectedSpec {
-    /// The resolving player ("you").
-    You,
-    /// The source permanent.
-    Source,
-    /// The frame's primary target, when it is still a permanent.
-    Target(TargetSpec),
-    /// The permanent whose event fired the trigger.
-    TriggeringPermanent,
-    /// Each permanent the resolving player controls matching the predicate.
-    EachYouControl(CardPredicate),
-    /// Each permanent an opponent of the resolving player controls matching
-    /// the predicate.
-    EachOpponentControls(CardPredicate),
-    /// Each battlefield permanent matching the predicate ("all creatures").
-    EachMatching(CardPredicate),
-    /// Each permanent the frame's primary target player controls matching
-    /// the predicate ("creatures target player controls").
-    EachTargetPlayerControls(CardPredicate),
-}
-
-/// The target spec of [`AffectedSpec::EachTargetPlayerControls`].
+/// The target spec of [`Scope::TargetPlayerControls`].
 static TARGET_PLAYER: TargetSpec = TargetSpec::Player;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -1144,15 +1115,11 @@ impl Effect {
             return true;
         }
         match self {
-            Effect::ApplyContinuous {
-                affected: AffectedSpec::TriggeringPermanent,
-                ..
-            } => true,
             Effect::Earthbend { count: value, .. }
             | Effect::MillCards { count: value, .. }
             | Effect::DrawCards { count: value }
-            | Effect::GainLifeValue { amount: value }
-            | Effect::DealDamageValue { amount: value, .. }
+            | Effect::GainLife { amount: value }
+            | Effect::DealDamage { amount: value, .. }
             | Effect::PutCounters { amount: value, .. } => *value == EffectValue::TriggeringPower,
             _ => false,
         }
@@ -1164,15 +1131,38 @@ impl Effect {
         match self {
             Effect::PutCounters { on, .. } => vec![on],
             Effect::PutCountersFrom { from, on } => vec![from, on],
-            Effect::Sacrifice { what, .. }
+            Effect::ApplyContinuous { affected: what, .. }
+            | Effect::Sacrifice { what, .. }
             | Effect::Move { what, .. }
             | Effect::Tap { what }
-            | Effect::Untap { what } => vec![what],
+            | Effect::Untap { what }
+            | Effect::Destroy { what }
+            | Effect::Airbend { what }
+            | Effect::GainControl { what, .. }
+            | Effect::DealDamage { what, .. }
+            | Effect::CounterSpell { what }
+            | Effect::CounterAbility { what }
+            | Effect::Earthbend { what, .. }
+            | Effect::Discard { what, .. } => vec![what],
             Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
                 vec![from]
             }
             _ => Vec::new(),
         }
+    }
+
+    /// The choice a `Chosen` selector asks of the resolving player, if the
+    /// verb has one; only `Sacrifice` may let them decline.
+    pub fn chosen(&self) -> Option<(&CardPredicate, Option<Except>, bool)> {
+        let (predicate, except) =
+            self.selectors()
+                .into_iter()
+                .find_map(|selector| match selector {
+                    ObjectSelector::Chosen { predicate, except } => Some((predicate, *except)),
+                    _ => None,
+                })?;
+        let optional = matches!(self, Effect::Sacrifice { optional: true, .. });
+        Some((predicate, except, optional))
     }
 
     /// Whether the effect asks about the spell whose casting triggered it,
@@ -1202,12 +1192,7 @@ impl Effect {
         Self::Modal {
             modes: outputs
                 .into_iter()
-                .map(|mana| {
-                    vec![Self::AddMana {
-                        mana,
-                        until_end_of_combat: false,
-                    }]
-                })
+                .map(|mana| vec![Self::add_mana(mana)])
                 .collect(),
         }
     }
@@ -1218,7 +1203,7 @@ impl Effect {
 
     /// "[affected] [modification] until end of turn."
     pub fn until_end_of_turn(
-        affected: AffectedSpec,
+        affected: ObjectSelector,
         modification: Modification<EffectValue>,
     ) -> Self {
         Effect::ApplyContinuous {
@@ -1229,7 +1214,7 @@ impl Effect {
     }
 
     /// A continuous effect with no stated duration.
-    pub fn indefinitely(affected: AffectedSpec, modification: Modification<EffectValue>) -> Self {
+    pub fn indefinitely(affected: ObjectSelector, modification: Modification<EffectValue>) -> Self {
         Effect::ApplyContinuous {
             affected,
             modification,
@@ -1252,24 +1237,7 @@ impl Effect {
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
-            Effect::ApplyContinuous {
-                affected: AffectedSpec::EachTargetPlayerControls(_),
-                ..
-            } => Some(&TARGET_PLAYER),
-            Effect::ApplyContinuous {
-                affected: AffectedSpec::Target(target),
-                ..
-            }
-            | Effect::DiscardTargetPlayer { target, .. }
-            | Effect::Destroy { target }
-            | Effect::Airbend { target }
-            | Effect::GainControl { target, .. }
-            | Effect::ChangeTarget { target }
-            | Effect::DealDamageValue { target, .. }
-            | Effect::DealDamage { target, .. }
-            | Effect::CounterSpell { target }
-            | Effect::CounterAbility { target }
-            | Effect::Earthbend { target, .. }
+            Effect::ChangeTarget { target }
             | Effect::AttachSourceTo { target }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
@@ -1298,15 +1266,21 @@ impl Effect {
             | Effect::Untap { .. }
             | Effect::RemoveCounters { .. }
             | Effect::RemoveAllCounters { .. }
+            | Effect::Destroy { .. }
+            | Effect::Airbend { .. }
+            | Effect::GainControl { .. }
+            | Effect::DealDamage { .. }
+            | Effect::CounterSpell { .. }
+            | Effect::CounterAbility { .. }
+            | Effect::Earthbend { .. }
+            | Effect::Discard { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
             | Effect::MillAndSelect { .. }
             | Effect::ApplyContinuous { .. }
             | Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
-            | Effect::Discard
             | Effect::CreateNonlegendaryCopy
-            | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardPlayThisTurn
             | Effect::ExileUntilNonlandCastFree { .. }
@@ -1318,10 +1292,6 @@ impl Effect {
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchLandsOpponentSplits { .. }
             | Effect::DrawCards { .. }
-            | Effect::MassDamage { .. }
-            | Effect::DestroyCreaturesLosingAbilities { .. }
-            | Effect::DamageOpponentCreatures { .. }
-            | Effect::CreateTokensValue { .. }
             | Effect::CreateToken { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
@@ -1331,8 +1301,6 @@ impl Effect {
             | Effect::EachPlayerKeepsCreatures { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
-            | Effect::GainLifeValue { .. }
-            | Effect::AddManaValue { .. }
             | Effect::FightLastTarget
             | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
@@ -1375,10 +1343,7 @@ impl Effect {
     /// "Sacrifice a [predicate]."
     pub fn sacrifice(predicate: CardPredicate) -> Self {
         Effect::Sacrifice {
-            what: ObjectSelector::Chosen {
-                predicate,
-                another: false,
-            },
+            what: ObjectSelector::chosen(predicate),
             optional: false,
         }
     }
@@ -1386,8 +1351,58 @@ impl Effect {
     /// "You may sacrifice [another] [predicate]."
     pub fn may_sacrifice(predicate: CardPredicate, another: bool) -> Self {
         Effect::Sacrifice {
-            what: ObjectSelector::Chosen { predicate, another },
+            what: ObjectSelector::Chosen {
+                predicate,
+                except: another.then_some(Except::This),
+            },
             optional: true,
+        }
+    }
+
+    /// "Destroy [what]."
+    pub fn destroy(what: ObjectSelector) -> Self {
+        Effect::Destroy { what }
+    }
+
+    /// "Deal [amount] damage to [what]."
+    pub fn deal_damage(amount: impl Into<EffectValue>, what: ObjectSelector) -> Self {
+        Effect::DealDamage {
+            amount: amount.into(),
+            what,
+        }
+    }
+
+    /// "You gain [amount] life."
+    pub fn gain_life(amount: impl Into<EffectValue>) -> Self {
+        Effect::GainLife {
+            amount: amount.into(),
+        }
+    }
+
+    /// "Discard a card."
+    pub fn discard() -> Self {
+        Effect::Discard {
+            what: ObjectSelector::You,
+            count: 1,
+        }
+    }
+
+    /// "Create [count] [token_name] tokens."
+    pub fn create_tokens(token_name: &str, count: impl Into<EffectValue>) -> Self {
+        Effect::CreateToken {
+            token_name: token_name.into(),
+            count: count.into(),
+            tapped_and_attacking: false,
+            attach_source: false,
+        }
+    }
+
+    /// "Add [mana]."
+    pub fn add_mana(mana: Mana) -> Self {
+        Effect::AddMana {
+            mana,
+            amount: EffectValue::Fixed(1),
+            until_end_of_combat: false,
         }
     }
 

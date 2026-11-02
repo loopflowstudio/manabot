@@ -240,24 +240,31 @@ def test_unknown_or_mixed_target_effects_have_no_polarity() -> None:
         targeting = [{"spec": "Creature", "min": 1, "max": 1}]
         return [{"name": "X", "spell_effects": list(effects), "targeting": targeting}]
 
-    def target(name: str, **fields: Any) -> dict[str, Any]:
-        return {name: {**fields, "target": "Creature"}}
-
     def verb(name: str, **fields: Any) -> dict[str, Any]:
         return {name: {**fields, "what": {"Target": "Creature"}}}
 
     assert derive_targeted_spells(spell(verb("Tap")))["X"].polarity is None
-    mixed = spell(target("DealDamage", amount=1), verb("Untap"))
+    mixed = spell(verb("DealDamage", amount={"Fixed": 1}), verb("Untap"))
     assert derive_targeted_spells(mixed)["X"].polarity is None
     bounce = spell(verb("Move", to="Hand"))
     assert derive_targeted_spells(bounce)["X"].polarity == "harmful"
     reanimate = spell(verb("Move", to="Battlefield"))
     assert derive_targeted_spells(reanimate)["X"].polarity is None
-    shrink = spell(target("BuffTarget", power=-2, toughness=-2))
+    shrink = spell(
+        {
+            "ApplyContinuous": {
+                "affected": {"Target": "Creature"},
+                "modification": {
+                    "ModifyPt": {"power": {"Fixed": -2}, "toughness": {"Fixed": -2}}
+                },
+                "duration": "EndOfTurn",
+            }
+        }
+    )
     assert derive_targeted_spells(shrink)["X"] == TargetedSpell(
         "harmful", "creature", False, pump=(-2, -2)
     )
-    modal = spell({"Modal": {"modes": [[target("DealDamage", amount=4)]]}})
+    modal = spell({"Modal": {"modes": [[verb("DealDamage", amount={"Fixed": 4})]]}})
     assert derive_targeted_spells(modal)["X"] == TargetedSpell(None, "creature", False)
 
 

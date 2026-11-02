@@ -32,12 +32,7 @@ fn tireless_tracker() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Clue".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Clue", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,

@@ -81,6 +81,10 @@ pub struct EffectFrame {
     /// they now exist ("it", "if you do").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub moved: Vec<ObjectRef>,
+    /// The permanent the resolving player chose for the instruction now
+    /// running over a `Chosen` selector; cleared once it has run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<ObjectRef>,
     /// The token this resolution created last ("that token").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created: Option<PermanentId>,
@@ -214,15 +218,21 @@ pub enum Decision {
         choices: Vec<crate::state::mana::Mana>,
         resume: Option<Box<Decision>>,
     },
-    Sacrifice {
+    /// `player` chooses a permanent they control matching `predicate` for
+    /// `effect`, the instruction over a `Chosen` selector ("sacrifice a
+    /// creature", "tap a creature you control"); `effect` then runs over
+    /// the choice.
+    ChooseObject {
         player: PlayerId,
         predicate: CardPredicate,
-        /// The source permanent of an "another" sacrifice, never a candidate.
+        /// The permanent an "another" or "all other" leaves out, never a
+        /// candidate.
         #[serde(skip_serializing_if = "Option::is_none")]
         excluded: Option<PermanentId>,
         /// "You may sacrifice": declining is allowed.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         optional: bool,
+        effect: Box<Effect>,
     },
     /// Place one of `remaining` `kind` counters on a tapped creature an
     /// opponent of `player` controls; candidates are read at each placement.
@@ -405,7 +415,7 @@ impl Decision {
             Decision::Payment(payment) => payment.player,
             Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
-            | Decision::Sacrifice { player, .. }
+            | Decision::ChooseObject { player, .. }
             | Decision::KeepCreatures { player, .. }
             | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
@@ -435,7 +445,7 @@ impl Decision {
             Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
-            | Decision::Sacrifice { .. }
+            | Decision::ChooseObject { .. }
             | Decision::KeepCreatures { .. }
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
@@ -573,9 +583,10 @@ impl Game {
         }
     }
 
-    /// The permanents a pending `Decision::Sacrifice` may select.
-    pub(crate) fn sacrifice_decision_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
-        let Decision::Sacrifice {
+    /// The permanents a pending `Decision::ChooseObject` may select: those
+    /// `player` controls matching the predicate, less the excluded one.
+    pub(crate) fn choice_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
+        let Decision::ChooseObject {
             player,
             predicate,
             excluded,
@@ -584,8 +595,9 @@ impl Game {
         else {
             return Vec::new();
         };
-        self.sacrifice_candidates(*player, predicate)
+        self.battlefield_permanents(*player)
             .into_iter()
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
             .filter(|id| Some(*id) != *excluded)
             .collect()
     }
@@ -610,6 +622,7 @@ impl Game {
                 created: None,
                 this_way: Vec::new(),
                 moved: Vec::new(),
+                chosen: None,
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -643,6 +656,8 @@ impl Game {
                 self.state.suspended_decision = Some(SuspendedResolution { frame, decision });
                 return;
             }
+            // A chosen permanent belongs to the one instruction that ran.
+            frame.chosen = None;
         }
         self.finalize_frame(frame);
     }
@@ -747,14 +762,14 @@ impl Game {
                     })
                     .collect(),
             },
-            Decision::Sacrifice {
+            Decision::ChooseObject {
                 player, optional, ..
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.sacrifice_decision_candidates(&suspended.decision)
+                    self.choice_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
                     *optional,
@@ -1064,7 +1079,7 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::Sacrifice { optional: true, .. }, Action::Decline { .. }) => {
+            (Decision::ChooseObject { optional: true, .. }, Action::Decline { .. }) => {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1104,23 +1119,30 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::Sacrifice { .. }, Action::SelectCard { card, .. }) => {
+            (Decision::ChooseObject { .. }, Action::SelectCard { card, .. }) => {
                 let selected = self
-                    .sacrifice_decision_candidates(&suspended.decision)
+                    .choice_candidates(&suspended.decision)
                     .into_iter()
                     .find(|id| {
                         self.state.permanents[*id]
                             .as_ref()
                             .is_some_and(|p| p.card == *card)
-                    });
+                    })
+                    .and_then(|id| self.permanent_object_ref(id));
                 let Some(selected) = selected else {
                     self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("illegal sacrifice selection".into()));
+                    return Err(AgentError("illegal object selection".into()));
                 };
-                suspended.frame.moved = self.sacrifice_permanent(selected).into_iter().collect();
+                let Decision::ChooseObject { effect, .. } = suspended.decision else {
+                    unreachable!()
+                };
+                // The instruction runs next, over the chosen permanent.
+                suspended.frame.chosen = Some(selected);
+                suspended.frame.queue.push_front(*effect);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+
             (Decision::KeepCreatures { .. }, Action::SelectCard { card, .. }) => {
                 let candidates = self.keep_candidates(&suspended.decision);
                 let selected =
@@ -1657,6 +1679,11 @@ impl Game {
                     return Err(err);
                 }
                 let effects = std::mem::take(&mut modes[*mode]);
+                if effects.is_empty() {
+                    // Stopping an "up to" counter choice completes its
+                    // instruction; the next verb must choose independently.
+                    suspended.frame.chosen = None;
+                }
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
                 Ok(())
@@ -2000,6 +2027,7 @@ mod learn_tests {
             created: None,
             this_way: Vec::new(),
             moved: Vec::new(),
+            chosen: None,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -2702,6 +2730,7 @@ mod payment_tests {
             created: None,
             this_way: Vec::new(),
             moved: Vec::new(),
+            chosen: None,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
