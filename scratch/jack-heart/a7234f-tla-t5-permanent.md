@@ -154,12 +154,15 @@ yet, add it to `Characteristics` instead of reading the printed card.
 - `Characteristics` (`flow/statics.rs`) gains `is_legendary` (layer 4:
   copiable supertypes unless a `Nonlegendary` record), `types: CardTypes`
   (layer 4: printed, static type grants, Creature when animated, Artifact for
-  an artifact-creature record; `is_creature` / `is_land` now read it) and
+  an artifact-creature record; `is_creature()` / `is_land()` are methods
+  reading it, not separate fields) and
   `ward` (printed ward unless abilities are lost). `permanent_is_legendary`
   is deleted; `legend_groups` reads the view.
 - `Observation::card_data` reads the view for every characteristic field of a
   battlefield card: name, power/toughness, legendary, Ally, Lesson, ward,
-  card types and keywords. Printed by definition: identity (zone, owner, id,
+  card types and keywords (`card_data` overrides `printed_card_data` with
+  struct update, so the split is visible in one place; `Card::is_legendary`
+  is the one printed-supertype reader). Printed by definition: identity (zone, owner, id,
   registry key), token status, text box, mana cost, kicker, face-down,
   cast permission and X. `CardTypeData::from_types` is the one builder.
 - `tests/cards/observability.rs`: `card_sources()` classifies every
@@ -234,6 +237,10 @@ yet, add it to `Characteristics` instead of reading the printed card.
 
 ## Checks
 
+- 2026-11-02 (compress, headless): debug `cargo test --test cards --test
+  rules_tests` (501 + 141 passed), clippy `--all-targets --all-features -D
+  warnings` clean. Observation output is unchanged, so no extension rebuild
+  or Python rerun; gate owns those.
 - 2026-11-02 (implement 1a/2a, headless): debug `cargo test --test cards
   observability` (51), `--test cards tla::` (390) and `stx::` (19),
   `--test rules_tests` legend / engine_events / cr_613 (24),

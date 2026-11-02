@@ -121,10 +121,6 @@ pub struct Characteristics {
     /// Creature (with Artifact for an artifact-creature record) when
     /// animated.
     pub types: CardTypes,
-    /// `types.is_creature()`, kept for the many readers of one flag.
-    pub is_creature: bool,
-    /// `types.is_land()`: printed or granted land.
-    pub is_land: bool,
     /// Layer 4 supertype: its copiable values' legendary supertype, unless a
     /// `Modification::Nonlegendary` record removes it. The legend rule and
     /// the card row read this.
@@ -157,6 +153,15 @@ pub struct Characteristics {
 impl Characteristics {
     pub fn pt(&self) -> (i32, i32) {
         (self.power, self.toughness)
+    }
+
+    pub fn is_creature(&self) -> bool {
+        self.types.is_creature()
+    }
+
+    /// Printed or granted land.
+    pub fn is_land(&self) -> bool {
+        self.types.is_land()
     }
 
     pub fn has_subtype(&self, subtype: &str) -> bool {
@@ -324,8 +329,6 @@ impl Game {
             characteristics_set: basis.set.is_some(),
             subtypes: owned(subtypes_with(card, &basis)),
             creature_types: owned(creature_types_with(card, &basis)),
-            is_creature: types.is_creature(),
-            is_land,
             is_legendary: self.is_legendary(permanent_id),
             types,
             is_animated: self.permanent_is_animated(permanent_id),
@@ -827,11 +830,8 @@ impl Game {
 
     /// Whether a battlefield permanent is a land, printed or granted.
     fn permanent_is_land(&self, permanent_id: PermanentId) -> bool {
-        self.is_land_with(permanent_id, &self.static_index().sources)
-    }
-
-    fn is_land_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> bool {
-        self.types_with(permanent_id, sources).is_land()
+        self.types_with(permanent_id, &self.static_index().sources)
+            .is_land()
     }
 
     /// Layer 4 card types: printed, plus static type grants, plus Creature
@@ -859,10 +859,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        self.state.cards[permanent.card]
-            .supertypes
-            .iter()
-            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
+        self.state.cards[permanent.card].is_legendary()
             && !self
                 .effects_on(permanent_id)
                 .any(|effect| effect.modification == Modification::Nonlegendary)
@@ -1284,7 +1281,7 @@ impl Game {
             return true;
         }
         let characteristics = self.characteristics(permanent_id);
-        !characteristics.is_creature || characteristics.keywords.haste
+        !characteristics.is_creature() || characteristics.keywords.haste
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's
@@ -1297,7 +1294,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        if !characteristics.is_creature {
+        if !characteristics.is_creature() {
             return false;
         }
         if permanent.deathtouch_damage && permanent.damage > 0 {

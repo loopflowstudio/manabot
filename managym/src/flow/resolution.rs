@@ -1361,7 +1361,7 @@ impl Game {
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
                     .filter(|id| {
-                        self.characteristics(*id).is_creature
+                        self.characteristics(*id).is_creature()
                             && self.state.permanents[*id].as_ref().is_some_and(|p| {
                                 let card = &self.state.cards[p.card];
                                 card.mana_cost
@@ -1398,7 +1398,7 @@ impl Game {
             Effect::MassDamage { amount } => {
                 for player in [PlayerId(0), PlayerId(1)] {
                     for permanent_id in self.battlefield_permanents(player) {
-                        if self.characteristics(permanent_id).is_creature {
+                        if self.characteristics(permanent_id).is_creature() {
                             self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
                         }
                     }
@@ -2156,16 +2156,16 @@ impl Game {
                     && self.permanent_matches_predicate(id, predicate)
             }
             TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
-                self.characteristics(id).is_creature
+                self.characteristics(id).is_creature()
             }
             TargetSpec::CreatureYouControl => {
-                permanent.controller == controller && self.characteristics(id).is_creature
+                permanent.controller == controller && self.characteristics(id).is_creature()
             }
             TargetSpec::CreatureOpponentControls => {
-                permanent.controller != controller && self.characteristics(id).is_creature
+                permanent.controller != controller && self.characteristics(id).is_creature()
             }
             TargetSpec::LandYouControl => {
-                permanent.controller == controller && self.characteristics(id).is_land
+                permanent.controller == controller && self.characteristics(id).is_land()
             }
             TargetSpec::SpellOrPermanent { min_mana_value } => {
                 self.card_mana_value(permanent.card) >= *min_mana_value

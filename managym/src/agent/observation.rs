@@ -1131,7 +1131,7 @@ impl Observation {
                     .map(|creature_type| creature_type.to_string())
                     .collect()
             }),
-            is_granted_land: characteristics.is_land
+            is_granted_land: characteristics.is_land()
                 && !game.state.cards[permanent.card].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
@@ -1174,61 +1174,49 @@ impl Observation {
     /// A card's row. On the battlefield every characteristic reads the
     /// layered view (`Game::characteristics`); elsewhere the printed card.
     fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
-        let card = &game.state.cards[card_id];
-        let layered = match game.state.card_to_permanent[card_id] {
+        let printed = Self::printed_card_data(game, card_id, zone);
+        match game.state.card_to_permanent[card_id] {
             Some(permanent) if zone == ZoneType::Battlefield => {
-                Some(game.characteristics(permanent))
+                let view = game.characteristics(permanent);
+                CardData {
+                    name: view.name.clone(),
+                    power: view.power,
+                    toughness: view.toughness,
+                    is_legendary: view.is_legendary,
+                    is_ally: view.has_subtype("Ally"),
+                    is_lesson: view.has_subtype("Lesson"),
+                    ward_cost: ward_value(view.ward.as_ref()),
+                    card_types: CardTypeData::from_types(&view.types),
+                    keywords: KeywordData::from_keywords(&view.keywords),
+                    ..printed
+                }
             }
-            _ => None,
-        };
-        let ward_value = |cost: &PaymentCost| i32::from(cost.mana_cost().mana_value);
+            _ => printed,
+        }
+    }
+
+    fn printed_card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
+        let card = &game.state.cards[card_id];
         CardData {
             zone,
             owner_id: game.state.players[card.owner.0].id.0 as i32,
             id: card.id.0 as i32,
             registry_key: card.registry_key.0 as i32,
-            name: layered
-                .as_ref()
-                .map_or_else(|| card.name.clone(), |view| view.name.clone()),
+            name: card.name.clone(),
             text_box: card.text_box.clone(),
-            power: layered
-                .as_ref()
-                .map_or_else(|| card.power.unwrap_or(0), |view| view.power),
-            toughness: layered
-                .as_ref()
-                .map_or_else(|| card.toughness.unwrap_or(0), |view| view.toughness),
+            power: card.power.unwrap_or(0),
+            toughness: card.toughness.unwrap_or(0),
             is_token: card.is_token,
-            is_legendary: layered.as_ref().map_or_else(
-                || {
-                    card.supertypes
-                        .iter()
-                        .any(|s| s.eq_ignore_ascii_case("legendary"))
-                },
-                |view| view.is_legendary,
-            ),
-            is_ally: layered
-                .as_ref()
-                .map_or_else(|| card.has_subtype("Ally"), |view| view.has_subtype("Ally")),
-            is_lesson: layered.as_ref().map_or_else(
-                || card.has_subtype("Lesson"),
-                |view| view.has_subtype("Lesson"),
-            ),
-            ward_cost: layered
-                .as_ref()
-                .map_or_else(|| card.ward(), |view| view.ward.as_ref())
-                .map_or(0, ward_value),
+            is_legendary: card.is_legendary(),
+            is_ally: card.has_subtype("Ally"),
+            is_lesson: card.has_subtype("Lesson"),
+            ward_cost: ward_value(card.ward()),
             kicker_cost: card
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
-            card_types: CardTypeData::from_types(
-                layered.as_ref().map_or(&card.types, |view| &view.types),
-            ),
-            keywords: KeywordData::from_keywords(
-                layered
-                    .as_ref()
-                    .map_or(&card.keywords, |view| &view.keywords),
-            ),
+            card_types: CardTypeData::from_types(&card.types),
+            keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
             face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
             cast_permission: game
@@ -1961,4 +1949,9 @@ impl Observation {
         })
         .to_string()
     }
+}
+
+/// A ward cost's mana value; 0 without ward.
+fn ward_value(cost: Option<&PaymentCost>) -> i32 {
+    cost.map_or(0, |cost| i32::from(cost.mana_cost().mana_value))
 }

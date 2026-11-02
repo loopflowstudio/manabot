@@ -96,7 +96,7 @@ impl Game {
             // its owner's graveyard (an earthbent land losing its counters
             // is a 0/0 and dies).
             let characteristics = self.characteristics(permanent_id);
-            let zero_toughness = characteristics.is_creature && characteristics.toughness <= 0;
+            let zero_toughness = characteristics.is_creature() && characteristics.toughness <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
             let destroy = !zero_toughness
                 && self.has_lethal_damage(permanent_id, &characteristics)

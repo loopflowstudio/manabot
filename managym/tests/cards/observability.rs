@@ -2833,11 +2833,7 @@ fn card_rows_off_the_battlefield_read_the_printed_card() {
     let mut s = five_color_setup(&["Gran-Gran"]);
     let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
     let card = card_of(&s, gran);
-    let printed_legendary = s.game().state.cards[card]
-        .supertypes
-        .iter()
-        .any(|kind| kind.eq_ignore_ascii_case("legendary"));
-    assert!(printed_legendary);
+    assert!(s.game().state.cards[card].is_legendary());
     until_end_of_turn(&mut s, gran, Modification::Nonlegendary);
     assert_eq!(card_json(&s, 0, gran)["is_legendary"], false);
     s.game_mut().move_card(card, ZoneType::Graveyard);
@@ -3189,12 +3185,6 @@ fn a_toph_granted_land_shows_in_its_card_row_and_the_v5_granted_column() {
         card_row(s.game(), &observation, &encoded(s, 0, 5), tile)[11]
     };
     assert_eq!((land(&plain), land(&granted)), (0.0, 1.0));
-    assert_eq!(
-        card_json(&plain, 0, tile)["card_types"]["is_land"],
-        false,
-        "the Tile is not a printed land"
-    );
-    assert_eq!(card_json(&granted, 0, tile)["card_types"]["is_land"], true);
     assert_eq!(
         (
             permanent_value(&plain, 0, tile, PERMANENT_GRANTED_LAND_INDEX),

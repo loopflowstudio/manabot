@@ -5251,7 +5251,7 @@ fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
 }
 
 fn is_creature(s: &Scenario, id: PermanentId) -> bool {
-    s.game().characteristics(id).is_creature
+    s.game().characteristics(id).is_creature()
 }
 
 fn crew_with(s: &mut Scenario, creature: PermanentId) {

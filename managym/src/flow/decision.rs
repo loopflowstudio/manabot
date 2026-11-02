@@ -529,7 +529,7 @@ impl Game {
         self.battlefield_permanents(*player)
             .into_iter()
             .filter(|id| {
-                self.characteristics(*id).is_creature
+                self.characteristics(*id).is_creature()
                     && !kept.contains(id)
                     && total + self.characteristics(*id).power <= *max_total_power
             })
@@ -578,7 +578,7 @@ impl Game {
         let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
             .flat_map(|player| self.battlefield_permanents(player))
-            .filter(|id| self.characteristics(*id).is_creature && !kept.contains(id))
+            .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .collect();
         for id in doomed {
             self.sacrifice_permanent(id);
