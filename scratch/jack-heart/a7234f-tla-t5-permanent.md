@@ -1,10 +1,11 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, HEAD `1e9fd2d7c`, PR #405 open, mergeable): implemented,
+Status (2026-11-02, HEAD `628608323`, PR #405 open, mergeable): implemented,
 demoed through native Commands and the LLM/Academy text path, and synced onto
 main at `4c8324a59` (T3's squash, the characteristics cache and T4). All three
-cards are defined and supported. Shipping is stopped per Jack Heart's steer
-6eae1230: the PR waits for Jack Heart's review; no merge.
+cards are defined and supported. The post-sync concept review found nothing to
+change and no open product choice (below). Shipping is stopped per Jack Heart's
+steer 6eae1230: the PR waits for Jack Heart's review; no merge.
 
 Two accepted models from T3 (`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`)
 are the base this builds on: continuous effects as records
@@ -75,6 +76,25 @@ vocabularies as v5 fact rows (`FactKind`).
   `decision` by frame kind (obligation for kind 6, ordering class for 7/8,
   placement group for 9, delayed-trigger event for 10).
 
+## Concept review after the sync — 2026-11-02 (headless)
+
+Checked the accepted model against the synced tree (`scratch/concept-review.html`).
+Nothing to change; no product choice is open.
+
+- One owner per fact survived the sync: a copy is `Card.copy` and the root
+  definition; "sacrificed this turn" is T4's `PlayerTurnHistory`, read by
+  `Condition::SacrificedThisTurnAtLeast` and `EffectValue::PermanentsSacrificedThisTurn`;
+  every sacrifice (effect, cost, forced) increments it through
+  `sacrifice_permanent`. No `StaticCondition`, `CreateNonlegendaryCopy` or
+  second `sorcery_timing` remains.
+- The three cards follow set conventions: firebending is the attacks trigger
+  every TLA card uses; the copy exception is the shared `Modification`.
+- Not adopted, as before: folding `CreatureWithCounters` and
+  `CreatureWithNamesakes` (waits for a third self-animation condition).
+  Mixed `"legendary"` / `"Legendary"` supertype casing predates T5 (11 cards
+  on main; readers compare case-insensitively, and tokens carry `is_legendary`,
+  not the string); a cosmetic cleanup for any batch, not a T5 decision.
+
 ## Sync onto main — 2026-11-02 (steer 6eae1230)
 
 - Merged with T3's head `a18902e0e` as the base (main's T3 is its squash), so
@@ -103,7 +123,13 @@ vocabularies as v5 fact rows (`FactKind`).
   and the Academy precision demos (`test_decision_surface`, 3 cases). Choice
   navigation, authored-match authority, Learn evidence, belief state and
   learning, and continuation input already pass; public-commitment parity
-  is unchecked since the sync.
+  is unchecked since the sync. CI on `1e9fd2d7c` (2026-11-02): Rust, Python
+  unit, conformance and Clean-machine Play passed; **Academy UI failed** on the
+  three Playwright `decision-surface.spec.ts` Precision cases because
+  `play_demo.py` rejects the diverged precision demo digest before any
+  decision is offered, so the decision surface never appears. Same cause as
+  the three stale `test_decision_surface` cases; re-recording the demos fixes
+  both. Integration (main, long) were still running.
 - Jack Heart's review of PR #405. No merge.
 - Known, not fixed: `tests/sim/test_rollout.py::TestBatchedSampler::test_selects_valid_actions_only`
   fills every float buffer with noise, which the fact and definition checks
