@@ -243,9 +243,16 @@ def test_unknown_or_mixed_target_effects_have_no_polarity() -> None:
     def target(name: str, **fields: Any) -> dict[str, Any]:
         return {name: {**fields, "target": "Creature"}}
 
-    assert derive_targeted_spells(spell(target("TapTarget")))["X"].polarity is None
-    mixed = spell(target("DealDamage", amount=1), target("UntapTarget"))
+    def verb(name: str, **fields: Any) -> dict[str, Any]:
+        return {name: {**fields, "what": {"Target": "Creature"}}}
+
+    assert derive_targeted_spells(spell(verb("Tap")))["X"].polarity is None
+    mixed = spell(target("DealDamage", amount=1), verb("Untap"))
     assert derive_targeted_spells(mixed)["X"].polarity is None
+    bounce = spell(verb("Move", to="Hand"))
+    assert derive_targeted_spells(bounce)["X"].polarity == "harmful"
+    reanimate = spell(verb("Move", to="Battlefield"))
+    assert derive_targeted_spells(reanimate)["X"].polarity is None
     shrink = spell(target("BuffTarget", power=-2, toughness=-2))
     assert derive_targeted_spells(shrink)["X"] == TargetedSpell(
         "harmful", "creature", False, pump=(-2, -2)

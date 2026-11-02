@@ -67,18 +67,15 @@ import managym
 Polarity = Literal["harmful", "beneficial"]
 
 # Effects that act on a spell's target, by what they do to that target's
-# controller. Names are the engine's `Effect` variants.
+# controller. Names are the engine's `Effect` variants; a `Move` of the target
+# off the battlefield (exile, bounce, tuck) reads as `MoveTargetAway`.
 HARMFUL_EFFECTS = frozenset(
     {
         "DealDamage",
         "DealDamageValue",
         "TargetCreaturesDealPowerDamageToLastTarget",
         "Destroy",
-        "Exile",
-        "ExileWithControllerToken",
-        "ExileUntilSourceLeaves",
-        "ReturnToHand",
-        "ReturnToHandDrawIfControlled",
+        "MoveTargetAway",
         "CounterSpell",
         "CounterUnlessPays",
         "DiscardTargetPlayer",
@@ -86,7 +83,7 @@ HARMFUL_EFFECTS = frozenset(
 )
 BENEFICIAL_EFFECTS = frozenset(
     {
-        "UntapTarget",
+        "Untap",
         "GrantKeywordsToTarget",
         "Earthbend",
         "BuffTargetValue",
@@ -98,6 +95,9 @@ BENEFICIAL_EFFECTS = frozenset(
 IMPLICIT_TARGET_EFFECTS = frozenset(
     {"CounterUnlessPays", "TargetCreaturesDealPowerDamageToLastTarget"}
 )
+# Fields through which a verb names the object it acts on (`ObjectSelector`);
+# a `{"Target": spec}` selector is the spell's target.
+SELECTOR_FIELDS = ("what", "on", "from")
 
 # ---------------------------------------------------------------------------
 # Card knowledge derived from the engine card definitions
@@ -133,18 +133,49 @@ _TARGET_MODIFICATIONS = {
 }
 
 
+def _target_of(body: Any) -> Any | None:
+    """The target spec an effect body acts on: its `target` field or a
+    `Target` object selector."""
+    if not isinstance(body, dict):
+        return None
+    if "target" in body:
+        return body["target"]
+    for field in SELECTOR_FIELDS:
+        selector = body.get(field)
+        if isinstance(selector, dict) and "Target" in selector:
+            return selector["Target"]
+    return None
+
+
+def _spec_name(spec: Any) -> str:
+    """A target spec's variant name (unit variants serialize as strings)."""
+    return spec if isinstance(spec, str) else next(iter(spec))
+
+
 def _variant(effect: Effect) -> tuple[str, Any]:
     """An effect's variant name and body (unit variants serialize as strings).
 
     `ApplyContinuous` reads as what it does to whom: a fixed P/T change on the
     target is `BuffTarget`, any other on the target `BuffTargetValue`, a
     keyword, subtype or unblockability grant to the target its `*Target`
-    name, and a P/T change on the source `ModifyUntilEot`. Other continuous
-    effects keep their name and carry no polarity.
+    name, and a P/T change on the source `ModifyUntilEot`. A `Move` of a
+    battlefield target anywhere but the battlefield is `MoveTargetAway`
+    (returning a graveyard card is not). Other continuous effects keep their
+    name and carry no polarity.
     """
     if isinstance(effect, str):
         return effect, {}
     ((name, body),) = effect.items()
+    if name == "Move":
+        selector = body["what"]
+        if (
+            isinstance(selector, dict)
+            and "Target" in selector
+            and body["to"] != "Battlefield"
+            and "Graveyard" not in _spec_name(selector["Target"])
+        ):
+            return "MoveTargetAway", {"target": selector["Target"]}
+        return name, body
     if name != "ApplyContinuous":
         return name, body
     affected = body["affected"]
@@ -191,9 +222,7 @@ def _target_effects(effects: list[Effect]) -> list[tuple[str, Any]]:
         name, body = _variant(effect)
         for nested in _children(name, body):
             found.extend(_target_effects(nested))
-        if name in IMPLICIT_TARGET_EFFECTS or (
-            isinstance(body, dict) and "target" in body
-        ):
+        if name in IMPLICIT_TARGET_EFFECTS or _target_of(body) is not None:
             found.append((name, body))
     return found
 
@@ -207,8 +236,8 @@ def _specs(effects: list[Effect]) -> list[Any]:
             continue
         if name == "TargetClause":
             specs.append(body["requirement"]["spec"])
-        elif "target" in body:
-            specs.append(body["target"])
+        elif (spec := _target_of(body)) is not None:
+            specs.append(spec)
         for key, value in body.items():
             if key == "modes":
                 for mode in value:

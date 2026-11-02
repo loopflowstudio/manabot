@@ -3,8 +3,8 @@ use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{CardDefinition, CardType, CardTypes, Keywords, StaticAbility},
     mana::ManaCost,
@@ -34,9 +34,9 @@ fn divide_by_zero() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{U}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::ReturnToHand {
-                target: TargetSpec::SpellOrPermanent { min_mana_value: 1 },
-            },
+            Effect::return_to_hand(ObjectSelector::Target(TargetSpec::SpellOrPermanent {
+                min_mana_value: 1,
+            })),
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {

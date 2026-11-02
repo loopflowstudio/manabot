@@ -1093,6 +1093,21 @@ impl Game {
                 },
                 _ => false,
             },
+            Condition::Moved => frame.is_some_and(|frame| !frame.moved.is_empty()),
+            Condition::TargetControlledByYou => {
+                let Some(Target::Permanent(permanent_id)) =
+                    frame.and_then(EffectFrame::primary_target)
+                else {
+                    return false;
+                };
+                let last_controller = match self.state.permanents[permanent_id].as_ref() {
+                    Some(permanent) => Some(permanent.controller),
+                    None => self
+                        .departed_permanent_lki(permanent_id)
+                        .map(|lki| lki.controller),
+                };
+                last_controller == Some(controller)
+            }
             Condition::DiscardedThisWay(predicate) => frame.is_some_and(|frame| {
                 frame
                     .this_way

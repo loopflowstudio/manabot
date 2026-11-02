@@ -1422,7 +1422,7 @@
     "400.7e": {
       "status": "partial",
       "scope": "Earthbend can find a land in its first public destination after dying.",
-      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:ReturnSourceToBattlefieldTapped",
+      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:Effect::Move",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
@@ -1432,7 +1432,7 @@
       "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
       "anchors": [
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
-        "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
+        "managym/src/flow/resolution.rs::Effect::Move",
         "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land",
         "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
       ]
@@ -1496,14 +1496,14 @@
     "400.7j": {
       "status": "partial",
       "scope": "Untargeted triggering-permanent context and exile links retain related objects across selected actions.",
-      "authority": "managym/src/state/ability.rs:AffectedSpec::TriggeringPermanent; managym/src/flow/resolution.rs:ExileUntilSourceLeaves; managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "authority": "managym/src/state/ability.rs:AffectedSpec::TriggeringPermanent; managym/src/flow/resolution.rs:Effect::Move (LinkedExile::UntilSourceLeaves); managym/src/flow/zones.rs:handle_leaves_battlefield",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "ExileLink retains exiled CardId only; leave/reenter-exile tracking remains unproved. General cost-moved objects and multi-zone effects need exact destination identity.",
       "anchors": [
         "managym/src/state/ability.rs::TriggeringPermanent",
-        "managym/src/flow/resolution.rs::ExileUntilSourceLeaves",
+        "managym/src/flow/resolution.rs::Effect::Move",
         "managym/src/flow/zones.rs::handle_leaves_battlefield"
       ]
     },
@@ -1806,7 +1806,7 @@
     "603.6": {
       "status": "partial",
       "scope": "ETB/death events and earthbend first-destination returns exist.",
-      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:ReturnSourceToBattlefieldTapped",
+      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:Effect::Move",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
@@ -1817,7 +1817,7 @@
       "anchors": [
         "managym/src/flow/triggers.rs::trigger_condition_fires",
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
-        "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
+        "managym/src/flow/resolution.rs::Effect::Move",
         "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land",
         "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
       ]
@@ -1890,7 +1890,7 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
-      "gap": "No Aura attachment/departure implementation. Existing ExileUntilSourceLeaves/ExileLink citations to 603.6e do not justify their duration semantics; correct in a future comment pass.",
+      "gap": "No Aura attachment/departure implementation. Existing Move { linked }/ExileLink citations to 603.6e do not justify their duration semantics; correct in a future comment pass.",
       "anchors": [
         "managym/src/state/permanent.rs::pub struct Permanent",
         "managym/src/state/ability.rs::TriggerCondition"
@@ -1946,7 +1946,7 @@
     "603.7c": {
       "status": "partial",
       "scope": "Watchers reject stale battlefield incarnations; resolving return loses destination identity.",
-      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:ReturnSourceToBattlefieldTapped",
+      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:Effect::Move",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
@@ -1956,7 +1956,7 @@
       "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
       "anchors": [
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
-        "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
+        "managym/src/flow/resolution.rs::Effect::Move",
         "managym/tests/rules/cr_704_sba.rs::cr_400_7_stale_delayed_trigger_reference_is_rejected",
         "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
       ]

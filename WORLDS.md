@@ -142,6 +142,22 @@ at cleanup and kept in last known information) apart from its marked damage.
 An entering counter replacement may be conditional. Observations add each
 player's `turn_history` and a permanent's `dealt_damage_this_turn`.
 
+Task MTG-235 (2026-11-02, same world) gives `Effect` verbs one object
+vocabulary: `ObjectSelector` (`This`, `Target`, `Triggering`, `Attached`,
+`CreatedThisWay`, `Grantor`, `Moved`, `Chosen`, `Each`) names what
+`PutCounters`, `PutCountersFrom`, `Sacrifice`, `Move`, `Tap`, `Untap`,
+`RemoveCounters` and `RemoveAllCounters` act on, resolved by one
+`Game::select` with last known information for a departed source; 33
+object-fused variants (`PutCountersOnSource`, `SacrificeTriggeringPermanent`,
+`ReturnGraveyardTarget`, `ExileAttached`, `TapTarget`, …) are gone and
+`Effect` has 79 variants. "If you do" is `Condition::Moved` over what the
+latest move or sacrifice moved; "if you controlled it" is
+`Condition::TargetControlledByYou`; `PlayerSelector::Owner` names the owner a
+move returns a card to. Behavior is unchanged except that a flashback spell
+returned to hand is exiled instead (CR 702.34a), which no card reaches.
+Learning tokens and the content digest change, so w17 evidence is re-recorded
+in place; no world or policy-input version changes.
+
 Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the

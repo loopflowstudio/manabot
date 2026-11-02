@@ -4,9 +4,9 @@
 
 use crate::state::{
     ability::{
-        Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn,
-        LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser,
+        LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     effect::{EffectDuration, Modification},
@@ -236,6 +236,8 @@ fn condition_text(condition: &Condition) -> String {
             "this has {count} or more {} counters",
             kind.name().replace('_', " ")
         ),
+        Condition::Moved => "you do".into(),
+        Condition::TargetControlledByYou => "you controlled that target".into(),
     }
 }
 
@@ -410,6 +412,110 @@ fn player_description(player: &PlayerSelector) -> String {
         PlayerSelector::TriggeringPlayer => "that player".into(),
         PlayerSelector::TargetController => "its controller".into(),
         PlayerSelector::Target(target) => target_description(target),
+        PlayerSelector::Owner => "its owner".into(),
+    }
+}
+
+fn selector_description(selector: &ObjectSelector) -> String {
+    match selector {
+        ObjectSelector::This => "this".into(),
+        ObjectSelector::Target(target) => target_description(target),
+        ObjectSelector::Triggering => "that permanent".into(),
+        ObjectSelector::Attached => "the permanent this is attached to".into(),
+        ObjectSelector::CreatedThisWay => "that token".into(),
+        ObjectSelector::Grantor => "the permanent granting this ability".into(),
+        ObjectSelector::Moved => "it".into(),
+        ObjectSelector::Chosen { predicate, another } => format!(
+            "{}{}",
+            if *another { "another " } else { "a " },
+            predicate_description(predicate, "permanent")
+        ),
+        ObjectSelector::Each { of, another } => {
+            let other = if *another { "other " } else { "" };
+            match of {
+                AffectedSpec::You => "you".into(),
+                AffectedSpec::Source => "this".into(),
+                AffectedSpec::Target(target) => target_description(target),
+                AffectedSpec::TriggeringPermanent => "that permanent".into(),
+                AffectedSpec::EachYouControl(predicate) => format!(
+                    "each {other}{} you control",
+                    predicate_description(predicate, "permanent")
+                ),
+                AffectedSpec::EachOpponentControls(predicate) => format!(
+                    "each {other}{} your opponents control",
+                    predicate_description(predicate, "permanent")
+                ),
+                AffectedSpec::EachMatching(predicate) => {
+                    format!(
+                        "each {other}{}",
+                        predicate_description(predicate, "permanent")
+                    )
+                }
+                AffectedSpec::EachTargetPlayerControls(predicate) => format!(
+                    "each {other}{} target player controls",
+                    predicate_description(predicate, "permanent")
+                ),
+            }
+        }
+    }
+}
+
+/// One sentence for a `Move`: the verb the destination implies, then its
+/// terms.
+fn move_description(
+    what: &ObjectSelector,
+    to: ZoneType,
+    tapped: bool,
+    under: Option<&PlayerSelector>,
+    with_counter: Option<CounterKind>,
+    linked: Option<LinkedExile>,
+) -> String {
+    // A card returning itself (Earthbend, flicker) reads as a return; its
+    // owner's control is the natural reading and goes unsaid.
+    let returns_itself = matches!(what, ObjectSelector::This);
+    let what = selector_description(what);
+    match to {
+        ZoneType::Hand => format!("Return {what} to its owner's hand"),
+        ZoneType::Battlefield => {
+            let mut text = if returns_itself {
+                "Return this card to the battlefield".to_string()
+            } else {
+                format!("Put {what} onto the battlefield")
+            };
+            if tapped {
+                text.push_str(" tapped");
+            }
+            if let Some(kind) = with_counter {
+                text.push_str(&format!(
+                    " with a {} counter on it",
+                    counter_description(kind)
+                ));
+            }
+            match under {
+                None => {}
+                Some(PlayerSelector::Owner) if returns_itself => {}
+                Some(PlayerSelector::Owner) => text.push_str(" under its owner's control"),
+                Some(player) => text.push_str(&format!(
+                    " under the control of {}",
+                    player_description(player)
+                )),
+            }
+            text
+        }
+        ZoneType::Exile => {
+            let mut text = format!("Exile {what}");
+            match linked {
+                Some(LinkedExile::WithSource) => text.push_str(" with this"),
+                Some(LinkedExile::UntilSourceLeaves) => {
+                    text.push_str(" until this leaves the battlefield")
+                }
+                None => {}
+            }
+            text
+        }
+        ZoneType::Library => format!("Shuffle {what} into its owner's library"),
+        ZoneType::Graveyard => format!("Put {what} into its owner's graveyard"),
+        ZoneType::Stack | ZoneType::Command => format!("Put {what} into the {to:?} zone"),
     }
 }
 
@@ -550,19 +656,22 @@ fn effect_description(effect: &Effect) -> Option<String> {
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
         CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
+        PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
+        PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
+        Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
+        Move { what, to, tapped, under, with_counter, linked } => move_description(what, *to, *tapped, under.as_ref(), *with_counter, *linked),
+        Tap { what } => format!("Tap {}", selector_description(what)),
+        Untap { what } => format!("Untap {}", selector_description(what)),
+        RemoveAllCounters { from } => format!("Remove all counters from {}", selector_description(from)),
+        RemoveCounters { up_to, chosen: None, from } => format!("Remove up to {up_to} counters from {}", selector_description(from)),
+        RemoveCounters { chosen: Some(kind), from, .. } => format!("Remove a {} counter from {}", counter_description(*kind), selector_description(from)),
         ApplyContinuous { affected, modification, duration } => continuous_description(affected, modification, *duration),
-        PutCountersOnTriggeringPermanent { count } => format!("Put {count} +1/+1 counters on the permanent that caused this trigger"),
         OptionalPayment { cost, if_paid, if_declined } => {
             let cost = payment_description(cost);
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))
         },
-        Sacrifice { predicate } => format!("Sacrifice a {}", predicate_description(predicate,"permanent")),
         DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(amount),player_description(player)),
         DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(amount)),
-        ReturnGraveyardTarget { target, to: GraveyardReturn::Hand } => format!("Return {} to your hand",target_description(target)),
-        ReturnGraveyardTarget { target, to: GraveyardReturn::Battlefield } => format!("Return {} to the battlefield",target_description(target)),
-        ReturnGraveyardTarget { target, to: GraveyardReturn::BattlefieldTapped } => format!("Put {} onto the battlefield tapped",target_description(target)),
-        MoveSourceFromGraveyard { to, then } => format!("Put this card from your graveyard into {to:?}. If you do, {}", effects_description(then)),
         ReturnMilledThisWay { predicate } => format!("Return up to one {} milled this way to the battlefield under your control", predicate_description(predicate, "card")),
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
         MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
@@ -585,11 +694,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         OptionalDiscardDraw { count, up_to } => format!("Discard up to {up_to} cards, then draw {count} for each"),
         DiscardTargetPlayer { count, target } => format!("{} discards {count} cards",target_description(target)),
         Destroy { target } => format!("Destroy {}",target_description(target)),
-        Exile { target } => format!("Exile {}",target_description(target)),
         Airbend { target } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",target_description(target)),
         AirbendAll { predicate } => format!("Airbend all other {}. Their owners may cast them from exile for {{2}}", predicate_description(predicate,"permanents")),
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
-        ExileSourceSpell => "Exile this spell".to_string(),
         ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
@@ -602,15 +709,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
             },
             modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
         ),
-        PutSourceCountersOnTarget { .. } => "Put its counters on target creature you control".into(),
-        ExileSourceAndReturn { player } => format!("Exile this, then return it to the battlefield under the control of {}", player_description(player)),
         GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
-        ExileWithSource { target } => format!("Exile {}", target_description(target)),
         CastExiledWithSource { predicate } => format!("You may cast a {} from among cards you own exiled with this", predicate_description(predicate, "spell")),
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
-        PutCountersOnCreatedToken { count } => format!("Put {} +1/+1 counters on that token", value_description(count)),
-        ExileAndReturn { .. } => "Exile target creature you control, then return it to the battlefield under its owner's control".into(),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),
         CreateDelayedTrigger { event, effects } => format!(
             "{}, {}",
@@ -626,8 +728,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
             },
             effects_description(effects)
         ),
-        SacrificeTriggeringPermanent => "Sacrifice that token".into(),
-        PutTriggeringCountersOnSource => "Put its counters on this creature".into(),
         MayDiscard { then } => format!(
             "You may discard a card. If you do, {}",
             effects_description(then)
@@ -647,25 +747,15 @@ fn effect_description(effect: &Effect) -> Option<String> {
         OwnerPutsIntoLibrary { target } => format!("The owner of {} puts it into their library second from the top or on the bottom", target_description(target)),
         PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
         PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
-        SacrificeSource { then } => format!("Sacrifice this. If you do: {}", effects_description(then)),
         MayOnceEachTurn { effects } => format!(
             "You may: {}. Do this only once each turn",
             effects_description(effects)
         ),
-        MaySacrifice { predicate, another, then } => format!(
-            "You may sacrifice {}{}. If you do: {}",
-            if *another { "another " } else { "a " },
-            predicate_description(predicate, "permanent"),
-            effects_description(then)
-        ),
-        ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
         Discard => "Discard a card".into(),
         DealDamageValue { amount, target } => format!("Deal X damage to {}, where X is {}",target_description(target),value_description(amount)),
-        PutCountersValue { count, target } => format!("Put X +1/+1 counters on {}, where X is {}",target_description(target),value_description(count)),
         If { condition: Condition::Always, then, .. } => effects_description(then),
         If { condition, then, otherwise } if otherwise.is_empty() => format!("If {}: {}",condition_text(condition),effects_description(then)),
         If { condition, then, otherwise } => format!("If {}: {}. Otherwise: {}",condition_text(condition),effects_description(then),effects_description(otherwise)),
-        ReturnToHand { target } => format!("Return {} to its owner's hand",target_description(target)),
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),
         CounterSpell { target } => format!("Counter {}",target_description(target)),
         CounterAbility { target } => format!("Counter {}",target_description(target)),
@@ -675,16 +765,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DestroyCreaturesLosingAbilities { max_mana_value } => format!("Each creature with mana value {} or less loses all abilities until end of turn. Destroy those creatures", value_description(max_mana_value)),
         DamageOpponentCreatures { amount } => format!("Deal {amount} damage to each creature your opponents control"),
         CreateTokensValue { token_name, count } => format!("Create X {token_name} tokens, where X is {}",value_description(count)),
-        ExileWithControllerToken { target, token_name } => format!("Exile {}. Its controller creates a {token_name} token",target_description(target)),
         CreateToken { token_name, count, tapped_and_attacking, attach_source } => format!("Create {count} {token_name} token{}{}{}",if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" },if *attach_source { ", then attach this to it" } else { "" }),
-        PutCountersOnSource { count, kind } => format!("Put {} {} counters on this",value_description(count),counter_description(*kind)),
-        PutCounters { count, kind, target } => format!("Put {count} {} counters on {}",counter_description(*kind),target_description(target)),
-        TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
-        ReturnSourceToHand => "Return this card from your graveyard to your hand".into(),
-        ReturnSourceToBattlefield { counter } => format!(
-            "Return this card from your graveyard to the battlefield with a {} counter on it",
-            counter_description(*counter)
-        ),
         GainLife { amount } => format!("You gain {amount} life"),
         GainLifeValue { amount } => format!("You gain life equal to {}", value_description(amount)),
         AddManaValue { mana, amount, until_end_of_combat } => format!("Add {} for each of {}{}", mana_description(mana), value_description(amount), if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
@@ -699,23 +780,11 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CounterUnlessPays { cost } => format!("Counter the spell unless its controller pays {}",payment_description(cost)),
         TargetCreaturesDealPowerDamageToLastTarget => "Each chosen creature except the last target deals damage equal to its power to the last target".into(),
         Earthbend { count, target } => { let count = value_description(count); format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)) },
-        ReturnSourceToBattlefieldTapped => "Return this card to the battlefield tapped".into(),
-        ExileUntilSourceLeaves { target } => format!("Exile up to one {} until this leaves the battlefield, only if this is still on the battlefield",target_description(target)),
         AddOneColorManaValue { amount } => format!("Add X mana of any one color, where X is {}",value_description(amount)),
         AddMana { mana, until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
-        UntapTarget { target } => format!("Untap {}",target_description(target)),
-        TapTarget { target } => format!("Tap {}",target_description(target)),
         AttachSourceTo { target } => format!("Attach this to {}",target_description(target)),
-        ExileAttached => "Exile the creature this is attached to".into(),
-        TapAttached => "Tap the creature this is attached to".into(),
-        RemoveAllCountersFromAttached => "Remove all counters from the creature this is attached to".into(),
         DistributeCountersToTappedOpponentCreatures { kind, count } => format!("Distribute {count} {} counters among any number of tapped creatures your opponents control",counter_description(*kind)),
-        ReturnGrantorToHand => "Return the permanent granting this ability to its owner's hand".into(),
-        ShuffleAttachedIntoLibrary => "The attached creature's owner shuffles it into their library".into(),
-        RemoveCounters { up_to, chosen: None, target } => format!("Remove up to {up_to} counters from {}",target_description(target)),
-        RemoveCounters { chosen: Some(kind), target, .. } => format!("Remove a {} counter from {}",counter_description(*kind),target_description(target)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
-        PutCountersOnEachMatching { count, predicate, other } => format!("Put {} +1/+1 counters on each {}{} you control",value_description(count),if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
     })
 }
 
@@ -824,9 +893,9 @@ mod tests {
             Effect::TargetClause {
                 requirement: TargetRequirement::up_to(2, TargetSpec::CreatureYouControl),
                 effects: vec![Effect::ForEachTarget {
-                    effects: vec![Effect::UntapTarget {
-                        target: TargetSpec::CreatureYouControl,
-                    }],
+                    effects: vec![Effect::untap(ObjectSelector::Target(
+                        TargetSpec::CreatureYouControl,
+                    ))],
                 }],
             },
             Effect::OptionalPayment {

@@ -7,7 +7,9 @@ use crate::{
     agent::action::Action,
     flow::game::Game,
     state::{
-        ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
+        ability::{
+            AffectedSpec, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec,
+        },
         card::{ActivatedAbilityDefinition, CardType, Keywords},
         effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
@@ -305,11 +307,11 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
                     clause(TargetSpec::CreatureOpponentControls, vec![damage()]),
                     clause(
                         TargetSpec::Creature,
-                        vec![Effect::PutCounters {
-                            count: 2,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: TargetSpec::Creature,
-                        }],
+                        vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            CounterKind::PlusOnePlusOne,
+                            2,
+                        )],
                     ),
                 ],
                 vec![Target::Permanent(victim); 2],
@@ -352,11 +354,11 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
                             count: EffectValue::Fixed(1),
                             target: spec.clone(),
                         },
-                        Effect::PutCounters {
-                            count: 2,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: spec,
-                        },
+                        Effect::put_counters(
+                            ObjectSelector::Target(spec),
+                            CounterKind::PlusOnePlusOne,
+                            2,
+                        ),
                     ],
                 )],
                 vec![Target::Permanent(land)],
@@ -406,9 +408,7 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 vec![clause(
                     TargetSpec::Creature,
                     vec![
-                        Effect::ReturnToHand {
-                            target: TargetSpec::Creature,
-                        },
+                        Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Creature)),
                         pause(),
                         damage(),
                     ],
@@ -459,15 +459,9 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 vec![clause(
                     spec.clone(),
                     vec![
-                        Effect::ReturnGraveyardTarget {
-                            target: spec.clone(),
-                            to: crate::state::ability::GraveyardReturn::Hand,
-                        },
+                        Effect::return_to_hand(ObjectSelector::Target(spec.clone())),
                         pause(),
-                        Effect::ReturnGraveyardTarget {
-                            target: spec,
-                            to: crate::state::ability::GraveyardReturn::Hand,
-                        },
+                        Effect::return_to_hand(ObjectSelector::Target(spec)),
                     ],
                 )],
                 vec![Target::GraveyardCard(original)],

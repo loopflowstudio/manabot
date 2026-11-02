@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use crate::{
     flow::{game::Game, trigger::PendingTrigger},
     state::{
-        ability::{Effect, EffectValue, PlayerSelector, TargetRequirement, TargetSpec},
+        ability::{
+            Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
+        },
         card::Keywords,
         effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
@@ -472,13 +474,11 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
                 vec![
                     Effect::TargetClause {
                         requirement: TargetRequirement::one(spec.clone()),
-                        effects: vec![Effect::ReturnToHand {
-                            target: spec.clone(),
-                        }],
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Target(spec.clone()))],
                     },
                     Effect::TargetClause {
                         requirement: TargetRequirement::one(spec.clone()),
-                        effects: vec![Effect::ReturnToHand { target: spec }],
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Target(spec))],
                     },
                     Effect::GainLife { amount: 7 },
                 ],
@@ -531,9 +531,7 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         let mut pending = trigger(
             source,
             vec![
-                Effect::ReturnToHand {
-                    target: spec.clone(),
-                },
+                Effect::return_to_hand(ObjectSelector::Target(spec.clone())),
                 Effect::GainLife { amount: 7 },
             ],
             0,
@@ -824,7 +822,18 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let mut enters = dies.clone();
     enters.id = crate::flow::trigger::TriggerId(1);
     enters.ability_index = 1;
-    let mut delayed = trigger(source, vec![Effect::ReturnSourceToBattlefieldTapped], 2);
+    let mut delayed = trigger(
+        source,
+        vec![Effect::Move {
+            what: ObjectSelector::This,
+            to: ZoneType::Battlefield,
+            tapped: true,
+            under: Some(PlayerSelector::Owner),
+            with_counter: None,
+            linked: None,
+        }],
+        2,
+    );
     delayed.ability_index = usize::MAX; // Inline effects do not reference a card slot.
     game.state.pending_triggers = vec![dies, enters, delayed];
     game.current_action_space = game.flush_triggers();

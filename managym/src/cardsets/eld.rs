@@ -1,6 +1,6 @@
 //! Throne of Eldraine.
 use crate::state::{
-    ability::{Effect, EffectValue, TargetSpec},
+    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -19,15 +19,15 @@ fn epic_downfall() -> CardDefinition {
         name: "Epic Downfall".into(),
         mana_cost: Some(ManaCost::parse("{1}{B}")),
         types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::Exile {
-            target: TargetSpec::Permanent {
+        spell_effects: vec![Effect::exile(ObjectSelector::Target(
+            TargetSpec::Permanent {
                 predicate: CardPredicate {
                     card_type: Some(CardType::Creature),
                     min_mana_value: Some(3),
                     ..Default::default()
                 },
             },
-        }],
+        ))],
         text_box: text_box.into(),
         ..Default::default()
     }

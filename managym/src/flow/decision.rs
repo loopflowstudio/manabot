@@ -74,9 +74,13 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
-    /// The cards the resolution's latest discard moved ("this way").
+    /// The cards the resolution's latest discard or mill moved ("this way").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub this_way: Vec<CardId>,
+    /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
+    /// they now exist ("it", "if you do").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub moved: Vec<ObjectRef>,
     /// The token this resolution created last ("that token").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created: Option<PermanentId>,
@@ -172,17 +176,6 @@ impl PaymentProgress {
     }
 }
 
-/// The optional part of a `Decision::Sacrifice` ("you may sacrifice ... If
-/// you do, ...").
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct OptionalSacrifice {
-    /// The source permanent of an "another" sacrifice, never a candidate.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub excluded: Option<PermanentId>,
-    /// Runs only after a sacrifice.
-    pub then: Vec<Effect>,
-}
-
 /// Where a `CastDuringResolution` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ResolutionCastOffer {
@@ -224,9 +217,12 @@ pub enum Decision {
     Sacrifice {
         player: PlayerId,
         predicate: CardPredicate,
-        /// Set for "you may sacrifice ... If you do": declining is allowed.
+        /// The source permanent of an "another" sacrifice, never a candidate.
         #[serde(skip_serializing_if = "Option::is_none")]
-        optional: Option<OptionalSacrifice>,
+        excluded: Option<PermanentId>,
+        /// "You may sacrifice": declining is allowed.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        optional: bool,
     },
     /// Place one of `remaining` `kind` counters on a tapped creature an
     /// opponent of `player` controls; candidates are read at each placement.
@@ -582,15 +578,15 @@ impl Game {
         let Decision::Sacrifice {
             player,
             predicate,
-            optional,
+            excluded,
+            ..
         } = decision
         else {
             return Vec::new();
         };
-        let excluded = optional.as_ref().and_then(|optional| optional.excluded);
         self.sacrifice_candidates(*player, predicate)
             .into_iter()
-            .filter(|id| Some(*id) != excluded)
+            .filter(|id| Some(*id) != *excluded)
             .collect()
     }
 
@@ -613,6 +609,7 @@ impl Game {
                 excess_damage: 0,
                 created: None,
                 this_way: Vec::new(),
+                moved: Vec::new(),
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -760,7 +757,7 @@ impl Game {
                     self.sacrifice_decision_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
-                    optional.is_some(),
+                    *optional,
                 ),
                 focus: source_focus,
             },
@@ -1067,12 +1064,7 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (
-                Decision::Sacrifice {
-                    optional: Some(_), ..
-                },
-                Action::Decline { .. },
-            ) => {
+            (Decision::Sacrifice { optional: true, .. }, Action::Decline { .. }) => {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1125,15 +1117,7 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("illegal sacrifice selection".into()));
                 };
-                self.sacrifice_permanent(selected);
-                if let Decision::Sacrifice {
-                    optional: Some(optional),
-                    ..
-                } = &mut suspended.decision
-                {
-                    let then = std::mem::take(&mut optional.then);
-                    suspended.frame.prepend_effects(then.into_iter());
-                }
+                suspended.frame.moved = self.sacrifice_permanent(selected).into_iter().collect();
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -2015,6 +1999,7 @@ mod learn_tests {
             excess_damage: 0,
             created: None,
             this_way: Vec::new(),
+            moved: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -2716,6 +2701,7 @@ mod payment_tests {
             excess_damage: 0,
             created: None,
             this_way: Vec::new(),
+            moved: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,

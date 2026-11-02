@@ -233,6 +233,13 @@ pub enum Condition {
     /// graveyard that this resolution exiled, and it matches [predicate]
     /// ("If a creature card is exiled this way").
     TargetCardExiled(CardPredicate),
+    /// Resolution only: the resolution's latest `Move` or `Sacrifice`
+    /// moved at least one object ("If you do").
+    Moved,
+    /// Resolution only: the frame's primary target is a permanent the
+    /// resolving player controls, or last controlled once it has left ("If
+    /// you controlled it").
+    TargetControlledByYou,
 }
 
 impl Condition {
@@ -258,7 +265,9 @@ impl Condition {
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
             | Condition::DiscardedThisWay(_)
-            | Condition::TriggeringSpellMatches(_) => true,
+            | Condition::TriggeringSpellMatches(_)
+            | Condition::Moved
+            | Condition::TargetControlledByYou => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
@@ -303,15 +312,20 @@ pub enum PlayerSelector {
     /// The controller of the frame's primary target permanent, as it is or
     /// last existed ("its controller").
     TargetController,
+    /// The owner of the object an instruction moves ("under its owner's
+    /// control"); only [`Effect::Move`] reads it.
+    Owner,
 }
 
 impl PlayerSelector {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Self::Target(spec) => Some(spec),
-            Self::You | Self::EachOpponent | Self::TriggeringPlayer | Self::TargetController => {
-                None
-            }
+            Self::You
+            | Self::EachOpponent
+            | Self::TriggeringPlayer
+            | Self::TargetController
+            | Self::Owner => None,
         }
     }
 }
@@ -377,21 +391,82 @@ impl PaymentCost {
     }
 }
 
-/// Where `Effect::ReturnGraveyardTarget` returns its card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum GraveyardReturn {
-    /// Its owner's hand.
-    Hand,
-    /// The battlefield, under the resolving player's control.
-    Battlefield,
-    /// The battlefield tapped, under the resolving player's control.
-    BattlefieldTapped,
+/// Which objects a verb acts on, read as the instruction resolves
+/// (`Game::select`). A verb acts only on the objects it can: counters, taps
+/// and sacrifices need battlefield permanents, a move any card object.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ObjectSelector {
+    /// The source: the exact permanent, graveyard card or spell the ability
+    /// or spell belongs to. Once the source has left the battlefield, the
+    /// card it became in the graveyard or exile it went to (CR 400.7,
+    /// 603.10a: "return this card", "exile it"); never a later object.
+    This,
+    /// The clause's chosen target. The spec declares the implicit targeting
+    /// clause of an effect list without an explicit `TargetClause`.
+    Target(TargetSpec),
+    /// The permanent whose event fired the trigger ("that creature", "that
+    /// token"), which the trigger keeps as its context.
+    Triggering,
+    /// The object the source Aura or Equipment is attached to.
+    Attached,
+    /// The token this resolution created last ("that token").
+    CreatedThisWay,
+    /// The exact permanent that granted the resolving ability ("return
+    /// Trusty Boomerang"); nothing once it has left the battlefield.
+    Grantor,
+    /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
+    /// they now exist ("then return it to the battlefield").
+    Moved,
+    /// A permanent the resolving player controls matching [predicate],
+    /// chosen by them as the instruction resolves ("sacrifice a creature");
+    /// `another` excludes the source. Only `Sacrifice` offers the choice.
+    Chosen {
+        predicate: CardPredicate,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        another: bool,
+    },
+    /// Every battlefield permanent the spec names, fixed as the instruction
+    /// resolves ("each creature you control"); `another` excludes the
+    /// source.
+    Each {
+        of: AffectedSpec,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        another: bool,
+    },
 }
 
-impl GraveyardReturn {
-    fn is_hand(&self) -> bool {
-        *self == GraveyardReturn::Hand
+impl ObjectSelector {
+    pub fn target_spec(&self) -> Option<&TargetSpec> {
+        match self {
+            Self::Target(spec) => Some(spec),
+            Self::Each {
+                of: AffectedSpec::EachTargetPlayerControls(_),
+                ..
+            } => Some(&TARGET_PLAYER),
+            Self::This
+            | Self::Triggering
+            | Self::Attached
+            | Self::CreatedThisWay
+            | Self::Grantor
+            | Self::Moved
+            | Self::Chosen { .. }
+            | Self::Each { .. } => None,
+        }
     }
+}
+
+/// How a card a [`Effect::Move`] exiles stays linked to the exact source
+/// (CR 607.2a); either link lasts only while the source is on the
+/// battlefield as it exiles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LinkedExile {
+    /// "Exiled with this creature": the link outlives the source, so a
+    /// later `CastExiledWithSource` still finds the card.
+    WithSource,
+    /// "Until this creature leaves the battlefield": the card returns at
+    /// once (no stack) when the source leaves. The implicit targeting clause
+    /// is "up to one".
+    UntilSourceLeaves,
 }
 
 /// Who chooses the card an `ExileLinked` effect exiles.
@@ -423,10 +498,61 @@ pub enum Effect {
         modification: Modification<EffectValue>,
         duration: EffectDuration,
     },
-    /// Put `count` +1/+1 counters on the exact permanent that caused the
-    /// trigger, without targeting.
-    PutCountersOnTriggeringPermanent {
-        count: i32,
+    /// Put `amount` counters of `kind` on each permanent `on` names,
+    /// `amount` read as the instruction resolves.
+    PutCounters {
+        on: ObjectSelector,
+        kind: CounterKind,
+        amount: EffectValue,
+    },
+    /// "Put its counters on [on]": every counter `from` has, or had as it
+    /// last existed on the battlefield (CR 603.10a), kind by kind.
+    PutCountersFrom {
+        from: ObjectSelector,
+        on: ObjectSelector,
+    },
+    /// The resolving player sacrifices each permanent `what` names that
+    /// they control (CR 701.17a); a `Chosen` selector asks them to pick one,
+    /// and only then may `optional` let them decline ("you may sacrifice
+    /// a creature"). What was sacrificed is read by a following "if you do"
+    /// ([`Condition::Moved`]).
+    Sacrifice {
+        what: ObjectSelector,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        optional: bool,
+    },
+    /// Move each object `what` names to `to`: a permanent, a graveyard or
+    /// exiled card, or a spell on the stack (which ceases to be cast). A
+    /// card entering the battlefield enters under the resolving player's
+    /// control (CR 110.2b) unless `under` names another player, `tapped`
+    /// and `with_counter` as stated; one moved to a library is shuffled
+    /// into its owner's. `linked` keeps an exiled card linked to the exact
+    /// source. A card leaving a graveyard for a hand is revealed. The moved
+    /// objects become [`ObjectSelector::Moved`] and answer
+    /// [`Condition::Moved`].
+    Move {
+        what: ObjectSelector,
+        to: ZoneType,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        tapped: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        under: Option<PlayerSelector>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        with_counter: Option<CounterKind>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        linked: Option<LinkedExile>,
+    },
+    /// Tap each permanent `what` names.
+    Tap {
+        what: ObjectSelector,
+    },
+    /// Untap each permanent `what` names.
+    Untap {
+        what: ObjectSelector,
+    },
+    /// Remove every counter from each permanent `from` names.
+    RemoveAllCounters {
+        from: ObjectSelector,
     },
     /// Copy the source's copiable characteristics, removing legendary.
     CreateNonlegendaryCopy,
@@ -435,34 +561,9 @@ pub enum Effect {
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     },
-    Sacrifice {
-        predicate: CardPredicate,
-    },
-    /// "You may sacrifice [another] [predicate]. If you do, [then]." The
-    /// controller chooses one or declines; `then` runs only after a
-    /// sacrifice.
-    MaySacrifice {
-        predicate: CardPredicate,
-        /// "another": the source permanent is not a candidate.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        another: bool,
-        then: Vec<Effect>,
-    },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife {
         amount: EffectValue,
-    },
-    ReturnGraveyardTarget {
-        target: TargetSpec,
-        #[serde(skip_serializing_if = "GraveyardReturn::is_hand")]
-        to: GraveyardReturn,
-    },
-    /// Move the card a departed source became, from the graveyard it just
-    /// went to, to `to` ("you may exile it", "return this card to its
-    /// owner's hand"); only if that happened, run `then`.
-    MoveSourceFromGraveyard {
-        to: ZoneType,
-        then: Vec<Effect>,
     },
     /// "Return up to one [predicate] card milled this way to the
     /// battlefield under your control": a choice among the cards the
@@ -522,34 +623,16 @@ pub enum Effect {
     Destroy {
         target: TargetSpec,
     },
-    Exile {
-        target: TargetSpec,
-    },
     /// Airbend (CR 701.65): exile the target; its owner may cast that exact
     /// exiled card for {2} rather than its mana cost.
     Airbend {
         target: TargetSpec,
-    },
-    /// "Exile this, then return it to the battlefield under [player]'s
-    /// control": the source returns as a new object (CR 400.7).
-    ExileSourceAndReturn {
-        player: PlayerSelector,
     },
     /// "[player] gains control of [the target]" for `duration` (CR 613.1b).
     GainControl {
         player: PlayerSelector,
         target: TargetSpec,
         duration: EffectDuration,
-    },
-    /// Put `count` +1/+1 counters on the token the resolution created last
-    /// ("Put a +1/+1 counter on that token for each ...").
-    PutCountersOnCreatedToken {
-        count: EffectValue,
-    },
-    /// "Exile [target], then return it to the battlefield under its
-    /// owner's control": it returns as a new object (CR 400.7).
-    ExileAndReturn {
-        target: TargetSpec,
     },
     /// Airbend every battlefield permanent matching `predicate` other than
     /// the clause's chosen target, if any.
@@ -610,22 +693,9 @@ pub enum Effect {
     PlaceTargetInLibrary {
         second_from_top: bool,
     },
-    /// Sacrifice the exact source permanent; only if that happened, run `then`.
-    SacrificeSource {
-        then: Vec<Effect>,
-    },
-    /// The resolving spell exiles itself instead of going to the graveyard.
-    ExileSourceSpell,
-    ReturnToHandDrawIfControlled {
-        target: TargetSpec,
-    },
     Discard,
     DealDamageValue {
         amount: EffectValue,
-        target: TargetSpec,
-    },
-    PutCountersValue {
-        count: EffectValue,
         target: TargetSpec,
     },
     /// "You may [effects]. Do this only once each turn." Offered only while
@@ -647,9 +717,6 @@ pub enum Effect {
         then: Vec<Effect>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         otherwise: Vec<Effect>,
-    },
-    ReturnToHand {
-        target: TargetSpec,
     },
     DealDamage {
         amount: i32,
@@ -694,10 +761,6 @@ pub enum Effect {
         token_name: String,
         count: EffectValue,
     },
-    ExileWithControllerToken {
-        target: TargetSpec,
-        token_name: String,
-    },
     /// Create `count` tokens from the registered token definition
     /// `token_name`, under the resolving player's control.
     CreateToken {
@@ -712,12 +775,6 @@ pub enum Effect {
     AttachSourceTo {
         target: TargetSpec,
     },
-    /// Exile the object the source Aura or Equipment is attached to.
-    ExileAttached,
-    /// Tap the object the source is attached to.
-    TapAttached,
-    /// Remove all counters from the object the source is attached to.
-    RemoveAllCountersFromAttached,
     /// "Distribute `count` [kind] counters among any number of tapped
     /// creatures your opponents control": the controller places them one
     /// at a time, choosing among the eligible creatures at each placement.
@@ -725,21 +782,6 @@ pub enum Effect {
         kind: CounterKind,
         count: usize,
     },
-    /// Return the permanent that granted this ability to its owner's hand
-    /// ("Return Trusty Boomerang"); nothing if it has left the battlefield.
-    ReturnGrantorToHand,
-    /// The owner of the object the source is attached to shuffles it into
-    /// their library.
-    ShuffleAttachedIntoLibrary,
-    /// Put `count` counters of `kind` on the source permanent, `count` read
-    /// at resolution.
-    PutCountersOnSource {
-        count: EffectValue,
-        kind: CounterKind,
-    },
-    /// "Put its counters on this creature": every counter the triggering
-    /// permanent had as it last existed, kind by kind, on the source.
-    PutTriggeringCountersOnSource,
     /// "[player] [effects]": the effects resolve with that player as "you"
     /// ("Its controller may search their library"), then the controller
     /// returns to the resolving one.
@@ -756,40 +798,12 @@ pub enum Effect {
     EachPlayerKeepsCreatures {
         max_total_power: i32,
     },
-    /// "Put its counters on [target]": every counter the source had as it
-    /// last existed, kind by kind, on the target (a leaves-the-battlefield
-    /// ability, CR 603.10a).
-    PutSourceCountersOnTarget {
-        target: TargetSpec,
-    },
-    /// Put `count` counters of `kind` on the target.
-    PutCounters {
-        count: i32,
-        kind: CounterKind,
-        target: TargetSpec,
-    },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
     /// `effects` trigger from this spell or ability's source. Their targets
     /// are chosen as the delayed ability is put on the stack.
     CreateDelayedTrigger {
         event: DelayedEvent,
         effects: Vec<Effect>,
-    },
-    /// Sacrifice the permanent the trigger names ("sacrifice that token"),
-    /// if its controller still controls it.
-    SacrificeTriggeringPermanent,
-    /// Tap the source permanent.
-    TapSource,
-    /// Untap the source permanent.
-    UntapSource,
-    /// "Return this card from your graveyard to your hand": only the exact
-    /// graveyard object the ability came from (CR 400.7).
-    ReturnSourceToHand,
-    /// "Return this card from your graveyard to the battlefield with a
-    /// [counter] counter on it": only the exact graveyard object the ability
-    /// came from, under its owner's control.
-    ReturnSourceToBattlefield {
-        counter: CounterKind,
     },
     /// Resolving player gains `amount` life.
     GainLife {
@@ -883,26 +897,10 @@ pub enum Effect {
         count: EffectValue,
         target: TargetSpec,
     },
-    /// Delayed-trigger payload (earthbend): return the source card from
-    /// the graveyard or exile to the battlefield tapped.
-    ReturnSourceToBattlefieldTapped,
-    /// "Exile [target]": a card in a graveyard or a permanent, exiled with
-    /// the exact source while it is on the battlefield ("cards exiled with
-    /// this creature", CR 607.2a). It stays exiled when the source leaves.
-    ExileWithSource {
-        target: TargetSpec,
-    },
     /// "You may cast a [predicate] spell from among cards you own exiled
     /// with this creature", paying its costs, as the effect resolves.
     CastExiledWithSource {
         predicate: CardPredicate,
-    },
-    /// "Exile [target] until this creature leaves the battlefield." The
-    /// exile only happens if the source is still on the battlefield when
-    /// this resolves (CR 603.6e pragmatics); the linked card returns
-    /// immediately (no stack) when the source leaves.
-    ExileUntilSourceLeaves {
-        target: TargetSpec,
     },
     /// Add mana to the resolving player's pool. `until_end_of_combat`
     /// routes it to the combat pool (firebending — persists across combat
@@ -931,35 +929,19 @@ pub enum Effect {
     SearchLibraryToHand {
         predicate: CardPredicate,
     },
-    /// Untap the target.
-    UntapTarget {
-        target: TargetSpec,
-    },
-    /// Tap the target.
-    TapTarget {
-        target: TargetSpec,
-    },
-    /// "Remove up to `up_to` counters from [target]." With `chosen` unset the
+    /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
     /// controller picks a present kind or stops; with it set, one counter of
     /// that kind is removed and the choice repeats for `up_to - 1`.
     RemoveCounters {
+        from: ObjectSelector,
         up_to: i32,
         chosen: Option<CounterKind>,
-        target: TargetSpec,
     },
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
     /// creatures; they each get +2/+2"). Inner effects must not suspend.
     ForEachTarget {
         effects: Vec<Effect>,
-    },
-    /// Put `count` +1/+1 counters on each battlefield permanent the
-    /// resolving player controls matching [predicate]; `other` excludes
-    /// the source permanent.
-    PutCountersOnEachMatching {
-        count: EffectValue,
-        predicate: CardPredicate,
-        other: bool,
     },
 }
 
@@ -1154,10 +1136,15 @@ impl Effect {
     /// Whether the effect reads the permanent whose event fired its
     /// trigger, which the trigger then keeps as its context.
     pub fn reads_triggering_permanent(&self) -> bool {
+        if self
+            .selectors()
+            .into_iter()
+            .any(|selector| *selector == ObjectSelector::Triggering)
+        {
+            return true;
+        }
         match self {
-            Effect::PutCountersOnTriggeringPermanent { .. }
-            | Effect::PutTriggeringCountersOnSource
-            | Effect::ApplyContinuous {
+            Effect::ApplyContinuous {
                 affected: AffectedSpec::TriggeringPermanent,
                 ..
             } => true,
@@ -1166,10 +1153,25 @@ impl Effect {
             | Effect::DrawCards { count: value }
             | Effect::GainLifeValue { amount: value }
             | Effect::DealDamageValue { amount: value, .. }
-            | Effect::PutCountersValue { count: value, .. } => {
-                *value == EffectValue::TriggeringPower
-            }
+            | Effect::PutCounters { amount: value, .. } => *value == EffectValue::TriggeringPower,
             _ => false,
+        }
+    }
+
+    /// The selectors a verb acts through, in field order; empty for every
+    /// other effect.
+    pub fn selectors(&self) -> Vec<&ObjectSelector> {
+        match self {
+            Effect::PutCounters { on, .. } => vec![on],
+            Effect::PutCountersFrom { from, on } => vec![from, on],
+            Effect::Sacrifice { what, .. }
+            | Effect::Move { what, .. }
+            | Effect::Tap { what }
+            | Effect::Untap { what } => vec![what],
+            Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
+                vec![from]
+            }
+            _ => Vec::new(),
         }
     }
 
@@ -1236,15 +1238,20 @@ impl Effect {
     }
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
+        if let Some(spec) = self
+            .selectors()
+            .into_iter()
+            .find_map(ObjectSelector::target_spec)
+        {
+            return Some(spec);
+        }
         match self {
-            Effect::Sacrifice { .. } | Effect::DrainLife { .. } => None,
             Effect::LoseLife { player, .. } | Effect::DealDamageToPlayer { player, .. } => {
                 player.target_spec()
             }
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
-            Effect::SelectTargetRequirement { .. } | Effect::MillAndSelect { .. } => None,
             Effect::ApplyContinuous {
                 affected: AffectedSpec::EachTargetPlayerControls(_),
                 ..
@@ -1253,38 +1260,17 @@ impl Effect {
                 affected: AffectedSpec::Target(target),
                 ..
             }
-            | Effect::ReturnGraveyardTarget { target, .. }
-            | Effect::ExileWithControllerToken { target, .. }
             | Effect::DiscardTargetPlayer { target, .. }
             | Effect::Destroy { target }
-            | Effect::Exile { target }
             | Effect::Airbend { target }
-            | Effect::ExileAndReturn { target }
             | Effect::GainControl { target, .. }
             | Effect::ChangeTarget { target }
-            | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
-            Effect::SearchBasicLand { .. }
-            | Effect::OptionalDiscardDraw { .. }
-            | Effect::ApplyContinuous { .. }
-            | Effect::PutCountersOnTriggeringPermanent { .. } => None,
-            Effect::DealDamageValue { target, .. } | Effect::PutCountersValue { target, .. } => {
-                Some(target)
-            }
-            Effect::Discard => None,
-            Effect::ReturnToHand { target } => Some(target),
-            Effect::DealDamage { target, .. } => Some(target),
-            Effect::CounterSpell { target } | Effect::CounterAbility { target } => Some(target),
-            Effect::PutCounters { target, .. } | Effect::PutSourceCountersOnTarget { target } => {
-                Some(target)
-            }
-            Effect::Earthbend { target, .. } => Some(target),
-            Effect::ExileUntilSourceLeaves { target } | Effect::ExileWithSource { target } => {
-                Some(target)
-            }
-            Effect::UntapTarget { target }
-            | Effect::TapTarget { target }
+            | Effect::DealDamageValue { target, .. }
+            | Effect::DealDamage { target, .. }
+            | Effect::CounterSpell { target }
+            | Effect::CounterAbility { target }
+            | Effect::Earthbend { target, .. }
             | Effect::AttachSourceTo { target }
-            | Effect::RemoveCounters { target, .. }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
@@ -1299,18 +1285,29 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::SacrificeSource { then }
-            | Effect::MoveSourceFromGraveyard { then, .. }
-            | Effect::MayDiscard { then }
+            Effect::MayDiscard { then }
             | Effect::ForPlayer { effects: then, .. }
-            | Effect::MaySacrifice { then, .. }
             | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::CreateNonlegendaryCopy
+            Effect::PutCounters { .. }
+            | Effect::PutCountersFrom { .. }
+            | Effect::Sacrifice { .. }
+            | Effect::Move { .. }
+            | Effect::Tap { .. }
+            | Effect::Untap { .. }
+            | Effect::RemoveCounters { .. }
+            | Effect::RemoveAllCounters { .. }
+            | Effect::DrainLife { .. }
+            | Effect::SelectTargetRequirement { .. }
+            | Effect::MillAndSelect { .. }
+            | Effect::ApplyContinuous { .. }
+            | Effect::SearchBasicLand { .. }
+            | Effect::OptionalDiscardDraw { .. }
+            | Effect::Discard
+            | Effect::CreateNonlegendaryCopy
             | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand
-            | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
@@ -1326,27 +1323,13 @@ impl Effect {
             | Effect::DamageOpponentCreatures { .. }
             | Effect::CreateTokensValue { .. }
             | Effect::CreateToken { .. }
-            | Effect::PutCountersOnSource { .. }
-            | Effect::TapSource
             | Effect::CreateDelayedTrigger { .. }
-            | Effect::ExileSourceAndReturn { .. }
-            | Effect::PutCountersOnCreatedToken { .. }
             | Effect::CopyTriggeringObject
             | Effect::ReturnMilledThisWay { .. }
             | Effect::CastExiledWithSource { .. }
-            | Effect::PutTriggeringCountersOnSource
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
-            | Effect::SacrificeTriggeringPermanent
-            | Effect::UntapSource
-            | Effect::ExileAttached
-            | Effect::TapAttached
-            | Effect::RemoveAllCountersFromAttached
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
-            | Effect::ReturnGrantorToHand
-            | Effect::ShuffleAttachedIntoLibrary
-            | Effect::ReturnSourceToHand
-            | Effect::ReturnSourceToBattlefield { .. }
             | Effect::GainLife { .. }
             | Effect::GainLifeValue { .. }
             | Effect::AddManaValue { .. }
@@ -1358,13 +1341,125 @@ impl Effect {
             | Effect::Learn
             | Effect::Modal { .. }
             | Effect::CounterUnlessPays { .. }
-            | Effect::ReturnSourceToBattlefieldTapped
             | Effect::AddMana { .. }
             | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
-            | Effect::PutCountersOnEachMatching { .. }
             | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Constructors that keep card definitions readable.
+
+    /// "Put `amount` [kind] counters on [on]."
+    pub fn put_counters(
+        on: ObjectSelector,
+        kind: CounterKind,
+        amount: impl Into<EffectValue>,
+    ) -> Self {
+        Effect::PutCounters {
+            on,
+            kind,
+            amount: amount.into(),
+        }
+    }
+
+    /// "Sacrifice this."
+    pub fn sacrifice_this() -> Self {
+        Effect::Sacrifice {
+            what: ObjectSelector::This,
+            optional: false,
+        }
+    }
+
+    /// "Sacrifice a [predicate]."
+    pub fn sacrifice(predicate: CardPredicate) -> Self {
+        Effect::Sacrifice {
+            what: ObjectSelector::Chosen {
+                predicate,
+                another: false,
+            },
+            optional: false,
+        }
+    }
+
+    /// "You may sacrifice [another] [predicate]."
+    pub fn may_sacrifice(predicate: CardPredicate, another: bool) -> Self {
+        Effect::Sacrifice {
+            what: ObjectSelector::Chosen { predicate, another },
+            optional: true,
+        }
+    }
+
+    /// "Put [what] into [zone]" with no further terms.
+    pub fn move_to(what: ObjectSelector, to: ZoneType) -> Self {
+        Effect::Move {
+            what,
+            to,
+            tapped: false,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }
+    }
+
+    /// "Exile [what]."
+    pub fn exile(what: ObjectSelector) -> Self {
+        Self::move_to(what, ZoneType::Exile)
+    }
+
+    /// "Return [what] to its owner's hand."
+    pub fn return_to_hand(what: ObjectSelector) -> Self {
+        Self::move_to(what, ZoneType::Hand)
+    }
+
+    /// "Return [what] to the battlefield [tapped]" under the resolving
+    /// player's control.
+    pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
+        Effect::Move {
+            what,
+            to: ZoneType::Battlefield,
+            tapped,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }
+    }
+
+    /// "Exile [what] with this" or "until this leaves the battlefield".
+    pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
+        Effect::Move {
+            what,
+            to: ZoneType::Exile,
+            tapped: false,
+            under: None,
+            with_counter: None,
+            linked: Some(linked),
+        }
+    }
+
+    pub fn tap(what: ObjectSelector) -> Self {
+        Effect::Tap { what }
+    }
+
+    pub fn untap(what: ObjectSelector) -> Self {
+        Effect::Untap { what }
+    }
+
+    /// "If you do, [then]": only after the latest move or sacrifice
+    /// happened.
+    pub fn if_you_do(then: Vec<Effect>) -> Self {
+        Effect::If {
+            condition: Condition::Moved,
+            then,
+            otherwise: Vec::new(),
+        }
+    }
+}
+
+impl From<i32> for EffectValue {
+    fn from(value: i32) -> Self {
+        EffectValue::Fixed(value)
     }
 }
 
@@ -1384,9 +1479,15 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
             .find_map(Effect::target_spec)
             .map(|spec| {
                 // The implicit exile-link clause is "up to one target".
-                let optional = effects
-                    .iter()
-                    .any(|effect| matches!(effect, Effect::ExileUntilSourceLeaves { .. }));
+                let optional = effects.iter().any(|effect| {
+                    matches!(
+                        effect,
+                        Effect::Move {
+                            linked: Some(LinkedExile::UntilSourceLeaves),
+                            ..
+                        }
+                    )
+                });
                 vec![TargetRequirement {
                     min: usize::from(!optional),
                     ..TargetRequirement::one(spec.clone())

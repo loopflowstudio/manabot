@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "081bbbe70dda8ccfef16840001f0f489b6f0cc7ad5b03520cabed01308b7dbf4",
+    "authority_receipt_sha256": "914017275bb3aec64ac0abac237dda69de7299d7795cf4e5965bbe8ac502daff",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "081bbbe70dda8ccfef16840001f0f489b6f0cc7ad5b03520cabed01308b7dbf4"
+          "sha256": "914017275bb3aec64ac0abac237dda69de7299d7795cf4e5965bbe8ac502daff"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "57791ac299a8efbb08ced4c9ee3d2fd0434c36b331e036007f830ef19a385491"
+          "sha256": "035a8fcfc2682bc51e32f83eae612953cd7dbcc55c476e1bc09b2081fa062fd9"
         },
         {
           "path": "academy/server.py",
@@ -85,7 +85,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "7fae38a796c8fc657aa062d626b03762fb4edb2e71cd7fc8c3944b49270cb642"
+          "sha256": "27c487291d6e08a45b09c76f72f1836ff82c0c4668e38829735586334c882613"
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
@@ -128,7 +128,7 @@
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "fdcfd90d06e82202494e4416c8ce219911ed6b87d1e1a00df8e09e27a99eacb0"
+      "sha256": "373a354a3426803576827a169831150ea98e64b21d7a765a44f1f13891f8ef3e"
     },
     "seed": 0,
     "semantic_decision_version": 7

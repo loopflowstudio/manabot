@@ -604,7 +604,7 @@ impl Game {
                     (3, resume.as_deref())
                 }
                 Decision::Sacrifice { optional, .. } => {
-                    frame.can_decline = optional.is_some();
+                    frame.can_decline = *optional;
                     (4, None)
                 }
                 Decision::SelectMilled { .. } => (5, None),

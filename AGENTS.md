@@ -267,6 +267,19 @@ A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.
 
+An `Effect` is a verb over an `ObjectSelector` (`This`, `Target(spec)`,
+`Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `Chosen`,
+`Each { of }`), never a `<Verb><Object>` variant: `PutCounters { on }`,
+`Sacrifice { what }`, `Move { what, to }`, `Tap { what }`. One resolver,
+`Game::select`, names the objects (last known information for `This` after
+the source leaves); a verb that depends on which object it hit is an `If`
+composition, and "if you do" is `Condition::Moved` over the frame's latest
+`Move` or `Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Use
+the constructors (`Effect::exile`, `return_to_hand`, `put_counters`,
+`sacrifice_this`, `may_sacrifice`, `if_you_do`) in card code and write the
+full `Effect::Move { .. }` literal only for `under`, `with_counter` or
+`linked`.
+
 Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
 `Action::ActivateCardAbility`. An ability's index is its position in

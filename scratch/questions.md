@@ -464,3 +464,62 @@ requirement, it needs its own Task.
   state write already passes `TrackedState::deref_mut`, so a derived index
   cannot drift, and the measured cost is small. Revisit only if profiles show
   index rebuilds dominating.
+
+## MTG-235 (effect verbs over an ObjectSelector) — 2026-11-02, headless
+
+- `TriggerCondition::Chapter` does not exist on this base (main `4c8324a59`);
+  it is T6's (MTG-225, unpublished). `CountersReach` waits for the stack.
+- `ObjectSelector::Target` carries the `TargetSpec` (as `AffectedSpec::Target`
+  does) rather than a clause index: an effect list without an explicit
+  `TargetClause` derives its implicit clause from that spec, and the clause
+  cursor already selects which chosen target a verb reads.
+- The directive's `Linked` selector is named `Grantor` (the frame field and
+  the only card, Trusty Boomerang, mean the granting Equipment); `Linked`
+  would read as the exile link, which is `Move { linked }`.
+- `Each { of: AffectedSpec, another }`: `another` keeps "each other creature
+  you control" (Fire Nation Attacks-style counters); `Chosen { predicate,
+  another }` keeps "sacrifice a/another [predicate]" as a selector only
+  `Sacrifice` offers (`select` debug-asserts elsewhere).
+- "If you do" is `Condition::Moved` reading a new `EffectFrame.moved` (what
+  the latest `Move`/`Sacrifice` moved) rather than a `then` list on the verb;
+  `this_way` stays the latest discard or mill because Avatar Destiny mills,
+  moves itself to hand, then reads the milled cards. `Condition::
+  TargetControlledByYou` (LKI controller) replaces ReturnToHandDrawIfControlled.
+- `Move` to the battlefield enters under the resolving player (CR 110.2b);
+  `PlayerSelector::Owner` is explicit (Blink-style return, earthbend's return).
+  `Move` to a library shuffles it into its owner's (the one use); top/bottom
+  placement stays `PlaceTargetInLibrary`.
+- `Move` of a spell to hand goes through the ordinary zone move, so a
+  flashback spell bounced from the stack is exiled (CR 702.34a); the old
+  `ReturnToHand` removed the stack object first and put it in hand. No card
+  or test reaches it.
+- `Sacrifice { optional: true }` is read only with a `Chosen` selector
+  ("you may sacrifice a creature"); a "you may sacrifice [it]" over a fixed
+  selector waits for a card (compress removed the unreachable payment path).
+- Remaining object-in-name verbs (not converted; each a different choice or
+  rule): ReturnMilledThisWay, DistributeCountersToTappedOpponentCreatures,
+  AirbendAll, DamageOpponentCreatures, DestroyCreaturesLosingAbilities,
+  EachPlayerKeepsCreatures, ExileTopCardPlayThisTurn, ExileUntilNonlandCastFree,
+  ExileLinked, CastExiledWithSource, AttachSourceTo, OwnerPutsIntoLibrary,
+  PlaceTargetInLibrary, PutTopCardsInHand, CopyTriggeringObject,
+  TargetCreaturesDealPowerDamageToLastTarget, FightLastTarget (17).
+- Heuristic polarity: a `Move` of a battlefield target off the battlefield is
+  harmful (`MoveTargetAway`); a `Move` of a graveyard-card target (True
+  Ancestry, Zuko's Conviction) carries no polarity, as the old
+  `ReturnGraveyardTarget` did.
+- A card returning itself to the battlefield is described as "Return this
+  card to the battlefield[ tapped]" (owner's control unsaid); other selectors
+  read "Put X onto the battlefield ... under its owner's control".
+- Evidence re-recorded in place (content digest moved): semantic-kernel
+  conformance (`record`), authored-match receipt and both parity corpora
+  (RUL-9 measurement fetched from the artifact store), the five
+  `academy/fixtures/*-w17.json` (prefixes replayed through `GameSession`; every
+  retained position reaches the same decision kind and offer count), belief v3
+  receipt pins, and the rules-audit citations of the removed resolution arms.
+  No regeneration script is retained for the Academy fixtures; a replay of
+  each fixture's prefix with digest rewriting suffices.
+- The lock exports `maturin` only under the `play` extra, so the extension
+  rebuild is `uv run --extra play maturin build --release ...`; the editable
+  build uv performs on `uv run` after Rust changes produces the same release
+  `.so` byte for byte.
+
