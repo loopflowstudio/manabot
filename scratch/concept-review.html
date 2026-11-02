@@ -3,85 +3,114 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T5 concept review: permanent copying, after the main sync</title>
+<title>T5 Concept Review</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf7f1; --mute:#6b655c; --line:#d9d2c5; --prop:#8a4b12; --code:#efe9dd; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#ece6da; --bg:#1a1916; --mute:#a39b8e; --line:#3a362f; --prop:#e0a160; --code:#26241f; } }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
-  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
-  header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
-  h1 { font-size:1.6rem; margin:0 0 .5rem; } h2 { font-size:1.2rem; margin-top:2.5rem; }
-  code { font:.88em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; overflow-wrap:anywhere; }
-  pre { background:var(--code); padding:.8rem 1rem; overflow-x:auto; border-radius:4px; }
-  pre code { background:none; padding:0; }
-  .proposed { border-left:3px solid var(--prop); padding-left:1rem; }
-  .proposed::before { content:"Considered, not adopted"; display:block; color:var(--prop); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
-  .existing { border-left:3px solid var(--line); padding-left:1rem; }
-  .existing::before { content:"Implemented"; display:block; color:var(--mute); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
-  table { border-collapse:collapse; width:100%; font-size:.92rem; } td, th { text-align:left; padding:.4rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
-  .wrap { overflow-x:auto; }
-  .lead { font-size:1.08rem; }
+:root{--bg:#fbfaf7;--fg:#1d1b18;--muted:#6b665e;--rule:#e2ddd3;--code:#f2efe8;--accent:#8a4b12;--add:#e6f2e3;--addfg:#205a1c;--del:#f6e3e0;--delfg:#7d2418;--prop:#2f5d8a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17161a;--fg:#e8e5df;--muted:#9b968d;--rule:#2e2c31;--code:#222126;--accent:#e0a35c;--add:#1d3320;--addfg:#a8dba0;--del:#3a2020;--delfg:#f0aaa0;--prop:#8bb8e6}}
+:root[data-theme="dark"]{--bg:#17161a;--fg:#e8e5df;--muted:#9b968d;--rule:#2e2c31;--code:#222126;--accent:#e0a35c;--add:#1d3320;--addfg:#a8dba0;--del:#3a2020;--delfg:#f0aaa0;--prop:#8bb8e6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,"Iowan Old Style",serif}
+main{max-width:780px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:1.6rem;margin:0 0 4px;font-weight:600}
+h2{font-size:1.15rem;margin:48px 0 8px;font-weight:600}
+.meta{color:var(--muted);font:13px/1.5 ui-sans-serif,system-ui,sans-serif}
+.lead{font-size:1.1rem;border-left:3px solid var(--accent);padding-left:14px;margin:28px 0}
+code{font:13.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 4px;border-radius:3px;overflow-wrap:anywhere}
+pre{background:var(--code);padding:14px 16px;border-radius:4px;overflow-x:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;margin:8px 0 4px}
+pre code{background:none;padding:0}
+.cap{color:var(--muted);font:12px ui-sans-serif,system-ui,sans-serif;margin-bottom:18px}
+.add{background:var(--add);color:var(--addfg);display:inline-block;min-width:100%}
+.del{background:var(--del);color:var(--delfg);display:inline-block;min-width:100%}
+.flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid var(--rule);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
+.flow>div{padding:10px 10px 10px 0;border-bottom:1px solid var(--rule)}
+.flow .h{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.prop{color:var(--prop)}
+.tag{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--prop);text-transform:uppercase;letter-spacing:.06em}
+ol.q>li{margin-bottom:14px}
+ol.q ol{list-style:lower-alpha;margin-top:4px}
+@media (max-width:640px){.flow{grid-template-columns:1fr}.flow .h{display:none}.flow>div:nth-child(3n+1){padding-top:16px;font-weight:600}}
+@media print{body{background:#fff;color:#000}}
 </style>
 </head>
-<body><main>
-<header>
-  <h1>T5 concept review: permanent copying, after the main sync</h1>
-  <p>Task a7234f · step: concept review (headless) · 2026-11-02 · HEAD <code>39dd86190</code> (re-run; code unchanged since <code>628608323</code>) · PR #405</p>
-  <p>Built from <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code>, <code>managym/src/cardsets/tla.rs</code>, <code>managym/src/state/effect.rs</code>, <code>managym/src/flow/zones.rs</code>, <code>managym/src/flow/sba.rs</code>, <code>managym/src/flow/statics.rs</code>, <code>managym/src/flow/resolution.rs</code>, <code>managym/src/agent/observation.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>academy/ui/src/lib/permanent-notes.ts</code>, <code>managym/tests/cards/observability.rs</code>, the #405 check run</p>
-</header>
+<body>
+<main>
+<h1>Who decides “legendary”?</h1>
+<div class="meta">Task MTG-224 (TLA T5) · concept-review with Jack Heart · 2026-11-02 · head <code>2df025c20</code> (PR #405)<br>
+Built from <code>managym/src/flow/statics.rs</code>, <code>flow/sba.rs</code>, <code>agent/observation.rs</code>, <code>state/effect.rs</code>, <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code></div>
 
-<p class="lead"><strong>Decision needed: none. Nothing to change, no open product choice.</strong> The sync onto main (T3's squash, the characteristics cache and T4) replaced T5's own turn history with T4's and kept every other accepted concept intact. The one new fact is CI evidence for gate: the Academy UI check fails on the stale precision demo, the same item gate already owns.</p>
+<p class="lead">The decision I need: should “is legendary” become a field of the layered characteristics view that the legend rule and the policy both read? Or does T5 ship with two readers that only agree because every way a permanent loses legendary today is through a copy?</p>
 
-<h2>Actions → concepts → APIs (synced tree)</h2>
-<div class="existing">
-<div class="wrap"><table>
-  <tr><th>Player action / event</th><th>Concept</th><th>API</th></tr>
-  <tr><td>Activate Joo Dee at sorcery speed: surveil, copy, sacrifice</td><td>activated ability with T3's sorcery timing; surveil on the inspect surface (two real choices, so never skipped)</td><td><code>sorcery_timing</code> in <code>check_activation_terms</code>; <code>Effect::Surveil</code></td></tr>
-  <tr><td>Get a token copy (all three cards)</td><td>copy effect = copiable values of the root definition plus exceptions, applied once into the token's definition</td><td><code>Effect::CreateTokenCopy { exceptions }</code> → <code>Game::create_token_copy</code> → <code>Card.copy: CopyEffect { of, exceptions }</code></td></tr>
-  <tr><td>Ran and Shaw's copy isn't legendary</td><td>an exception from the same vocabulary as layered records</td><td><code>Modification::Nonlegendary</code>; <code>permanent_is_legendary</code> reads copiable supertypes and records</td></tr>
-  <tr><td>Sacrifice a permanent (effect, cost or forced)</td><td>this turn's history per player, owned by T4</td><td><code>sacrifice_permanent</code> increments <code>TurnState.history[p].permanents_sacrificed</code>; read by <code>Condition::SacrificedThisTurnAtLeast</code> and <code>EffectValue::PermanentsSacrificedThisTurn</code></td></tr>
-  <tr><td>Airship's end step after a sacrifice</td><td>intervening-if trigger, rechecked on resolution</td><td><code>Ability::Triggered { intervening_if }</code> with <code>Condition::SacrificedThisTurnAtLeast { count: 1 }</code></td></tr>
-  <tr><td>Eight Airships make each one a creature</td><td>self-relative animation counted on post-layer-3 names</td><td><code>StaticAbility::CreatureWithNamesakes(8)</code> via <code>creature_with_namesakes</code> / <code>name_stage</code></td></tr>
-  <tr><td>Agent / human sees the copy</td><td>inputs stated, not only results</td><td><code>FactKind::Copy</code>, <code>FactKind::CopyException</code>; text and Academy "copy of …, except isn't legendary"; protocol <code>copy_of</code></td></tr>
-  <tr><td>LLM / Academy text sees a suspended obligation</td><td>a frame's decision code, labelled by frame kind, bounded once</td><td><code>continuation::decision_code</code>, <code>MAX_DECISION_CODE</code> = 22 (Surveil); Python's table tested against it</td></tr>
-</table></div>
+<p>You accepted this rule for T5: <em>a permanent with modified characteristics is always seen as modified</em>. Copy, exceptions and layered records compose, and the policy sees the result. T5 meets that rule for every characteristic except one.</p>
+
+<h2>The interaction</h2>
+<div class="flow">
+  <div class="h">Action</div><div class="h">Concept</div><div class="h">API that decides</div>
+  <div>Cast a 5th Dragon with Ran and Shaw out</div><div>Token copy, except “isn't legendary”</div><div><code>create_token_copy</code> writes copiable values into the definition and records <code>Card.copy</code></div>
+  <div>State-based actions check the legend rule</div><div>Layer-4 supertype</div><div><code>permanent_is_legendary</code> (sba.rs)</div>
+  <div>Policy, LLM text and tokens look at the board</div><div>“legendary yes/no”</div><div><code>CardData.is_legendary</code>: printed supertypes</div>
+  <div class="prop">Proposed: any reader asks</div><div class="prop">One layered value</div><div class="prop"><code>characteristics(id).is_legendary</code></div>
 </div>
 
-<h2>What the sync deliberately changed</h2>
-<div class="existing">
-<p>T5's own <code>PlayerTurnHistory</code>, player column, <code>update_turn_history</code> and <code>StaticCondition::SacrificedThisTurnAtLeast</code> were dropped for T4's struct, column position and <code>Condition</code>. The branch now has one owner for "sacrificed this turn" and no leftover of the earlier shape: <code>StaticCondition</code>, <code>CreateNonlegendaryCopy</code> and the duplicate <code>sorcery_timing</code> are absent from <code>managym/src</code>.</p>
-<pre><code>// flow/zones.rs — every sacrifice path (resolution, costs, forced choices) ends here
-self.state.turn.history[controller.0].permanents_sacrificed += 1;
+<h2>Today: two readers, one layered view that leaves legendary out</h2>
+<pre><code>    pub(crate) fn permanent_is_legendary(&amp;self, id: PermanentId) -&gt; bool {
+        ...
+        self.state.cards[permanent.card]
+            .supertypes
+            .iter()
+            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
+            &amp;&amp; !self
+                .effects_on(id)
+                .any(|effect| effect.modification == Modification::Nonlegendary)
+    }</code></pre>
+<div class="cap">managym/src/flow/sba.rs · <code>Game::permanent_is_legendary</code> · 2df025c20 · L16–27 (omission marked)</div>
 
-// cardsets/tla.rs — Phoenix Fleet Airship
-Ability::Triggered {
-    condition: TriggerCondition::BeginningOfYourEndStep,
-    intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
-    effects: vec![Effect::CreateTokenCopy { exceptions: vec![] }],
-}</code></pre>
-</div>
+<pre><code>            is_legendary: card
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("legendary")),
+            // A characteristic-setting effect replaces a permanent's types.
+            is_ally: match game.state.card_to_permanent[card_id] {
+                Some(permanent) if zone == ZoneType::Battlefield =&gt; {
+                    game.characteristics(permanent).has_subtype("Ally")
+                }
+                _ =&gt; card.has_subtype("Ally"),
+            },</code></pre>
+<div class="cap">managym/src/agent/observation.rs · <code>card_data</code> · 2df025c20 · L1160–1170. <code>is_ally</code> already reads the layered view on the battlefield; <code>is_legendary</code> doesn't.</div>
 
-<h2>Challenge</h2>
+<p><strong>Counterexample.</strong> Any effect that says “target legendary creature isn't legendary until end of turn” is an <code>ApplyContinuous</code> record of <code>Modification::Nonlegendary</code>, and that variant already exists. The legend rule then spares the permanent, but column 39, the text (“legendary yes”) and the tokens still say legendary. No card does this yet, so the two readers agree only by coincidence.</p>
+
+<h2>Proposed <span class="tag">not implemented</span></h2>
+<pre><code> pub struct Characteristics {
+     pub name: String,
+     ...
+     pub is_creature: bool,
+<span class="add">+    /// Layer 4: copiable supertypes, unless a `Nonlegendary` record removes it.
++    pub is_legendary: bool,
+</span>     pub is_land: bool,</code></pre>
+<div class="cap">managym/src/flow/statics.rs · <code>Characteristics</code> · illustrative diff against 2df025c20 L106–122</div>
+<pre><code><span class="del">-            if self.permanent_is_legendary(id) {
+</span><span class="add">+            if self.characteristics(id).is_legendary {
+</span></code></pre>
+<div class="cap">flow/sba.rs · <code>legend_groups</code> · illustrative; <code>permanent_is_legendary</code> is deleted</div>
+<p><code>CardData.is_legendary</code> would read the layered value on the battlefield, the same way <code>is_ally</code> does, and the printed value everywhere else. Widths, tokens and text wording stay the same. To prove it: one directed test applies a non-copy <code>Nonlegendary</code> record and checks the legend rule, column 39 and the text line together.</p>
+
+<h2>Already settled, not reopened</h2>
 <ul>
-  <li><strong>Normal path:</strong> Joo Dee activates; surveil shows "to graveyard" or "keep"; the token is "copy of D1"; the sacrifice choice lists every artifact or creature, including the token and Joo Dee. Sacrificing counts toward the Airship's end step.</li>
-  <li><strong>Failure:</strong> Joo Dee or the Airship leaves before the copy resolves. The copy uses the retained card's definition (last known information); the test <code>phoenix_fleet_airship_copies_itself_as_it_last_existed_after_leaving</code> holds it.</li>
-  <li><strong>Recovery / chain:</strong> a copy of a copy keeps <code>of</code> = root and extends <code>exceptions</code> (CR 707.9b). Ran and Shaw's intervening-if is rechecked at resolution, and the forced copies (not cast) make no tokens.</li>
-  <li><strong>Counterexample that would invalidate the model:</strong> a sacrifice that bypasses <code>sacrifice_permanent</code>. None exists: play, decision, mana (costs) and resolution all call it.</li>
+<li>Writing copiable values into the definition when the copy is created is correct (token copies don't follow later changes to their source). <code>Card.copy</code> keeps the inputs, so the policy can see them.</li>
+<li>“Sacrificed this turn” has one owner, T4's <code>PlayerTurnHistory</code>, and every sacrifice goes through <code>sacrifice_permanent</code>.</li>
+<li><code>CreatureWithNamesakes</code> stays as is (your call). The new “Catalog-scale types” Task already proposes replacing it.</li>
 </ul>
 
-<h2>Considered this pass</h2>
-<div class="proposed">
-<p><strong>Fold <code>CreatureWithCounters</code> and <code>CreatureWithNamesakes</code> into one variant.</strong> Still waits for a third self-animation condition; it would re-key an existing card's tokens for no accepted decision.</p>
-<p><strong>Normalise supertype casing.</strong> <code>"legendary"</code> and <code>"Legendary"</code> both appear in <code>tla.rs</code> (11 lowercase on main, before T5). Readers compare case-insensitively and the policy sees <code>is_legendary</code>, never the string, so nothing a player or agent sees differs. A cosmetic cleanup for any batch; not a product choice and not T5's.</p>
-<p><strong>Name the protocol field <code>copy</code> like the Rust side.</strong> Pydantic's <code>BaseModel.copy</code> shadows it; <code>copy_of</code> stays, with the reason recorded in <code>questions.md</code>.</p>
-</div>
-
-<h2>CI evidence for gate (not a concept)</h2>
-<p>Check run on <code>1e9fd2d7c</code>: Rust, Python unit, Protocol and Semantic Kernel conformance, Academy Integration and Clean-machine Play passed. <strong>Academy UI failed</strong>: the three Playwright <code>decision-surface.spec.ts</code> Precision cases time out waiting for <code>decision-surface</code>. <code>academy/play_demo.py</code> raises when the recorded precision demo digest diverges before a Command, so no decision is ever offered. This is the stale precision demo already listed under Remaining (<code>test_decision_surface</code>, 3 cases); re-recording the demos fixes both. Integration (main, long) were still running. At this re-run (2026-11-02) the check run on <code>9bf9c1928</code> had the same jobs passed and Academy UI and both Integration jobs still pending; main is still <code>4c8324a59</code>, so the diagnosis stands and nothing in it is a concept question.</p>
-
 <h2>Questions</h2>
-<ol>
-  <li>None. No product choice is open and no design change is pending; gate re-records the stale demos and receipts, then the PR waits for Jack Heart's review.</li>
+<ol class="q">
+<li>Legendary as a layered characteristic:
+  <ol><li>Do it in T5 before merge (small: one field, one deleted function, one test). <em>My recommendation.</em></li>
+  <li>Merge T5 as is, and do it in the first PR that adds a non-copy “isn't legendary” effect.</li>
+  <li>Fold it into the Catalog-scale types Task, with the other supertypes.</li></ol></li>
+<li>Same question for every observation field: should each <code>CardData</code> flag for a battlefield card read <code>characteristics()</code> by rule, guarded in <code>observability.rs</code>?
+  <ol><li>Yes, make it the rule now.</li>
+  <li>No, fix flags one at a time as cards need them.</li></ol></li>
 </ol>
-</main></body>
+</main>
+</body>
 </html>

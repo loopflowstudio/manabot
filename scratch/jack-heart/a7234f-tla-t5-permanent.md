@@ -100,6 +100,42 @@ line were refreshed.
   on main; readers compare case-insensitively, and tokens carry `is_legendary`,
   not the string); a cosmetic cleanup for any batch, not a T5 decision.
 
+## Concept review with Jack Heart — 2026-11-02 (at `2df025c20`, open)
+
+Page: `scratch/concept-review.html`. The headless reviews found nothing to
+change. This one checks the accepted decision 2 ("always see a permanent
+having modified abilities") against how the code reads one characteristic.
+
+- **Mismatch.** T3's `Game::characteristics()` (`flow/statics.rs:265`) is the
+  layered view that the rules and the observation share. Name, subtypes,
+  creature, animated, keywords, P/T and abilities are all in it. Legendary is
+  not. Two readers decide it on their own:
+  `Game::permanent_is_legendary` (`flow/sba.rs:16`) reads copiable supertypes
+  minus a `Nonlegendary` record, and the legend rule uses it.
+  `CardData.is_legendary` (`agent/observation.rs:1160`) reads printed
+  supertypes only, and the tensor column 39, the text "legendary yes/no" and
+  the tokens' `is_legendary` all use it.
+- **Why it's consistent today.** The only source of `Nonlegendary` is a copy
+  exception, which `create_token_copy` writes into the token's definition, so
+  the two readers agree. Their answers split when a record (not a copy
+  exception) says "isn't legendary": the legend rule spares the permanent, but
+  the policy and the text still say legendary. The `Modification` vocabulary
+  already allows this, since `Nonlegendary` is a layer-4 record.
+- **Proposed (not accepted).** Add `is_legendary` to `Characteristics`,
+  computed in layer 4 from copiable supertypes and records. The legend rule
+  reads `characteristics(id).is_legendary`, and `permanent_is_legendary` goes
+  away. `CardData.is_legendary` reads characteristics on the battlefield, the
+  same way `is_ally` already does, and the printed value elsewhere. No column,
+  token or text change. Proof: a directed test that applies a `Nonlegendary`
+  record outside a copy and checks the legend rule, column 39 and the text
+  line together.
+- **Not in question.** Writing copiable values into the definition at
+  creation is the rule (token copies don't track their source later), and
+  `Card.copy` records its inputs for observation.
+  `PlayerTurnHistory` has one owner.
+
+Open for Jack Heart: questions 1 and 2 on the page.
+
 ## Sync onto main — 2026-11-02 (steer 6eae1230)
 
 - Merged with T3's head `a18902e0e` as the base (main's T3 is its squash), so
