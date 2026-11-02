@@ -11,14 +11,14 @@ Still live for every TLA PR:
 - Seven TLA PRs plus one decklist-import PR. Implement, test and publish one
   cohesive PR, then stop for Jack Heart's review: no auto-merge, landing, paid
   compute, training or follow-up Task launches.
-- One typed authoring source lowered to the native runtime and learning
-  projection; no browser rules, runtime Oracle parser, fallback registry or
+- One Rust `CardDefinition` in engine rules types, executed directly and
+  projected into learning tokens; no separate authoring IR, browser rules,
+  runtime Oracle parser, fallback registry or
   parallel current-world executors. Registration or generated tests never
   certify a card; independent expected rules outcomes cover each clause.
-- Allocation of all 286 cards lives in `docs/rules/tla/allocation.jsonl`;
-  research under `scratch/reference/full-tla-final/`.
+- Allocation of all 286 cards lives in `docs/rules/tla/allocation.jsonl`.
 - Decklist Task f871a8 owns parsing, deck admission and Academy/training input;
-  content definitions, IR/runtime lowering and content versioning stay here.
+  content definitions, rules execution and content versioning stay here.
   World w16 and learning schema 8 stay unreleased; frozen evidence is not rewritten.
 - Exercise Command, replay/fork, observations and current-world admission where
   affected; keep choices uncapped and viewer-safe.

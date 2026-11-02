@@ -37,7 +37,8 @@ that value for T5; a printed-P/T accessor or field removal requires a follow-up
 protocol decision by Jack Heart. This is not a T5 blocker.
 
 The choice-navigation re-record (`889948346`) preserves recorded offer ids
-when labels repeat, keeping original state digests and offer order. Gate must
-publish that local change and verify the Playwright cases at the new head.
+when labels repeat, keeping original state digests and offer order. It is
+published; Academy UI passed at `bbb5101eb` (CI 41539137476). Whole-head
+acceptance at `933798396` remains with gate/CI.
 Shipping remains stopped by steer f39fef34; `/verify` is not a pre-merge check
 because that skill finishes delivered Tasks.

@@ -34,10 +34,10 @@ ol.q ol{list-style:lower-alpha;margin-top:4px}
 <body>
 <main>
 <h1>One view decides every characteristic</h1>
-<div class="meta">Task MTG-224 (TLA T5) · concept-review, headless, after Jack Heart's 1a/2a · 2026-11-02 · local head <code>889948346</code> (PR #405, pushed head <code>e8fd88eed</code>)<br>
-Built from <code>managym/src/flow/statics.rs</code>, <code>flow/sba.rs</code>, <code>agent/observation.rs</code>, <code>tests/cards/observability.rs</code>, <code>manabot/managym/experience_projection.py</code>, <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code></div>
+<div class="meta">Task MTG-224 (TLA T5) · concept-review, headless, after Jack Heart's 1a/2a · 2026-11-02 · reviewed head <code>933798396</code> · PR #405<br>
+Built from <code>managym/src/flow/statics.rs</code>, <code>managym/src/flow/sba.rs</code>, <code>managym/src/flow/zones.rs</code>, <code>managym/src/agent/observation.rs</code>, <code>managym/tests/cards/observability.rs</code>, <code>managym/tests/cards/tla.rs</code>, <code>manabot/managym/experience_projection.py</code>, <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code></div>
 
-<p class="lead">No decision is needed. Jack Heart's 1a and 2a are implemented: the legend rule and every battlefield card-row field read the same layered view, and a compile-time guard classifies each field as layered or printed. The one remaining mismatch is a name, not a behavior, and it belongs to a protocol follow-up rather than to T5.</p>
+<p class="lead">No new T5 decision is needed. Jack Heart's 1a and 2a are implemented: the legend rule and mutable battlefield card-row characteristics read the same layered view. An exhaustive guard classifies each field as layered or printed. The existing printed-P/T protocol question remains deferred. Current-head validation belongs to gate; shipping stays stopped for review.</p>
 
 <h2>The interaction</h2>
 <p>Ran and Shaw's copy enters as a nonlegendary token. A person in Academy sees two Ran and Shaws on the battlefield and the note "copy of Ran and Shaw, except isn't legendary". The policy sees the copy's card row with column 39 clear, and the legend rule leaves both alone. Later, an effect that says "isn't legendary" until end of turn (a record, not a copy) applies to a legendary creature. Every observer must agree with the rule that spares it.</p>
@@ -45,12 +45,18 @@ Built from <code>managym/src/flow/statics.rs</code>, <code>flow/sba.rs</code>, <
 <h2>Actions → concepts → APIs</h2>
 <div class="flow">
 <div class="h">A person or policy does</div><div class="h">The concept</div><div class="h">The API that answers</div>
+<div>Activates Joo Dee, chooses “Keep on top” or “Put … into your graveyard,” then chooses a sacrifice</div><div>One resolving ability with separate pending decisions; its copy enters before the sacrifice</div><div>Revision-bound Command → <code>Decision::Surveil</code> → <code>Game::create_token_copy</code> → sacrifice choice</div>
 <div>Looks at a permanent's name, types, legendary, P/T, keywords, ward, Ally, Lesson</div><div>Its <em>characteristics after continuous effects</em> (one layered view)</div><div><code>Game::characteristics(id)</code> → <code>Characteristics { name, types, is_legendary, subtypes, keywords, ward, power, toughness, … }</code></div>
 <div>The engine applies the legend rule</div><div>Same view</div><div><code>legend_groups</code> reads <code>characteristics(id).is_legendary</code> <span class="tag done">implemented</span></div>
 <div>A viewer reads the card row of a battlefield card</div><div>Same view, printed only for identity and costs</div><div><code>Observation::card_data</code> overrides <code>printed_card_data</code> with the view <span class="tag done">implemented</span></div>
 <div>Someone adds a field to <code>CardData</code></div><div>It must be layered or printed by definition</div><div><code>CardSource</code> guard: exhaustive destructure in <code>observability.rs</code>, 9 layered, 11 printed with a reason <span class="tag done">implemented</span></div>
 <div>A viewer reads the card row off the battlefield</div><div>The printed card</div><div><code>printed_card_data</code>; <code>card_rows_off_the_battlefield_read_the_printed_card</code></div>
 </div>
+
+<h2>Failure and recovery</h2>
+<p><strong>Accepted contract:</strong> if the connection drops after surveil, the tap cost and inspected information remain committed. Reconnecting must show the actual pending sacrifice decision, including the new token when legal. A stale click cannot restart the ability or silently select a sacrifice. Academy presents the engine's decision; it owns no separate copy lifecycle.</p>
+<p><strong>Source disappears:</strong> an Airship's queued trigger can resolve after the source leaves. The retained card supplies its copiable definition; a new token receives a new identity. Copy exceptions persist through a copy of a copy, while counters and temporary grants do not. <code>Card.copy</code> is hashed state, and the layered view is derived from the current state.</p>
+<p class="cap">Source review and existing directed witnesses support these distinctions. This step ran no new gameplay or reconnect proof. Copying a temporary buff, exposing the surveilled card to the opponent, or restarting a committed ability on recovery would invalidate the contract.</p>
 
 <h2>Before and after</h2>
 <pre><code><span class="del">- Game::permanent_is_legendary(id)   // flow/sba.rs: copiable supertypes minus a record</span>
@@ -74,9 +80,9 @@ Built from <code>managym/src/flow/statics.rs</code>, <code>flow/sba.rs</code>, <
 "base_power": card.power,            # the card row: layered on the battlefield since 2a
 <span class="del">- # printed value, for a "4/4 (2/2)" display   (no component ever read it)</span></code></pre>
 
-<h2>Questions</h2>
+<h2>Deferred question — outside T5</h2>
 <ol class="q">
-<li>None block T5. For the protocol follow-up on <code>base_power</code> / <code>base_toughness</code>, which of these should the separate Task take?
+<li>No answer is required for this headless step. The future protocol choice for <code>base_power</code> / <code>base_toughness</code> remains unresolved; no follow-up work is authorized here:
 <ol>
 <li>Keep the fields as the card row's value (current, documented).</li>
 <li>Add a printed-P/T accessor to the engine and make the fields printed again.</li>

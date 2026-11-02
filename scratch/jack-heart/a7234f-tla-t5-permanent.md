@@ -1,10 +1,11 @@
 # T5 (a7234f): permanent copying — plan and status
 
-As of 2026-11-02, local base `bbb5101eb`, PR #405 was last recorded at
-`e8fd88eed`; main `29660d00c` is merged. Joo Dee, One of Many, Ran and Shaw,
-and Phoenix Fleet Airship are defined and supported. Implementation and the
-native Command / LLM text demos are complete. Gate owns current-head checks,
-publication and the PR description refresh below.
+As of 2026-11-02, local and published PR #405 head is `933798396`;
+main `29660d00c` is merged and remains the upstream head. Joo Dee, One of Many,
+Ran and Shaw, and Phoenix Fleet Airship are defined and supported. Implementation and the
+native Command / LLM text demos are complete. The choice-navigation repair
+and updated PR description are published. Current-head acceptance remains
+with gate; pending CI is not a green result.
 
 **Shipping is stopped.** Jack Heart's latest steer f39fef34 says to run the
 Graph through gate, then stop for review: no merge. The Task's recorded
@@ -13,9 +14,9 @@ Graph label do not override this explicit direction.
 
 Prior review narratives and detailed check history:
 `bbb5101eb:scratch/jack-heart/a7234f-tla-t5-permanent.md`.
-The uncommitted implement note at compression entry confirmed no source
-changes since `924e520b4`; its corrected characteristic authority and completed
-deletion list are preserved here. Its original diff is also in
+The implement note at compression entry confirmed no source
+changes since `924e520b4`; its corrected characteristic authority is preserved
+here and the completed deletion list is retained at `933798396`. Its original diff is also in
 `.lf/tmp/t5-compress-input.patch`.
 
 ## Accepted design
@@ -26,6 +27,11 @@ modified-characteristic facts and tokens; share sacrifice history with T4;
 define Phoenix Fleet Airship. All four are implemented. T3's continuous-effect
 records and v5 fact rows are the substrate
 (`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`).
+
+Acceptance remains all three cards' allocated obligations, directed debug
+rules witnesses, current-world support, and viewer-safe complete observations
+and actions through Academy and training. Passing a shared consumer path alone
+does not establish rules correctness. Jack Heart's review is still required.
 
 Engine scope is copiable-value authority and dynamic ability inheritance for
 these three self-copy cards; arbitrary face-aware consumers finish in T6.
@@ -70,6 +76,21 @@ The headless concept review after 1a/2a found no further T5 product choice
 - Do not fold `CreatureWithCounters` and `CreatureWithNamesakes` before a
   third self-animation condition justifies it. Mixed supertype casing predates
   T5; readers are case-insensitive and tokens use the legendary flag.
+
+Rechecked at `933798396` on 2026-11-02 after compression: **no design change
+and no open T5 product choice**. Production behavior has not changed since
+the preceding concept review. The normal interaction remains activate →
+private surveil choice → copy enters → choose a sacrifice; committed costs
+and revealed information survive interruption. Recovery must return the actual
+pending decision through the existing revision-bound Command contract, never
+restart the ability or choose a sacrifice in Academy. A departed copy source
+retains its copiable definition; counters and temporary grants must not leak
+into the copy. These are the counterexamples that would invalidate the design,
+not new product choices. Existing directed witnesses cover private surveil,
+copy inheritance and departed sources; this review adds no runtime proof or
+new reconnect claim. The next proof remains current-head gate acceptance.
+The deferred printed-P/T alternatives below remain unapproved and outside T5;
+no documentation or skill-instruction redesign is needed for this outcome.
 
 ## Model as implemented
 
@@ -132,26 +153,28 @@ The headless concept review after 1a/2a found no further T5 product choice
 - Re-gate after sync re-recorded content-bound w17 receipts and precision
   demos; the authored-match authority receipt remained byte-identical.
   Release Playwright passed 25, skipped 2 environment-gated cases. The
-  subsequent 1a/2a CI failure and its repaired fixture are detailed below.
+  subsequent 1a/2a CI run 41536286824 at `e8fd88eed` failed Academy UI's
+  CHOOSE_TARGET and DISCARD cases: retained `base_power` / `base_toughness`
+  still held printed values after card rows became layered. Release-packages
+  run 41536286630 succeeded; it was not the failing CI run.
+- `889948346` re-recorded choice navigation and preserved recorded offer ids
+  when labels repeat. Only projection P/T, match ids, frame hashes and source
+  commit changed; state digests and offer order stayed fixed. The kernel,
+  authored-match, demo and trigger-order receipts did not move. Academy UI
+  passed in CI run 41539137476 at `bbb5101eb`, verifying the repaired live
+  cases. That run's Integration (main) was still running when inspected.
+- `933798396` checkpoints the subsequent test-helper and note compression;
+  production behavior is unchanged. PR #405 now describes layered legendary,
+  the CardData rule and the repaired fixture. No description refresh remains.
 
 ## Remaining
 
-- Gate at the head `e8fd88eed` (1a/2a implemented and compressed, main
-  `29660d00c` merged). CI runs 41536286824 / 41536286630
-  passed every job except Academy UI, whose two live retained
-  choice-navigation cases (CHOOSE_TARGET, DISCARD) found the fixture's
-  projection stale: `base_power` / `base_toughness` are the card row's P/T,
-  layered since 2a. Realign re-recorded
-  `academy/fixtures/choice-navigation-w17.json` (only those values, match
-  ids, frame hashes and the source commit moved; every state digest and
-  offer order is preserved) after fixing
-  `scratch/tools/regen_choice_navigation.py` to keep a recorded offer id
-  when its label repeats (the first-match rule had silently moved
-  CHOOSE_TARGET to another copy of It'll Quench Ya!, changing its digest).
-  The kernel, authored-match, demo and trigger-order receipts did not move.
-  Gate at the new head: CI (the Playwright spec is the proof of the
-  re-record), the local debug `cargo test`, clippy and the focused Python
-  suites with the rebuilt extension.
+- Gate acceptance at the current head remains open. CI run 41540970453 at
+  `933798396` was pending at inspection; Release packages 41540970371 was
+  running. Prior-head Academy UI success resolves the fixture failure but
+  does not certify the whole current head. Existing debug, clippy and Python
+  evidence below is reusable where the source is unchanged; missing
+  current-head acceptance and any new failures belong to gate/CI.
 - Open for Jack Heart: the projection's `base_power` / `base_toughness`
   were documented as printed values for a "4/4 (2/2)" display; with the
   card row layered they equal `power` / `toughness` on the battlefield, and
@@ -161,11 +184,6 @@ The headless concept review after 1a/2a found no further T5 product choice
   add a printed-P/T accessor to the engine and keep the field printed, or
   (iii) drop the fields (protocol change). (ii) and (iii) are follow-up
   Tasks, not T5 blockers.
-- PR #405's body predates 1a/2a: it says the legend rule reads
-  `Game::permanent_is_legendary` (deleted) and does not state the layered
-  `CardData` rule or `Characteristics.is_legendary`. Gate or pr-publish
-  refreshes those sentences; the "314 cards" and copy-model paragraphs are
-  current.
 - Then Jack Heart's review of PR #405. No merge: steer f39fef34 is the latest
   direction, and the Task record's auto-ship approval (21:35:52Z) does not
   override it.
@@ -173,30 +191,9 @@ The headless concept review after 1a/2a found no further T5 product choice
   fills every float buffer with noise, which the fact and definition checks
   reject. CI does not select the file.
 
-## Delete — do not maintain
-
-- Removed spent T3 rewrite scripts `scratch/tools/convert_continuous.py` and
-  `scratch/tools/rust_followups.py`: the surviving engine already owns their
-  migrations. Removed `scratch/add_fixture.py` (its scratch input is absent;
-  Scryfall fixtures are maintained by the existing card tooling).
-- Removed `scratch/tools/probe_t5.py` and `scratch/tools/demo_t5_contract.py`:
-  probes for the repaired capture failure; the real text-path demos and
-  `test_joo_dee_surveil_and_copy_play_through_the_text_decision` survive.
-  Original scripts remain at `bbb5101eb:scratch/`; no live callers.
-
-- `Game::permanent_is_legendary` and battlefield `CardData` reads of printed
-  mutable characteristics: replaced by `Characteristics` and the exhaustive
-  layered/printed field guard. Done in `16e28c304`, compressed in `924e520b4`.
-- `Effect::CreateNonlegendaryCopy` (main) and `CreateTokenCopy { nonlegendary }`:
-  replaced by `{ exceptions }`. Done.
-- The branch's duplicate `ActivatedAbilityDefinition.sorcery_timing`: T3's is
-  the one field. Done.
-- The tensor-only "copy identity" model: superseded by `CopyEffect` and its
-  fact rows. Done.
-- T5's own `PlayerTurnHistory` and `StaticCondition::SacrificedThisTurnAtLeast`:
-  T4's. Done at the sync.
-
-No remaining deletion targets in the accepted design.
+Obsolete copy/legend readers, duplicate T3/T4 mechanisms, and spent migration
+and capture-probe scripts are removed. Their deletion history is retained at
+`933798396`; there are no remaining deletion targets in the accepted design.
 
 ## Validation handoff
 
@@ -211,4 +208,8 @@ Full prior output and commands remain at the history reference above.
 Compression keeps all behavioral tests, shares the Ran and Shaw graveyard
 setup, uses `Characteristics::pt()` in T5 assertions and names the injected
 renderer test for what it proves. Production source and receipts are unchanged.
-`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --test cards tla::`: 390 passed; `uv run --extra dev pytest tests/semantic/test_text_observation.py::test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects -q`: 1 passed; format/lint and `git diff --check` clean. Gate retains current-head CI and acceptance checks.
+Compression's recorded focused checks passed 390 TLA tests and the injected
+text-renderer test; format/lint were clean. Reconciliation changes context only
+and adds no new runtime claim.
+
+Check: `git diff --check` — passed; `lf context` — memory and scratch within both token and byte limits; current-head acceptance deferred to gate/CI.

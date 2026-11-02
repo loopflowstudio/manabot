@@ -7,10 +7,9 @@ Full text: `48f14c9a9:scratch/tla-rust-authoring-direction.md`.
   trip. Scripts may generate checked-in Rust; `cardsets/` stays de-duplicated.
 - One current world, which knows its supported cards and checks cards/decks.
   Old worlds run from their git revision (operator default; see questions.md).
-- 2026-10-29 refinements: support by definition, one world pool with set
-  filters ([892c47-author-tla-cards.md](892c47-author-tla-cards.md)); later
-  steers replace the authoring layer with engine-type definitions carrying
-  Scryfall ids (T1's Remaining).
+- Jack Heart's 2026-10-29 refinements, now implemented: support by definition,
+  one world pool with set filters, and engine-type definitions carrying
+  Scryfall ids. The separate authoring layer and current-path IR are removed.
 - Still in force: frozen evidence, checkpoints and receipts are never
   rewritten; D1/f871a8 owns decklist parsing/admission over `content_pool`;
   independent rules witnesses; no merge authorized.
