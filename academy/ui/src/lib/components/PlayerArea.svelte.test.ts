@@ -29,6 +29,7 @@ it("shows an open opponent's decklist with unseen counts", () => {
       label: 'Opponent',
       opponent: true,
       definitionNames: names,
+      tablePermanents: [],
       player: player({
         main_counts: { '4': 17, '9': 23 },
         unseen_counts: { '4': 16, '9': 24 },
@@ -45,7 +46,7 @@ it("shows an open opponent's decklist with unseen counts", () => {
 
 it("says a closed opponent's decklist is closed and lists nothing", () => {
   const { body } = render(PlayerArea, {
-    props: { label: 'Opponent', opponent: true, definitionNames: names, player: player({}) },
+    props: { label: 'Opponent', opponent: true, definitionNames: names, tablePermanents: [], player: player({}) },
   });
   expect(body).toContain('Decklist closed');
   expect(body).not.toContain('sideboard-summary');
