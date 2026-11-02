@@ -162,3 +162,26 @@ tests, formatting and focused Clippy passed before reconciliation; no executable
 code changed here. Full affected suites and PR verification belong to gate/CI.
 
 Check (2026-11-02): `gh run view 41540798745 --json conclusion,headSha,event,url` → successful dispatch at e5615edcc; artifact/baseline equality verified with `uv run --no-project python`; `git diff --check` clean and `lf context` under both limits.
+
+## Publication verification (2026-11-02)
+
+`lf sync` completed without conflicts against origin/main 29660d00c and
+checkpointed the completed realign/concept-review notes at 4f828ec64.
+The complete debug Rust suite with `CARGO_PROFILE_DEV_OPT_LEVEL=1` and `-j 2`
+passed: 855 tests, including all four search-digest fixtures. The affected
+Python unit invocation (`tests/infra/`, clean-machine verifier and
+`deploy/play/tests/`) passed all 90 tests; the focused 57 comparator/selection
+checks also passed, including the injected 20% slowdown. Actionlint passed
+both workflows; Rust formatting, all-target/all-feature Clippy with warnings
+denied, and focused Python Ruff lint/format passed.
+The committed baseline exactly matches all values and measurement metadata
+in the retained artifact from successful dispatch 41540798745.
+
+Publication copy must retain the T4/T5/T6 table from docs/development.md and
+its different-CPU, old-digest limitations. The same-runner reference and
+native throughput interpretations remain for Jack Heart's review. PR-path
+execution (selection, durable head, both summary blocks, comparison and
+artifact identity), controlled reference-build-failure recovery, and the
+first main push remain unverified. Publishing enables the PR-path check;
+it supplies neither shipping approval nor Task completion. The Graph stops
+at its interactive demo boundary.
