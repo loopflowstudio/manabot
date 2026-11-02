@@ -169,3 +169,66 @@ Heart's review of the PR.
 ## Check-result
 
 2026-11-02 realign — the extension rebuilt from this head (`uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`) differed from the one the implement pass tested; against the rebuilt `.so`, `uv run --extra dev pytest tests/sim/test_heuristic.py tests/semantic/test_learning_projection.py tests/semantic/test_learning_projection_env.py tests/semantic/test_current_content.py tests/semantic/test_text_observation.py tests/semantic/test_static_ability_tokens.py tests/verify/test_observation_parity.py tests/belief/test_state.py tests/academy/test_choice_navigation.py tests/academy/test_trigger_order.py tests/academy/test_learn_setup.py -q`: 152 passed. Rust: debug `cargo test` (cards 485, lib 132, conformance/replay/authored), clippy and fmt clean at the compress pass; no Rust source changed since.
+
+## Concept review with Jack Heart (2026-11-02, in the Task conversation)
+
+Page: `scratch/concept-review.html`. Jack Heart decided 2026-11-02 (answers
+"1a 2a 3a 4b" in the Task conversation; the second "3a" read as 2a) and then
+said "after that, ship it. this looks good". Accepted direction, amending
+PR #412 before review:
+
+- **1a.** Every verb that acts on objects takes `what: ObjectSelector`.
+  `Destroy`, `Airbend`, `GainControl`, `DealDamage`, `CounterSpell`,
+  `CounterAbility`, `DiscardTargetPlayer`, `Earthbend` lose `target:
+  TargetSpec`; `MassDamage`, `DamageOpponentCreatures`, `AirbendAll` and
+  `DestroyCreaturesLosingAbilities` become the base verb over `Each` (with
+  the ability-loss rule kept for the last). `AirbendAll` needs `Each` to
+  exclude the clause's target (`except: Target` or equivalent); keep it a
+  one-rule verb only if that cannot be expressed.
+- **2a.** `AffectedSpec` folds into `ObjectSelector`: `ApplyContinuous.affected`
+  is an `ObjectSelector`, `Each { of }` holds the predicate scope directly
+  (`You`, `EachYouControl`, `EachOpponentControls`, `EachMatching`,
+  `EachTargetPlayerControls` become selector or scope forms), and the layer
+  computation in `flow/statics.rs` keeps its own private resolution of the
+  same selector.
+- **3a.** Value twins merge on `EffectValue` in the same change:
+  `DealDamage`/`DealDamageValue`, `GainLife`/`GainLifeValue`,
+  `CreateToken`/`CreateTokensValue`, `AddMana`/`AddManaValue`.
+- **4b.** `Chosen` is a general selector: `Game::select` offers the choice for
+  any verb ("tap a creature you control"), not only `Sacrifice`.
+
+Same acceptance as the first pass: every directed card test unchanged in
+debug `cargo test`, observability witnesses every verb and selector, tokens
+and content digest re-recorded in place, w17 stays, no version bump;
+WORLDS.md and AGENTS.md updated. One cohesive PR (#412 amended), then ship.
+
+Original mismatch and questions, kept for the record:
+
+The one consequential mismatch: a card author still learns three ways to say
+which objects a verb acts on, and the policy sees three token shapes for one
+idea. `Move { what: ObjectSelector::Target(Creature) }` tokens as
+`Effect::Move · what · ObjectSelector::Target · TargetSpec::Creature`;
+`Destroy { target: TargetSpec::Creature }` tokens as `Effect::Destroy ·
+target · TargetSpec::Creature`; `ApplyContinuous { affected:
+AffectedSpec::Target(Creature) }` tokens as `… affected · AffectedSpec::Target
+…`. In `cardsets/tla.rs` the three appear 106, 71 and 82 times.
+
+Questions as put:
+
+1. Verbs still binding `target: TargetSpec` (`Destroy`, `Airbend`,
+   `GainControl`, `DealDamage`, `CounterSpell`, `CounterAbility`,
+   `DiscardTargetPlayer`, `Earthbend`): take `what: ObjectSelector`?
+   (a) amend #412, (b) second PR in this Task after #412 merges,
+   (c) separate Task, (d) leave as is.
+2. `AffectedSpec`: fold into `ObjectSelector` (`Each { of }` becomes the one
+   "all of them" and `ApplyContinuous.affected` is an `ObjectSelector`), or
+   keep it as the payload of `Each` only?
+3. Value twins (`DealDamage`/`DealDamageValue`, `GainLife`/`GainLifeValue`,
+   `CreateToken`/`CreateTokensValue`, `AddMana`/`AddManaValue`): merge on
+   `EffectValue` in the same change as 1, separately, or not?
+4. `Chosen` beyond `Sacrifice` ("tap a creature you control"): wait for a
+   card that needs it (current), or generalize `select` now?
+
+Counterexample kept: `AirbendAll` excludes the clause's chosen target, not
+the source; `Each { another }` cannot say that, so folding it needs
+`Each { except: Target }` or it stays a one-rule verb.
