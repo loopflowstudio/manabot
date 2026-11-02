@@ -3,28 +3,34 @@
 //! as the condition of an `Effect::If`, never in a static, an `ActiveIf` or an
 //! intervening-if clause, where no resolution exists to ask. A source
 //! question (one that reads the ability's source permanent) may also be an
-//! intervening-if, never a static or an `ActiveIf`.
+//! intervening-if or the "as long as" of a static the source projects on
+//! itself (a type grant, a land-type overwrite), never a scoped static's
+//! condition or an `ActiveIf`.
 
 use managym::state::{
     ability::{Ability, Condition, Effect, TriggerCondition},
-    card::CardDefinition,
+    card::{CardDefinition, CardType, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 use managym_cards::catalog;
 use serde_json::Value;
 
 /// Where a condition sits: an `Effect::If` condition may ask anything; an
-/// intervening-if may also ask about its ability's source.
+/// intervening-if and a source-projected static's "as long as" may also ask
+/// about the source.
 #[derive(Clone, Copy, PartialEq)]
 enum Place {
     Elsewhere,
     InterveningIf,
+    SourceStatic,
     IfCondition,
 }
 
 /// Paths (JSON pointers) of resolution-only conditions outside an
 /// `Effect::If` condition, and of source questions outside an `Effect::If`
-/// condition or an intervening-if clause.
+/// condition, an intervening-if clause or a type grant's / land-type
+/// overwrite's own condition.
 fn misplaced_resolution_conditions(definition: &CardDefinition) -> Vec<String> {
     let value = serde_json::to_value(definition).expect("definitions serialize");
     let mut found = Vec::new();
@@ -69,6 +75,16 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                         }
                     }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
+                    ("TypeGrant" | "SetsLandType", Value::Object(ability)) => {
+                        for (part, inner) in ability {
+                            let place = if part == "condition" {
+                                Place::SourceStatic
+                            } else {
+                                place
+                            };
+                            walk(inner, format!("{child}/{part}"), place, found);
+                        }
+                    }
                     _ => walk(field, child, place, found),
                 }
             }
@@ -150,4 +166,35 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&source_active).len(), 1);
+
+    let fire = Condition::SourceCountersAtLeast {
+        kind: CounterKind::Fire,
+        count: 3,
+    };
+    let source_type_grant = CardDefinition {
+        name: "Witness".into(),
+        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+            scope: StaticScope::This,
+            types: vec![CardType::Creature],
+            subtypes: Vec::new(),
+            condition: Some(fire.clone()),
+        })],
+        ..Default::default()
+    };
+    assert!(misplaced_resolution_conditions(&source_type_grant).is_empty());
+
+    let source_buff = CardDefinition {
+        name: "Witness".into(),
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::This,
+            condition: Some(fire),
+            power: 1,
+            toughness: 1,
+            per_creature_type_max: None,
+            per_color_among: None,
+            per_graveyard_matching: None,
+        })],
+        ..Default::default()
+    };
+    assert_eq!(misplaced_resolution_conditions(&source_buff).len(), 1);
 }

@@ -180,8 +180,10 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
-    /// "if you control a [predicate] permanent".
-    ControlsMatching {
+    /// "if you control `count` or more [predicate] permanents" (`count` 1:
+    /// "if you control a [predicate]").
+    ControlsAtLeast {
+        count: usize,
         predicate: CardPredicate,
     },
     /// "as long as you have `count` or more unspent mana" (both pools).
@@ -267,7 +269,7 @@ impl Condition {
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
             | Condition::GraveyardAtLeast { .. }
-            | Condition::ControlsMatching { .. }
+            | Condition::ControlsAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn

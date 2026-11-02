@@ -27,12 +27,11 @@ pub enum Modification<N = i32> {
     /// Layer 4: adds creature subtypes ("becomes an Ally in addition to its
     /// other types").
     AddSubtypes(Vec<String>),
-    /// Layer 4: becomes an artifact creature; its printed P/T apply
-    /// (CR 301.7b; crew, CR 702.122a).
-    BecomeArtifactCreature,
-    /// Layer 4: becomes a creature in addition to its other types (an
-    /// earthbent land "becomes a 0/0 creature ... that's still a land", with
-    /// its base P/T and haste as records of the same timestamp).
+    /// Layer 4: becomes a creature in addition to its other types. A crewed
+    /// Vehicle "becomes an artifact creature" (CR 702.122a) with its printed
+    /// P/T, already an artifact; an earthbent land "becomes a 0/0 creature
+    /// ... that's still a land", with its base P/T and haste as records of
+    /// the same timestamp.
     BecomeCreature,
     /// Layer 6: gains keywords.
     AddKeywords(Keywords),
@@ -78,7 +77,6 @@ impl<N> Modification<N> {
     pub fn resolve(&self, mut amount: impl FnMut(&N) -> i32) -> Modification<i32> {
         match self {
             Self::AddSubtypes(subtypes) => Modification::AddSubtypes(subtypes.clone()),
-            Self::BecomeArtifactCreature => Modification::BecomeArtifactCreature,
             Self::BecomeCreature => Modification::BecomeCreature,
             Self::AddKeywords(keywords) => Modification::AddKeywords(*keywords),
             Self::LoseAllAbilities => Modification::LoseAllAbilities,

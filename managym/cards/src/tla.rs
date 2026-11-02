@@ -10,10 +10,10 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
-        CardDefinition, CardType, CardTypes, CounterThreshold, Keyword, Keywords, ManaAbility,
-        PowerCda, ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics,
-        SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
-        StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, ManaAbility, PowerCda,
+        ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
+        StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction,
+        StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
         TriggeredManaAbility,
     },
     mana::{Color, Mana, ManaCost, ManaUse},
@@ -957,6 +957,7 @@ fn avatar_destiny() -> CardDefinition {
                 scope: StaticScope::Attached,
                 types: Vec::new(),
                 subtypes: vec!["Avatar".into()],
+                condition: None,
             }),
         ],
         abilities: vec![Ability::Triggered {
@@ -2765,7 +2766,8 @@ fn earth_rumble_wrestlers() -> CardDefinition {
     let text_box = "Reach\nThis creature gets +1/+0 and has trample as long as you control a land creature or a land entered the battlefield under your control this turn.";
     let condition = || {
         Some(Condition::AnyOf(vec![
-            Condition::ControlsMatching {
+            Condition::ControlsAtLeast {
+                count: 1,
                 predicate: CardPredicate {
                     card_type: Some(CardType::Land),
                     card_types_any: vec![CardType::Creature],
@@ -3395,7 +3397,7 @@ fn fire_nation_warship() -> CardDefinition {
             crew: Some(2),
             effects: vec![Effect::until_end_of_turn(
                 AffectedSpec::Source,
-                Modification::BecomeArtifactCreature,
+                Modification::BecomeCreature,
             )],
             ..Default::default()
         }],
@@ -4655,7 +4657,7 @@ fn invasion_submersible() -> CardDefinition {
             mana_cost: ManaCost::parse("{3}"),
             waterbend: true,
             effects: vec![
-                Effect::indefinitely(AffectedSpec::Source, Modification::BecomeArtifactCreature),
+                Effect::indefinitely(AffectedSpec::Source, Modification::BecomeCreature),
                 Effect::PutCountersOnSource {
                     count: EffectValue::Fixed(3),
                     kind: CounterKind::PlusOnePlusOne,
@@ -6854,7 +6856,8 @@ fn raucous_audience() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             effects: vec![Effect::If {
-                condition: Condition::ControlsMatching {
+                condition: Condition::ControlsAtLeast {
+                    count: 1,
                     predicate: CardPredicate {
                         min_power: Some(4),
                         card_type: Some(CardType::Creature),
@@ -8398,7 +8401,7 @@ fn the_fire_nation_drill() -> CardDefinition {
                 crew: Some(2),
                 effects: vec![Effect::until_end_of_turn(
                     AffectedSpec::Source,
-                    Modification::BecomeArtifactCreature,
+                    Modification::BecomeCreature,
                 )],
                 ..Default::default()
             },
@@ -8553,7 +8556,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
                             ..Default::default()
                         },
                     }),
-                    Modification::BecomeArtifactCreature,
+                    Modification::BecomeCreature,
                 ),
                 Effect::until_end_of_turn(
                     AffectedSpec::Target(TargetSpec::PermanentYouControl {
@@ -8916,6 +8919,7 @@ fn toph_the_first_metalbender() -> CardDefinition {
             }),
             types: vec![CardType::Land],
             subtypes: Vec::new(),
+            condition: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -9085,7 +9089,7 @@ fn tundra_tank() -> CardDefinition {
             crew: Some(1),
             effects: vec![Effect::until_end_of_turn(
                 AffectedSpec::Source,
-                Modification::BecomeArtifactCreature,
+                Modification::BecomeCreature,
             )],
             ..Default::default()
         }],
@@ -9603,7 +9607,7 @@ fn war_balloon() -> CardDefinition {
                 crew: Some(3),
                 effects: vec![Effect::until_end_of_turn(
                     AffectedSpec::Source,
-                    Modification::BecomeArtifactCreature,
+                    Modification::BecomeCreature,
                 )],
                 ..Default::default()
             },
@@ -9616,9 +9620,14 @@ fn war_balloon() -> CardDefinition {
                 ..Default::default()
             },
         ],
-        statics: vec![StaticAbility::CreatureWithCounters(CounterThreshold {
-            kind: CounterKind::Fire,
-            count: 3,
+        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+            scope: StaticScope::This,
+            types: vec![CardType::Creature],
+            subtypes: Vec::new(),
+            condition: Some(Condition::SourceCountersAtLeast {
+                kind: CounterKind::Fire,
+                count: 3,
+            }),
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -10130,7 +10139,7 @@ fn zhao_the_moon_slayer() -> CardDefinition {
             StaticAbility::SetsLandType(StaticLandType {
                 predicate: nonbasic_land(),
                 subtype: "Mountain".into(),
-                while_counters: CounterThreshold {
+                condition: Condition::SourceCountersAtLeast {
                     kind: CounterKind::Conqueror,
                     count: 1,
                 },

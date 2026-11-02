@@ -147,6 +147,21 @@ preserves accepted decisions, dated proof limits and source history.
 - A new diagnostic must name the play, search, or Study behavior it explains
   and the runtime decision it can change.
 
+- Catalog-scale types (MTG-238, 2026-11-02): counters are sparse by kind,
+  keywords are a `Keyword` enum in a bitset, card sets are the `managym-cards`
+  crate on `managym-state`, and every duration-bound change is a continuous
+  effect record, never a `Permanent` field. A type change that preserves
+  serialization moves no digest; removing a serialized field moves the
+  state-hash contract and re-records every corpus that embeds state digests
+  (semantic-kernel, authored-match, both parity receipts, Academy fixtures).
+  Batch content-digest-moving changes: the `BecomeArtifactCreature` fold,
+  the keyword-list serialization and the count-to-condition rewrites moved
+  the content digest once, together.
+- Concurrent engine Tasks on one base (T6, MTG-235, MTG-236, MTG-238 on
+  `4c8324a59`) each rewrite the state types; a directory move in one forces
+  the rest across it. Sequence structural moves and vocabulary rewrites, or
+  publish the move first so the others rebase once.
+
 ## Architecture convergence (accepted 2026-07-17)
 
 - managym is the rules engine Manabot specifically needs, including

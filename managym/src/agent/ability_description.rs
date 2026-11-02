@@ -193,8 +193,15 @@ fn condition_text(condition: &Condition) -> String {
             "your graveyard has at least {count} {} cards",
             predicate_description(predicate, "matching")
         ),
-        Condition::ControlsMatching { predicate } => format!(
+        Condition::ControlsAtLeast {
+            count: 1,
+            predicate,
+        } => format!(
             "you control a {}",
+            predicate_description(predicate, "permanent")
+        ),
+        Condition::ControlsAtLeast { count, predicate } => format!(
+            "you control {count} or more {}s",
             predicate_description(predicate, "permanent")
         ),
         Condition::UnspentManaAtLeast { count } => {
@@ -735,9 +742,6 @@ fn continuous_description(
             "{subject} becomes {} in addition to its other types{until}",
             subtypes.join(" ")
         ),
-        Modification::BecomeArtifactCreature => {
-            format!("{subject} becomes an artifact creature{until}")
-        }
         Modification::BecomeCreature => {
             format!("{subject} becomes a creature in addition to its other types{until}")
         }

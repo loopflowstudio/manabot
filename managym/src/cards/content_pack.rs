@@ -13,6 +13,7 @@ use std::{
 };
 
 use super::fixtures;
+use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, Effect, PaymentCost, TriggerCondition, TriggerSubject},
     card::{Card, CardDefId, CardDefinition},
@@ -217,6 +218,9 @@ impl ContentPack {
 
     /// Immutable public characteristics reused by every capture of this content
     /// identity. Rules programs stay native and are not reconstructed from text.
+    /// Keywords take the observation's object shape (as card and permanent
+    /// rows do), not the definition's own list, so the capture contract
+    /// (`DECISION_CAPTURE_VERSION`) does not follow the content encoding.
     pub fn public_definition(&self, id: CardDefId) -> Option<&serde_json::Value> {
         self.public_definitions
             .get_or_init(|| {
@@ -226,7 +230,8 @@ impl ContentPack {
                             "name": card.name, "text_box": card.text_box,
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
-                            "keywords": card.keywords, "power": card.power,
+                            "keywords": KeywordData::from_keywords(&card.keywords),
+                            "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
                             "ward": card.ward().map(PaymentCost::mana_cost),
                             "is_token": card.is_token,

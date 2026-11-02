@@ -196,9 +196,10 @@ impl Keyword {
     }
 }
 
-/// A set of keywords. Serialized as every keyword's name to whether it is
-/// present, in [`Keyword::ALL`] order, so a definition's content digest and
-/// learning tokens read the same shape whatever the set holds.
+/// A set of keywords. Serialized as the sequence of the keywords present, in
+/// [`Keyword::ALL`] order (as `Counters` lists its present kinds), so a
+/// definition's content digest and learning tokens carry only what the set
+/// holds and a new keyword changes no other card's encoding.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Keywords(u64);
 
@@ -254,12 +255,7 @@ impl fmt::Debug for Keywords {
 
 impl serde::Serialize for Keywords {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Keywords", Keyword::ALL.len())?;
-        for keyword in Keyword::ALL {
-            state.serialize_field(keyword.name(), &self.has(keyword))?;
-        }
-        state.end()
+        serializer.collect_seq(self.iter())
     }
 }
 
@@ -322,8 +318,11 @@ pub struct StaticPtBuff {
 }
 
 /// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
-/// addition to their other types" (Toph, the First Metalbender). It grants no
-/// abilities. Scopes read printed types only, so type computation never
+/// addition to their other types [as long as condition]" (Toph, the First
+/// Metalbender; War Balloon's "as long as it has three or more fire counters
+/// on it, it's an artifact creature"). It grants no abilities. Scopes read
+/// printed types only, and the condition is asked of the source permanent
+/// (its counters, its controller's permanents), so type computation never
 /// recurses.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticTypeGrant {
@@ -333,6 +332,10 @@ pub struct StaticTypeGrant {
     /// types").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes: Vec<String>,
+    /// "as long as ...", asked of the source's controller with the source as
+    /// its permanent; absent for an unconditional grant.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<Condition>,
 }
 
 /// "Enchanted creature loses all abilities and is a [creature_types] with base
@@ -363,12 +366,14 @@ pub struct StaticKeywordGrant {
 }
 
 /// [`StaticAbility::SetsLandType`]: matching lands become `subtype` while
-/// the source has its counters.
+/// the condition holds for the source (Zhao, the Moon Slayer: "as long as
+/// Zhao has a conqueror counter on it").
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticLandType {
     pub predicate: CardPredicate,
     pub subtype: String,
-    pub while_counters: CounterThreshold,
+    /// A source question (counters): asked with the source as its permanent.
+    pub condition: Condition,
 }
 
 /// A static triggered-ability grant (CR 613.1f layer 6): "[scope] have
@@ -377,13 +382,6 @@ pub struct StaticLandType {
 pub struct StaticTriggeredGrant {
     pub scope: StaticScope,
     pub ability: Box<Ability>,
-}
-
-/// "As long as this has N or more [kind] counters on it" (War Balloon).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct CounterThreshold {
-    pub kind: CounterKind,
-    pub count: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -672,10 +670,9 @@ pub enum StaticAbility {
     /// An attack, block or untap restriction this card projects while on the
     /// battlefield.
     Restriction(StaticRestriction),
-    /// "As long as this has N or more [kind] counters on it, it's an artifact
-    /// creature" (CR 613.1d), read by `Permanent::animated_creature`.
-    CreatureWithCounters(CounterThreshold),
-    /// A type grant this card projects while on the battlefield.
+    /// A type grant this card projects while on the battlefield, on itself
+    /// ("as long as this has three or more fire counters on it, it's an
+    /// artifact creature") or on what its scope covers.
     TypeGrant(StaticTypeGrant),
     /// "This creature can attack as though it didn't have defender" while
     /// the condition holds for its controller (Platypus-Bear).
@@ -872,13 +869,6 @@ impl CardDefinition {
     pub fn cost_reduction_if_targets(&self) -> Option<&TargetCostReduction> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::CostsLessIfTargets(reduction) => Some(reduction),
-            _ => None,
-        })
-    }
-
-    pub fn creature_with_counters(&self) -> Option<&CounterThreshold> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CreatureWithCounters(threshold) => Some(threshold),
             _ => None,
         })
     }

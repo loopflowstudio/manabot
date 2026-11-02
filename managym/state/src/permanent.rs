@@ -184,13 +184,6 @@ impl Permanent {
         }
     }
 
-    /// Whether its own counter-threshold static (War Balloon) makes it a
-    /// creature. `Game::characteristics` adds type-changing records.
-    pub fn creature_by_counters(&self, card: &Card) -> bool {
-        card.creature_with_counters()
-            .is_some_and(|threshold| self.counter_count(threshold.kind) >= threshold.count)
-    }
-
     /// Printed keywords plus keyword counters. An input to
     /// `Game::characteristics`, which applies continuous effects and static
     /// grants in layer 6.

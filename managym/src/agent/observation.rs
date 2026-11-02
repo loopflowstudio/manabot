@@ -417,7 +417,6 @@ impl ContinuousEffectData {
                 data.subtypes = subtypes.clone();
                 "AddSubtypes"
             }
-            Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
             Modification::BecomeCreature => "BecomeCreature",
             Modification::AddKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();

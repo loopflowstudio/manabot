@@ -70,10 +70,10 @@ use managym::{
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
-            CounterThreshold, Keyword, Keywords, PowerCda, Restriction, SacrificeCost,
-            SetCharacteristics, SpellCostReduction, StaticAbility, StaticKeywordGrant,
-            StaticLandType, StaticPtBuff, StaticRestriction, StaticScope, StaticTriggeredGrant,
-            StaticTypeGrant, TargetCostReduction,
+            Keyword, Keywords, PowerCda, Restriction, SacrificeCost, SetCharacteristics,
+            SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
+            StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant,
+            TargetCostReduction,
         },
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -110,8 +110,8 @@ enum Seen {
 
 /// Keyword → (card column, permanent column). Every keyword is evergreen
 /// today, so each has columns; the first non-evergreen keyword names its fact
-/// row here instead of columns. The token is the keyword's name on the
-/// definition.
+/// row here instead of columns. The token is the `Keyword::<name>` variant in
+/// the definition's keyword list, present only when the keyword is.
 fn keyword_columns(keywords: Keywords) -> [(&'static str, bool, usize, usize); 14] {
     Keyword::ALL.map(|keyword| {
         let (card, permanent) = match keyword {
@@ -226,9 +226,6 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::AddSubtypes",
             Seen::Fact(FactKind::AddedSubtype),
         ),
-        Modification::BecomeArtifactCreature => {
-            ("Modification::BecomeArtifactCreature", Seen::Permanent(8))
-        }
         Modification::BecomeCreature => ("Modification::BecomeCreature", Seen::Permanent(8)),
         Modification::AddKeywords(_) => (
             "Modification::AddKeywords",
@@ -294,7 +291,6 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     let permanent = |modification| (false, modification);
     vec![
         permanent(Modification::AddSubtypes(vec!["Ally".into()])),
-        permanent(Modification::BecomeArtifactCreature),
         permanent(Modification::BecomeCreature),
         permanent(Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))),
         permanent(Modification::LoseAllAbilities),
@@ -317,7 +313,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 17;
+const MODIFICATION_VARIANTS: usize = 16;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -1023,7 +1019,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::Always => "Condition::Always",
         Condition::CardsDrawnAtLeast { .. } => "Condition::CardsDrawnAtLeast",
         Condition::GraveyardAtLeast { .. } => "Condition::GraveyardAtLeast",
-        Condition::ControlsMatching { .. } => "Condition::ControlsMatching",
+        Condition::ControlsAtLeast { .. } => "Condition::ControlsAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
@@ -1051,7 +1047,8 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 1,
             predicate: CardPredicate::creature(),
         },
-        Condition::ControlsMatching {
+        Condition::ControlsAtLeast {
+            count: 1,
             predicate: CardPredicate::creature(),
         },
         Condition::UnspentManaAtLeast { count: 3 },
@@ -1267,13 +1264,6 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker",
         ),
-        StaticAbility::CreatureWithCounters(_) => witnessed(
-            "StaticAbility::CreatureWithCounters",
-            Seen::Via("the counter fact rows and the creature type column once it holds"),
-            "War Balloon",
-            "tla",
-            "war_balloon_flies_once_it_has_three_fire_counters",
-        ),
         StaticAbility::TypeGrant(_) => witnessed(
             "StaticAbility::TypeGrant",
             Seen::Via("the granted permanents' card type columns"),
@@ -1424,14 +1414,14 @@ fn static_witnesses() -> Vec<StaticAbility> {
             kind: Restriction::DoesntUntap,
             unless: None,
         }),
-        StaticAbility::CreatureWithCounters(CounterThreshold {
-            kind: CounterKind::Fire,
-            count: 3,
-        }),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
-            types: vec![CardType::Land],
+            types: vec![CardType::Creature],
             subtypes: Vec::new(),
+            condition: Some(Condition::SourceCountersAtLeast {
+                kind: CounterKind::Fire,
+                count: 3,
+            }),
         }),
         StaticAbility::AttacksDespiteDefender(Condition::YourTurn),
         StaticAbility::TriggersAdditionalTime(CardPredicate::subtype("Ally")),
@@ -1439,7 +1429,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::SetsLandType(StaticLandType {
             predicate: CardPredicate::creature(),
             subtype: "Mountain".into(),
-            while_counters: CounterThreshold {
+            condition: Condition::SourceCountersAtLeast {
                 kind: CounterKind::Conqueror,
                 count: 1,
             },
@@ -1743,12 +1733,26 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
             keywords,
             ..Default::default()
         };
+        let keyword_token = (TokenKind::Variant, name_value(&format!("Keyword::{name}")));
         let tokens = tokens_of(&definition);
         let at = tokens
             .iter()
-            .position(|token| *token == (TokenKind::Field, name_value(name)))
+            .position(|token| *token == (TokenKind::Field, name_value("keywords")))
             .unwrap();
-        assert_eq!(tokens[at + 1], (TokenKind::Boolean, 1), "{name}");
+        assert_eq!(
+            &tokens[at + 1..at + 4],
+            [
+                (TokenKind::Structure, name_value("[")),
+                keyword_token,
+                (TokenKind::Structure, name_value("/[")),
+            ],
+            "{name}"
+        );
+        let bare = tokens_of(&CardDefinition {
+            name: "Witness".into(),
+            ..Default::default()
+        });
+        assert!(!bare.contains(&keyword_token), "{name}");
     }
 }
 

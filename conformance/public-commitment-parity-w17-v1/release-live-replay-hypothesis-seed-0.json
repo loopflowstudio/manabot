@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "d09281c69b27b43d819da0982f87af746fc546be1f532c22388d470c5380e6cc",
+    "authority_receipt_sha256": "56821006b3f3e2ecb49ecbf7a20e6f928041cd1df3d1dfcad21c2dd5ed623456",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "d09281c69b27b43d819da0982f87af746fc546be1f532c22388d470c5380e6cc"
+          "sha256": "56821006b3f3e2ecb49ecbf7a20e6f928041cd1df3d1dfcad21c2dd5ed623456"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "8b7ed4f4621e316cc01be0e0b5dca240271586a201ea63deace861bf3e785d94"
+          "sha256": "34b494150925063d8212df8f46d2307d88a5227d0d49d9c2ac44963548ac8451"
         },
         {
           "path": "academy/server.py",
@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "f3c195b9e6eeab8228391cc9a33087558ade57ff4944af352f32d2a3ed4eff64"
+          "sha256": "435af5918d3589392dc9bac1aebb95de022556f0b3b158d96f180a8bdb57ee35"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -128,7 +128,7 @@
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "13a022ebd3f29cb3a3d33fa581c7ef7f165fa79ce5b738cbedb247ea61dde483"
+      "sha256": "fbcd234f945b3f56b857018fbfcab32ccb5e1ef84f1ffab3dec7ef7b80a66a5b"
     },
     "seed": 0,
     "semantic_decision_version": 7
