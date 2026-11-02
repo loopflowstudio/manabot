@@ -495,27 +495,22 @@ requirement, it needs its own Task.
 - T6's head (`2c1ba169f`) is unpushed, so measuring it on CI needs its commit
   reachable from origin; pushed as a plain ref under `refs/engine-budget/`
   for the dispatch and deleted afterwards (not a branch, no PR).
-- Second reconciliation (2026-11-02, headless, `code` graph realign step):
-  `.lf/wave/engine/MEMORY.md` is left unwritten even though this is a Graph
-  step, because the lesson it would record (A/B against a committed reference
-  commit, not committed absolute numbers) is a draft decision awaiting Jack
-  Heart's review; the proposal stays in the plan. The engine Wave has no
-  child Waves to read (only `GOAL.md` and `MEMORY.md` under it).
-- Concept review (2026-11-02, headless, `code` graph): the two "draft,
-  awaiting review" decisions are read as implied by the accepted outcome
-  plus the runner evidence (A/B against a committed reference commit; native
-  `Env::step` random play), so the review did not return Blocked on them;
-  Jack Heart's PR review confirms them. The design changed in one place:
-  recording the reference from the PR's own compare run (artifact plus
-  `record --reason`), with a kept speedup as a documented reason to move the
-  reference. `measure` stays for commits without a PR. Wave memory still
-  unwritten: this step does not maintain `.lf/wave/`.
-- Implement (2026-11-02, headless, `code` graph): the artifact is named
-  `engine-budget` in both modes (the measure mode's `-<commit>` suffix is
-  dropped) so the documented download command has one form; the run id
-  already identifies a measurement. `measurement.json` carries the full
-  `lscpu` model name (e.g. "AMD EPYC 7763 64-Core Processor") rather than
-  the hand-shortened "AMD EPYC 7763" of the first recording; the string is
-  orientation only, never compared. Compare's FAIL hint leaves `<run-id>`
-  as a placeholder instead of reading `GITHUB_RUN_ID`, so the line reads the
-  same in CI and in tests.
+- Realign, concept review and implement (2026-11-02, headless, `code`
+  graph): `.lf/wave/engine/MEMORY.md` stays unwritten because no step so far
+  maintains `.lf/wave/`; the proposal is in the plan. The two formerly draft
+  decisions (A/B against a committed reference commit; native `Env::step`
+  random play) are read as implied by the accepted outcome plus the runner
+  evidence, so the review did not return Blocked; Jack Heart's PR review
+  confirms them. One design change: the reference is recorded from the PR's
+  own compare run (artifact plus `record --reason`), a kept speedup being a
+  documented reason to move it; `measure` stays for commits without a PR.
+  The artifact is named `engine-budget` in both modes (the run id identifies
+  a measurement). `measurement.json` carries the full `lscpu` model name
+  rather than the hand-shortened "AMD EPYC 7763" of the first recording; the
+  string is orientation only, never compared. Compare's FAIL hint leaves
+  `<run-id>` as a placeholder instead of reading `GITHUB_RUN_ID`, so the line
+  reads the same in CI and in tests.
+- Compress (2026-11-02, headless): `compare` and `record` read run
+  directories with the job's fixed file names instead of four file flags,
+  with the job's own paths as defaults; the uploaded artifact therefore also
+  contains the `reference/` run, which `record` ignores.

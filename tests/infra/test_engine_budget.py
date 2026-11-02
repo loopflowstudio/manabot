@@ -33,6 +33,7 @@ BASE = {
     },
     "bench_steps": {"steps_per_s": 5000.0, "steps": 99923, "games": 512, "digest": 44},
 }
+RUNNER = "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release"
 
 
 def _run(*args: str | Path) -> tuple[int, str]:
@@ -42,16 +43,15 @@ def _run(*args: str | Path) -> tuple[int, str]:
     return completed.returncode, completed.stdout + completed.stderr
 
 
-def _write_results(
+def _write_run(
     directory: Path,
-    name: str,
     *,
     scale: float = 1.0,
     search_digests: tuple[int, int, int] = (11, 22, 33),
     steps_digest: int = 44,
-) -> tuple[Path, Path]:
-    """Benchmark output lines where `scale` multiplies every duration."""
-    search = directory / f"{name}_search.jsonl"
+) -> Path:
+    """A run directory of both benchmarks' output; `scale` multiplies every duration."""
+    directory.mkdir(parents=True)
     lines = [
         json.dumps(
             {
@@ -68,9 +68,8 @@ def _write_results(
     lines.append(
         json.dumps({"worst_overall_s": 10.0 * scale, "total_overall_s": 300.0 * scale})
     )
-    search.write_text("\n".join(lines) + "\n")
-    steps = directory / f"{name}_steps.jsonl"
-    steps.write_text(
+    (directory / "bench_search.jsonl").write_text("\n".join(lines) + "\n")
+    (directory / "bench_steps.jsonl").write_text(
         json.dumps(
             {
                 "games": 512,
@@ -83,7 +82,23 @@ def _write_results(
         )
         + "\n"
     )
-    return search, steps
+    return directory
+
+
+def _write_artifact(directory: Path, *, commit: str, runner: str, scale: float) -> Path:
+    """What `gh run download --name engine-budget` leaves: a run plus measurement.json."""
+    _write_run(directory, scale=scale)
+    (directory / "measurement.json").write_text(
+        json.dumps(
+            {
+                "commit": commit,
+                "date": "2026-11-03",
+                "run": "https://github.com/loopflowstudio/manabot/actions/runs/1",
+                "runner": runner,
+            }
+        )
+    )
+    return directory
 
 
 def _compare(
@@ -98,41 +113,24 @@ def _compare(
     """A slower runner than the recording (reference at 1.4x) hosts both runs."""
     baseline = tmp_path / "baseline.json"
     baseline.write_text(json.dumps(BASE))
-    reference_search, reference_steps = _write_results(
-        tmp_path, "reference", scale=reference_scale, search_digests=reference_digests
-    )
-    search, steps = _write_results(
-        tmp_path,
-        "candidate",
+    artifact = _write_run(
+        tmp_path / "artifact",
         scale=scale,
         search_digests=search_digests,
         steps_digest=steps_digest,
     )
+    reference = _write_run(
+        artifact / "reference", scale=reference_scale, search_digests=reference_digests
+    )
     return _run(
         "compare",
-        "--baseline", baseline,
-        "--reference-search", reference_search,
-        "--reference-steps", reference_steps,
-        "--search", search,
-        "--steps", steps,
-    )  # fmt: skip
-
-
-def _write_artifact(directory: Path, *, commit: str, runner: str, scale: float) -> Path:
-    """What `gh run download --name engine-budget` leaves: both outputs and measurement.json."""
-    directory.mkdir()
-    _write_results(directory, "bench", scale=scale)
-    (directory / "measurement.json").write_text(
-        json.dumps(
-            {
-                "commit": commit,
-                "date": "2026-11-03",
-                "run": "https://github.com/loopflowstudio/manabot/actions/runs/1",
-                "runner": runner,
-            }
-        )
+        "--baseline",
+        baseline,
+        "--artifact",
+        artifact,
+        "--reference",
+        reference,
     )
-    return directory
 
 
 def test_within_tolerance_on_a_slower_runner_passes(tmp_path: Path) -> None:
@@ -187,9 +185,8 @@ def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
 
 def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
-    runner = "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release"
     artifact = _write_artifact(
-        tmp_path / "first", commit="0123456789abcdef", runner=runner, scale=1.3
+        tmp_path / "first", commit="0123456789abcdef", runner=RUNNER, scale=1.3
     )
     code, output = _run(
         "record", "--baseline", baseline, "--artifact", artifact,
@@ -201,7 +198,7 @@ def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> 
         "commit": "0123456789abcdef",
         "date": "2026-11-03",
         "run": "https://github.com/loopflowstudio/manabot/actions/runs/1",
-        "runner": runner,
+        "runner": RUNNER,
         "reason": "T6 adds Sagas to the curated decks",
     }
     assert recorded["tolerance"] == 0.10
@@ -231,9 +228,9 @@ def test_record_adopts_a_downloaded_artifact_with_its_reason(tmp_path: Path) -> 
 def test_record_refuses_a_directory_without_a_measurement(tmp_path: Path) -> None:
     """Hand-assembled output is not a recording: the job's measurement.json names the run."""
     baseline = tmp_path / "baseline.json"
-    _write_results(tmp_path, "bench")
+    artifact = _write_run(tmp_path / "artifact")
     code, output = _run(
-        "record", "--baseline", baseline, "--artifact", tmp_path, "--reason", "x"
+        "record", "--baseline", baseline, "--artifact", artifact, "--reason", "x"
     )
     assert code == 1, output
     assert "not an Engine Budget artifact" in output

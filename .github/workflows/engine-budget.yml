@@ -130,14 +130,10 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # The script's defaults are the two run directories written above.
       - name: Compare the candidate with the reference
         if: env.REFERENCE != ''
-        run: |
-          uv run --no-project --python 3.12 python scripts/engine_budget.py compare \
-            --reference-search .cache/engine-budget/reference/bench_search.jsonl \
-            --reference-steps .cache/engine-budget/reference/bench_steps.jsonl \
-            --search .cache/engine-budget/bench_search.jsonl \
-            --steps .cache/engine-budget/bench_steps.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
+        run: uv run --no-project --python 3.12 python scripts/engine_budget.py compare | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the measurement
         if: always()

@@ -4,18 +4,21 @@ The two release benchmarks under ``managym/examples`` print JSON lines:
 ``bench_search`` one line per seeded game (worst, median and total Search-64
 reply time plus a digest of its search results) and a summary line;
 ``bench_steps`` one line for its headless random-play workload (steps per
-second and a digest of every decision). ``managym/perf/baseline.json`` names a
-reference commit, the digests both workloads must reproduce, and the figures
-the reference measured when it was recorded.
+second and a digest of every decision). A *run directory* holds one run of
+both as ``bench_search.jsonl`` and ``bench_steps.jsonl``; the Engine Budget
+job writes the candidate's to ``.cache/engine-budget`` (with
+``measurement.json`` naming the commit, date, run and runner) and the
+reference's to ``.cache/engine-budget/reference``, and uploads the whole
+directory as the ``engine-budget`` artifact.
 
-GitHub-hosted runners land on different CPU generations (an identical engine
-measured 6.8k and 10.3k steps/s on two of them), so wall time is never
-compared across runs. CI rebuilds the reference commit with the current
-benchmarks on the same runner and ``compare`` holds the candidate to the
-reference's fresh timings within the tolerance, and both to the committed
-digests. Every run uploads its candidate measurement as the ``engine-budget``
-artifact (both outputs plus ``measurement.json`` naming the commit, date, run
-and runner); ``record`` rewrites the file from a downloaded artifact with the
+``managym/perf/baseline.json`` names a reference commit, the digests both
+workloads must reproduce, and the figures the reference measured when it was
+recorded. GitHub-hosted runners land on different CPU generations (an
+identical engine measured 6.8k and 10.3k steps/s on two of them), so wall time
+is never compared across runs: CI rebuilds the reference commit with the
+current benchmarks on the same runner and ``compare`` holds the candidate to
+the reference's fresh timings within the tolerance, and both to the committed
+digests. ``record`` rewrites the file from a downloaded artifact with the
 reason that moves the reference. Stdlib only, so CI runs it without syncing
 the project.
 """
@@ -74,6 +77,14 @@ class Baseline(TypedDict):
 
 
 @dataclass(frozen=True)
+class Run:
+    """One run of both benchmarks, read from a run directory."""
+
+    search: SearchResult
+    steps: StepsResult
+
+
+@dataclass(frozen=True)
 class Check:
     """One budget line: ``failure`` is empty when the measurement is within it."""
 
@@ -81,6 +92,9 @@ class Check:
     expected: str
     measured: str
     failure: str
+
+
+# --- Reading -----------------------------------------------------------------
 
 
 def _lines(path: Path) -> list[dict[str, Any]]:
@@ -125,18 +139,20 @@ def read_steps(path: Path) -> StepsResult:
     )
 
 
-def load_baseline(path: Path) -> Baseline:
-    # The file is written by ``record`` below, so its shape is trusted.
-    return cast(Baseline, json.loads(path.read_text()))
+def read_run(directory: Path) -> Run:
+    return Run(
+        search=read_search(directory / "bench_search.jsonl"),
+        steps=read_steps(directory / "bench_steps.jsonl"),
+    )
 
 
-def read_measurement(path: Path) -> Measurement:
+def read_measurement(directory: Path) -> Measurement:
     """The job's ``measurement.json``; a hand-made directory fails by name."""
+    path = directory / "measurement.json"
     if not path.is_file():
         raise SystemExit(
             f"{path}: not an Engine Budget artifact (download one with "
-            "`gh run download <run-id> --name engine-budget --dir "
-            f"{path.parent}`)"
+            f"`gh run download <run-id> --name engine-budget --dir {directory}`)"
         )
     row = json.loads(path.read_text())
     return Measurement(
@@ -145,6 +161,14 @@ def read_measurement(path: Path) -> Measurement:
         run=str(row["run"]),
         runner=str(row["runner"]),
     )
+
+
+def load_baseline(path: Path) -> Baseline:
+    # The file is written by ``record`` below, so its shape is trusted.
+    return cast(Baseline, json.loads(path.read_text()))
+
+
+# --- Checks ------------------------------------------------------------------
 
 
 def _slower(name: str, reference: float, measured: float, tolerance: float) -> Check:
@@ -177,50 +201,46 @@ def _same(name: str, expected: int | None, measured: int | None) -> Check:
     )
 
 
-def digest_checks(
-    label: str, baseline: Baseline, search: SearchResult, steps: StepsResult
-) -> list[Check]:
+def digest_checks(label: str, baseline: Baseline, run: Run) -> list[Check]:
     """Both workloads reproduce the committed digests, seed set included."""
     expected_seeds = baseline["bench_search"]["seeds"]
+    seeds = run.search["seeds"]
     expected_steps = baseline["bench_steps"]
     checks = [
         _same(
             f"{label} search seed {seed} digest",
             expected_seeds[seed]["digest"] if seed in expected_seeds else None,
-            search["seeds"][seed]["digest"] if seed in search["seeds"] else None,
+            seeds[seed]["digest"] if seed in seeds else None,
         )
-        for seed in sorted(set(expected_seeds) | set(search["seeds"]), key=int)
+        for seed in sorted(set(expected_seeds) | set(seeds), key=int)
     ]
     checks += [
-        _same(f"{label} steps games", expected_steps["games"], steps["games"]),
-        _same(f"{label} steps count", expected_steps["steps"], steps["steps"]),
-        _same(f"{label} steps digest", expected_steps["digest"], steps["digest"]),
+        _same(f"{label} steps games", expected_steps["games"], run.steps["games"]),
+        _same(f"{label} steps count", expected_steps["steps"], run.steps["steps"]),
+        _same(f"{label} steps digest", expected_steps["digest"], run.steps["digest"]),
     ]
     return checks
 
 
-def timing_checks(
-    tolerance: float,
-    reference_search: SearchResult,
-    reference_steps: StepsResult,
-    search: SearchResult,
-    steps: StepsResult,
-) -> list[Check]:
+def timing_checks(tolerance: float, reference: Run, candidate: Run) -> list[Check]:
     """Candidate timings against the reference measured on the same machine."""
     return [
         _slower(
             "search worst reply",
-            reference_search["worst_s"],
-            search["worst_s"],
+            reference.search["worst_s"],
+            candidate.search["worst_s"],
             tolerance,
         ),
         _slower(
-            "search total", reference_search["total_s"], search["total_s"], tolerance
+            "search total",
+            reference.search["total_s"],
+            candidate.search["total_s"],
+            tolerance,
         ),
         _faster(
             "steps throughput",
-            reference_steps["steps_per_s"],
-            steps["steps_per_s"],
+            reference.steps["steps_per_s"],
+            candidate.steps["steps_per_s"],
             tolerance,
         ),
     ]
@@ -256,13 +276,14 @@ def render(baseline: Baseline, rows: list[Check]) -> str:
     return "\n".join(lines)
 
 
+# --- Commands ----------------------------------------------------------------
+
+
 def compare(args: argparse.Namespace) -> int:
     baseline = load_baseline(args.baseline)
-    reference_search = read_search(args.reference_search)
-    reference_steps = read_steps(args.reference_steps)
-    search = read_search(args.search)
-    steps = read_steps(args.steps)
-    rows = digest_checks("reference", baseline, reference_search, reference_steps)
+    reference = read_run(args.reference)
+    candidate = read_run(args.artifact)
+    rows = digest_checks("reference", baseline, reference)
     if any(row.failure for row in rows):
         # The committed digests do not describe the reference commit, so the
         # file is wrong, not the candidate; say so before any timing.
@@ -275,17 +296,16 @@ def compare(args: argparse.Namespace) -> int:
                 "re-record from the reference commit",
             ),
         )
-    rows += digest_checks("candidate", baseline, search, steps)
-    rows += timing_checks(
-        baseline["tolerance"], reference_search, reference_steps, search, steps
-    )
+    rows += digest_checks("candidate", baseline, candidate)
+    rows += timing_checks(baseline["tolerance"], reference, candidate)
     print(render(baseline, rows))
     return 1 if any(row.failure for row in rows) else 0
 
 
 def record(args: argparse.Namespace) -> int:
     """Adopt a downloaded artifact's candidate as the reference."""
-    measurement = read_measurement(args.artifact / "measurement.json")
+    measurement = read_measurement(args.artifact)
+    candidate = read_run(args.artifact)
     # The tolerance is a decision of its own, edited in the file; a new
     # recording keeps it.
     tolerance = (
@@ -294,8 +314,8 @@ def record(args: argparse.Namespace) -> int:
     baseline = Baseline(
         tolerance=tolerance,
         reference=Reference(**measurement, reason=args.reason),
-        bench_search=read_search(args.artifact / "bench_search.jsonl"),
-        bench_steps=read_steps(args.artifact / "bench_steps.jsonl"),
+        bench_search=candidate.search,
+        bench_steps=candidate.steps,
     )
     args.baseline.write_text(json.dumps(baseline, indent=2) + "\n")
     print(f"Recorded {args.baseline} at {measurement['commit'][:9]}: {args.reason}")
@@ -307,33 +327,31 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     compare_command = commands.add_parser(
         "compare",
-        help="candidate output against the reference commit's output from the same runner",
-    )
-    compare_command.add_argument("--baseline", type=Path, default=BASELINE)
-    compare_command.add_argument("--reference-search", type=Path, required=True)
-    compare_command.add_argument("--reference-steps", type=Path, required=True)
-    compare_command.add_argument(
-        "--search", type=Path, required=True, help="candidate bench_search output"
+        help="the candidate against the reference commit's run from the same runner",
     )
     compare_command.add_argument(
-        "--steps", type=Path, required=True, help="candidate bench_steps output"
+        "--reference",
+        type=Path,
+        default=ARTIFACT / "reference",
+        help="reference run directory",
     )
     compare_command.set_defaults(handler=compare)
     record_command = commands.add_parser(
-        "record",
-        help="rewrite the baseline from a downloaded Engine Budget artifact",
-    )
-    record_command.add_argument("--baseline", type=Path, default=BASELINE)
-    record_command.add_argument(
-        "--artifact",
-        type=Path,
-        default=ARTIFACT,
-        help="directory `gh run download --name engine-budget` wrote to",
+        "record", help="rewrite the baseline from a downloaded Engine Budget artifact"
     )
     record_command.add_argument(
         "--reason", required=True, help="why the reference moves"
     )
     record_command.set_defaults(handler=record)
+    for command in (compare_command, record_command):
+        command.add_argument("--baseline", type=Path, default=BASELINE)
+        command.add_argument(
+            "--artifact",
+            type=Path,
+            default=ARTIFACT,
+            help="candidate run directory: the job's output, or where "
+            "`gh run download --name engine-budget` wrote it",
+        )
     args = parser.parse_args(argv)
     return int(args.handler(args))
 
