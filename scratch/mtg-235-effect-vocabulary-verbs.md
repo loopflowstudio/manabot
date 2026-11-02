@@ -8,8 +8,8 @@ The historical review page is retained at that commit; `scratch/concept-review.h
 shows the current headless review.
 
 Status: amendment verified for publication. Existing edits from the interrupted
-Claude run are preserved in `98031f50f`; the tested amendment is `24b8a8a8b`,
-synced with main `29660d00`. Final-source automated acceptance passed on
+Claude run are preserved in `98031f50f`; the tested amendment is `059d37b01`,
+synced with main `230b2f563`. Final-source automated acceptance passed on
 2026-11-02; amended publication is the current operation. Subsequent delivery
 and MTG-225 integration remain pending.
 
@@ -99,18 +99,19 @@ shrinks by more than half; these remaining rules are outside the accepted cut.
 
 ## Acceptance and remaining work
 
-- Final-source acceptance passed: debug Rust suite 856 passed / 2 ignored,
+- Final-source acceptance passed: debug Rust suite 862 passed / 2 ignored,
   including all 485 directed card tests unchanged, selector/token guards,
   choice-lifetime tests and semantic conformance reproduction. Python consumers,
   native/Python observation parity, LLM rendering, world admission, monitoring,
-  model and replay/parity suites: 391 passed / 1 skipped.
+  model and disclosure suites: 411 passed / 1 skipped; the sync resolver
+  separately verified the two regenerated parity corpora with 7 passing tests.
 - Refreshed semantic conformance, authored-match receipt, both parity corpora,
   five Academy fixtures and current belief receipt pins against the rebuilt
   extension. Historical receipts are unchanged. w17 and policy input v5 stay
   open in place; WORLDS.md records changed content/tokens.
-- Academy type checking and build passed; decision-label Vitest 2 passed;
+- Academy type checking and build passed; decision-label/decklist Vitest 8 passed;
   headless choice-navigation, Learn and trigger-order recovery 10 passed.
-  Retained final-source clippy (all targets/features), fmt and Ruff pass.
+  Final-source clippy (all targets/features) and fmt pass; retained Ruff passes.
   The installed cp312 extension matches the rebuilt wheel byte for byte.
   Publication logs remain local under `.runs/publish-mtg-235/`. Delivery remains
   separate from publication; old-head CI is not used as amendment proof.
@@ -146,7 +147,7 @@ its final source (142 commands, no divergence). The complete recovery log is Cod
 `90147cf1e73340099716c86f29261341`); it preserves rebuild hashes and commands.
 Compression evidence is retained in session `session_068a02853c1f42b599b854fb7f585e0a`.
 
-Check-result: 2026-11-02 — final-source acceptance at `24b8a8a8b`: Rust 856 passed / 2 ignored; Python 391 passed / 1 skipped; browser 10 passed; UI checks/build and 2 label tests passed; `git diff --check` clean. MTG-225 integration remains pending.
+Check-result: 2026-11-02 — final-source acceptance at `059d37b01`: Rust 862 passed / 2 ignored; Python 411 passed / 1 skipped plus 7 parity tests; browser 10 passed; UI checks/build and 8 label/decklist tests passed; `git diff --check` clean. MTG-225 integration remains pending.
 
 ## Concept review after recovery — 2026-11-02
 
@@ -179,3 +180,13 @@ choice state. Changed content identity requires current w17 evidence while
 historical receipts and frozen observation widths stay intact. At this review boundary, final-head acceptance was still pending; the publication
 checks recorded above now establish it. This concept review itself added no
 test-pass or delivery claim; MTG-225 integration remains pending.
+
+## Publication sync — 2026-11-02
+
+Main advanced to `230b2f563` (decklist disclosure) during publication. Loopflow
+sync resolved six evidence/note conflicts and merged it as `059d37b01`; selector
+code merged cleanly. The rebuilt extension and regenerated receipts retain the
+142-command authored tape, all five choice prefixes/offers and 69 commitments
+with zero parity gaps. Acceptance was rerun on this combined source as recorded
+above. Clippy initially failed to resolve the relative Python interpreter; the
+absolute repository interpreter passed. Publication remains separate from merge.
