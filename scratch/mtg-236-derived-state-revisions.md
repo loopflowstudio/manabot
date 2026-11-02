@@ -208,3 +208,49 @@ pools, `clear_damage`, the step flags, `emit`'s three pushes, taps and
 - Bench evidence under load: wall-clock worst reply is unusable when other
   sessions load the machine; record CPU seconds and score digests, and
   verify thresholds only on a quiet machine or CI runner.
+
+## Local PR walkthrough (2026-11-02, continued primary conversation)
+
+- `scratch/pr-review.html` reviews published base `4c8324a59516b9738fe55f925ea35ecbb28e369c`
+  to head `06472d4c89ad6317d0bc86f54d53f63669958a47`, with pinned source
+  excerpts for revision invalidation, payment/error continuation, cache-carrying
+  clones, effect indexes and trigger-source filtering.
+- Rendered in headless Chromium at 1440×1000 and 390×844; inspected the opening
+  and code sections, tested a disclosure, no page overflow or script errors.
+- Fresh GitHub read: all 17 executed checks succeeded, package publication
+  skipped; PR #411 open and mergeable, no auto-merge. Task is at interactive
+  `demo`; its completed code Graph has no live process in `lf ps`.
+- Performance figures remain prior-run evidence, not fresh acceptance. The
+  quiet-machine 4.34 s / 128.7 s thresholds are unverified. No benchmark run,
+  scope approval, merge authorization or Task completion occurred in this pass.
+- Earlier headless notes call subtype deferral settled; the conversation
+  contains no subsequent acceptance from Jack Heart. The walkthrough labels
+  the deferral as the implementation decision and preserves this distinction.
+
+## Sync after status return (2026-11-02)
+
+Fresh PR status became conflicting after main reached `a8abf01b1` (T5 token
+copies, following decklist disclosure). `lf sync --manual` and `--continue`
+created merge `e088c99b6`. Kept main's `CreateTokenCopy` resolution instead of
+restoring the obsolete `CreateNonlegendaryCopy` implementation; retained the
+branch's typed accessors. Kept main's compressed questions plus MTG-236 notes.
+
+Focused debug proof (`CARGO_PROFILE_DEV_OPT_LEVEL=1`, two Cargo jobs): four
+copy/observability tests and four Joo Dee tests passed. Rebuilt the release
+Python extension and replaced it atomically. Authored-match parity passed all
+three tests after refreshing only its relevant-source manifest.
+
+The initial combined parity run had five passes and two public-commitment
+receipt failures. Inspection found only source-manifest differences and the
+six prior/posterior/history digests (duplicated in the headless summary).
+These bind the content manifest, which T5 changed; main also updated the native
+belief-binding expectations for that reason. No command, state witness,
+commitment, support size, viewer-isolation assertion, atomicity proof or frozen
+evidence differed. Refreshed the current open-w17 receipt from the producer,
+asserting equality after removing only those source/digest fields; retained
+frozen RUL-9 and INT-12 references unchanged. Focused rerun follows.
+
+The rerun passed: four public-commitment tests plus main's native belief
+projection receipt test (5 passed in 33.28 s). Together with the three authored
+parity tests and eight directed debug Rust tests, the focused sync proof is
+green. Full post-sync CI and quiet-machine latency acceptance remain separate.
