@@ -126,6 +126,26 @@ def test_imported_invalid_setup_does_not_replace_live_game(tmp_path: Path) -> No
     assert session.env.search_witness_json() == witness
 
 
+def test_rematch_keeps_closed_decklists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    config = {"villain_type": "random", "seed": 0, "decklists": "closed"}
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            assert websocket.receive_json()["type"] == "observation"
+            (record,) = server.SESSION_REGISTRY.values()
+            websocket.send_json({"type": "rematch", "grant_revision": 1, "config": {}})
+            payload = websocket.receive_json()
+            assert payload["type"] == "observation"
+            assert record.game.trace is not None
+            assert record.game.trace.config.decklists == "closed"
+    assert "main_counts" not in payload["frame"]["projection"]["opponent"]
+    assert payload["deck_names"]["villain"] == "Closed decklist"
+
+
 def test_rematch_re_admits_retained_sources(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

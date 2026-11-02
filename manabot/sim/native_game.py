@@ -41,7 +41,7 @@ from manabot.sim.execution import EvalExecution
 from manabot.sim.frames import build_command, build_viewer_frame
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import PlayerRegistration, require_open_decklists
 from manabot.sim.replay import replay_environment
 from manabot.sim.serving_protocol import (
     DecisionReply,
@@ -142,6 +142,11 @@ def execute_game(
         )
         policies: dict[str, PolicyKey] = {}
         in_child = _InChildPlayers()
+        if "match_hypers" in game:
+            require_open_decklists(
+                MatchConfig.model_validate(game["match_hypers"]).decklists,
+                registrations,
+            )
         for registration in registrations:
             responsible = registration.player_id
             send(("phase", responsible))

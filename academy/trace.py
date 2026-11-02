@@ -12,7 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Literal
 
 from managym.experience_projection import redact_observation
 
@@ -57,6 +57,9 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
+    # "open": each player knows the other's main deck and sideboard;
+    # "closed": neither. Traces that predate the option were open.
+    decklists: Literal["open", "closed"] = "open"
     # Private import provenance: each seat's decklist (``managym.Decklist``
     # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None
@@ -115,11 +118,19 @@ class GameConfig:
                     raise ValueError(
                         f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
                     )
+                expected.disclosure = self.decklists
                 configs.append(expected)
             return configs
         return [
-            managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
-            managym.PlayerConfig("Villain", self.villain_deck, self.villain_sideboard),
+            managym.PlayerConfig(
+                "Hero", self.hero_deck, self.hero_sideboard, disclosure=self.decklists
+            ),
+            managym.PlayerConfig(
+                "Villain",
+                self.villain_deck,
+                self.villain_sideboard,
+                disclosure=self.decklists,
+            ),
         ]
 
 
@@ -290,6 +301,11 @@ def prepare_trace_payload(
         and payload.get("end_reason") == "game_over"
         and bool(payload.get("final_observation", {}).get("game_over"))
     )
+    if config.get("decklists") == "closed" and not reveal_hidden:
+        config["villain_deck"] = {}
+        config["villain_sideboard"] = {}
+        config["villain_deck_name"] = "closed"
+        config.pop("asset_pack", None)
 
     observations = [
         event.get("observation", {}) for event in prepared.get("events", [])
