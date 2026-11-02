@@ -127,6 +127,37 @@ a third condition.
     attacked.
   - w17 evidence is re-recorded for the combined content digest.
 
+## Sync onto main (T3 squash, characteristics cache, T4) — 2026-11-02
+
+Jack Heart's steer 6eae1230: T3 and T4 merged; sync and fold sacrifice history
+into T4's `PlayerTurnHistory`.
+
+- Resolved against T3's head `a18902e0e` as merge base (main's T3 is its
+  squash), so only T5's own diff met the cache and T4: ~60 hunks instead of
+  ~1465.
+- Turn history is T4's: `PlayerTurnHistory { attacked, permanents_sacrificed,
+  land_entered, cards_drawn }`, `PLAYER_SACRIFICED_INDEX` after attacked
+  (player width 67), always hashed. T5's struct, column, `update_turn_history`
+  (engine undo is gone) and `StaticCondition` are dropped; the Airship trigger
+  uses T4's `intervening_if` and `Condition::SacrificedThisTurnAtLeast`, and
+  Ran and Shaw keeps T4's `intervening_if` with `CreateTokenCopy`.
+- Decision codes keep main's numbering: KeepCreatures 20, Retarget 21;
+  Surveil moves to 22 (`MAX_DECISION_CODE` 22). The text labels follow, and
+  kind-10 waiting delayed triggers label their event through
+  `_frame_decision`.
+- `CreatureWithNamesakes` is computed inside the layer stages, so it reads a
+  private `name_stage` and `ability_loss_timestamp`, never the cached view.
+- Wording: "sacrificed 1 permanent" / "drew 1 card" singular in LLM text and
+  Academy (main's test expected "drew 1 cards").
+- Re-recorded in the sync: protocol schemas, semantic-kernel w17 evidence
+  (14 cases / 3396 commands), belief v3 receipt pins. Taken from main and
+  still to re-record at gate: authored-match receipt and its SHA pins in both
+  parity modules, authored-match parity, public-commitment parity, Academy
+  demos, choice navigation and trigger-order fixtures.
+- Checked: debug `cargo test --no-fail-fast` (all targets pass after the
+  conformance re-record), text observation, observation parity, `tests/env/`,
+  belief state, experience protocol, vitest permanent notes and GameBoard.
+
 ## Delete — do not maintain
 
 - `Effect::CreateNonlegendaryCopy` (main) and `CreateTokenCopy { nonlegendary }`
