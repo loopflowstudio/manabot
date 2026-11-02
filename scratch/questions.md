@@ -67,3 +67,38 @@ They are evidence, not new work. In particular: frozen advice failures remain
 blockers rather than fixtures to regenerate; source-sensitive parity receipts
 must be rebuilt after final Rust edits; current w17 evidence is refreshed in
 place, whereas earlier worlds remain frozen.
+
+# MTG-216 (decklist disclosure) — 2026-10-30, implementation (headless)
+
+Jack Heart accepted one open/closed option, default open (supersedes the
+kickoff's four-way assumption). Reversible choices made while implementing:
+
+- No player-row "known" flag: an open main deck is never empty, so all-zero
+  `decklists` rows mean closed. The player width is untouched (67 after the
+  sync with main's T4 v5 widening) and the native width-binding rule is
+  unchanged.
+- No separate Python `DecklistHidden` class: refusals are `AgentError`
+  ("decklist closed: …"). `Game::determinize` and
+  `HiddenHandConstraints::for_viewer` assert; `Env` entry points check first.
+- Search refusal at match build lists observation-only kinds
+  (`checkpoint`, `heuristic`, `random`, `scripted_greedy`); every other kind is
+  refused in closed matches. Academy refuses its search villain in closed games.
+- Decklist pooling is semantic-pack only, like `known_hand`; generic-model
+  policies ignore the `decklists` buffer. Adding `decklist_projection` changes
+  the v5 semantic `ActorCritic` parameters, so v5 semantic checkpoints saved
+  before this change fail strict load (open world; none frozen).
+- Disclosure is not part of `world_binding` or deck identity: a checkpoint can
+  play both modes, and in a closed game it sees zero opponent rows.
+- `Deck.player()` (training deck pools) seats an open decklist; it takes no
+  disclosure argument. Closed games come from `MatchConfig.decklists` or
+  Academy only.
+- `canonical_replay`/`study` privacy validators do not check decklist maps:
+  frames carry no disclosure, and the engine projection is the authority.
+
+
+## Sync onto main 230b2f563 — 2026-11-02
+
+The selector amendment and upstream decklist disclosure both remain. Current
+w17 parity receipts and choice-navigation frames are regenerated against their
+combined source; neither side’s stale digest is treated as merged evidence.
+The authored command tape and retained choice prefixes must remain unchanged.

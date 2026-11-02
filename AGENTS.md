@@ -128,6 +128,14 @@ checkpoints or experiment evidence.
   that adds it; a frozen policy-input version never silently falls behind.
   `managym/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
+- Decklist disclosure (open by default, or closed) lives on native
+  `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
+  `GameConfig.decklists`. Observations, search and possible worlds read it
+  through `Game::decklist_known`/`require_open_decklist`; never filter decklist
+  information in an encoder or the browser. V5 encodes the lists in the
+  `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
+  Academy's server keeps a closed opponent's deck name, the matchup's asset pack
+  and unseen definition names out of its frames and viewer trace exports.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
