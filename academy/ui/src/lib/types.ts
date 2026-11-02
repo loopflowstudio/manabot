@@ -162,6 +162,8 @@ export interface PlayerState {
   keeps_red_mana?: boolean;
   /** What this player has done this turn. */
   turn_history?: PlayerTurnHistory;
+  /** Extra turns this player will take after this one. */
+  extra_turns?: number;
   /** Continuous effects on this player, in timestamp order. */
   effects?: ContinuousEffect[];
   hand: CardState[];

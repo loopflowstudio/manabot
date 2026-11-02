@@ -44,6 +44,9 @@ pub struct ContentPack {
     pack_key: Option<String>,
     cards_by_name: BTreeMap<String, CardDefId>,
     definitions: Vec<Arc<CardDefinition>>,
+    /// Each back face's row and its front's (CR 712.1), derived from the
+    /// fronts' `back_face` as they register.
+    back_faces: BTreeMap<CardDefId, CardDefId>,
     digest: OnceLock<String>,
     public_definitions: OnceLock<Vec<serde_json::Value>>,
 }
@@ -140,6 +143,7 @@ impl ContentPack {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             pack_key,
             cards_by_name: BTreeMap::new(),
+            back_faces: BTreeMap::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
             definitions: Vec::with_capacity(definitions.len()),
@@ -181,7 +185,27 @@ impl ContentPack {
             self.cards_by_name.insert(name, definition_id).is_none(),
             "duplicate card definition"
         );
+        let back_face = definition.back_face.clone();
         self.definitions.push(Arc::new(definition));
+        // A double-faced card's back face is its own row, right after its
+        // front, so a transformed permanent observes and tokenizes as it.
+        if let Some(back_face) = back_face {
+            let back_id = CardDefId(definition_id.0 + 1);
+            self.register_card(*back_face);
+            self.back_faces.insert(back_id, definition_id);
+        }
+    }
+
+    /// The back face of the double-faced card whose front is `front`.
+    pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<CardDefinition>)> {
+        let name = &self.definition(front)?.back_face.as_ref()?.name;
+        let id = self.definition_id(name)?;
+        Some((id, Arc::clone(&self.definitions[id.0 as usize])))
+    }
+
+    /// The front face whose back face is `back`; `None` for any other row.
+    pub fn front_face(&self, back: CardDefId) -> Option<CardDefId> {
+        self.back_faces.get(&back).copied()
     }
 
     /// Iterate every registered card definition (conformance tests audit

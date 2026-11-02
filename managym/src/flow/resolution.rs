@@ -837,23 +837,45 @@ impl Game {
                 let object = self.present_primary_target(frame)?;
                 self.next_retarget(frame.controller, object, 0, false)
             }
-            Effect::ExileSourceAndReturn { player } => {
+            Effect::ExileSourceAndReturn {
+                player,
+                transformed,
+            } => {
                 let [player] = self.selected_players(player, frame)[..] else {
                     return None;
                 };
                 let id = self.source_permanent_id(frame)?;
                 let card = self.state.permanents[id].as_ref()?.card;
                 self.move_card(card, ZoneType::Exile);
-                if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
+                // A token ceases to exist once exiled (CR 111.7); a card with
+                // no back face can't return transformed (CR 701.28c).
+                let returns = !self.state.cards[card].is_token
+                    && (!*transformed
+                        || self
+                            .state
+                            .content
+                            .back_face(self.state.cards[card].definition_id)
+                            .is_some());
+                if returns && self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
                     self.move_card_with_entry(
                         card,
                         ZoneType::Battlefield,
                         crate::flow::proposed_event::ZoneEntry {
                             controller: Some(player),
+                            transformed: *transformed,
                             ..Default::default()
                         },
                     );
                 }
+                None
+            }
+            Effect::TakeExtraTurn => {
+                self.state.turn.extra_turns.push(frame.controller);
+                None
+            }
+            Effect::TransformSource => {
+                let id = self.source_permanent_id(frame)?;
+                self.transform_permanent(id);
                 None
             }
             Effect::GainControl {

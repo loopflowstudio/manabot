@@ -98,6 +98,14 @@ pub struct TurnState {
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.
     pub ability_resolutions_this_turn: BTreeMap<(usize, usize), u32>,
+    /// Extra turns still to be taken (CR 500.7), the most recently created
+    /// last: it is taken first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub extra_turns: Vec<PlayerId>,
+    /// While extra turns are being taken: the player whose turn follows them,
+    /// the one who would have played after the turn they interrupted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resume_with: Option<PlayerId>,
     pub current_phase: usize,
     pub current_step: usize,
     pub step_initialized: bool,
@@ -115,6 +123,8 @@ impl TurnState {
             history: Default::default(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
+            extra_turns: Vec::new(),
+            resume_with: None,
             current_phase: 0,
             current_step: 0,
             step_initialized: false,
@@ -176,6 +186,19 @@ impl TurnState {
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();
-        self.active_player = PlayerId((self.active_player.0 + 1) % 2);
+        self.active_player = self.next_turn_player();
+    }
+
+    /// Who takes the next turn: the most recent extra turn's player, else
+    /// the player after the last ordinary turn (CR 500.7).
+    fn next_turn_player(&mut self) -> PlayerId {
+        let after_this = PlayerId((self.active_player.0 + 1) % 2);
+        match self.extra_turns.pop() {
+            Some(player) => {
+                self.resume_with.get_or_insert(after_this);
+                player
+            }
+            None => self.resume_with.take().unwrap_or(after_this),
+        }
     }
 }

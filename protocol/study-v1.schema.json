@@ -1526,6 +1526,12 @@
             "$ref": "#/$defs/LegacyCardView"
           }
         },
+        "extra_turns": {
+          "description": "Extra turns this player will take after this one.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "graveyard": {
           "type": "array",
           "items": {

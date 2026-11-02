@@ -504,6 +504,11 @@ impl Game {
                 }
                 self.state.permanents[permanent_id] = None;
             }
+            // CR 712.8a: a double-faced card is front face up outside the
+            // battlefield.
+            if self.state.cards[card].is_transformed() {
+                self.state.cards[card].transform(None);
+            }
         }
 
         if let Some(lki) = departing_lki {
@@ -526,6 +531,13 @@ impl Game {
         self.state.zones.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
+            if entry.transformed {
+                let back = self
+                    .state
+                    .content
+                    .back_face(self.state.cards[card].definition_id);
+                self.state.cards[card].transform(back);
+            }
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent =
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
@@ -534,6 +546,11 @@ impl Game {
             permanent.cast_x = cast_x;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
+            // CR 714.3a: a Saga enters with a lore counter, which triggers its
+            // first chapter (CR 714.2b).
+            if self.state.cards[card].is_saga() {
+                permanent.counters.change(CounterKind::Lore, 1);
+            }
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
             if self.state.cards[card].types.is_land() {
@@ -559,6 +576,20 @@ impl Game {
             face_down: entry.face_down,
         };
         self.emit(event);
+        if let Some(saga) = self.state.card_to_permanent[card]
+            .filter(|_| to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga())
+        {
+            let total = self.state.permanents[saga]
+                .as_ref()
+                .map_or(0, |permanent| permanent.counter_count(CounterKind::Lore));
+            self.emit(GameEvent::CountersPut {
+                permanent: saga,
+                kind: CounterKind::Lore,
+                count: 1,
+                total,
+                by: holder,
+            });
+        }
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_ref, to_zone);
         }
@@ -576,6 +607,33 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));
         }
+        true
+    }
+
+    /// Transform a double-faced permanent (CR 701.28a): it turns over and
+    /// stays the same object, keeping its counters, damage, attachments and
+    /// combat status (CR 712.9). Returns false for anything else, which
+    /// can't transform (CR 701.28c).
+    pub(crate) fn transform_permanent(&mut self, permanent: PermanentId) -> bool {
+        let Some(card) = self.state.permanents[permanent].as_ref().map(|p| p.card) else {
+            return false;
+        };
+        let back = if self.state.cards[card].is_transformed() {
+            None
+        } else {
+            match self
+                .state
+                .content
+                .back_face(self.state.cards[card].definition_id)
+            {
+                Some(back) => Some(back),
+                None => return false,
+            }
+        };
+        self.state.cards[card].transform(back);
+        // Its mana abilities and static grants may change for either player.
+        self.invalidate_mana_cache(PlayerId(0));
+        self.invalidate_mana_cache(PlayerId(1));
         true
     }
 

@@ -42,9 +42,9 @@ use managym::{
             PERMANENT_DIM, PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX,
             PERMANENT_GRANTED_LAND_INDEX, PERMANENT_ONCE_EACH_TURN_INDEX,
             PERMANENT_TIMESTAMP_INDEX, PLAYER_ATTACKED_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM,
-            PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
-            PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
-            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
+            PLAYER_EXTRA_TURNS_INDEX, PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX,
+            PLAYER_LAND_ENTERED_INDEX, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX,
+            PLAYER_SACRIFICED_INDEX, PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
         },
     },
     flow::{
@@ -371,7 +371,7 @@ fn affected_witnesses() -> [AffectedSpec; 8] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 18] {
     let TurnState {
         active_player: _,
         turn_number: _,
@@ -380,6 +380,8 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
         history,
         ability_triggers_this_turn: _,
         ability_resolutions_this_turn: _,
+        extra_turns: _,
+        resume_with: _,
         current_phase: _,
         current_step: _,
         step_initialized: _,
@@ -409,6 +411,14 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
         (
             "history",
             Seen::Via("each player's history columns, listed next"),
+        ),
+        (
+            "extra_turns",
+            Seen::Player(PLAYER_EXTRA_TURNS_INDEX, PLAYER_EXTRA_TURNS_INDEX + 1),
+        ),
+        (
+            "resume_with",
+            Seen::Via("the player after the interrupted turn: the extra-turn columns and the active player"),
         ),
         (
             "history.cards_drawn",
@@ -447,6 +457,8 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
         Effect::CreateNonlegendaryCopy => "Effect::CreateNonlegendaryCopy",
+        Effect::TransformSource => "Effect::TransformSource",
+        Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::PutCountersOnTriggeringPermanent { .. } => {
             "Effect::PutCountersOnTriggeringPermanent"
@@ -563,7 +575,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 107;
+const EFFECT_VARIANTS: usize = 109;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -854,7 +866,10 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::ExileSourceAndReturn {
             player: PlayerSelector::EachOpponent,
+            transformed: true,
         },
+        Effect::TransformSource,
+        Effect::TakeExtraTurn,
         Effect::GainControl {
             player: PlayerSelector::You,
             target: TargetSpec::Creature,
@@ -953,6 +968,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YourAttackingCreatureTriggers => {
             "TriggerCondition::YourAttackingCreatureTriggers"
         }
+        TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
     }
 }
 
@@ -1022,6 +1038,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         },
         TriggerCondition::BeginningOfYourFirstMainPhase,
         TriggerCondition::YourAttackingCreatureTriggers,
+        TriggerCondition::Chapter { chapter: 2 },
     ]
 }
 
@@ -1873,6 +1890,7 @@ fn turn_history_moves_each_players_named_column() {
             "history.attacked" => history.attacked = true,
             "history.permanents_sacrificed" => history.permanents_sacrificed = 2,
             "history.land_entered" => history.land_entered = true,
+            "extra_turns" => turn.extra_turns.push(PlayerId(0)),
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -2363,6 +2381,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
         effects => [Rows("Effect fact rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
+        extra_turns => [column(Player, PLAYER_EXTRA_TURNS_INDEX)],
     }));
     fields.extend(encoding!(PlayerTurnHistory {
         attacked => [column(Player, PLAYER_ATTACKED_INDEX)],

@@ -195,7 +195,8 @@ fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentErr
 
 /// Names of the token definitions `definition`'s effects create: every
 /// `token_name` at any depth of its serialized effects, so an effect that nests
-/// others (modes, branches, granted abilities) needs no visitor entry.
+/// others (modes, branches, granted abilities) needs no visitor entry. A
+/// double-faced card's back face creates tokens of its own.
 pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
     fn visit(value: &serde_json::Value, out: &mut BTreeSet<String>) {
         match value {
@@ -218,6 +219,9 @@ pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
         &serde_json::to_value(definition).expect("card definitions serialize"),
         &mut out,
     );
+    if let Some(back_face) = &definition.back_face {
+        out.extend(created_tokens(back_face));
+    }
     out
 }
 

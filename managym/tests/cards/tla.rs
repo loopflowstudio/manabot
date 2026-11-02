@@ -12665,3 +12665,222 @@ fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
     assert_eq!(zone_of(&s, ty_lee), Some(ZoneType::Battlefield));
     assert_eq!(zone_of(&s, theirs), Some(ZoneType::Exile));
 }
+
+// ---------------------------------------------------------------------------
+// T6: Sagas (CR 714) and transforming double-faced cards (CR 712).
+
+/// Reach player 0's next precombat main phase, where the lore counter goes on.
+fn next_main_phase(s: &mut Scenario) {
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+}
+
+/// Put player 0's Saga onto the battlefield at its last chapter and play
+/// through it, so it returns transformed; the back face's permanent.
+fn transformed_saga(s: &mut Scenario, name: &str) -> PermanentId {
+    let saga = put_onto_battlefield(s, 0, name);
+    let card = card_of(s, saga);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    settle(s);
+    if let Some(saga) = s.game().state.card_to_permanent[card] {
+        set_counters(s, saga, CounterKind::Lore, 2);
+    }
+    next_main_phase(s);
+    settle(s);
+    assert!(
+        s.game().state.cards[card].is_transformed(),
+        "{name} transformed"
+    );
+    s.game().state.card_to_permanent[card].unwrap()
+}
+
+/// I mills three and makes a Food as the Saga enters; II puts a counter on
+/// each of up to two creatures after the next draw step; III draws only with
+/// a creature or Lesson card in the graveyard, then the Saga is sacrificed.
+#[test]
+fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() {
+    let mut s = five_color_setup(&["Leaves from the Vine", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let saga_card = cast(&mut s, "Leaves from the Vine");
+    resolve_top(&mut s);
+    let saga = s.game().state.card_to_permanent[saga_card].expect("on the battlefield");
+    assert_eq!(
+        counters_of(&s, saga, CounterKind::Lore),
+        1,
+        "enters with one"
+    );
+    let library_before = s.zone_size(0, ZoneType::Library);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Library), library_before - 3);
+    assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
+
+    next_main_phase(&mut s);
+    assert_eq!(counters_of(&s, saga, CounterKind::Lore), 2);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ogre, CounterKind::PlusOnePlusOne), 1);
+
+    // III: no creature or Lesson card in the graveyard means no draw.
+    for card in s
+        .game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Graveyard, PlayerId(0))
+        .clone()
+    {
+        s.game_mut().move_card(card, ZoneType::Exile);
+    }
+    next_main_phase(&mut s);
+    let hand_before = s.zone_size(0, ZoneType::Hand);
+    settle(&mut s);
+    assert_eq!(
+        s.zone_size(0, ZoneType::Hand),
+        hand_before,
+        "nothing to draw for"
+    );
+    assert_eq!(
+        zone_of(&s, saga_card),
+        Some(ZoneType::Graveyard),
+        "sacrificed after III"
+    );
+    assert_eq!(
+        s.game().state.turn.history[0].permanents_sacrificed,
+        1,
+        "CR 714.4 sacrifices it"
+    );
+}
+
+/// With a creature card in the graveyard, chapter III draws.
+#[test]
+fn leaves_from_the_vine_draws_on_its_last_chapter_with_a_creature_card_in_the_graveyard() {
+    let mut s = five_color_setup(&["Leaves from the Vine", "Gray Ogre"]);
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    let saga = put_onto_battlefield(&mut s, 0, "Leaves from the Vine");
+    set_counters(&mut s, saga, CounterKind::Lore, 2);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    settle(&mut s);
+    next_main_phase(&mut s);
+    let hand_before = s.zone_size(0, ZoneType::Hand);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before + 1);
+}
+
+/// The Saga stays until its last chapter ability has left the stack
+/// (CR 714.4), even when a fourth lore counter arrives meanwhile.
+#[test]
+fn the_cave_of_two_lovers_is_sacrificed_only_after_its_final_chapter_resolves() {
+    let mut s = five_color_setup(&["The Cave of Two Lovers", "Mountain"]);
+    let land = s.force_permanent_on_battlefield(0, "Mountain");
+    let cave_card = cast(&mut s, "The Cave of Two Lovers");
+    resolve_top(&mut s);
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Ally").len(),
+        2,
+        "I: two Allies"
+    );
+    let cave = s.game().state.card_to_permanent[cave_card].unwrap();
+
+    next_main_phase(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    // II: the search offers Mountains (Cave is the other subtype it accepts).
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let mountain = offered_cards(&s)[0];
+    assert_eq!(s.game().state.cards[mountain].name, "Mountain");
+    select_card(&mut s, mountain);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, mountain), Some(ZoneType::Hand));
+
+    next_main_phase(&mut s);
+    assert_eq!(counters_of(&s, cave, CounterKind::Lore), 3);
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::ChooseTarget,
+        "III: earthbend"
+    );
+    // Chapter III is on the stack with its target chosen; the Saga waits.
+    assert!(s.choose_target(Target::Permanent(land)));
+    assert_eq!(zone_of(&s, cave_card), Some(ZoneType::Battlefield));
+    set_counters(&mut s, cave, CounterKind::Lore, 4);
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(counters_of(&s, land, CounterKind::PlusOnePlusOne), 3);
+    assert_eq!(zone_of(&s, cave_card), Some(ZoneType::Graveyard));
+}
+
+/// I and II scry then draw; III exiles the Saga and returns it as Avatar
+/// Kuruk, a new object with the back face's characteristics.
+#[test]
+fn the_legend_of_kuruk_returns_transformed_as_avatar_kuruk() {
+    let mut s = five_color_setup(&["The Legend of Kuruk"]);
+    let saga = put_onto_battlefield(&mut s, 0, "The Legend of Kuruk");
+    let card = card_of(&s, saga);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    let hand_before = s.zone_size(0, ZoneType::Hand);
+    settle(&mut s);
+    assert_eq!(
+        s.zone_size(0, ZoneType::Hand),
+        hand_before + 1,
+        "I: scry 2, draw"
+    );
+    set_counters(&mut s, saga, CounterKind::Lore, 2);
+
+    next_main_phase(&mut s);
+    settle(&mut s);
+    let kuruk_card = card;
+    assert_eq!(zone_of(&s, kuruk_card), Some(ZoneType::Battlefield));
+    let kuruk = s.game().state.card_to_permanent[kuruk_card].unwrap();
+    assert_ne!(kuruk, saga, "a new object (CR 400.7)");
+    let back = &s.game().state.cards[kuruk_card];
+    assert!(back.is_transformed());
+    assert_eq!(back.name, "Avatar Kuruk");
+    let characteristics = s.game().characteristics(kuruk);
+    assert!(characteristics.is_creature);
+    assert_eq!((characteristics.power, characteristics.toughness), (4, 3));
+    assert_eq!(
+        counters_of(&s, kuruk, CounterKind::Lore),
+        0,
+        "no lore: not a Saga"
+    );
+    assert_eq!(
+        s.game().state.turn.history[0].permanents_sacrificed,
+        0,
+        "the creature is not sacrificed"
+    );
+
+    // Leaving the battlefield turns it front face up (CR 712.8a).
+    s.game_mut().move_card(kuruk_card, ZoneType::Hand);
+    assert!(!s.game().state.cards[kuruk_card].is_transformed());
+    assert_eq!(s.game().state.cards[kuruk_card].name, "The Legend of Kuruk");
+}
+
+/// Avatar Kuruk makes a Spirit for each spell its controller casts, and its
+/// exhaust waterbend grants an extra turn after this one (CR 500.7).
+#[test]
+fn avatar_kuruk_makes_spirits_and_takes_an_extra_turn() {
+    let mut s = five_color_setup(&["The Legend of Kuruk", "Gray Ogre"]);
+    let kuruk = transformed_saga(&mut s, "The Legend of Kuruk");
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Spirit").len(), 1);
+
+    s.set_player_mana_pool(0, "20");
+    activate(&mut s, kuruk, 0);
+    settle(&mut s);
+    assert_eq!(s.game().state.turn.extra_turns, vec![PlayerId(0)]);
+    let turn = s.game().state.turn.turn_number;
+    s.advance_until(
+        |sc| sc.game().state.turn.turn_number == turn + 1,
+        "the next turn begins".into(),
+    );
+    assert_eq!(s.active_player(), 0, "the extra turn is player 0's");
+    s.advance_until(
+        |sc| sc.game().state.turn.turn_number == turn + 2,
+        "the turn after the extra turn begins".into(),
+    );
+    assert_eq!(s.active_player(), 1, "then the opponent's turn resumes");
+    assert!(!offers_ability(&mut s, kuruk, 0), "exhaust: only once");
+}

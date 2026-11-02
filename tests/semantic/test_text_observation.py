@@ -548,6 +548,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
+        "extra_turns": "extra turn",
         "restricted_mana": "Restricted mana for",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
@@ -597,6 +598,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     state["agent"] |= {
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
+        "extra_turns": 1,
         "turn_history": {
             "attacked": True,
             "permanents_sacrificed": 2,
@@ -612,6 +614,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     )
     assert "Keeps unspent red mana until end of turn." in text
     assert "Has no maximum hand size for the rest of the game." in text
+    assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
         "their control; drew 1 cards." in text

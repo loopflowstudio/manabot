@@ -464,3 +464,21 @@ requirement, it needs its own Task.
   state write already passes `TrackedState::deref_mut`, so a derived index
   cannot drift, and the measured cost is small. Revisit only if profiles show
   index rebuilds dominating.
+
+# T6 (MTG-225) operator choices — 2026-11-02, headless
+
+- Base: developed on main `4c8324a59` (T3+T4) while T5 #405 was mid-sync;
+  T5's synced head is merged when it publishes, so the stack is kept.
+- A double-faced card is one definition function; `back_face` holds the back
+  face, which the pack registers as its own row right after the front.
+  `back_face` serializes as the back face's name (a definition reference in
+  tokens and digests), so a back face carries no `key`/`scryfall_id` of its
+  own; pool rows mark it "not a deck entry".
+- Back-face colors follow Scryfall's face data: no color indicator except
+  Fire Lord Sozin (black), so Avatar Kuruk/Kyoshi/Roku/Yangchen and the Aang
+  back faces are colorless here. Flag for review against the printed cards.
+- Entering with a Saga's lore counter emits `CountersPut` (so chapter I
+  triggers, CR 714.2b/122.6); other entry counters still emit nothing.
+- Extra turns are observed as a per-player count (player column
+  `PLAYER_EXTRA_TURNS_INDEX`, player width +1); the resume order is not a
+  column.

@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use super::{
     ability::{
         effect_target_requirements, Ability, Condition, Effect, PaymentCost, TargetRequirement,
-        TargetSpec,
+        TargetSpec, TriggerCondition,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -714,9 +714,48 @@ pub struct CardDefinition {
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
+    /// The back face of a transforming double-faced card (CR 712.1): its own
+    /// characteristics, registered by the content pack as its own row after
+    /// this one. Serialized as its name, a reference to that row, so the
+    /// front's digest and tokens name it without repeating it.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_back_face"
+    )]
+    pub back_face: Option<Box<CardDefinition>>,
+}
+
+fn serialize_back_face<S: serde::Serializer>(
+    face: &Option<Box<CardDefinition>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match face {
+        Some(face) => serializer.serialize_some(&face.name),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl CardDefinition {
+    /// A Saga (CR 714.1): an enchantment with the Saga subtype.
+    pub fn is_saga(&self) -> bool {
+        self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
+    }
+
+    /// Its final chapter number (CR 714.2d): the greatest of its chapter
+    /// abilities' numbers.
+    pub fn final_chapter(&self) -> Option<u8> {
+        self.abilities
+            .iter()
+            .filter_map(|ability| match ability {
+                Ability::Triggered {
+                    condition: TriggerCondition::Chapter { chapter },
+                    ..
+                } => Some(*chapter),
+                _ => None,
+            })
+            .max()
+    }
+
     /// The optional additional cost a cast may choose to pay: kicker or an
     /// optional waterbend, which both mark the spell kicked.
     pub fn optional_cost(&self) -> Option<&ManaCost> {
@@ -897,6 +936,9 @@ pub struct Card {
     pub registry_key: ObjectId,
     pub owner: PlayerId,
     definition: Arc<CardDefinition>,
+    /// The front face's row while the back face is up (CR 712.8): set by
+    /// [`Card::transform`], cleared as the card leaves the battlefield.
+    front: Option<(CardDefId, Arc<CardDefinition>)>,
 }
 
 impl Card {
@@ -912,7 +954,42 @@ impl Card {
             registry_key: ObjectId(definition_id.0),
             owner,
             definition,
+            front: None,
         }
+    }
+
+    /// Whether its back face is up (CR 712.8).
+    pub fn is_transformed(&self) -> bool {
+        self.front.is_some()
+    }
+
+    /// The front face's row, whichever face is up: the card's identity in
+    /// every zone but the battlefield.
+    pub fn front_definition_id(&self) -> CardDefId {
+        self.front
+            .as_ref()
+            .map_or(self.definition_id, |(id, _)| *id)
+    }
+
+    /// Turn it over (CR 701.28a): to the given back face, or back to its
+    /// front. A card without that face cannot transform (CR 701.28c), which
+    /// callers check with [`ContentPack::back_face`](crate::cards::content_pack::ContentPack::back_face).
+    pub fn transform(&mut self, back: Option<(CardDefId, Arc<CardDefinition>)>) {
+        match (self.front.take(), back) {
+            (Some((id, definition)), _) => self.show(id, definition),
+            (None, Some((id, definition))) => {
+                let front = (self.definition_id, Arc::clone(&self.definition));
+                self.show(id, definition);
+                self.front = Some(front);
+            }
+            (None, None) => {}
+        }
+    }
+
+    fn show(&mut self, id: CardDefId, definition: Arc<CardDefinition>) {
+        self.definition_id = id;
+        self.registry_key = ObjectId(id.0);
+        self.definition = definition;
     }
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {

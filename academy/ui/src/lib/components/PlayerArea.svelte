@@ -158,6 +158,11 @@
       {label} has no maximum hand size.
     </p>
   {/if}
+  {#if player.extra_turns}
+    <p class="type-caption py-1" data-testid="extra-turns">
+      {label} will take {player.extra_turns === 1 ? 'an extra turn' : `${player.extra_turns} extra turns`} after this one.
+    </p>
+  {/if}
   {#if player.turn_history}
     {@const history = player.turn_history}
     <p class="type-caption py-1" data-testid="turn-history">

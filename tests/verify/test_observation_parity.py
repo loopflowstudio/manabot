@@ -450,6 +450,7 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     obs.agent_permanents = [mine]
     agent = obs.agent
     agent.keeps_red_mana = agent.no_maximum_hand_size = True
+    agent.extra_turns = 2
     kept = managym.ContinuousEffect()
     kept.modification, kept.color = "KeepUnspentMana", "Red"
     kept.duration, kept.timestamp = "EndOfTurn", base + 3

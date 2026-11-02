@@ -10,7 +10,8 @@
 //! program (each triggered, mana, triggered-mana and activated ability, plus
 //! the spell). Identity and printed text (`key`, `scryfall_id`, `name`,
 //! `text_box`) are never tokens. A `token_name` becomes a definition
-//! reference to the created token's row, so the policy reads the token's own
+//! reference to the created token's row, and a double-faced card's
+//! `back_face` one to its back face's row, so the policy reads that
 //! definition in place.
 //!
 //! Token values are stable hashes of the Rust names (`"Effect::DealDamage"`,
@@ -306,11 +307,11 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         unsupported("characters")
     }
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
-        if self.field == Some("token_name") {
+        if matches!(self.field, Some("token_name" | "back_face")) {
             let row = self
                 .pack
                 .definition_id(value)
-                .ok_or_else(|| ContentError(format!("token {value:?} is not in the pack")))?;
+                .ok_or_else(|| ContentError(format!("{value:?} is not in the pack")))?;
             let CardDefId(row) = row;
             self.tokens
                 .push((TokenKind::DefinitionRef, 0, Some(row as i32)));
@@ -622,7 +623,9 @@ mod tests {
                 catalog.token_kind[source as usize],
                 TokenKind::DefinitionRef as u16
             );
-            assert!(pack.definition(CardDefId(row as u32)).unwrap().is_token);
+            // A created token, or a double-faced card's back face.
+            let row = CardDefId(row as u32);
+            assert!(pack.definition(row).unwrap().is_token || pack.front_face(row).is_some());
         }
     }
 }

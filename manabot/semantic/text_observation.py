@@ -593,6 +593,10 @@ class _Renderer:
                 lines.append("Keeps unspent red mana until end of turn.")
             if history := _turn_history(player.turn_history):
                 lines.append(f"This turn: {history}.")
+            if player.extra_turns:
+                lines.append(
+                    f"Will take {player.extra_turns} extra turn(s) after this one."
+                )
             for effect in player.effects:
                 lines.append(f"Effect: {self._effect(effect)}.")
             for label, quantities in (

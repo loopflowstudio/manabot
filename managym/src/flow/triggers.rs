@@ -19,6 +19,7 @@ use crate::{
         effect::{EffectDuration, Modification},
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
+        permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
     },
@@ -1466,6 +1467,21 @@ impl Game {
             }
             (TriggerCondition::YouScry, GameEvent::Scried { player }) => {
                 *player == source_controller
+            }
+            (
+                TriggerCondition::Chapter { chapter },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: CounterKind::Lore,
+                    count,
+                    total,
+                    ..
+                },
+            ) => {
+                let chapter = i32::from(*chapter);
+                self.state.card_to_permanent[source_card] == Some(*permanent)
+                    && total - count < chapter
+                    && chapter <= *total
             }
             (
                 TriggerCondition::YouPutCountersOnCreature { kind },

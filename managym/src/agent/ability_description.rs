@@ -142,6 +142,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::BeginningOfYourFirstMainPhase => {
             "At the beginning of your first main phase".into()
         }
+        TriggerCondition::Chapter { chapter } => format!("Chapter {}", roman(*chapter)),
         TriggerCondition::YouDrawNthCardThisTurn { n } => {
             format!("When you draw card {n} this turn")
         }
@@ -357,6 +358,7 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
         CounterKind::Quest => "quest",
         CounterKind::Finality => "finality",
         CounterKind::Conqueror => "conqueror",
+        CounterKind::Lore => "lore",
         CounterKind::DoubleStrike => "double strike",
     }
 }
@@ -603,7 +605,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
             modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
         ),
         PutSourceCountersOnTarget { .. } => "Put its counters on target creature you control".into(),
-        ExileSourceAndReturn { player } => format!("Exile this, then return it to the battlefield under the control of {}", player_description(player)),
+        ExileSourceAndReturn { player, transformed } => format!("Exile this, then return it to the battlefield{} under the control of {}", if *transformed { " transformed" } else { "" }, player_description(player)),
+        TransformSource => "Transform this".into(),
+        TakeExtraTurn => "Take an extra turn after this one".into(),
         GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
         ExileWithSource { target } => format!("Exile {}", target_description(target)),
@@ -813,6 +817,19 @@ fn continuous_description(
     }
 }
 
+/// A chapter number as printed (CR 714.2a).
+fn roman(chapter: u8) -> &'static str {
+    match chapter {
+        1 => "I",
+        2 => "II",
+        3 => "III",
+        4 => "IV",
+        5 => "V",
+        6 => "VI",
+        _ => "?",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -843,3 +860,4 @@ mod tests {
         assert_eq!(description, "Choose 0–2 target creature you control for this clause: For each chosen target: Untap target creature you control. You may pay {1}{W}. If paid: Draw 2 cards. Otherwise: Deal 1 damage to you");
     }
 }
+

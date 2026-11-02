@@ -467,6 +467,7 @@ class LegacyPlayerView(ProtocolModel):
         default_factory=PlayerTurnHistoryView,
         exclude_if=lambda value: value == PlayerTurnHistoryView(),
     )
+    extra_turns: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     no_maximum_hand_size: bool = Field(
         default=False, exclude_if=lambda value: not value
     )

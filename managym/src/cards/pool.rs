@@ -64,6 +64,8 @@ impl PoolRuntime {
             .map(|(card_def_id, definition)| {
                 let reason = if definition.is_token {
                     Some("A token, created by its card; not a deck entry".to_owned())
+                } else if content.front_face(card_def_id).is_some() {
+                    Some("The back face of a double-faced card; not a deck entry".to_owned())
                 } else if definition.key.is_empty() {
                     Some("A rules fixture, not a printed card".to_owned())
                 } else {

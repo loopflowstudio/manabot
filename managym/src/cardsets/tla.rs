@@ -114,8 +114,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fire_nation_attacks(),
         fire_nation_cadets(),
         fire_nation_engineer(),
-        fire_nation_raider(),
         fire_nation_palace(),
+        fire_nation_raider(),
         fire_nation_warship(),
         fire_navy_trebuchet(),
         fire_sages(),
@@ -169,6 +169,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         kyoshi_island_plaza(),
         kyoshi_village(),
         kyoshi_warriors(),
+        leaves_from_the_vine(),
         lo_and_li_twin_tutors(),
         long_feng_grand_secretariat(),
         lost_days(),
@@ -225,11 +226,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         serpent_of_the_pass(),
         serpents_pass(),
         shared_roots(),
-        sokka_tenacious_tactician(),
-        sold_out(),
         sokka_bold_boomeranger(),
         sokka_lateral_strategist(),
         sokka_s_haiku(),
+        sokka_tenacious_tactician(),
+        sold_out(),
         solstice_revelations(),
         south_pole_voyager(),
         southern_air_temple(),
@@ -244,9 +245,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         team_avatar(),
         teo_spirited_glider(),
         the_boulder_ready_to_rumble(),
+        the_cave_of_two_lovers(),
         the_earth_king(),
         the_fire_nation_drill(),
         the_last_agni_kai(),
+        the_legend_of_kuruk(),
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
         the_spirit_oasis(),
@@ -5545,6 +5548,74 @@ fn kyoshi_warriors() -> CardDefinition {
     }
 }
 
+fn leaves_from_the_vine() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Mill three cards, then create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nII — Put a +1/+1 counter on each of up to two target creatures you control.\nIII — Draw a card if there's a creature or Lesson card in your graveyard.";
+
+    CardDefinition {
+        key: "tla.leaves_from_the_vine",
+        scryfall_id: "b18995c2-efe3-46ca-8204-e2dc0e42f6e3",
+        name: "Leaves from the Vine".into(),
+        mana_cost: Some(ManaCost::parse("{1}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(
+                1,
+                vec![
+                    Effect::MillCards {
+                        count: EffectValue::Fixed(3),
+                        target: None,
+                    },
+                    Effect::CreateToken {
+                        token_name: "Food".into(),
+                        count: 1,
+                        tapped_and_attacking: false,
+                        attach_source: false,
+                    },
+                ],
+            ),
+            chapter(
+                2,
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        max: 2,
+                        ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                    },
+                    effects: vec![Effect::ForEachTarget {
+                        effects: vec![Effect::PutCounters {
+                            count: 1,
+                            kind: CounterKind::PlusOnePlusOne,
+                            target: TargetSpec::CreatureYouControl,
+                        }],
+                    }],
+                }],
+            ),
+            chapter(
+                3,
+                vec![Effect::If {
+                    condition: Condition::GraveyardAtLeast {
+                        count: 1,
+                        predicate: CardPredicate {
+                            any_of: vec![
+                                CardPredicate::creature(),
+                                CardPredicate::subtype("Lesson"),
+                            ],
+                            ..Default::default()
+                        },
+                    },
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                }],
+            ),
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn lo_and_li_twin_tutors() -> CardDefinition {
     let text_box = "When Lo and Li enter, search your library for a Lesson or Noble card, reveal it, put it into your hand, then shuffle.\nNoble creatures you control and Lesson spells you control have lifelink.";
 
@@ -8497,6 +8568,48 @@ fn the_boulder_ready_to_rumble() -> CardDefinition {
     }
 }
 
+fn the_cave_of_two_lovers() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Create two 1/1 white Ally creature tokens.\nII — Search your library for a Mountain or Cave card, reveal it, put it into your hand, then shuffle.\nIII — Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    CardDefinition {
+        key: "tla.the_cave_of_two_lovers",
+        scryfall_id: "50bf5c8b-f218-46b7-843c-8d8083f02fd2",
+        name: "The Cave of Two Lovers".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(
+                1,
+                vec![Effect::CreateToken {
+                    token_name: "Ally".into(),
+                    count: 2,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            ),
+            chapter(
+                2,
+                vec![Effect::SearchLibraryToHand {
+                    predicate: CardPredicate {
+                        subtypes_any: vec!["Mountain".into(), "Cave".into()],
+                        ..Default::default()
+                    },
+                }],
+            ),
+            chapter(
+                3,
+                vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(3),
+                    target: TargetSpec::LandYouControl,
+                }],
+            ),
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn the_earth_king() -> CardDefinition {
     let text_box = "When The Earth King enters, create a 4/4 green Bear creature token.\nWhenever one or more creatures you control with power 4 or greater attack, search your library for up to that many basic land cards, put them onto the battlefield tapped, then shuffle.";
 
@@ -8658,6 +8771,64 @@ fn the_last_agni_kai() -> CardDefinition {
             },
         ],
         text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn the_legend_of_kuruk() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter.)\nI, II — Scry 2, then draw a card.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.";
+    let back_text = "Whenever you cast a spell, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"\nExhaust — Waterbend {20}: Take an extra turn after this one. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)";
+    let scry_then_draw = || {
+        vec![
+            Effect::Scry { count: 2 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
+        ]
+    };
+
+    CardDefinition {
+        key: "tla.the_legend_of_kuruk",
+        scryfall_id: "5e9a53d3-7f2f-4a9c-9516-0713da740478",
+        name: "The Legend of Kuruk".into(),
+        mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(1, scry_then_draw()),
+            chapter(2, scry_then_draw()),
+            chapter(3, return_transformed()),
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Avatar Kuruk".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into()],
+            power: Some(4),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouCastSpell {
+                    predicate: CardPredicate::default(),
+                },
+                effects: vec![Effect::CreateToken {
+                    token_name: "Spirit".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                waterbend: true,
+                mana_cost: ManaCost::parse("{20}"),
+                effects: vec![Effect::TakeExtraTurn],
+                ..Default::default()
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
         ..Default::default()
     }
 }
@@ -10481,6 +10652,7 @@ fn zuko_conflicted() -> CardDefinition {
                     }),
                     mode(Effect::ExileSourceAndReturn {
                         player: PlayerSelector::EachOpponent,
+                        transformed: false,
                     }),
                 ],
             }],
@@ -10598,6 +10770,24 @@ fn zuko_s_exile() -> CardDefinition {
         text_box: text_box.into(),
         ..Default::default()
     }
+}
+
+/// A Saga's chapter ability (CR 714.2).
+fn chapter(chapter: u8, effects: Vec<Effect>) -> Ability {
+    Ability::Triggered {
+        intervening_if: None,
+        condition: TriggerCondition::Chapter { chapter },
+        effects,
+    }
+}
+
+/// "Exile this Saga, then return it to the battlefield transformed under your
+/// control."
+fn return_transformed() -> Vec<Effect> {
+    vec![Effect::ExileSourceAndReturn {
+        player: PlayerSelector::You,
+        transformed: true,
+    }]
 }
 
 // ---- Mana constructors ----

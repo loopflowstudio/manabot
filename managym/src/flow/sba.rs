@@ -4,7 +4,10 @@
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
+        ability::{Ability, TriggerCondition},
         game_object::{CardId, PermanentId, PlayerId},
+        permanent::CounterKind,
+        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -198,7 +201,61 @@ impl Game {
             self.process_game_events_with_sources(&trigger_sources);
         }
 
+        // CR 714.4 — A Saga whose lore counters reach its final chapter is
+        // sacrificed once none of its chapter abilities is waiting or on the
+        // stack.
+        for saga in self.finished_sagas() {
+            self.sacrifice_permanent(saga);
+            performed = true;
+        }
+
         performed
+    }
+
+    fn finished_sagas(&self) -> Vec<PermanentId> {
+        (0..self.state.permanents.len())
+            .map(PermanentId)
+            .filter(|&id| {
+                let Some(permanent) = self.state.permanents[id].as_ref() else {
+                    return false;
+                };
+                let card = &self.state.cards[permanent.card];
+                let Some(last) = card.final_chapter().filter(|_| card.is_saga()) else {
+                    return false;
+                };
+                permanent.counter_count(CounterKind::Lore) >= i32::from(last)
+                    && !self.chapter_ability_pending(permanent.card)
+            })
+            .collect()
+    }
+
+    /// Whether a chapter ability of this Saga has triggered and not yet left
+    /// the stack: waiting to be put on it, or on it.
+    fn chapter_ability_pending(&self, saga: CardId) -> bool {
+        let object = self.current_object_ref(saga);
+        let is_chapter = |index: usize| {
+            matches!(
+                self.state.cards[saga].abilities.get(index),
+                Some(Ability::Triggered {
+                    condition: TriggerCondition::Chapter { .. },
+                    ..
+                })
+            )
+        };
+        self.state.pending_triggers.iter().any(|trigger| {
+            trigger.source_card == saga
+                && trigger.source_ref == object
+                && trigger.inline_effects.is_none()
+                && is_chapter(trigger.ability_index)
+        }) || self.state.stack_objects.iter().any(|item| match item {
+            StackObject::TriggeredAbility(ability) => {
+                ability.source_card == saga
+                    && ability.source_ref == object
+                    && ability.inline_effects.is_none()
+                    && is_chapter(ability.ability_index)
+            }
+            _ => false,
+        })
     }
 
     /// Whether an Aura is unattached, or attached to itself or an object its

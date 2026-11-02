@@ -130,11 +130,13 @@ pub enum GameEvent {
         target: EventSubject,
         amount: u32,
     },
-    /// `by` put `count` (> 0) `kind` counters on a permanent (CR 122.6).
+    /// `by` put `count` (> 0) `kind` counters on a permanent (CR 122.6),
+    /// leaving `total` of that kind on it.
     CountersPut {
         permanent: PermanentId,
         kind: CounterKind,
         count: i32,
+        total: i32,
         by: PlayerId,
     },
     /// A player scried (CR 701.22).

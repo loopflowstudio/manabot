@@ -526,6 +526,8 @@ class Player:
     keeps_red_mana: bool
     no_maximum_hand_size: bool
     turn_history: PlayerTurnHistory
+    # Extra turns this player will take after this one (CR 500.7).
+    extra_turns: int
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
@@ -625,7 +627,7 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
-    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror).
+    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore).
     counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
     attached_to: int | None

@@ -126,6 +126,12 @@ pub enum TriggerCondition {
     YourAttackingCreatureTriggers,
     /// "At the beginning of your first main phase" (the precombat main).
     BeginningOfYourFirstMainPhase,
+    /// A Saga's chapter ability (CR 714.2b): triggers as lore counters put
+    /// on this Saga bring their number from below `chapter` to at least it.
+    /// Abilities printed "I, II" are one ability per chapter.
+    Chapter {
+        chapter: u8,
+    },
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `PlayerTurnHistory::cards_drawn`).
     YouDrawNthCardThisTurn {
@@ -530,11 +536,22 @@ pub enum Effect {
     Airbend {
         target: TargetSpec,
     },
-    /// "Exile this, then return it to the battlefield under [player]'s
-    /// control": the source returns as a new object (CR 400.7).
+    /// "Exile this, then return it to the battlefield [transformed] under
+    /// [player]'s control": the source returns as a new object (CR 400.7),
+    /// its back face up when `transformed` (CR 712.14). A card with no back
+    /// face stays exiled (CR 701.28c).
     ExileSourceAndReturn {
         player: PlayerSelector,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        transformed: bool,
     },
+    /// "Take an extra turn after this one" (CR 500.7): the resolving
+    /// player's, before any extra turn created earlier.
+    TakeExtraTurn,
+    /// "Transform [this]" (CR 701.28): the source permanent turns over and
+    /// stays the same object (CR 712.9). Nothing happens to a permanent that
+    /// isn't a double-faced card (CR 701.28c).
+    TransformSource,
     /// "[player] gains control of [the target]" for `duration` (CR 613.1b).
     GainControl {
         player: PlayerSelector,
@@ -1328,6 +1345,8 @@ impl Effect {
             | Effect::CreateToken { .. }
             | Effect::PutCountersOnSource { .. }
             | Effect::TapSource
+            | Effect::TransformSource
+            | Effect::TakeExtraTurn
             | Effect::CreateDelayedTrigger { .. }
             | Effect::ExileSourceAndReturn { .. }
             | Effect::PutCountersOnCreatedToken { .. }

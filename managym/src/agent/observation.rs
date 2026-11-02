@@ -68,6 +68,9 @@ pub struct PlayerData {
     /// What this player has done this turn (public: every event in it was).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: PlayerTurnHistory,
+    /// Extra turns this player will take after this one (CR 500.7).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub extra_turns: u32,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
@@ -841,6 +844,13 @@ impl Observation {
                 .collect(),
             keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
             turn_history: game.state.turn.history[player.0],
+            extra_turns: game
+                .state
+                .turn
+                .extra_turns
+                .iter()
+                .filter(|taker| **taker == player)
+                .count() as u32,
             effects: ContinuousEffectData::list(game, Some(Affected::Player(player))),
         }
     }
