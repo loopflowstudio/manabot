@@ -595,6 +595,7 @@ fn effect_witnesses() -> Vec<Effect> {
     };
     vec![
         Effect::CreateTokenCopy {
+            of: Some(TargetSpec::Creature),
             exceptions: vec![Modification::Nonlegendary],
         },
         Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 1)),

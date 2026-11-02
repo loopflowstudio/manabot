@@ -214,6 +214,7 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         # target effects the derivation finds.
         "Earth Rumble": "beneficial",
         "Fatal Fissure": "beneficial",
+        "Foggy Swamp Visions": "harmful",
         "How to Start a Riot": "beneficial",
         "Jet's Brainwashing": "beneficial",
         "Price of Freedom": "harmful",

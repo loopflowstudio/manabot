@@ -560,7 +560,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
-        CreateTokenCopy { exceptions } => copy_description(exceptions),
+        CreateTokenCopy { of, exceptions } => copy_description(of.as_ref(), exceptions),
         ApplyContinuous { affected, modification, duration } => continuous_description(affected, modification, *duration),
         PutCountersOnTriggeringPermanent { count } => format!("Put {count} +1/+1 counters on the permanent that caused this trigger"),
         OptionalPayment { cost, if_paid, if_declined } => {
@@ -742,8 +742,14 @@ fn effect_description(effect: &Effect) -> Option<String> {
 }
 
 /// "Create a token that's a copy of this[, except …]" (CR 707.9).
-fn copy_description(exceptions: &[Modification<EffectValue>]) -> String {
-    let mut text = "Create a token that's a copy of this".to_string();
+fn copy_description(of: Option<&TargetSpec>, exceptions: &[Modification<EffectValue>]) -> String {
+    let mut text = match of {
+        None => "Create a token that's a copy of this".to_string(),
+        Some(spec) => format!(
+            "Create a token that's a copy of {}",
+            target_description(spec)
+        ),
+    };
     for (index, exception) in exceptions.iter().enumerate() {
         // "It …", lowercased after "except".
         let phrase = continuous_description(

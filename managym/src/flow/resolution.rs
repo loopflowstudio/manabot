@@ -1278,12 +1278,34 @@ impl Game {
                 }
                 None
             }
-            Effect::CreateTokenCopy { exceptions } => {
+            Effect::CreateTokenCopy { of, exceptions } => {
                 let exceptions = exceptions
                     .iter()
                     .map(|exception| exception.resolve(|value| self.effect_value(value, frame)))
                     .collect();
-                self.create_token_copy(frame.source?, frame.controller, exceptions);
+                let copied = match of {
+                    None => frame.source?,
+                    // The target as it was chosen, even once the resolution
+                    // has moved it ("exile ..., create a copy of it").
+                    Some(_) => match frame.primary_target()? {
+                        Target::Permanent(id) => {
+                            if self.present_primary_target(frame).is_none() {
+                                return None;
+                            }
+                            self.state.permanents[id].as_ref()?.card
+                        }
+                        // Copied once this resolution has exiled it.
+                        Target::GraveyardCard(object) => {
+                            let card = CardId::from(object.entity);
+                            if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
+                                return None;
+                            }
+                            card
+                        }
+                        _ => return None,
+                    },
+                };
+                frame.created = self.create_token_copy(copied, frame.controller, exceptions);
                 None
             }
             Effect::OptionalPayment {

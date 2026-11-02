@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Sagas to Standard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column with a sticky section nav; code sits in full-width slabs; interactive demos are bordered panels with a state readout on the right. */
+:root{
+  --bg:#f5f7fa;--surface:#ffffff;--ink:#1c2230;--ink-2:#55607a;--line:#d9dfe9;--code-bg:#eef2f7;
+  --accent:#0b6e78;--accent-ink:#ffffff;
+  --now:#3c4a66;--now-bg:#e6eaf2;
+  --wip:#8a5a00;--wip-bg:#fff1d6;
+  --prop:#0b6e78;--prop-bg:#dff3f4;
+  --bad:#a1322a;--bad-bg:#fbe5e2;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-display:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#151921;--surface:#1c2230;--ink:#e6eaf2;--ink-2:#a3adc2;--line:#2e3747;--code-bg:#111520;
+  --accent:#4fc1c9;--accent-ink:#0b1a1c;
+  --now:#b7c1d8;--now-bg:#262e40;
+  --wip:#f0bf5e;--wip-bg:#3a2d10;
+  --prop:#4fc1c9;--prop-bg:#113a3e;
+  --bad:#f08b80;--bad-bg:#3f1d1a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151921;--surface:#1c2230;--ink:#e6eaf2;--ink-2:#a3adc2;--line:#2e3747;--code-bg:#111520;
+  --accent:#4fc1c9;--accent-ink:#0b1a1c;
+  --now:#b7c1d8;--now-bg:#262e40;
+  --wip:#f0bf5e;--wip-bg:#3a2d10;
+  --prop:#4fc1c9;--prop-bg:#113a3e;
+  --bad:#f08b80;--bad-bg:#3f1d1a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--font-body)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:52rem;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:1.5rem 5rem}
+header.top{padding-block:2rem 1rem}
+.eyebrow{font:500 .78rem/1.2 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+h1{font:600 2.4rem/1.1 var(--font-display);margin:.4rem 0 .6rem;text-wrap:balance;letter-spacing:-.01em}
+.lede{font-size:1.08rem;color:var(--ink-2);max-width:40rem;margin:0}
+nav.sections{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:1rem calc(-1 * max(16px,env(safe-area-inset-left,0px))) 0 calc(-1 * max(16px,env(safe-area-inset-right,0px)));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+nav.sections ul{list-style:none;margin:0;padding:0;display:flex;gap:.25rem;overflow-x:auto;scrollbar-width:none}
+nav.sections ul::-webkit-scrollbar{display:none}
+nav.sections a{display:block;padding:.7rem .8rem;font:500 .9rem/1 var(--font-display);color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+nav.sections a[aria-current="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.sections a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.view{display:none;padding-top:1.5rem}
+section.view.active{display:block}
+h2{font:600 1.7rem/1.15 var(--font-display);margin:1.6rem 0 .5rem;text-wrap:balance}
+h3{font:600 1.15rem/1.3 var(--font-display);margin:2rem 0 .4rem}
+p,li{max-width:42rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin:1rem 0 0;font-size:.85rem;color:var(--ink-2)}
+.chip{display:inline-block;font:500 .72rem/1 var(--font-mono);letter-spacing:.05em;text-transform:uppercase;padding:.3rem .5rem;border-radius:3px;vertical-align:middle}
+.chip.now{background:var(--now-bg);color:var(--now)}
+.chip.wip{background:var(--wip-bg);color:var(--wip)}
+.chip.prop{background:var(--prop-bg);color:var(--prop)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+pre{margin:1rem 0;background:var(--code-bg);border:1px solid var(--line);border-radius:4px;padding:.9rem 1rem;overflow-x:auto;font:.82rem/1.5 var(--font-mono)}
+code{font-family:var(--font-mono);font-size:.88em;background:var(--code-bg);padding:.05em .3em;border-radius:3px}
+pre code{background:none;padding:0;font-size:inherit}
+.cmt{color:var(--ink-2)}
+.kw{color:var(--accent)}
+.block{border-left:3px solid var(--line);padding:.1rem 0 .1rem 1rem;margin:1.2rem 0}
+.block.prop{border-color:var(--prop)}
+.block.wip{border-color:var(--wip)}
+.block.bad{border-color:var(--bad)}
+.block>.chip{margin-bottom:.4rem}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 .75rem/1.3 var(--font-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
+td code{white-space:nowrap}
+.scroll{overflow-x:auto}
+.num{font-variant-numeric:tabular-nums}
+/* demos */
+.demo{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1rem;margin:1.2rem 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem}
+@media (max-width:700px){.demo{grid-template-columns:minmax(0,1fr)}}
+.demo>div{min-width:0}
+.demo h4{margin:0 0 .5rem;font:600 .95rem/1.3 var(--font-display)}
+.demo .hint{font-size:.85rem;color:var(--ink-2);margin:0 0 .6rem}
+.controls{display:flex;flex-wrap:wrap;gap:.5rem}
+button{font:500 .88rem/1 var(--font-body);padding:.55rem .8rem;border-radius:4px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.state{font:.8rem/1.5 var(--font-mono);background:var(--code-bg);border:1px solid var(--line);border-radius:4px;padding:.7rem .8rem;white-space:pre;overflow-x:auto;min-height:7rem}
+.log{font:.8rem/1.5 var(--font-mono);color:var(--ink-2);margin:.6rem 0 0;padding:0;list-style:none;max-height:11rem;overflow:auto}
+.log li{padding:.1rem 0;border-top:1px dashed var(--line)}
+.log li.ev{color:var(--ink)}
+.log li.sba{color:var(--bad)}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin:.4rem 0}
+.toggle button{border:0;border-radius:0;background:var(--surface)}
+.toggle button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.pair{position:relative}
+.pair pre[hidden]{display:none}
+.chart{width:100%;height:auto;max-width:100%;display:block}
+.chart text{font:500 11px var(--font-mono);fill:var(--ink-2)}
+.chart .axis{stroke:var(--line)}
+.chart .now-line{stroke:var(--now);fill:none;stroke-width:2}
+.chart .proj-line{stroke:var(--now);fill:none;stroke-width:2;stroke-dasharray:5 5}
+.chart .prop-line{stroke:var(--prop);fill:none;stroke-width:2}
+.chart .dot{fill:var(--now)}
+.chart .pdot{fill:var(--prop)}
+.range{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.6rem;align-items:center;font-size:.9rem}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem;margin:.8rem 0}
+.stat{background:var(--code-bg);border-radius:4px;padding:.6rem .7rem}
+.stat b{display:block;font:600 1.3rem/1.2 var(--font-display)}
+.stat span{font-size:.78rem;color:var(--ink-2)}
+.cache-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:.4rem;padding:.35rem 0;border-top:1px solid var(--line);font-size:.86rem;align-items:center}
+.cache-row.head{font:500 .72rem/1.3 var(--font-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);border-top:0}
+.pill{display:inline-block;padding:.15rem .45rem;border-radius:3px;font:500 .75rem/1.3 var(--font-mono)}
+.pill.hit{background:var(--prop-bg);color:var(--prop)}
+.pill.miss{background:var(--bad-bg);color:var(--bad)}
+details{margin:.8rem 0;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+summary{cursor:pointer;padding:.7rem .9rem;font:500 .95rem/1.3 var(--font-display)}
+details>div{padding:0 .9rem .6rem}
+ol.steps{counter-reset:s;list-style:none;padding:0}
+ol.steps li{counter-increment:s;position:relative;padding-left:2.4rem;margin:.9rem 0}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:.1rem;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:600 .85rem/1.7rem var(--font-display);text-align:center}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-size:.82rem;color:var(--ink-2)}
+@media (prefers-reduced-motion:no-preference){section.view.active{animation:fade .18s ease-out}@keyframes fade{from{opacity:.4}to{opacity:1}}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">manabot · managym engine · MTG-225 (T6) · 2026-11-02</div>
+  <h1>Sagas to Standard</h1>
+  <p class="lede">The data structures and APIs that give the engine Sagas and double-faced cards now, and that let the card file grow from 657 definitions toward the whole of Standard without the effect vocabulary or the step time growing with it.</p>
+  <div class="legend">
+    <span><span class="chip now">main</span> shipped on <code>origin/main 4c8324a59</code></span>
+    <span><span class="chip wip">T6 tree</span> in the implement agent's working tree today</span>
+    <span><span class="chip prop">proposed</span> not written; needs Jack Heart's decision</span>
+  </div>
+</header>
+
+<nav class="sections" aria-label="Sections">
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#faces">Faces &amp; copies</a></li>
+    <li><a href="#sagas">Sagas &amp; turns</a></li>
+    <li><a href="#effects">Effect vocabulary</a></li>
+    <li><a href="#performance">Performance</a></li>
+    <li><a href="#standard">Toward Standard</a></li>
+  </ul>
+</nav>
+
+<!-- ============================================================ -->
+<section class="view" id="overview">
+  <h2>One card representation, three consumers</h2>
+  <p>Every card is one Rust value, a <code>CardDefinition</code>, written in its set file. The engine plays it, the learning tokens are a serde walk of it, and the observation describes it. That contract is what already scales: adding a card that reuses existing rules types costs no vocabulary edit, no model change and no per-step work.</p>
+  <pre><code><span class="cmt">// managym/src/state/card.rs (main)</span>
+<span class="kw">pub struct</span> CardDefinition {
+    <span class="kw">pub</span> key: &amp;'static str,            <span class="cmt">// "tla.zhao_ruthless_admiral": identity, never tokens</span>
+    <span class="kw">pub</span> scryfall_id: &amp;'static str,
+    <span class="kw">pub</span> name: String,
+    <span class="kw">pub</span> mana_cost: Option&lt;ManaCost&gt;,
+    <span class="kw">pub</span> types: CardTypes,  <span class="kw">pub</span> supertypes: Vec&lt;String&gt;,  <span class="kw">pub</span> subtypes: Vec&lt;String&gt;,
+    <span class="kw">pub</span> abilities: Vec&lt;Ability&gt;,                     <span class="cmt">// triggered abilities</span>
+    <span class="kw">pub</span> statics: Vec&lt;StaticAbility&gt;,                <span class="cmt">// CR 604, printed order</span>
+    <span class="kw">pub</span> mana_abilities: Vec&lt;ManaAbility&gt;,
+    <span class="kw">pub</span> activated_abilities: Vec&lt;ActivatedAbilityDefinition&gt;,
+    <span class="kw">pub</span> spell_effects: Vec&lt;Effect&gt;,  <span class="kw">pub</span> targeting: Vec&lt;TargetRequirement&gt;,
+    <span class="kw">pub</span> additional_costs: Vec&lt;AdditionalCost&gt;,
+    <span class="kw">pub</span> keywords: Keywords,          <span class="cmt">// 14 bool fields today</span>
+    <span class="kw">pub</span> replacement_effects: Vec&lt;ReplacementEffect&gt;,
+    <span class="kw">pub</span> text_box: String,  <span class="kw">pub</span> power: Option&lt;i32&gt;,  <span class="kw">pub</span> toughness: Option&lt;i32&gt;,
+    <span class="kw">pub</span> is_token: bool,
+}</code></pre>
+
+  <h3>Who owns what</h3>
+  <div class="scroll"><table>
+    <tr><th>Fact</th><th>Type / API</th><th>Where</th></tr>
+    <tr><td>The catalog a game runs against</td><td><code>ContentPack</code>: <code>Vec&lt;Arc&lt;CardDefinition&gt;&gt;</code> indexed by <code>CardDefId</code>, <code>content_digest()</code>, <code>manifest()</code></td><td><code>cards/content_pack.rs</code></td></tr>
+    <tr><td>An object in a game</td><td><code>Card { definition_id, definition: Arc, copy: Option&lt;CopyEffect&gt; }</code>; <code>Permanent { counters, timestamp, attached_to, animated, … }</code></td><td><code>state/</code></td></tr>
+    <tr><td>Anything with a duration</td><td><code>ContinuousEffect { timestamp, source, affected, modification, duration }</code></td><td><code>state/effect.rs</code></td></tr>
+    <tr><td>What a permanent is right now</td><td><code>Game::characteristics(id) → Arc&lt;Characteristics&gt;</code>: layers 1, 4, 6, 7a–c, cached per <code>TrackedState</code> revision</td><td><code>flow/statics.rs</code></td></tr>
+    <tr><td>Later, and this turn</td><td><code>DelayedEvent</code> triggers (T4); <code>TurnState.history</code> (T4/T5)</td><td><code>flow/</code></td></tr>
+    <tr><td>What the policy sees</td><td>v5 rows + <code>facts</code> block (open vocabularies); learning tokens = hashed rule names</td><td><code>agent/</code>, <code>cards/tokens.rs</code></td></tr>
+  </table></div>
+
+  <h3>The three things this guide changes</h3>
+  <ol class="steps">
+    <li><strong>Faces and Sagas</strong> enter as data on the types above: a back face is another catalog row, a Saga chapter is a counter-threshold trigger, an extra turn is a queue on <code>TurnState</code>. No new subsystems. <a href="#faces">Faces</a>, <a href="#sagas">Sagas</a>.</li>
+    <li><strong>The effect vocabulary gets its missing axis.</strong> Today the object a verb acts on is spelled into the verb's name, so <code>Effect</code> grows with the card count (63 → 107 variants over T1–T4). A verb plus an <code>ObjectSelector</code> replaces about 25 variants with 3 and gives the policy tokens that mean the same thing on every card. <a href="#effects">Effects</a>.</li>
+    <li><strong>Derived state stops being recomputed on every write.</strong> One revision counter invalidates every cache on any mutable borrow. Splitting it by what the layers read, indexing effect records by object, and carrying caches into search clones remove the T3 regression's remaining 15–18%. A CI budget keeps it gone. <a href="#performance">Performance</a>.</li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section class="view" id="faces">
+  <h2>Double-faced cards are two catalog rows and one object</h2>
+  <p>A card's two faces are written together, in one function, so a card is still authored in one place. The pack registers the back face as its own row immediately after the front, so a transformed permanent observes, tokenizes and copies as the face that is showing. The object itself never changes: it keeps its counters, damage, attachments and combat status when it turns over (CR 712.9).</p>
+
+  <div class="block wip"><span class="chip wip">T6 tree</span>
+  <pre><code><span class="cmt">// state/card.rs</span>
+<span class="kw">pub struct</span> CardDefinition {
+    <span class="cmt">/* … */</span>
+    <span class="cmt">/// Back face of a transforming DFC (CR 712.1). Serialized as its name,</span>
+    <span class="cmt">/// a reference to its own row, so the front's digest and tokens name it</span>
+    <span class="cmt">/// without repeating it.</span>
+    <span class="kw">pub</span> back_face: Option&lt;Box&lt;CardDefinition&gt;&gt;,
+}
+
+<span class="cmt">// cards/content_pack.rs</span>
+<span class="kw">impl</span> ContentPack {
+    <span class="kw">pub fn</span> register_card(&amp;<span class="kw">mut self</span>, definition: CardDefinition) {
+        <span class="cmt">// … push the front as row n …</span>
+        <span class="kw">if let</span> Some(back) = back_face {          <span class="cmt">// back face is row n + 1</span>
+            <span class="kw">self</span>.register_card(*back);
+            <span class="kw">self</span>.back_faces.insert(CardDefId(n + 1), CardDefId(n));
+        }
+    }
+    <span class="kw">pub fn</span> back_face(&amp;<span class="kw">self</span>, front: CardDefId) -&gt; Option&lt;(CardDefId, Arc&lt;CardDefinition&gt;)&gt;;
+    <span class="kw">pub fn</span> front_face(&amp;<span class="kw">self</span>, back: CardDefId) -&gt; Option&lt;CardDefId&gt;;
+}
+
+<span class="cmt">// state/card.rs: the in-game object</span>
+<span class="kw">pub struct</span> Card {
+    <span class="kw">pub</span> id: ObjectId,
+    <span class="kw">pub</span> definition_id: CardDefId,      <span class="cmt">// the face that is showing</span>
+    <span class="kw">pub</span> registry_key: ObjectId,         <span class="cmt">// = definition_id, for the observation ABI</span>
+    definition: Arc&lt;CardDefinition&gt;,
+    front: Option&lt;(CardDefId, Arc&lt;CardDefinition&gt;)&gt;,   <span class="cmt">// Some while transformed</span>
+}
+<span class="kw">impl</span> Card {
+    <span class="kw">pub fn</span> transform(&amp;<span class="kw">mut self</span>, back: Option&lt;(CardDefId, Arc&lt;CardDefinition&gt;)&gt;);
+    <span class="kw">pub fn</span> is_transformed(&amp;<span class="kw">self</span>) -&gt; bool;
+}
+
+<span class="cmt">// flow/zones.rs</span>
+<span class="kw">impl</span> Game {
+    <span class="cmt">/// CR 701.28a, 712.9: turns over, same object. false if no back face (701.28c).</span>
+    <span class="kw">pub(crate) fn</span> transform_permanent(&amp;<span class="kw">mut self</span>, permanent: PermanentId) -&gt; bool;
+    <span class="cmt">// On any move off the battlefield: front face up again (CR 712.8a).</span>
+    <span class="cmt">// On entry with `entry.transformed`: back face up (CR 712.14).</span>
+}
+
+<span class="cmt">// state/ability.rs</span>
+Effect::TransformSource
+Effect::ExileSourceAndReturn { <span class="cmt">/* … */</span> transformed: bool }   <span class="cmt">// "return it transformed"</span></code></pre>
+  </div>
+
+  <div class="demo" id="dfc-demo">
+    <div>
+      <h4>Try it: Aang, at the Crossroads // Aang, Destined Savior</h4>
+      <p class="hint">The readout is the in-game <code>Card</code> and <code>Permanent</code>. Watch which fields change and which survive a transform.</p>
+      <div class="controls">
+        <button class="primary" id="dfc-transform">Transform</button>
+        <button id="dfc-counter">Put a +1/+1 counter</button>
+        <button id="dfc-tap">Tap</button>
+        <button id="dfc-leave">Exile, then return transformed</button>
+        <button id="dfc-copy">Create a token copy</button>
+        <button id="dfc-reset">Reset</button>
+      </div>
+      <ul class="log" id="dfc-log" aria-live="polite"></ul>
+    </div>
+    <div>
+      <div class="state" id="dfc-state"></div>
+    </div>
+  </div>
+
+  <h3>Copies of a face</h3>
+  <p>T5 made the copy effect data: <code>Card.copy: Option&lt;CopyEffect { of: CardDefId, exceptions }&gt;</code>, materialized by <code>Game::create_token_copy</code>. Faces fit without a new field: a copy's <code>of</code> is the source's <em>current</em> <code>definition_id</code>, and a copy made from a face that has no <code>back_face</code> of its own cannot transform. That is CR 707.8 and 712.8 falling out of the row model.</p>
+  <div class="block prop"><span class="chip prop">proposed detail</span>
+  <pre><code><span class="cmt">// flow/zones.rs, create_token_copy: one line decides face-aware copying</span>
+<span class="kw">let</span> of = source.definition_id;              <span class="cmt">// back face's row when the source is transformed</span>
+<span class="cmt">// Ember Island Production / Fire Lord Azula / Joo Dee all pass through here;</span>
+<span class="cmt">// `transform_permanent` returns false on the copy because its row has no back_face.</span></code></pre>
+  <p>Observation: the permanent row's definition index already names the showing face. Add <code>FactKind::Transformed</code> (source = the front's row) so a viewer, and the policy, can tell a transformed Aang from a card that was printed that way. Tokens: the front's serialized <code>back_face</code> is a definition reference to the back's row, the same device <code>token_name</code> uses, so the policy reads the back face's own program in place.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="view" id="sagas">
+  <h2>A Saga is a counter kind, a threshold trigger and one state-based action</h2>
+  <p>Nothing about Sagas needs a new subsystem. Lore is a <code>CounterKind</code> like stun or quest. A chapter is a triggered ability whose condition is "lore counters put on this brought the count to at least N". The sacrifice is a state-based action, so it waits until the final chapter has left the stack (CR 714.4).</p>
+
+  <div class="block wip"><span class="chip wip">T6 tree</span>
+  <pre><code><span class="cmt">// state/permanent.rs</span>
+<span class="kw">pub enum</span> CounterKind { PlusOnePlusOne, Stun, Fire, DoubleStrike, Quest, Finality, Conqueror, <b>Lore</b> }
+
+<span class="cmt">// state/ability.rs</span>
+TriggerCondition::Chapter { chapter: u8 }   <span class="cmt">// fires as the count crosses from &lt; chapter to ≥ chapter (CR 714.2b)</span>
+
+<span class="cmt">// flow/zones.rs, on entering the battlefield</span>
+<span class="kw">if</span> card.is_saga() {
+    permanent.counters.change(CounterKind::Lore, 1);            <span class="cmt">// CR 714.3a</span>
+    <span class="kw">self</span>.emit(GameEvent::CountersPut { kind: Lore, count: 1, total, .. });  <span class="cmt">// chapter I triggers</span>
+}
+<span class="cmt">// flow/tick.rs, precombat main: one lore counter per Saga you control (CR 714.2a)</span>
+<span class="cmt">// flow/sba.rs: lore ≥ final chapter &amp;&amp; no chapter ability of this Saga on the stack → sacrifice (CR 714.4)</span></code></pre>
+  </div>
+
+  <div class="demo" id="saga-demo">
+    <div>
+      <h4>Try it: The Legend of Kuruk</h4>
+      <p class="hint">Chapters I–III. The sacrifice is a state-based action, so it cannot happen while chapter III is still on the stack.</p>
+      <div class="controls">
+        <button class="primary" id="saga-main">Precombat main: add lore</button>
+        <button id="saga-resolve">Resolve top of stack</button>
+        <button id="saga-sba">Check state-based actions</button>
+        <button id="saga-reset">Reset</button>
+      </div>
+      <ul class="log" id="saga-log" aria-live="polite"></ul>
+    </div>
+    <div>
+      <div class="state" id="saga-state"></div>
+    </div>
+  </div>
+
+  <p>Three of the T6 Sagas end with "exile this Saga, then return it to the battlefield transformed". That is <code>Effect::ExileSourceAndReturn { transformed: true }</code> from the <a href="#faces">faces</a> section: the same object leaves (front face up, CR 712.8a) and a new object enters back face up as Avatar Kuruk, Kyoshi, Roku, Yangchen or Sozin.</p>
+
+  <div class="block prop"><span class="chip prop">proposed generalization</span>
+  <p><code>Chapter</code> is one instance of a counter crossing a threshold. Writing it as <code>TriggerCondition::CountersReach { kind: CounterKind, at_least: u8 }</code> covers chapters, "when the third quest counter is put on", and Class levels later, with one token shape. The directed Saga tests stay the same; only the condition's name changes. Decide this with the <a href="#effects">vocabulary question</a>, not separately.</p>
+  </div>
+
+  <h3>Turn scheduling</h3>
+  <div class="block wip"><span class="chip wip">T6 tree</span>
+  <pre><code><span class="cmt">// flow/turn.rs</span>
+<span class="kw">pub struct</span> TurnState {
+    <span class="cmt">/* active_player, turn_number, lands_played, history, … */</span>
+    <span class="cmt">/// Extra turns still to be taken (CR 500.7), most recently created last: taken first.</span>
+    <span class="kw">pub</span> extra_turns: Vec&lt;PlayerId&gt;,
+    <span class="cmt">/// The player whose turn follows the extra turns.</span>
+    <span class="kw">pub</span> resume_with: Option&lt;PlayerId&gt;,
+}
+Effect::TakeExtraTurn        <span class="cmt">// Avatar Kuruk</span></code></pre>
+  </div>
+  <div class="block prop"><span class="chip prop">proposed</span>
+  <pre><code><span class="cmt">// Bumi, Unleashed: "untap all lands you control. After this phase, there is an additional</span>
+<span class="cmt">// combat phase. Creatures that attacked this turn can't attack during it." (restricted extra combat)</span>
+<span class="kw">pub struct</span> TurnState { <span class="cmt">/* … */</span> <span class="kw">pub</span> extra_combats: Vec&lt;ExtraCombat&gt; }
+<span class="kw">pub struct</span> ExtraCombat { <span class="kw">pub</span> restriction: Option&lt;AttackRestriction&gt; }  <span class="cmt">// AttackedThisTurn</span>
+Effect::AddCombatPhase { restriction }
+
+<span class="cmt">// "at the beginning of your next upkeep, transform it" / "sacrifice it at your next end step":</span>
+<span class="cmt">// T4's Effect::CreateDelayedTrigger with DelayedEvent::{NextUpkeep, NextEndStep} and</span>
+<span class="cmt">// the verb (TransformSource / Sacrifice) as its effect. No new scheduling machinery.</span></code></pre>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="view" id="effects">
+  <h2>Separate the verb from the object it acts on</h2>
+  <p><code>Effect</code> has 107 variants at 657 definitions. About 45 serve one card each. Most of the growth comes from fusing the target into the verb: there are seven ways to put counters on something and nine ways to exile something. Each variant is its own resolution arm, its own observability row and an opaque learning token, so the policy sees <code>SacrificeSource</code> and <code>SacrificeTriggeringPermanent</code> as unrelated words.</p>
+
+  <div class="demo" id="growth-demo" style="grid-template-columns:minmax(0,1fr)">
+    <div>
+      <h4>Variants per batch, and where the current slope leads</h4>
+      <p class="hint">Measured points are from the merged TLA batches. The dashed line extends T1→T4's slope (0.13 variants per card); the solid teal line is the proposed vocabulary, which grows with new <em>verbs</em>, not new cards. Projections, not measurements.</p>
+      <svg class="chart" id="growth-chart" viewBox="0 0 640 300" role="img" aria-label="Effect variants against card definitions"></svg>
+      <div class="range">
+        <span>Cards</span>
+        <input type="range" id="growth-range" min="657" max="20000" step="1" value="3000" aria-label="Target card count">
+        <span class="num" id="growth-cards">3,000</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><b class="num" id="growth-now">—</b><span>variants on the current slope</span></div>
+        <div class="stat"><b class="num" id="growth-prop">—</b><span>variants with selectors (est.)</span></div>
+        <div class="stat"><b class="num">≈3,000</b><span>cards in a typical Standard</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>The shape</h3>
+  <div class="toggle" role="group" aria-label="Show code">
+    <button id="eff-now" aria-pressed="true">Today</button>
+    <button id="eff-prop" aria-pressed="false">Proposed</button>
+  </div>
+  <div class="pair">
+<pre id="eff-code-now"><code><span class="cmt">// state/ability.rs (main): the object is in the verb's name</span>
+Effect::PutCounters { .. }                  Effect::PutCountersOnSource { .. }
+Effect::PutCountersOnTriggeringPermanent    Effect::PutCountersOnCreatedToken { .. }
+Effect::PutTriggeringCountersOnSource       Effect::PutSourceCountersOnTarget
+Effect::PutCountersOnEachMatching { .. }    Effect::PutCountersValue { .. }
+
+Effect::Sacrifice { .. }   Effect::MaySacrifice { .. }
+Effect::SacrificeSource    Effect::SacrificeTriggeringPermanent
+
+Effect::ReturnToHand { .. }      Effect::ReturnSourceToHand      Effect::ReturnGrantorToHand
+Effect::ReturnSourceToBattlefield  Effect::ReturnSourceToBattlefieldTapped
+Effect::ReturnGraveyardTarget { .. }   Effect::ReturnToHandDrawIfControlled
+
+Effect::Exile { .. }  Effect::ExileAttached  Effect::ExileWithSource  Effect::ExileLinked
+Effect::ExileSourceAndReturn { .. }  Effect::ExileAndReturn { .. }  Effect::ExileUntilSourceLeaves { .. }
+Effect::ExileTopCardPlayThisTurn  Effect::ExileUntilNonlandCastFree  Effect::ExileWithControllerToken
+
+<span class="cmt">// flow/resolution.rs: `match effect {` with 102 arms</span></code></pre>
+<pre id="eff-code-prop" hidden><code><span class="cmt">// state/ability.rs (proposed): which object, said once</span>
+<span class="kw">pub enum</span> ObjectSelector {
+    This,                       <span class="cmt">// the source (LKI once it has left)</span>
+    Target(u8),                 <span class="cmt">// index into the ability's targets</span>
+    Triggering,                 <span class="cmt">// the object the trigger condition named</span>
+    Attached,                   <span class="cmt">// equipped / enchanted object</span>
+    CreatedThisWay,             <span class="cmt">// tokens from the previous effect</span>
+    Linked,                     <span class="cmt">// T5's exile links</span>
+    Each(AffectedSpec),         <span class="cmt">// each permanent you control matching …</span>
+}
+
+<span class="kw">pub enum</span> Zone { Hand, Battlefield, Graveyard, Exile, LibraryTop, LibraryBottom }
+
+Effect::PutCounters { on: ObjectSelector, kind: CounterKind, amount: EffectValue }
+Effect::Sacrifice   { what: ObjectSelector, optional: bool }
+Effect::Move        { what: ObjectSelector, to: Zone, tapped: bool, transformed: bool,
+                      until: Option&lt;Linger&gt; }   <span class="cmt">// Linger::SourceLeaves for "until ~ leaves"</span>
+
+<span class="cmt">// Card code stays readable through constructors:</span>
+Effect::sacrifice_this()  ==  Effect::Sacrifice { what: This, optional: <span class="kw">false</span> }
+Effect::exile_this_return_transformed()
+    ==  Effect::Move { what: This, to: Exile, .. } then Move { what: This, to: Battlefield, transformed: <span class="kw">true</span>, .. }
+
+<span class="cmt">// flow/resolution.rs: one selector resolver, one arm per verb</span>
+<span class="kw">fn</span> select(&amp;<span class="kw">self</span>, what: &amp;ObjectSelector, ctx: &amp;ResolutionContext) -&gt; Vec&lt;ObjectRef&gt;;
+Effect::Sacrifice { what, optional } =&gt; <span class="kw">for</span> object <span class="kw">in</span> <span class="kw">self</span>.select(what, ctx) { <span class="kw">self</span>.sacrifice(object, optional)? }</code></pre>
+  </div>
+
+  <div class="scroll"><table>
+    <tr><th>Today</th><th>Proposed</th><th>Rows removed</th></tr>
+    <tr><td>7 PutCounters* variants</td><td><code>PutCounters { on, kind, amount }</code></td><td class="num">6</td></tr>
+    <tr><td>4 Sacrifice* variants</td><td><code>Sacrifice { what, optional }</code></td><td class="num">3</td></tr>
+    <tr><td>6 Return*, 9 Exile*, Destroy, PlaceTargetInLibrary, OwnerPutsIntoLibrary</td><td><code>Move { what, to, tapped, transformed, until }</code></td><td class="num">≈16</td></tr>
+    <tr><td>TapSource, UntapSource, TapTarget, UntapTarget, TapAttached</td><td><code>Tap { what }</code>, <code>Untap { what }</code></td><td class="num">3</td></tr>
+    <tr><td><code>Chapter</code>, counter-threshold statics</td><td><code>CountersReach { kind, at_least }</code></td><td class="num">1–2</td></tr>
+  </table></div>
+
+  <h3>What this buys and what it costs</h3>
+  <ul>
+    <li><strong>Learning transfer.</strong> A <code>Sacrifice</code> + <code>This</code> token pair means the same thing on every card. Today each fused verb is a distinct hash the policy must learn from scratch.</li>
+    <li><strong>Smaller guards.</strong> <code>tests/cards/observability.rs</code> matches exhaustively over <code>Effect</code>; it shrinks with the vocabulary, and a new selector is one row rather than N.</li>
+    <li><strong>Cost.</strong> New learning-token streams and a new <code>content_digest</code>. Policies that read tokens retrain. Frozen worlds, checkpoints and experiment evidence are untouched; this is a change on the open world.</li>
+    <li><strong>The counterexample to keep.</strong> Verbs whose rules depend on which object they hit, such as <code>ReturnToHandDrawIfControlled</code>, do not fold cleanly. Keep them as <code>If { .. }</code> compositions, and measure how many remain. If the fused set does not shrink by at least half, the axis is weaker than it looks.</li>
+  </ul>
+  <div class="block prop"><span class="chip prop">decision</span>
+  <p><strong>Recommendation:</strong> its own Task between T6 and T7. T6 writes <em>new</em> effects (<code>Move … transformed</code>, extra combat, untap-all) in the selector shape where that is cheap and leaves the 107 existing verbs alone, so it stays one cohesive PR. The vocabulary Task then migrates the existing verbs behind constructor helpers, with every directed card test unchanged as the acceptance check.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="view" id="performance">
+  <h2>Cost should follow what changed, not whether anything changed</h2>
+  <p>#410 made a permanent's characteristics a cached view, computed once per state revision. That is the right model, and it won back most of T3's regression. What remains comes from how the revision is tracked.</p>
+
+  <div class="scroll"><table>
+    <tr><th>Build</th><th>Worst Search-64 reply</th><th>Total (3 seeds × 40 decisions)</th></tr>
+    <tr><td>main before T3 (<code>b73a6b5</code>)</td><td class="num">4.34 s</td><td class="num">128.7 s</td></tr>
+    <tr><td>T3 (<code>f122d51</code>)</td><td class="num">9.82 s</td><td class="num">305.5 s</td></tr>
+    <tr><td>characteristics cache, #410 (<code>ada77df</code>)</td><td class="num">4.97 s (+15%)</td><td class="num">151.8 s (+18%)</td></tr>
+    <tr><td>T4, T5, T6</td><td colspan="2">not measured on a quiet machine; no CI budget exists</td></tr>
+  </table></div>
+
+  <h3>Where the time goes</h3>
+  <div class="block bad"><span class="chip bad">today</span>
+  <pre><code><span class="cmt">// flow/game.rs: every mutable borrow is a new revision</span>
+<span class="kw">pub struct</span> TrackedState { state: GameState, revision: u64 }
+<span class="cmt">// deref_mut → revision += 1   (priority_mut / rng_mut are the only exceptions)</span>
+
+<span class="cmt">// flow/statics.rs: a new revision drops everything</span>
+<span class="kw">fn</span> at(&amp;<span class="kw">mut self</span>, revision: u64) -&gt; &amp;<span class="kw">mut</span> Self {
+    <span class="kw">if</span> <span class="kw">self</span>.revision != revision { <span class="kw">self</span>.index = None; <span class="kw">self</span>.characteristics.clear(); }
+}
+<span class="cmt">// flow/effects.rs: every lookup scans every record</span>
+<span class="kw">pub fn</span> effects_on(&amp;<span class="kw">self</span>, p: PermanentId) -&gt; <span class="kw">impl</span> Iterator { <span class="kw">self</span>.state.effects.iter().filter(..) }
+<span class="cmt">// flow/triggers.rs: per event, snapshot every permanent and walk the whole object_lki history</span></code></pre>
+  </div>
+
+  <div class="demo" id="cache-demo" style="grid-template-columns:minmax(0,1fr)">
+    <div>
+      <h4>Try it: one priority pass, two invalidation rules</h4>
+      <p class="hint">Click writes in the order a real step makes them. Each row shows whether the next <code>characteristics()</code> read hits the cache under today's single revision and under revisions split by what the layers read.</p>
+      <div class="controls">
+        <button id="cw-tap">Tap a land</button>
+        <button id="cw-priority">Pass priority</button>
+        <button id="cw-damage">Deal 2 damage</button>
+        <button id="cw-life">Lose 2 life</button>
+        <button id="cw-counter">Put a +1/+1 counter</button>
+        <button id="cw-effect">Pump until end of turn</button>
+        <button id="cw-attach">Attach Equipment</button>
+        <button id="cw-reset">Reset</button>
+      </div>
+      <div id="cache-rows">
+        <div class="cache-row head"><span>Write</span><span>Today</span><span>Split revisions</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b class="num" id="cw-miss-now">0</b><span>recomputes today</span></div>
+        <div class="stat"><b class="num" id="cw-miss-prop">0</b><span>recomputes, split</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Four changes, in order of payoff</h3>
+  <div class="block prop"><span class="chip prop">proposed</span>
+  <pre><code><span class="cmt">// 1. Revisions by what the layers read. Typed accessors decide which counter moves.</span>
+<span class="kw">pub struct</span> TrackedState {
+    state: GameState,
+    rev: Revisions,
+}
+<span class="kw">pub struct</span> Revisions { characteristics: u64, triggers: u64, offers: u64 }
+<span class="kw">impl</span> TrackedState {
+    <span class="kw">pub fn</span> permanent_mut(&amp;<span class="kw">mut self</span>, id) -&gt; PermanentWrite&lt;'_&gt;;   <span class="cmt">// .tap() bumps offers; .counters() bumps characteristics</span>
+    <span class="kw">pub fn</span> effects_mut(&amp;<span class="kw">mut self</span>) -&gt; &amp;<span class="kw">mut</span> EffectRecords;          <span class="cmt">// bumps characteristics</span>
+    <span class="kw">pub fn</span> player_mut(&amp;<span class="kw">mut self</span>, id) -&gt; &amp;<span class="kw">mut</span> Player;              <span class="cmt">// life, mana: bumps nothing the layers read</span>
+}
+<span class="cmt">// StaticsCache keys on rev.characteristics only. Debug builds keep recompute-and-assert.</span>
+
+<span class="cmt">// 2. Effect records indexed by whom they affect.</span>
+<span class="kw">pub struct</span> EffectRecords {
+    records: Vec&lt;ContinuousEffect&gt;,
+    by_object: HashMap&lt;ObjectRef, SmallVec&lt;[u32; 4]&gt;&gt;,   <span class="cmt">// maintained on push / expire</span>
+    by_player: [SmallVec&lt;[u32; 4]&gt;; 2],
+}
+<span class="kw">pub fn</span> effects_on(&amp;<span class="kw">self</span>, object: ObjectRef) -&gt; &amp;[u32];     <span class="cmt">// O(records on this object)</span>
+
+<span class="cmt">// 3. Search clones keep what they know. `Arc&lt;Characteristics&gt;` is immutable, so a cloned</span>
+<span class="cmt">//    world's cache is valid until its first characteristic write.</span>
+<span class="kw">impl</span> Clone <span class="kw">for</span> Game { <span class="cmt">/* clone statics cache (Arc clones), keep rev */</span> }
+
+<span class="cmt">// 4. Trigger sources by event kind, and LKI by entity.</span>
+<span class="kw">pub struct</span> TriggerIndex { by_event: BTreeMap&lt;EventKind, Vec&lt;TriggerSource&gt;&gt; }  <span class="cmt">// rebuilt on rev.triggers</span>
+<span class="kw">pub struct</span> ObjectLkiLog { latest: HashMap&lt;EntityId, u32&gt;, entries: Vec&lt;(ObjectRef, ObjectLki)&gt; }</code></pre>
+  <p>Interning is the fifth: <code>Characteristics</code> owns <code>String</code> and <code>Vec</code> fields (about 7% of playout time in #410's profile). Subtypes become <code>SubtypeId(u16)</code> from a catalog-wide table built with the pack; the text stays available for the LLM observation and Academy.</p>
+  </div>
+
+  <h3>A budget, so it stays fixed</h3>
+  <div class="block prop"><span class="chip prop">proposed</span>
+  <ul>
+    <li><code>managym/examples/bench_search.rs</code> runs in CI on a quiet runner, release build, same three seeds. The PR fails if worst reply or total exceeds the recorded baseline by more than 10%. A PR that moves the baseline records why.</li>
+    <li>A headless steps/s workload (the rul-9 shape) alongside it, so training throughput is measured for the first time since July.</li>
+    <li>Measure T4 and T5 once, now, so T6 has a baseline that is not a laptop under load.</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="view" id="standard">
+  <h2>What else has to change before 3,000 cards, and before 20,000</h2>
+  <p>Standard is about 3,000 cards across the legal sets; all of Magic is about 27,000 distinct names. The card representation is ready for either. These are the remaining places where a count is written into a type or a file.</p>
+
+  <div class="scroll"><table>
+    <tr><th>Today</th><th>Problem at scale</th><th>Change</th><th>When</th></tr>
+    <tr><td><code>Counters([i32; 7])</code> on every permanent</td><td>Magic has about 150 counter kinds; a dense array copies 150 ints per permanent per clone</td><td><code>Counters(SmallVec&lt;[(CounterKind, i32); 2]&gt;)</code>; same API</td><td>small Task, before counter kinds pass ~16</td></tr>
+    <tr><td><code>Keywords</code> struct of 14 <code>bool</code> fields</td><td>About 150 keyword abilities; a field per keyword is a column per keyword in the tensor</td><td><code>enum Keyword</code> + bitset; keywords become fact rows past the evergreen set</td><td>with the vocabulary Task</td></tr>
+    <tr><td><code>tla.rs</code>: 10.6k lines for 263 cards in the engine crate</td><td>~40 lines/card → 120k lines for Standard, 800k for everything; every card edit rebuilds the engine</td><td>Card sets move to a <code>managym-cards</code> crate (one module per set, unchanged function shape); engine depends on it only through <code>catalog()</code></td><td>before the third set after TLA</td></tr>
+    <tr><td>Layers 1, 4, 6, 7a–c</td><td>Control-changing (2), text-changing (3), color (5) and dependency order (613.8) are unrepresented</td><td>Add as stages in <code>flow/statics.rs</code> when the first card needs them; the layer basis already passes stage inputs forward</td><td>per card, as allocated</td></tr>
+    <tr><td>Card-shaped predicates: <code>CreatureWithNamesakes(8)</code>, <code>Permanent.animated</code></td><td>Each is a field or variant only one card reads</td><td>Animation becomes an <code>ApplyContinuous</code> record (the rule CLAUDE.md already states); namesakes becomes <code>Count(predicate) ≥ n</code></td><td>vocabulary Task</td></tr>
+    <tr><td>Authoring by hand</td><td>Standard-scale authoring is thousands of functions</td><td>The approved Oracle-text generator (drafts Rust + tests for review; never a runtime path)</td><td>separate Task, already accepted</td></tr>
+  </table></div>
+
+  <h3>What does not need to change</h3>
+  <ul>
+    <li><code>ContentPack</code>: a <code>Vec&lt;Arc&lt;CardDefinition&gt;&gt;</code> and a name map scale to 27,000 rows without a design change. Per-step cost never reads the catalog size.</li>
+    <li>Learning tokens: hashed rule names and definition references; a new card that reuses verbs is new rows, not a new vocabulary.</li>
+    <li>The v5 observation: open vocabularies are already fact rows, and the facts block is sized by the board, not the catalog.</li>
+    <li>The observability guard: exhaustive matches that fail to compile when a variant is unencoded. It is the mechanism that keeps the three consumers in parity as the vocabulary moves.</li>
+  </ul>
+
+  <h3>Order of work</h3>
+  <ol class="steps">
+    <li><strong>T6 (MTG-225, running).</strong> Faces, Sagas, extra turns and combats on the structures in this guide; new effects written with selectors where cheap. One PR, Jack Heart's review.</li>
+    <li><strong>Engine budget.</strong> <code>bench_search</code> and steps/s in CI with a baseline; measure T4–T6 once on a quiet runner.</li>
+    <li><strong>Vocabulary.</strong> <code>ObjectSelector</code>, <code>Move</code>, <code>CountersReach</code>, sparse counters, keyword enum; every directed test unchanged.</li>
+    <li><strong>Derived-state revisions.</strong> Split revisions, indexed effect records, cache-carrying clones, trigger index. Each lands with its <code>bench_search</code> delta in the PR body.</li>
+    <li><strong>Card-set crate.</strong> Before the first non-TLA set after this delivery.</li>
+    <li><strong>T7 and onward</strong> on the new shape.</li>
+  </ol>
+</section>
+
+<footer>Built from <code>origin/main 4c8324a59</code>, the T6 working tree in <code>manabot.mtg-225-tla-t6-sagas</code>, PR #410's benchmark, and the T5 design notes. Projections are labelled as such; every other number is from a commit, a PR body or the code.</footer>
+</div>
+
+<script>
+(function(){
+  // ---------- hash routing ----------
+  var views = Array.prototype.slice.call(document.querySelectorAll('section.view'));
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.sections a'));
+  function show(){
+    var id = (location.hash||'#overview').slice(1);
+    if(!document.getElementById(id) || !document.getElementById(id).classList.contains('view')) id='overview';
+    views.forEach(function(v){ v.classList.toggle('active', v.id===id); });
+    links.forEach(function(a){ a.setAttribute('aria-current', a.getAttribute('href')==='#'+id ? 'true':'false'); });
+  }
+  window.addEventListener('hashchange', show); show();
+  // in-page links to sections scroll to top of content
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    if(a && document.getElementById(a.getAttribute('href').slice(1))){ setTimeout(function(){ window.scrollTo({top:0}); }, 0); }
+  });
+
+  function fmt(n){ return n.toLocaleString('en-US'); }
+  function log(ul, text, cls){ var li=document.createElement('li'); li.textContent=text; if(cls) li.className=cls; ul.insertBefore(li, ul.firstChild); while(ul.children.length>12) ul.removeChild(ul.lastChild); }
+
+  // ---------- DFC demo ----------
+  var FRONT = {id:412, name:'Aang, at the Crossroads', pt:'3/3', kw:'flying'};
+  var BACK  = {id:413, name:'Aang, Destined Savior',  pt:'5/5', kw:'flying'};
+  var d, dLog = document.getElementById('dfc-log'), dState = document.getElementById('dfc-state');
+  function dReset(){ d = {objectId:71, face:'front', counters:0, tapped:false, onBattlefield:true, copies:0}; dLog.innerHTML=''; dRender(); log(dLog,'enter_and_settle: Aang, at the Crossroads enters front face up','ev'); }
+  function dRender(){
+    var face = d.face==='front'?FRONT:BACK;
+    var copyLine = d.copies ? '\n\n// token copy #'+d.copies+' made from the showing face\nCard { definition_id: CardDefId('+face.id+'), copy: Some(CopyEffect { of: CardDefId('+face.id+') }) }\n  transform_permanent(copy) -> false   // its row has no back_face' : '';
+    dState.textContent =
+      (d.onBattlefield ? '' : '// off the battlefield: CR 712.8a, front face up\n') +
+      'Card {\n' +
+      '  id: ObjectId('+d.objectId+'),\n' +
+      '  definition_id: CardDefId('+face.id+'),   // '+face.name+'\n' +
+      '  registry_key: ObjectId('+face.id+'),\n' +
+      '  front: '+(d.face==='back' ? 'Some((CardDefId('+FRONT.id+'), …))' : 'None')+',\n' +
+      '}\n' +
+      (d.onBattlefield ?
+      'Permanent {\n' +
+      '  counters: '+(d.counters? '{ PlusOnePlusOne: '+d.counters+' }' : '{}')+',\n' +
+      '  tapped: '+d.tapped+',\n' +
+      '  timestamp: ObjectId('+d.objectId+'),\n' +
+      '}\n' +
+      'characteristics() -> '+face.pt+(d.counters?' + '+d.counters+'/+'+d.counters:'')+', '+face.kw
+      : 'Permanent: none') + copyLine;
+    document.getElementById('dfc-transform').disabled = !d.onBattlefield;
+    document.getElementById('dfc-counter').disabled = !d.onBattlefield;
+    document.getElementById('dfc-tap').disabled = !d.onBattlefield;
+    document.getElementById('dfc-copy').disabled = !d.onBattlefield;
+  }
+  document.getElementById('dfc-transform').onclick=function(){ d.face = d.face==='front'?'back':'front'; log(dLog,'transform_permanent(ObjectId('+d.objectId+')) -> true; same object, counters and tapped state kept (CR 712.9)','ev'); dRender(); };
+  document.getElementById('dfc-counter').onclick=function(){ d.counters++; log(dLog,'counters.change(PlusOnePlusOne, 1): revision bump; characteristics recomputed'); dRender(); };
+  document.getElementById('dfc-tap').onclick=function(){ d.tapped=!d.tapped; log(dLog,'tapped = '+d.tapped); dRender(); };
+  document.getElementById('dfc-leave').onclick=function(){
+    log(dLog,'Move { what: This, to: Exile }: ObjectId('+d.objectId+') leaves; front face up again (712.8a); counters gone','ev');
+    d.objectId += 1; d.face='back'; d.counters=0; d.tapped=false; d.onBattlefield=true;
+    log(dLog,'Move { what: This, to: Battlefield, transformed: true }: new ObjectId('+d.objectId+') enters as '+BACK.name+' (712.14, 400.7)','ev');
+    dRender();
+  };
+  document.getElementById('dfc-copy').onclick=function(){ d.copies++; var face=d.face==='front'?FRONT:BACK; log(dLog,'create_token_copy: of = CardDefId('+face.id+') ('+face.name+'); copy cannot transform (707.8)','ev'); dRender(); };
+  document.getElementById('dfc-reset').onclick=dReset;
+  dReset();
+
+  // ---------- Saga demo ----------
+  var s, sLog=document.getElementById('saga-log'), sState=document.getElementById('saga-state');
+  var CH = {1:'I: Scry 2, then draw a card.', 2:'II: Scry 2, then draw a card.', 3:'III: Exile this Saga, then return it transformed.'};
+  function sReset(){ s={lore:0, stack:[], onBattlefield:true, phase:'main', sacrificed:false, transformed:false}; sLog.innerHTML=''; enter(); sRender(); }
+  function enter(){ s.lore=1; log(sLog,'enters: counters.change(Lore, 1) (714.3a); emit CountersPut { kind: Lore, total: 1 }','ev'); s.stack.push(1); log(sLog,'TriggerCondition::Chapter { chapter: 1 } fires → chapter I on the stack'); }
+  function sRender(){
+    var final = 3;
+    sState.textContent = s.sacrificed ?
+      (s.transformed ? '// chapter III resolved: Move { This → Exile }, then Move { This → Battlefield, transformed: true }\nCard { definition_id: CardDefId(431) /* Avatar Kuruk */, front: Some(CardDefId(430)) }\nPermanent { counters: {}, timestamp: new }' : '// sacrificed by state-based action (714.4)') :
+      'Permanent {\n  counters: { Lore: '+s.lore+' },\n}\nCard { definition_id: CardDefId(430) /* The Legend of Kuruk */ }\n\nstack: ['+s.stack.map(function(c){return 'Chapter '+['','I','II','III'][c];}).join(', ')+']\n\nSBA 714.4: lore ('+s.lore+') >= final ('+final+')  → '+(s.lore>=final?'yes':'no')+'\n          chapter ability on stack  → '+(s.stack.length?'yes':'no')+'\n          sacrifice now?            → '+((s.lore>=final && !s.stack.length)?'YES':'no');
+    document.getElementById('saga-main').disabled = s.sacrificed || s.stack.length>0;
+    document.getElementById('saga-resolve').disabled = s.sacrificed || !s.stack.length;
+    document.getElementById('saga-sba').disabled = s.sacrificed;
+  }
+  document.getElementById('saga-main').onclick=function(){ s.lore++; log(sLog,'precombat main (714.2a): counters.change(Lore, 1); total '+s.lore,'ev'); if(s.lore<=3){ s.stack.push(s.lore); log(sLog,'Chapter { chapter: '+s.lore+' } fires (count crossed from '+(s.lore-1)+' to '+s.lore+')'); } sRender(); };
+  document.getElementById('saga-resolve').onclick=function(){ var c=s.stack.pop(); log(sLog,'resolve chapter '+['','I','II','III'][c]+': '+CH[c],'ev'); if(c===3){ s.sacrificed=true; s.transformed=true; log(sLog,'ExileSourceAndReturn { transformed: true }: new object, Avatar Kuruk, back face up','ev'); } sRender(); };
+  document.getElementById('saga-sba').onclick=function(){ if(s.lore>=3 && !s.stack.length){ s.sacrificed=true; log(sLog,'SBA 714.4: lore >= 3 and no chapter on the stack → sacrifice','sba'); } else { log(sLog,'SBA 714.4: nothing to do'+(s.stack.length?' (chapter still on the stack)':'')); } sRender(); };
+  document.getElementById('saga-reset').onclick=sReset;
+  sReset();
+
+  // ---------- growth chart ----------
+  var pts=[[113,63],[322,63],[412,83],[509,85],[657,107]];
+  var slope=(107-63)/(657-322);
+  var range=document.getElementById('growth-range'), cardsOut=document.getElementById('growth-cards'), nowOut=document.getElementById('growth-now'), propOut=document.getElementById('growth-prop');
+  function propAt(cards){ // verbs grow with the log of cards: ~60 at 657, ~100 at 3000, ~140 at 20000 (estimate)
+    return Math.round(60 + 40*Math.log(cards/657)/Math.log(3000/657)); }
+  function drawChart(){
+    var target=+range.value; cardsOut.textContent=fmt(target);
+    var nowAt=Math.round(63+slope*(target-322)); nowOut.textContent=fmt(nowAt); propOut.textContent='≈'+fmt(propAt(target));
+    var svg=document.getElementById('growth-chart'); var W=640,H=300,L=52,R=16,T=16,B=40;
+    var maxX=Math.max(target,800), maxY=Math.max(nowAt,140)*1.08;
+    function X(c){return L+(W-L-R)*c/maxX;} function Y(v){return T+(H-T-B)*(1-v/maxY);}
+    var out='';
+    out+='<line class="axis" x1="'+L+'" y1="'+Y(0)+'" x2="'+(W-R)+'" y2="'+Y(0)+'"/><line class="axis" x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+Y(0)+'"/>';
+    var yt=[0,Math.round(maxY/3/10)*10,Math.round(2*maxY/3/10)*10]; yt.forEach(function(v){ out+='<text x="'+(L-6)+'" y="'+(Y(v)+4)+'" text-anchor="end">'+v+'</text>'; });
+    [0,0.5,1].forEach(function(f){ var c=Math.round(maxX*f); out+='<text x="'+X(c)+'" y="'+(H-14)+'" text-anchor="middle">'+fmt(c)+'</text>'; });
+    out+='<text x="'+(W-R)+'" y="'+(H-2)+'" text-anchor="end">cards defined</text><text x="'+(L+4)+'" y="'+(T+10)+'">Effect variants</text>';
+    out+='<polyline class="now-line" points="'+pts.map(function(p){return X(p[0])+','+Y(p[1]);}).join(' ')+'"/>';
+    out+='<polyline class="proj-line" points="'+X(657)+','+Y(107)+' '+X(target)+','+Y(nowAt)+'"/>';
+    var pp=[]; for(var i=0;i<=20;i++){ var c=657+(target-657)*i/20; pp.push(X(c)+','+Y(propAt(c))); }
+    out+='<polyline class="prop-line" points="'+pp.join(' ')+'"/>';
+    pts.forEach(function(p){ out+='<circle class="dot" cx="'+X(p[0])+'" cy="'+Y(p[1])+'" r="4"/>'; });
+    out+='<circle class="pdot" cx="'+X(657)+'" cy="'+Y(60)+'" r="4"/>';
+    var labels=[['T1',322,63,-10],['T2',412,83,-10],['T3',509,85,-10],['T4',657,107,-10]]; labels.forEach(function(l){ out+='<text x="'+X(l[1])+'" y="'+(Y(l[2])+l[3])+'" text-anchor="middle">'+l[0]+'</text>'; });
+    out+='<text x="'+(X(target)-6)+'" y="'+(Y(nowAt)-8)+'" text-anchor="end">current slope: '+fmt(nowAt)+'</text>';
+    out+='<text x="'+(X(target)-6)+'" y="'+(Y(propAt(target))+16)+'" text-anchor="end" fill="var(--prop)" style="fill:var(--prop)">with selectors: ≈'+fmt(propAt(target))+'</text>';
+    svg.innerHTML=out;
+  }
+  range.addEventListener('input', drawChart); drawChart();
+
+  // ---------- effects toggle ----------
+  var bNow=document.getElementById('eff-now'), bProp=document.getElementById('eff-prop');
+  function eff(which){ bNow.setAttribute('aria-pressed', which==='now'); bProp.setAttribute('aria-pressed', which==='prop'); document.getElementById('eff-code-now').hidden = which!=='now'; document.getElementById('eff-code-prop').hidden = which!=='prop'; }
+  bNow.onclick=function(){eff('now');}; bProp.onclick=function(){eff('prop');};
+
+  // ---------- cache demo ----------
+  var WRITES = {
+    'cw-tap':      {label:'permanent.tapped = true',           chars:false, note:'offers rev'},
+    'cw-priority': {label:'priority_mut().pass()',             chars:false, exempt:true},
+    'cw-damage':   {label:'permanent.damage += 2',             chars:false, note:'no layer reads damage'},
+    'cw-life':     {label:'player.life -= 2',                  chars:false},
+    'cw-counter':  {label:'permanent.counters.change(+1/+1)',  chars:true},
+    'cw-effect':   {label:'effects.push(ApplyContinuous pump)',chars:true},
+    'cw-attach':   {label:'permanent.attached_to = Some(..)',  chars:true}
+  };
+  var rows=document.getElementById('cache-rows'), missNow=0, missProp=0;
+  function cwReset(){ rows.querySelectorAll('.cache-row:not(.head)').forEach(function(r){r.remove();}); missNow=0; missProp=0; document.getElementById('cw-miss-now').textContent='0'; document.getElementById('cw-miss-prop').textContent='0'; }
+  Object.keys(WRITES).forEach(function(id){
+    document.getElementById(id).onclick=function(){
+      var w=WRITES[id]; var row=document.createElement('div'); row.className='cache-row';
+      var nowMiss = !w.exempt; var propMiss = w.chars;
+      if(nowMiss) missNow++; if(propMiss) missProp++;
+      row.innerHTML='<code>'+w.label+'</code>'+
+        '<span><span class="pill '+(nowMiss?'miss':'hit')+'">'+(nowMiss?'recompute':'cache hit')+'</span></span>'+
+        '<span><span class="pill '+(propMiss?'miss':'hit')+'">'+(propMiss?'recompute':'cache hit')+'</span>'+(w.note&&!propMiss?' <span style="color:var(--ink-2);font-size:.78rem">'+w.note+'</span>':'')+'</span>';
+      rows.appendChild(row);
+      document.getElementById('cw-miss-now').textContent=missNow; document.getElementById('cw-miss-prop').textContent=missProp;
+    };
+  });
+  document.getElementById('cw-reset').onclick=cwReset;
+  // seed one realistic pass
+  ['cw-tap','cw-priority','cw-damage','cw-counter','cw-life'].forEach(function(id){ document.getElementById(id).click(); });
+})();
+</script>
+
+</body>
+</html>

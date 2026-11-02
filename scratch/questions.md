@@ -68,3 +68,8 @@ here; main carries their outcomes.
   read by `Card::mana_value_cost` for predicates and targets.
 - Airbending a spell exiles it from the stack with the {2} recast grant
   (Aang, Swift Savior's "creature or spell").
+- Copies of double-faced permanents follow CR 707.8a (post-2021): the token
+  has both faces and is transformed if the original is, so it can transform.
+- Foggy Swamp Visions' "X target creature cards" offers up to X targets
+  (`max_x`), not exactly X; "your next end step" uses the next end step, the
+  same for a sorcery. Its heuristic polarity is pinned "harmful" (exile).

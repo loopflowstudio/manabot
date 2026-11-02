@@ -121,6 +121,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         earthbending_lesson(),
         earthen_ally(),
         elemental_teachings(),
+        ember_island_production(),
         energybending(),
         enter_the_avatar_state(),
         fancy_footwork(),
@@ -145,6 +146,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         foggy_swamp_hunters(),
         foggy_swamp_spirit_keeper(),
         foggy_swamp_vinebender(),
+        foggy_swamp_visions(),
         forecasting_fortune_teller(),
         gather_the_white_lotus(),
         geyser_leaper(),
@@ -3164,6 +3166,36 @@ fn elemental_teachings() -> CardDefinition {
     }
 }
 
+fn ember_island_production() -> CardDefinition {
+    let text_box = "Choose one —\n• Create a token that's a copy of target creature you control, except it's not legendary and it's a 4/4 Hero in addition to its other types.\n• Create a token that's a copy of target creature an opponent controls, except it's not legendary and it's a 2/2 Coward in addition to its other types.";
+    let production = |target: TargetSpec, size: i32, subtype: &str| {
+        vec![Effect::CreateTokenCopy {
+            of: Some(target),
+            exceptions: vec![
+                Modification::Nonlegendary,
+                Modification::base_pt(Some(size), Some(size)),
+                Modification::AddSubtypes(vec![subtype.into()]),
+            ],
+        }]
+    };
+
+    CardDefinition {
+        key: "tla.ember_island_production",
+        scryfall_id: "0f79a7fc-36b1-4397-8e67-6638379d3a38",
+        name: "Ember Island Production".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![Effect::Modal {
+            modes: vec![
+                production(TargetSpec::CreatureYouControl, 4, "Hero"),
+                production(TargetSpec::CreatureOpponentControls, 2, "Coward"),
+            ],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn energybending() -> CardDefinition {
     let text_box = "Lands you control gain all basic land types until end of turn.\nDraw a card.";
 
@@ -4034,6 +4066,45 @@ fn foggy_swamp_vinebender() -> CardDefinition {
                 ..Default::default()
             }),
         )],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn foggy_swamp_visions() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, waterbend {X}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nExile X target creature cards from graveyards. For each creature card exiled this way, create a token that's a copy of it. At the beginning of your next end step, sacrifice those tokens.";
+    let creature_card = || TargetSpec::GraveyardCard {
+        predicate: CardPredicate::creature(),
+    };
+
+    CardDefinition {
+        key: "tla.foggy_swamp_visions",
+        scryfall_id: "3a46deaa-88f7-4eec-aa99-b85073847918",
+        name: "Foggy Swamp Visions".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
+        targeting: vec![TargetRequirement {
+            min: 0,
+            max: 0,
+            max_x: true,
+            ..TargetRequirement::one(creature_card())
+        }],
+        spell_effects: vec![Effect::ForEachTarget {
+            effects: vec![
+                Effect::Exile {
+                    target: creature_card(),
+                },
+                Effect::CreateTokenCopy {
+                    of: Some(creature_card()),
+                    exceptions: vec![],
+                },
+                Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::NextEndStepForCreatedToken,
+                    effects: vec![Effect::SacrificeTriggeringPermanent],
+                },
+            ],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5325,7 +5396,10 @@ fn joo_dee_one_of_many() -> CardDefinition {
             sorcery_timing: true,
             effects: vec![
                 Effect::Surveil { count: 1 },
-                Effect::CreateTokenCopy { exceptions: vec![] },
+                Effect::CreateTokenCopy {
+                    of: None,
+                    exceptions: vec![],
+                },
                 Effect::Sacrifice {
                     predicate: CardPredicate {
                         card_types_any: vec![CardType::Artifact, CardType::Creature],
@@ -6893,7 +6967,10 @@ fn phoenix_fleet_airship() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
-            effects: vec![Effect::CreateTokenCopy { exceptions: vec![] }],
+            effects: vec![Effect::CreateTokenCopy {
+                of: None,
+                exceptions: vec![],
+            }],
         }],
         statics: vec![StaticAbility::CreatureWithNamesakes(8)],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -7257,6 +7334,7 @@ fn ran_and_shaw() -> CardDefinition {
                     },
                 }),
                 effects: vec![Effect::CreateTokenCopy {
+                    of: None,
                     exceptions: vec![Modification::Nonlegendary],
                 }],
             },

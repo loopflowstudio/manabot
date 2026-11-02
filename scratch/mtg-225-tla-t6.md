@@ -53,9 +53,9 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | Bender's Waterskin | supported |
 | Bumi, Unleashed | |
 | Koh, the Face Stealer | |
-| Ember Island Production | |
+| Ember Island Production | supported; copies the face that's up, transformed |
 | Fire Lord Azula | |
-| Foggy Swamp Visions | |
+| Foggy Swamp Visions | supported |
 
 ## Delete — do not maintain
 

@@ -371,7 +371,7 @@ impl Game {
         source: CardId,
         controller: PlayerId,
         exceptions: Vec<Modification>,
-    ) {
+    ) -> Option<PermanentId> {
         let mut copy = self.state.cards[source].clone();
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
@@ -393,6 +393,7 @@ impl Game {
         let card_id = self.add_card(copy);
         self.move_card(card_id, ZoneType::Battlefield);
         self.invalidate_mana_cache(controller);
+        self.state.card_to_permanent[card_id]
     }
 
     /// Add a card created during play to the game, outside every zone.

@@ -13556,3 +13556,81 @@ fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
         "untapped"
     );
 }
+
+/// Each mode copies a creature on its side with its own exceptions: not
+/// legendary, a 4/4 Hero or a 2/2 Coward. A copy of a transformed permanent
+/// shows the face that's up and is transformed itself (CR 707.8a).
+#[test]
+fn ember_island_production_copies_either_side_with_its_exceptions() {
+    let mut s = five_color_setup(&[
+        "Ember Island Production",
+        "The Legend of Kuruk",
+        "Gray Ogre",
+    ]);
+    let kuruk = transformed_saga(&mut s, "The Legend of Kuruk");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    cast(&mut s, "Ember Island Production");
+    choose_mode(&mut s, 0);
+    assert!(
+        !offered_targets(&s).contains(&Target::Permanent(ogre)),
+        "yours only"
+    );
+    assert!(s.choose_target(Target::Permanent(kuruk)));
+    settle(&mut s);
+    let copies = s.battlefield_permanents_named(0, "Avatar Kuruk");
+    let token = *copies.iter().find(|id| **id != kuruk).expect("a copy");
+    let card = &s.game().state.cards[card_of(&s, token)];
+    assert!(
+        card.is_token && card.is_transformed(),
+        "the face that's up, transformed"
+    );
+    assert!(!card.supertypes.iter().any(|t| t == "Legendary"));
+    assert!(card.has_subtype("Hero") && card.has_subtype("Avatar"));
+    let view = s.game().characteristics(token);
+    assert_eq!((view.power, view.toughness), (4, 4));
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Avatar Kuruk").len(),
+        2,
+        "not legendary: no legend rule"
+    );
+
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    cast(&mut s, "Ember Island Production");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let coward = s.battlefield_permanents_named(0, "Gray Ogre")[0];
+    assert!(s.game().state.cards[card_of(&s, coward)].has_subtype("Coward"));
+    assert_eq!(s.game().characteristics(coward).power, 2);
+}
+
+/// Waterbend X exiles X creature cards from any graveyards, copies each one
+/// exiled, and sacrifices the copies at the next end step.
+#[test]
+fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
+    let mut s = five_color_unfunded_setup(&["Foggy Swamp Visions", "Gray Ogre", "Craw Wurm"]);
+    let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    let theirs = plant_in_graveyard(&mut s, 1, "Craw Wurm");
+    s.set_player_mana_pool(0, "BBB2");
+    cast(&mut s, "Foggy Swamp Visions");
+    choose_mode(&mut s, 2);
+    for card in [mine, theirs] {
+        let object = s.game().current_object_ref(card).unwrap();
+        assert!(s.choose_target(Target::GraveyardCard(object)));
+    }
+    if s.action_space().kind == ActionSpaceKind::Waterbend {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    resolve_top(&mut s);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, mine), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, theirs), Some(ZoneType::Exile));
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
+    assert_eq!(s.battlefield_permanents_named(0, "Craw Wurm").len(), 1);
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, "Gray Ogre").is_empty());
+    assert!(s.battlefield_permanents_named(0, "Craw Wurm").is_empty());
+    assert_eq!(s.game().state.turn.history[0].permanents_sacrificed, 2);
+}

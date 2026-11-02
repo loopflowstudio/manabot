@@ -439,14 +439,19 @@ pub enum Effect {
     PutCountersOnTriggeringPermanent {
         count: i32,
     },
-    /// Create a token that's a copy of the source (CR 707.2, 111.1). The
-    /// token copies the source's copiable values: its definition, including
-    /// any copy effect already applied to it, and never its counters, damage,
-    /// tapped state or non-copy effects. A source that has left the
-    /// battlefield is copied as it last existed there. `exceptions` ("except
-    /// it's not legendary") become part of the token's own copiable values
-    /// (CR 707.9b), so a copy of it inherits them.
+    /// Create a token that's a copy of the source, or of the target `of`
+    /// names (CR 707.2, 111.1). The token copies the copiable values: the
+    /// definition of the face that's up, including any copy effect already
+    /// applied, and never counters, damage, tapped state or non-copy
+    /// effects. A copy of a double-faced permanent has both faces and enters
+    /// transformed if that permanent is (CR 707.8a). An object that has left
+    /// its zone is copied as it last existed there ("a copy of it" after
+    /// exiling it). `exceptions` ("except it's not legendary") become part of
+    /// the token's own copiable values (CR 707.9b), so a copy of it inherits
+    /// them.
     CreateTokenCopy {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        of: Option<TargetSpec>,
         exceptions: Vec<Modification<EffectValue>>,
     },
     OptionalPayment {
@@ -1359,8 +1364,8 @@ impl Effect {
             | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::CreateTokenCopy { .. }
-            | Effect::AirbendAll { .. }
+            Effect::CreateTokenCopy { of, .. } => of.as_ref(),
+            Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardsToPlay { .. }

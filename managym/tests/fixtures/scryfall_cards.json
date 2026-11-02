@@ -4384,5 +4384,27 @@
     ],
     "oracle_text": "Reach, trample\nWhenever Aang and La attack, put a +1/+1 counter on each tapped creature you control.",
     "colors": []
+  },
+  "Ember Island Production": {
+    "name": "Ember Island Production",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Sorcery",
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Create a token that's a copy of target creature you control, except it's not legendary and it's a 4/4 Hero in addition to its other types.\n• Create a token that's a copy of target creature an opponent controls, except it's not legendary and it's a 2/2 Coward in addition to its other types.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Foggy Swamp Visions": {
+    "name": "Foggy Swamp Visions",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Sorcery",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, waterbend {X}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nExile X target creature cards from graveyards. For each creature card exiled this way, create a token that's a copy of it. At the beginning of your next end step, sacrifice those tokens.",
+    "colors": [
+      "B"
+    ]
   }
 }
