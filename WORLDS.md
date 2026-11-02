@@ -179,8 +179,8 @@ Task MTG-216 (2026-10-30, same world) makes decklist disclosure a match option:
 open (default; each player knows the other's main deck and sideboard) or
 closed (neither). Observations carry main, unseen, sideboard and
 remaining-sideboard counts by definition for every known decklist; v5 adds a
-`decklists` buffer `(2, 60, 5)` that is zero for a closed opponent, and the
-player width stays 60. Search and possible worlds refuse a closed opponent.
+`decklists` buffer `(2, 60, 5)` that is zero for a closed opponent. Search and
+possible worlds refuse a closed opponent.
 The Academy navigation fixture and the authored-match and parity receipts
 were re-recorded with the same Commands; state digests are unchanged.
 

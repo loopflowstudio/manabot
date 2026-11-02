@@ -32,11 +32,11 @@
         },
         {
           "path": "academy/server.py",
-          "sha256": "ef302ecfeb32ec389b0dfbbc44468f6bf11b99c2a4750e504de57b2bc5507da2"
+          "sha256": "b4fb3c9217aaf43d8208161538158ebf4e93bb27c8535e441480d64e297d7cd7"
         },
         {
           "path": "academy/trace.py",
-          "sha256": "6394167e32d7b170c2b374f15a47a2178074d9b34d740530544c066df13aaf8b"
+          "sha256": "8836f427a67b81bff372ed8c60c057346b5d336340bdb17ccb3c27245e307834"
         },
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
@@ -56,7 +56,7 @@
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "f444e80b2c500335c64d8b955aea5314a1b2743f523fa60ec49f44313f9d57a6"
+          "sha256": "d7a0720140ea288ac7416b4bce0ed29ec1df009d94dc2cfcf926c649f83a0dbb"
         },
         {
           "path": "manabot/semantic/decision_contract.py",
@@ -559,7 +559,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "aad08a3adb56dc181de699e442b89085038f2f371580d4f28c5bdf845859b59f"
+      "sha256": "32fe94928d88cd4490f20c5b4640bac2ad0127518b9d01ad9842139221f9a85d"
     },
     "seed": 0
   },

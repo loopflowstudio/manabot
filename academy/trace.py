@@ -301,6 +301,11 @@ def prepare_trace_payload(
         and payload.get("end_reason") == "game_over"
         and bool(payload.get("final_observation", {}).get("game_over"))
     )
+    if config.get("decklists") == "closed" and not reveal_hidden:
+        config["villain_deck"] = {}
+        config["villain_sideboard"] = {}
+        config["villain_deck_name"] = "closed"
+        config.pop("asset_pack", None)
 
     observations = [
         event.get("observation", {}) for event in prepared.get("events", [])

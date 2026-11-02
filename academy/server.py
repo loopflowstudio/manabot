@@ -189,6 +189,7 @@ DECK_DISPLAY_NAMES = {
 # Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
 DEFAULT_HERO_DECK_NAME = CURATED_PACK.hero_deck_id
 DEFAULT_VILLAIN_DECK_NAME = CURATED_PACK.villain_deck_id
+CLOSED_DECK_NAME = "Closed decklist"
 # Backwards-compatible alias (tests and older callers).
 DEFAULT_DECK = INTERACTIVE_DECK
 
@@ -868,6 +869,7 @@ class GameSession:
         # Display names for the current matchup, echoed on every payload.
         self.deck_names: dict[str, str] | None = None
         self.asset_pack: dict[str, str] | None = None
+        self.decklists_closed = False
         self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
@@ -993,7 +995,10 @@ class GameSession:
         self._record_player_owner = self.attempt_owner
         self.env, self.obs, self.villain_policy = env, obs, policy
         self._demo_name = demo_name
-        if selected_pack is not None:
+        # A pack identifies both decks, so closed games use the generic identity.
+        # Cards still resolve their treatments by name from their public zones.
+        self.decklists_closed = config.decklists == "closed"
+        if selected_pack is not None and not self.decklists_closed:
             self.asset_manifest_hash = selected_pack.manifest_sha256
             self.content_hash = (
                 UNVERSIONED_CONTENT_HASH
@@ -1008,7 +1013,11 @@ class GameSession:
             "hero": DECK_DISPLAY_NAMES.get(config.hero_deck_name, "Custom"),
             "villain": DECK_DISPLAY_NAMES.get(config.villain_deck_name, "Custom"),
         }
-        self.asset_pack = dict(config.asset_pack) if config.asset_pack else None
+        self.asset_pack = (
+            dict(config.asset_pack)
+            if config.asset_pack and not self.decklists_closed
+            else None
+        )
         self.trace = Trace(
             config=config,
             events=[],
@@ -1825,6 +1834,17 @@ class GameSession:
             frame=frame,
         )
 
+    def _deck_names_for(self, viewer: int) -> dict[str, str] | None:
+        """Display names `viewer` may know; a closed opponent's deck is unnamed."""
+        if self.deck_names is None:
+            return None
+        names = dict(self.deck_names)
+        if self.decklists_closed:
+            names["villain" if viewer == HERO_PLAYER_INDEX else "hero"] = (
+                CLOSED_DECK_NAME
+            )
+        return names
+
     def _build_frame(
         self,
         obs: managym.Observation,
@@ -1855,7 +1875,7 @@ class GameSession:
             "winner": _winner_for_hero(obs) if viewer == HERO_PLAYER_INDEX else None,
             "action_space": action_space,
             "stops": self._stops_payload(),
-            "deck_names": dict(self.deck_names) if self.deck_names else None,
+            "deck_names": self._deck_names_for(viewer),
             "asset_pack": dict(self.asset_pack) if self.asset_pack else None,
             "log": None,
             "auto_passed": None,
@@ -2785,6 +2805,7 @@ def _dispatch_table_request(
                 "villain_sims": previous.villain_sims,
                 "hero_deck": previous.hero_deck_name,
                 "villain_deck": previous.villain_deck_name,
+                "decklists": previous.decklists,
                 "stops": record.game.stops,
                 "auto_pass": record.game.auto_pass,
                 "stop_on_stack": record.game.stop_on_stack,

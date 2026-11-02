@@ -346,6 +346,27 @@ def serialize_observation(
     return data
 
 
+def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
+    """Definitions this viewer's observation names: its own lists, cards it can
+    see, publicly known hand cards and the stack."""
+    return {
+        *(observation.agent.main_counts or {}),
+        *(observation.agent.sideboard_counts or {}),
+        *observation.agent.known_hand,
+        *observation.opponent.known_hand,
+        *(
+            card.registry_key
+            for cards in (
+                observation.agent_cards,
+                observation.agent_sideboard,
+                observation.opponent_cards,
+            )
+            for card in cards
+        ),
+        *(entry.source_card_registry_key for entry in observation.stack_objects),
+    }
+
+
 def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """Current viewer projection for play, recorded decisions and Study roots.
 
@@ -378,6 +399,13 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
         }
         for entry in observation.stack_objects
     ]
+    # The manifest covers both decklists, so a closed opponent narrows it.
+    if observation.opponent.main_counts is None:
+        data["definition_names"] = {
+            str(definition): name
+            for definition in _definitions_known_to_viewer(observation)
+            if (name := data["definition_names"].get(str(definition))) is not None
+        }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
 
