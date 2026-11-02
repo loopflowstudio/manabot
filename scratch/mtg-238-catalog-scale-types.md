@@ -2,10 +2,10 @@
 
 Task: sparse counters, keyword enum, card-set crate, animation as a record,
 `CreatureWithNamesakes` as a counted predicate.
-Base: main `4c8324a59` (T4). The Task says to start after MTG-225 (T6)
-publishes and to stack on the effect-vocabulary Task (MTG-235) if both are
-open; neither had a PR when this started (2026-11-02) nor at the realign or
-the second implement that day, so this branch sits on main (see Status).
+Base: main `29660d00c` (T4 plus the ARCHITECTURE owners rename, merged in
+`ab9a5db94`). The Task says to start after MTG-225 (T6) publishes and to
+stack on the effect-vocabulary Task (MTG-235) if both are open; MTG-225 had no
+PR at any pass on 2026-11-02, so this branch sits on main (see Status).
 
 ## Design (accepted shape, 2026-11-02; batch carried the same day)
 
@@ -60,7 +60,7 @@ the Academy fixtures and the belief v3 receipt pins were re-recorded with the
 same Commands and decision revisions; the learning schema stays 10 (tokens
 derive from the definitions).
 
-## Status (implement 2026-11-02, third pass)
+## Status (realign 2026-11-02, after compress)
 
 On the branch: items 1–5, WORLDS.md / managym README / AGENTS.md /
 conformance README records, the re-recorded corpora,
@@ -87,6 +87,27 @@ Landing order (Jack Heart's steer, 2026-11-02): the batch is approved; hold
 until MTG-225 publishes, then sync and publish. MTG-235 (#412) and MTG-236
 (#411) are published onto the same base and both edit `managym/src/state/*`,
 so whichever lands first also crosses this branch's crate move at the sync.
+MTG-225 also has an unpublished `jack/mtg-225-t6-one-catalog` WIP
+(`c774d401e`) rewriting `cards/content_pack.rs`, `pool.rs`, `setups.rs`,
+`world.rs` and `python/bindings.rs`, which this branch also edits; if it joins
+T6 before publication, the sync resolves those files against it too.
+
+Concept review (2026-11-02, headless, after compress): the implemented
+change matches the accepted shape and Jack Heart's approved batch; nothing to
+change and no open product choice. The steer's "learning schema 9 -> 10" is
+already satisfied (the schema was 10 before this branch; the keyword list
+changes token values, not the schema's kinds, roles or dtypes). The remaining
+work is the T6 sync above, which needs MTG-225 to publish.
+
+pr-publish (2026-11-02, headless): not published. The graph reached
+pr-publish from loop-or-next, but the publication boundary is Jack Heart's
+steer (hold until MTG-225 publishes, then sync) and the Task directive (stack
+on the open effect-vocabulary Task); MTG-225 still had no PR (implement
+running, `pr: null`) and main was still `29660d00c`, so `lf sync` had nothing
+to merge and a PR now would be against main with content the T6 sync rewrites.
+Blocker returned: MTG-225 unpublished. No code changed since compress's green
+checks, so they were not rerun. When MTG-225 publishes: `lf sync` onto its
+branch, do the three sync items above, rerun the Checks, then `lf pr publish`.
 
 Follow-on outside this Task: `PyKeywords` (`python/bindings.rs`) is still a
 14-bool struct on the Python surface (`.keywords.flying` in Academy and text
@@ -110,20 +131,8 @@ At the T6 sync: `CreatureWithNamesakes`, `Card::creature_with_namesakes`,
 - `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test` (debug) and `cargo test --release`
 - extension rebuild, then `uv run --extra dev pytest tests/env tests/academy tests/belief tests/semantic tests/verify tests/model tests/test_package_boundaries.py -q`
 
-Check result (2026-11-02, second implement): `cargo fmt --check`, clippy
-`--all-targets --all-features -D warnings` and debug (`OPT_LEVEL=1`) `cargo
-test --no-fail-fast` green across the three crates (484 card tests); extension
-rebuilt; corpora re-recorded once (kernel 14 cases / 3396 Commands,
-authored-match and parity 142 Commands, public commitment 69 commitments, five
-Academy fixtures, belief v3 pins; presentation pins unchanged); the Python
-suite above 864 passed, 1 skipped, then `tests/academy tests/verify
-tests/semantic` 494 passed after the capture-keyword fix and receipt rewrite.
-Release `cargo test` and the arena-admission suite in CLAUDE.md are gate's.
-Third pass (2026-11-02): no code change; `cargo fmt --check` and the debug
-`definitions` / `observability` card tests (47) pass on the checkpointed tree.
-Compress (2026-11-02): `Counters::change` is one binary search, `Keywords`
-set operations take values like its other methods, `Keywords::of` is a fold,
-live doc pointers name the moved paths; serialization is untouched, so no
-digest moves. `cargo fmt --check`, clippy `-D warnings` and debug `cargo test
---no-fail-fast` green across the three crates (484 card tests); the extension
-rebuild, Python suite and release `cargo test` stay with gate.
+Check result (2026-11-02, compress): `cargo fmt --check`, clippy `-D warnings`
+and debug `cargo test --no-fail-fast` green across the three crates (484 card
+tests); the earlier batch pass rebuilt the extension and ran the Python suite
+above (864 passed, 1 skipped). Release `cargo test`, a rebuilt-extension Python
+run on the compressed tree and the arena-admission suite are gate's.

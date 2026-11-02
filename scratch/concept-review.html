@@ -57,193 +57,66 @@
 </head>
 <body>
 <header>
-  <p>Task MTG-238 · Catalog-scale types · step: concept-review (Graph, headless) · 2026-11-02</p>
-  <p>Built from <code>scratch/mtg-238-catalog-scale-types.md</code>, <code>managym/state/src/{card,effect,permanent,ability}.rs</code>,
-     <code>managym/src/flow/{statics,effects}.rs</code>, <code>managym/cards/tests/cards/observability.rs</code>,
-     <code>managym/src/python/bindings.rs</code>, and T6's <code>managym/src/state/card.rs</code> in the MTG-225 checkout.</p>
+  <p>Task MTG-238 · Catalog-scale types · step: concept-review (Graph, headless, second pass) · 2026-11-02</p>
+  <p>Built from <code>scratch/mtg-238-catalog-scale-types.md</code>, <code>scratch/questions.md</code>,
+     <code>managym/state/src/card.rs</code>, <code>managym/src/flow/statics.rs</code>,
+     <code>content/semantic/current/learning_schema.json</code> and Jack Heart's steer of 2026-11-02.</p>
 </header>
 
-<h1>Four counts left the types. Three stayed, each guarding the same digest.</h1>
+<h1>The batch is on the branch. Nothing to change and no open choice. The remaining work is the T6 sync.</h1>
 
 <div class="decision">
-  <p><strong>Decision this page records.</strong> The implemented change matches the accepted shape.
-  The three remaining card-shaped types and the struct-of-bools keyword serialization are
-  retired together in one content-digest-moving batch, which the T6 sync creates anyway.
-  No product choice is open; the landing-order question in the working design is delivery
-  sequencing, and the Task directive already answers it by default (wait for T6).</p>
+  <p><strong>Outcome.</strong> The proposals from the first pass (a conditional <code>TypeGrant</code>,
+  one <code>BecomeCreature</code> record, sparse <code>Keywords</code> serialization) were approved by Jack Heart and
+  implemented as one content-digest-moving change, and the corpora were re-recorded once. This pass
+  finds no mismatch between the accepted shape and the code.</p>
 </div>
 
-<h2>Who acts, what they touch, what changes it</h2>
+<h2>Actions → concepts → APIs (all on the branch)</h2>
 
 <table>
-  <tr><th>Actor and action</th><th>Concept they meet</th><th>API that changes state</th></tr>
-  <tr>
-    <td>Card author writes a creature with flying in a set file</td>
-    <td><code>Keyword</code>, <code>Keywords</code></td>
-    <td><code>Keywords::of(&amp;[Keyword::Flying])</code>; engine reads <code>.has(Keyword::Flying)</code></td>
-  </tr>
-  <tr>
-    <td>Card author gives a land "becomes a 0/0 creature with haste" (earthbend)</td>
-    <td>three <code>ContinuousEffect</code> records at one timestamp</td>
-    <td><code>Game::animate_permanent</code>, the only writer; expiry when the object leaves (CR 400.7)</td>
-  </tr>
-  <tr>
-    <td>Engine puts a +1/+1 counter on a permanent</td>
-    <td><code>Counters</code>, sparse by kind</td>
-    <td><code>Counters::change(kind, delta)</code>; serialized as the present kinds only</td>
-  </tr>
-  <tr>
-    <td>Card author edits one card</td>
-    <td><code>managym-cards</code> on <code>managym-state</code></td>
-    <td><code>cargo check -p managym-cards</code> without rebuilding the engine; the engine reaches cards through <code>catalog()</code></td>
-  </tr>
-  <tr>
-    <td>Policy reads a definition</td>
-    <td>learning tokens, a serde walk of the same value</td>
-    <td>adding a variant adds tokens; no vocabulary edit</td>
-  </tr>
-  <tr class="p">
-    <td class="p">Card author writes "this is an [artifact] creature as long as [condition]"</td>
-    <td class="p">today: two card-shaped statics · proposed: one conditional <code>TypeGrant</code></td>
-    <td class="p">today: private <code>creature_with_*</code> readers · proposed: the existing layer-4 path</td>
-  </tr>
+  <tr><th>Actor and action</th><th>Concept</th><th>API</th></tr>
+  <tr><td>Card author gives a creature flying</td><td><code>Keyword</code>, <code>Keywords</code> bitset</td>
+      <td><code>Keywords::of(&amp;[Keyword::Flying])</code>, <code>.has(..)</code>; serialized as the sequence of present keywords</td></tr>
+  <tr><td>Earthbend or crew turns a permanent into a creature</td><td><code>BecomeCreature</code> continuous-effect record</td>
+      <td><code>Game::animate_permanent</code> (earthbend); crew records the same variant until end of turn</td></tr>
+  <tr><td>"is a creature as long as …" (War Balloon)</td><td>conditional <code>StaticTypeGrant</code></td>
+      <td><code>condition: Some(SourceCountersAtLeast { Fire, 3 })</code>, asked of the source</td></tr>
+  <tr><td>Engine adds a counter</td><td>sparse <code>Counters</code></td>
+      <td><code>Counters::change</code>; serialization unchanged</td></tr>
+  <tr><td>Card author edits one card</td><td><code>managym-cards</code> crate</td>
+      <td>the engine reaches cards only through <code>catalog()</code> / <code>incomplete()</code></td></tr>
 </table>
 
-<h2>What exists on the branch, checked against the design</h2>
-
-<div class="existing">
+<h2>Checked this pass</h2>
 <ul>
-  <li><code>Counters(SmallVec&lt;[(CounterKind, i32); 2]&gt;)</code>, kind-ordered, positive only; serialization a map of present kinds. Hashes unchanged. Matches.</li>
-  <li><code>enum Keyword</code> (14) with a <code>u64</code> bitset <code>Keywords</code>; serialization is still the 14-field struct of bools so the content digest and token shape are byte-identical. Matches, except the design text listed a <code>remove</code> that does not exist. Corrected in the working design: <code>without</code> is the only subtraction.</li>
-  <li><code>Permanent.animated</code> is gone; earthbend is <code>BecomeCreature</code> + <code>SetBasePt 0/0</code> + <code>AddKeywords(haste)</code>, indefinite, one timestamp. Hash contract 12, corpora re-recorded. Matches.</li>
-  <li>Workspace of three crates; the engine references the cards crate at exactly three sites (<code>catalog()</code> twice, <code>incomplete()</code> once). Matches.</li>
-  <li><code>CreatureWithNamesakes</code> conversion: not on this base (it is T6's). Remaining at the sync, as Status says.</li>
-</ul>
-</div>
-
-<h2>The consequential mismatch</h2>
-
-<p>The Task retires counts written into types. Three survive on the branch, and each was kept for the
-same reason: moving the w17 content digest re-records every corpus. The accepted batching rule says
-to move it once. The T6 sync moves it regardless (the namesakes conversion rewrites a T6 definition,
-and T6's new cards move it on their own), so the reason to keep them expires at the sync.</p>
-
-<h3>1. One conditional type grant instead of two card-shaped statics</h3>
-
-<div class="existing">
-<pre><code>// managym/state/src/card.rs (branch)
-StaticAbility::CreatureWithCounters(CounterThreshold { kind, count })   // War Balloon
-StaticAbility::TypeGrant(StaticTypeGrant { scope, types, subtypes })     // unconditional
-
-// T6 checkout, managym/src/state/card.rs
-StaticAbility::CreatureWithNamesakes(8)                                  // Phoenix Fleet Airship
-
-// managym/src/flow/statics.rs (branch): one private reader each
-fn permanent_is_animated(..) -&gt; bool {
-    permanent.creature_by_counters(card) || has BecomeCreature || becomes_artifact_creature(..)
-}</code></pre>
-</div>
-
-<div class="proposed">
-<pre><code>pub struct StaticTypeGrant {
-    pub scope: StaticScope,
-    pub types: Vec&lt;CardType&gt;,
-    #[serde(skip_serializing_if = "Vec::is_empty")] pub subtypes: Vec&lt;String&gt;,
-    #[serde(skip_serializing_if = "Option::is_none")] pub condition: Option&lt;Condition&gt;,
-}
-
-Condition::ControlsAtLeast { count: u32, predicate: CardPredicate }  // ControlsMatching = count 1
-CardPredicate { namesake: bool, .. }                                 // shares the source's name
-
-// War Balloon
-TypeGrant { scope: This, types: [Creature], condition: Some(SourceCountersAtLeast { kind, count }) }
-// Phoenix Fleet Airship (at the T6 sync)
-TypeGrant { scope: This, types: [Artifact, Creature],
-            condition: Some(ControlsAtLeast { count: 8, predicate: namesake }) }</code></pre>
-<p>Unconditional grants keep their encoding (<code>skip_serializing_if</code>). The two readers,
-both <code>Card::creature_with_*</code> finders and <code>Permanent::creature_by_counters</code> go;
-<code>permanent_is_animated</code> reads conditional grants through the layer-4 path it already has.
-No name enters the vocabulary, which was T6's reason for the relative form.</p>
-</div>
-
-<h3>2. One "becomes a creature" record</h3>
-
-<div class="existing">
-<pre><code>Modification::BecomeArtifactCreature   // crew, six definitions, until end of turn
-Modification::BecomeCreature           // earthbend, indefinite</code></pre>
-</div>
-<div class="proposed">
-<p>Fold into one variant: either <code>BecomeCreature { types }</code> or <code>BecomeCreature</code> beside
-<code>AddCardTypes([Artifact])</code>, whichever leaves each crew definition one line. The design
-already deferred this to "the next content-digest-moving change"; that change is this batch.</p>
-</div>
-
-<h3>3. Keywords serialize sparsely, as counters already do</h3>
-
-<div class="existing">
-<pre><code>impl Serialize for Keywords {       // struct of 14 fields, one bool each, enum order
-    serialize_struct("Keywords", 14) → flying: true, reach: false, haste: false, ...
-}
-// → every card's characteristics span carries 14 boolean tokens;
-//   adding keyword #15 rewrites every card's encoding and the token shape.</code></pre>
-</div>
-<div class="proposed">
-<pre><code>impl Serialize for Keywords {       // sequence of present names, enum order
-    collect_seq(self.iter().map(Keyword::name)) → ["flying"]
-}
-// learning schema 9 → 10; KeywordData tensor columns unchanged.</code></pre>
-<p>This is the token-side form of the policy-input rule "open vocabularies as rows, never per-kind
-columns". At ~150 keywords the struct form is a 150-bool row per card. <code>Counters</code>
-chose the sparse answer in this same change.</p>
-</div>
-
-<div class="deleted">
-<ul>
-  <li><code>StaticAbility::CreatureWithCounters</code>, <code>CounterThreshold</code>, <code>Card::creature_with_counters</code>, <code>Permanent::creature_by_counters</code></li>
-  <li>T6's <code>StaticAbility::CreatureWithNamesakes</code>, <code>Card::creature_with_namesakes</code>, <code>Game::creature_with_namesakes</code></li>
-  <li><code>Modification::BecomeArtifactCreature</code>, <code>Game::becomes_artifact_creature</code></li>
-  <li>the struct-form <code>Serialize for Keywords</code></li>
-</ul>
-</div>
-
-<h2>Normal path, failure, recovery</h2>
-
-<ul>
-  <li><strong>Normal.</strong> A player crews Phoenix Fleet Airship while controlling eight of them: the conditional
-  grant and the crew record both say creature; <code>is_animated</code> reads one layer-4 answer. The
-  directed tests in <code>tests/cards/tla.rs</code> keep their names and assert the same observations.</li>
-  <li><strong>Failure.</strong> A condition that needed layer-4 output (types) would recurse through the type
-  computation. The two instances read counters and names (layers 1–3), and the view's rule "scopes read
-  printed types only" stands. A keyword that is not a presence bit (ward with a cost, protection from a
-  quality) is already a <code>StaticAbility</code>, so the sparse serialization never has to encode it.</li>
-  <li><strong>Recovery.</strong> The digest moves once, after the batch and the T6 sync; one corpus re-record with
-  the hash-12 Commands. If the batch is abandoned, the branch as it stands is complete against the
-  accepted shape and ships with the three types in place.</li>
+  <li>No <code>CreatureWithCounters</code>, <code>BecomeArtifactCreature</code>, <code>ControlsMatching</code> or
+      <code>Permanent.animated</code> remains in the three crates. The remaining <code>is_animated</code> fields are
+      derived characteristics, not stored state.</li>
+  <li><code>impl Serialize for Keywords</code> is <code>collect_seq(self.iter())</code>. Each keyword serializes
+      as its variant token, so adding a keyword leaves other cards' tokens unchanged.</li>
+  <li>The steer said "learning schema 9 → 10". The schema was already 10 before this branch, and the keyword
+      list changes token values, not the schema's kinds, roles or dtypes. So no bump is needed, as recorded in
+      <code>scratch/questions.md</code>. This is a stale number in the steer, not a product choice.</li>
 </ul>
 
-<h2>Outside this Task's outcome</h2>
-
-<p><code>PyKeywords</code> in <code>python/bindings.rs</code> is the same 14-bool struct on the Python surface,
-read as <code>.keywords.flying</code> by Academy and the text observation. Its sparse form is a Python API
-migration across those readers. Recorded as a follow-on Task for when the first non-evergreen keyword
-arrives; the Task outcome names the Rust types only.</p>
-
-<h2>Landing order</h2>
-
-<p>Status asks Jack Heart to choose between landing MTG-238 first (the three sibling branches rebase across the
-crate move) or holding until T6 publishes (the Task directive). This is delivery sequencing: it changes no
-concept, API or observation. The directive already selects holding; only the first option needs approval.
-Items 1 (War Balloon half), 2 and 3 above need nothing from T6 and are implementable on this base; the
-namesakes half waits for the sync.</p>
+<h2>Still to do, already decided</h2>
+<div class="existing">
+<ul>
+  <li>At the T6 sync: Phoenix Fleet Airship's <code>CreatureWithNamesakes(8)</code> becomes
+      <code>TypeGrant { This, [Creature], ControlsAtLeast { 8, namesake } }</code>, and T5/T6's keyword literals and
+      the <code>src/state</code> and <code>cardsets/tla.rs</code> edits cross the crate move. After that, the corpora are re-recorded once more.</li>
+  <li>Landing order (Jack Heart, 2026-11-02): hold until MTG-225 publishes, then sync. MTG-225 has no open PR
+      as of this pass.</li>
+  <li>Follow-on outside this Task: <code>PyKeywords</code> on the Python surface.</li>
+</ul>
+</div>
 
 <h2>Questions</h2>
-
 <ol>
-  <li>None open. The batch follows from accepted rules (count conditions, one digest move, rows not columns);
-  the only new consequence is learning schema 9 → 10, recorded in the working design and
-  <code>scratch/questions.md</code>.</li>
+  <li>None open.</li>
 </ol>
 
-<p class="muted">Written last, after <code>scratch/mtg-238-catalog-scale-types.md</code> and <code>scratch/questions.md</code>.</p>
+<p class="muted">Written last, after <code>scratch/mtg-238-catalog-scale-types.md</code>.</p>
 </body>
 </html>

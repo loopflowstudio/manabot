@@ -105,3 +105,10 @@ characteristics view, MTG-234) are main's and live at
   ties the two spellings. Historical records (`docs/research/semantic-kernel.md`,
   WORLDS.md's w16 section, `experiments/card-conformance-audit.md`) keep the
   pre-move paths; live pointers were updated.
+- pr-publish (2026-11-02, headless): the graph stepped into pr-publish while
+  MTG-225 (the directed base) still had no PR. Jack Heart's steer holds the
+  branch until MTG-225 publishes and the Task says to stack, so publishing a
+  ready PR against main was read as outside the boundary and skipped; a
+  blocker was returned instead. If Jack Heart wants a PR against main before
+  the T6 sync (review of the batch as it stands), `lf pr publish` from this
+  checkout does it with no further change.
