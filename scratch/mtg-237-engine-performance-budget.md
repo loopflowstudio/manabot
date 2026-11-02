@@ -56,7 +56,7 @@ not a latency budget.
   and costs one recording per such PR; accepted as the price of (3). A kept
   speedup is the third reason to move the reference (concept review).
 
-## Concept reviews (2026-11-02, headless; 5c8b0f2db, c8cbc5421 and the third below)
+## Concept reviews (2026-11-02, headless; 5c8b0f2db, c8cbc5421, aab658e7e)
 
 Source: Jack Heart's Performance section ("the PR fails if worst reply or
 total exceeds the recorded baseline by more than 10%; a PR that moves the
@@ -67,35 +67,27 @@ settled by the accepted decisions, with no open product choice:
 
 - First (fixed in 45f1b4627): moving the reference needed a second `measure`
   dispatch and a seven-flag command, and keeping a speedup was not a
-  documented move. Now *every Engine Budget run is a recording of its
-  candidate; a PR adopts one by committing it with a reason*: the artifact's
-  `measurement.json`, `record --reason`, three documented reasons (rules
-  change reaching the decks, accepted cost, kept speedup; so MTG-236's PRs
-  record their head and the gain is budgeted), `measure` confined to commits
-  without a PR.
+  documented move. Now every run is a recording of its candidate
+  (`measurement.json`; `record --reason`; three documented reasons;
+  `measure` confined to commits without a PR), so MTG-236's PRs record their
+  head and the gain is budgeted.
 - Second (fixed in 2f3fe99e1): on `pull_request` the default checkout is
-  GitHub's ephemeral `refs/pull/N/merge`, so a recording from a PR run would
-  name a commit the next run's "Check out the other commit" cannot fetch.
-  The job now checks out `github.event.pull_request.head.sha || github.sha`
-  (PR head; pushed or dispatched SHA otherwise), so the measured tree and the
-  recorded commit are one durable commit. Detect Changes still diffs the
-  merge commit. The `measure` and push paths were never affected, which is
-  why the T4 recording and the validating dispatch passed.
-- Third (fixed in the implement commit after aab658e7e): the job built and
-  ran the reference *before* the candidate, so a reference commit that no
-  longer compiled with this ref's benchmarks (the `Env` surface change the
-  docs name) stopped the job before the candidate was measured, the artifact
-  was empty, and that PR could not adopt its own run; its only way was a
-  `measure` dispatch, which the docs reserve for commits without a PR. Now
-  the job builds, runs and records the candidate (its summary block), then
-  builds and runs the reference (its own block), compares and uploads, so any
-  run whose candidate builds is a recording. Order on one VM is assumed not
-  to bias the 10% tolerance (questions.md). Same commit: the reasons to move
-  the reference are a moved digest (rules reaching the decks, *or* the
-  benchmarks or curated lists), an accepted cost, or a kept speedup, and a
-  reference that no longer builds is recorded like any other move; compare's
-  "baseline file" row says "digests do not describe the reference" and leaves
-  the recovery (record this run) to the footer.
+  GitHub's ephemeral `refs/pull/N/merge`, which a later run cannot fetch. The
+  job checks out `github.event.pull_request.head.sha || github.sha`, so the
+  measured tree and the recorded commit are one durable commit. Detect
+  Changes still diffs the merge commit; `measure` and push were never
+  affected (the T4 recording and the validating dispatch passed).
+- Third (fixed in 644eab3b0): the reference was built before the candidate,
+  so a reference that no longer compiled with this ref's benchmarks (the
+  `Env` surface change the docs name) left an empty artifact and that PR
+  could not adopt its own run. Now the candidate is built, run and recorded
+  first (its summary block), then the reference (its block), then compare
+  and upload. Order on one VM is assumed not to bias the 10% tolerance
+  (questions.md). Same commit: the reasons to move the reference name a
+  moved digest (rules reaching the decks, or the benchmarks or curated
+  lists), an accepted cost or a kept speedup; compare's "baseline file" row
+  says "digests do not describe the reference" and leaves recovery to the
+  footer.
 
 Checked paths: PASS table and merge; 12% slower with matching digests (fix,
 or record the head and cite the delta from the failing run); a baseline whose
@@ -111,10 +103,8 @@ Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
 Reference 4c8324a59 recorded from CI run 41517623999; full CI validated by
 workflow_dispatch run 41527511986 at 07512aa8c (Engine Budget A/B included).
-Later commits (script simplification, one `other` checkout, the recording
-design change, run-directory reading, the PR-head checkout, the compress
-pass, the candidate-first step order) have passed tests and actionlint
-locally but not CI: the branch has no PR and branch pushes do not trigger CI.
+Every commit since has passed tests and actionlint locally but not CI: the
+branch has no PR and branch pushes do not trigger CI.
 Main moved to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at
 49765237c; the reference 4c8324a59 still describes the engine (checked
 2026-11-02).
@@ -133,4 +123,4 @@ GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
 steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean, ruff clean (2026-11-02, implement after the third review).
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean, ruff clean (2026-11-02, compress after the third review: the workflow gates the reference steps on `measure` directly and lists both cache workspaces statically; no `REFERENCE`/`WORKSPACES` variables).

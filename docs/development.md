@@ -225,16 +225,15 @@ only.
 **Moving the reference.** Every run is a recording of its candidate: the
 `engine-budget` artifact holds the candidate's output and a `measurement.json`
 naming the candidate commit, date, run and runner CPU, written before the
-reference is built, so a reference that no longer builds with the change's
-benchmarks still leaves a recording. A PR adopts its own run as the
-reference, saying why in the commit, for one of three reasons: a digest moved
-(a rules change reaching these decks, or a change to the benchmarks or the
-curated lists); a measured cost is accepted; or a speedup is kept, so later
-slowdowns are budgeted against the faster engine rather than allowed back up
-to the old reference. The PR body cites the delta from the run it adopts; the
-recording commit's own run then compares the same engine with that reference
-and passes. When both digests match and the engine did not change, a failure
-is runner noise: re-run the job.
+reference is built. A PR adopts its own run as the reference, saying why in
+the commit, for one of three reasons: a digest moved (a rules change reaching
+these decks, or a change to the benchmarks or the curated lists); a measured
+cost is accepted; or a speedup is kept, so later slowdowns are budgeted
+against the faster engine rather than allowed back up to the old reference.
+The PR body cites the delta from the run it adopts; the recording commit's
+own run then compares the same engine with that reference and passes. When
+both digests match and the engine did not change, a failure is runner noise:
+re-run the job.
 
 ```bash
 gh run download <run-id> --name engine-budget --dir .cache/engine-budget
@@ -246,11 +245,12 @@ job checks out and records the PR head, never GitHub's ephemeral merge
 commit, and a PR head stays fetchable after a squash merge. The benchmarks
 use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
 `is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
-that the reference commit no longer compiles with moves the reference in the
-same PR, recorded from the PR's own run like any other move. For a commit that has no PR, the `measure` dispatch input on
-`ci.yml` selects only Engine Budget, benchmarks that commit with the
-dispatched ref's benchmarks and uploads the same artifact without comparing
-(`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
+that the reference commit no longer compiles with still records the
+candidate (the reference is built afterwards) and moves the reference in the
+same PR like any other move. For a commit that has no PR, the `measure`
+dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
+with the dispatched ref's benchmarks and uploads the same artifact without
+comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
 Measured once on 2026-11-02 with these benchmarks (steps/s; worst Search-64
 reply; total over 3 seeds x 40 decisions), each on its own runner:

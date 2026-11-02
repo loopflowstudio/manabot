@@ -8,10 +8,9 @@ name: Engine Budget
 # machine and holds the candidate to the reference within the tolerance and
 # both to the committed digests. Every run is a recording of its candidate:
 # the `engine-budget` artifact holds both outputs and a measurement.json a PR
-# adopts with `scripts/engine_budget.py record --reason`, so the candidate is
-# a durable commit (the PR head, not GitHub's ephemeral merge commit). `measure`
-# records a commit that has no PR with this ref's benchmarks, without
-# comparing (docs/development.md, Engine performance budget).
+# adopts with `scripts/engine_budget.py record --reason`. `measure` records a
+# commit that has no PR with this ref's benchmarks, without comparing
+# (docs/development.md, Engine performance budget).
 
 on:
   workflow_call:
@@ -45,20 +44,12 @@ jobs:
       - name: Choose the candidate and the other commit
         run: |
           if [ -n "$MEASURE" ]; then
-            {
-              echo "OTHER=$MEASURE"
-              echo "CANDIDATE=other/managym"
-              echo "REFERENCE="
-              printf 'WORKSPACES=other/managym -> target\n'
-            } >> "$GITHUB_ENV"
+            echo "OTHER=$MEASURE"
+            echo "CANDIDATE=other/managym"
           else
-            {
-              echo "OTHER=$(jq -r .reference.commit managym/perf/baseline.json)"
-              echo "CANDIDATE=managym"
-              echo "REFERENCE=other/managym"
-              printf 'WORKSPACES<<EOF\nmanagym -> target\nother/managym -> target\nEOF\n'
-            } >> "$GITHUB_ENV"
-          fi
+            echo "OTHER=$(jq -r .reference.commit managym/perf/baseline.json)"
+            echo "CANDIDATE=managym"
+          fi >> "$GITHUB_ENV"
 
       - name: Check out the other commit
         uses: actions/checkout@v4
@@ -78,7 +69,10 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ${{ env.WORKSPACES }}
+          # The target a mode leaves unbuilt is skipped at save.
+          workspaces: |
+            managym -> target
+            other/managym -> target
           key: engine-budget
 
       - name: Setup uv
@@ -121,15 +115,15 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Build the reference benchmarks
-        if: env.REFERENCE != ''
-        run: cargo build --release --locked --manifest-path "$REFERENCE/Cargo.toml" --example bench_search --example bench_steps
+        if: env.MEASURE == ''
+        run: cargo build --release --locked --manifest-path other/managym/Cargo.toml --example bench_search --example bench_steps
 
       - name: Run the reference
-        if: env.REFERENCE != ''
+        if: env.MEASURE == ''
         run: |
           mkdir -p .cache/engine-budget/reference
-          "$REFERENCE/target/release/examples/bench_steps" | tee .cache/engine-budget/reference/bench_steps.jsonl
-          "$REFERENCE/target/release/examples/bench_search" | tee .cache/engine-budget/reference/bench_search.jsonl
+          other/managym/target/release/examples/bench_steps | tee .cache/engine-budget/reference/bench_steps.jsonl
+          other/managym/target/release/examples/bench_search | tee .cache/engine-budget/reference/bench_search.jsonl
           {
             echo "Reference \`$OTHER\`:"
             echo '```'
@@ -139,7 +133,7 @@ jobs:
 
       # The script's defaults are the two run directories written above.
       - name: Compare the candidate with the reference
-        if: env.REFERENCE != ''
+        if: env.MEASURE == ''
         run: uv run --no-project --python 3.12 python scripts/engine_budget.py compare | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the measurement

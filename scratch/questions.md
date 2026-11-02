@@ -523,24 +523,19 @@ requirement, it needs its own Task.
 - T6's head (`2c1ba169f`) is unpushed, so measuring it on CI needs its commit
   reachable from origin; pushed as a plain ref under `refs/engine-budget/`
   for the dispatch and deleted afterwards (not a branch, no PR).
-- Headless steps of the `code` graph (2026-11-02): `.lf/wave/engine/MEMORY.md`
-  stays unwritten because no step so far maintains `.lf/wave/`; the proposal
-  is in the plan. The two formerly draft decisions (A/B against a committed
-  reference commit; native `Env::step` random play) are read as implied by the
-  accepted outcome plus the runner evidence, so no review returned Blocked;
-  Jack Heart's PR review is where they are confirmed or reversed (no PR yet).
-  Both concept reviews' findings and fixes are in the plan (commits 5c8b0f2db,
-  c8cbc5421). Small readings made along the way: the artifact is named
-  `engine-budget` in both modes (the run id identifies a measurement);
-  `measurement.json` carries the full `lscpu` model name, orientation only,
-  never compared; compare's FAIL hint leaves `<run-id>` as a placeholder so
-  the line reads the same in CI and in tests; the uploaded artifact also
-  contains the `reference/` run, which `record` ignores; `record` takes the
-  tolerance from the committed file, which always exists, rather than
-  defaulting it.
-- Third concept review (2026-11-02): running the candidate before the
-  reference on the one VM is assumed not to bias the comparison beyond what
-  the 10% tolerance absorbs (two runs of one engine on separate EPYC 7763
-  machines agreed within 2.5%); the order exists so a run whose reference
-  cannot build with the change's benchmarks still records its candidate.
-  Reverse it only with evidence that order matters.
+- Headless readings (2026-11-02; decisions, review findings and the
+  proposed Wave memory are in the plan): the two formerly draft decisions
+  (A/B against a committed reference commit; native `Env::step` random play)
+  are read as implied by the accepted outcome plus the runner evidence, so no
+  review returned Blocked; Jack Heart's PR review confirms or reverses them.
+  The artifact is named `engine-budget` in both modes (the run id identifies
+  a measurement); `measurement.json` carries the full `lscpu` model name,
+  orientation only; compare's FAIL hint leaves `<run-id>` as a placeholder so
+  the line reads the same in CI and in tests; the artifact also contains the
+  `reference/` run, which `record` ignores; `record` takes the tolerance from
+  the committed file rather than defaulting it. Running the candidate before
+  the reference on the one VM is assumed not to bias the comparison beyond
+  the 10% tolerance (two runs of one engine on separate EPYC 7763 machines
+  agreed within 2.5%); the order exists so a run whose reference cannot build
+  with the change's benchmarks still records its candidate. Reverse it only
+  with evidence that order matters.

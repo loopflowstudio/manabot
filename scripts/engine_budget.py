@@ -285,10 +285,8 @@ def compare(args: argparse.Namespace) -> int:
     candidate = read_run(args.artifact)
     rows = digest_checks("reference", baseline, reference)
     if any(row.failure for row in rows):
-        # The committed digests do not describe the reference commit, so the
-        # file is wrong, not the candidate; say so before any timing. Recording
-        # this run (the footer) is the recovery, whether the benchmarks moved
-        # or the file was edited by hand.
+        # The file, not the candidate, is wrong: say so before any timing.
+        # The footer's recording is the recovery.
         rows.insert(
             0,
             Check(
