@@ -17,7 +17,15 @@ for family, position in fixture["positions"].items():
     frame = session.new_game(position["config"])["frame"]
     prefix = []
     for ordinal, step in enumerate(position["prefix"]):
-        offer = next(o for o in frame["offers"] if o["label"] == step["label"])
+        # Labels can repeat (two copies of one card in hand); keep the recorded
+        # offer id when it still carries the label, so the position's state
+        # and digest are preserved and only the frame's observation moves.
+        candidates = [o for o in frame["offers"] if o["label"] == step["label"]]
+        offer = next(
+            (o for o in candidates if o["id"] == step["offer_id"]), candidates[0]
+        )
+        if len(candidates) > 1:
+            print(f"{family}: step {ordinal} {step['label']!r} x{len(candidates)}, kept id {offer['id']}")
         prefix.append({"offer_id": offer["id"], "label": step["label"]})
         result = session.hero_command(
             {

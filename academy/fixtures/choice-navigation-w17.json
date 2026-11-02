@@ -114,9 +114,9 @@
       "digest": "8e64f1d38a247e3939da490305931fb15bfb67cdd36060fb81d2098808f92768",
       "frame": {
         "protocol": 1,
-        "match_id": "Ycu_0AmkALDds1_eKQs3ng",
+        "match_id": "_w5n-nt4rJdfhe2Vm1ImTQ",
         "revision": 75,
-        "frame_hash": "53b79dc0254dd1c49f70f773b030aba90a5917bf1d488ed2470931f6329c4d31",
+        "frame_hash": "a239be2b13037bd0ad0d39b8cbe40a88b59bd2baf0cea0f9434484662fb2cc47",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -698,8 +698,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 2,
+                "base_power": 2,
+                "base_toughness": 3,
                 "plus1_counters": 0
               }
             ]
@@ -992,7 +992,7 @@
                 "summoning_sick": false,
                 "power": 9,
                 "toughness": 4,
-                "base_power": 0,
+                "base_power": 9,
                 "base_toughness": 4,
                 "plus1_counters": 0
               },
@@ -1715,9 +1715,9 @@
       "digest": "d2ae0e9145ae4e97f486613ce52ede3637cd96f705b0692574937beee1d4fca6",
       "frame": {
         "protocol": 1,
-        "match_id": "Nu5Bl-RJI7-mvJHkzLyv4Q",
+        "match_id": "CtxMPwJrEWFeXH3VzR8NsQ",
         "revision": 64,
-        "frame_hash": "2618b271397d00d5a15c66d3ab3461ec3d20dae52db213a2c958e677dc99b90c",
+        "frame_hash": "2c44cc3232a732c1c8eb4940eb3c016df4e235732afc6b6712ab3bab58253ecc",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2358,8 +2358,8 @@
                 "summoning_sick": false,
                 "power": 4,
                 "toughness": 4,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 4,
+                "base_toughness": 4,
                 "plus1_counters": 2
               },
               {
@@ -2406,8 +2406,8 @@
                 "summoning_sick": false,
                 "power": 5,
                 "toughness": 5,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 5,
+                "base_toughness": 5,
                 "plus1_counters": 4
               },
               {
@@ -2935,9 +2935,9 @@
       "digest": "9ee4de4cffcf8139aea772b8d9074e97cc0716946b6440b89251a5c5bf16b90c",
       "frame": {
         "protocol": 1,
-        "match_id": "EI1bK8x4ty0Mlb_u67XoFQ",
+        "match_id": "42PwIuC4iYQEbzK2sGYlWw",
         "revision": 90,
-        "frame_hash": "4d32204e524c29ac1fc099b208f78d21c31f27f1268cf7e41303dec8545f715d",
+        "frame_hash": "8ec62a3a7d0959d69de8d26dd2991ed921f47925cda9a26039f7948d4e5ed082",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3561,8 +3561,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 2,
-                "base_power": 0,
-                "base_toughness": 0,
+                "base_power": 2,
+                "base_toughness": 2,
                 "plus1_counters": 2
               },
               {
@@ -3657,8 +3657,8 @@
                 "summoning_sick": false,
                 "power": 1,
                 "toughness": 1,
-                "base_power": 0,
-                "base_toughness": 0,
+                "base_power": 1,
+                "base_toughness": 1,
                 "plus1_counters": 1
               },
               {
@@ -3681,8 +3681,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 0
               },
               {
@@ -3705,8 +3705,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 0
               },
               {
@@ -4171,9 +4171,9 @@
       "digest": "5fba47de33986c30b7730795c95391cee9977a597ac6e2cf464e2aa2619a4ff5",
       "frame": {
         "protocol": 1,
-        "match_id": "zxg-4QdkRrvG8_hsePexZw",
+        "match_id": "5CkU-Qlgt2ekmEEdIuRmRg",
         "revision": 36,
-        "frame_hash": "db0df9285302a56621e5a8c2feb3d68275e69cc6f8926a6ecdcfee93c1ab1869",
+        "frame_hash": "bcaa20f30a4a358520c3ceab867e09adde393d2f804008672e6a026f9610fa54",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4677,8 +4677,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 1,
                 "attacking": true
               },
@@ -4726,8 +4726,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 2,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 2,
+                "base_toughness": 2,
                 "plus1_counters": 1,
                 "attacking": true
               },
@@ -5034,9 +5034,9 @@
       "digest": "98145c0467f4f407a6fe048ce3c2ba8aa8216be9c69f8e30fe4c06dba6dcdbd0",
       "frame": {
         "protocol": 1,
-        "match_id": "Nx7jKF5K8KLYYF-UYpd4XA",
+        "match_id": "Ngj15NKm3UTmMxOwxzvgFQ",
         "revision": 56,
-        "frame_hash": "efa07321d97d0b71ec916fe9a5aa5d785607a9be9709f1999f76e8e0a0e094c6",
+        "frame_hash": "995745f61352f8b7338c75e9b2edf9dcb1fed2852cd18f1fe418ad02d84a1716",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5689,8 +5689,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 1
               },
               {
@@ -5737,8 +5737,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 2
               },
               {
@@ -5930,6 +5930,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "072adf12627809df87625fb000b70521ebb0e1ff",
+  "source_base_commit": "e8fd88eedf184a23079fe708e4da2056186d0f74",
   "world_version": "w17"
 }

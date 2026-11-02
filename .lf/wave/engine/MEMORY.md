@@ -196,10 +196,30 @@ preserves accepted decisions, dated proof limits and source history.
   main (T5 met ~60 hunks instead of ~1465). World-content changes re-record w17
   evidence in place: the semantic kernel, authored-match receipt and parity
   pins, public-commitment parity, Academy demos, choice navigation and
-  trigger-order fixtures; only hashes and digests should move. Until the
+  trigger-order fixtures; only hashes and digests should move. A
+  re-record that resolves a prefix by offer label must keep the recorded
+  offer id when labels repeat (two copies of a card in hand), or the
+  position silently changes copy, state digest and permanent order
+  (`regen_choice_navigation.py`, fixed 2026-11-02). Until the
   Academy demos are re-recorded, `play_demo.py` rejects their digest before
   any decision is offered, so the Playwright decision-surface spec fails in
   CI as a symptom of the stale demo, not a UI defect.
+- Jack Heart's T5 concept review (2026-11-02, decisions 1a/2a): legendary is
+  a layered characteristic (`Characteristics.is_legendary`, layer 4: copiable
+  supertypes unless a `Nonlegendary` record), read by the legend rule and the
+  card row alike; no separate reader. Every `CardData` field that states a
+  characteristic of a battlefield card reads `Game::characteristics()`, and
+  `tests/cards/observability.rs` classifies each field as layered or printed
+  by definition so an unclassified field does not compile. A characteristic
+  without a layered value is added to `Characteristics`, never read from the
+  printed card. The rule changed no column, token or protocol; the kernel,
+  authored-match, demo and trigger-order receipts stayed green, but any
+  recorded viewer projection whose card rows sit under active effects moves
+  (the choice-navigation fixture's earthbent lands and anthems), and the
+  projection's `base_power` stopped being a printed value: printed P/T has
+  no other Python-visible source (the pack manifest carries ids and names
+  only), so restoring it needs an engine accessor, a decision Jack Heart
+  has not made.
 
 ## Open tensions
 

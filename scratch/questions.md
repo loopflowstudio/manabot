@@ -108,3 +108,19 @@ here; main carries their outcomes.
   name as the card line's label.
 - Evidence that embeds card rows with active effects moves; implement left
   the re-records to gate, which owns the receipts.
+
+## T5 realign after 1a/2a — 2026-11-02 (headless)
+
+- CI on `e8fd88eed` failed only Academy UI's two live retained
+  choice-navigation cases (CHOOSE_TARGET, DISCARD): the recorded projection's
+  `base_power` / `base_toughness` are the card row's P/T, which 2a made
+  layered on the battlefield (earthbent 0/0 lands now 2/2 and 1/1, anthem
+  creatures 3/3). No UI component reads `base_power`; the projection's comment
+  had promised printed values for a "4/4 (2/2)" display. Printed P/T has no
+  other Python-visible source, so keeping the field printed means a new engine
+  accessor. Simpler reversible choice taken: re-record the fixture with
+  `scratch/tools/regen_choice_navigation.py`, document `base_power` as the
+  card row's value, and leave the printed-P/T question for Jack Heart (plan,
+  Remaining). Memory bullet corrected: evidence under active effects does move.
+- `/verify` was not run before the realign commit, as for every T5 commit:
+  that Loopflow skill checks a merged change, and shipping is stopped.

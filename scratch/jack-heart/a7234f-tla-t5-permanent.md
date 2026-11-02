@@ -1,12 +1,17 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, PR #405 open, no review yet): implemented, demoed through
-native Commands and the LLM/Academy text path, synced onto main at `4c8324a59`
-(T3's squash, the characteristics cache and T4). All three cards are defined
-and supported. Jack Heart's concept-review decisions 1a and 2a (below) are
-implemented on top of the gated head; gate re-records whatever evidence the
-layered card rows move. Shipping is stopped per Jack Heart's steer 6eae1230:
-the PR waits for Jack Heart's review; no merge.
+Status (2026-11-02, PR #405 open, no review yet, head `e8fd88eed`, main
+`29660d00c` merged, 0 behind): implemented, demoed through native Commands
+and the LLM/Academy text path, synced onto main (T3's squash, the
+characteristics cache and T4). All three cards are defined and supported.
+Jack Heart's concept-review decisions 1a and 2a (below) are implemented
+(`16e28c304`) and compressed (`924e520b4`); CI on the head is the gate's
+pending check (Remaining). Shipping is stopped per Jack Heart's latest steer
+f39fef34 ("run the graph through gate. Shipping stays stopped: no merge").
+The Task record shows "Auto-Ship approved by Session … for Jack Heart
+2026-11-02T21:35:52Z" and the Graph "running from land --wait-and-fix"; the
+steer is the later, explicit direction, so the PR waits for Jack Heart's
+review and nothing merges.
 
 Two accepted models from T3 (`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`)
 are the base this builds on: continuous effects as records
@@ -187,11 +192,13 @@ yet, add it to `Characteristics` instead of reading the printed card.
 - The Yip Yip! card test and `PermanentData.keywords`' doc had stated the
   old contract (card entry keeps printed keywords); both now state the
   layered one.
-- Consequence for evidence: a battlefield card row now equals its
-  permanent's layered values (P/T with counters and pumps, granted keywords
-  and types), so recorded observations with active effects change. Gate
-  re-records the affected receipts (semantic-kernel evidence, authored-match
-  parity, precision demos, trigger-order digests) as it did after the sync.
+- Evidence: a battlefield card row now equals its permanent's layered
+  values (P/T with counters and pumps, granted keywords and types). Implement
+  expected recorded observations with active effects to move; on
+  `e8fd88eed` only the choice-navigation fixture's projection did
+  (earthbent lands, anthem creatures), and realign re-recorded it
+  (Remaining). The kernel, authored-match, demo and trigger-order receipts
+  held.
 
 ## Sync onto main — 2026-11-02 (steer 6eae1230)
 
@@ -211,15 +218,39 @@ yet, add it to `Characteristics` instead of reading the printed card.
 
 ## Remaining
 
-- Gate at the head with decisions 1a/2a: debug `cargo test`, clippy, the
-  rebuilt extension, the Python suites and the evidence re-records the
-  layered card rows require (above); then Jack Heart's review of PR #405.
-  No merge. CI run 41511227714 on
-  `836042c07` passed every selected job (Rust, Python unit, both
-  conformance, Clean-machine Play, Academy UI, Academy Integration,
-  Integration main and long). The gate at that head (2026-11-02, below)
-  removed three sync duplicates and corrected the supported-card count; its
-  commit is the head to review.
+- Gate at the head `e8fd88eed` (1a/2a implemented and compressed, main
+  `29660d00c` merged). CI runs 41536286824 / 41536286630
+  passed every job except Academy UI, whose two live retained
+  choice-navigation cases (CHOOSE_TARGET, DISCARD) found the fixture's
+  projection stale: `base_power` / `base_toughness` are the card row's P/T,
+  layered since 2a. Realign re-recorded
+  `academy/fixtures/choice-navigation-w17.json` (only those values, match
+  ids, frame hashes and the source commit moved; every state digest and
+  offer order is preserved) after fixing
+  `scratch/tools/regen_choice_navigation.py` to keep a recorded offer id
+  when its label repeats (the first-match rule had silently moved
+  CHOOSE_TARGET to another copy of It'll Quench Ya!, changing its digest).
+  The kernel, authored-match, demo and trigger-order receipts did not move.
+  Gate at the new head: CI (the Playwright spec is the proof of the
+  re-record), the local debug `cargo test`, clippy and the focused Python
+  suites with the rebuilt extension.
+- Open for Jack Heart: the projection's `base_power` / `base_toughness`
+  were documented as printed values for a "4/4 (2/2)" display; with the
+  card row layered they equal `power` / `toughness` on the battlefield, and
+  printed P/T has no other Python-visible source (the pack manifest carries
+  ids and names only). No UI component reads them today. Choices: (i) keep
+  them as the card row's value (current; the comment now says so), (ii)
+  add a printed-P/T accessor to the engine and keep the field printed, or
+  (iii) drop the fields (protocol change). (ii) and (iii) are follow-up
+  Tasks, not T5 blockers.
+- PR #405's body predates 1a/2a: it says the legend rule reads
+  `Game::permanent_is_legendary` (deleted) and does not state the layered
+  `CardData` rule or `Characteristics.is_legendary`. Gate or pr-publish
+  refreshes those sentences; the "314 cards" and copy-model paragraphs are
+  current.
+- Then Jack Heart's review of PR #405. No merge: steer f39fef34 is the latest
+  direction, and the Task record's auto-ship approval (21:35:52Z) does not
+  override it.
 - Known, not fixed: `tests/sim/test_rollout.py::TestBatchedSampler::test_selects_valid_actions_only`
   fills every float buffer with noise, which the fact and definition checks
   reject. CI does not select the file.
@@ -237,6 +268,12 @@ yet, add it to `Characteristics` instead of reading the printed card.
 
 ## Checks
 
+- 2026-11-02 (realign after 1a/2a, headless): CI on `e8fd88eed` passed all
+  jobs but Academy UI (two choice-navigation projection cases). Extension
+  rebuilt at HEAD; `uv run python scratch/tools/regen_choice_navigation.py`
+  then `uv run --extra dev pytest tests/academy/test_choice_navigation.py -q`:
+  5 failed before the re-record, 7 passed after. The Playwright proof is
+  CI's at the new head.
 - 2026-11-02 (compress, headless): debug `cargo test --test cards --test
   rules_tests` (501 + 141 passed), clippy `--all-targets --all-features -D
   warnings` clean. Observation output is unchanged, so no extension rebuild

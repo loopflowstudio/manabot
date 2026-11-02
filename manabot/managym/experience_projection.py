@@ -149,8 +149,10 @@ def _serialize_permanent(
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
         # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. Printed values ride alongside so the UI can
-        # show "4/4 (2/2)" on a buffed permanent.
+        # SBA actually checks. `base_power` / `base_toughness` are the card
+        # row's values; on the battlefield the card row reads the layered
+        # characteristics too, so they equal the effective values there.
+        # Printed P/T is not in the projection.
         "power": int(permanent.power),
         "toughness": int(permanent.toughness),
         "base_power": int(card.power) if card else None,
