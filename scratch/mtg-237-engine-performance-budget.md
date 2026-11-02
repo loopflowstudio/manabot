@@ -29,8 +29,40 @@ Design from Jack Heart's concept review of 2026-11-02 (Performance section,
 Nothing is replaced. The Clean-machine Play 120 s wait stays a launch proof,
 not a latency budget.
 
-## Status
+## Decisions
 
-Implemented 2026-11-02. Reference 4c8324a59 recorded from CI run 41517623999;
-T4/T5/T6 figures in docs/development.md. Full CI on the branch (run 41527511986,
-head 07512aa8c) passed, Engine Budget A/B included.
+- Accepted (Task brief, Jack Heart, 2026-11-02): both workloads budgeted at
+  10% against a committed file; digests asserted identical; a 20% slowdown
+  fixture; one-time T4/T5/T6 measurement; `uv` only; no induced load.
+- Draft, awaiting Jack Heart's review: "committed baseline" is read as a
+  committed *reference commit* rebuilt and measured A/B on the same runner,
+  not committed absolute numbers. Evidence: one engine spread 6.8k-10.3k
+  steps/s across three runner CPU models (far outside 10%); two runs on one
+  model agreed within 2.5%. The file's figures are orientation only.
+- Draft, awaiting review: the headless workload is native `Env::step`
+  random-legal play (512 games, skip_trivial), not the rul-9 Python
+  semantic-Command runner (deleted in #343). Its steps/s is its own
+  baseline, not comparable with rul-9's 588.5.
+- Draft: any rules change reaching the curated decks moves the random-play
+  digest and costs one `record` per such PR; accepted as the price of (3).
+
+## Status (reconciled 2026-11-02)
+
+Exists: workflow, both benchmarks, comparator, tests, baseline file,
+AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
+Reference 4c8324a59 recorded from CI run 41517623999. Full CI validated by
+workflow_dispatch run 41527511986 at 07512aa8c (Engine Budget A/B included).
+The later script simplification b734238c4 is pushed and passes its tests
+locally; CI has not run on that head yet.
+
+Remains (publication, owned by the caller): open the PR with the T4/T5/T6
+figures in its body; the PR run confirms path selection on the
+`pull_request` event, and the first main run after merge confirms the push
+path. Jack Heart's review decides the two draft decisions above.
+
+Proposed Wave memory (not written; `.lf/wave/` is read-only here): engine
+speed now has a CI budget relative to a committed reference commit; GitHub
+runner wall time is not comparable across runs; T4 main measured 6.8k
+steps/s and 13.8 s worst Search-64 reply on EPYC 7763.
+
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 55 passed.
