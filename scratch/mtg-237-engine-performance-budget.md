@@ -95,12 +95,35 @@ re-running the job is the recovery when digests match and the engine did not
 change. Open for later evidence, not this Task: the 10% figure and whether a
 dedicated runner is worth buying.
 
-## Status (reconciled 2026-11-02, fourth-review implement)
+Concept-review outcome (2026-11-02, after full-score repair): nothing to
+change and no open product choice requiring another implement pass. The
+developer's interaction is one PR check and, for a deliberate change, one
+artifact adoption with a reason. Its concepts map directly to the existing
+APIs: the candidate and reference are `Run` values, `compare` produces the
+budget checks, and `record` persists the candidate's measurement and reason
+as the next `Baseline`. CI owns execution and artifact identity; the committed
+file owns the reference and tolerance. No separate measurement lifecycle or
+second baseline command is needed.
+
+The normal path preserves scores and passes within budget. A timing or digest
+failure remains visible until fixed or deliberately adopted; recording keeps
+the tolerance and leaves the original run as evidence. A reference build
+failure retains the candidate recording for the same recovery, subject to the
+controlled proof still listed below. The two counterexamples already driving
+the design—different runner speeds and changed losing scores with the same
+winner—are addressed without changing the accepted workload or hiding failure.
+The reference/workload interpretations remain explicit for Jack Heart's PR
+review, not newly approved here. Next proof remains the existing gate and
+PR-path checks; this review requests no code rewrite or execution restart.
+
+## Status (reconciled 2026-11-02, realign)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the historical T4/T5/T6
 figures and their digest limitation. Completed workflow work at 078d37ef4
-is preserved. Main 29660d00c was merged at 49765237c.
+is preserved. Main 29660d00c was merged at 49765237c and remains origin's
+current main as of this reconciliation. Compression at db008a1c6 changes
+neither digest bytes nor measured work.
 
 Full-score digest implementation: e5615edcc. The focused example tests are
 included in ordinary `cargo test`; benchmark-only edits select Rust too.
@@ -115,26 +138,27 @@ The steps digest is unchanged. The three new full-score digests come from
 that artifact, not calculations or reinterpretation of historical results.
 
 Remains, owned by later steps: affected gate suites and publication with the
-T4/T5/T6 figures and their limitation in the PR body. The PR run confirms
-path selection, PR-head checkout, candidate-first recovery after a reference
-build failure, the two summary blocks, flagless same-runner comparison with
-the strengthened baseline, and artifact identity. The first main run after
+T4/T5/T6 figures and their limitation in the PR body. The PR run must confirm
+path selection, PR-head checkout, the two summary blocks, flagless same-runner
+comparison with the strengthened baseline, and artifact identity. Recovery
+after a reference build failure needs a separate controlled failure proof;
+a successful PR run alone cannot establish it. The first main run after
 merge confirms the push path. The measurement dispatch path passed in
 41540798745. Interactive demo remains its declared boundary; shipping is
 not authorized.
 
-Proposed Wave memory, not written (no step so far maintains Wave memory):
-engine speed now has a CI budget relative to a committed reference commit;
-GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
-steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
-`.lf/wave/engine/MEMORY.md` from the step that does.
+The code Graph's realign step updated Engine memory with the same-runner
+evidence, full-score requirement, historical limits and candidate-first
+artifact recovery. The selected Wave has no child directories or child
+memories. The reference/workload interpretations still await Jack Heart's
+review; no new product decision arose in reconciliation.
 
 Reply timings are sorted in place after summing: their original order is no
 longer used, so a cloned vector adds no information. Digest bytes, measured
 work and the baseline remain unchanged.
 
-Check (2026-11-02): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml --example bench_search -j 2`
-→ 4 passed; `cargo fmt --manifest-path managym/Cargo.toml --check` and
-`git diff --check` clean. Reused implement's 57 comparator/CI-selection passes
-and focused Clippy result; full affected suites and PR verification belong
-to gate/CI. `lf context` confirms memory and scratch remain under both limits.
+Existing validation retained: four debug digest tests, 57 comparator/CI-selection
+tests, formatting and focused Clippy passed before reconciliation; no executable
+code changed here. Full affected suites and PR verification belong to gate/CI.
+
+Check (2026-11-02): `gh run view 41540798745 --json conclusion,headSha,event,url` → successful dispatch at e5615edcc; artifact/baseline equality verified with `uv run --no-project python`; `git diff --check` clean and `lf context` under both limits.

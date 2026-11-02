@@ -103,6 +103,25 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Runtime evidence
 
+- Jack Heart's MTG-237 brief (2026-11-02) requires a 10% engine budget,
+  deliberate baseline moves, search-score preservation and a separate headless
+  throughput workload. The implementation compares candidate and committed
+  reference on one CI runner: identical T4 code measured 6.8k–10.3k steps/s
+  across runner CPU models, so recorded wall times cannot budget another run.
+  Same-runner comparison and native random-legal `Env::step` throughput remain
+  interpretations awaiting Jack Heart's PR review; this throughput is not
+  comparable with the retired rul-9 Python Command runner's 588.5 steps/s.
+- Search correctness needs every ordered action score and decision boundary.
+  A digest of only simulation count and winning action misses changed losing
+  scores. MTG-237 now hashes full scores; its historical T4/T5/T6 measurements
+  retain the old limitation and establish no full-score equality. The new
+  baseline comes from CI run 41540798745, not reinterpreted historical output.
+  Detailed measurements and the adoption procedure live in
+  `docs/development.md#engine-performance-budget`; PR-path proof remains open.
+- Record the candidate before building the reference so an incompatible
+  reference still leaves an adoptable measurement. Moving digests, accepting a
+  cost or retaining a speedup requires a reason and the candidate's own CI
+  artifact. Measure the durable PR head, not the ephemeral merge commit.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.
