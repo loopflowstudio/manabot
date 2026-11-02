@@ -6,7 +6,7 @@
 use managym::{
     flow::turn::StepKind,
     state::{
-        card::Keywords,
+        card::{Keyword, Keywords},
         effect::{Affected, EffectDuration, Modification},
         game_object::{PermanentId, PlayerId},
         zone::ZoneType,
@@ -29,10 +29,7 @@ fn ogre_scenario() -> (Scenario, PermanentId) {
 }
 
 fn flying() -> Modification {
-    Modification::AddKeywords(Keywords {
-        flying: true,
-        ..Default::default()
-    })
+    Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))
 }
 
 fn indefinitely(s: &mut Scenario, id: PermanentId, modification: Modification) {
@@ -54,13 +51,21 @@ fn cr_613_7_a_grant_later_than_ability_loss_applies_and_an_earlier_one_does_not(
     until_end_of_turn(&mut later_grant, ogre, Modification::LoseAllAbilities);
     until_end_of_turn(&mut later_grant, ogre, flying());
     assert!(later_grant.game().characteristics(ogre).abilities_lost);
-    assert!(later_grant.game().characteristics(ogre).keywords.flying);
+    assert!(later_grant
+        .game()
+        .characteristics(ogre)
+        .keywords
+        .has(Keyword::Flying));
 
     let (mut earlier_grant, ogre) = ogre_scenario();
     until_end_of_turn(&mut earlier_grant, ogre, flying());
     until_end_of_turn(&mut earlier_grant, ogre, Modification::LoseAllAbilities);
     assert!(earlier_grant.game().characteristics(ogre).abilities_lost);
-    assert!(!earlier_grant.game().characteristics(ogre).keywords.flying);
+    assert!(!earlier_grant
+        .game()
+        .characteristics(ogre)
+        .keywords
+        .has(Keyword::Flying));
 }
 
 /// CR 514.2: "until end of turn" records end in the cleanup step; the
@@ -101,7 +106,7 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     let (mut s, ogre) = ogre_scenario();
     indefinitely(&mut s, ogre, flying());
     let old = s.game().affected_permanent(ogre).unwrap();
-    assert!(s.game().characteristics(ogre).keywords.flying);
+    assert!(s.game().characteristics(ogre).keywords.has(Keyword::Flying));
 
     let card = card_of(&s, ogre);
     s.game_mut().move_card(card, ZoneType::Hand);
@@ -110,7 +115,11 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     assert_ne!(s.game().affected_permanent(returned), Some(old));
     assert!(s.game().state.effects.is_empty());
     assert_eq!(s.game().effects_on(returned).count(), 0);
-    assert!(!s.game().characteristics(returned).keywords.flying);
+    assert!(!s
+        .game()
+        .characteristics(returned)
+        .keywords
+        .has(Keyword::Flying));
 }
 
 /// Records are match state: restoring a fork snapshot removes a record
@@ -136,7 +145,7 @@ fn fork_restore_restores_continuous_effect_records_and_the_state_hash() {
     branch = mark;
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
-    assert!(!branch.characteristics(ogre).keywords.flying);
+    assert!(!branch.characteristics(ogre).keywords.has(Keyword::Flying));
 
     branch.apply_continuous(
         None,
@@ -154,7 +163,7 @@ fn fork_restore_restores_continuous_effect_records_and_the_state_hash() {
     branch = mark;
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
-    assert!(branch.characteristics(ogre).keywords.flying);
+    assert!(branch.characteristics(ogre).keywords.has(Keyword::Flying));
 }
 
 /// Equal games with equal records hash equally; the records are part of the

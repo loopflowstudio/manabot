@@ -6,7 +6,7 @@
 //! only descriptor deck import and admission read. Authored setups' packs hold
 //! their decks' cards and are described for policy vocabularies only; they
 //! are fixed setups, never deck-admission targets. A defined card is eligible
-//! unless its set file marks it incomplete ([`cardsets::incomplete`]); tokens
+//! unless its set module marks it incomplete (`managym_cards::incomplete`); tokens
 //! and rules fixtures are never deck entries. Setup construction policy belongs
 //! to the admission caller, not this catalog.
 
@@ -18,7 +18,6 @@ use std::{
 use super::{setups::authored_packs, ContentError};
 use crate::{
     cards::content_pack::{default_content_pack, ContentPack},
-    cardsets,
     state::card::CardDefId,
 };
 
@@ -55,7 +54,7 @@ struct PoolRuntime {
 
 impl PoolRuntime {
     fn describe(pack_key: &str, content: Arc<ContentPack>) -> Self {
-        let incomplete = cardsets::incomplete()
+        let incomplete = managym_cards::incomplete()
             .iter()
             .copied()
             .collect::<BTreeMap<_, _>>();

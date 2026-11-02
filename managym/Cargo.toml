@@ -3,6 +3,14 @@ name = "managym"
 version = "0.2.0"
 edition = "2021"
 
+# The engine, with the rules types it is written in (`state/`) and the card
+# sets it runs (`cards/`) as sibling crates. The engine reaches the sets only
+# through `managym_cards::catalog()`, so `cargo check -p managym-cards` checks
+# a card edit against the rules types alone. `cargo test` here covers all three.
+[workspace]
+members = ["state", "cards"]
+default-members = [".", "state", "cards"]
+
 # Agent worktrees build this crate once or twice, then disappear. Keep file and
 # line debugging without retaining a full incremental compiler graph per clone.
 [profile.dev]
@@ -28,6 +36,8 @@ name = "bench_observation"
 required-features = ["benchmark"]
 
 [dependencies]
+managym-cards = { path = "cards" }
+managym-state = { path = "state" }
 blake3 = "1"
 base64 = "0.22"
 rand = "0.8"

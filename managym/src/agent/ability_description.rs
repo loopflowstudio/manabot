@@ -8,7 +8,7 @@ use crate::state::{
         LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
-    card::{Card, CardType, Keywords},
+    card::{Card, CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
     mana::{Mana, ManaCost},
     permanent::CounterKind,
@@ -496,42 +496,10 @@ fn cost_description(cost: &ManaCost) -> String {
 }
 
 fn keywords_description(k: &Keywords) -> String {
-    let Keywords {
-        flying,
-        reach,
-        haste,
-        flash,
-        vigilance,
-        trample,
-        first_strike,
-        double_strike,
-        deathtouch,
-        lifelink,
-        defender,
-        menace,
-        hexproof,
-        indestructible,
-    } = k;
-    [
-        (flying, "flying"),
-        (reach, "reach"),
-        (haste, "haste"),
-        (flash, "flash"),
-        (vigilance, "vigilance"),
-        (trample, "trample"),
-        (first_strike, "first strike"),
-        (double_strike, "double strike"),
-        (deathtouch, "deathtouch"),
-        (lifelink, "lifelink"),
-        (defender, "defender"),
-        (menace, "menace"),
-        (hexproof, "hexproof"),
-        (indestructible, "indestructible"),
-    ]
-    .into_iter()
-    .filter_map(|(on, name)| on.then_some(name))
-    .collect::<Vec<_>>()
-    .join(", ")
+    k.iter()
+        .map(Keyword::printed)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub(crate) fn effects_description(effects: &[Effect]) -> String {
@@ -769,6 +737,9 @@ fn continuous_description(
         ),
         Modification::BecomeArtifactCreature => {
             format!("{subject} becomes an artifact creature{until}")
+        }
+        Modification::BecomeCreature => {
+            format!("{subject} becomes a creature in addition to its other types{until}")
         }
         Modification::AddKeywords(keywords) => {
             format!("{subject} gains {}{until}", keywords_description(keywords))

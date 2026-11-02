@@ -126,7 +126,7 @@ checkpoints or experiment evidence.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.
-  `managym/tests/cards/observability.rs` names each `Observation` field's
+  `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
@@ -142,7 +142,7 @@ checkpoints or experiment evidence.
   Never emit an un-uv'ed Python command in docs, scripts, or instructions.
 - Python is pinned to 3.12 (PyO3 caps at 3.13; the venv is 3.12). Fresh venvs:
   `uv venv --python 3.12`.
-- After changing Rust under `managym/src`, rebuild from the repository root so
+- After changing Rust under `managym/` (the engine, `state/` or `cards/`), rebuild from the repository root so
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
@@ -203,26 +203,30 @@ checks required by the affected package and workflow.
 ### Card definitions
 
 Each card is one function in the set file of its first printing under
-`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`), returning
-the engine's own `CardDefinition` written in its rules types (`Effect`,
-`Ability`, `StaticAbility`, `AdditionalCost`, `TargetSpec`, `TriggerCondition`,
-…). That value is the only card representation: there is no authoring language,
+`managym/cards/src/` (the `managym-cards` crate; keys `<set>.<card>`; basics
+are `lea.*`), returning the engine's own `CardDefinition` written in its rules
+types (`Effect`, `Ability`, `StaticAbility`, `AdditionalCost`, `TargetSpec`,
+`TriggerCondition`, …), which live in the `managym-state` crate
+(`managym/state/`) and are re-exported as `managym::state`. The engine reaches
+the sets only through `managym_cards::catalog()`. Keywords are `Keyword`
+variants held in a `Keywords` set (`Keywords::of(&[Keyword::Flying])`);
+counters are `CounterKind` entries stored sparsely on the permanent. That value is the only card representation: there is no authoring language,
 compiler, IR or card JSON. `CardDefinition` holds identity, characteristics and
 ability/cost lists; a static ability or additional cost is a variant of
 `StaticAbility` or `AdditionalCost`, never a new field. Every token is a
-`CardDefinition` with `is_token: true` in `cardsets/tokens.rs` (keys `token.*`,
+`CardDefinition` with `is_token: true` in `managym/cards/src/tokens.rs` (keys `token.*`,
 Scryfall id of its first token printing). Add the function to its set file's `cards()`. New behavior is a new
-rules-type variant (with a directed test in `tests/cards/<set>.rs`), never
+rules-type variant (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
-id of the printing in its set file (`tests/cards/scryfall.rs` checks shape and
-uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
+id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
+checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
 online, never in CI). Rebuild the extension after card changes.
 
 Learning tokens derive from the same definitions (`cards/tokens.rs`,
 `managym.learning_catalog`), so a new variant reaches the policy without a
 vocabulary edit. Every mechanic must be observable in both the observation
 tensor and the tokens: extend the exhaustive guards in
-`tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
+`managym/cards/tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
 `TriggerCondition`, `Ability`, `StaticAbility`, `AdditionalCost`) and give the
 mechanic a directed test there. Static and cost rows name a real card and its
 behavior test in `tests/cards/<set>.rs`, which the guard checks.
@@ -231,14 +235,14 @@ Support is definition: the world pool is every defined card from every set, and
 a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
 with the missing behavior). Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
-or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, the
-set file of that card; engine rules stay in `tests/rules/`, and shared scenario
-helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+or gate a card. A test about one card goes in `managym/cards/tests/cards/<set>.rs`,
+the set file of that card; engine rules stay in `managym/tests/rules/`, and shared
+scenario helpers live in `managym/tests/support/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
 The default pack registers every definition in name order (`cards/content_pack.rs`).
-Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
-set under the single `tests/cards.rs` target. Both test targets mount
-`tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
+Card tests mirror the set files: `managym/cards/tests/cards/<set>.rs`, one module
+per set under the single `tests/cards.rs` target of the cards crate (the engine is
+its dev-dependency). Both test targets mount the engine's `tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
 primitive defined once. `five_color_setup` decks hold four copies of each listed
 name; a fifth `force_permanent_on_battlefield` of that name returns an existing
 copy, so list another card when a test needs more. `inspect::keywords` reads

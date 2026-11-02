@@ -25,7 +25,11 @@ is re-recorded together. The authored-match receipt's SHA-256 is pinned as
 `uv run --extra dev python -m academy.public_commitment_parity write`; the
 latter needs the RUL-9 measurement from the artifact store. The same digest
 binds `academy/fixtures/*-w17.json` and the belief v3 receipt pins in
-`tests/belief/test_state.py`.
+`tests/belief/test_state.py`. A state-hash contract change (object ids or
+`MATCH_STATE_HASH_VERSION`) moves every pinned digest the same way without
+touching the content digest; `scripts/refresh_academy_fixtures.py` replays the
+Academy fixtures' recorded Commands and rewrites their digests, and the
+presentation pins in `tests/academy/test_authored_match_parity.py` follow.
 
 Earlier worlds' corpora (semantic-kernel w8–w15, authored-match and parity v1
 through w11, public-commitment-parity-v1, the Learn w4 cohorts) are archived

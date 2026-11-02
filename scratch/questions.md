@@ -464,3 +464,45 @@ requirement, it needs its own Task.
   state write already passes `TrackedState::deref_mut`, so a derived index
   cannot drift, and the measured cost is small. Revisit only if profiles show
   index rebuilds dominating.
+
+## MTG-238 (catalog-scale types) — 2026-11-02, headless
+
+- Started on main `4c8324a59` although the Task says to start after MTG-225
+  (T6) publishes: T6 was still in `implement` with no PR when this Task was
+  launched. T6's `StaticAbility::CreatureWithNamesakes` therefore does not
+  exist here; converting it to a `Count(predicate) >= n` condition is deferred
+  to the sync onto T6. T6's new `Keywords { x: true, ..Default::default() }`
+  literals and `.keywords.x` reads convert mechanically at that sync
+  (`Keywords::of(&[Keyword::X])`, `.keywords.has(Keyword::X)`); `tla.rs` moved
+  to `managym/cards/src/tla.rs` with its body otherwise untouched so git
+  rename detection carries T6's card edits across.
+- "State hashes unchanged" held for counters and keywords (serialization
+  byte-identical, content digest unchanged) but not for the animation change:
+  `Permanent.animated` was serialized on every permanent, so removing it
+  changes every canonical encoding. Per the contract in `state/hash.rs` the
+  version is now 12 and every corpus embedding state digests was re-recorded
+  (semantic-kernel, the authored-match receipt and both parity receipts, the
+  five Academy fixtures via the new `scripts/refresh_academy_fixtures.py`, the
+  presentation pins in `tests/academy/test_authored_match_parity.py`); the
+  content digest did not move, so no card test or token evidence changed. The
+  alternative, a dead serialized `animated` key, was rejected.
+- `Modification::BecomeArtifactCreature` (crew) was kept beside the new
+  `BecomeCreature` because folding the two into one general type-adding record
+  would rewrite six card definitions and
+  move the w17 content digest, which re-records every corpus including the
+  authored-match receipt that needs the RUL-9 artifact-store measurement. Fold
+  it at the next content-digest-moving change.
+- "Others become fact rows" has no instance: all 14 keywords are evergreen, so
+  no `FactKind` was added for non-evergreen keywords. The exhaustive `Keyword`
+  match in `observability.rs` forces the first non-evergreen keyword to name
+  its fact row instead of columns.
+- `player.rs` and `deck.rs` stay in the engine crate (`managym::state`) rather
+  than `managym-state`: `Deck` is a `#[pyclass]` whose `#[pymethods]` must be
+  defined in the same crate, and nothing in the rules vocabulary reads them.
+- The `managym-cards` tests dev-depend on the engine (a Cargo-permitted
+  dev-dependency cycle) and mount `managym/tests/support` by `#[path]` so each
+  scenario primitive stays defined once.
+- Compress (headless): `tests/academy/test_ur_lessons_increment.py` asserted a
+  37-wide permanent row, stale since T4 (`4c8324a59`) added the dealt-damage
+  column on main; corrected to 38 here because it is one line and the suite
+  is otherwise green. Not a rule of this Task.

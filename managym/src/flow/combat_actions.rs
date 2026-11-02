@@ -1,6 +1,7 @@
 // combat_actions.rs
 // Combat declaration and resolution methods on Game.
 
+use crate::state::card::Keyword;
 use crate::{
     agent::action::AgentError,
     flow::{
@@ -53,7 +54,9 @@ impl Game {
             if !self.permanent_can_attack(permanent_id) {
                 return Err(AgentError("permanent cannot attack".to_string()));
             }
-            self.characteristics(permanent_id).keywords.vigilance
+            self.characteristics(permanent_id)
+                .keywords
+                .has(Keyword::Vigilance)
         };
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.attacking = true;
@@ -119,7 +122,7 @@ impl Game {
                 continue;
             }
             let keywords = self.characteristics(*attacker_id).keywords;
-            if keywords.first_strike || keywords.double_strike {
+            if keywords.has(Keyword::FirstStrike) || keywords.has(Keyword::DoubleStrike) {
                 return true;
             }
         }
@@ -129,7 +132,7 @@ impl Game {
                     continue;
                 }
                 let keywords = self.characteristics(*blocker_id).keywords;
-                if keywords.first_strike || keywords.double_strike {
+                if keywords.has(Keyword::FirstStrike) || keywords.has(Keyword::DoubleStrike) {
                     return true;
                 }
             }
@@ -155,8 +158,8 @@ impl Game {
 
             let attacker_power = self.characteristics(attacker_id).power.max(0);
             let attacker_keywords = self.characteristics(attacker_id).keywords;
-            let attacker_has_trample = attacker_keywords.trample;
-            let attacker_has_deathtouch = attacker_keywords.deathtouch;
+            let attacker_has_trample = attacker_keywords.has(Keyword::Trample);
+            let attacker_has_deathtouch = attacker_keywords.has(Keyword::Deathtouch);
 
             let declared_blockers = combat
                 .attacker_to_blockers
@@ -229,8 +232,8 @@ impl Game {
         pass: CombatDamagePass,
     ) -> bool {
         let keywords = self.characteristics(permanent_id).keywords;
-        let has_first = keywords.first_strike;
-        let has_double = keywords.double_strike;
+        let has_first = keywords.has(Keyword::FirstStrike);
+        let has_double = keywords.has(Keyword::DoubleStrike);
         match pass {
             CombatDamagePass::FirstStrike => has_first || has_double,
             CombatDamagePass::NormalWithFirstStrike => !has_first || has_double,
@@ -256,7 +259,10 @@ impl Game {
             return false;
         };
         let card = &self.state.cards[permanent.card];
-        let defender_applies = self.characteristics(permanent_id).keywords.defender
+        let defender_applies = self
+            .characteristics(permanent_id)
+            .keywords
+            .has(Keyword::Defender)
             && card.attacks_despite_defender().is_none_or(|condition| {
                 !self.check_static_condition(condition, permanent.controller)
             });
@@ -345,7 +351,9 @@ impl Game {
 
         let attacker_keywords = self.characteristics(attacker_id).keywords;
         let blocker_keywords = self.characteristics(blocker_id).keywords;
-        if attacker_keywords.flying && !(blocker_keywords.flying || blocker_keywords.reach) {
+        if attacker_keywords.has(Keyword::Flying)
+            && !(blocker_keywords.has(Keyword::Flying) || blocker_keywords.has(Keyword::Reach))
+        {
             return false;
         }
 
@@ -361,7 +369,11 @@ impl Game {
             if self.state.permanents[attacker_id].is_none() {
                 continue;
             }
-            if !self.characteristics(attacker_id).keywords.menace {
+            if !self
+                .characteristics(attacker_id)
+                .keywords
+                .has(Keyword::Menace)
+            {
                 continue;
             }
             let Some(combat) = self.state.combat.as_mut() else {

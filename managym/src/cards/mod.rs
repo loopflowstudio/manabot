@@ -3,7 +3,7 @@
 //! card.
 //!
 //! Card rules are the engine's own [`CardDefinition`](crate::state::card::CardDefinition)
-//! values written in `cardsets/`, one file per printed set; nothing here
+//! values written in `managym-cards`, one module per printed set; nothing here
 //! interprets or lowers them.
 //! - [`content_pack`]: the immutable catalog a match runs against.
 //! - [`setups`]: the authored decklists and the packs they run on.

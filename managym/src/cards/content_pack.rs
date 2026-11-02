@@ -66,9 +66,9 @@ impl fmt::Debug for ContentPack {
 /// shared `Arc<ContentPack>` rather than cloning this value.
 pub type CardRegistry = ContentPack;
 
-/// Every current card from `cardsets/` and the rules fixtures, in name order.
+/// Every current card from `managym-cards` and the rules fixtures, in name order.
 fn default_order() -> Vec<CardDefinition> {
-    crate::cardsets::catalog()
+    managym_cards::catalog()
         .iter()
         .cloned()
         .chain([fixtures::crossroads_of_destiny()])

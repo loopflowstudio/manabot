@@ -50,7 +50,7 @@ use crate::{
     state::{
         ability::{Condition, Effect},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keywords, PowerCda,
+            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keyword, Keywords, PowerCda,
             Restriction, SetCharacteristics, StaticAbility, StaticScope,
         },
         effect::Modification,
@@ -505,11 +505,9 @@ impl Game {
         };
         let card = &self.state.cards[permanent.card];
 
-        // Layer 7a: base P/T (characteristic-defining, or printed); an
-        // earthbent permanent is a 0/0 creature.
-        let (mut base_power, mut base_toughness) = if permanent.animated {
-            (0, 0)
-        } else {
+        // Layer 7a: base P/T (characteristic-defining, or printed). An
+        // earthbent land's 0/0 is a 7b setter record.
+        let (mut base_power, mut base_toughness) = {
             let power = match card.power_cda() {
                 Some(cda) => self.cda_power(cda, permanent.controller),
                 None => card.power.unwrap_or(0),
@@ -1157,13 +1155,16 @@ impl Game {
     }
 
     /// Whether something other than its printed type makes the permanent a
-    /// creature: earthbend, its own counter threshold, or an effect.
+    /// creature: its own counter threshold, earthbend or crew.
     fn permanent_is_animated(&self, permanent_id: PermanentId) -> bool {
         self.state
             .permanents
             .get(permanent_id.0)
             .and_then(|p| p.as_ref())
-            .is_some_and(|permanent| permanent.animated_creature(&self.state.cards[permanent.card]))
+            .is_some_and(|permanent| {
+                permanent.creature_by_counters(&self.state.cards[permanent.card])
+            })
+            || self.permanent_has_modification(permanent_id, &Modification::BecomeCreature)
             || self.becomes_artifact_creature(permanent_id)
     }
 
@@ -1205,7 +1206,7 @@ impl Game {
             return true;
         }
         let characteristics = self.characteristics(permanent_id);
-        !characteristics.is_creature || characteristics.keywords.haste
+        !characteristics.is_creature || characteristics.keywords.has(Keyword::Haste)
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's
@@ -1280,9 +1281,11 @@ impl Game {
         };
         let card = &self.state.cards[permanent.card];
         let flying = || match view {
-            ScopeView::Types | ScopeView::Keywords => self.recorded_keywords(permanent_id).flying,
+            ScopeView::Types | ScopeView::Keywords => {
+                self.recorded_keywords(permanent_id).has(Keyword::Flying)
+            }
             ScopeView::PowerToughness | ScopeView::Rules => {
-                self.effective_keywords(permanent_id).flying
+                self.effective_keywords(permanent_id).has(Keyword::Flying)
             }
         };
         if (predicate.flying && !flying())

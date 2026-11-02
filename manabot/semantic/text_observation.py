@@ -267,6 +267,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
+        "BecomeCreature": "is also a creature",
         "BecomeArtifactCreature": "is an artifact creature",
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",

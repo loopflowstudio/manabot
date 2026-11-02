@@ -8,7 +8,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
-        card::{ActivatedAbilityDefinition, CardType, Keywords},
+        card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
         effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -138,10 +138,7 @@ fn damage() -> Effect {
 }
 
 fn hexproof_keywords() -> Keywords {
-    Keywords {
-        hexproof: true,
-        ..Default::default()
-    }
+    Keywords::of(&[Keyword::Hexproof])
 }
 
 /// Grant (or remove the grant of) hexproof until end of turn.
@@ -193,7 +190,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clones() {
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert!(game.characteristics(victim).keywords.hexproof);
+            assert!(game.characteristics(victim).keywords.has(Keyword::Hexproof));
             assert_eq!(game.state.permanents[victim].as_ref().unwrap().damage, 0);
             let space = game.suspended_decision_action_space().unwrap();
             let choice = space
@@ -363,8 +360,12 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
                 vec![0],
             );
             game.resolve_top_of_stack();
+            let characteristics = game.characteristics(land);
+            assert!(characteristics.is_animated);
+            assert!(characteristics.is_creature);
+            assert_eq!(characteristics.pt(), (3, 3));
+            assert!(characteristics.keywords.has(Keyword::Haste));
             let permanent = game.state.permanents[land].as_ref().unwrap();
-            assert!(permanent.animated);
             assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 3);
         }
     }

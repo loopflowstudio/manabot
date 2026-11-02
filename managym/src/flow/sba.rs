@@ -1,6 +1,7 @@
 // sba.rs
 // State-based actions.
 
+use crate::state::card::Keyword;
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
@@ -103,7 +104,7 @@ impl Game {
             // CR 704.5g — Creatures with lethal damage are destroyed.
             let destroy = !zero_toughness
                 && self.has_lethal_damage(permanent_id, &characteristics)
-                && !characteristics.keywords.indestructible;
+                && !characteristics.keywords.has(Keyword::Indestructible);
             let legend_loser = legend_losers.contains(&permanent.card);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.

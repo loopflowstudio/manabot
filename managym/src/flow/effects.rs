@@ -16,7 +16,7 @@
 use crate::{
     flow::game::Game,
     state::{
-        card::{CardDefId, Keywords},
+        card::{CardDefId, Keyword, Keywords},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
@@ -52,22 +52,56 @@ impl Game {
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
         let timestamp = self.state.id_gen.next_id();
-        let records: Vec<ContinuousEffect> = affected
-            .into_iter()
-            .map(|affected| ContinuousEffect {
-                timestamp,
-                source,
-                controller,
-                affected,
-                modification: modification.clone(),
-                duration,
-                source_object,
-            })
-            .collect();
-        if records.is_empty() {
+        self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
+            timestamp,
+            source,
+            controller,
+            affected,
+            modification: modification.clone(),
+            duration,
+            source_object,
+        }));
+    }
+
+    /// Earthbend's animation (CR 702.182a): the object becomes a 0/0 creature
+    /// with haste in addition to its other types, as three records of one
+    /// timestamp (layers 4, 7b and 6) that last as long as the object does.
+    pub fn animate_permanent(
+        &mut self,
+        permanent_id: PermanentId,
+        source: Option<CardId>,
+        controller: PlayerId,
+    ) {
+        let Some(object) = self.permanent_object_ref(permanent_id) else {
+            return;
+        };
+        let timestamp = self.state.id_gen.next_id();
+        let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
+        let modifications = [
+            Modification::BecomeCreature,
+            Modification::SetBasePt {
+                power: Some(0),
+                toughness: Some(0),
+            },
+            Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+        ];
+        self.push_effects(modifications.map(|modification| ContinuousEffect {
+            timestamp,
+            source,
+            controller,
+            affected: Affected::Object(object),
+            modification,
+            duration: EffectDuration::Indefinite,
+            source_object: None,
+        }));
+    }
+
+    fn push_effects(&mut self, records: impl IntoIterator<Item = ContinuousEffect>) {
+        let before = self.state.effects.len();
+        self.state.effects.extend(records);
+        if self.state.effects.len() == before {
             return;
         }
-        self.state.effects.extend(records);
         // Characteristics can change which mana abilities exist.
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));

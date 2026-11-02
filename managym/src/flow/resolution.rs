@@ -2,6 +2,7 @@
 // Resolving stack objects. Effects execute through an EffectFrame so a
 // resolution can suspend on a mid-resolution decision (see decision.rs).
 
+use crate::state::card::Keyword;
 use std::collections::VecDeque;
 
 use crate::{
@@ -1492,8 +1493,8 @@ impl Game {
                 };
                 let source = self.source_permanent_id(frame)?;
                 let counters = match self.state.permanents[triggering].as_ref() {
-                    Some(permanent) => permanent.counters,
-                    None => self.departed_permanent_lki(triggering)?.counters,
+                    Some(permanent) => permanent.counters.clone(),
+                    None => self.departed_permanent_lki(triggering)?.counters.clone(),
                 };
                 for (kind, count) in counters.iter() {
                     self.put_counters(source, kind, count, frame.controller);
@@ -1523,7 +1524,7 @@ impl Game {
                 else {
                     return None;
                 };
-                let counters = self.object_lki(frame.source_ref?)?.counters;
+                let counters = self.object_lki(frame.source_ref?)?.counters.clone();
                 for (kind, count) in counters.iter() {
                     self.put_counters(permanent_id, kind, count, frame.controller);
                 }
@@ -1740,14 +1741,8 @@ impl Game {
                     return None;
                 };
                 let watched = self.permanent_object_ref(permanent_id)?;
-                let controller = {
-                    let permanent = self.state.permanents[permanent_id].as_mut()?;
-                    // The land becomes a 0/0 creature with haste that's
-                    // still a land (base 0/0 by construction — lands print
-                    // no P/T).
-                    permanent.animated = true;
-                    permanent.controller
-                };
+                let controller = self.state.permanents[permanent_id].as_ref()?.controller;
+                self.animate_permanent(permanent_id, frame.source, controller);
                 if !self.put_counters(
                     permanent_id,
                     CounterKind::PlusOnePlusOne,
@@ -2057,7 +2052,7 @@ impl Game {
                 // presence and hexproof at selection and resolution (608.2b).
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
                     && (permanent.controller == controller
-                        || !self.characteristics(id).keywords.hexproof)
+                        || !self.characteristics(id).keywords.has(Keyword::Hexproof))
                     && self.permanent_matches_spec(id, spec, controller)
             }
             Target::Player(player) => match spec {

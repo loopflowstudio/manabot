@@ -73,6 +73,20 @@ prefix is gone). Content digests, state digests and learning tokens changed, so
 w17 conformance, authored-match, parity and Academy fixtures were re-recorded
 with the same Commands and decision revisions; the learning schema stays 9.
 
+Task MTG-238 (2026-11-02, same world) gave the engine catalog-scale types
+without changing rules or content: counters are stored sparsely by kind
+(`Counters` serializes exactly as before), keywords are `Keyword` variants in a
+`Keywords` bitset (serialized as the same name-to-bool struct, so content
+digests and tokens are unchanged), and card sets live in the `managym-cards`
+crate on the `managym-state` rules types, reached by the engine only through
+`catalog()`. Earthbend's animation is no longer a `Permanent` field: it is
+three continuous-effect records of one timestamp (`BecomeCreature`,
+`SetBasePt 0/0`, `AddKeywords(haste)`) that end when the object leaves, read by
+the same `is_animated` column and effect fact rows. Removing the field changed
+the canonical permanent encoding, so the match-state hash contract is **12**
+and `semantic-kernel-w17-v1` was re-recorded with the same Commands; the
+content digest, authored-match and parity receipts are unchanged.
+
 Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
 definition with a `serde` serializer: learning schema **9**, token values are
 stable hashes of Rust and printed names, and IR opcodes, roles and enums are

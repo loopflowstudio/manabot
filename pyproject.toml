@@ -142,6 +142,8 @@ exclude = [
     "academy/ui/e2e/**",
     "academy/ui/static/**",
     { path = "managym/src/**", format = "wheel" },
+    { path = "managym/state/**", format = "wheel" },
+    { path = "managym/cards/**", format = "wheel" },
     { path = "managym/tests/**", format = "wheel" },
     { path = "managym/examples/**", format = "wheel" },
     "managym/target/**",

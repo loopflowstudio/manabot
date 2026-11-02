@@ -3,7 +3,6 @@ pub mod agent;
 pub mod benchmark_allocations;
 pub mod canonical_replay;
 pub mod cards;
-pub mod cardsets;
 pub mod conformance;
 pub mod decision;
 pub mod decision_capture;

@@ -1,3 +1,4 @@
+use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::{
@@ -277,22 +278,24 @@ impl KeywordData {
         ]
     }
 
-    pub fn from_keywords(keywords: &crate::state::card::Keywords) -> Self {
+    /// The evergreen keywords' columns. Every `Keyword` is evergreen today;
+    /// a non-evergreen keyword gets a fact row instead of a column.
+    pub fn from_keywords(keywords: &Keywords) -> Self {
         Self {
-            flying: keywords.flying,
-            reach: keywords.reach,
-            haste: keywords.haste,
-            flash: keywords.flash,
-            vigilance: keywords.vigilance,
-            trample: keywords.trample,
-            first_strike: keywords.first_strike,
-            double_strike: keywords.double_strike,
-            deathtouch: keywords.deathtouch,
-            lifelink: keywords.lifelink,
-            defender: keywords.defender,
-            menace: keywords.menace,
-            hexproof: keywords.hexproof,
-            indestructible: keywords.indestructible,
+            flying: keywords.has(Keyword::Flying),
+            reach: keywords.has(Keyword::Reach),
+            haste: keywords.has(Keyword::Haste),
+            flash: keywords.has(Keyword::Flash),
+            vigilance: keywords.has(Keyword::Vigilance),
+            trample: keywords.has(Keyword::Trample),
+            first_strike: keywords.has(Keyword::FirstStrike),
+            double_strike: keywords.has(Keyword::DoubleStrike),
+            deathtouch: keywords.has(Keyword::Deathtouch),
+            lifelink: keywords.has(Keyword::Lifelink),
+            defender: keywords.has(Keyword::Defender),
+            menace: keywords.has(Keyword::Menace),
+            hexproof: keywords.has(Keyword::Hexproof),
+            indestructible: keywords.has(Keyword::Indestructible),
         }
     }
 }
@@ -415,6 +418,7 @@ impl ContinuousEffectData {
                 "AddSubtypes"
             }
             Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
+            Modification::BecomeCreature => "BecomeCreature",
             Modification::AddKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
                 "AddKeywords"
