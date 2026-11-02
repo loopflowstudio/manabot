@@ -4451,5 +4451,27 @@
     ],
     "oracle_text": "Flying\nLand creatures you control have vigilance.\nAt the beginning of combat on your turn, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
     "colors": []
+  },
+  "The Legend of Yangchen": {
+    "name": "The Legend of Yangchen",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Starting with you, each player chooses up to one permanent with mana value 3 or greater from among permanents your opponents control. Exile those permanents.\nII — You may have target opponent draw three cards. If you do, draw three cards.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Avatar Yangchen": {
+    "name": "Avatar Yangchen",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Airbend"
+    ],
+    "oracle_text": "Flying\nWhenever you cast your second spell each turn, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)",
+    "colors": []
   }
 }

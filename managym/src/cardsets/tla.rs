@@ -274,6 +274,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         the_legend_of_kuruk(),
         the_legend_of_kyoshi(),
         the_legend_of_roku(),
+        the_legend_of_yangchen(),
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
         the_spirit_oasis(),
@@ -9357,6 +9358,89 @@ fn the_legend_of_roku() -> CardDefinition {
                     attach_source: false,
                 }],
                 ..Default::default()
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
+}
+
+fn the_legend_of_yangchen() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter.)\nI — Starting with you, each player chooses up to one permanent with mana value 3 or greater from among permanents your opponents control. Exile those permanents.\nII — You may have target opponent draw three cards. If you do, draw three cards.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.";
+    let back_text = "Flying\nWhenever you cast your second spell each turn, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)";
+    let draw_three = || Effect::DrawCards {
+        count: EffectValue::Fixed(3),
+    };
+    let nonland_permanent = || TargetSpec::Permanent {
+        predicate: CardPredicate {
+            not_card_types: vec![CardType::Land],
+            ..Default::default()
+        },
+    };
+
+    CardDefinition {
+        key: "tla.the_legend_of_yangchen",
+        scryfall_id: "a60e8f23-90b2-4bc6-bd54-a95055556389",
+        name: "The Legend of Yangchen".into(),
+        mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(
+                1,
+                vec![Effect::EachPlayerChoosesToExile {
+                    predicate: CardPredicate {
+                        min_mana_value: Some(3),
+                        ..Default::default()
+                    },
+                }],
+            ),
+            chapter(
+                2,
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Opponent),
+                    effects: vec![Effect::Modal {
+                        modes: vec![
+                            vec![
+                                Effect::ForPlayer {
+                                    player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                                    effects: vec![draw_three()],
+                                },
+                                draw_three(),
+                            ],
+                            vec![],
+                        ],
+                    }],
+                }],
+            ),
+            chapter(3, return_transformed()),
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Avatar Yangchen".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into()],
+            power: Some(4),
+            toughness: Some(5),
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        another: true,
+                        ..TargetRequirement::one(nonland_permanent())
+                    },
+                    effects: vec![Effect::Airbend {
+                        target: nonland_permanent(),
+                    }],
+                }],
             }],
             text_box: back_text.into(),
             ..Default::default()

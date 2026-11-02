@@ -480,6 +480,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
         Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
         Effect::UntapAll { .. } => "Effect::UntapAll",
+        Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::PutCountersOnTriggeringPermanent { .. } => {
             "Effect::PutCountersOnTriggeringPermanent"
@@ -597,7 +598,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 112;
+const EFFECT_VARIANTS: usize = 113;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -906,6 +907,9 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::UntapAll {
             predicate: CardPredicate::creature(),
         },
+        Effect::EachPlayerChoosesToExile {
+            predicate: CardPredicate::creature(),
+        },
         Effect::GainControl {
             player: PlayerSelector::You,
             target: TargetSpec::Creature,
@@ -1005,6 +1009,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::YourAttackingCreatureTriggers"
         }
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
+        TriggerCondition::YouCastNthSpellThisTurn { .. } => {
+            "TriggerCondition::YouCastNthSpellThisTurn"
+        }
     }
 }
 
@@ -1075,6 +1082,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::BeginningOfYourFirstMainPhase,
         TriggerCondition::YourAttackingCreatureTriggers,
         TriggerCondition::Chapter { chapter: 2 },
+        TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
     ]
 }
 

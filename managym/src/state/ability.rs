@@ -49,6 +49,11 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// "Whenever you cast your Nth spell each turn" (CR 603.2): the spell is
+    /// the Nth its controller cast this turn.
+    YouCastNthSpellThisTurn {
+        n: u32,
+    },
     /// "Whenever a player casts a [predicate] spell": any player, including
     /// you. The caster is the trigger context ("they").
     PlayerCastsSpell {
@@ -571,6 +576,12 @@ pub enum Effect {
     },
     /// "Untap all [predicate] you control."
     UntapAll {
+        predicate: CardPredicate,
+    },
+    /// "Starting with you, each player chooses up to one [predicate]
+    /// permanent from among permanents your opponents control. Exile those
+    /// permanents."
+    EachPlayerChoosesToExile {
         predicate: CardPredicate,
     },
     /// "Take an extra turn after this one" (CR 500.7): the resolving
@@ -1405,6 +1416,7 @@ impl Effect {
             | Effect::TakeExtraTurn
             | Effect::AdditionalCombatPhase { .. }
             | Effect::UntapAll { .. }
+            | Effect::EachPlayerChoosesToExile { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::ExileSourceAndReturn { .. }
             | Effect::PutCountersOnCreatedToken { .. }

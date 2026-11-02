@@ -76,3 +76,5 @@ here; main carries their outcomes.
 - Additional combat phases are a stack on `TurnState` observed as a count on
   the active player's row; a pending phase's attacker limit is visible only
   once it applies (attack offers).
+- Yangchen II's "you may have target opponent draw three" is a resolution
+  `Modal` (draw both / nothing) inside its target clause, not a new variant.

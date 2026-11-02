@@ -142,6 +142,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::BeginningOfYourFirstMainPhase => {
             "At the beginning of your first main phase".into()
         }
+        TriggerCondition::YouCastNthSpellThisTurn { n } => {
+            format!("Whenever you cast your spell number {n} each turn")
+        }
         TriggerCondition::Chapter { chapter } => format!("Chapter {}", roman(*chapter)),
         TriggerCondition::YouDrawNthCardThisTurn { n } => {
             format!("When you draw card {n} this turn")
@@ -636,6 +639,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
                 predicate_description(predicate, "creatures")
             ),
         },
+        EachPlayerChoosesToExile { predicate } => format!(
+            "Starting with you, each player chooses up to one {} from among permanents your opponents control. Exile those permanents",
+            predicate_description(predicate, "permanent")
+        ),
         UntapAll { predicate } => format!("Untap all {} you control", predicate_description(predicate, "permanents")),
         GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),

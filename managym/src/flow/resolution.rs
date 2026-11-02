@@ -1580,6 +1580,12 @@ impl Game {
                 frame.controller = *player;
                 None
             }
+            Effect::EachPlayerChoosesToExile { predicate } => self.choose_to_exile(
+                frame.controller,
+                frame.controller,
+                predicate.clone(),
+                Vec::new(),
+            ),
             Effect::EachPlayerKeepsCreatures { max_total_power } => {
                 self.keep_creatures(self.active_player(), *max_total_power, Vec::new())
             }

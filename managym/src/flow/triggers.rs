@@ -1232,6 +1232,16 @@ impl Game {
                     && self.state.card_to_permanent[*card]
                         .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
             }
+            (
+                TriggerCondition::YouCastNthSpellThisTurn { n },
+                GameEvent::SpellCast { card, .. },
+            ) => {
+                self.spell_caster(*card) == source_controller
+                    && self.state.turn.spells_cast[source_controller.0]
+                        .iter()
+                        .position(|cast| cast == card)
+                        == Some(*n as usize - 1)
+            }
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.spell_caster(*card) == source_controller
                     && predicate.matches_card(&self.state.cards[*card])

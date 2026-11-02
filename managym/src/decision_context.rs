@@ -354,6 +354,7 @@ impl Game {
                 Decision::CastDuringResolution { paid: true, .. } => ("resolution_cast", "Choose a spell to cast now, paying its costs, or decline."),
                 Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
                 Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
+                Decision::ChooseToExile { .. } => ("choose_to_exile", "Choose up to one permanent from among those the resolving ability's controller's opponents control; every chosen permanent is then exiled."),
                 Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),

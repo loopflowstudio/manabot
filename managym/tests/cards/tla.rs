@@ -13736,3 +13736,82 @@ fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
     assert!(keywords(&s, land).vigilance, "a land creature you control");
     assert!(!keywords(&s, aang).vigilance, "not a land");
 }
+
+/// I: you, then the opponent, may each choose one of the opponent's
+/// permanents with mana value 3 or greater; both are exiled. II: you may
+/// have the opponent draw three to draw three yourself. Avatar Yangchen
+/// airbends on your second spell each turn.
+#[test]
+fn the_legend_of_yangchen_exiles_chosen_permanents_and_airbends_on_the_second_spell() {
+    let mut s = five_color_setup(&[
+        "The Legend of Yangchen",
+        "Craw Wurm",
+        "Gray Ogre",
+        "Lightning Bolt",
+    ]);
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm"); // mana value 6
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre"); // mana value 3
+    let small = s.force_permanent_on_battlefield(1, "Forest");
+    let saga = put_onto_battlefield(&mut s, 0, "The Legend of Yangchen");
+    let card = card_of(&s, saga);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(
+        s.action_space().player,
+        Some(PlayerId(0)),
+        "starting with you"
+    );
+    let offered = offered_cards(&s);
+    assert!(
+        !offered.contains(&card_of(&s, small)),
+        "mana value 3 or greater"
+    );
+    let wurm_card = card_of(&s, wurm);
+    select_card(&mut s, wurm_card);
+    assert_eq!(
+        s.action_space().player,
+        Some(PlayerId(1)),
+        "then the opponent"
+    );
+    assert!(
+        !offered_cards(&s).contains(&card_of(&s, wurm)),
+        "already chosen"
+    );
+    let ogre_card = card_of(&s, ogre);
+    select_card(&mut s, ogre_card);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
+    assert_eq!(s.battlefield_permanents_named(1, "Craw Wurm").len(), 0);
+
+    next_main_phase(&mut s);
+    target_opponent(&mut s);
+    let (mine, theirs) = (
+        s.zone_size(0, ZoneType::Hand),
+        s.zone_size(1, ZoneType::Hand),
+    );
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), mine + 3);
+    assert_eq!(s.zone_size(1, ZoneType::Hand), theirs + 3);
+
+    next_main_phase(&mut s);
+    settle(&mut s);
+    assert_eq!(s.game().state.cards[card].name, "Avatar Yangchen");
+    let target = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "RR");
+    cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    settle(&mut s);
+    assert!(
+        s.game().state.pending_triggers.is_empty(),
+        "first spell: nothing"
+    );
+    cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let target_card = card_of(&s, target);
+    assert!(s.choose_target(Target::Permanent(target)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target_card), Some(ZoneType::Exile), "airbent");
+}

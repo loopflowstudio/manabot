@@ -193,6 +193,7 @@ _OBLIGATIONS = (
     "keep creatures",
     "retarget",
     "surveil",
+    "choose a permanent to exile",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
