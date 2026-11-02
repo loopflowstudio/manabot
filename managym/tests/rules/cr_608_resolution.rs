@@ -8,7 +8,7 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{AffectedSpec, Effect, EffectValue, TargetSpec},
+        ability::{AffectedSpec, Effect, EffectValue, PlayerSelector, TargetSpec},
         card::Keywords,
         effect::Modification,
         game_object::{CardId, PlayerId},
@@ -32,7 +32,11 @@ fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
         id: TriggerId(0),
         ordering_class: TriggerOrderingClass::Ordinary,
         context: None,
+        player: None,
+        chosen_modes: Vec::new(),
+        attacker: None,
         inline_effects: Some(effects),
+        x: 0,
     });
 }
 
@@ -53,7 +57,10 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
         &mut s,
         card,
         vec![
-            Effect::DealDamageToController { amount: 1 },
+            Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(1),
+            },
             Effect::Modal {
                 modes: vec![
                     vec![Effect::GainLife { amount: 2 }],
@@ -221,7 +228,7 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(victim)));
     s.pass_priority();
     s.pass_priority();
-    assert!(s.game().effective_keywords(victim).hexproof);
+    assert!(s.game().characteristics(victim).keywords.hexproof);
     assert_eq!(
         s.game().state.permanents[victim].as_ref().unwrap().damage,
         1

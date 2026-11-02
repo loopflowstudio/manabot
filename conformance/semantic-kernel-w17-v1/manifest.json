@@ -105,6 +105,6 @@
     "max_commands": 512,
     "seed": 24301
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "world_version": "w17"
 }

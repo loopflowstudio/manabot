@@ -9,20 +9,11 @@ use crate::{
     flow::game::Game,
     state::{
         ability::Effect,
-        card::{AbilityGrant, ActivatedAbilityDefinition, ReplacementEffect, StaticAbility},
+        card::{ActivatedAbilityDefinition, ReplacementEffect},
         game_object::{PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaUse},
     },
 };
-
-/// Basic land types and the mana their intrinsic ability adds (CR 305.6).
-const BASIC_LAND_TYPES: [(&str, &str); 5] = [
-    ("Plains", "W"),
-    ("Island", "U"),
-    ("Swamp", "B"),
-    ("Mountain", "R"),
-    ("Forest", "G"),
-];
 
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
@@ -447,118 +438,6 @@ impl PaymentModel {
 }
 
 impl Game {
-    /// Printed abilities, then currently granted abilities in source order,
-    /// then the intrinsic mana ability of basic land types gained by an effect,
-    /// then abilities granted by attached Equipment and Auras in battlefield
-    /// order, each with its cost as it would be paid now. A permanent that has
-    /// lost all abilities keeps only the grants of the Aura that set its
-    /// characteristics (Humble Merchant's "{T}: Add {C}").
-    pub(crate) fn activated_abilities_for(
-        &self,
-        permanent: PermanentId,
-    ) -> Vec<ActivatedAbilityDefinition> {
-        let Some(source) = self.state.permanents[permanent].as_ref() else {
-            return Vec::new();
-        };
-        let card = &self.state.cards[source.card];
-        let purpose = ManaUse::ability(
-            card.subtypes
-                .iter()
-                .map(String::as_str)
-                .chain(self.added_subtypes(permanent)),
-        );
-        let lost = self.has_lost_abilities(permanent);
-        let mut abilities = Vec::new();
-        if !lost {
-            abilities = card.activated_abilities.clone();
-            self.extend_own_abilities(permanent, &mut abilities);
-        }
-        for (grantor, card) in self.attachments_on(permanent) {
-            if lost && card.attached_characteristics().is_none() {
-                continue;
-            }
-            let grantor = self
-                .permanent_object_ref(grantor)
-                .expect("battlefield permanent has an exact identity");
-            abilities.extend(card.attached_grants().enumerate().map(|(index, ability)| {
-                ActivatedAbilityDefinition {
-                    granted_by: Some(AbilityGrant { grantor, index }),
-                    ..ability.clone()
-                }
-            }));
-        }
-        for ability in &mut abilities {
-            self.price_activation(source.controller, purpose, ability);
-        }
-        abilities
-    }
-
-    /// Read state-dependent mana outputs of printed abilities, then add mana
-    /// abilities from `mana_grant` permanents and gained basic land types:
-    /// everything `permanent` loses with its abilities.
-    fn extend_own_abilities(
-        &self,
-        permanent: PermanentId,
-        abilities: &mut Vec<ActivatedAbilityDefinition>,
-    ) {
-        let source = self.state.permanents[permanent].as_ref().unwrap();
-        for ability in abilities.iter_mut() {
-            if let [effect] = ability.effects.as_slice() {
-                if let Some(effect) = self.current_mana_output(effect, source.controller) {
-                    ability.effects = vec![effect];
-                }
-            }
-        }
-        for grant in self.battlefield_permanents(source.controller) {
-            let grant = self.state.permanents[grant].as_ref().unwrap();
-            if self.state.cards[grant.card].statics.iter().any(|ability| {
-                matches!(
-                    ability,
-                    StaticAbility::GrantsAnyColorManaAbility(predicate)
-                        if self.permanent_matches_predicate(permanent, predicate)
-                )
-            }) {
-                abilities.push(ActivatedAbilityDefinition {
-                    tap_source: true,
-                    effects: vec![Effect::any_color_mana()],
-                    ..Default::default()
-                });
-            }
-        }
-        if let Some(effect) = self.gained_land_type_mana(permanent) {
-            abilities.push(ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![effect],
-                ..Default::default()
-            });
-        }
-    }
-
-    /// A land with a basic land type has "{T}: Add [its color]" (CR 305.6).
-    /// Printed types already carry that ability; types gained until end of
-    /// turn (Energybending) add one ability choosing among their colors.
-    fn gained_land_type_mana(&self, permanent: PermanentId) -> Option<Effect> {
-        let source = self.state.permanents[permanent].as_ref()?;
-        let added = self.added_subtypes(permanent);
-        if added.is_empty() || !self.permanent_is_land(permanent) {
-            return None;
-        }
-        let card = &self.state.cards[source.card];
-        let colors: Vec<Mana> = BASIC_LAND_TYPES
-            .iter()
-            .filter(|(name, _)| added.contains(name) && !card.has_subtype(name))
-            .map(|(_, mana)| Mana::parse(mana))
-            .collect();
-        match colors.as_slice() {
-            [] => None,
-            [mana] => Some(Effect::AddMana {
-                mana: mana.clone(),
-                until_end_of_combat: false,
-            }),
-            _ => Some(Effect::mana_choice(colors)),
-        }
-    }
-
     /// Mana abilities resolve at once (CR 605.3a), so an output that depends
     /// on the game is fixed when the ability is offered: a branch between two
     /// immediate outputs, or X mana of one chosen color. Activation costs do
@@ -569,11 +448,11 @@ impl Game {
         controller: PlayerId,
     ) -> Option<Effect> {
         match effect {
-            Effect::IfCondition {
+            Effect::If {
                 condition,
-                effects,
+                then,
                 otherwise,
-            } if [effects, otherwise].iter().all(|branch| {
+            } if [then, otherwise].iter().all(|branch| {
                 matches!(
                     branch.as_slice(),
                     [Effect::AddMana {
@@ -584,7 +463,7 @@ impl Game {
             }) =>
             {
                 let branch = if self.check_static_condition(condition, controller) {
-                    effects
+                    then
                 } else {
                     otherwise
                 };
@@ -668,7 +547,8 @@ impl Game {
                     resume,
                     ..
                 } => {
-                    let ability = &game.activated_abilities_for(*permanent)[*ability_index];
+                    let ability =
+                        &game.characteristics(*permanent).activated_abilities[*ability_index];
                     reserved.push(SourceReservation {
                         permanent: *permanent,
                         tap: ability.tap_source,
@@ -693,14 +573,14 @@ impl Game {
             .map(|permanent| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 let card = &self.state.cards[source.card];
+                let characteristics = self.characteristics(permanent);
                 // A source that lost its abilities offers no zero-mana tap.
                 let can_tap = self.permanent_can_tap(permanent);
-                let fixed = (can_tap
-                    && !card.mana_abilities.is_empty()
-                    && !self.has_lost_abilities(permanent))
-                .then(|| self.fixed_source_mana(permanent));
-                let abilities = self
-                    .activated_abilities_for(permanent)
+                let fixed =
+                    (can_tap && !card.mana_abilities.is_empty() && !characteristics.abilities_lost)
+                        .then(|| self.fixed_source_mana(permanent));
+                let abilities = characteristics
+                    .activated_abilities
                     .iter()
                     .enumerate()
                     .filter(|(index, ability)| {
@@ -768,7 +648,7 @@ impl Game {
                 ability_index,
                 ..
             } => {
-                let ability = &self.activated_abilities_for(*permanent)[*ability_index];
+                let ability = &self.characteristics(*permanent).activated_abilities[*ability_index];
                 Some(SourceReservation {
                     permanent: *permanent,
                     tap: ability.tap_source,
@@ -789,7 +669,9 @@ impl Game {
                     resume,
                     ..
                 } => {
-                    let ability = game.activated_abilities_for(*permanent)[*ability_index].clone();
+                    let ability = game.characteristics(*permanent).activated_abilities
+                        [*ability_index]
+                        .clone();
                     let mut outputs = ability.mana_choices().unwrap();
                     if ability.tap_source {
                         let player = decision.player();
@@ -1012,9 +894,7 @@ impl Game {
         if !self.can_activate_mana_ability(player, permanent, ability_index) {
             return Err(AgentError("illegal mana activation".into()));
         }
-        let ability = self
-            .activated_abilities_for(permanent)
-            .swap_remove(ability_index);
+        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         self.record_activation(permanent, ability_index, &ability);
         let old = self.state.suspended_decision.take();
         self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {
@@ -1073,7 +953,7 @@ impl Game {
                 _ => unreachable!("validated automatic prefix"),
             }
         }
-        let ability = self.activated_abilities_for(permanent)[ability_index].clone();
+        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         if ability.tap_source {
             self.tap_permanent(permanent, true);
         }
@@ -1103,30 +983,23 @@ impl Game {
             .map(|ability| ability.mana.clone())
             .collect::<Vec<_>>();
         self.tap_permanent(permanent, true);
-        self.journal_player(player);
         for mana in produced {
             self.state.players[player.0].mana_pool.add(&mana);
         }
     }
 
     /// Fixed tap output plus immediate triggered bonuses; chosen outputs stay
-    /// in the payment search until the player selects a color.
+    /// in the payment search until the player selects a color. Callers check
+    /// that the source has mana abilities, can tap and has not lost its
+    /// abilities, reading its characteristics once.
     fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
         let source = self.state.permanents[permanent].as_ref().unwrap();
         let card = &self.state.cards[source.card];
-        if self.has_lost_abilities(permanent) {
-            return Mana::default();
-        }
         let mut output = Mana::default();
-        if !self.permanent_can_tap(permanent) {
-            return output;
-        }
         for ability in &card.mana_abilities {
             output.add(&ability.mana);
         }
-        if !card.mana_abilities.is_empty() {
-            output.add(&self.tap_mana_bonus(permanent, source.controller));
-        }
+        output.add(&self.tap_mana_bonus(permanent, source.controller));
         output
     }
 
@@ -1135,13 +1008,11 @@ impl Game {
             return cached.clone();
         }
         let mana = self.producible_mana(player);
-        self.journal_mana_cache(player);
         self.state.mana_cache[player.0] = Some(mana.clone());
         mana
     }
 
     pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.journal_mana_cache(player);
         self.state.mana_cache[player.0] = None;
     }
 
@@ -1214,7 +1085,6 @@ impl Game {
     fn spend_mana_to_remainder(&mut self, player: PlayerId, remaining: Mana) {
         // Rebuild the pools by restriction class and color, consuming the
         // expiring combat pool before the regular pool within each class.
-        self.journal_player(player);
         let player_state = &mut self.state.players[player.0];
         let mut classes = player_state
             .mana_pool
@@ -1251,6 +1121,13 @@ impl Game {
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         for permanent_id in self.battlefield_permanents(player) {
+            let source = self.state.permanents[permanent_id].as_ref().unwrap();
+            if self.state.cards[source.card].mana_abilities.is_empty()
+                || !self.permanent_can_tap(permanent_id)
+                || self.characteristics(permanent_id).abilities_lost
+            {
+                continue;
+            }
             total.add(&self.fixed_source_mana(permanent_id));
         }
         total
@@ -1261,7 +1138,6 @@ impl Game {
     /// `clear_combat_mana_pools`.
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
-            self.journal_player(player);
             let pool = std::mem::take(&mut self.state.players[player.0].mana_pool);
             self.state.players[player.0].mana_pool = self.unspent_mana_retained(player, pool);
         }
@@ -1271,7 +1147,6 @@ impl Game {
     /// `unspent_mana_retained` keeps joins the ordinary pool.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
-            self.journal_player(player);
             let combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
             let kept = self.unspent_mana_retained(player, combat);
             self.state.players[player.0].mana_pool.add(&kept);
@@ -1295,12 +1170,11 @@ impl Game {
     /// Whether `player` controls a permanent replacing mana loss (CR 614.1a).
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.battlefield_permanents(player).into_iter().any(|id| {
-            !self.has_lost_abilities(id)
-                && self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                    self.state.cards[permanent.card]
-                        .replacement_effects
-                        .contains(&ReplacementEffect::UnspentManaBecomesRed)
-                })
+            self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                self.state.cards[permanent.card]
+                    .replacement_effects
+                    .contains(&ReplacementEffect::UnspentManaBecomesRed)
+            }) && !self.characteristics(id).abilities_lost
         })
     }
 }

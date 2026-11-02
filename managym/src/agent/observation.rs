@@ -376,7 +376,8 @@ pub struct ContinuousEffectData {
     /// The mana color kept (`Red`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
-    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`).
+    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`,
+    /// `WhileYouControlSource`).
     pub duration: String,
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -493,12 +494,26 @@ impl ContinuousEffectData {
                 "ModifyPt"
             }
             Modification::CantBeBlocked => "CantBeBlocked",
+            Modification::CantBlock => "CantBlock",
+            Modification::DoesntUntap => "DoesntUntap",
+            Modification::LoseKeywords(keywords) => {
+                data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
+                "LoseKeywords"
+            }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
             }
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::ControlChanged { previous } => {
+                data.amount = Some(previous.0 as i32);
+                "ControlChanged"
+            }
+            Modification::ModeChosen { mode } => {
+                data.amount = Some(i32::from(*mode));
+                "ModeChosen"
+            }
         }
         .to_string();
         data
@@ -545,7 +560,9 @@ pub struct PermanentData {
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub exhausted_abilities: i32,
-    /// "Once each turn" abilities this object has activated this turn.
+    /// "Once each turn" abilities this object has used this turn: activated
+    /// abilities, once-each-turn triggers that fired and "do this only once
+    /// each turn" options taken.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
     /// Firebending granted until end of turn, summed over grants.
@@ -583,6 +600,10 @@ pub struct PermanentData {
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
+    /// It was dealt damage this turn, whether or not that damage is still
+    /// marked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -613,6 +634,7 @@ pub enum EventType {
     PermanentsDied = 10,
     TurnStarted = 11,
     CardRevealed = 12,
+    AbilityCountered = 13,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1024,8 +1046,7 @@ impl Observation {
         perm_id: crate::state::game_object::PermanentId,
         permanent: &Permanent,
     ) {
-        let (power, toughness) = game.effective_pt(perm_id);
-        let set_characteristics = game.set_characteristics(perm_id);
+        let characteristics = game.characteristics(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
@@ -1037,17 +1058,24 @@ impl Observation {
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
-            once_each_turn_used: permanent.activated_this_turn.len() as i32,
-            granted_firebending: i32::from(game.granted_firebending(perm_id)),
-            temp_subtypes: game
-                .added_subtypes(perm_id)
-                .into_iter()
-                .map(str::to_owned)
+            once_each_turn_used: (permanent.activated_this_turn.len()
+                + game.permanent_object_ref(perm_id).map_or(0, |object| {
+                    game.state
+                        .turn
+                        .ability_triggers_this_turn
+                        .range((object, 0)..=(object, usize::MAX))
+                        .count()
+                })) as i32,
+            granted_firebending: i32::from(characteristics.firebending),
+            temp_subtypes: characteristics
+                .added_subtypes
+                .iter()
+                .map(|subtype| subtype.to_string())
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
-            power,
-            toughness,
-            is_animated: game.permanent_is_animated(perm_id),
+            power: characteristics.power,
+            toughness: characteristics.toughness,
+            is_animated: characteristics.is_animated,
             has_exile_link: game
                 .permanent_object_ref(perm_id)
                 .is_some_and(|object_ref| {
@@ -1056,7 +1084,7 @@ impl Observation {
                         .iter()
                         .any(|link| link.source == object_ref)
                 }),
-            keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
+            keywords: KeywordData::from_keywords(&characteristics.keywords),
             counters: permanent
                 .counters
                 .iter()
@@ -1067,14 +1095,17 @@ impl Observation {
                 .attached_to
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
-            name: set_characteristics.map(|set| set.named.clone()),
-            creature_types: set_characteristics.map(|_| {
-                game.creature_types(perm_id)
-                    .into_iter()
-                    .map(str::to_owned)
+            name: characteristics
+                .characteristics_set
+                .then(|| characteristics.name.to_string()),
+            creature_types: characteristics.characteristics_set.then(|| {
+                characteristics
+                    .creature_types
+                    .iter()
+                    .map(|creature_type| creature_type.to_string())
                     .collect()
             }),
-            is_granted_land: game.permanent_is_land(perm_id)
+            is_granted_land: characteristics.is_land
                 && !game.state.cards[permanent.card].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
@@ -1084,9 +1115,10 @@ impl Observation {
                     .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
                     .map(|attacker| attacker.id.0 as i32)
             }),
-            abilities_lost: game.has_lost_abilities(perm_id),
-            used_abilities: game
-                .activated_abilities_for(perm_id)
+            abilities_lost: characteristics.abilities_lost,
+            dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            used_abilities: characteristics
+                .activated_abilities
                 .iter()
                 .enumerate()
                 .filter(|(index, ability)| permanent.activation_used(*index, ability))
@@ -1132,14 +1164,14 @@ impl Observation {
             // A characteristic-setting effect replaces a permanent's types.
             is_ally: match game.state.card_to_permanent[card_id] {
                 Some(permanent) if zone == ZoneType::Battlefield => {
-                    game.permanent_has_subtype(permanent, "Ally")
+                    game.characteristics(permanent).has_subtype("Ally")
                 }
                 _ => card.has_subtype("Ally"),
             },
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
                 .ward()
-                .map(|cost| i32::from(cost.mana_value))
+                .map(|cost| i32::from(cost.mana_cost().mana_value))
                 .unwrap_or(0),
             kicker_cost: card
                 .optional_cost()
@@ -1272,6 +1304,16 @@ impl Observation {
                     card_id: None,
                 })
             }
+            Target::StackAbility(id) => {
+                game.find_ability_on_stack_index(id)?;
+                Some(StackTargetData {
+                    kind: StackTargetKindData::StackObject,
+                    player_id: None,
+                    permanent_id: None,
+                    stack_object_id: Some(id.0 as i32),
+                    card_id: None,
+                })
+            }
         }
     }
 
@@ -1366,9 +1408,19 @@ impl Observation {
                 *card,
                 PlayerId(0),
             )],
+            GameEvent::AbilityCountered {
+                source_card,
+                controller,
+                ..
+            } => vec![Self::card_event_data(
+                EventType::AbilityCountered,
+                *source_card,
+                *controller,
+            )],
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
+                ..
             } => vec![Self::card_event_data(
                 EventType::AbilityTriggered,
                 *source_card,
@@ -1461,6 +1513,10 @@ impl Observation {
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
+            | GameEvent::CombatDamageToPlayers { .. }
+            | GameEvent::LibrarySearched { .. }
+            | GameEvent::CountersPut { .. }
+            | GameEvent::Scried { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }
@@ -1588,6 +1644,7 @@ impl Observation {
                 crate::state::target::Target::StackSpell(card_id) => {
                     vec![game.state.cards[card_id].id]
                 }
+                crate::state::target::Target::StackAbility(id) => vec![*id],
             },
             Action::ScryCard { card, .. }
             | Action::SelectCard { card, .. }
@@ -1620,12 +1677,20 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::TapPayment {
+                            source: crate::flow::game::ActivationSource::Card(card),
+                            ..
                         }) => Some(*card),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::TapPayment {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })

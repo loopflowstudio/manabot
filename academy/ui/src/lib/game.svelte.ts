@@ -78,6 +78,10 @@ export class GameStore {
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
+  deckImport = $state<{
+    hero: { source: string; filename: string };
+    villain: { source: string; filename: string };
+  } | null>(null);
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.
   deckNames = $state<DeckNames | null>(null);
@@ -181,6 +185,7 @@ export class GameStore {
       ...this.opponentConfig(),
       request_id: crypto.randomUUID(),
       player_token: playerToken(),
+      ...(this.deckImport ? { deck_import: this.deckImport } : {}),
       hero_deck: this.decks.hero,
       villain_deck: this.decks.villain,
       stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },

@@ -64,11 +64,11 @@ impl Game {
         let Some(before) = marked(self) else {
             return 0;
         };
-        if !self.permanent_is_creature(permanent_id) {
+        if !self.characteristics(permanent_id).is_creature {
             self.apply_permanent_damage(source, permanent_id, amount);
             return 0;
         }
-        let remaining = (self.effective_toughness(permanent_id) - before).max(0);
+        let remaining = (self.characteristics(permanent_id).toughness - before).max(0);
         let deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.deathtouch)
@@ -83,18 +83,19 @@ impl Game {
         (dealt - lethal).max(0)
     }
 
+    /// Whether any damage was dealt (prevention may leave none).
     pub(crate) fn apply_combat_player_damage(
         &mut self,
         source: Option<ObjectRef>,
         player: PlayerId,
         amount: i32,
-    ) {
+    ) -> bool {
         self.apply_proposed_event(ProposedEvent::Damage {
             source,
             target: ProposedDamageTarget::Player(player),
             amount,
             combat: true,
-        });
+        })
     }
 
     pub(crate) fn apply_combat_permanent_damage(
@@ -141,7 +142,6 @@ impl Game {
 
         match target {
             ProposedDamageTarget::Player(player) => {
-                self.journal_player(player);
                 let Some(player_state) = self.state.players.get_mut(player.0) else {
                     return false;
                 };
@@ -172,7 +172,6 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
                     return false;
                 };
-                self.journal_permanent(permanent_id);
                 let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                     return false;
                 };
@@ -217,7 +216,6 @@ impl Game {
         {
             return false;
         }
-        self.journal_player(player);
         let Some(player_state) = self.state.players.get_mut(player.0) else {
             return false;
         };
@@ -238,7 +236,6 @@ impl Game {
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
             if self.state.permanents[permanent_id].is_some() {
-                self.journal_permanent(permanent_id);
                 self.state.permanents[permanent_id]
                     .as_mut()
                     .expect("checked permanent")
@@ -252,7 +249,7 @@ impl Game {
     /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectRef) -> Option<crate::state::card::Keywords> {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return Some(self.effective_keywords(permanent_id));
+            return Some(self.characteristics(permanent_id).keywords);
         }
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
@@ -284,16 +281,27 @@ impl Game {
     }
 
     /// The cleanup step (CR 514.2): "until end of turn" effects end and
-    /// "once each turn" limits reset.
+    /// "once each turn" limits and "dealt damage this turn" reset.
     pub(crate) fn end_turn_modifiers(&mut self) {
         self.end_turn_effects();
+        if self
+            .state
+            .delayed_triggers
+            .iter()
+            .any(|trigger| trigger.this_turn)
+        {
+            self.state
+                .delayed_triggers
+                .retain(|trigger| !trigger.this_turn);
+        }
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
             if self.state.permanents[permanent_id]
                 .as_ref()
-                .is_some_and(|permanent| !permanent.activated_this_turn.is_empty())
+                .is_some_and(|permanent| {
+                    !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
+                })
             {
-                self.journal_permanent(permanent_id);
                 self.state.permanents[permanent_id]
                     .as_mut()
                     .expect("checked permanent")

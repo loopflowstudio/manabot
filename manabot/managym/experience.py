@@ -311,6 +311,13 @@ class LegacyRestrictedManaView(ProtocolModel):
     mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32]
 
 
+class PlayerTurnHistoryView(ProtocolModel):
+    attacked: bool = Field(default=False, exclude_if=lambda value: not value)
+    permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
+    cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+
+
 class LegacyCardView(ProtocolModel):
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
@@ -348,12 +355,6 @@ class ContinuousEffectView(ProtocolModel):
     duration: str
     source: str | None = Field(default=None, exclude_if=lambda value: value is None)
     timestamp: UInt32
-
-
-class PlayerTurnHistoryView(ProtocolModel):
-    """What one player has done this turn."""
-
-    permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class CopyView(ProtocolModel):
@@ -408,6 +409,9 @@ class LegacyPermanentView(ProtocolModel):
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
+    )
+    dealt_damage_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
     )
     effects: list[ContinuousEffectView] = Field(
         default_factory=list, exclude_if=lambda value: not value

@@ -20,7 +20,7 @@ fn proft_etb_draw_and_combat_counts_at_resolution() {
     put_onto_battlefield(&mut s, 0, "Island");
     put_onto_battlefield(&mut s, 0, "Island");
     let gran = put_onto_battlefield(&mut s, 0, "Gran-Gran");
-    s.game_mut().state.turn.cards_drawn_this_turn[0] = 1;
+    s.game_mut().state.turn.history[0].cards_drawn = 1;
     let card = cast_owned(&mut s, "Proft's Eidetic Memory");
     let before = s.zone_size(0, ZoneType::Hand);
     resolve_top(&mut s); // permanent enters, ETB on stack
@@ -47,7 +47,7 @@ fn proft_combat_requires_two_draws_and_own_turn() {
         put_onto_battlefield(&mut s, 0, "Gran-Gran");
         s.pass_priority();
         resolve_top(&mut s); // ETB
-        s.game_mut().state.turn.cards_drawn_this_turn[0] = draws;
+        s.game_mut().state.turn.history[0].cards_drawn = draws;
         s.advance_to_active_step(0, StepKind::BeginningOfCombat);
         assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
         assert!(s.game().state.stack_objects.is_empty());
@@ -57,7 +57,7 @@ fn proft_combat_requires_two_draws_and_own_turn() {
     put_onto_battlefield(&mut s, 1, "Gran-Gran");
     s.pass_priority();
     resolve_top(&mut s);
-    s.game_mut().state.turn.cards_drawn_this_turn[1] = 3;
+    s.game_mut().state.turn.history[1].cards_drawn = 3;
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert!(s.game().state.stack_objects.is_empty());
 }
@@ -116,7 +116,7 @@ fn proft_has_no_effect_if_its_only_target_leaves() {
     let gran = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     s.pass_priority();
     resolve_top(&mut s);
-    s.game_mut().state.turn.cards_drawn_this_turn[0] = 3;
+    s.game_mut().state.turn.history[0].cards_drawn = 3;
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert!(s.choose_target(Target::Permanent(gran)));
     let card = card_of(&s, gran);

@@ -1,6 +1,6 @@
 """Stateless current-decision context from current stack/continuation relations.
 
-Rows [B,64,32/33] retain frame order, parent links and target clauses. Definition
+Rows [B,64,32/33/49] retain frame order, parent links and target clauses. Definition
 IDs join the existing catalog; object indexes gather the current object table.
 Neither identifier is used as a numeric feature. Gradients reach the shared
 object/catalog encoders and this projection; no memory survives a decision.
@@ -37,10 +37,11 @@ class ContinuationEncoder(nn.Module):
         rows = torch.where(valid.bool().unsqueeze(-1), rows, 0)
         if not torch.isfinite(rows).all():
             raise ValueError("relations must be finite")
-        # Waiting occurrence order is presentation, unlike public stack order.
-        # Retain its causal/ability facts without treating frame joins as features.
+        # Waiting occurrence order (pending and delayed triggers) is
+        # presentation, unlike public stack order. Retain its causal/ability
+        # facts without treating frame joins as features.
         features_rows = rows.clone()
-        pending = (rows[..., 3] == 7) | (rows[..., 3] == 8)
+        pending = (rows[..., 3] == 7) | (rows[..., 3] == 8) | (rows[..., 3] == 10)
         features_rows[..., 1:3] = torch.where(pending.unsqueeze(-1), 0, rows[..., 1:3])
         features = [
             features_rows[..., :5],

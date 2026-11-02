@@ -2,6 +2,9 @@
 
 Research date: 2026-07-15.
 
+Status: historical. The undo, journal and page-COW sections were superseded by
+full-clone forking (docs/ARCHITECTURE.md §10; experiments w2-182/198/199).
+
 Compared revisions:
 
 - Etude: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (2026-07-10).

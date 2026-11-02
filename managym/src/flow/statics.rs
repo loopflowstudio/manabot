@@ -1,6 +1,10 @@
 // statics.rs
-// Continuous-effect queries: effective power/toughness, effective keywords,
-// animation-aware type checks, and static-condition evaluation.
+// A permanent's characteristics after continuous effects, and static-condition
+// evaluation. `Game::characteristics` is the one reader of a permanent's
+// derived name, types, keywords, abilities and power/toughness; the layer
+// stages below are private to it and to static-scope matching. Rules questions
+// that depend on characteristics (`permanent_can_tap`, lethal damage,
+// predicates) read the view or the stage they need.
 //
 // Characteristics apply static abilities and continuous-effect records
 // (`state::effect`) together, by layer and then by timestamp (CR 613.7). A
@@ -26,25 +30,46 @@
 // A scope reads what the layers before its own determine (`ScopeView`):
 // type grants read printed types; keyword grants add granted types; P/T
 // scopes add effective keywords; restrictions, which no layer reads, also
-// read effective power. No computation can recurse.
+// read effective power. No computation can recurse: code the stages call
+// (static scopes, ability mana outputs) never reads the view. A view computes
+// the shared layer inputs (`LayerBasis`) once and hands them to each stage.
+//
+// Derived data is cached per state revision (`TrackedState`, `StaticsCache`):
+// the static-source index (`StaticIndex`: attached permanents and the
+// permanents whose statics can apply) is built once per revision, and each
+// permanent's view is computed once per revision and shared as an `Arc`.
+// Any mutable access to state starts a new revision, so neither can go stale.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::{
-    flow::game::Game,
+    flow::{decision::EffectFrame, game::Game},
     state::{
-        ability::StaticCondition,
+        ability::{Condition, Effect},
         card::{
-            Card, CardType, Keywords, PowerCda, Restriction, SetCharacteristics, StaticAbility,
-            StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keywords, PowerCda,
+            Restriction, SetCharacteristics, StaticAbility, StaticScope,
         },
         effect::Modification,
-        game_object::{CardId, ObjectId, PermanentId, PlayerId},
-        permanent::CounterKind,
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        mana::{Mana, ManaUse},
+        permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         zone::ZoneType,
     },
 };
+
+/// Basic land types and the mana their intrinsic ability adds (CR 305.6).
+const BASIC_LAND_TYPES: [(&str, &str); 5] = [
+    ("Plains", "W"),
+    ("Island", "U"),
+    ("Swamp", "B"),
+    ("Mountain", "R"),
+    ("Forest", "G"),
+];
 
 /// Subtypes that permanents in the current pools can carry which are not
 /// creature types (land and artifact types; CR 205.3).
@@ -74,19 +99,402 @@ pub(crate) enum ScopeView {
     Rules,
 }
 
+/// A battlefield permanent's characteristics with every static ability and
+/// continuous-effect record applied (CR 613). A permanent that has left the
+/// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Characteristics {
+    /// Set by a characteristic-setting Aura, or printed (CR 201.2).
+    pub name: String,
+    /// Whether a characteristic-setting Aura replaced its name, creature
+    /// types and base power/toughness.
+    pub characteristics_set: bool,
+    /// Every subtype it has: printed (creature types replaced by a
+    /// characteristic-setting Aura's), then added by records.
+    pub subtypes: Vec<String>,
+    /// Creature subtypes added by records after any characteristic-setting
+    /// Aura (layer 4), in record order.
+    pub added_subtypes: Vec<String>,
+    /// Distinct creature types (CR 205.3m), sorted.
+    pub creature_types: Vec<String>,
+    pub is_creature: bool,
+    /// Printed or granted land.
+    pub is_land: bool,
+    /// A creature by something other than its printed type: earthbend, its
+    /// own counter threshold, or an effect.
+    pub is_animated: bool,
+    /// Layer 6 keywords.
+    pub keywords: Keywords,
+    /// Firebending N granted by records after any ability loss, summed.
+    pub firebending: u8,
+    /// Whether it has lost all abilities (a record, or a characteristic-
+    /// setting Aura); grants with later timestamps still apply.
+    pub abilities_lost: bool,
+    pub power: i32,
+    pub toughness: i32,
+    /// Printed abilities, then currently granted abilities in source order,
+    /// then the intrinsic mana ability of basic land types gained by an
+    /// effect, then abilities granted by attached Equipment and Auras in
+    /// battlefield order, each with its cost as it would be paid now. An
+    /// ability's index is its position here; offers, activation and payment
+    /// read only this list. A permanent that has lost all abilities keeps only
+    /// the grants of the Aura that set its characteristics (Humble Merchant's
+    /// "{T}: Add {C}").
+    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+}
+
+impl Characteristics {
+    pub fn pt(&self) -> (i32, i32) {
+        (self.power, self.toughness)
+    }
+
+    pub fn has_subtype(&self, subtype: &str) -> bool {
+        self.subtypes.iter().any(|s| s == subtype)
+    }
+}
+
+/// A battlefield permanent whose card projects static P/T, keyword,
+/// restriction, type, triggered-ability, additional-trigger or mana-ability
+/// grants, with its controller.
+type StaticSource = (PermanentId, PlayerId, CardId);
+
+/// A battlefield permanent attached to an object, with that exact object.
+type Attachment = (PermanentId, ObjectRef, CardId);
+
+/// The battlefield permanents static abilities can come from, at one state
+/// revision, each list in battlefield order.
+#[derive(Debug, PartialEq)]
+struct StaticIndex {
+    attachments: Vec<Attachment>,
+    /// Static sources that have not lost their abilities.
+    sources: Vec<StaticSource>,
+}
+
+/// State-derived statics data, valid for the state revision it was computed
+/// at; reading it at a later revision discards it first.
+#[derive(Default)]
+pub(crate) struct StaticsCache {
+    revision: u64,
+    index: Option<Arc<StaticIndex>>,
+    /// Indexed by `PermanentId`.
+    characteristics: Vec<Option<Arc<Characteristics>>>,
+}
+
+/// Opaque, so a game's `Debug` text does not depend on what was read.
+impl std::fmt::Debug for StaticsCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("StaticsCache")
+    }
+}
+
+impl StaticsCache {
+    fn at(&mut self, revision: u64) -> &mut Self {
+        if self.revision != revision {
+            self.revision = revision;
+            self.index = None;
+            self.characteristics.clear();
+        }
+        self
+    }
+}
+
+/// Layer inputs several stages read, computed once per view: the
+/// permanent's attachments, the characteristic-setting Aura (latest by
+/// timestamp), the ability-loss timestamp and the subtypes records add after
+/// that Aura (layer 4).
+struct LayerBasis<'a> {
+    /// Auras and Equipment attached to it, in battlefield order.
+    attachments: Vec<(PermanentId, &'a Card)>,
+    set: Option<&'a SetCharacteristics>,
+    set_timestamp: Option<ObjectId>,
+    lost: Option<ObjectId>,
+    added_subtypes: Vec<&'a str>,
+}
+
+/// Every subtype: printed or added by records. A characteristic-setting Aura
+/// replaces the printed creature types.
+fn subtypes_with<'a>(card: &'a Card, basis: &LayerBasis<'a>) -> Vec<&'a str> {
+    let printed = card.subtypes.iter().map(String::as_str);
+    let mut subtypes: Vec<&str> = match basis.set {
+        Some(set) => set
+            .creature_types
+            .iter()
+            .map(String::as_str)
+            .chain(printed.filter(|s| NONCREATURE_SUBTYPES.contains(s)))
+            .collect(),
+        None => printed.collect(),
+    };
+    for &subtype in &basis.added_subtypes {
+        if !subtypes.contains(&subtype) {
+            subtypes.push(subtype);
+        }
+    }
+    subtypes
+}
+
+/// Distinct creature types (CR 205.3m): printed subtypes of a printed
+/// creature (or the Aura-set ones) plus added subtypes, less noncreature
+/// subtypes, sorted. Animated lands keep only added types.
+fn creature_types_with<'a>(card: &'a Card, basis: &LayerBasis<'a>) -> Vec<&'a str> {
+    let printed: &[String] = if let Some(set) = basis.set {
+        &set.creature_types
+    } else if card.types.is_creature() {
+        &card.subtypes
+    } else {
+        &[]
+    };
+    let mut types: Vec<&str> = printed
+        .iter()
+        .map(String::as_str)
+        .chain(basis.added_subtypes.iter().copied())
+        .filter(|s| !NONCREATURE_SUBTYPES.contains(s))
+        .collect();
+    types.sort_unstable();
+    types.dedup();
+    types
+}
+
+fn owned(strs: Vec<&str>) -> Vec<String> {
+    strs.into_iter().map(str::to_string).collect()
+}
+
 impl Game {
-    /// The permanent's effective power: CDA-aware or set base, plus static buffs,
-    /// until-EOT deltas, and +1/+1 counters.
-    pub fn effective_power(&self, permanent_id: PermanentId) -> i32 {
-        self.effective_pt(permanent_id).0
+    /// The permanent's characteristics: static abilities and effect records
+    /// applied by layer and then timestamp (see the header). Computed once
+    /// per state revision.
+    pub fn characteristics(&self, permanent_id: PermanentId) -> Arc<Characteristics> {
+        let revision = self.state.revision();
+        let cached = self
+            .statics_cache
+            .borrow_mut()
+            .at(revision)
+            .characteristics
+            .get(permanent_id.0)
+            .and_then(Option::clone);
+        if let Some(characteristics) = cached {
+            debug_assert_eq!(
+                *characteristics,
+                self.compute_characteristics(permanent_id),
+                "stale cached characteristics for {permanent_id:?}"
+            );
+            return characteristics;
+        }
+        let characteristics = Arc::new(self.compute_characteristics(permanent_id));
+        let mut cache = self.statics_cache.borrow_mut();
+        let entries = &mut cache.at(revision).characteristics;
+        if entries.len() <= permanent_id.0 {
+            entries.resize(permanent_id.0 + 1, None);
+        }
+        entries[permanent_id.0] = Some(characteristics.clone());
+        characteristics
     }
 
-    /// The permanent's effective toughness (same layering as power).
-    pub fn effective_toughness(&self, permanent_id: PermanentId) -> i32 {
-        self.effective_pt(permanent_id).1
+    fn compute_characteristics(&self, permanent_id: PermanentId) -> Characteristics {
+        let Some(permanent) = self
+            .state
+            .permanents
+            .get(permanent_id.0)
+            .and_then(|p| p.as_ref())
+        else {
+            return Characteristics::default();
+        };
+        let card = &self.state.cards[permanent.card];
+        let index = self.static_index();
+        let sources = &index.sources;
+        let basis = self.layer_basis(permanent_id, sources);
+        let (power, toughness) = self.pt_with(permanent_id, &basis, sources);
+        let is_land = self.is_land_with(permanent_id, sources);
+        Characteristics {
+            name: basis
+                .set
+                .map_or(card.name.as_str(), |set| set.named.as_str())
+                .to_string(),
+            characteristics_set: basis.set.is_some(),
+            subtypes: owned(subtypes_with(card, &basis)),
+            creature_types: owned(creature_types_with(card, &basis)),
+            is_creature: self.permanent_is_creature(permanent_id),
+            is_land,
+            is_animated: self.permanent_is_animated(permanent_id),
+            keywords: self.keywords_with(permanent_id, basis.lost, sources),
+            firebending: self.firebending_with(permanent_id, basis.lost),
+            abilities_lost: basis.lost.is_some(),
+            power,
+            toughness,
+            activated_abilities: self.activated_abilities_with(
+                permanent_id,
+                &basis,
+                is_land,
+                sources,
+            ),
+            added_subtypes: owned(basis.added_subtypes),
+        }
     }
 
-    pub fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
+    /// The static-source index at the current state revision, built once per
+    /// revision.
+    fn static_index(&self) -> Arc<StaticIndex> {
+        let revision = self.state.revision();
+        let cached = self.statics_cache.borrow_mut().at(revision).index.clone();
+        if let Some(index) = cached {
+            debug_assert_eq!(*index, self.build_static_index(), "stale static index");
+            return index;
+        }
+        let index = Arc::new(self.build_static_index());
+        self.statics_cache.borrow_mut().at(revision).index = Some(index.clone());
+        index
+    }
+
+    /// Scan both battlefields for attached permanents and for static sources
+    /// that have not lost their abilities. Reads attachments only through the
+    /// list it is building, never through `static_index`.
+    fn build_static_index(&self) -> StaticIndex {
+        let battlefield: Vec<(CardId, PermanentId, &Permanent)> = [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(|&card_id| {
+                let permanent_id = self.state.card_to_permanent[card_id]?;
+                let permanent = self.state.permanents[permanent_id].as_ref()?;
+                Some((card_id, permanent_id, permanent))
+            })
+            .collect();
+        let attachments: Vec<Attachment> = battlefield
+            .iter()
+            .filter_map(|&(card_id, permanent_id, permanent)| {
+                Some((permanent_id, permanent.attached_to?, card_id))
+            })
+            .collect();
+        // Only an attached characteristic-setting Aura or a land-type
+        // overwrite removes abilities without a record; without either,
+        // records alone decide.
+        let unrecorded_loss = attachments.iter().any(|&(_, _, card_id)| {
+            self.state.cards[card_id]
+                .attached_characteristics()
+                .is_some()
+        }) || battlefield.iter().any(|&(card_id, _, _)| {
+            self.state.cards[card_id]
+                .statics
+                .iter()
+                .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
+        });
+        let sources = battlefield
+            .iter()
+            .filter(|&&(card_id, permanent_id, _)| {
+                let projects = self.state.cards[card_id].statics.iter().any(|ability| {
+                    matches!(
+                        ability,
+                        StaticAbility::PtBuff(_)
+                            | StaticAbility::KeywordGrant(_)
+                            | StaticAbility::Restriction(_)
+                            | StaticAbility::TypeGrant(_)
+                            | StaticAbility::TriggersAdditionalTime(_)
+                            | StaticAbility::TriggeredGrant(_)
+                            | StaticAbility::GrantsAnyColorManaAbility(_)
+                    )
+                });
+                projects
+                    && if unrecorded_loss {
+                        self.ability_loss_timestamp_in(&attachments, permanent_id)
+                    } else {
+                        self.recorded_loss(permanent_id)
+                    }
+                    .is_none()
+            })
+            .map(|&(card_id, permanent_id, permanent)| {
+                (permanent_id, permanent.controller, card_id)
+            })
+            .collect();
+        StaticIndex {
+            attachments,
+            sources,
+        }
+    }
+
+    /// The layer inputs several stages share, computed once per view from
+    /// the view's static sources.
+    fn layer_basis(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> LayerBasis<'_> {
+        let attachments = self.attachments_on(permanent_id);
+        let setter = self.latest_setter(attachments.iter().copied());
+        let set_timestamp = setter.map(|(timestamp, _)| timestamp);
+        let overwrite = self.land_type_overwrite(permanent_id);
+        let mut added_subtypes: Vec<&str> = Vec::new();
+        for &(source_id, controller, card_id) in sources {
+            for grant in self.state.cards[card_id]
+                .type_grants()
+                .filter(|grant| !grant.subtypes.is_empty())
+            {
+                if self.static_scope_applies(
+                    &grant.scope,
+                    source_id,
+                    controller,
+                    permanent_id,
+                    ScopeView::Types,
+                ) {
+                    added_subtypes.extend(grant.subtypes.iter().map(String::as_str));
+                }
+            }
+        }
+        if let Some((_, subtype)) = overwrite {
+            added_subtypes.push(subtype);
+        }
+        for effect in self.effects_on(permanent_id) {
+            if let Modification::AddSubtypes(added) = &effect.modification {
+                if effect.follows(set_timestamp) {
+                    for subtype in added {
+                        if !added_subtypes.contains(&subtype.as_str()) {
+                            added_subtypes.push(subtype);
+                        }
+                    }
+                }
+            }
+        }
+        LayerBasis {
+            attachments,
+            set: setter.map(|(_, set)| set),
+            set_timestamp,
+            lost: self.loss_timestamp_with(permanent_id, set_timestamp, overwrite),
+            added_subtypes,
+        }
+    }
+
+    /// The latest characteristic-setting Aura among `attachments` (CR
+    /// 613.7e), with its timestamp.
+    fn latest_setter<'a>(
+        &'a self,
+        attachments: impl Iterator<Item = (PermanentId, &'a Card)>,
+    ) -> Option<(ObjectId, &'a SetCharacteristics)> {
+        attachments
+            .filter_map(|(aura, card)| {
+                let set = card.attached_characteristics()?;
+                Some((self.state.permanents[aura].as_ref()?.timestamp, set))
+            })
+            .max_by_key(|(timestamp, _)| *timestamp)
+    }
+
+    /// The latest record removing all of the permanent's abilities.
+    fn recorded_loss(&self, permanent_id: PermanentId) -> Option<ObjectId> {
+        self.effects_on(permanent_id)
+            .filter(|effect| effect.modification == Modification::LoseAllAbilities)
+            .map(|effect| effect.timestamp)
+            .last()
+    }
+
+    /// Layer 7: power and toughness (CDA-aware or set base, plus static buffs,
+    /// records and +1/+1 counters).
+    fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
+        let index = self.static_index();
+        self.pt_with(
+            permanent_id,
+            &self.layer_basis(permanent_id, &index.sources),
+            &index.sources,
+        )
+    }
+
+    fn pt_with(
+        &self,
+        permanent_id: PermanentId,
+        basis: &LayerBasis,
+        sources: &[StaticSource],
+    ) -> (i32, i32) {
         let Some(permanent) = self
             .state
             .permanents
@@ -118,10 +526,7 @@ impl Game {
                 _ => None,
             })
             .collect();
-        if let (Some(set), Some(timestamp)) = (
-            self.set_characteristics(permanent_id),
-            self.set_characteristics_timestamp(permanent_id),
-        ) {
+        if let (Some(set), Some(timestamp)) = (basis.set, basis.set_timestamp) {
             setters.push((timestamp, Some(set.power), Some(set.toughness)));
         }
         setters.sort_by_key(|(timestamp, _, _)| *timestamp);
@@ -131,7 +536,7 @@ impl Game {
         }
 
         // Layer 7c: static continuous effects, records and +1/+1 counters.
-        let (static_power, static_toughness) = self.static_pt_bonus(permanent_id);
+        let (static_power, static_toughness) = self.static_pt_bonus(permanent_id, sources);
         let (record_power, record_toughness) = self
             .effects_on(permanent_id)
             .filter_map(|effect| match effect.modification {
@@ -169,11 +574,11 @@ impl Game {
 
     /// Sum of static P/T buffs applying to `target_id` from every
     /// battlefield permanent (including itself for `StaticScope::This`).
-    fn static_pt_bonus(&self, target_id: PermanentId) -> (i32, i32) {
+    fn static_pt_bonus(&self, target_id: PermanentId, sources: &[StaticSource]) -> (i32, i32) {
         let mut power = 0;
         let mut toughness = 0;
-        for (source_id, controller, card) in self.static_sources() {
-            for buff in card.pt_buffs() {
+        for &(source_id, controller, card) in sources {
+            for buff in self.state.cards[card].pt_buffs() {
                 if !self.static_scope_applies(
                     &buff.scope,
                     source_id,
@@ -194,7 +599,10 @@ impl Game {
                     .per_color_among
                     .as_ref()
                     .map_or(1, |predicate| self.colors_among(controller, predicate));
-                let times = per_type * per_color;
+                let per_card = buff.per_graveyard_matching.as_ref().map_or(1, |predicate| {
+                    self.count_graveyard_matching(controller, predicate) as i32
+                });
+                let times = per_type * per_color * per_card;
                 power += buff.power * times;
                 toughness += buff.toughness * times;
             }
@@ -204,13 +612,18 @@ impl Game {
 
     /// Keywords granted to `target_id` by static abilities of battlefield
     /// permanents (layer 6) whose timestamps follow `after`.
-    fn static_keyword_bonus(&self, target_id: PermanentId, after: Option<ObjectId>) -> Keywords {
+    fn static_keyword_bonus(
+        &self,
+        target_id: PermanentId,
+        after: Option<ObjectId>,
+        sources: &[StaticSource],
+    ) -> Keywords {
         let mut keywords = Keywords::default();
-        for (source_id, controller, card) in self.static_sources() {
+        for &(source_id, controller, card) in sources {
             if !self.follows(source_id, after) {
                 continue;
             }
-            for grant in card.keyword_grants() {
+            for grant in self.state.cards[card].keyword_grants() {
                 if self.static_scope_applies(
                     &grant.scope,
                     source_id,
@@ -234,8 +647,8 @@ impl Game {
     pub(crate) fn spell_keywords(&self, card_id: CardId, controller: PlayerId) -> Keywords {
         let card = &self.state.cards[card_id];
         let mut keywords = card.keywords;
-        for (_, source_controller, source) in self.static_sources() {
-            for grant in source.keyword_grants() {
+        for &(_, source_controller, source) in &self.static_index().sources {
+            for grant in self.state.cards[source].keyword_grants() {
                 if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
                     if source_controller == controller
                         && predicate.matches_card(card)
@@ -251,37 +664,16 @@ impl Game {
         keywords
     }
 
-    /// Battlefield permanents whose cards project static P/T, keyword or
-    /// restriction effects, with their controllers.
-    fn static_sources(&self) -> impl Iterator<Item = (PermanentId, PlayerId, &Card)> {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(move |player| {
-                self.state
-                    .zones
-                    .zone_cards(ZoneType::Battlefield, player)
-                    .iter()
-                    .filter_map(move |&card_id| {
-                        let card = &self.state.cards[card_id];
-                        if !card.statics.iter().any(|ability| {
-                            matches!(
-                                ability,
-                                StaticAbility::PtBuff(_)
-                                    | StaticAbility::KeywordGrant(_)
-                                    | StaticAbility::Restriction(_)
-                                    | StaticAbility::TypeGrant(_)
-                            )
-                        }) {
-                            return None;
-                        }
-                        let permanent_id = self.state.card_to_permanent[card_id]?;
-                        let permanent = self.state.permanents[permanent_id].as_ref()?;
-                        if self.has_lost_abilities(permanent_id) {
-                            return None;
-                        }
-                        Some((permanent_id, permanent.controller, card))
-                    })
+    /// Every static source that has not lost its abilities, in battlefield
+    /// order, with its card.
+    pub(crate) fn static_sources(&self) -> Vec<(PermanentId, PlayerId, &Card)> {
+        self.static_index()
+            .sources
+            .iter()
+            .map(|&(permanent_id, controller, card_id)| {
+                (permanent_id, controller, &self.state.cards[card_id])
             })
+            .collect()
     }
 
     /// Whether the static ability of `source_id` has a timestamp after
@@ -294,100 +686,116 @@ impl Game {
         })
     }
 
-    /// The Aura attached to `permanent_id` that sets its characteristics, if
-    /// any: the latest by timestamp.
-    fn set_characteristics_source(&self, permanent_id: PermanentId) -> Option<PermanentId> {
-        self.attachments_on(permanent_id)
-            .filter(|(_, card)| card.attached_characteristics().is_some())
-            .max_by_key(|(aura, _)| {
-                self.state.permanents[*aura]
-                    .as_ref()
-                    .map(|permanent| permanent.timestamp)
-            })
-            .map(|(aura, _)| aura)
+    /// The latest timestamp at which the permanent lost all abilities, if
+    /// it has (CR 613.1f); grants with later timestamps still apply.
+    /// Reads no static scope, so `build_static_index` can ask it of each
+    /// source.
+    fn ability_loss_timestamp(&self, permanent_id: PermanentId) -> Option<ObjectId> {
+        self.ability_loss_timestamp_in(&self.static_index().attachments, permanent_id)
     }
 
-    /// The timestamp of the Aura that sets the permanent's characteristics,
-    /// if any (CR 613.7e).
-    pub(crate) fn set_characteristics_timestamp(
+    fn ability_loss_timestamp_in(
         &self,
+        attachments: &[Attachment],
         permanent_id: PermanentId,
     ) -> Option<ObjectId> {
-        let aura = self.set_characteristics_source(permanent_id)?;
-        self.state.permanents[aura]
-            .as_ref()
-            .map(|permanent| permanent.timestamp)
+        let set = self.latest_setter(self.attachments_in(attachments, permanent_id).into_iter());
+        self.loss_timestamp_with(
+            permanent_id,
+            set.map(|(timestamp, _)| timestamp),
+            self.land_type_overwrite(permanent_id),
+        )
     }
 
-    /// The characteristics an Aura attached to `permanent_id` sets, if any.
-    pub(crate) fn set_characteristics(
+    /// The latest of a recorded loss, the characteristic-setting Aura and a
+    /// land-type overwrite (CR 305.7: the land loses its other abilities).
+    fn loss_timestamp_with(
         &self,
         permanent_id: PermanentId,
-    ) -> Option<&SetCharacteristics> {
-        let aura = self.set_characteristics_source(permanent_id)?;
-        let card = self.state.permanents[aura].as_ref()?.card;
-        self.state.cards[card].attached_characteristics()
+        set_timestamp: Option<ObjectId>,
+        overwrite: Option<(ObjectId, &str)>,
+    ) -> Option<ObjectId> {
+        self.recorded_loss(permanent_id)
+            .max(set_timestamp)
+            .max(overwrite.map(|(timestamp, _)| timestamp))
     }
 
-    /// Whether the permanent has lost all abilities (an effect record, or an
-    /// Aura that sets its characteristics). Its printed abilities predate
-    /// any loss; `effective_keywords` keeps later grants.
-    pub fn has_lost_abilities(&self, permanent_id: PermanentId) -> bool {
-        self.ability_loss_timestamp(permanent_id).is_some()
+    /// Whether an effect makes the permanent an artifact creature.
+    fn becomes_artifact_creature(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::BecomeArtifactCreature)
     }
 
-    /// Creature subtypes added by effect records after any characteristic-
-    /// setting Aura's timestamp (layer 4).
-    pub fn added_subtypes(&self, permanent_id: PermanentId) -> Vec<&str> {
-        let aura = self.set_characteristics_timestamp(permanent_id);
-        let mut subtypes: Vec<&str> = Vec::new();
-        for effect in self.effects_on(permanent_id) {
-            if let Modification::AddSubtypes(added) = &effect.modification {
-                if effect.follows(aura) {
-                    for subtype in added {
-                        if !subtypes.contains(&subtype.as_str()) {
-                            subtypes.push(subtype);
+    /// Firebending granted by effects later than any ability loss, summed.
+    fn firebending_with(&self, permanent_id: PermanentId, lost: Option<ObjectId>) -> u8 {
+        self.effects_on(permanent_id)
+            .filter(|effect| effect.follows(lost))
+            .filter_map(|effect| match effect.modification {
+                Modification::Firebending(amount) => Some(amount),
+                _ => None,
+            })
+            .fold(0, u8::saturating_add)
+    }
+
+    fn permanent_has_subtype(&self, permanent_id: PermanentId, subtype: &str) -> bool {
+        self.state.permanents[permanent_id]
+            .as_ref()
+            .is_some_and(|permanent| {
+                subtypes_with(
+                    &self.state.cards[permanent.card],
+                    &self.layer_basis(permanent_id, &self.static_index().sources),
+                )
+                .contains(&subtype)
+            })
+    }
+
+    /// A static land-type overwrite on a printed land (Zhao, the Moon
+    /// Slayer): the setting permanent's timestamp and the basic land type.
+    /// Matching reads printed characteristics, and the setter's own loss only
+    /// from records, so this never recurses.
+    pub(crate) fn land_type_overwrite(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<(ObjectId, &str)> {
+        let permanent = self.state.permanents[permanent_id].as_ref()?;
+        let card = &self.state.cards[permanent.card];
+        if !card.types.is_land() {
+            return None;
+        }
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(|&setter_card| {
+                let setter_id = self.state.card_to_permanent[setter_card]?;
+                let setter = self.state.permanents[setter_id].as_ref()?;
+                self.state.cards[setter_card]
+                    .statics
+                    .iter()
+                    .find_map(|ability| match ability {
+                        StaticAbility::SetsLandType(set)
+                            if setter.counter_count(set.while_counters.kind)
+                                >= set.while_counters.count
+                                && set.predicate.matches_card(card)
+                                && !self.effects_on(setter_id).any(|effect| {
+                                    effect.modification == Modification::LoseAllAbilities
+                                }) =>
+                        {
+                            Some((setter.timestamp, set.subtype.as_str()))
                         }
-                    }
-                }
-            }
-        }
-        subtypes
-    }
-
-    /// The permanent's name (CR 201.2), as set by a characteristic-setting
-    /// Aura or printed.
-    pub fn permanent_name(&self, permanent_id: PermanentId) -> &str {
-        match self.set_characteristics(permanent_id) {
-            Some(set) => &set.named,
-            None => self.state.permanents[permanent_id]
-                .as_ref()
-                .map_or("", |permanent| &self.state.cards[permanent.card].name),
-        }
-    }
-
-    /// Whether the permanent has `subtype`: printed or temporarily granted.
-    /// A characteristic-setting Aura replaces its printed creature types.
-    pub fn permanent_has_subtype(&self, permanent_id: PermanentId, subtype: &str) -> bool {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return false;
-        };
-        let printed = self.state.cards[permanent.card].has_subtype(subtype);
-        let printed = match self.set_characteristics(permanent_id) {
-            Some(set) => {
-                set.creature_types.iter().any(|s| s == subtype)
-                    || (printed && NONCREATURE_SUBTYPES.contains(&subtype))
-            }
-            None => printed,
-        };
-        printed || self.added_subtypes(permanent_id).contains(&subtype)
+                        _ => None,
+                    })
+            })
+            .max_by_key(|(timestamp, _)| *timestamp)
     }
 
     /// Card types static type grants add to `target_id` (layer 4).
-    fn granted_card_types(&self, target_id: PermanentId) -> Vec<CardType> {
+    fn granted_card_types(
+        &self,
+        target_id: PermanentId,
+        sources: &[StaticSource],
+    ) -> Vec<CardType> {
         let mut types = Vec::new();
-        for (source_id, controller, card) in self.static_sources() {
-            for grant in card.type_grants() {
+        for &(source_id, controller, card) in sources {
+            for grant in self.state.cards[card].type_grants() {
                 if self.static_scope_applies(
                     &grant.scope,
                     source_id,
@@ -403,12 +811,16 @@ impl Game {
     }
 
     /// Whether a battlefield permanent is a land, printed or granted.
-    pub(crate) fn permanent_is_land(&self, permanent_id: PermanentId) -> bool {
+    fn permanent_is_land(&self, permanent_id: PermanentId) -> bool {
+        self.is_land_with(permanent_id, &self.static_index().sources)
+    }
+
+    fn is_land_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> bool {
         self.state.permanents[permanent_id]
             .as_ref()
             .is_some_and(|p| self.state.cards[p.card].types.is_land())
             || self
-                .granted_card_types(permanent_id)
+                .granted_card_types(permanent_id, sources)
                 .contains(&CardType::Land)
     }
 
@@ -426,7 +838,7 @@ impl Game {
 
     /// Whether a static scope from `source_id` (controlled by `controller`)
     /// covers `target_id`, reading the characteristics `view` allows.
-    fn static_scope_applies(
+    pub(crate) fn static_scope_applies(
         &self,
         scope: &StaticScope,
         source_id: PermanentId,
@@ -478,70 +890,69 @@ impl Game {
 
     /// Auras and Equipment attached to the creature `target`, in battlefield
     /// order, less those that have lost their own abilities.
-    pub(crate) fn attachments_on(
+    pub(crate) fn attachments_on(&self, target: PermanentId) -> Vec<(PermanentId, &Card)> {
+        self.attachments_in(&self.static_index().attachments, target)
+    }
+
+    /// `attachments_on`, reading the attached permanents from `attachments`.
+    fn attachments_in(
         &self,
+        attachments: &[Attachment],
         target: PermanentId,
-    ) -> impl Iterator<Item = (PermanentId, &Card)> {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(move |player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
-            .filter_map(move |&card_id| {
-                let source = self.state.card_to_permanent[card_id]?;
+    ) -> Vec<(PermanentId, &Card)> {
+        // Most permanents carry nothing: compare exact refs before asking
+        // whether the target is still a creature.
+        let Some(target_ref) = self.permanent_object_ref(target) else {
+            return Vec::new();
+        };
+        attachments
+            .iter()
+            .filter(|&&(source, attached, _)| {
                 // Only records can remove an attachment's own abilities,
                 // so this never recurses.
-                (!self
-                    .effects_on(source)
-                    .any(|effect| effect.modification == Modification::LoseAllAbilities)
-                    && self.attached_creature(source) == Some(target))
-                .then(|| (source, &self.state.cards[card_id]))
+                attached == target_ref
+                    && self.permanent_is_creature(target)
+                    && !self
+                        .effects_on(source)
+                        .any(|effect| effect.modification == Modification::LoseAllAbilities)
             })
+            .map(|&(source, _, card_id)| (source, &self.state.cards[card_id]))
+            .collect()
     }
 
     /// Whether a static restriction from a battlefield permanent applies to
     /// `target_id`.
     pub(crate) fn has_restriction(&self, target_id: PermanentId, kind: Restriction) -> bool {
-        self.static_sources().any(|(source_id, controller, card)| {
-            card.restrictions().any(|restriction| {
-                restriction.kind == kind
-                    && restriction
-                        .unless
-                        .as_ref()
-                        .is_none_or(|condition| !self.check_static_condition(condition, controller))
-                    && self.static_scope_applies(
-                        &restriction.scope,
-                        source_id,
-                        controller,
-                        target_id,
-                        ScopeView::Rules,
-                    )
+        self.static_index()
+            .sources
+            .iter()
+            .any(|&(source_id, controller, card)| {
+                self.state.cards[card].restrictions().any(|restriction| {
+                    restriction.kind == kind
+                        && restriction.unless.as_ref().is_none_or(|condition| {
+                            !self.check_static_condition(condition, controller)
+                        })
+                        && self.static_scope_applies(
+                            &restriction.scope,
+                            source_id,
+                            controller,
+                            target_id,
+                            ScopeView::Rules,
+                        )
+                })
             })
-        })
     }
 
-    /// Distinct creature types of a battlefield creature (CR 205.3m): printed
-    /// subtypes of a printed creature plus temporarily granted subtypes, less
-    /// noncreature subtypes. Animated lands keep only granted types.
-    pub(crate) fn creature_types(&self, permanent_id: PermanentId) -> Vec<&str> {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return Vec::new();
-        };
-        let card = &self.state.cards[permanent.card];
-        let printed: &[String] = if let Some(set) = self.set_characteristics(permanent_id) {
-            &set.creature_types
-        } else if card.types.is_creature() {
-            &card.subtypes
-        } else {
-            &[]
-        };
-        let mut types: Vec<&str> = printed
-            .iter()
-            .map(String::as_str)
-            .chain(self.added_subtypes(permanent_id))
-            .filter(|s| !NONCREATURE_SUBTYPES.contains(s))
-            .collect();
-        types.sort_unstable();
-        types.dedup();
-        types
+    /// Distinct creature types of a battlefield creature (CR 205.3m).
+    fn creature_types(&self, permanent_id: PermanentId) -> Vec<&str> {
+        self.state.permanents[permanent_id]
+            .as_ref()
+            .map_or_else(Vec::new, |permanent| {
+                creature_types_with(
+                    &self.state.cards[permanent.card],
+                    &self.layer_basis(permanent_id, &self.static_index().sources),
+                )
+            })
     }
 
     /// The greatest number of creatures `controller` controls that share one
@@ -572,36 +983,171 @@ impl Game {
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
 
-    /// Evaluate a static condition for `controller` ("you").
+    /// Answer a game-state condition for `controller` ("you"): statics and
+    /// `ActiveIf`. Resolution-only and source questions have no frame or
+    /// source here and answer false; definition checks keep them out of
+    /// these contexts.
     pub(crate) fn check_static_condition(
         &self,
-        condition: &StaticCondition,
+        condition: &Condition,
         controller: PlayerId,
     ) -> bool {
+        debug_assert!(
+            !condition.is_resolution_only() && !condition.reads_source(),
+            "resolution-only or source condition outside Effect::If: {condition:?}"
+        );
+        self.condition_holds(condition, controller, None, None, None)
+    }
+
+    /// Answer an intervening "if" (CR 603.4) of the ability of the exact
+    /// battlefield object `source`, as its event occurs and as it resolves.
+    /// `triggering` is the permanent whose event fired it.
+    pub(crate) fn check_intervening_if(
+        &self,
+        condition: &Condition,
+        controller: PlayerId,
+        source: Option<ObjectRef>,
+        triggering: Option<Target>,
+    ) -> bool {
+        debug_assert!(
+            !condition.is_resolution_only(),
+            "resolution-only condition outside Effect::If: {condition:?}"
+        );
+        self.condition_holds(condition, controller, None, source, triggering)
+    }
+
+    /// Answer `condition` for `controller`, reading `frame` for the
+    /// resolution-only questions (CR 608.2c).
+    pub(crate) fn check_condition(
+        &self,
+        condition: &Condition,
+        controller: PlayerId,
+        frame: Option<&EffectFrame>,
+    ) -> bool {
+        self.condition_holds(
+            condition,
+            controller,
+            frame,
+            frame.and_then(|frame| frame.source_ref),
+            frame.and_then(|frame| frame.context_target),
+        )
+    }
+
+    /// The source questions read `source`, the ability's exact object, which
+    /// answers nothing once it has left the battlefield; the triggering
+    /// questions read `triggering`, as it is or last existed.
+    fn condition_holds(
+        &self,
+        condition: &Condition,
+        controller: PlayerId,
+        frame: Option<&EffectFrame>,
+        source: Option<ObjectRef>,
+        triggering: Option<Target>,
+    ) -> bool {
+        let source_permanent = || {
+            source
+                .and_then(|source| self.lookup_current_permanent(source).ok())
+                .and_then(|id| self.state.permanents[id].as_ref())
+        };
         match condition {
-            StaticCondition::Always => true,
-            StaticCondition::YourTurn => self.active_player() == controller,
-            StaticCondition::CardsDrawnAtLeast { count } => {
-                self.state.turn.cards_drawn_this_turn[controller.0] >= *count
+            Condition::Always => true,
+            Condition::YourTurn => self.active_player() == controller,
+            Condition::CardsDrawnAtLeast { count } => {
+                self.state.turn.history[controller.0].cards_drawn >= *count
             }
-            StaticCondition::GraveyardAtLeast { count, predicate } => {
+            Condition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }
-            StaticCondition::ControlsMatching { predicate } => self
+            Condition::ControlsMatching { predicate } => self
                 .battlefield_permanents(controller)
                 .into_iter()
                 .any(|id| self.permanent_matches_predicate(id, predicate)),
-            StaticCondition::UnspentManaAtLeast { count } => {
+            Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }
-            StaticCondition::SacrificedThisTurnAtLeast { count } => {
+            Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
+            Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
+            Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
+            }
+            Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
+                self.condition_holds(condition, controller, frame, source, triggering)
+            }),
+            Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
+            Condition::TargetMatches(predicate) => frame
+                .and_then(|frame| self.present_primary_target(frame))
+                .is_some_and(|target| {
+                    matches!(target, Target::Permanent(id)
+                        if self.permanent_matches_predicate(id, predicate))
+                }),
+            Condition::SourceCountersAtLeast { kind, count } => {
+                source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
+            }
+            Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
+            Condition::TriggeringHadCounters => match triggering {
+                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
+                    Some(permanent) => permanent.has_counters(),
+                    None => self
+                        .departed_permanent_lki(id)
+                        .is_some_and(|lki| !lki.counters.is_empty()),
+                },
+                _ => false,
+            },
+            Condition::DiscardedThisWay(predicate) => frame.is_some_and(|frame| {
+                frame
+                    .this_way
+                    .iter()
+                    .any(|card| predicate.matches_card(&self.state.cards[*card]))
+            }),
+            Condition::TriggeringSpellMatches(predicate) => matches!(
+                frame.and_then(|frame| frame.context_target),
+                Some(Target::StackSpell(card)) if predicate.matches_card(&self.state.cards[card])
+            ),
+            Condition::TargetCardExiled(predicate) => {
+                let Some(Target::GraveyardCard(object)) =
+                    frame.and_then(EffectFrame::primary_target)
+                else {
+                    return false;
+                };
+                let card = CardId::from(object.entity);
+                self.current_object_ref(card) != Some(object)
+                    && self.state.zones.zone_of(card) == Some(ZoneType::Exile)
+                    && predicate.matches_card(&self.state.cards[card])
+            }
+            Condition::TargetDealtDamageThisTurn => {
+                let Some(Target::Permanent(permanent_id)) =
+                    frame.and_then(EffectFrame::primary_target)
+                else {
+                    return false;
+                };
+                // A departed target answers from its last known information.
+                match self.state.permanents[permanent_id].as_ref() {
+                    Some(permanent) => permanent.dealt_damage_this_turn,
+                    None => self
+                        .departed_permanent_lki(permanent_id)
+                        .is_some_and(|lki| lki.dealt_damage_this_turn),
+                }
             }
         }
     }
 
+    /// A creature on the battlefield (layer 4). Ability outputs read this
+    /// while `characteristics` is computing, so it never reads the view.
+    pub(crate) fn permanent_is_battlefield_creature(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self
+            .state
+            .permanents
+            .get(permanent_id.0)
+            .and_then(|p| p.as_ref())
+        else {
+            return false;
+        };
+        self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
+            && self.permanent_is_creature(permanent_id)
+    }
+
     /// Animation-aware creature check.
-    pub(crate) fn permanent_is_creature(&self, permanent_id: PermanentId) -> bool {
+    fn permanent_is_creature(&self, permanent_id: PermanentId) -> bool {
         self.state
             .permanents
             .get(permanent_id.0)
@@ -612,7 +1158,7 @@ impl Game {
 
     /// Whether something other than its printed type makes the permanent a
     /// creature: earthbend, its own counter threshold, or an effect.
-    pub(crate) fn permanent_is_animated(&self, permanent_id: PermanentId) -> bool {
+    fn permanent_is_animated(&self, permanent_id: PermanentId) -> bool {
         self.state
             .permanents
             .get(permanent_id.0)
@@ -623,8 +1169,8 @@ impl Game {
     }
 
     /// `StaticAbility::CreatureWithNamesakes`: its controller controls
-    /// enough permanents with its name (layer 4; names read
-    /// `permanent_name`, which no type computation affects).
+    /// enough permanents with its name (layer 4; names come from layers 1–3,
+    /// which no type computation affects).
     fn creature_with_namesakes(&self, permanent_id: PermanentId) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
@@ -632,53 +1178,88 @@ impl Game {
         let Some(count) = self.state.cards[permanent.card].creature_with_namesakes() else {
             return false;
         };
-        if self.has_lost_abilities(permanent_id) {
+        if self.ability_loss_timestamp(permanent_id).is_some() {
             return false;
         }
-        let name = self.permanent_name(permanent_id);
+        let name = self.name_stage(permanent_id);
         self.battlefield_permanents(permanent.controller)
             .into_iter()
-            .filter(|&id| self.permanent_name(id) == name)
+            .filter(|&id| self.name_stage(id) == name)
             .count() as u32
             >= count
+    }
+
+    /// The name after layers 1–3: the card's (copied) name, or the latest
+    /// characteristic-setting Aura's (CR 613.7e). Matches the view's `name`.
+    fn name_stage(&self, permanent_id: PermanentId) -> &str {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return "";
+        };
+        let attachments = self.attachments_on(permanent_id);
+        match self.latest_setter(attachments.into_iter()) {
+            Some((_, set)) => &set.named,
+            None => &self.state.cards[permanent.card].name,
+        }
     }
 
     /// Layer 6 keywords: printed keywords, keyword counters and animation
     /// haste, then static grants and records; a loss of all abilities removes
     /// whatever has an earlier timestamp.
-    pub fn effective_keywords(&self, permanent_id: PermanentId) -> Keywords {
-        let lost = self.ability_loss_timestamp(permanent_id);
-        self.recorded_keywords(permanent_id)
-            .union(&self.static_keyword_bonus(permanent_id, lost))
+    fn effective_keywords(&self, permanent_id: PermanentId) -> Keywords {
+        self.keywords_with(
+            permanent_id,
+            self.ability_loss_timestamp(permanent_id),
+            &self.static_index().sources,
+        )
+    }
+
+    fn keywords_with(
+        &self,
+        permanent_id: PermanentId,
+        lost: Option<ObjectId>,
+        sources: &[StaticSource],
+    ) -> Keywords {
+        self.recorded_keywords_with(permanent_id, lost)
+            .union(&self.static_keyword_bonus(permanent_id, lost, sources))
+            .without(&self.lost_keywords(permanent_id))
     }
 
     /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
     /// untapped, and a creature under its controller's control since the
-    /// turn began or with haste, as `effective_keywords` and
-    /// `permanent_is_creature` report it. A temporary grant must not erase the
-    /// restriction that applies again when the grant expires (CR 702.10).
+    /// turn began or with haste, as its characteristics report it. A
+    /// temporary grant must not erase the restriction that applies again when
+    /// the grant expires (CR 702.10).
     pub(crate) fn permanent_can_tap(&self, permanent_id: PermanentId) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        !(permanent.tapped
-            || (permanent.summoning_sick
-                && self.permanent_is_creature(permanent_id)
-                && !self.effective_keywords(permanent_id).haste))
+        if permanent.tapped {
+            return false;
+        }
+        if !permanent.summoning_sick {
+            return true;
+        }
+        let characteristics = self.characteristics(permanent_id);
+        !characteristics.is_creature || characteristics.keywords.haste
     }
 
-    /// Lethal-damage check (CR 704.5g), animation- and statics-aware.
-    pub(crate) fn has_lethal_damage(&self, permanent_id: PermanentId) -> bool {
+    /// Lethal-damage check (CR 704.5g) against the permanent's
+    /// `characteristics`.
+    pub(crate) fn has_lethal_damage(
+        &self,
+        permanent_id: PermanentId,
+        characteristics: &Characteristics,
+    ) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        if !self.permanent_is_creature(permanent_id) {
+        if !characteristics.is_creature {
             return false;
         }
         if permanent.deathtouch_damage && permanent.damage > 0 {
             return true;
         }
-        permanent.damage >= self.effective_toughness(permanent_id)
+        permanent.damage >= characteristics.toughness
     }
 
     /// Match a battlefield permanent against a predicate using its
@@ -694,10 +1275,17 @@ impl Game {
     /// Keywords before static grants (what layer-4 and layer-6 scopes read):
     /// intrinsic keywords and records, after any loss.
     fn recorded_keywords(&self, permanent_id: PermanentId) -> Keywords {
+        self.recorded_keywords_with(permanent_id, self.ability_loss_timestamp(permanent_id))
+    }
+
+    fn recorded_keywords_with(
+        &self,
+        permanent_id: PermanentId,
+        lost: Option<ObjectId>,
+    ) -> Keywords {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Keywords::default();
         };
-        let lost = self.ability_loss_timestamp(permanent_id);
         let mut keywords = if lost.is_some() {
             Keywords::default()
         } else {
@@ -750,7 +1338,12 @@ impl Game {
         {
             return false;
         }
-        let has_subtype = |name: &str| self.permanent_has_subtype(permanent_id, name);
+        // Layer-4 scopes read printed subtypes, so subtype grants never
+        // recurse.
+        let has_subtype = |name: &str| match view {
+            ScopeView::Types => card.has_subtype(name),
+            _ => self.permanent_has_subtype(permanent_id, name),
+        };
         if predicate
             .subtype
             .as_deref()
@@ -770,8 +1363,11 @@ impl Game {
             not_subtypes: Vec::new(),
             ..predicate.clone()
         };
+        // Read effective power only for power predicates: a power-free
+        // predicate in a static P/T condition ("as long as you control a land
+        // creature") must not recompute the P/T it contributes to.
         let power = match view {
-            ScopeView::Rules => self.effective_power(permanent_id),
+            ScopeView::Rules if predicate.reads_power() => self.effective_pt(permanent_id).0,
             _ => card.power.unwrap_or(0),
         };
         let mut types = Vec::new();
@@ -782,8 +1378,145 @@ impl Game {
             || !structural.card_types_any.is_empty()
             || !structural.not_card_types.is_empty();
         if view != ScopeView::Types && reads_types {
-            types.extend(self.granted_card_types(permanent_id));
+            types.extend(self.granted_card_types(permanent_id, &self.static_index().sources));
         }
         structural.matches(card, power, &types)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Activated abilities (layer 6)
+// -----------------------------------------------------------------------------
+impl Game {
+    /// `Characteristics::activated_abilities`.
+    fn activated_abilities_with(
+        &self,
+        permanent: PermanentId,
+        basis: &LayerBasis,
+        is_land: bool,
+        sources: &[StaticSource],
+    ) -> Vec<ActivatedAbilityDefinition> {
+        let Some(source) = self.state.permanents[permanent].as_ref() else {
+            return Vec::new();
+        };
+        let card = &self.state.cards[source.card];
+        let purpose = ManaUse::ability(
+            card.subtypes
+                .iter()
+                .map(String::as_str)
+                .chain(basis.added_subtypes.iter().copied()),
+        );
+        let lost = basis.lost.is_some();
+        let mut abilities = Vec::new();
+        if !lost {
+            abilities = card.activated_abilities.clone();
+            self.extend_own_abilities(permanent, basis, is_land, sources, &mut abilities);
+        }
+        for &(grantor, card) in &basis.attachments {
+            if lost && card.attached_characteristics().is_none() {
+                continue;
+            }
+            let grantor = self
+                .permanent_object_ref(grantor)
+                .expect("battlefield permanent has an exact identity");
+            abilities.extend(card.attached_grants().enumerate().map(|(index, ability)| {
+                ActivatedAbilityDefinition {
+                    granted_by: Some(AbilityGrant { grantor, index }),
+                    ..ability.clone()
+                }
+            }));
+        }
+        // A land-type overwrite's mana ability postdates its ability loss.
+        if let Some((_, subtype)) = self.land_type_overwrite(permanent) {
+            if let Some((_, mana)) = BASIC_LAND_TYPES.iter().find(|(name, _)| *name == subtype) {
+                abilities.push(ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse(mana),
+                        until_end_of_combat: false,
+                    }],
+                    ..Default::default()
+                });
+            }
+        }
+        for ability in &mut abilities {
+            self.price_activation(source.controller, purpose, ability);
+        }
+        abilities
+    }
+
+    /// Read state-dependent mana outputs of printed abilities, then add mana
+    /// abilities from `mana_grant` permanents and gained basic land types:
+    /// everything `permanent` loses with its abilities.
+    fn extend_own_abilities(
+        &self,
+        permanent: PermanentId,
+        basis: &LayerBasis,
+        is_land: bool,
+        sources: &[StaticSource],
+        abilities: &mut Vec<ActivatedAbilityDefinition>,
+    ) {
+        let source = self.state.permanents[permanent].as_ref().unwrap();
+        for ability in abilities.iter_mut() {
+            if let [effect] = ability.effects.as_slice() {
+                if let Some(effect) = self.current_mana_output(effect, source.controller) {
+                    ability.effects = vec![effect];
+                }
+            }
+        }
+        for &(_, controller, grantor) in sources {
+            if controller == source.controller
+                && self.state.cards[grantor].statics.iter().any(|ability| {
+                    matches!(
+                    ability,
+                    StaticAbility::GrantsAnyColorManaAbility(predicate)
+                        if self.permanent_matches_predicate(permanent, predicate)
+                    )
+                })
+            {
+                abilities.push(ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::any_color_mana()],
+                    ..Default::default()
+                });
+            }
+        }
+        if let Some(effect) = self.gained_land_type_mana(permanent, &basis.added_subtypes, is_land)
+        {
+            abilities.push(ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![effect],
+                ..Default::default()
+            });
+        }
+    }
+
+    /// A land with a basic land type has "{T}: Add [its color]" (CR 305.6).
+    /// Printed types already carry that ability; types gained until end of
+    /// turn (Energybending) add one ability choosing among their colors.
+    fn gained_land_type_mana(
+        &self,
+        permanent: PermanentId,
+        added: &[&str],
+        is_land: bool,
+    ) -> Option<Effect> {
+        let source = self.state.permanents[permanent].as_ref()?;
+        if added.is_empty() || !is_land {
+            return None;
+        }
+        let card = &self.state.cards[source.card];
+        let colors: Vec<Mana> = BASIC_LAND_TYPES
+            .iter()
+            .filter(|(name, _)| added.contains(name) && !card.has_subtype(name))
+            .map(|(_, mana)| Mana::parse(mana))
+            .collect();
+        match colors.as_slice() {
+            [] => None,
+            [mana] => Some(Effect::AddMana {
+                mana: mana.clone(),
+                until_end_of_combat: false,
+            }),
+            _ => Some(Effect::mana_choice(colors)),
+        }
     }
 }

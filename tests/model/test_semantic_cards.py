@@ -28,7 +28,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     obs = tensors(space, before)
@@ -42,7 +42,9 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     # The outside rows otherwise have identical bounded features. Their
     # distinct executable programs must affect actual retrieval scores.
     assert len(set(logits[0, take].detach().tolist())) == 3
-    logits[0, take[0]].backward()
+    # Sum the take logits: at this width a single logit can sit at a dead
+    # activation and carry no gradient on its own.
+    logits[0, take].sum().backward()
     assert agent.semantic_cards.token_embedding.weight.grad.abs().sum() > 0
 
     retrieval = contract.frame.find_verb("learn_take_lesson")
@@ -69,7 +71,7 @@ def test_semantic_policy_rejects_unadmitted_definition(learn_root):  # noqa: F81
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     actor = SemanticDecisionContract.from_env(learn_root).frame.actor

@@ -1,12 +1,11 @@
 //! CR 611 / 613: continuous effects from resolved spells and abilities are
 //! records on `GameState::effects`. Layer 6 applies them by timestamp
 //! (CR 613.7), each duration ends at its boundary (CR 514.2, CR 400.7), and
-//! the records are journaled and hashed like the rest of the match state.
+//! the records are hashed and forked like the rest of the match state.
 
 use managym::{
     agent::action::ActionSpaceKind,
     flow::turn::StepKind,
-    search_state::{BranchDriver, ClonePlusUndoDriver},
     state::{
         card::Keywords,
         effect::{Affected, EffectDuration, Modification},
@@ -55,14 +54,14 @@ fn cr_613_7_a_grant_later_than_ability_loss_applies_and_an_earlier_one_does_not(
     let (mut later_grant, ogre) = ogre_scenario();
     until_end_of_turn(&mut later_grant, ogre, Modification::LoseAllAbilities);
     until_end_of_turn(&mut later_grant, ogre, flying());
-    assert!(later_grant.game().has_lost_abilities(ogre));
-    assert!(later_grant.game().effective_keywords(ogre).flying);
+    assert!(later_grant.game().characteristics(ogre).abilities_lost);
+    assert!(later_grant.game().characteristics(ogre).keywords.flying);
 
     let (mut earlier_grant, ogre) = ogre_scenario();
     until_end_of_turn(&mut earlier_grant, ogre, flying());
     until_end_of_turn(&mut earlier_grant, ogre, Modification::LoseAllAbilities);
-    assert!(earlier_grant.game().has_lost_abilities(ogre));
-    assert!(!earlier_grant.game().effective_keywords(ogre).flying);
+    assert!(earlier_grant.game().characteristics(ogre).abilities_lost);
+    assert!(!earlier_grant.game().characteristics(ogre).keywords.flying);
 }
 
 /// CR 514.2: "until end of turn" records end in the cleanup step; the
@@ -79,11 +78,11 @@ fn cr_514_2_an_end_of_turn_record_ends_at_cleanup() {
         },
     );
     indefinitely(&mut s, ogre, flying());
-    assert_eq!(s.game().effective_pt(ogre), (4, 3));
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 3));
     assert_eq!(s.game().effects_on(ogre).count(), 2);
 
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert_eq!(s.game().effective_pt(ogre), (2, 2));
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
     let remaining: Vec<_> = s
         .game()
         .effects_on(ogre)
@@ -103,7 +102,7 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     let (mut s, ogre) = ogre_scenario();
     indefinitely(&mut s, ogre, flying());
     let old = s.game().affected_permanent(ogre).unwrap();
-    assert!(s.game().effective_keywords(ogre).flying);
+    assert!(s.game().characteristics(ogre).keywords.flying);
 
     let card = card_of(&s, ogre);
     s.game_mut().move_card(card, ZoneType::Hand);
@@ -112,20 +111,19 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     assert_ne!(s.game().affected_permanent(returned), Some(old));
     assert!(s.game().state.effects.is_empty());
     assert_eq!(s.game().effects_on(returned).count(), 0);
-    assert!(!s.game().effective_keywords(returned).flying);
+    assert!(!s.game().characteristics(returned).keywords.flying);
 }
 
-/// Records are journaled: rolling back to a mark removes a record applied
-/// after it and restores records a zone change ended after it.
+/// Records are match state: restoring a fork snapshot removes a record
+/// applied after it and restores records a zone change ended after it.
 #[test]
-fn rollback_restores_continuous_effect_records_and_the_state_hash() {
+fn fork_restore_restores_continuous_effect_records_and_the_state_hash() {
     let (s, ogre) = ogre_scenario();
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(s.game());
+    let mut branch = s.game().clone();
     let effects = branch.state.effects.clone();
     let hash = branch.state.deterministic_hash();
 
-    let mark = driver.mark(&mut branch);
+    let mark = branch.clone();
     let affected = branch.affected_permanent(ogre).unwrap();
     branch.apply_continuous(
         None,
@@ -136,10 +134,10 @@ fn rollback_restores_continuous_effect_records_and_the_state_hash() {
     );
     assert_ne!(branch.state.effects, effects);
     assert_ne!(branch.state.deterministic_hash(), hash);
-    driver.rollback(&mut branch, mark);
+    branch = mark;
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
-    assert!(!branch.effective_keywords(ogre).flying);
+    assert!(!branch.characteristics(ogre).keywords.flying);
 
     branch.apply_continuous(
         None,
@@ -150,14 +148,14 @@ fn rollback_restores_continuous_effect_records_and_the_state_hash() {
     );
     let effects = branch.state.effects.clone();
     let hash = branch.state.deterministic_hash();
-    let mark = driver.mark(&mut branch);
+    let mark = branch.clone();
     let card = branch.state.permanents[ogre].as_ref().unwrap().card;
     branch.move_card(card, ZoneType::Hand);
     assert!(branch.state.effects.is_empty());
-    driver.rollback(&mut branch, mark);
+    branch = mark;
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
-    assert!(branch.effective_keywords(ogre).flying);
+    assert!(branch.characteristics(ogre).keywords.flying);
 }
 
 /// Equal games with equal records hash equally; the records are part of the

@@ -4,7 +4,7 @@ Admission retains original bytes, validates ordinary policy/world contracts and
 the unchanged learning recipe, and derives absolute counters from the producer.
 This is a new segment with fresh game/RNG streams, never process recovery. A
 declared setup transfer lets the segment continue on different decks from the
-same semantic pack (a curriculum); nothing else about the recipe may change.
+same world (a curriculum); nothing else about the recipe may change.
 
 A parent that was interrupted before exporting its final state can still be
 continued from one of its monitoring exports (`monitoring_update`): the raw
@@ -157,12 +157,14 @@ def validate_adam(optimizer: torch.optim.Adam) -> None:
 
 
 def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
-    """A deck switch stays inside the agent's semantic pack and changes decks."""
-    pack = regime.agent.semantic_pack
+    """A deck switch stays inside the agent's world and changes decks."""
+    world = regime.agent.world
+    if regime.match is None:
+        raise ValueError("setup transfer requires an authored match, not a deck source")
     if source == regime.match:
         raise ValueError("setup transfer must change the match")
-    if source.content_pack != pack or regime.match.content_pack != pack:
-        raise ValueError("setup transfer must stay inside the agent's semantic pack")
+    if source.world != world or regime.match.world != world:
+        raise ValueError("setup transfer must stay inside the agent's world")
 
 
 def admit_learning_state(
@@ -210,6 +212,7 @@ def admit_learning_state(
         source.regime.world != regime.world
         or source.regime.agent != regime.agent
         or source.regime.observation != regime.observation
+        or source.regime.deck_source != regime.deck_source
         or source.regime.match != source_match
         or source.regime.schedule_clock != regime.schedule_clock
     ):

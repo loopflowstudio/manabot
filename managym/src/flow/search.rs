@@ -31,7 +31,7 @@ impl Game {
     /// Replace the game RNG with a fresh seeded stream (for reproducible
     /// playouts from cloned states).
     pub fn reseed(&mut self, seed: u64) {
-        self.state.rng = ChaCha8Rng::seed_from_u64(seed);
+        *self.state.rng_mut() = ChaCha8Rng::seed_from_u64(seed);
     }
 
     /// Sample one world consistent with `perspective`'s observation.
@@ -53,7 +53,6 @@ impl Game {
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
-        self.journal_zones();
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
         residual.extend(self.foretold_cards(opponent));
         residual.sort_unstable_by_key(|card| card.0);
@@ -100,7 +99,7 @@ impl Game {
                                 | Decision::SearchBasicLand { .. }
                                 | Decision::SearchLibraryToHand { .. }
                                 | Decision::SearchDistinctLands { .. }
-                                | Decision::CastWithoutPaying { .. }
+                                | Decision::CastDuringResolution { .. }
                         )
             });
         if refresh {
@@ -199,7 +198,7 @@ impl Game {
             if action_count == 0 {
                 return Err(AgentError("random_playout: empty action space".to_string()));
             }
-            let index = self.state.rng.gen_range(0..action_count);
+            let index = self.state.rng_mut().gen_range(0..action_count);
             self.step(index)?;
             steps += 1;
         }

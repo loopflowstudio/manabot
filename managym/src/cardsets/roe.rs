@@ -1,5 +1,5 @@
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
     mana::{Mana, ManaCost},
 };
@@ -18,10 +18,13 @@ fn prophetic_prism() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}")),
         types: CardTypes::new([CardType::Artifact]),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,

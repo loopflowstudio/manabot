@@ -4,7 +4,7 @@ use managym::{
     agent::action::{ActionSpaceKind, ActionType},
     flow::{
         event::GameEvent,
-        trigger::{DelayedTrigger, DelayedTriggerKind},
+        trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::StepKind,
     },
     state::{
@@ -245,6 +245,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
     assert_ne!(first, second);
 
     let ability = Ability::Triggered {
+        intervening_if: None,
         condition: TriggerCondition::Dies {
             subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
         },
@@ -319,9 +320,15 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
     assert_ne!(old_ref, new_ref);
 
     s.game_mut().state.delayed_triggers.push(DelayedTrigger {
-        watched: old_ref,
+        event: DelayedTriggerEvent::Leaves {
+            watched: old_ref,
+            or_exiled: true,
+        },
         controller: PlayerId(0),
-        kind: DelayedTriggerKind::ReturnToBattlefieldTapped,
+        source_card: card,
+        source_ref: Some(old_ref),
+        effects: vec![Effect::ReturnSourceToBattlefieldTapped],
+        this_turn: false,
     });
     s.game_mut().state.permanents[new_permanent]
         .as_mut()

@@ -31,7 +31,6 @@ from manabot.env.replay import (
     run_bounded_replay,
 )
 from manabot.infra.config import MatchConfig
-from manabot.training.rollout.self_play import deck_identity
 import managym
 
 GameOutcome = Literal[
@@ -65,6 +64,9 @@ class GameAttempt(BaseModel):
     seed: int
     seat: int
     matchup: MatchConfig
+    decks_digest: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     outcome: GameOutcome
     actions: list[int] = []
     error_class: str | None = None
@@ -99,8 +101,8 @@ class GameErrorState(BaseModel):
         match = attempt.matchup
         cell = ":".join(
             (
-                deck_identity(match.hero_deck, match.hero_sideboard),
-                deck_identity(match.villain_deck, match.villain_sideboard),
+                managym.Deck(match.hero_deck, match.hero_sideboard).identity,
+                managym.Deck(match.villain_deck, match.villain_sideboard).identity,
                 str(attempt.seat),
             )
         )

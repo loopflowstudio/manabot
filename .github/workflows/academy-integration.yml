@@ -49,7 +49,7 @@ jobs:
         run: uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
 
       - name: Elemental roster admission
-        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q
+        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q
 
       - name: Elemental local play contracts
         run: |

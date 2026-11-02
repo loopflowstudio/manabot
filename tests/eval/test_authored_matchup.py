@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 
 from manabot.eval.match import play_cell
-from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.replay import read_trace
 from managym import WORLD_VERSION
+from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -32,7 +32,7 @@ def test_authored_matrix_has_four_roles_and_exact_native_selection() -> None:
         (matrix.role_b, matrix.role_b),
     ]
     for leg in range(8):
-        assert matrix.match(leg).content_pack == matrix.pack_key
+        assert matrix.match(leg).world == matrix.pack_key
     with pytest.raises(ValueError, match="distinct"):
         AuthoredMatchup(pack_key="anything", role_a="same", role_b="same")
     with pytest.raises(ValueError, match="between"):
@@ -47,9 +47,7 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
     tmp_path: Path,
 ) -> None:
     matrix = roster()
-    contract = EvaluationContract.model_validate_json(
-        (ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text()
-    )
+    contract = arena_fixture()
     key = contract.key.model_copy(
         update={"world": WORLD_VERSION, "content_suite": matrix.content_suite}
     )
@@ -80,7 +78,7 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
         assert row["seat_decks"] == list(matrix.decks(row["leg"]))
         assert row["player_a_seat"] == row["leg"] % 2
     for game in read_trace(Path(trace["path"])):
-        assert game["match_hypers"]["content_pack"] == matrix.pack_key
+        assert game["match_hypers"]["world"] == matrix.pack_key
     with pytest.raises(ValueError, match="suite differs"):
         play_cell(
             key=contract.key,

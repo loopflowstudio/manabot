@@ -273,18 +273,6 @@ class ExactRangePlayer:
         return list(self.completed_replays)
 
 
-class UniformRangePlayer(ExactRangePlayer):
-    def __init__(
-        self, sims: int, *, likelihood: ActionLikelihood, **kwargs: Any
-    ) -> None:
-        super().__init__(
-            sims,
-            likelihood=likelihood,
-            sampling=RangeSampling.COMPATIBLE_PRIOR,
-            **kwargs,
-        )
-
-
 def _quantile_ms(values: np.ndarray, quantile: float) -> float | None:
     return float(np.quantile(values, quantile)) * 1000 if values.size else None
 

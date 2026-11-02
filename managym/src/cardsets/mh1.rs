@@ -21,7 +21,9 @@ fn fists_of_flame() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{R}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::DrawCards { count: 1 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
             Effect::until_end_of_turn(
                 AffectedSpec::Target(TargetSpec::Creature),
                 Modification::ModifyPt {
@@ -56,7 +58,7 @@ fn prismatic_vista() -> CardDefinition {
             sacrifice_source: true,
             effects: vec![Effect::SearchBasicLand {
                 subtype: None,
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped: false,
                 untap_if_lands: None,
                 bottom_source: false,

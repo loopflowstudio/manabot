@@ -9,6 +9,8 @@ mod support;
 mod afr;
 #[path = "cards/blb.rs"]
 mod blb;
+#[path = "cards/definitions.rs"]
+mod definitions;
 #[path = "cards/eld.rs"]
 mod eld;
 #[path = "cards/ice.rs"]

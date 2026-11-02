@@ -107,7 +107,7 @@ are already included in completion tokens and must not be charged twice. Cache
 reads/writes were zero. The unchanged renderer puts varying state early, so a
 separately versioned, viewer-safe stable-prefix layout remains a useful next
 experiment; this batch establishes no cache savings. See the
-[adapter and cache discussion](../docs/openrouter.md).
+[adapter and cache discussion](../docs/llm.md#hosted-models-openrouter).
 
 ## Retrieve the evidence
 
@@ -147,5 +147,5 @@ The first ten games are under `haiku-ten/game-00` through `game-09`; the other
 90 are under `haiku-hundred/game-010` through `game-099`, beneath the extracted
 `.runs/`. Original orchestration scripts retain those historical paths and are
 not a portable campaign API. Inspecting cached evidence makes no hosted requests.
-For new paid games use the [current runner](../docs/openrouter.md), a new output
+For new paid games use the [current runner](../docs/llm.md#hosted-models-openrouter), a new output
 directory and explicit model, checkpoint, match and cost limits.

@@ -14,8 +14,7 @@ impl Game {
     /// suspend stabilization. Completing that choice re-enters this routine
     /// through the ordinary action boundary before priority can be granted.
     pub(crate) fn stabilize_before_priority(&mut self) -> Option<ActionSpace> {
-        self.journal_priority();
-        self.state.priority.sba_done = false;
+        self.state.priority_mut().sba_done = false;
 
         loop {
             // CR 603.3b: finish this placement round before another SBA or
@@ -34,7 +33,6 @@ impl Game {
             // again before putting waiting triggers on the stack.
             if self.perform_state_based_actions() {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.journal_turn();
                     self.state.turn.cleanup_priority = true;
                 }
                 if self.is_game_over() {
@@ -55,7 +53,6 @@ impl Game {
             let had_waiting_triggers = !self.state.pending_triggers.is_empty();
             if had_waiting_triggers {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.journal_turn();
                     self.state.turn.cleanup_priority = true;
                 }
                 if let Some(choice) = self.flush_triggers() {
@@ -63,9 +60,7 @@ impl Game {
                 }
                 continue;
             }
-
-            self.journal_priority();
-            self.state.priority.sba_done = true;
+            self.state.priority_mut().sba_done = true;
             return None;
         }
     }

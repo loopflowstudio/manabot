@@ -1,7 +1,0 @@
-flow: code
-area:
-  - academy/
-  - manabot/env/
-  - managym/src/
-  - tests/
-direction: [clarity]

@@ -89,19 +89,22 @@ impl Game {
         }
     }
 
-    /// Battlefield permanents `player` controls whose abilities are active.
-    fn active_permanent_cards(&self, player: PlayerId) -> impl Iterator<Item = &Card> {
-        self.battlefield_permanents(player)
-            .into_iter()
-            .filter(|&id| !self.has_lost_abilities(id))
-            .filter_map(|id| self.state.permanents[id].as_ref())
-            .map(|permanent| &self.state.cards[permanent.card])
+    /// Whether a battlefield permanent `player` controls satisfies `has`
+    /// with its abilities active. Checks the card before its characteristics.
+    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&Card) -> bool) -> bool {
+        self.battlefield_permanents(player).into_iter().any(|id| {
+            self.state.permanents[id]
+                .as_ref()
+                .is_some_and(|permanent| has(&self.state.cards[permanent.card]))
+                && !self.characteristics(id).abilities_lost
+        })
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
-        self.active_permanent_cards(player)
-            .any(|card| card.has_static(&StaticAbility::LookAtLibraryTop))
+        self.active_permanent_has(player, |card| {
+            card.has_static(&StaticAbility::LookAtLibraryTop)
+        })
     }
 
     /// The top card of `player`'s library, when a permanent they control
@@ -111,7 +114,7 @@ impl Game {
         let card = self.library_top_card(player)?;
         let definition = &self.state.cards[card];
         (!definition.types.is_land()
-            && self.active_permanent_cards(player).any(|source| {
+            && self.active_permanent_has(player, |source| {
                 source
                     .library_top_casting()
                     .is_some_and(|predicate| predicate.matches_card(definition))
@@ -152,7 +155,7 @@ impl Game {
         let card_ref = &self.state.cards[card];
         let mut cost = if cast.free {
             ManaCost::default()
-        } else if self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
+        } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             card_ref.mana_cost.clone()?
         } else {
             self.zone_cast_cost(player, card)?
@@ -236,7 +239,6 @@ impl Game {
         }
 
         // CR 305.2 — Track one normal land play per turn.
-        self.journal_turn();
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
 
@@ -286,15 +288,17 @@ impl Game {
         self.begin_cast(player, card, CastChoices::default())
     }
 
-    /// Cast `card` without paying its mana cost while an effect resolves
-    /// (CR 608.2g): its timing and zone permissions don't apply.
-    pub(crate) fn begin_free_cast(
+    /// Cast `card` while an effect resolves (CR 608.2g), paying its costs
+    /// or not: its timing and zone permissions don't apply.
+    pub(crate) fn begin_resolution_cast(
         &mut self,
         player: PlayerId,
         card: CardId,
+        paid: bool,
     ) -> Result<(), AgentError> {
         let cast = CastChoices {
-            free: true,
+            free: !paid,
+            resolving: paid,
             ..CastChoices::default()
         };
         self.begin_cast(player, card, cast)
@@ -338,6 +342,13 @@ impl Game {
         let Some(cost) = self.effective_spell_cost(player, card, cast, targets) else {
             return false;
         };
+        if !cast.kicked
+            && self.state.cards[card]
+                .life_alternative()
+                .is_some_and(|life| self.state.players[player.0].life < life as i32)
+        {
+            return false;
+        }
         let waterbend = self
             .cast_waterbend_generic(player, card, cast)
             .min(cost.generic());
@@ -400,6 +411,10 @@ impl Game {
         if self.state.cards[card].optional_cost().is_some()
             && self.can_pay_cast(player, card, kicked)
         {
+            // Only the mana is payable: "pay 5 life or pay {2}" at low life.
+            if !self.can_pay_cast(player, card, cast) {
+                return self.begin_mode_selection(player, card, kicked);
+            }
             self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
             return Ok(());
         }
@@ -812,7 +827,9 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        self.journal_turn();
+        if let (false, Some(life)) = (cast.kicked, self.state.cards[card].life_alternative()) {
+            self.change_life(player, -(life as i32));
+        }
         self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.
         self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, cast);
@@ -820,22 +837,31 @@ impl Game {
             card,
             targets: targets.clone(),
         });
-        // Ward (CR 702.21) — targeted permanents see the spell that
-        // targeted them.
+        self.emit_permanents_targeted(&targets, Target::StackSpell(card), player);
+        Ok(())
+    }
+
+    /// Ward (CR 702.21) — each targeted permanent sees, once, the spell or
+    /// ability that targeted it as that object is put on the stack.
+    pub(crate) fn emit_permanents_targeted(
+        &mut self,
+        targets: &[Target],
+        by: Target,
+        by_controller: PlayerId,
+    ) {
         let mut notified = std::collections::HashSet::new();
         for target in targets {
-            if !notified.insert(target) {
+            if !notified.insert(*target) {
                 continue;
             }
-            if let Target::Permanent(permanent) = target {
+            if let Target::Permanent(permanent) = *target {
                 self.emit(GameEvent::PermanentTargeted {
                     permanent,
-                    spell: card,
-                    spell_controller: player,
+                    by,
+                    by_controller,
                 });
             }
         }
-        Ok(())
     }
 
     pub(crate) fn activate_ability_action(
@@ -862,7 +888,8 @@ impl Game {
         }
 
         let Some(ability) = self
-            .activated_abilities_for(permanent_id)
+            .characteristics(permanent_id)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -927,7 +954,8 @@ impl Game {
         ability_index: usize,
     ) -> Vec<u8> {
         let Some(ability) = self
-            .activated_abilities_for(permanent)
+            .characteristics(permanent)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -1041,7 +1069,6 @@ impl Game {
         if !ability.exhaust && !ability.once_each_turn {
             return;
         }
-        self.journal_permanent(permanent);
         if let Some(permanent) = self.state.permanents[permanent].as_mut() {
             permanent.record_activation(ability_index, ability);
         }
@@ -1056,7 +1083,8 @@ impl Game {
     ) -> Option<ActivatedAbilityDefinition> {
         match source {
             ActivationSource::Permanent(permanent) => self
-                .activated_abilities_for(permanent)
+                .characteristics(permanent)
+                .activated_abilities
                 .get(ability_index)
                 .cloned(),
             ActivationSource::Card(card) => {
@@ -1148,12 +1176,12 @@ impl Game {
     /// Whether the permanents among `targets` have a creature type in common
     /// ("that share a creature type").
     fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
-        let mut common: Option<Vec<&str>> = None;
+        let mut common: Option<Vec<String>> = None;
         for target in targets {
             let Target::Permanent(id) = target else {
                 return false;
             };
-            let types = self.creature_types(*id);
+            let types = self.characteristics(*id).creature_types.clone();
             common = Some(match common {
                 None => types,
                 Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
@@ -1239,6 +1267,81 @@ impl Game {
     }
 
     fn begin_activation_payment(
+        &mut self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
+        x: u8,
+    ) -> Result<(), AgentError> {
+        let ability = self
+            .activation_ability(source, ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?;
+        if ability.tap_cost.is_some() {
+            self.pending_choice = Some(PendingChoice::TapPayment {
+                player,
+                source,
+                ability_index,
+                targets,
+            });
+            return Ok(());
+        }
+        self.continue_activation_payment(player, source, ability_index, targets, x)
+    }
+
+    /// The untapped permanents `player` controls that can pay `ability`'s
+    /// tap cost.
+    pub(crate) fn tap_cost_candidates(
+        &self,
+        player: PlayerId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Vec<PermanentId> {
+        let Some(predicate) = &ability.tap_cost else {
+            return Vec::new();
+        };
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| {
+                self.state.permanents[*id]
+                    .as_ref()
+                    .is_some_and(|permanent| !permanent.tapped)
+                    && self.permanent_matches_predicate(*id, predicate)
+            })
+            .collect()
+    }
+
+    /// Tap the chosen permanent for the pending tap cost, then pay the rest.
+    pub(crate) fn tap_payment_action(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::TapPayment {
+            player: payer,
+            source,
+            ability_index,
+            targets,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no tap payment pending".into()));
+        };
+        let ability = self
+            .activation_ability(source, ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?;
+        let tapped = self.state.card_to_permanent[card]
+            .filter(|id| self.tap_cost_candidates(player, &ability).contains(id));
+        let (true, Some(tapped)) = (payer == player, tapped) else {
+            return Err(AgentError(
+                "tap cost must be an untapped permanent you control".into(),
+            ));
+        };
+        self.pending_choice = None;
+        self.tap_permanent(tapped, false);
+        self.continue_activation_payment(player, source, ability_index, targets, 0)
+    }
+
+    /// The activation's remaining costs once any tap cost is paid.
+    fn continue_activation_payment(
         &mut self,
         player: PlayerId,
         source: ActivationSource,
@@ -1495,7 +1598,7 @@ impl Game {
                 if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
                     spell.mode = mode;
                 }
-                self.state.priority.on_non_pass_action(self.active_player());
+                self.restart_priority_round();
                 Ok(())
             }
             Payment::Activation {
@@ -1538,8 +1641,10 @@ impl Game {
                     && self.state.permanents[id]
                         .as_ref()
                         .is_some_and(|permanent| !permanent.tapped)
-                    && self.permanent_is_creature(id)
-                    && self.effective_power(id) > 0
+                    && {
+                        let characteristics = self.characteristics(id);
+                        characteristics.is_creature && characteristics.power > 0
+                    }
             })
             .collect()
     }
@@ -1547,7 +1652,7 @@ impl Game {
     pub(crate) fn crew_power_available(&self, player: PlayerId, vehicle: PermanentId) -> i32 {
         self.crew_candidates(player, vehicle)
             .into_iter()
-            .map(|id| self.effective_power(id))
+            .map(|id| self.characteristics(id).power)
             .sum()
     }
 
@@ -1573,7 +1678,7 @@ impl Game {
         let crew = self.state.card_to_permanent[card]
             .filter(|id| self.crew_candidates(player, permanent).contains(id))
             .ok_or_else(|| AgentError("creature cannot crew".into()))?;
-        let remaining_power = remaining_power - self.effective_power(crew);
+        let remaining_power = remaining_power - self.characteristics(crew).power;
         self.tap_permanent(crew, false);
         if remaining_power > 0 {
             self.pending_choice = Some(PendingChoice::Crew {
@@ -1640,7 +1745,8 @@ impl Game {
         else {
             return None;
         };
-        self.activated_abilities_for(*source)
+        self.characteristics(*source)
+            .activated_abilities
             .get(*ability_index)
             .is_some_and(|ability| ability.tap_source)
             .then_some(*source)
@@ -1786,7 +1892,8 @@ impl Game {
         let attached = permanent.attached_to;
         let source_definition_id = self.state.cards[source_card].definition_id;
         let Some(ability) = self
-            .activated_abilities_for(permanent_id)
+            .characteristics(permanent_id)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -1807,6 +1914,7 @@ impl Game {
         }
 
         let id = self.state.id_gen.next_id();
+        self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
             controller: player,
@@ -1819,7 +1927,7 @@ impl Game {
             x,
             granted_by: ability.granted_by,
         }));
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
         Ok(())
     }
 
@@ -1845,6 +1953,7 @@ impl Game {
             .current_object_ref(card)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen.next_id();
+        self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
             controller: player,
@@ -1857,7 +1966,7 @@ impl Game {
             x: 0,
             granted_by: None,
         }));
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
         Ok(())
     }
 

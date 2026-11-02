@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def recipe() -> TrainingRegime:
     value = direct_self_play()
     value.world = WORLD_VERSION
-    value.agent.semantic_pack = "ur-lessons-vs-gw-allies"
+    value.agent.world = "ur-lessons-vs-gw-allies"
     return value
 
 
@@ -418,3 +418,14 @@ def test_legacy_learning_discriminator_is_rejected() -> None:
         DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
     rule = DampedPolicyLearning(gradient="damped_policy")
     assert rule.model_dump()["gradient"] == "damped_policy"
+
+
+def test_frozen_regimes_read_their_pack_selectors_as_world() -> None:
+    value = json.loads(
+        (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_text()
+    )
+    assert value["match"]["content_pack"] == "elemental-world-v2"
+    regime = TrainingRegime.model_validate(value)
+    assert regime.match is not None
+    assert regime.match.world == regime.agent.world == "elemental-world-v2"
+    assert regime.match.model_dump(mode="json")["world"] == "elemental-world-v2"

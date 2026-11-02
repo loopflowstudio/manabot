@@ -30,12 +30,12 @@ impl Game {
     fn legend_groups(&self) -> Vec<Vec<CardId>> {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<&str, Vec<CardId>>::new();
+            let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
             for id in self.battlefield_permanents(player) {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                 if self.permanent_is_legendary(id) {
                     names
-                        .entry(self.permanent_name(id))
+                        .entry(self.characteristics(id).name.clone())
                         .or_default()
                         .push(permanent.card);
                 }
@@ -109,12 +109,12 @@ impl Game {
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
             // is a 0/0 and dies).
-            let zero_toughness = self.permanent_is_creature(permanent_id)
-                && self.effective_toughness(permanent_id) <= 0;
+            let characteristics = self.characteristics(permanent_id);
+            let zero_toughness = characteristics.is_creature && characteristics.toughness <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
             let destroy = !zero_toughness
-                && self.has_lethal_damage(permanent_id)
-                && !self.effective_keywords(permanent_id).indestructible;
+                && self.has_lethal_damage(permanent_id, &characteristics)
+                && !characteristics.keywords.indestructible;
             let legend_loser = legend_losers.contains(&permanent.card);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.
@@ -177,7 +177,6 @@ impl Game {
             })
             .collect();
         for permanent_id in detached {
-            self.journal_permanent(permanent_id);
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
             }
@@ -194,12 +193,12 @@ impl Game {
             }
             let card_id = CardId(index);
             match self.state.zones.zone_of(card_id) {
-                Some(ZoneType::Battlefield) | None => {}
+                // A spell copy is a token card while on the stack (CR 704.5e).
+                Some(ZoneType::Battlefield | ZoneType::Stack) | None => {}
                 Some(_) => tokens_to_remove.push((card_id, card.owner)),
             }
         }
         for (card_id, owner) in tokens_to_remove {
-            self.journal_zone_move(card_id);
             let from = self.state.zones.zone_of(card_id);
             self.state.zones.remove_card(card_id);
             self.capture_card_move(card_id, from, None, owner);

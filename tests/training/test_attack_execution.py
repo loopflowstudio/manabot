@@ -31,7 +31,7 @@ def _plan(tmp_path: Path) -> AttackPlan:
     match = selected_match()
     space = ObservationSpace()
     config = ModelConfig(
-        hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+        hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
     )
     target = tmp_path / "target.pt"
     torch.manual_seed(17)

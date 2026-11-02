@@ -5,10 +5,11 @@ Source identities bind relative paths as well as bytes; relocating source change
 identity and never grants automatic admission to an older execution.
 """
 
+from collections.abc import Iterable, Mapping
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from managym.experience import UNVERSIONED_CONTENT_HASH
 
@@ -128,6 +129,20 @@ def runtime_fingerprints(
         "matchup_sha256": canonical_sha256(matchup.model_dump()),
         "matchup": matchup.model_dump(),
     }
+
+
+def authored_matchup_sha256(identities: Mapping[str, Any], consumer: str) -> str:
+    """The authored setup a run trained on, for consumers registered against one.
+
+    A deck run draws from a source (`deck_source_sha256`) and has no single
+    matchup; such consumers reject it rather than read a representative pair.
+    """
+    if "deck_source_sha256" in identities:
+        raise ValueError(
+            f"{consumer} requires an authored matchup; this run drew decks from "
+            f"source {identities['deck_source_sha256']}"
+        )
+    return identities["matchup_sha256"]
 
 
 def validate_runtime_fingerprints(

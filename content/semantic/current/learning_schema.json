@@ -13,6 +13,7 @@
   "object_roles": {
     "agent_card": 1,
     "agent_sideboard": 4,
+    "delayed_trigger": 5,
     "opponent_card": 2,
     "stack_ability": 3
   },
@@ -23,7 +24,7 @@
     "triggered": 1,
     "triggered_mana": 3
   },
-  "schema_version": 9,
+  "schema_version": 10,
   "token_kinds": {
     "boolean": 5,
     "definition_ref": 7,

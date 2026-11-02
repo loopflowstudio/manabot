@@ -17,7 +17,8 @@ defines, with definition IDs, keys, Scryfall ids, world/content identity and
 "lea"])` narrows it to TLA cards and basics for deck generation or validation.
 Rust consumers use `cards::content_pool`, `pool_content` and
 `world::set_cards`. Decklist Task **f871a8** owns construction policy, native
-`admit_deck`, input parsing and consumer entry points.
+`admit_deck`/`check_decks` (against the world, never a pack), input parsing and
+consumer entry points.
 
 A defined TLA card is supported unless `tla::INCOMPLETE` marks it. TLA cards not
 yet defined do not exist in this world; their batch (T2–T7) authors them. The 81

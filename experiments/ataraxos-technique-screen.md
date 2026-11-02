@@ -32,12 +32,12 @@ post-iteration evaluation EMA. Its setup estimator and compound structure are
 separate from move learning. Source experiments motivate candidates; they do
 not establish their MTG benefit.
 
-The [fidelity ledger](../docs/ataraxos.md#fidelity-table) owns implemented equations
+The [fidelity ledger](../docs/training.md#ataraxos) owns implemented equations
 and unresolved conventions. [Omitted controls](ataraxos-omitted-controls.md),
-[compound contracts](../docs/training-regimes.md#compound-decisions),
-[sampler reporting](../docs/belief-sampler.md), [local search](../docs/local-policy-search.md),
-[tactical diagnostics](../docs/checkpoint-scenarios.md) and
-[recovery/calibration](../docs/training-recovery.md) cover delivered ETU-92–98/100.
+[compound contracts](../docs/training.md#regimes-and-stages),
+[sampler reporting](../docs/search-and-beliefs.md#belief-sampler), [local search](../docs/search-and-beliefs.md#local-policy-search),
+[tactical diagnostics](../docs/evaluation.md#checkpoint-scenarios) and
+[recovery/calibration](../docs/training.md#recovery) cover delivered ETU-92–98/100.
 This inventory supersedes their prospective research ownership for learning-rule,
 credit and systems screens only. Larger belief/search/exploiter studies stay
 with ETU-99. ETU-101 owns W&B; architecture/input studies keep their own ownership.

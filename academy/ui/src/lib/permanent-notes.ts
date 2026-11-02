@@ -4,7 +4,8 @@ import type { ContinuousEffect, CopyEffect, PermanentState } from './types';
 // One continuous-effect record, in the words the LLM text uses
 // (`manabot/semantic/text_observation.py`, `effect_phrase`).
 export function effectNote(effect: ContinuousEffect): string {
-  const until = effect.duration === 'EndOfTurn' ? 'until end of turn: ' : '';
+  const until = effect.duration === 'EndOfTurn' ? 'until end of turn: '
+    : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: " : '';
   return `${until}${modificationPhrase(effect)}${effect.source ? ` (${effect.source})` : ''}`;
 }
 
@@ -36,12 +37,22 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return `firebending ${effect.amount}`;
     case 'CantBeBlocked':
       return "can't be blocked";
+    case 'CantBlock':
+      return "can't block";
+    case 'DoesntUntap':
+      return "doesn't untap during its controller's untap step";
+    case 'LoseKeywords':
+      return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
     case 'ExileIfWouldDie':
       return 'exiled instead if it would die';
     case 'KeepUnspentMana':
       return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
     case 'NoMaximumHandSize':
       return 'no maximum hand size';
+    case 'ControlChanged':
+      return `control changed from seat ${(effect.amount ?? 0) + 1}`;
+    case 'ModeChosen':
+      return `mode ${(effect.amount ?? 0) + 1} already chosen`;
     default:
       return effect.modification;
   }

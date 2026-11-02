@@ -14,7 +14,7 @@ use std::{
 
 use super::fixtures;
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, PaymentCost, TriggerCondition, TriggerSubject},
     card::{Card, CardDefId, CardDefinition},
     game_object::{ObjectId, PlayerId},
 };
@@ -159,10 +159,11 @@ impl ContentPack {
         self.digest.take();
         self.public_definitions.take();
         // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
-        // becomes the target of a spell an opponent controls, counter it
-        // unless that player pays [cost]."
+        // becomes the target of a spell or ability an opponent controls,
+        // counter it unless that player pays [cost]."
         if let Some(ward_cost) = definition.ward().cloned() {
             definition.abilities.push(Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::BecomesTargeted {
                     subject: TriggerSubject::This,
                 },
@@ -227,7 +228,8 @@ impl ContentPack {
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": card.keywords, "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
-                            "ward": card.ward(), "is_token": card.is_token,
+                            "ward": card.ward().map(PaymentCost::mana_cost),
+                            "is_token": card.is_token,
                         })
                     })
                     .collect()

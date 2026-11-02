@@ -103,11 +103,15 @@ _STAGES = frozenset(
         "legend_rule",
         "order_triggers",
         "trigger_targets",
+        "trigger_mode",
         "revealed_hand",
         "split_revealed",
         "free_cast",
         "linked_exile",
         "distribute_counters",
+        "keep_creatures",
+        "retarget",
+        "resolution_cast",
         "surveil",
     )
 )
@@ -183,9 +187,11 @@ _OBLIGATIONS = (
     "search lands with different names",
     "split revealed cards",
     "discard from revealed hand",
-    "cast without paying",
+    "cast during resolution",
     "exile linked card",
     "distribute counters",
+    "keep creatures",
+    "retarget",
     "surveil",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
@@ -196,6 +202,14 @@ _PLACEMENT_GROUPS = (
     "placing active player's ability-triggered triggers",
     "placing nonactive player's ability-triggered triggers",
 )
+_DELAYED_EVENTS = (
+    "none",
+    "the watched object to die",
+    "the watched object to die or be exiled",
+    "a creature to die",
+    "the next end step",
+    "its controller's next matching spell",
+)
 
 
 def _frame_decision(kind: int, decision: int) -> str:
@@ -205,6 +219,8 @@ def _frame_decision(kind: int, decision: int) -> str:
         return _enum(_TRIGGER_CLASSES, decision)
     if kind == 9:
         return _enum(_PLACEMENT_GROUPS, decision)
+    if kind == 10:
+        return "waits for " + _enum(_DELAYED_EVENTS, decision)
     raise TextEncodingError(f"frame kind {kind} carries no decision")
 
 
@@ -224,6 +240,20 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
         for label, value in (("mode", mode), ("ability", ability))
         if value is not None
     ]
+
+
+def _turn_history(history: managym.PlayerTurnHistory) -> str:
+    """What a player has done this turn, or empty when nothing yet."""
+    parts = []
+    if history.attacked:
+        parts.append("attacked")
+    if count := history.permanents_sacrificed:
+        parts.append(f"sacrificed {count} permanent{'' if count == 1 else 's'}")
+    if history.land_entered:
+        parts.append("had a land enter under their control")
+    if count := history.cards_drawn:
+        parts.append(f"drew {count} card{'' if count == 1 else 's'}")
+    return "; ".join(parts)
 
 
 def _spending(restricted: managym.RestrictedMana) -> str:
@@ -278,14 +308,6 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     )
 
 
-def _turn_history(history: managym.PlayerTurnHistory) -> str:
-    """What a player has done this turn, or empty when nothing yet."""
-    count = history.permanents_sacrificed
-    if not count:
-        return ""
-    return f"sacrificed {count} permanent{'' if count == 1 else 's'}"
-
-
 def effect_phrase(effect: managym.ContinuousEffect) -> str:
     """What one continuous-effect record does, in the words Academy shows."""
     modification = effect.modification
@@ -297,6 +319,10 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return f"base power/toughness {power}/{toughness}"
     if modification == "AddKeywords":
         return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+    if modification == "LoseKeywords":
+        return "loses " + ", ".join(
+            keyword.replace("_", " ") for keyword in effect.keywords
+        )
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
@@ -305,9 +331,13 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
+        "CantBlock": "can't block",
+        "DoesntUntap": "doesn't untap during its controller's untap step",
         "ExileIfWouldDie": "exiled instead if it would die",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
+        "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
+        "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
     }
     try:
         return phrases[modification]
@@ -473,7 +503,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -486,6 +516,8 @@ class _Renderer:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision:
             details.append(_frame_decision(relation.kind, relation.decision))
+        if relation.kind == 10 and relation.this_turn:
+            details.append("ends at this turn's cleanup if it has not triggered")
         if relation.cost is not None:
             details.append(
                 "remaining cost "
@@ -509,7 +541,8 @@ class _Renderer:
                 f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
-            details.append("trigger context " + self.fact_reference(relation.context))
+            label = "watching" if relation.kind == 10 else "trigger context"
+            details.append(f"{label} {self.fact_reference(relation.context)}")
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)
@@ -725,6 +758,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.dealt_damage_this_turn:
+            parts.append("dealt damage this turn")
         if permanent.copy is not None:
             parts.append(self._copy(permanent.copy))
         parts.extend(f"effect {self._effect(effect)}" for effect in permanent.effects)
@@ -739,7 +774,10 @@ class _Renderer:
 
     def _effect(self, effect: managym.ContinuousEffect) -> str:
         """One continuous-effect record: how long, what, and its source."""
-        until = "until end of turn: " if effect.duration == "EndOfTurn" else ""
+        until = {
+            "EndOfTurn": "until end of turn: ",
+            "WhileYouControlSource": "while its source's controller controls it: ",
+        }.get(effect.duration, "")
         source = (
             f" (from {self.definition(effect.source_registry_key)})"
             if effect.source_registry_key is not None

@@ -2621,6 +2621,11 @@
           "title": "Damage",
           "type": "integer"
         },
+        "dealt_damage_this_turn": {
+          "default": false,
+          "title": "Dealt Damage This Turn",
+          "type": "boolean"
+        },
         "effects": {
           "items": {
             "$ref": "#/$defs/ContinuousEffectView"
@@ -3514,8 +3519,24 @@
     },
     "PlayerTurnHistoryView": {
       "additionalProperties": false,
-      "description": "What one player has done this turn.",
       "properties": {
+        "attacked": {
+          "default": false,
+          "title": "Attacked",
+          "type": "boolean"
+        },
+        "cards_drawn": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Cards Drawn",
+          "type": "integer"
+        },
+        "land_entered": {
+          "default": false,
+          "title": "Land Entered",
+          "type": "boolean"
+        },
         "permanents_sacrificed": {
           "default": 0,
           "maximum": 4294967295,

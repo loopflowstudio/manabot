@@ -32,6 +32,9 @@ pub struct CardPredicate {
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supertype: Option<String>,
+    /// "nonbasic": the card must not have the basic supertype.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub nonbasic: bool,
     /// At least one alternative must match ("artifact or Lesson").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<CardPredicate>,
@@ -67,6 +70,13 @@ impl CardPredicate {
             subtype: Some(subtype.to_string()),
             ..Self::default()
         }
+    }
+
+    /// Whether matching compares power, here or in an alternative.
+    pub fn reads_power(&self) -> bool {
+        self.min_power.is_some()
+            || self.max_power.is_some()
+            || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
     /// Match against a card's printed characteristics.
@@ -108,6 +118,14 @@ impl CardPredicate {
             .supertype
             .as_ref()
             .is_some_and(|s| !card.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
+        {
+            return false;
+        }
+        if self.nonbasic
+            && card
+                .supertypes
+                .iter()
+                .any(|t| t.eq_ignore_ascii_case("basic"))
         {
             return false;
         }

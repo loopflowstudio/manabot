@@ -1,11 +1,11 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use crate::{
     agent::action::Action,
-    flow::{game::Game, undo::JournalStats},
+    flow::game::Game,
     state::{
         ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keywords},
@@ -114,7 +114,9 @@ fn stack(
             targets,
             target_req_indices: indices,
             context: None,
+            player: None,
             inline_effects: Some(effects),
+            x: 0,
         }),
         Entry::Spell => unreachable!(),
     };
@@ -168,7 +170,7 @@ fn pause() -> Effect {
 }
 
 #[test]
-fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo() {
+fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clones() {
     for controller in [PlayerId(0), PlayerId(1)] {
         for entry in ENTRIES {
             let (mut game, victim, _) = fixture(controller);
@@ -191,7 +193,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert!(game.effective_keywords(victim).hexproof);
+            assert!(game.characteristics(victim).keywords.hexproof);
             assert_eq!(game.state.permanents[victim].as_ref().unwrap().damage, 0);
             let space = game.suspended_decision_action_space().unwrap();
             let choice = space
@@ -218,8 +220,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 captured.digest
             );
             let before = game.state.deterministic_hash();
-            game.enable_undo(Arc::new(JournalStats::default()), 608);
-            let mark = game.undo_mark();
+            let root = game.clone();
             game.step(choice).unwrap();
             assert_eq!(
                 game.state.permanents[victim].as_ref().unwrap().damage,
@@ -230,14 +231,11 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
             let after = game.state.deterministic_hash();
             fork.step(choice).unwrap();
             assert_eq!(fork.state.deterministic_hash(), after);
-            game.undo_rollback(mark);
             assert_eq!(
-                game.capture_decision(controller, 0).unwrap().digest,
+                root.capture_decision(controller, 0).unwrap().digest,
                 captured.digest
             );
-            assert_eq!(game.state.deterministic_hash(), before);
-            game.step(choice).unwrap();
-            assert_eq!(game.state.deterministic_hash(), after);
+            assert_eq!(root.state.deterministic_hash(), before);
         }
     }
 }
@@ -463,12 +461,12 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                     vec![
                         Effect::ReturnGraveyardTarget {
                             target: spec.clone(),
-                            tapped_onto_battlefield: false,
+                            to: crate::state::ability::GraveyardReturn::Hand,
                         },
                         pause(),
                         Effect::ReturnGraveyardTarget {
                             target: spec,
-                            tapped_onto_battlefield: false,
+                            to: crate::state::ability::GraveyardReturn::Hand,
                         },
                     ],
                 )],
@@ -647,4 +645,116 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
     if let Ok(path) = std::env::var("RESOLUTION_ELIGIBILITY_EVIDENCE") {
         std::fs::write(path, serde_json::to_string_pretty(&evidence).unwrap()).unwrap();
     }
+}
+
+/// Effect::CounterSpell counters spells only: given an ability as its
+/// object (a trigger context), it leaves the ability on the stack.
+#[test]
+fn counter_spell_cannot_affect_an_ability() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    let source = game
+        .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+        .unwrap();
+    let source_card = game.state.permanents[source].as_ref().unwrap().card;
+    let id = game.state.id_gen.next_id();
+    game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        id,
+        controller: PlayerId(0),
+        source_card,
+        source_ref: game.permanent_object_ref(source),
+        source_lki: None,
+        source_definition_id: game.state.cards[source_card].definition_id,
+        ability_index: 0,
+        targets: Vec::new(),
+        target_req_indices: Vec::new(),
+        context: Some(Target::StackAbility(ability)),
+        player: None,
+        inline_effects: Some(vec![Effect::CounterSpell {
+            target: TargetSpec::Spell,
+        }]),
+        x: 0,
+    }));
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.stack_objects.len(), 1);
+    assert_eq!(game.state.stack_objects[0].id(), ability);
+}
+
+/// Effect::CounterAbility removes the targeted ability from the stack and
+/// announces GameEvent::AbilityCountered; it offers no spell as a target.
+#[test]
+fn counter_ability_counters_an_ability_and_cannot_target_a_spell() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    let spec = TargetSpec::Ability;
+    assert_eq!(
+        game.legal_targets_for_spec(&spec, PlayerId(0)),
+        vec![Target::StackAbility(ability)]
+    );
+    stack(
+        &mut game,
+        Entry::Spell,
+        PlayerId(0),
+        vec![Effect::CounterAbility {
+            target: spec.clone(),
+        }],
+        vec![Target::StackAbility(ability)],
+        vec![0],
+    );
+    let Some(StackObject::Spell(counter)) = game.state.stack_objects.last() else {
+        panic!("the counter is a spell");
+    };
+    let counter = counter.card;
+    assert!(!game.target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
+    assert!(!game
+        .legal_targets_for_spec(&spec, PlayerId(0))
+        .contains(&Target::StackSpell(counter)));
+    game.drain_events();
+    game.resolve_top_of_stack();
+    assert!(game.state.stack_objects.is_empty());
+    assert!(game.drain_events().iter().any(|event| matches!(
+        event,
+        crate::flow::event::GameEvent::AbilityCountered { ability: countered, controller: PlayerId(1), by: Some(by), .. }
+            if *countered == ability && *by == counter
+    )));
+}
+
+/// Effect::CounterSpell cannot target an ability: no ability is offered or
+/// legal for its spell target.
+#[test]
+fn counter_spell_cannot_target_an_ability() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Triggered,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    assert!(game
+        .legal_targets_for_spec(&TargetSpec::Spell, PlayerId(0))
+        .is_empty());
+    assert!(!game.target_is_legal(
+        Target::StackAbility(ability),
+        &TargetSpec::Spell,
+        PlayerId(0)
+    ));
 }

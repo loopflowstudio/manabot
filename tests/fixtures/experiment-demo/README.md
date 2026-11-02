@@ -32,5 +32,5 @@ the exports does not re-admit a checkpoint or claim a fresh replay.
 The editable declaration is
 [experiment_demo.py](../../runners/experiment_demo.py). The shared runner generates
 this same notebook for ordinary executions. See the
-[execution guide](../../../docs/experiment-execution.md) for launch, placement,
+[execution guide](../../../docs/training.md#execute-locally) for launch, placement,
 continuation, budget and interpretation contracts.

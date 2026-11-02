@@ -73,16 +73,16 @@ impl Game {
         let permanent_id = self.lookup_current_permanent(object_ref).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
         let definition = &self.state.cards[card];
+        let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
-            keywords: self.effective_keywords(permanent_id),
-            creature_types: self
-                .creature_types(permanent_id)
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            keywords: characteristics.keywords,
+            creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
-            animated_creature: self.permanent_is_animated(permanent_id),
-            abilities_lost: self.has_lost_abilities(permanent_id),
+            animated_creature: characteristics.is_animated,
+            abilities_lost: characteristics.abilities_lost,
+            dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            power: characteristics.power,
+            counters: permanent.counters,
             object_ref,
             card,
             from_zone: ZoneType::Battlefield,
@@ -104,6 +104,15 @@ impl Game {
             .object_lki
             .values()
             .find(|lki| lki.permanent == permanent_id)
+    }
+
+    /// Last known information of `card`'s most recent battlefield object.
+    pub(crate) fn latest_card_lki(&self, card: CardId) -> Option<&ObjectLki> {
+        self.state
+            .object_lki
+            .values()
+            .filter(|lki| lki.card == card)
+            .max_by_key(|lki| lki.object_ref)
     }
 
     /// Capture the stable viewer identity for a current or departed object.
@@ -134,12 +143,10 @@ impl Game {
     }
 
     pub(crate) fn record_object_lki(&mut self, lki: ObjectLki) {
-        self.journal_object_lki(lki.object_ref);
         self.state.object_lki.insert(lki.object_ref, lki);
     }
 
     pub(crate) fn advance_object_incarnation(&mut self, card: CardId) {
-        self.journal_incarnation(card);
         let incarnation = self
             .state
             .object_incarnations

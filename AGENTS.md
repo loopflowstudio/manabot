@@ -114,9 +114,10 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
-  remains column 31. V5 widens player rows to 64, card rows to 55 and
-  permanent rows to 37 (v1–v4: 40 / 41 / 29), validity last, and adds a
+  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 49; validity
+  remains column 31. Waiting delayed triggers are v5 relation frames (kind
+  10, after every other frame); v2–v4 encode none. V5 widens player rows to 67, card rows to 55 and
+  permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds a
   `facts` block (128 × 12, one row per `FactKind` fact about a player or
   permanent). Open-ended vocabularies (counter kinds, added subtypes, set
   names, used abilities, continuous-effect records, copy effects and their
@@ -168,7 +169,7 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-Read [validation by change area](docs/development/validation.md) for the
+Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
 
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
@@ -238,13 +239,30 @@ The default pack registers every definition in name order (`cards/content_pack.r
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
 set under the single `tests/cards.rs` target. Both test targets mount
 `tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
-primitive defined once.
+primitive defined once. `five_color_setup` decks hold four copies of each listed
+name; a fifth `force_permanent_on_battlefield` of that name returns an existing
+copy, so list another card when a test needs more. `inspect::keywords` reads
+printed and until-end-of-turn keywords only; assert static grants through the
+observation. `force_permanent_on_battlefield` places a permanent without an
+entry event (no triggers or turn history); `enter_and_settle` and
+`play_and_settle` enter through the zone move.
 
-A permanent's activated abilities are `Game::activated_abilities_for` (printed,
-then granted, e.g. an Equipment's `AbilityGrant`); activation, payment
-and offer code indexes only that list, never `card.activated_abilities`.
-Whether a permanent has lost its abilities is `Game::has_lost_abilities`,
-which reads continuous-effect records and an Aura's `SetCharacteristics`.
+A permanent's characteristics after continuous effects (name, types, keywords,
+ability loss, activated abilities, power/toughness) are one view,
+`Game::characteristics(id)`, which applies static abilities and effect records
+in layer and timestamp order once; callers read its fields, and rules
+questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
+Its `activated_abilities` are printed, then granted (e.g. an Equipment's
+`AbilityGrant`); activation, payment and offer code indexes only that list,
+never `card.activated_abilities`. Its `abilities_lost` reads
+continuous-effect records and an Aura's `SetCharacteristics`. Code that the
+layer computation itself calls (static scopes, ability outputs) reads the
+private layer stages in `flow/statics.rs`, never the view.
+The view and its static-source index are computed once per state revision and
+shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` whose
+every mutable access advances the revision; only fields no characteristic
+reads (priority, the RNG) have non-advancing accessors. Debug builds recompute
+every cached view and index on read and assert they match.
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

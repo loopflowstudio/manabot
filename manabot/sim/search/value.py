@@ -60,39 +60,6 @@ class ValueScorer:
 
 
 # -----------------------------------------------------------------------------
-# Rank correlation (no scipy dependency)
-# -----------------------------------------------------------------------------
-
-
-def _average_ranks(x: np.ndarray) -> np.ndarray:
-    order = np.argsort(x, kind="mergesort")
-    ranks = np.empty(len(x), dtype=np.float64)
-    sorted_x = x[order]
-    i = 0
-    while i < len(x):
-        j = i
-        while j + 1 < len(x) and sorted_x[j + 1] == sorted_x[i]:
-            j += 1
-        ranks[order[i : j + 1]] = 0.5 * (i + j)
-        i = j + 1
-    return ranks
-
-
-def spearman(x: np.ndarray, y: np.ndarray) -> float:
-    """Spearman rank correlation with average ranks for ties."""
-
-    if len(x) < 2:
-        return float("nan")
-    rx, ry = _average_ranks(np.asarray(x)), _average_ranks(np.asarray(y))
-    rx -= rx.mean()
-    ry -= ry.mean()
-    denom = float(np.sqrt((rx**2).sum() * (ry**2).sum()))
-    if denom == 0.0:
-        return float("nan")
-    return float((rx * ry).sum() / denom)
-
-
-# -----------------------------------------------------------------------------
 # Value-at-leaf action scoring (shared by V-greedy and value-search)
 # -----------------------------------------------------------------------------
 
@@ -299,11 +266,5 @@ def load_value_scorer(checkpoint: str, *, device: str = "cpu") -> ValueScorer:
 # -----------------------------------------------------------------------------
 # Assessing V: rollout ground truth + strategic buckets (wave README protocol)
 # -----------------------------------------------------------------------------
-
-#: Instants in INTERACTIVE_DECK — "holding interaction" for the aggro-bias
-#: tripwire. Ancestral Recall is an instant but not interaction; it is
-#: tracked separately.
-INTERACTION_NAMES = frozenset({"Lightning Bolt", "Counterspell"})
-INSTANT_NAMES = frozenset({"Lightning Bolt", "Counterspell", "Ancestral Recall"})
 
 _HAND_ZONE = 1  # managym.ZoneEnum.HAND

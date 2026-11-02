@@ -150,17 +150,23 @@
       {label} can cast spells only from hand until the other player's next turn.
     </p>
   {/if}
-  {#if player.turn_history?.permanents_sacrificed}
-    <p class="type-caption py-1" data-testid="turn-history">
-      {label} this turn: sacrificed {player.turn_history.permanents_sacrificed} {player.turn_history.permanents_sacrificed === 1 ? 'permanent' : 'permanents'}.
-    </p>
-  {/if}
   {#each player.effects ?? [] as effect}
     <p class="type-caption py-1" data-testid="player-effect">{label}: {effectNote(effect)}.</p>
   {/each}
   {#if player.no_maximum_hand_size}
     <p class="type-caption py-1" data-testid="no-maximum-hand-size">
       {label} has no maximum hand size.
+    </p>
+  {/if}
+  {#if player.turn_history}
+    {@const history = player.turn_history}
+    <p class="type-caption py-1" data-testid="turn-history">
+      {label} this turn: {[
+        history.attacked && 'attacked',
+        history.permanents_sacrificed && `sacrificed ${history.permanents_sacrificed} permanent${history.permanents_sacrificed === 1 ? '' : 's'}`,
+        history.land_entered && 'a land entered',
+        history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
+      ].filter(Boolean).join(' · ')}.
     </p>
   {/if}
   <!-- The player bar, in the manner of a chess clock plate: identity at

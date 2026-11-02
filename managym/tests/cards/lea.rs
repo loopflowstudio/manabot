@@ -131,7 +131,11 @@ fn counterspell_counters_ancestral_recall() {
 
 #[test]
 fn an_announced_tap_cannot_be_used_to_fund_itself() {
-    use managym::state::{ability::Effect, card::ActivatedAbilityDefinition, mana::ManaCost};
+    use managym::state::{
+        ability::{Effect, EffectValue},
+        card::ActivatedAbilityDefinition,
+        mana::ManaCost,
+    };
 
     for tap_source in [false, true] {
         let mut s = five_color_setup(&["Llanowar Elves"]);
@@ -144,7 +148,9 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
                 mana_cost: ManaCost::parse("1"),
                 tap_source,
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             });
         s.set_player_mana_pool(0, "0");

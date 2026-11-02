@@ -68,7 +68,7 @@ export interface ContinuousEffect {
   keywords?: string[];
   subtypes?: string[];
   color?: string;
-  /** `EndOfTurn` or `Indefinite`. */
+  /** `EndOfTurn`, `Indefinite` or `WhileYouControlSource`. */
   duration: string;
   /** The source's printed name. */
   source?: string;
@@ -115,14 +115,12 @@ export interface PermanentState {
   abilities_lost?: boolean;
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  /** It was dealt damage this turn. */
+  dealt_damage_this_turn?: boolean;
   /** Continuous effects on it, in timestamp order. */
   effects?: ContinuousEffect[];
   /** The copy effect that made it a copy (CR 707.2). */
   copy_of?: CopyEffect;
-}
-
-export interface PlayerTurnHistory {
-  permanents_sacrificed?: number;
 }
 
 /** A copy effect: the printed card it copies and the exceptions in its copiable values (CR 707.9b). */
@@ -137,6 +135,13 @@ export interface SideboardCard {
   owner_id: number;
   registry_key: number;
   name: string;
+}
+
+export interface PlayerTurnHistory {
+  attacked?: boolean;
+  permanents_sacrificed?: number;
+  land_entered?: boolean;
+  cards_drawn?: number;
 }
 
 export interface PlayerState {

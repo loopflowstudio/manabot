@@ -720,9 +720,7 @@ def test_tiny_checkpoint_match_captures_verified_native_facts(tmp_path: Path) ->
     space = ObservationSpace()
     agent = ActorCritic(
         space,
-        ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="elemental-world-v2"
-        ),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world="elemental-world-v2"),
     )
     path = tmp_path / "tiny.pt"
     save_checkpoint(

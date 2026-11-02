@@ -1,6 +1,7 @@
 """Scalar game simulation and evaluation statistics recorded through Etude.
 
-load_player admits local policies or exact Etude checkpoint records. run_simulation
+load_player admits local policies or exact Etude checkpoint records; simulate_models
+admits each model against the actual match setup before play. run_simulation
 owns the evaluation tracking lifetime; game statistics never fit a model.
 """
 
@@ -26,6 +27,7 @@ from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
 from manabot.model.checkpoint import load_checkpoint, load_etude_checkpoint
+from manabot.model.world import validate_agent_setup
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
@@ -413,21 +415,15 @@ def simulate_models(
     villain_player: Player,
     sim_config: Optional[SimulationConfig] = None,
 ) -> GameStats:
-    """
-    Evaluate models in parallel by running multiple games simultaneously.
-
-    Args:
-        hero_player: Player for hero position
-        villain_player: Player for villain position
-        eval_hypers: Evaluation hyperparameters
-
-    Returns:
-        GameStats with results
-    """
+    """Run games in parallel threads after admitting each model to the match setup."""
     logger = getLogger("manabot.sim.sim").getChild("simulate_parallel")
 
     # Set up hyperparameters
     sim_config = sim_config or SimulationConfig()
+    player_configs = Match(sim_config.match).to_rust()
+    for player in (hero_player, villain_player):
+        if isinstance(player, ModelPlayer):
+            validate_agent_setup(player.agent, player_configs)
 
     # Determine number of threads (capped by games and CPU cores)
     num_threads = min(sim_config.num_threads, sim_config.num_games)

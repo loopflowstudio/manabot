@@ -43,9 +43,25 @@ SCENARIO_A = "advice-scenario-a"
 SCENARIO_B = "advice-scenario-b"
 
 
-def test_default_play_import_does_not_require_training_dependencies() -> None:
+@pytest.mark.parametrize(
+    "decks",
+    [
+        {"hero_deck": "interactive", "villain_deck": "interactive"},
+        {
+            "deck_import": {
+                "hero": {"source": "10 Forest\n10 Mountain"},
+                "villain": {"source": "20 Island"},
+            }
+        },
+    ],
+    ids=["preset", "imported"],
+)
+def test_default_play_import_does_not_require_training_dependencies(
+    decks: dict[str, object],
+) -> None:
     script = """
 import builtins
+import json
 import sys
 
 blocked = {'numpy', 'torch', 'pandas', 'psutil', 'gymnasium'}
@@ -64,7 +80,7 @@ from tempfile import TemporaryDirectory
 with TemporaryDirectory() as directory:
     game = academy.server.GameSession(trace_dir=Path(directory))
     game.new_game({
-        'hero_deck': 'interactive', 'villain_deck': 'interactive',
+        **json.loads(sys.argv[1]),
         'villain_type': 'passive', 'seed': 197, 'auto_pass': False,
     })
     game.hero_action(0)
@@ -73,7 +89,9 @@ with TemporaryDirectory() as directory:
 assert 'manabot.sim.search.conditional' not in sys.modules
 assert 'numpy' not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run(
+        [sys.executable, "-c", script, json.dumps(decks)], check=True, timeout=60
+    )
 
 
 @pytest.fixture(autouse=True)

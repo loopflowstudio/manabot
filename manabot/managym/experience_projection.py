@@ -172,6 +172,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "used_abilities": list(permanent.used_abilities) or None,
+        "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
         "copy_of": _copy(permanent.copy),
     }
@@ -180,7 +181,12 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
 
 def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
     """What a player has done this turn, absent facts omitted."""
-    values = {"permanents_sacrificed": history.permanents_sacrificed}
+    values = {
+        "attacked": history.attacked,
+        "permanents_sacrificed": history.permanents_sacrificed,
+        "land_entered": history.land_entered,
+        "cards_drawn": history.cards_drawn,
+    }
     return {key: value for key, value in values.items() if value}
 
 
@@ -292,6 +298,11 @@ def _serialize_player(
             for key, count in player.remaining_sideboard_counts.items()
         },
         **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
+        **(
+            {"turn_history": turn_history}
+            if (turn_history := _turn_history(player.turn_history))
+            else {}
+        ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         **(
             {"turn_history": turn_history}
