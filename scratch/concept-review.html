@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-237 concept review: the engine budget's actions, concepts and APIs</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1d1d1b; --mute: #6b6861; --bg: #faf8f3; --rule: #d8d3c6; --prop: #8a5a1c; --propbg: #f4e9d6; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #e8e4da; --mute: #a39e92; --bg: #1a1916; --rule: #3a3731; --prop: #e0b36b; --propbg: #2c251a; } }
+  html { background: var(--bg); color: var(--fg); }
+  body { max-width: 44rem; margin: 3rem auto; padding: 0 1.25rem; font: 17px/1.55 Georgia, "Iowan Old Style", serif; }
+  header { color: var(--mute); font-size: .9rem; border-bottom: 1px solid var(--rule); padding-bottom: 1rem; margin-bottom: 2rem; }
+  header strong { color: var(--fg); font-weight: 600; }
+  h1 { font-size: 1.6rem; line-height: 1.25; font-weight: 600; margin: 0 0 .5rem; }
+  h2 { font-size: 1.15rem; margin: 2.5rem 0 .75rem; font-weight: 600; }
+  p { margin: .75rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; margin: 1rem 0; }
+  th, td { text-align: left; vertical-align: top; padding: .45rem .5rem .45rem 0; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 600; color: var(--mute); font-size: .82rem; letter-spacing: .02em; }
+  code, pre { font: .86em/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+  pre { padding: .75rem 1rem; border-left: 2px solid var(--rule); overflow-x: auto; white-space: pre-wrap; }
+  .proposed { border-left-color: var(--prop); background: var(--propbg); }
+  .tag { display: inline-block; font: .72rem/1 ui-monospace, Menlo, monospace; color: var(--prop); border: 1px solid var(--prop); border-radius: 3px; padding: .15rem .35rem; vertical-align: middle; margin-left: .4rem; }
+  .mismatch { border: 1px solid var(--prop); padding: 1rem 1.25rem; margin: 1.5rem 0; }
+  ol li { margin: .5rem 0; }
+  .lead { font-size: 1.05rem; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Task</strong> MTG-237 Engine performance budget in CI &nbsp;·&nbsp; <strong>Step</strong> concept-review (headless) &nbsp;·&nbsp; <strong>Date</strong> 2026-11-02<br>
+  Built from <code>.github/workflows/engine-budget.yml</code>, <code>scripts/engine_budget.py</code>, <code>managym/perf/baseline.json</code>, <code>docs/development.md</code> (Engine performance budget), <code>managym/examples/bench_search.rs</code>, <code>bench_steps.rs</code>, and Jack Heart's Performance section of 2026-11-02.
+</header>
+
+<h1>One act, not two: a PR adopts the measurement its own run already made</h1>
+<p class="lead">Decision recorded: every Engine Budget run is a recording of its candidate. Moving the reference becomes "download the run's artifact, state the reason, commit", and keeping a speedup joins rules changes and accepted costs as a reason to move it. No open product choice; Jack Heart's PR review confirms the A/B reading of "committed baseline".</p>
+
+<h2>Actions</h2>
+<table>
+  <tr><th>What a developer does</th><th>Today</th><th>Proposed <span class="tag">proposed</span></th></tr>
+  <tr><td>Pushes an engine PR</td><td>Engine Budget rebuilds the reference commit beside the change on one runner and prints one PASS/FAIL table: digests, then worst reply, total, steps/s.</td><td>Unchanged.</td></tr>
+  <tr><td>Accepts a cost, or a rules change moved a digest</td><td>Dispatch <code>ci.yml</code> with <code>measure=&lt;head&gt;</code>, wait for a second job, download its artifact, run <code>record</code> with seven flags, commit.</td><td>Download the PR run's artifact, <code>record --reason</code>, commit.</td></tr>
+  <tr><td>Keeps a speedup</td><td>Not a documented move. The reference stays at T4, so later slowdowns are allowed back up to T4.</td><td>Same two commands; the PR body cites the delta from that run.</td></tr>
+  <tr><td>Measures a commit with no PR</td><td><code>measure=&lt;commit&gt;</code> dispatch (T4/T5/T6 done).</td><td>Unchanged; documented as the only use of <code>measure</code>.</td></tr>
+  <tr><td>Changes the tolerance</td><td>Edits <code>tolerance</code> in the file.</td><td>Unchanged.</td></tr>
+</table>
+
+<h2>Concepts</h2>
+<table>
+  <tr><th>Concept</th><th>Today</th><th>Proposed</th></tr>
+  <tr><td>Reference commit</td><td>The commit rebuilt and measured beside every candidate; named in <code>baseline.json</code>.</td><td>Unchanged.</td></tr>
+  <tr><td>Digests</td><td>The workload's identity on both benchmarks; a change fails until the reference moves.</td><td>Unchanged.</td></tr>
+  <tr><td>Tolerance</td><td>10%, edited in the file.</td><td>Unchanged.</td></tr>
+  <tr><td>Measurement</td><td>A run's two <code>.jsonl</code> files. Which commit, runner and run they came from is typed by hand into <code>record</code>.</td><td>The artifact: two <code>.jsonl</code> files plus <code>measurement.json</code> (commit, date, run URL, runner CPU). <span class="tag">proposed</span></td></tr>
+  <tr><td>Measure</td><td>A separate dispatch that is the only route to a recording.</td><td>A way to measure a commit that has no PR. Not part of moving the reference.</td></tr>
+  <tr><td>Recording</td><td><code>record</code> with seven flags.</td><td><code>record --reason</code> over a downloaded artifact. <span class="tag">proposed</span></td></tr>
+</table>
+
+<div class="mismatch">
+<p><strong>The consequential mismatch.</strong> Every compare run already measures the candidate on the runner with exactly the output <code>record</code> consumes, yet moving the reference requires a second dispatch and a hand-typed command. And the one move the design names as the budget's purpose ("a CI budget keeps it gone", "each lands with its bench_search delta in the PR body") is not documented at all. Two concepts stand where the contract needs one.</p>
+</div>
+
+<h2>APIs</h2>
+<pre># today: moving the reference
+gh workflow run ci.yml --ref &lt;branch&gt; -f measure=&lt;commit&gt;
+gh run download &lt;run-id&gt; --name engine-budget-&lt;commit&gt; --dir .cache/engine-budget
+uv run scripts/engine_budget.py record \
+  --search .cache/engine-budget/bench_search.jsonl --steps .cache/engine-budget/bench_steps.jsonl \
+  --commit &lt;commit&gt; --date &lt;YYYY-MM-DD&gt; --run https://github.com/.../runs/&lt;run-id&gt; \
+  --runner "GitHub-hosted ubuntu-24.04, &lt;CPU&gt; (4 vCPU), release" --reason "&lt;why&gt;"</pre>
+<pre class="proposed"># proposed: from the PR's own Engine Budget run              [proposed]
+gh run download &lt;run-id&gt; --name engine-budget --dir .cache/engine-budget
+uv run scripts/engine_budget.py record --reason "&lt;why the reference moves&gt;"
+
+# the job writes, in both modes, beside the two .jsonl files:
+.cache/engine-budget/measurement.json
+{ "commit": "&lt;candidate sha&gt;", "date": "2026-11-02",
+  "run": "https://github.com/loopflowstudio/manabot/actions/runs/&lt;id&gt;",
+  "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release" }</pre>
+<p>The committed file, <code>compare</code>, the workflow's A/B shape, the 20% fixture and the digest tests are unchanged. <code>record</code> drops six flags and gains a directory argument with a default.</p>
+
+<h2>Settled by accepted decisions, recorded in the working design</h2>
+<ol>
+  <li><strong>A/B against a committed reference commit</strong> is the only reading of "committed baseline" that delivers a 10% budget on GitHub-hosted runners (one engine: 6.8k and 10.3k steps/s on two runner CPUs) and the "delta in the PR body" the order of work asks for. The file remains a committed artifact a PR moves with a reason.</li>
+  <li><strong>Native <code>Env::step</code> random play</strong> is the headless workload. The purpose is training throughput; training steps the native <code>Env</code>; the rul-9 Python runner no longer exists. Its figure is its own baseline.</li>
+  <li><strong>A rules change reaching the decks moves the reference</strong>, one recording per such PR; the failing run's timing rows still show that PR's cost.</li>
+</ol>
+
+<h2>Normal path, failure, recovery</h2>
+<p>Normal: engine PR, PASS table, merge. Failure: 12% slower with matching digests; fix it, or record the head with the reason and cite the delta. Recovery: a file whose digests no longer describe its reference fails first as "baseline file: re-record from the reference commit"; the fix is one recording. A noisy VM is the counterexample to 10%; two EPYC 7763 runs agreed within 2.5%, and re-running the job is the recovery when digests match and the engine did not change.</p>
+
+<h2>Questions</h2>
+<ol>
+  <li>None block. The tolerance and whether a dedicated runner is ever worth buying wait for evidence from the first months of PRs.</li>
+</ol>
+</body>
+</html>

@@ -501,3 +501,12 @@ requirement, it needs its own Task.
   commit, not committed absolute numbers) is a draft decision awaiting Jack
   Heart's review; the proposal stays in the plan. The engine Wave has no
   child Waves to read (only `GOAL.md` and `MEMORY.md` under it).
+- Concept review (2026-11-02, headless, `code` graph): the two "draft,
+  awaiting review" decisions are read as implied by the accepted outcome
+  plus the runner evidence (A/B against a committed reference commit; native
+  `Env::step` random play), so the review did not return Blocked on them;
+  Jack Heart's PR review confirms them. The design changed in one place:
+  recording the reference from the PR's own compare run (artifact plus
+  `record --reason`), with a kept speedup as a documented reason to move the
+  reference. `measure` stays for commits without a PR. Wave memory still
+  unwritten: this step does not maintain `.lf/wave/`.
