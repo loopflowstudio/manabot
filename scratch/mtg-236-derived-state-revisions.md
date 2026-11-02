@@ -7,9 +7,10 @@ review of 2026-11-02, Performance section). Base `4c8324a59` (T4 landed);
 ## Status (reconciled 2026-11-02)
 
 Items 1-4 exist and are checked (below). Item 5 is not implemented and is
-proposed for removal (decision pending). Remaining: the quiet-machine
-acceptance measurement, publication with the measured delta in the PR body,
-and ordering against T5/T6, which touch the same files.
+dropped from this Task (settled at the 2026-11-02 concept review, below;
+reversible). Remaining: the quiet-machine acceptance measurement,
+publication with the measured delta in the PR body, and ordering against
+T5/T6, which touch the same files.
 
 ## Outcome (brief's payoff order)
 
@@ -38,14 +39,79 @@ and ordering against T5/T6, which touch the same files.
    remaining profile is mana payment search (`Mana::payment_remainders`,
    `PaymentModel::witness`, the `PaymentSearchState` hash map) and allocator
    time.
-   **Decision needed (Jack Heart):** drop item 5 from this Task on that
-   evidence, or implement it anyway for the brief's stated reason (allocation
-   share). Proposal: drop it and open a separate Task for mana payment
-   search if the quiet-machine bench misses acceptance. Not accepted yet.
+   Settled (concept review, 2026-11-02): dropped from this Task. The brief
+   lands each item with its measured `bench_search` delta; an item whose
+   entire upper bound is under 1% of playout time has no delta to land
+   with, and its premise (7% allocation share) was measured before items
+   1-4 and no longer describes `Game::characteristics`. The PR body keeps
+   this as deferred evidence. Jack Heart can reopen it; mana payment search
+   is a separate Task if the quiet-machine bench misses acceptance.
 
 Acceptance (unchanged): `bench_search` worst reply <= 4.34 s and total
 <= 128.7 s, seeds 1-3, 40 decisions, same score digests as `main`; debug and
 release `cargo test` green; no rules change (`WORLDS.md` untouched).
+
+## Concept review (2026-11-02, headless, against the brief and `d0b86ce63`)
+
+Accepted experience, unchanged: a Search-64 reply as fast as before T3 with
+the same play (identical score digests). Nothing a player, policy or viewer
+sees changes; the concepts this Task adds are for the engine's readers.
+
+Model as implemented, and what each name must mean:
+
+- `Revisions { characteristics, mana_pools, triggers }`: one counter per
+  derivation, named for what reads it, not for what writes it. `DerefMut`
+  advances all three; a typed accessor advances the subset its field feeds.
+  The names match the brief's "revisions by what the layers read";
+  `mana_pools` for the brief's `offers` is recorded in `questions.md`.
+- `DerivedCache`: everything computed from state and keyed on `Revisions`
+  (static index, views, trigger index), cloned with the game as immutable
+  `Arc`s. One cache, one keying rule.
+- `EffectRecords`, `TriggerIndex`, `ObjectLkiLog`: indexes over records the
+  state already owned; they add lookups, not new facts. The canonical hash
+  still serializes the ordered records and the LKI log in object order.
+
+What settles the contract "a write a layer reads advances its counter":
+
+- The permanent fields behind typed accessors (tapped, damage, deathtouch
+  mark, summoning sickness, exhaust and once-per-turn limits, dealt-damage
+  flag) are read only by rules questions (`permanent_can_tap`,
+  `has_lethal_damage`), offers, and source/frame conditions
+  (`SourceTapped`, `TargetDealtDamageThisTurn`). `check_static_condition`
+  debug-asserts that no static carries a source or resolution-only
+  condition, so no static can read them. Verified by reading
+  `flow/statics.rs` at this head.
+- Pool reads by statics are discovered from the sources present
+  (`StaticIndex::reads_mana_pools`, from `Condition::reads_mana_pools`),
+  not declared by hand. A new condition that reads another untracked input
+  must extend the same predicate; it is a one-input form of "which extra
+  inputs do the present sources read", to generalize only when a second
+  input appears.
+- Debug builds recompute every cached value on read and assert equality,
+  so a misclassified accessor fails `cargo test` in debug (CI).
+
+Settled implications (no code change in this Task):
+
+- Item 5 is dropped (above). It is an implementation means whose expected
+  delta the brief's own standard cannot land; not a product choice.
+- No rename or merge is needed among the added types. The three-counter
+  struct is the smallest form that keeps tapping and mana payment off the
+  layer cache; folding `mana_pools` into `characteristics` would flush the
+  views on every mana tap, and a single counter was the problem.
+
+Follow-on direction, outside this Task (not in the brief, not in the
+profile; record for a separate Task if wanted): the producible-mana cache
+(`mana_cache`, `cached_producible_mana`, `invalidate_mana_cache`) is the one
+remaining hand-invalidated derivation, with about 25 invalidation sites
+across `zones.rs`, `decision.rs`, `effects.rs`, `resolution.rs`, `sba.rs`,
+`search.rs`, `proposed_event.rs` and `scenario.rs`. It reads availability
+(`permanent_can_tap`: tapped, summoning sickness) and `abilities_lost`, so
+it cannot join `DerivedCache` without an availability counter. Adding one
+would let it key on `Revisions`, delete the manual sites and gain the same
+debug recompute-and-assert. Weigh against the bench before doing it; it is
+not needed for acceptance.
+
+Unresolved product choices: none. What remains is delivery (below).
 
 ## Remaining work
 

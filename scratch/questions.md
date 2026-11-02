@@ -489,3 +489,16 @@ requirement, it needs its own Task.
   during every run, so absolute times here are not comparable to the
   brief's (4.97 s / 151.8 s); deltas against the same-session baseline
   and identical score digests are the evidence.
+
+## MTG-236 decision pass 1 — 2026-11-02, headless
+
+- Item 5 (interned subtypes) is deferred, not built: after items 1-4 the
+  release profile puts all of `Game::characteristics` at ~2% inclusive and
+  its string building under 1%, so interning cannot move the acceptance
+  numbers. Reversible: it stays listed in the PR body as deferred evidence
+  for Jack Heart, and a separate Task covers it or mana payment search if
+  the quiet-machine bench misses acceptance.
+- The quiet-machine `bench_search` thresholds are owned by the gate/CI
+  owner; this machine carried load 25-70 throughout (35 at this pass). The
+  headless equivalent is the 31% CPU-second drop with identical score
+  digests, projecting ~3.4 s / ~105 s against the 4.34 s / 128.7 s bound.
