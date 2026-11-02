@@ -1544,6 +1544,135 @@
       "title": "CodeSourceArtifact",
       "type": "object"
     },
+    "ContinuousEffectView": {
+      "additionalProperties": false,
+      "description": "One continuous-effect record on a permanent or player (CR 611, 613).",
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "duration": {
+          "title": "Duration",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "modification": {
+          "title": "Modification",
+          "type": "string"
+        },
+        "power": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Power"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "subtypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Subtypes",
+          "type": "array"
+        },
+        "timestamp": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Timestamp",
+          "type": "integer"
+        },
+        "toughness": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Toughness"
+        }
+      },
+      "required": [
+        "modification",
+        "duration",
+        "timestamp"
+      ],
+      "title": "ContinuousEffectView",
+      "type": "object"
+    },
+    "CopyView": {
+      "additionalProperties": false,
+      "description": "A copy effect: the printed card it copies and its exceptions (CR 707.9b).",
+      "properties": {
+        "exceptions": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CopyView",
+      "type": "object"
+    },
     "DecisionContextView": {
       "additionalProperties": false,
       "properties": {
@@ -2451,6 +2580,17 @@
           "title": "Controller Id",
           "type": "integer"
         },
+        "copy_of": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "counters": {
           "additionalProperties": {
             "maximum": 4294967295,
@@ -2485,6 +2625,13 @@
           "default": false,
           "title": "Dealt Damage This Turn",
           "type": "boolean"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Effects",
+          "type": "array"
         },
         "exhausted_abilities": {
           "default": 0,
@@ -2659,6 +2806,13 @@
           "default": null,
           "title": "Combat Mana"
         },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
         "exile": {
           "items": {
             "$ref": "#/$defs/LegacyCardView"
@@ -2801,6 +2955,23 @@
           "title": "Life",
           "type": "integer"
         },
+        "main_counts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Main Counts"
+        },
         "mana": {
           "anyOf": [
             {
@@ -2859,13 +3030,21 @@
           "type": "integer"
         },
         "remaining_sideboard_counts": {
-          "additionalProperties": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Remaining Sideboard Counts",
-          "type": "object"
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remaining Sideboard Counts"
         },
         "restricted_mana": {
           "items": {
@@ -2882,13 +3061,21 @@
           "type": "array"
         },
         "sideboard_counts": {
-          "additionalProperties": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Sideboard Counts",
-          "type": "object"
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sideboard Counts"
         },
         "stack": {
           "items": {
@@ -2899,6 +3086,23 @@
         },
         "turn_history": {
           "$ref": "#/$defs/PlayerTurnHistoryView"
+        },
+        "unseen_counts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unseen Counts"
         },
         "zone_counts": {
           "additionalProperties": {

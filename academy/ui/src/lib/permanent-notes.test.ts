@@ -37,6 +37,18 @@ describe('permanent notes', () => {
     expect(permanentNotes(zuko, [zuko])).toEqual(['firebending 2 until end of turn']);
   });
 
+  it('states a copy effect and its exceptions in the LLM text words', () => {
+    const copy = permanent(6, 'Ran and Shaw', {
+      copy_of: {
+        name: 'Ran and Shaw',
+        exceptions: [{ modification: 'Nonlegendary', duration: 'Indefinite', timestamp: 6 }],
+      },
+    });
+    const airship = permanent(7, 'Phoenix Fleet Airship', { copy_of: { name: 'Phoenix Fleet Airship' } });
+    expect(permanentNotes(copy, [copy])).toEqual(["copy of Ran and Shaw, except isn't legendary"]);
+    expect(permanentNotes(airship, [airship])).toEqual(['copy of Phoenix Fleet Airship']);
+  });
+
   it('states combat assignments, lost abilities and spent activation limits', () => {
     const attacker = permanent(6, 'Bear', { attacking: true });
     const blocker = permanent(7, 'Wall', { controller_id: 1, blocking: 6 });

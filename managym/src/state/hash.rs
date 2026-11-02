@@ -53,6 +53,8 @@ impl fmt::Display for MatchStateHash {
 struct CanonicalCard {
     /// Copied tokens can differ from their registered source definition.
     copied_characteristics: Option<super::card::CardDefinition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    copy: Option<super::effect::CopyEffect>,
     object_id: ObjectId,
     definition_id: CardDefId,
     owner: PlayerId,
@@ -200,6 +202,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             .iter()
             .map(|card| CanonicalCard {
                 copied_characteristics: card.is_token.then(|| (**card).clone()),
+                copy: card.copy.clone(),
                 object_id: card.id,
                 definition_id: card.definition_id,
                 owner: card.owner,

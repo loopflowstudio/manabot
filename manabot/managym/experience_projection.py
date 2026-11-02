@@ -149,8 +149,10 @@ def _serialize_permanent(
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
         # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. Printed values ride alongside so the UI can
-        # show "4/4 (2/2)" on a buffed permanent.
+        # SBA actually checks. `base_power` / `base_toughness` are the card
+        # row's values; on the battlefield the card row reads the layered
+        # characteristics too, so they equal the effective values there.
+        # Printed P/T is not in the projection.
         "power": int(permanent.power),
         "toughness": int(permanent.toughness),
         "base_power": int(card.power) if card else None,
@@ -174,11 +176,13 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
+        "copy_of": _copy(permanent.copy),
     }
     return {key: value for key, value in values.items() if value is not None}
 
 
 def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
+    """What a player has done this turn, absent facts omitted."""
     values = {
         "attacked": history.attacked,
         "permanents_sacrificed": history.permanents_sacrificed,
@@ -186,6 +190,14 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "cards_drawn": history.cards_drawn,
     }
     return {key: value for key, value in values.items() if value}
+
+
+def _copy(copy: managym.CopyEffect | None) -> dict[str, Any] | None:
+    """The copy effect that made a permanent a copy, or None for an original."""
+    if copy is None:
+        return None
+    exceptions = _effects(copy.exceptions)
+    return {"name": copy.name, **({"exceptions": exceptions} if exceptions else {})}
 
 
 def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
@@ -280,12 +292,15 @@ def _serialize_player(
         "known_hand": {
             str(key): int(count) for key, count in player.known_hand.items()
         },
-        "sideboard_counts": {
-            str(key): int(count) for key, count in player.sideboard_counts.items()
-        },
-        "remaining_sideboard_counts": {
-            str(key): int(count)
-            for key, count in player.remaining_sideboard_counts.items()
+        **{
+            name: {str(key): int(count) for key, count in counts.items()}
+            for name in (
+                "main_counts",
+                "unseen_counts",
+                "sideboard_counts",
+                "remaining_sideboard_counts",
+            )
+            if (counts := getattr(player, name)) is not None
         },
         **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
         **(
@@ -343,6 +358,27 @@ def serialize_observation(
     return data
 
 
+def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
+    """Definitions this viewer's observation names: its own lists, cards it can
+    see, publicly known hand cards and the stack."""
+    return {
+        *(observation.agent.main_counts or {}),
+        *(observation.agent.sideboard_counts or {}),
+        *observation.agent.known_hand,
+        *observation.opponent.known_hand,
+        *(
+            card.registry_key
+            for cards in (
+                observation.agent_cards,
+                observation.agent_sideboard,
+                observation.opponent_cards,
+            )
+            for card in cards
+        ),
+        *(entry.source_card_registry_key for entry in observation.stack_objects),
+    }
+
+
 def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """Current viewer projection for play, recorded decisions and Study roots.
 
@@ -375,6 +411,13 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
         }
         for entry in observation.stack_objects
     ]
+    # The manifest covers both decklists, so a closed opponent narrows it.
+    if observation.opponent.main_counts is None:
+        data["definition_names"] = {
+            str(definition): name
+            for definition in _definitions_known_to_viewer(observation)
+            if (name := data["definition_names"].get(str(definition))) is not None
+        }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
 

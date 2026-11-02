@@ -13,11 +13,15 @@
 // own timestamp (`Permanent::timestamp`, CR 613.7a/d/e). `flow/statics.rs`
 // applies both by layer, then by timestamp. Expiry is one function per
 // boundary in `flow/effects.rs`.
+//
+// A copy effect (CR 707, layer 1) is not a record: it is `CopyEffect` on
+// the copy's `Card`, and its exceptions are the same `Modification`
+// vocabulary, applied once into the copy's definition (its copiable values).
 
 use std::collections::HashMap;
 
 use super::{
-    card::{CardDefId, Keywords},
+    card::{CardDefId, CardDefinition, CardType, Keywords},
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::Color,
 };
@@ -32,6 +36,9 @@ pub enum Modification<N = i32> {
     /// Layer 4: becomes an artifact creature; its printed P/T apply
     /// (CR 301.7b; crew, CR 702.122a).
     BecomeArtifactCreature,
+    /// Layer 4: loses the legendary supertype ("except it isn't
+    /// legendary", CR 707.9b).
+    Nonlegendary,
     /// Layer 6: gains keywords.
     AddKeywords(Keywords),
     /// Layer 6: loses all abilities (CR 613.1f).
@@ -77,6 +84,7 @@ impl<N> Modification<N> {
         match self {
             Self::AddSubtypes(subtypes) => Modification::AddSubtypes(subtypes.clone()),
             Self::BecomeArtifactCreature => Modification::BecomeArtifactCreature,
+            Self::Nonlegendary => Modification::Nonlegendary,
             Self::AddKeywords(keywords) => Modification::AddKeywords(*keywords),
             Self::LoseAllAbilities => Modification::LoseAllAbilities,
             Self::Firebending(amount) => Modification::Firebending(*amount),
@@ -101,6 +109,63 @@ impl<N> Modification<N> {
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
         }
     }
+}
+
+impl Modification {
+    /// Apply this modification to copiable values, as a copy exception
+    /// (CR 707.9b). Only modifications of printed characteristics are
+    /// copiable; a rules effect returns false and leaves `definition` alone
+    /// (no definition authors one as an exception).
+    pub fn apply_copiable(&self, definition: &mut CardDefinition) -> bool {
+        match self {
+            Self::AddSubtypes(subtypes) => {
+                for subtype in subtypes {
+                    if !definition.subtypes.contains(subtype) {
+                        definition.subtypes.push(subtype.clone());
+                    }
+                }
+            }
+            Self::BecomeArtifactCreature => {
+                definition.types.types.insert(CardType::Artifact);
+                definition.types.types.insert(CardType::Creature);
+            }
+            Self::Nonlegendary => definition
+                .supertypes
+                .retain(|supertype| !supertype.eq_ignore_ascii_case("legendary")),
+            Self::AddKeywords(keywords) => {
+                definition.keywords = definition.keywords.union(keywords);
+            }
+            Self::SetBasePt { power, toughness } => {
+                definition.power = power.or(definition.power);
+                definition.toughness = toughness.or(definition.toughness);
+            }
+            Self::LoseAllAbilities
+            | Self::Firebending(_)
+            | Self::ModifyPt { .. }
+            | Self::CantBeBlocked
+            | Self::CantBlock
+            | Self::DoesntUntap
+            | Self::LoseKeywords(_)
+            | Self::ExileIfWouldDie
+            | Self::KeepUnspentMana(_)
+            | Self::NoMaximumHandSize
+            | Self::ControlChanged { .. }
+            | Self::ModeChosen { .. } => return false,
+        }
+        true
+    }
+}
+
+/// A copy effect (CR 707.2) on the object it makes a copy: what it copies
+/// and the exceptions that are part of its copiable values. `Card`'s
+/// definition is the result; this keeps the inputs for observation.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CopyEffect {
+    /// The printed definition at the root of the copy chain.
+    pub of: CardDefId,
+    /// Exceptions in the order they applied, a copied copy's first: a copy
+    /// of a copy inherits them (CR 707.9b).
+    pub exceptions: Vec<Modification>,
 }
 
 /// How long a continuous effect lasts.

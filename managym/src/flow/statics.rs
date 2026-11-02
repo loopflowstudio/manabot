@@ -56,10 +56,10 @@ use crate::{
         triggers::TriggerIndex,
     },
     state::{
-        ability::{Condition, Effect},
+        ability::{Condition, Effect, PaymentCost},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keywords, PowerCda,
-            Restriction, SetCharacteristics, StaticAbility, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, CardTypes, Keywords,
+            PowerCda, Restriction, SetCharacteristics, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
@@ -125,9 +125,14 @@ pub struct Characteristics {
     pub added_subtypes: Vec<String>,
     /// Distinct creature types (CR 205.3m), sorted.
     pub creature_types: Vec<String>,
-    pub is_creature: bool,
-    /// Printed or granted land.
-    pub is_land: bool,
+    /// Layer 4 card types: printed, added by static type grants, and
+    /// Creature (with Artifact for an artifact-creature record) when
+    /// animated.
+    pub types: CardTypes,
+    /// Layer 4 supertype: its copiable values' legendary supertype, unless a
+    /// `Modification::Nonlegendary` record removes it. The legend rule and
+    /// the card row read this.
+    pub is_legendary: bool,
     /// A creature by something other than its printed type: earthbend, its
     /// own counter threshold, or an effect.
     pub is_animated: bool,
@@ -138,6 +143,8 @@ pub struct Characteristics {
     /// Whether it has lost all abilities (a record, or a characteristic-
     /// setting Aura); grants with later timestamps still apply.
     pub abilities_lost: bool,
+    /// Its printed ward cost (layer 6), unless it has lost its abilities.
+    pub ward: Option<PaymentCost>,
     pub power: i32,
     pub toughness: i32,
     /// Printed abilities, then currently granted abilities in source order,
@@ -154,6 +161,15 @@ pub struct Characteristics {
 impl Characteristics {
     pub fn pt(&self) -> (i32, i32) {
         (self.power, self.toughness)
+    }
+
+    pub fn is_creature(&self) -> bool {
+        self.types.is_creature()
+    }
+
+    /// Printed or granted land.
+    pub fn is_land(&self) -> bool {
+        self.types.is_land()
     }
 
     pub fn has_subtype(&self, subtype: &str) -> bool {
@@ -328,7 +344,8 @@ impl Game {
         let sources = &index.sources;
         let basis = self.layer_basis(permanent_id, sources);
         let (power, toughness) = self.pt_with(permanent_id, &basis, sources);
-        let is_land = self.is_land_with(permanent_id, sources);
+        let types = self.types_with(permanent_id, sources);
+        let is_land = types.is_land();
         Characteristics {
             name: basis
                 .set
@@ -337,12 +354,13 @@ impl Game {
             characteristics_set: basis.set.is_some(),
             subtypes: owned(subtypes_with(card, &basis)),
             creature_types: owned(creature_types_with(card, &basis)),
-            is_creature: self.permanent_is_creature(permanent_id),
-            is_land,
+            is_legendary: self.is_legendary(permanent_id),
+            types,
             is_animated: self.permanent_is_animated(permanent_id),
             keywords: self.keywords_with(permanent_id, basis.lost, sources),
             firebending: self.firebending_with(permanent_id, basis.lost),
             abilities_lost: basis.lost.is_some(),
+            ward: basis.lost.is_none().then(|| card.ward().cloned()).flatten(),
             power,
             toughness,
             activated_abilities: self.activated_abilities_with(
@@ -848,16 +866,39 @@ impl Game {
 
     /// Whether a battlefield permanent is a land, printed or granted.
     fn permanent_is_land(&self, permanent_id: PermanentId) -> bool {
-        self.is_land_with(permanent_id, &self.static_index().sources)
+        self.types_with(permanent_id, &self.static_index().sources)
+            .is_land()
     }
 
-    fn is_land_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> bool {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .is_some_and(|p| self.state.cards[p.card].types.is_land())
-            || self
-                .granted_card_types(permanent_id, sources)
-                .contains(&CardType::Land)
+    /// Layer 4 card types: printed, plus static type grants, plus Creature
+    /// when animated (an artifact-creature record also adds Artifact).
+    fn types_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> CardTypes {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return CardTypes::default();
+        };
+        let mut types = self.state.cards[permanent.card].types.clone();
+        types
+            .types
+            .extend(self.granted_card_types(permanent_id, sources));
+        if self.permanent_is_animated(permanent_id) {
+            types.types.insert(CardType::Creature);
+        }
+        if self.becomes_artifact_creature(permanent_id) {
+            types.types.insert(CardType::Artifact);
+        }
+        types
+    }
+
+    /// Layer 4 supertype: the copiable legendary supertype (a copy exception
+    /// is already in the card) unless a `Nonlegendary` record removes it.
+    fn is_legendary(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        self.state.cards[permanent.card].is_legendary()
+            && !self
+                .effects_on(permanent_id)
+                .any(|effect| effect.modification == Modification::Nonlegendary)
     }
 
     /// Distinct colors among `controller`'s permanents matching `predicate`
@@ -1201,6 +1242,41 @@ impl Game {
             .and_then(|p| p.as_ref())
             .is_some_and(|permanent| permanent.animated_creature(&self.state.cards[permanent.card]))
             || self.becomes_artifact_creature(permanent_id)
+            || self.creature_with_namesakes(permanent_id)
+    }
+
+    /// `StaticAbility::CreatureWithNamesakes`: its controller controls
+    /// enough permanents with its name (layer 4; names come from layers 1–3,
+    /// which no type computation affects).
+    fn creature_with_namesakes(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        let Some(count) = self.state.cards[permanent.card].creature_with_namesakes() else {
+            return false;
+        };
+        if self.ability_loss_timestamp(permanent_id).is_some() {
+            return false;
+        }
+        let name = self.name_stage(permanent_id);
+        self.battlefield_permanents(permanent.controller)
+            .into_iter()
+            .filter(|&id| self.name_stage(id) == name)
+            .count() as u32
+            >= count
+    }
+
+    /// The name after layers 1–3: the card's (copied) name, or the latest
+    /// characteristic-setting Aura's (CR 613.7e). Matches the view's `name`.
+    fn name_stage(&self, permanent_id: PermanentId) -> &str {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return "";
+        };
+        let attachments = self.attachments_on(permanent_id);
+        match self.latest_setter(attachments.into_iter()) {
+            Some((_, set)) => &set.named,
+            None => &self.state.cards[permanent.card].name,
+        }
     }
 
     /// Layer 6 keywords: printed keywords, keyword counters and animation
@@ -1241,7 +1317,7 @@ impl Game {
             return true;
         }
         let characteristics = self.characteristics(permanent_id);
-        !characteristics.is_creature || characteristics.keywords.haste
+        !characteristics.is_creature() || characteristics.keywords.haste
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's
@@ -1254,7 +1330,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        if !characteristics.is_creature {
+        if !characteristics.is_creature() {
             return false;
         }
         if permanent.deathtouch_damage && permanent.damage > 0 {

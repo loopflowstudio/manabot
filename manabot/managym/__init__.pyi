@@ -265,9 +265,12 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
+        disclosure: Literal["open", "closed"] = "open",
     ) -> None: ...
     name: str
     world: str | None
+    # Whether the opponent knows this player's main deck and sideboard.
+    disclosure: Literal["open", "closed"]
     @property
     def deck(self) -> Deck: ...
     @property
@@ -521,10 +524,16 @@ class Player:
     zone_counts: List[int]
     graveyard_lessons: int
     known_hand: Dict[int, int]
-    sideboard_counts: Dict[int, int]
-    remaining_sideboard_counts: Dict[int, int]
+    # Decklist counts by definition id; None when the viewer's opponent has a
+    # closed decklist. Unseen counts the library, plus an opponent's hand and
+    # face-down foretold cards; remaining counts sideboard copies outside the game.
+    main_counts: Optional[Dict[int, int]]
+    unseen_counts: Optional[Dict[int, int]]
+    sideboard_counts: Optional[Dict[int, int]]
+    remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
     no_maximum_hand_size: bool
+    # What this player has done this turn.
     turn_history: PlayerTurnHistory
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
@@ -535,6 +544,8 @@ class Player:
     effects: list[ContinuousEffect]
 
 class PlayerTurnHistory:
+    """What one player has done this turn."""
+
     attacked: bool
     permanents_sacrificed: int
     land_entered: bool
@@ -558,6 +569,11 @@ class CastPermission:
     foretold: bool
 
 class Card:
+    """A card in any zone. On the battlefield every characteristic field
+    (name, power/toughness, card types, legendary, Ally, Lesson, ward,
+    keywords) reads the engine's layered characteristics; elsewhere the
+    printed card. Identity, token status and casting costs are printed."""
+
     zone: ZoneEnum
     owner_id: int
     id: int
@@ -588,8 +604,9 @@ class ContinuousEffect:
     """One continuous-effect record on a player or permanent (CR 611, 613)."""
 
     # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
-    # BecomeArtifactCreature, LoseAllAbilities, Firebending, CantBeBlocked,
-    # CantBlock, ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
+    # BecomeArtifactCreature, Nonlegendary, LoseAllAbilities, Firebending,
+    # CantBeBlocked, CantBlock, ExileIfWouldDie, KeepUnspentMana or
+    # NoMaximumHandSize.
     modification: str
     power: int | None
     toughness: int | None
@@ -603,6 +620,15 @@ class ContinuousEffect:
     # The source's printed name (public: the spell or ability resolved).
     source_name: str | None
     timestamp: int
+
+class CopyEffect:
+    """The copy effect that made a permanent a copy (CR 707.2)."""
+
+    # The printed definition at the root of the copy chain, and its name.
+    registry_key: int
+    name: str
+    # Exceptions in its copiable values (CR 707.9b), in application order.
+    exceptions: list[ContinuousEffect]
 
 class Permanent:
     id: int
@@ -642,6 +668,8 @@ class Permanent:
     # Its timestamp (CR 613.7d/e) when an attachment renewed it; None while
     # it is `id`, its entering timestamp.
     timestamp: int | None
+    # The copy effect that made it a copy; None for an original.
+    copy: CopyEffect | None
 
 class Turn:
     turn_number: int
@@ -721,6 +749,7 @@ class Observation:
 class AgentError(RuntimeError): ...
 
 WORLD_VERSION: str
+MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
 
 class VisibleReference:

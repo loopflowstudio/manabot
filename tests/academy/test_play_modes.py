@@ -228,6 +228,26 @@ def test_default_villain_is_search_64(isolated_traces):
     assert config.villain_deck_name == "gw_allies"
 
 
+def test_closed_game_plays_through_and_keeps_its_setup_in_the_stored_trace(
+    isolated_traces,
+):
+    """Stack labels and public cards keep their names through a whole closed game,
+    and the stored trace can still rebuild it."""
+    with TestClient(app) as client:
+        payload = _play_full_game(
+            client,
+            {"villain_type": "random", "seed": 11, "decklists": "closed"},
+            hero_seed=11,
+        )
+    assert payload["deck_names"]["villain"] == "Closed decklist"
+    assert "asset_pack" not in payload
+    assert "main_counts" not in payload["frame"]["projection"]["opponent"]
+    trace = _recorded_traces(isolated_traces)[-1][1]
+    assert trace["config"]["decklists"] == "closed"
+    assert trace["config"]["villain_deck"] == server.GW_ALLIES_DECK
+    assert trace["config"]["asset_pack"] == server.CURATED_PACK.reference
+
+
 def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
     """Named decks: payloads echo display names, traces record identifiers."""
     with TestClient(app) as client:

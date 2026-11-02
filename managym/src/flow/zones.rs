@@ -10,7 +10,8 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        card::{CardDefId, Restriction, StaticAbility},
+        card::{Card, CardDefId, Restriction, StaticAbility},
+        effect::{CopyEffect, Modification},
         game_object::{CardId, Incarnation, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         permanent::Permanent,
@@ -317,10 +318,7 @@ impl Game {
         };
         debug_assert!(card.is_token, "created token must be a token definition");
 
-        let card_id = CardId(self.state.cards.len());
-        self.state.cards.push(card);
-        self.state.card_to_permanent.push(None);
-        self.state.object_incarnations.push(Incarnation::INITIAL);
+        let card_id = self.add_card(card);
         self.move_card_with_entry(
             card_id,
             ZoneType::Battlefield,
@@ -345,6 +343,52 @@ impl Game {
         }
         self.invalidate_mana_cache(controller);
         self.state.card_to_permanent[card_id]
+    }
+
+    /// Create a token that's a copy of `source` under `controller` (CR 707.2,
+    /// 111.1). A card's definition is its copiable values: play never
+    /// mutates it, and counters, damage, tapped state and non-copy effects
+    /// live on the `Permanent` and in effect records. The source card keeps
+    /// its definition after leaving the battlefield, so a departed source is
+    /// copied as it last existed there. `exceptions` become part of the
+    /// token's copiable values after the source's own (CR 707.9b); the
+    /// token's `CopyEffect` records both and the definition at the root.
+    pub(crate) fn create_token_copy(
+        &mut self,
+        source: CardId,
+        controller: PlayerId,
+        exceptions: Vec<Modification>,
+    ) {
+        let mut copy = self.state.cards[source].clone();
+        copy.id = self.state.id_gen.next_id();
+        copy.owner = controller;
+        // Any write detaches the shared definition (`DerefMut`), so a copy
+        // of a token without exceptions keeps sharing its source's.
+        if !copy.is_token {
+            copy.is_token = true;
+        }
+        for exception in &exceptions {
+            let copiable = exception.apply_copiable(&mut copy);
+            debug_assert!(copiable, "copy exception {exception:?} is a rules effect");
+        }
+        let mut effect = copy.copy.take().unwrap_or(CopyEffect {
+            of: copy.definition_id,
+            exceptions: Vec::new(),
+        });
+        effect.exceptions.extend(exceptions);
+        copy.copy = Some(effect);
+        let card_id = self.add_card(copy);
+        self.move_card(card_id, ZoneType::Battlefield);
+        self.invalidate_mana_cache(controller);
+    }
+
+    /// Add a card created during play to the game, outside every zone.
+    fn add_card(&mut self, card: Card) -> CardId {
+        let card_id = CardId(self.state.cards.len());
+        self.state.cards.push(card);
+        self.state.card_to_permanent.push(None);
+        self.state.object_incarnations.push(Incarnation::INITIAL);
+        card_id
     }
 
     /// Count permanents a player controls matching a predicate (e.g.

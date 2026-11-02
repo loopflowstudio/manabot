@@ -77,6 +77,9 @@ pub struct ContinuationFrame {
     /// delayed trigger (CR 603.7; `decision` names its event, see
     /// [`delayed_event_code`]).
     pub kind: u8,
+    /// Kind 6: the obligation's `decision_code`. Kinds 7 and 8: trigger
+    /// ordering class (1 ordinary, 2 ability-triggered). Kind 9: placement
+    /// group plus one. Zero otherwise.
     pub decision: u8,
     pub parent: Option<usize>,
     pub controller: usize,
@@ -568,12 +571,13 @@ impl Game {
                 controller: decision.player().0,
                 ..ContinuationFrame::default()
             };
-            let (kind, resume) = match decision {
+            frame.decision = decision_code(decision);
+            let resume = match decision {
                 Decision::Payment(progress) => {
                     frame.cost(&progress.remaining.mana_cost());
                     frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
                     frame.can_decline = progress.can_decline();
-                    (1, None)
+                    None
                 }
                 Decision::ManaUpfront {
                     permanent,
@@ -587,7 +591,7 @@ impl Game {
                         &self.characteristics(*permanent).activated_abilities[*ability_index]
                             .mana_cost,
                     );
-                    (2, resume.as_deref())
+                    resume.as_deref()
                 }
                 Decision::ManaChoice {
                     choices, resume, ..
@@ -601,33 +605,14 @@ impl Game {
                             lesson: output.restricted_colors(),
                         })
                         .collect();
-                    (3, resume.as_deref())
+                    resume.as_deref()
                 }
                 Decision::Sacrifice { optional, .. } => {
                     frame.can_decline = optional.is_some();
-                    (4, None)
+                    None
                 }
-                Decision::SelectMilled { .. } => (5, None),
-                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => {
-                    (6, None)
-                }
-                Decision::OptionalDiscardDraw { .. } => (7, None),
-                Decision::Scry { .. } => (8, None),
-                Decision::LookAndSelect { .. } => (9, None),
-                Decision::Modal { .. } => (10, None),
-                Decision::Learn { .. } => (11, None),
-                Decision::Discard { .. } => (12, None),
-                Decision::LegendRule { .. } => (13, None),
-                Decision::SearchDistinctLands { .. } => (14, None),
-                Decision::OpponentSplitsRevealed { .. } => (15, None),
-                Decision::DiscardFromRevealedHand { .. } => (16, None),
-                Decision::CastDuringResolution { .. } => (17, None),
-                Decision::ExileLinked { .. } => (18, None),
-                Decision::DistributeCounters { .. } => (19, None),
-                Decision::KeepCreatures { .. } => (20, None),
-                Decision::Retarget { .. } => (21, None),
+                _ => None,
             };
-            frame.decision = kind;
             frames.push(frame);
             let Some(next) = resume else {
                 break;
@@ -668,6 +653,40 @@ impl Game {
                 frame.targets = self.clause_targets(targets, &[], viewer);
             }
         }
+    }
+}
+
+/// Highest obligation code `decision_code` assigns. Captured continuation
+/// frames are validated against it; raise it with each new code.
+pub const MAX_DECISION_CODE: u8 = 22;
+
+/// A suspended obligation's stable code in `ContinuationFrame::decision`
+/// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
+/// new ones, never renumber.
+pub fn decision_code(decision: &Decision) -> u8 {
+    match decision {
+        Decision::Payment(_) => 1,
+        Decision::ManaUpfront { .. } => 2,
+        Decision::ManaChoice { .. } => 3,
+        Decision::Sacrifice { .. } => 4,
+        Decision::SelectMilled { .. } => 5,
+        Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => 6,
+        Decision::OptionalDiscardDraw { .. } => 7,
+        Decision::Scry { .. } => 8,
+        Decision::LookAndSelect { .. } => 9,
+        Decision::Modal { .. } => 10,
+        Decision::Learn { .. } => 11,
+        Decision::Discard { .. } => 12,
+        Decision::LegendRule { .. } => 13,
+        Decision::SearchDistinctLands { .. } => 14,
+        Decision::OpponentSplitsRevealed { .. } => 15,
+        Decision::DiscardFromRevealedHand { .. } => 16,
+        Decision::CastDuringResolution { .. } => 17,
+        Decision::ExileLinked { .. } => 18,
+        Decision::DistributeCounters { .. } => 19,
+        Decision::KeepCreatures { .. } => 20,
+        Decision::Retarget { .. } => 21,
+        Decision::Surveil { .. } => 22,
     }
 }
 
@@ -890,6 +909,162 @@ mod tests {
         assert_eq!(frames[2].decision, 3);
         assert_eq!(frames[2].parent, Some(1));
         assert_eq!(frames[2].mana_outputs[0].mana, [0, 1, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn every_decision_code_is_within_the_validated_bound() {
+        use crate::{
+            flow::decision::{PaymentProgress, ResolutionCastOffer},
+            state::{
+                ability::LinkedGrant, game_object::PermanentId, permanent::CounterKind,
+                predicate::CardPredicate,
+            },
+        };
+        let player = PlayerId(0);
+        let predicate = CardPredicate::default();
+        // One value per variant. `decision_code`'s exhaustive match makes a
+        // new variant fail to compile until it has a code; add it here too.
+        let decisions = [
+            Decision::Payment(PaymentProgress::new(
+                player,
+                PaymentCost::Waterbend { generic: 1 },
+                vec![],
+                vec![],
+            )),
+            Decision::ManaUpfront {
+                player,
+                permanent: PermanentId(0),
+                ability_index: 0,
+                resume: None,
+            },
+            Decision::ManaChoice {
+                player,
+                choices: vec![],
+                resume: None,
+            },
+            Decision::Sacrifice {
+                player,
+                predicate: predicate.clone(),
+                optional: None,
+            },
+            Decision::DistributeCounters {
+                player,
+                kind: CounterKind::PlusOnePlusOne,
+                remaining: 1,
+            },
+            Decision::SelectMilled {
+                player,
+                cards: vec![],
+                if_declined: vec![],
+                to_battlefield: false,
+            },
+            Decision::SearchBasicLand {
+                player,
+                subtype: None,
+                remaining: 1,
+                tapped: true,
+                untap_if_lands: None,
+                bottom_source: false,
+                to_hand: false,
+                selected: vec![],
+            },
+            Decision::SearchLibraryToHand {
+                player,
+                predicate: predicate.clone(),
+            },
+            Decision::OptionalDiscardDraw {
+                player,
+                count: 1,
+                remaining: 1,
+                discarded: 0,
+            },
+            Decision::Scry {
+                player,
+                looked: vec![],
+                remaining: vec![],
+                top: vec![],
+                bottom: vec![],
+            },
+            Decision::Surveil {
+                player,
+                looked: vec![],
+            },
+            Decision::LookAndSelect {
+                reveal: false,
+                player,
+                looked: vec![],
+                predicate: predicate.clone(),
+                selected: 0,
+                min_select: 0,
+                max_select: 1,
+            },
+            Decision::SearchDistinctLands {
+                player,
+                remaining: 1,
+                selected: vec![],
+                opponent_picks: 1,
+            },
+            Decision::DiscardFromRevealedHand {
+                player,
+                owner: player,
+                predicate: predicate.clone(),
+            },
+            Decision::OpponentSplitsRevealed {
+                player,
+                owner: player,
+                revealed: vec![],
+                remaining: 1,
+            },
+            Decision::CastDuringResolution {
+                player,
+                offer: ResolutionCastOffer::Hand {
+                    predicate: predicate.clone(),
+                },
+                paid: false,
+                spends: None,
+            },
+            Decision::ExileLinked {
+                player,
+                owner: player,
+                zone: ZoneType::Graveyard,
+                predicate,
+                up_to: true,
+                grant: LinkedGrant::FlashAnyMana,
+                grantee: player,
+                source: None,
+            },
+            Decision::Modal {
+                player,
+                modes: vec![],
+            },
+            Decision::Learn { player },
+            Decision::Discard {
+                player,
+                remaining: 1,
+                then: None,
+            },
+            Decision::KeepCreatures {
+                player,
+                max_total_power: 0,
+                kept: vec![],
+            },
+            Decision::Retarget {
+                player,
+                object: Target::Player(player),
+                slot: 0,
+                may_keep: false,
+            },
+            Decision::LegendRule {
+                player,
+                groups: vec![],
+                keep: vec![],
+            },
+        ];
+        let codes: Vec<u8> = decisions.iter().map(decision_code).collect();
+        assert!(codes
+            .iter()
+            .all(|code| (1..=MAX_DECISION_CODE).contains(code)));
+        assert_eq!(codes.iter().max(), Some(&MAX_DECISION_CODE));
     }
 
     #[test]
