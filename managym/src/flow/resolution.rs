@@ -227,7 +227,22 @@ impl Game {
                 .activated_abilities
                 .get(ability.ability_index),
         };
-        let Some(definition) = definition.cloned() else {
+        // An ability past the printed ones is inherited (Koh): it is read from
+        // the definition the source still has the abilities of.
+        let definition = definition.cloned().or_else(|| {
+            let printed = self.state.cards[ability.source_card]
+                .activated_abilities
+                .len();
+            let permanent = self.lookup_current_permanent(ability.source_ref).ok()?;
+            let inherited = self.inherited_definition(permanent)?;
+            self.state
+                .content
+                .definition(inherited)?
+                .activated_abilities
+                .get(ability.ability_index.checked_sub(printed)?)
+                .cloned()
+        });
+        let Some(definition) = definition else {
             return;
         };
 
@@ -1314,9 +1329,7 @@ impl Game {
                     // has moved it ("exile ..., create a copy of it").
                     Some(_) => match frame.primary_target()? {
                         Target::Permanent(id) => {
-                            if self.present_primary_target(frame).is_none() {
-                                return None;
-                            }
+                            self.present_primary_target(frame)?;
                             self.state.permanents[id].as_ref()?.card
                         }
                         // Copied once this resolution has exiled it.
@@ -1585,6 +1598,74 @@ impl Game {
                 frame.controller = *player;
                 None
             }
+            Effect::MayExileTriggeringWithSource => {
+                // The card the dying creature became (CR 400.7), still in its
+                // graveyard; `ExileWithSource` exiles it as the frame's target.
+                let Some(Target::Permanent(id)) = frame.context_target else {
+                    return None;
+                };
+                let card = self.departed_permanent_lki(id)?.card;
+                if self.state.zones.zone_of(card) != Some(ZoneType::Graveyard) {
+                    return None;
+                }
+                frame.targets = vec![crate::flow::decision::ResolutionTarget {
+                    target: Target::GraveyardCard(self.current_object_ref(card)?),
+                    requirement: 0,
+                    legal: true,
+                }];
+                Some(Decision::Modal {
+                    player: frame.controller,
+                    modes: vec![
+                        vec![Effect::ExileWithSource {
+                            target: TargetSpec::GraveyardCard {
+                                predicate: CardPredicate::default(),
+                            },
+                        }],
+                        vec![],
+                    ],
+                })
+            }
+            Effect::ChooseExiledWithSource { predicate } => {
+                let source = frame.source_ref?;
+                let modes: Vec<Vec<Effect>> = self
+                    .state
+                    .exile_links
+                    .iter()
+                    .filter(|link| link.source == source)
+                    .map(|link| link.exiled_card)
+                    .filter(|card| {
+                        self.state.zones.zone_of(*card) == Some(ZoneType::Exile)
+                            && predicate.matches_card(&self.state.cards[*card])
+                    })
+                    .map(|card| {
+                        vec![Effect::HaveAbilitiesOf {
+                            definition: self.state.cards[card].definition_id,
+                        }]
+                    })
+                    .collect();
+                (!modes.is_empty()).then_some(Decision::Modal {
+                    player: frame.controller,
+                    modes,
+                })
+            }
+            Effect::HaveAbilitiesOf { definition } => {
+                let id = self.source_permanent_id(frame)?;
+                let affected = self.affected_permanent(id)?;
+                let timestamp = self.state.id_gen.next_id();
+                self.state
+                    .effects
+                    .push(crate::state::effect::ContinuousEffect {
+                        timestamp,
+                        source: Some(*definition),
+                        controller: frame.controller,
+                        affected,
+                        modification: Modification::HasAbilitiesOfSource,
+                        duration: EffectDuration::Indefinite,
+                        source_object: None,
+                    });
+                self.invalidate_mana_cache(frame.controller);
+                None
+            }
             Effect::DestroyAll { predicate } => {
                 let doomed: Vec<_> = [PlayerId(0), PlayerId(1)]
                     .into_iter()
@@ -1645,7 +1726,6 @@ impl Game {
             Effect::PayTargetsManaValue { if_paid } => {
                 let total: u32 = frame
                     .active_targets()
-                    .into_iter()
                     .filter_map(|target| match target.target {
                         Target::GraveyardCard(object) => Some(CardId::from(object.entity)),
                         _ => None,

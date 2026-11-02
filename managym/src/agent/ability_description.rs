@@ -106,6 +106,12 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When one or more {} you control attack",
             predicate_description(predicate, "permanents")
         ),
+        TriggerCondition::Attacks {
+            subject: TriggerSubject::Another(predicate),
+        } => format!(
+            "When one or more other {} attack",
+            predicate_description(predicate, "permanents")
+        ),
         TriggerCondition::AttacksAlone { subject } => {
             format!("When {} attacks alone", subject_description(subject))
         }
@@ -188,6 +194,7 @@ fn subject_description(subject: &TriggerSubject) -> String {
             predicate_description(p, "permanent")
         ),
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
+        TriggerSubject::Another(p) => format!("another {}", predicate_description(p, "permanent")),
         TriggerSubject::AnyYouControl(p) => {
             format!("a {} you control", predicate_description(p, "permanent"))
         }
@@ -654,6 +661,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
                 predicate_description(predicate, "creatures")
             ),
         },
+        MayExileTriggeringWithSource => "You may exile it".into(),
+        ChooseExiledWithSource { predicate } => format!("Choose a {} exiled with this", predicate_description(predicate, "card")),
+        HaveAbilitiesOf { .. } => "This has all activated and triggered abilities of the chosen card".into(),
         DestroyAll { predicate } => format!("Destroy all {}", predicate_description(predicate, "permanents")),
         NameAndExileFromTargetPlayer { count } => format!("Choose a card name. Search target opponent's graveyard, hand, and library for up to {count} cards with that name and exile them. Then that player shuffles"),
         ExileNamed { name, count } => format!("Exile up to {count} cards named {name} from that player's graveyard, hand, and library, then they shuffle"),
@@ -895,6 +905,9 @@ fn continuous_description(
             format!("You control {}{until}", subject.to_lowercase())
         }
         Modification::ModeChosen { mode } => format!("{subject} has chosen mode {}", mode + 1),
+        Modification::HasAbilitiesOfSource => {
+            format!("{subject} has all activated and triggered abilities of the chosen card")
+        }
     }
 }
 

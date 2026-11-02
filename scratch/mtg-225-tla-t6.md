@@ -54,7 +54,7 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | Avatar Aang // Aang, Master of Elements | supported; bending events and four-kind history |
 | Bender's Waterskin | supported |
 | Bumi, Unleashed | supported; additional land-creature combat |
-| Koh, the Face Stealer | |
+| Koh, the Face Stealer | supported; ability inheritance as an effect record |
 | Ember Island Production | supported; copies the face that's up, transformed |
 | Fire Lord Azula | supported; spells cast while attacking are copied |
 | Foggy Swamp Visions | supported |

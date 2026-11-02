@@ -4543,5 +4543,17 @@
     ],
     "oracle_text": "Flying\nSpells you cast cost {W}{U}{B}{R}{G} less to cast. (This can reduce generic costs.)\nAt the beginning of each upkeep, you may transform Aang, Master of Elements. If you do, you gain 4 life, draw four cards, put four +1/+1 counters on him, and he deals 4 damage to each opponent.",
     "colors": []
+  },
+  "Koh, the Face Stealer": {
+    "name": "Koh, the Face Stealer",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Legendary Creature — Shapeshifter Spirit",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "When Koh enters, exile up to one other target creature.\nWhenever another nontoken creature dies, you may exile it.\nPay 1 life: Choose a creature card exiled with Koh.\nKoh has all activated and triggered abilities of the last chosen card.",
+    "colors": [
+      "B"
+    ]
   }
 }

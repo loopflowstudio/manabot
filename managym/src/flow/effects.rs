@@ -89,6 +89,16 @@ impl Game {
             .filter(move |effect| object.is_some_and(|object| effect.affects_object(object)))
     }
 
+    /// The definition whose activated and triggered abilities the permanent
+    /// has from its latest `HasAbilitiesOfSource` record (Koh), unless it has
+    /// lost its abilities.
+    pub(crate) fn inherited_definition(&self, permanent_id: PermanentId) -> Option<CardDefId> {
+        self.effects_on(permanent_id)
+            .filter(|effect| effect.modification == Modification::HasAbilitiesOfSource)
+            .last()
+            .and_then(|effect| effect.source)
+    }
+
     /// Records affecting a player, in timestamp order.
     pub fn player_effects(&self, player: PlayerId) -> impl Iterator<Item = &ContinuousEffect> {
         self.state

@@ -188,6 +188,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         katara_the_fearless(),
         katara_water_tribe_s_hope(),
         knowledge_seeker(),
+        koh_the_face_stealer(),
         kyoshi_battle_fan(),
         kyoshi_island_plaza(),
         kyoshi_village(),
@@ -5872,6 +5873,60 @@ fn knowledge_seeker() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn koh_the_face_stealer() -> CardDefinition {
+    let text_box = "When Koh enters, exile up to one other target creature.\nWhenever another nontoken creature dies, you may exile it.\nPay 1 life: Choose a creature card exiled with Koh.\nKoh has all activated and triggered abilities of the last chosen card.";
+
+    CardDefinition {
+        key: "tla.koh_the_face_stealer",
+        scryfall_id: "28f6fa32-5058-4c29-9ba8-9d8f2057eb6d",
+        name: "Koh, the Face Stealer".into(),
+        mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Shapeshifter".into(), "Spirit".into()],
+        power: Some(6),
+        toughness: Some(6),
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::Creature)
+                    },
+                    effects: vec![Effect::ExileWithSource {
+                        target: TargetSpec::Creature,
+                    }],
+                }],
+            },
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::Another(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        token: Some(false),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::MayExileTriggeringWithSource],
+            },
+        ],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            life_cost: 1,
+            effects: vec![Effect::ChooseExiledWithSource {
+                predicate: CardPredicate::creature(),
+            }],
+            ..Default::default()
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

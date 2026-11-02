@@ -872,21 +872,31 @@ impl Game {
         let Ok(target) = self.lookup_current_permanent(source.lki.object_ref) else {
             return Vec::new();
         };
-        self.static_sources()
+        // Triggered abilities a record lets it have (Koh's chosen card).
+        let inherited = self
+            .inherited_definition(target)
+            .and_then(|id| self.state.content.definition(id))
+            .map(|definition| definition.abilities.clone())
+            .unwrap_or_default();
+        inherited
             .into_iter()
-            .flat_map(|(grantor, controller, card)| {
-                card.triggered_grants()
-                    .filter(move |grant| {
-                        self.static_scope_applies(
-                            &grant.scope,
-                            grantor,
-                            controller,
-                            target,
-                            ScopeView::Rules,
-                        )
-                    })
-                    .map(|grant| (*grant.ability).clone())
-            })
+            .chain(
+                self.static_sources()
+                    .into_iter()
+                    .flat_map(|(grantor, controller, card)| {
+                        card.triggered_grants()
+                            .filter(move |grant| {
+                                self.static_scope_applies(
+                                    &grant.scope,
+                                    grantor,
+                                    controller,
+                                    target,
+                                    ScopeView::Rules,
+                                )
+                            })
+                            .map(|grant| (*grant.ability).clone())
+                    }),
+            )
             .collect()
     }
 
@@ -1390,6 +1400,10 @@ impl Game {
                 TriggerSubject::EnchantedCreature => attackers
                     .iter()
                     .any(|attacker| self.is_enchanted_by(*attacker, source_card)),
+                TriggerSubject::Another(predicate) => attackers.iter().any(|attacker| {
+                    self.permanent_is_other(*attacker, source_card)
+                        && self.permanent_matches_predicate(*attacker, predicate)
+                }),
             },
             (
                 TriggerCondition::AttacksAlone { subject },
@@ -1417,6 +1431,10 @@ impl Game {
                     }
                     TriggerSubject::EnchantedCreature => {
                         self.is_enchanted_by(*attacker, source_card)
+                    }
+                    TriggerSubject::Another(predicate) => {
+                        self.permanent_is_other(*attacker, source_card)
+                            && self.permanent_matches_predicate(*attacker, predicate)
                     }
                 }
             }
@@ -1638,6 +1656,9 @@ impl Game {
                     && source_was_on_battlefield
                     && matches(predicate)
             }
+            TriggerSubject::Another(predicate) => {
+                moved_card != source_card && source_was_on_battlefield && matches(predicate)
+            }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
             TriggerSubject::EnchantedCreature => self.state.card_to_permanent[source_card]
@@ -1672,6 +1693,10 @@ impl Game {
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
             TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_card),
+            TriggerSubject::Another(predicate) => {
+                permanent.card != source_card
+                    && self.permanent_matches_predicate(permanent_id, predicate)
+            }
         }
     }
 

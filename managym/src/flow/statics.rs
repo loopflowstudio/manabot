@@ -1417,6 +1417,13 @@ impl Game {
         let mut abilities = Vec::new();
         if !lost {
             abilities = card.activated_abilities.clone();
+            // Inherited abilities follow the printed ones (Koh).
+            if let Some(definition) = self
+                .inherited_definition(permanent)
+                .and_then(|id| self.state.content.definition(id))
+            {
+                abilities.extend(definition.activated_abilities.iter().cloned());
+            }
             self.extend_own_abilities(permanent, basis, is_land, sources, &mut abilities);
         }
         for &(grantor, card) in &basis.attachments {

@@ -13989,3 +13989,92 @@ fn avatar_aang_draws_on_each_bending_and_transforms_after_all_four() {
     assert_eq!(counters_of(&s, aang, CounterKind::PlusOnePlusOne), 4);
     s.assert_life(1, 16);
 }
+
+/// Koh exiles a creature as it enters and may exile each other nontoken
+/// creature that dies; paying 1 life chooses one of those cards, and Koh has
+/// the last chosen card's activated and triggered abilities.
+#[test]
+fn koh_the_face_stealer_takes_the_abilities_of_the_last_chosen_card() {
+    let mut s = five_color_setup(&["Koh, the Face Stealer", "Turtle-Duck", "Gray Ogre"]);
+    let duck = s.force_permanent_on_battlefield(1, "Turtle-Duck");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let (duck_card, ogre_card) = (card_of(&s, duck), card_of(&s, ogre));
+    let koh_card = cast(&mut s, "Koh, the Face Stealer");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(duck)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, duck_card), Some(ZoneType::Exile));
+    let koh = s.game().state.card_to_permanent[koh_card].unwrap();
+
+    s.game_mut().move_card(ogre_card, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, ogre_card),
+        Some(ZoneType::Exile),
+        "exiled with Koh"
+    );
+
+    assert!(!offers_ability(&mut s, koh, 1), "nothing chosen yet");
+    activate(&mut s, koh, 0);
+    settle_until_modal(&mut s);
+    assert_eq!(s.action_space().actions.len(), 2, "both exiled cards");
+    // Modes follow the exile links: Turtle-Duck first.
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    s.assert_life(0, 19);
+    assert!(offers_ability(&mut s, koh, 1), "Turtle-Duck's ability");
+    activate(&mut s, koh, 1);
+    settle(&mut s);
+    let view = s.game().characteristics(koh);
+    assert_eq!(view.power, 4);
+    assert!(view.keywords.trample);
+
+    activate(&mut s, koh, 0);
+    settle_until_modal(&mut s);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert!(
+        !offers_ability(&mut s, koh, 1),
+        "the last chosen card has none"
+    );
+}
+
+/// Pass priority until a mode choice is offered.
+fn settle_until_modal(s: &mut Scenario) {
+    for _ in 0..10 {
+        if s.action_space().kind == ActionSpaceKind::Modal {
+            return;
+        }
+        s.pass_priority();
+    }
+    panic!("no mode choice: {:?}", s.action_space());
+}
+
+/// Koh's chosen card's triggered abilities trigger from Koh: with Fire Lord
+/// Azula chosen, Koh firebends 2 as he attacks.
+#[test]
+fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
+    let mut s = five_color_setup(&["Koh, the Face Stealer", "Fire Lord Azula"]);
+    let azula = s.force_permanent_on_battlefield(1, "Fire Lord Azula");
+    let koh_card = cast(&mut s, "Koh, the Face Stealer");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(azula)));
+    settle(&mut s);
+    let koh = s.game().state.card_to_permanent[koh_card].unwrap();
+    activate(&mut s, koh, 0);
+    settle_until_modal(&mut s);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    clear_summoning_sickness(&mut s, koh);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, koh);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.players[0].combat_mana_pool.mana[3],
+        2,
+        "Azula's firebending 2, from Koh"
+    );
+}

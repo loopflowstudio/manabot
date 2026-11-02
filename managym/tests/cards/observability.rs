@@ -287,6 +287,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::ModeChosen",
             Seen::Actions("a chosen mode is no longer offered"),
         ),
+        Modification::HasAbilitiesOfSource => (
+            "Modification::HasAbilitiesOfSource",
+            Seen::Fact(FactKind::Effect),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -335,10 +339,11 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
             previous: PlayerId(1),
         }),
         permanent(Modification::ModeChosen { mode: 1 }),
+        permanent(Modification::HasAbilitiesOfSource),
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 17;
+const MODIFICATION_VARIANTS: usize = 18;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -490,6 +495,9 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::NameAndExileFromTargetPlayer { .. } => "Effect::NameAndExileFromTargetPlayer",
         Effect::ExileNamed { .. } => "Effect::ExileNamed",
         Effect::PayTargetsManaValue { .. } => "Effect::PayTargetsManaValue",
+        Effect::MayExileTriggeringWithSource => "Effect::MayExileTriggeringWithSource",
+        Effect::ChooseExiledWithSource { .. } => "Effect::ChooseExiledWithSource",
+        Effect::HaveAbilitiesOf { .. } => "Effect::HaveAbilitiesOf",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::PutCountersOnTriggeringPermanent { .. } => {
             "Effect::PutCountersOnTriggeringPermanent"
@@ -607,7 +615,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 117;
+const EFFECT_VARIANTS: usize = 120;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -929,6 +937,13 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::PayTargetsManaValue {
             if_paid: vec![Effect::Discard],
+        },
+        Effect::MayExileTriggeringWithSource,
+        Effect::ChooseExiledWithSource {
+            predicate: CardPredicate::creature(),
+        },
+        Effect::HaveAbilitiesOf {
+            definition: managym::state::card::CardDefId(0),
         },
         Effect::GainControl {
             player: PlayerSelector::You,

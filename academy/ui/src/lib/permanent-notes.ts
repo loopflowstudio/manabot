@@ -53,6 +53,8 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return `control changed from seat ${(effect.amount ?? 0) + 1}`;
     case 'ModeChosen':
       return `mode ${(effect.amount ?? 0) + 1} already chosen`;
+    case 'HasAbilitiesOfSource':
+      return `has the activated and triggered abilities of ${effect.source_name ?? 'the chosen card'}`;
     default:
       return effect.modification;
   }

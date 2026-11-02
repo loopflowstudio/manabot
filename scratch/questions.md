@@ -90,3 +90,9 @@ here; main carries their outcomes.
   until-end-of-combat mana (firebending's only source), "you earthbend" and
   "you airbend" once per resolved instruction. The turn history keeps the four
   kinds as bits (`PlayerTurnHistory.bent`, four player columns).
+- Koh: "has all activated and triggered abilities of the last chosen card" is
+  a `HasAbilitiesOfSource` continuous-effect record whose source is the chosen
+  definition (latest record wins). Inherited activated abilities follow the
+  printed ones; an inherited activation resolves from the record while Koh
+  remains, and inherited leaves-the-battlefield triggers do not fire as Koh
+  leaves. "You may exile it" is a resolution `Modal`.

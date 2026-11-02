@@ -312,6 +312,8 @@ pub enum TriggerSubject {
     AnyYouControl(CardPredicate),
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// "another [predicate]", whoever controls it.
+    Another(CardPredicate),
 }
 
 /// The players an effect affects, relative to its controller.
@@ -619,6 +621,19 @@ pub enum Effect {
     /// of the frame's chosen targets: paying it runs `if_paid` on them.
     PayTargetsManaValue {
         if_paid: Vec<Effect>,
+    },
+    /// "You may exile it": the card the triggering creature became in its
+    /// graveyard, exiled with this ability's source (CR 607.2a).
+    MayExileTriggeringWithSource,
+    /// "Choose a [predicate] card exiled with [this]": one mode per such
+    /// card, each `HaveAbilitiesOf` it.
+    ChooseExiledWithSource {
+        predicate: CardPredicate,
+    },
+    /// The source permanent has all activated and triggered abilities of
+    /// `definition` from now on, until a later choice (CR 613.1f).
+    HaveAbilitiesOf {
+        definition: crate::state::card::CardDefId,
     },
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
@@ -1281,6 +1296,7 @@ impl Effect {
         match self {
             Effect::PutCountersOnTriggeringPermanent { .. }
             | Effect::PutTriggeringCountersOnSource
+            | Effect::MayExileTriggeringWithSource
             | Effect::ApplyContinuous {
                 affected: AffectedSpec::TriggeringPermanent,
                 ..
@@ -1460,6 +1476,9 @@ impl Effect {
             | Effect::UntapAll { .. }
             | Effect::EachPlayerChoosesToExile { .. }
             | Effect::DestroyAll { .. }
+            | Effect::MayExileTriggeringWithSource
+            | Effect::ChooseExiledWithSource { .. }
+            | Effect::HaveAbilitiesOf { .. }
             | Effect::NameAndExileFromTargetPlayer { .. }
             | Effect::ExileNamed { .. }
             | Effect::PayTargetsManaValue { .. }

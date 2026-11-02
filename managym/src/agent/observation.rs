@@ -524,6 +524,7 @@ impl ContinuousEffectData {
                 data.amount = Some(i32::from(*mode));
                 "ModeChosen"
             }
+            Modification::HasAbilitiesOfSource => "HasAbilitiesOfSource",
         }
         .to_string();
         data

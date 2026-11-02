@@ -74,6 +74,9 @@ pub enum Modification<N = i32> {
     /// The source's triggered ability chose mode `mode` ("choose one that
     /// hasn't been chosen"); lasts as long as the object.
     ModeChosen { mode: u8 },
+    /// "has all activated and triggered abilities of" the record's source
+    /// definition (Koh, the Face Stealer's last chosen card), layer 6.
+    HasAbilitiesOfSource,
 }
 
 impl<N> Modification<N> {
@@ -105,6 +108,7 @@ impl<N> Modification<N> {
                 previous: *previous,
             },
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
+            Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
         }
     }
 }
@@ -148,7 +152,8 @@ impl Modification {
             | Self::KeepUnspentMana(_)
             | Self::NoMaximumHandSize
             | Self::ControlChanged { .. }
-            | Self::ModeChosen { .. } => return false,
+            | Self::ModeChosen { .. }
+            | Self::HasAbilitiesOfSource => return false,
         }
         true
     }

@@ -346,6 +346,9 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "NoMaximumHandSize": "no maximum hand size",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
+        "HasAbilitiesOfSource": (
+            f"has the activated and triggered abilities of {effect.source_name}"
+        ),
     }
     try:
         return phrases[modification]
