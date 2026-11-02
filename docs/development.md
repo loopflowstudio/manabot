@@ -212,25 +212,29 @@ their own and compares a change with the reference commit named in
 GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
 the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
 Intel Xeon 6973P-C (2026-11-02), so wall time is never compared across runs.
-The job checks out the reference commit, builds it with the change's
-benchmarks, runs reference then candidate on the one machine, and fails the
-PR when the candidate is more than 10% slower than the reference on any
-timing or either run's digests differ from the committed ones (two runs of
-one engine on separate EPYC 7763 machines agreed within 2.5%). So a speedup
-that changes search results fails until the reference moves, and so does a
-baseline file whose digests no longer describe its reference commit. The
-figures in the file are the reference's own recording, for orientation only.
+The job builds and runs the candidate, then checks out the reference commit,
+builds it with the change's benchmarks and runs it on the one machine, and
+fails the PR when the candidate is more than 10% slower than the reference on
+any timing or either run's digests differ from the committed ones (two runs
+of one engine on separate EPYC 7763 machines agreed within 2.5%). So a
+speedup that changes search results fails until the reference moves, and so
+does a baseline file whose digests no longer describe its reference commit.
+The figures in the file are the reference's own recording, for orientation
+only.
 
 **Moving the reference.** Every run is a recording of its candidate: the
-`engine-budget` artifact holds both outputs and a `measurement.json` naming
-the candidate commit, date, run and runner CPU. A PR adopts its own run as the
-reference, saying why in the commit, for one of three reasons: a rules change
-reaching these decks moved a digest; a measured cost is accepted; or a
-speedup is kept, so later slowdowns are budgeted against the faster engine
-rather than allowed back up to the old reference. The PR body cites the delta
-from the run it adopts; the recording commit's own run then compares the same
-engine with that reference and passes. When both digests match and the engine
-did not change, a failure is runner noise: re-run the job.
+`engine-budget` artifact holds the candidate's output and a `measurement.json`
+naming the candidate commit, date, run and runner CPU, written before the
+reference is built, so a reference that no longer builds with the change's
+benchmarks still leaves a recording. A PR adopts its own run as the
+reference, saying why in the commit, for one of three reasons: a digest moved
+(a rules change reaching these decks, or a change to the benchmarks or the
+curated lists); a measured cost is accepted; or a speedup is kept, so later
+slowdowns are budgeted against the faster engine rather than allowed back up
+to the old reference. The PR body cites the delta from the run it adopts; the
+recording commit's own run then compares the same engine with that reference
+and passes. When both digests match and the engine did not change, a failure
+is runner noise: re-run the job.
 
 ```bash
 gh run download <run-id> --name engine-budget --dir .cache/engine-budget
@@ -242,9 +246,8 @@ job checks out and records the PR head, never GitHub's ephemeral merge
 commit, and a PR head stays fetchable after a squash merge. The benchmarks
 use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
 `is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
-must keep the
-reference commit compiling with the new benchmarks or move the reference in
-the same PR. For a commit that has no PR, the `measure` dispatch input on
+that the reference commit no longer compiles with moves the reference in the
+same PR, recorded from the PR's own run like any other move. For a commit that has no PR, the `measure` dispatch input on
 `ci.yml` selects only Engine Budget, benchmarks that commit with the
 dispatched ref's benchmarks and uploads the same artifact without comparing
 (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).

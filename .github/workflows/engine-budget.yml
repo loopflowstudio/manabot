@@ -87,19 +87,11 @@ jobs:
           python-version: '3.12'
           enable-cache: false
 
+      # The candidate is built, run and recorded before the reference, so a
+      # run whose reference cannot build with this ref's benchmarks is still
+      # a recording its PR adopts.
       - name: Build the candidate benchmarks
         run: cargo build --release --locked --manifest-path "$CANDIDATE/Cargo.toml" --example bench_search --example bench_steps
-
-      - name: Build the reference benchmarks
-        if: env.REFERENCE != ''
-        run: cargo build --release --locked --manifest-path "$REFERENCE/Cargo.toml" --example bench_search --example bench_steps
-
-      - name: Run the reference
-        if: env.REFERENCE != ''
-        run: |
-          mkdir -p .cache/engine-budget/reference
-          "$REFERENCE/target/release/examples/bench_steps" | tee .cache/engine-budget/reference/bench_steps.jsonl
-          "$REFERENCE/target/release/examples/bench_search" | tee .cache/engine-budget/reference/bench_search.jsonl
 
       - name: Run the candidate
         run: |
@@ -122,15 +114,26 @@ jobs:
             echo
             echo "Runner \`${RUNNER_OS}\` \`$(uname -m)\`, $RUNNER"
             echo
-            if [ -n "$REFERENCE" ]; then
-              echo "Reference \`$OTHER\`:"
-              echo '```'
-              cat .cache/engine-budget/reference/bench_steps.jsonl .cache/engine-budget/reference/bench_search.jsonl
-              echo '```'
-            fi
             echo "Candidate \`$COMMIT\`:"
             echo '```'
             cat .cache/engine-budget/bench_steps.jsonl .cache/engine-budget/bench_search.jsonl
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the reference benchmarks
+        if: env.REFERENCE != ''
+        run: cargo build --release --locked --manifest-path "$REFERENCE/Cargo.toml" --example bench_search --example bench_steps
+
+      - name: Run the reference
+        if: env.REFERENCE != ''
+        run: |
+          mkdir -p .cache/engine-budget/reference
+          "$REFERENCE/target/release/examples/bench_steps" | tee .cache/engine-budget/reference/bench_steps.jsonl
+          "$REFERENCE/target/release/examples/bench_search" | tee .cache/engine-budget/reference/bench_search.jsonl
+          {
+            echo "Reference \`$OTHER\`:"
+            echo '```'
+            cat .cache/engine-budget/reference/bench_steps.jsonl .cache/engine-budget/reference/bench_search.jsonl
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 

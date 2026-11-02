@@ -177,7 +177,7 @@ def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
     code, output = _compare(tmp_path, scale=1.4, reference_digests=(11, 22, 34))
     assert code == 1, output
     assert (
-        "| baseline file | abc123def | digests differ | re-record from the reference commit |"
+        "| baseline file | abc123def | digests differ | digests do not describe the reference |"
         in output
     )
     assert "| reference search seed 3 digest | 33 | 34 | differs |" in output

@@ -286,14 +286,16 @@ def compare(args: argparse.Namespace) -> int:
     rows = digest_checks("reference", baseline, reference)
     if any(row.failure for row in rows):
         # The committed digests do not describe the reference commit, so the
-        # file is wrong, not the candidate; say so before any timing.
+        # file is wrong, not the candidate; say so before any timing. Recording
+        # this run (the footer) is the recovery, whether the benchmarks moved
+        # or the file was edited by hand.
         rows.insert(
             0,
             Check(
                 "baseline file",
                 baseline["reference"]["commit"][:9],
                 "digests differ",
-                "re-record from the reference commit",
+                "digests do not describe the reference",
             ),
         )
     rows += digest_checks("candidate", baseline, candidate)
