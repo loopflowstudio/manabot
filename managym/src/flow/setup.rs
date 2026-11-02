@@ -131,8 +131,7 @@ impl Game {
         }
 
         let mut game = Self {
-            statics_cache: Default::default(),
-            trigger_index: Default::default(),
+            derived: Default::default(),
             state: TrackedState::new(GameState {
                 cards,
                 permanents: PermanentVec::default(),

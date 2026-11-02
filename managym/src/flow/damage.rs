@@ -142,10 +142,9 @@ impl Game {
 
         match target {
             ProposedDamageTarget::Player(player) => {
-                if self.state.players.get(player.0).is_none() {
+                let Some(life) = self.state.life_mut(player) else {
                     return false;
-                }
-                let life = self.state.life_mut(player);
+                };
                 let old_life = *life;
                 *life = life.saturating_sub(amount);
                 let new_life = *life;
@@ -215,10 +214,9 @@ impl Game {
         {
             return false;
         }
-        if self.state.players.get(player.0).is_none() {
+        let Some(life) = self.state.life_mut(player) else {
             return false;
-        }
-        let life = self.state.life_mut(player);
+        };
         let old_life = *life;
         *life = life.saturating_add(delta);
         let new_life = *life;

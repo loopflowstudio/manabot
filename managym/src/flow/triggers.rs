@@ -130,29 +130,15 @@ struct TriggerSourceEntry {
 }
 
 /// Which battlefield permanents can have a triggered ability that fires on
-/// each kind of event, at one `triggers` revision (`Revisions`): every
-/// permanent with its printed abilities' kinds, in battlefield-slot order,
-/// plus the kinds of every static triggered-ability grant, which may reach
-/// any permanent its scope covers.
+/// each kind of event, at one `triggers` revision (`Revisions`, cached in
+/// `DerivedCache`): every permanent with its printed abilities' kinds, in
+/// object order like `snapshot_trigger_sources`, plus the kinds of every
+/// static triggered-ability grant, which may reach any permanent its scope
+/// covers.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct TriggerIndex {
     sources: Vec<TriggerSourceEntry>,
     granted: EventKinds,
-}
-
-/// The trigger index at the `triggers` revision it was built for; reading
-/// it at a later revision rebuilds it. Cloned with the game.
-#[derive(Clone, Default)]
-pub(crate) struct TriggerIndexCache {
-    revision: u64,
-    index: Option<Arc<TriggerIndex>>,
-}
-
-/// Opaque, so a game's `Debug` text does not depend on what was read.
-impl std::fmt::Debug for TriggerIndexCache {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("TriggerIndexCache")
-    }
 }
 
 impl Game {
@@ -1253,22 +1239,19 @@ impl Game {
     /// The trigger index at the current `triggers` revision, built once per
     /// revision.
     fn trigger_index(&self) -> Arc<TriggerIndex> {
-        let revision = self.state.revisions().triggers;
-        let cached = {
-            let cache = self.trigger_index.borrow();
-            (cache.revision == revision)
-                .then(|| cache.index.clone())
-                .flatten()
-        };
+        let revisions = self.state.revisions();
+        let cached = self
+            .derived
+            .borrow_mut()
+            .at(revisions)
+            .trigger_index
+            .clone();
         if let Some(index) = cached {
             debug_assert_eq!(*index, self.build_trigger_index(), "stale trigger index");
             return index;
         }
         let index = Arc::new(self.build_trigger_index());
-        *self.trigger_index.borrow_mut() = TriggerIndexCache {
-            revision,
-            index: Some(index.clone()),
-        };
+        self.derived.borrow_mut().at(revisions).trigger_index = Some(index.clone());
         index
     }
 
@@ -1280,7 +1263,7 @@ impl Game {
             .fold(EventKinds::NONE, |kinds, grant| {
                 kinds | ability_event_kinds(&grant.ability)
             });
-        let sources = self
+        let mut sources: Vec<TriggerSourceEntry> = self
             .state
             .permanents
             .iter()
@@ -1299,6 +1282,9 @@ impl Game {
                 })
             })
             .collect();
+        // Object order (a battlefield card has one current object, so its
+        // entity orders it): the order the fired triggers are numbered in.
+        sources.sort_by_key(|entry| entry.card);
         TriggerIndex { sources, granted }
     }
 

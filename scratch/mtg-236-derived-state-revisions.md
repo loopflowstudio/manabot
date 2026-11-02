@@ -5,13 +5,18 @@ review of 2026-11-02, Performance section). Base `4c8324a59` (T4 landed).
 
 ## Outcome (payoff order; each measured with `bench_search`, release, seeds 1-3, 40 decisions)
 
-1. `Revisions { characteristics, triggers }` on `TrackedState`; `DerefMut`
-   advances both, typed accessors advance the subset their field feeds.
-   `StaticsCache` keys on `characteristics`; debug recompute-and-assert stays.
+1. `Revisions { characteristics, mana_pools, triggers }` on `TrackedState`;
+   `DerefMut` advances all three, typed accessors advance the subset their
+   field feeds. One `DerivedCache` (`flow/statics.rs`) holds the static
+   index and views (keyed on `characteristics`, views also on `mana_pools`
+   while a static condition reads a pool) and the trigger index (keyed on
+   `triggers`); debug recompute-and-assert stays.
 2. `EffectRecords` (`state/effect.rs`): records in timestamp order plus
    by-object / by-player index; `effects_on` reads one object's records.
-3. `Game::clone` carries the statics cache (immutable `Arc`s) and revisions.
-4. `TriggerIndex` (sources by event kind) rebuilt on `triggers`;
+3. `Game::clone` carries the derived cache (immutable `Arc`s) and revisions.
+4. `TriggerIndex` (sources by event kind) rebuilt on `triggers`, sources in
+   object order so simultaneous triggers are numbered as `main` numbers them
+   (the index first yielded slot order; compress pass fixed it);
    `ObjectLkiLog` with latest-by-entity lookup.
 5. Interned subtypes in `Characteristics`: not done. After 1-4 a 25 s
    `sample` of the release bench puts all of `Game::characteristics` at
@@ -26,12 +31,12 @@ digests as `main`; debug and release `cargo test` green; no rules change.
 
 ## Delete — do not maintain
 
-- `TrackedState::revision()` single counter (replaced by `Revisions`).
-- `GameState::effects: Vec<ContinuousEffect>` as a bare list (becomes
-  `EffectRecords`; the canonical hash still serializes the ordered records).
-- `GameState::object_lki: BTreeMap` linear scans in `flow/triggers.rs` and
-  `flow/identity.rs` (`ObjectLkiLog` owns the lookups).
-- `Game::clone` starting with an empty `StaticsCache`.
+All removed on this branch: `TrackedState::revision()` single counter
+(`Revisions`), `GameState::effects` as a bare `Vec` (`EffectRecords`; the
+canonical hash still serializes the ordered records), `object_lki` linear
+scans in `flow/triggers.rs` and `flow/identity.rs` (`ObjectLkiLog`),
+`Game::clone` starting with an empty cache, and the separate
+`TriggerIndexCache` (folded into `DerivedCache`). Nothing remains to delete.
 
 ## Measurements
 

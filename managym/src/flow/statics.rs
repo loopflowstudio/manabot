@@ -34,13 +34,15 @@
 // (static scopes, ability mana outputs) never reads the view. A view computes
 // the shared layer inputs (`LayerBasis`) once and hands them to each stage.
 //
-// Derived data is cached per state revision (`TrackedState`, `StaticsCache`):
+// Derived data is cached per state revision (`TrackedState`, `DerivedCache`):
 // the static-source index (`StaticIndex`: attached permanents and the
 // permanents whose statics can apply) is built once per `characteristics`
 // revision, and each permanent's view is computed once per revision and
 // shared as an `Arc`. Every write a layer may read advances that revision
 // (`Revisions`), so neither can go stale; a mana-pool write advances only
 // `mana_pools`, which the views follow while a static condition reads a pool.
+// The same cache holds the trigger-source index (`flow/triggers.rs`) at the
+// `triggers` revision.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -51,6 +53,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
+        triggers::TriggerIndex,
     },
     state::{
         ability::{Condition, Effect},
@@ -178,27 +181,29 @@ struct StaticIndex {
     reads_mana_pools: bool,
 }
 
-/// State-derived statics data, valid for the revisions it was computed at;
-/// reading it at a later `characteristics` revision discards it first, and
-/// a later `mana_pools` revision discards the views while the index reads
-/// the pools. Cloned with the game: every entry is an immutable `Arc`.
+/// Data derived from state, valid for the `Revisions` it was computed at.
+/// Reading it at a later `characteristics` revision discards the static
+/// index and the views; a later `mana_pools` revision discards the views
+/// while the index reads the pools; a later `triggers` revision discards the
+/// trigger index. Cloned with the game: every entry is an immutable `Arc`.
 #[derive(Clone, Default)]
-pub(crate) struct StaticsCache {
+pub(crate) struct DerivedCache {
     revisions: Revisions,
     index: Option<Arc<StaticIndex>>,
     /// Indexed by `PermanentId`.
     characteristics: Vec<Option<Arc<Characteristics>>>,
+    pub(super) trigger_index: Option<Arc<TriggerIndex>>,
 }
 
 /// Opaque, so a game's `Debug` text does not depend on what was read.
-impl std::fmt::Debug for StaticsCache {
+impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("StaticsCache")
+        f.write_str("DerivedCache")
     }
 }
 
-impl StaticsCache {
-    fn at(&mut self, revisions: Revisions) -> &mut Self {
+impl DerivedCache {
+    pub(super) fn at(&mut self, revisions: Revisions) -> &mut Self {
         if self.revisions.characteristics != revisions.characteristics {
             self.index = None;
             self.characteristics.clear();
@@ -209,6 +214,9 @@ impl StaticsCache {
                 .is_none_or(|index| index.reads_mana_pools)
         {
             self.characteristics.clear();
+        }
+        if self.revisions.triggers != revisions.triggers {
+            self.trigger_index = None;
         }
         self.revisions = revisions;
         self
@@ -282,7 +290,7 @@ impl Game {
     pub fn characteristics(&self, permanent_id: PermanentId) -> Arc<Characteristics> {
         let revisions = self.state.revisions();
         let cached = self
-            .statics_cache
+            .derived
             .borrow_mut()
             .at(revisions)
             .characteristics
@@ -297,7 +305,7 @@ impl Game {
             return characteristics;
         }
         let characteristics = Arc::new(self.compute_characteristics(permanent_id));
-        let mut cache = self.statics_cache.borrow_mut();
+        let mut cache = self.derived.borrow_mut();
         let entries = &mut cache.at(revisions).characteristics;
         if entries.len() <= permanent_id.0 {
             entries.resize(permanent_id.0 + 1, None);
@@ -351,13 +359,13 @@ impl Game {
     /// revision.
     fn static_index(&self) -> Arc<StaticIndex> {
         let revisions = self.state.revisions();
-        let cached = self.statics_cache.borrow_mut().at(revisions).index.clone();
+        let cached = self.derived.borrow_mut().at(revisions).index.clone();
         if let Some(index) = cached {
             debug_assert_eq!(*index, self.build_static_index(), "stale static index");
             return index;
         }
         let index = Arc::new(self.build_static_index());
-        self.statics_cache.borrow_mut().at(revisions).index = Some(index.clone());
+        self.derived.borrow_mut().at(revisions).index = Some(index.clone());
         index
     }
 

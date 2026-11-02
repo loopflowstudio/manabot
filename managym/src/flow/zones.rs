@@ -245,13 +245,12 @@ impl Game {
     /// untapped-to-tapped transition (CR 603.10-style "becomes tapped").
     /// Returns whether the permanent transitioned.
     pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
+        let Some(controller) = self.permanent_controller(permanent_id) else {
+            return false;
+        };
         if !self.state.tap(permanent_id) {
             return false;
         }
-        let controller = self.state.permanents[permanent_id]
-            .as_ref()
-            .expect("tapped permanent")
-            .controller;
         self.invalidate_mana_cache(controller);
         self.emit(GameEvent::PermanentTapped {
             permanent: permanent_id,
@@ -280,6 +279,20 @@ impl Game {
             }
         }
         produced
+    }
+
+    /// Untap a permanent; its controller's producible mana changes.
+    pub(crate) fn untap_permanent(&mut self, permanent_id: PermanentId) {
+        if let Some(controller) = self.permanent_controller(permanent_id) {
+            self.state.untap(permanent_id);
+            self.invalidate_mana_cache(controller);
+        }
+    }
+
+    fn permanent_controller(&self, permanent_id: PermanentId) -> Option<PlayerId> {
+        self.state.permanents[permanent_id]
+            .as_ref()
+            .map(|permanent| permanent.controller)
     }
 
     fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {

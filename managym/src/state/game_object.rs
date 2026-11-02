@@ -106,8 +106,8 @@ pub struct ObjectLkiLog {
     by_object: BTreeMap<ObjectRef, ObjectLki>,
     /// The latest departed object of each entity, by entity index.
     latest_by_entity: Vec<Option<ObjectRef>>,
-    /// The departed object that occupied each battlefield slot (slots are
-    /// never reused), by `PermanentId`.
+    /// The departed object that occupied each battlefield slot, by
+    /// `PermanentId`; a slot is never reused.
     by_permanent: Vec<Option<ObjectRef>>,
 }
 
@@ -125,9 +125,7 @@ impl ObjectLkiLog {
         if self.by_permanent.len() <= slot {
             self.by_permanent.resize(slot + 1, None);
         }
-        if self.by_permanent[slot].is_none_or(|first| object < first) {
-            self.by_permanent[slot] = Some(object);
-        }
+        self.by_permanent[slot].get_or_insert(object);
         self.by_object.insert(object, lki);
     }
 

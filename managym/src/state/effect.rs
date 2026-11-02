@@ -217,10 +217,6 @@ impl EffectRecords {
         self.records.is_empty()
     }
 
-    pub fn len(&self) -> usize {
-        self.records.len()
-    }
-
     /// Keep the records `keep` accepts, in order, and rebuild the index.
     pub fn retain(&mut self, mut keep: impl FnMut(&ContinuousEffect) -> bool) {
         let records = std::mem::take(&mut self.records);

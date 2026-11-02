@@ -1591,12 +1591,7 @@ impl Game {
             }
             Effect::UntapSource => {
                 if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.state.untap(permanent_id);
-                    let controller = self.state.permanents[permanent_id]
-                        .as_ref()
-                        .expect("source permanent")
-                        .controller;
-                    self.invalidate_mana_cache(controller);
+                    self.untap_permanent(permanent_id);
                 }
                 None
             }
@@ -1866,13 +1861,7 @@ impl Game {
             Effect::UntapTarget { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    if let Some(controller) = self.state.permanents[permanent_id]
-                        .as_ref()
-                        .map(|permanent| permanent.controller)
-                    {
-                        self.state.untap(permanent_id);
-                        self.invalidate_mana_cache(controller);
-                    }
+                    self.untap_permanent(permanent_id);
                 }
                 None
             }

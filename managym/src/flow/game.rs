@@ -20,9 +20,8 @@ use crate::{
         decision::SuspendedResolution,
         event::GameEvent,
         priority::PriorityState,
-        statics::StaticsCache,
+        statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
-        triggers::TriggerIndexCache,
         turn::TurnState,
     },
     state::{
@@ -230,13 +229,14 @@ pub enum PendingChoice {
     },
 }
 
-/// Counters for the data `Game` derives from state and caches, each advanced
-/// by the writes that can change what its derivation reads:
+/// Counters for the data `Game` derives from state and caches in
+/// `DerivedCache`, each advanced by the writes that can change what its
+/// derivation reads:
 ///
 /// - `characteristics`: permanents' characteristics and the static-source
-///   index (`StaticsCache`), which read permanents, cards, the battlefield
-///   and graveyards, combat, continuous-effect records, and the turn's
-///   active player and history.
+///   index, which read permanents, cards, the battlefield and graveyards,
+///   combat, continuous-effect records, and the turn's active player and
+///   history.
 /// - `mana_pools`: both players' pools, which a static condition may read
 ///   ("as long as you have six or more unspent mana"). The cache compares it
 ///   only while a static source with such a condition is on the battlefield.
@@ -338,8 +338,11 @@ impl TrackedState {
         &mut self.state.object_lki
     }
 
-    pub(crate) fn life_mut(&mut self, player: PlayerId) -> &mut i32 {
-        &mut self.state.players[player.0].life
+    pub(crate) fn life_mut(&mut self, player: PlayerId) -> Option<&mut i32> {
+        self.state
+            .players
+            .get_mut(player.0)
+            .map(|player| &mut player.life)
     }
 
     /// Step progress flags, which only the game loop reads.
@@ -390,17 +393,13 @@ impl TrackedState {
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
     pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
-        let revisions = &mut self.revisions;
-        if let Some(permanent) = self
-            .state
-            .permanents
-            .get_mut(permanent_id.0)
-            .and_then(Option::as_mut)
-        {
-            if permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0 {
-                revisions.characteristics += 1;
-            }
-            permanent.untap();
+        let Some(permanent) = self.permanent_untracked(permanent_id) else {
+            return;
+        };
+        let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
+        permanent.untap();
+        if removes_stun {
+            self.revisions.characteristics += 1;
         }
     }
 
@@ -532,12 +531,10 @@ pub struct Game {
     /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
     pub state: TrackedState,
-    /// Characteristics and static sources derived from `state` at its current
-    /// revisions; cloned with it (its `Arc`s are immutable), never hashed.
-    pub(crate) statics_cache: RefCell<StaticsCache>,
-    /// Trigger sources by event kind, derived from `state` at its current
-    /// `triggers` revision; cloned with it, never hashed.
-    pub(crate) trigger_index: RefCell<TriggerIndexCache>,
+    /// Characteristics, static sources and trigger sources derived from
+    /// `state` at its current revisions; cloned with it (its `Arc`s are
+    /// immutable), never hashed.
+    pub(crate) derived: RefCell<DerivedCache>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
@@ -563,8 +560,7 @@ impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
-            statics_cache: RefCell::new(self.statics_cache.borrow().clone()),
-            trigger_index: RefCell::new(self.trigger_index.borrow().clone()),
+            derived: RefCell::new(self.derived.borrow().clone()),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
