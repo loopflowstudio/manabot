@@ -245,8 +245,9 @@ Budget) benchmarks any commit reachable from origin with the dispatched ref's
 benchmarks and records the result in the step summary without comparing, so a
 historical commit can be measured on the same profile. The benchmarks use
 only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
-`flat_mc_scores`); a change to that surface must keep the reference commit
-compiling with the new benchmarks or move the reference in the same PR.
+`is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
+must keep the reference commit compiling with the new benchmarks or move the
+reference in the same PR.
 
 Measured once on 2026-11-02 with these benchmarks (steps/s; worst Search-64
 reply; total over 3 seeds x 40 decisions), each on its own runner:

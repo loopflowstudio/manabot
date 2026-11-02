@@ -495,3 +495,9 @@ requirement, it needs its own Task.
 - T6's head (`2c1ba169f`) is unpushed, so measuring it on CI needs its commit
   reachable from origin; pushed as a plain ref under `refs/engine-budget/`
   for the dispatch and deleted afterwards (not a branch, no PR).
+- Second reconciliation (2026-11-02, headless, `code` graph realign step):
+  `.lf/wave/engine/MEMORY.md` is left unwritten even though this is a Graph
+  step, because the lesson it would record (A/B against a committed reference
+  commit, not committed absolute numbers) is a draft decision awaiting Jack
+  Heart's review; the proposal stays in the plan. The engine Wave has no
+  child Waves to read (only `GOAL.md` and `MEMORY.md` under it).

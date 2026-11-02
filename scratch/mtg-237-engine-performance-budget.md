@@ -46,7 +46,7 @@ not a latency budget.
 - Draft: any rules change reaching the curated decks moves the random-play
   digest and costs one `record` per such PR; accepted as the price of (3).
 
-## Status (reconciled 2026-11-02)
+## Status (reconciled 2026-11-02, second pass)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
 AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
@@ -56,19 +56,25 @@ Since then: the script simplification b734238c4, and the compress pass of
 2026-11-02 that gave the workflow one `other` checkout (the measured commit
 or the reference, chosen once; `CANDIDATE`/`REFERENCE` paths replace
 `ENGINE_DIR`/`MEASURE` branching in every later step) and dropped `record`'s
-unused `--tolerance` flag (the tolerance is edited in the file). Both pass
-the tests locally and actionlint; CI has not run on this head. The PR run
-covers the compare path; the `measure` path is unexercised since the rewrite
-and wants one dispatch before the next re-record (gate/CI).
+unused `--tolerance` flag (the tolerance is edited in the file). The second
+reconciliation completed the documented benchmark `Env` surface
+(`is_game_over`, `winner_index`, which `bench_steps` calls). Main has not
+moved past the base 4c8324a59 (checked 2026-11-02), so nothing upstream
+changes the approach. Tests and actionlint pass locally; CI has not run on
+this head because the branch has no PR and branch pushes do not trigger CI.
+The PR run covers the compare path; the `measure` path is unexercised since
+the rewrite and wants one dispatch before the next re-record (gate/CI).
 
 Remains (publication, owned by the caller): open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on the
 `pull_request` event, and the first main run after merge confirms the push
 path. Jack Heart's review decides the two draft decisions above.
 
-Proposed Wave memory (not written; `.lf/wave/` is read-only here): engine
-speed now has a CI budget relative to a committed reference commit; GitHub
-runner wall time is not comparable across runs; T4 main measured 6.8k
-steps/s and 13.8 s worst Search-64 reply on EPYC 7763.
+Proposed Wave memory, not written: engine speed now has a CI budget relative
+to a committed reference commit; GitHub runner wall time is not comparable
+across runs; T4 main measured 6.8k steps/s and 13.8 s worst Search-64 reply
+on EPYC 7763. Left in scratch because the A/B reading of "committed
+baseline" it rests on is a draft awaiting Jack Heart's review; write it to
+`.lf/wave/engine/MEMORY.md` once the review settles it.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 55 passed.
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 55 passed (2026-11-02, head 675a2e623 plus the docs edit).
