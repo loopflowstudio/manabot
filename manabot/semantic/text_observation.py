@@ -666,6 +666,8 @@ class _Renderer:
         ]
         if permission.this_turn:
             terms.append("this turn only")
+        if permission.through_next_turn:
+            terms.append("until the end of their next turn")
         if permission.own_turn_only:
             terms.append("during their own turn only")
         if permission.after_turn is not None:

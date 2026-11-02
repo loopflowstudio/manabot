@@ -331,6 +331,9 @@ pub struct LegacyCastPermissionView {
     pub cost: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
+    /// Ends in the cleanup step of the permitted player's next turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub through_next_turn: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
     /// Usable only on a turn numbered after this one.

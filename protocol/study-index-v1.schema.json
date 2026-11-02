@@ -1193,6 +1193,10 @@
         "this_turn": {
           "type": "boolean"
         },
+        "through_next_turn": {
+          "description": "Ends in the cleanup step of the permitted player's next turn.",
+          "type": "boolean"
+        },
         "waterbend": {
           "type": "boolean"
         }

@@ -17,7 +17,7 @@ use crate::{
     agent::action::AgentError,
     flow::{game::Game, proposed_event::ZoneEntry},
     state::{
-        ability::LinkedGrant,
+        ability::{LinkedGrant, PlayWindow},
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::ManaCost,
         zone::ZoneType,
@@ -35,6 +35,10 @@ pub struct ExileCastGrant {
     /// "this turn": the grant ends in the cleanup step.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
+    /// "Until the end of your next turn": the turn number it was granted on;
+    /// it ends in the cleanup step of `player`'s first turn after that one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub through_next_turn: Option<u32>,
     /// The grant lasts while `player` controls this battlefield object
     /// ("for as long as you control Hama", "cards exiled with Azula").
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,6 +72,7 @@ impl ExileCastGrant {
             player,
             cost: None,
             this_turn: false,
+            through_next_turn: None,
             source: None,
             own_turn_only: false,
             waterbend: false,
@@ -121,11 +126,22 @@ impl Game {
         });
     }
 
-    /// "Exile the top card of your library. You may play that card this turn."
-    pub(crate) fn exile_top_card_play_this_turn(&mut self, player: PlayerId) {
-        if let Some(card) = self.state.zones.top(ZoneType::Library, player) {
+    /// "Exile the top `count` cards of your library. You may play them
+    /// [this turn | until the end of your next turn]."
+    pub(crate) fn exile_top_cards_to_play(
+        &mut self,
+        player: PlayerId,
+        count: usize,
+        until: PlayWindow,
+    ) {
+        let turn = self.state.turn.turn_number;
+        for _ in 0..count {
+            let Some(card) = self.state.zones.top(ZoneType::Library, player) else {
+                return;
+            };
             self.exile_with_play_grant(card, |object| ExileCastGrant {
-                this_turn: true,
+                this_turn: until == PlayWindow::ThisTurn,
+                through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
                 ..ExileCastGrant::new(object, player)
             });
         }
@@ -289,12 +305,17 @@ impl Game {
         }
     }
 
-    /// "This turn" grants end in the cleanup step (CR 514.2).
+    /// "This turn" grants end in the cleanup step (CR 514.2), and "until the
+    /// end of your next turn" ones in that of the permitted player's next
+    /// turn.
     pub(crate) fn expire_turn_cast_grants(&mut self) {
-        self.state
-            .cast_permissions
-            .exile_grants
-            .retain(|grant| !grant.this_turn);
+        let (active, turn) = (self.active_player(), self.state.turn.turn_number);
+        self.state.cast_permissions.exile_grants.retain(|grant| {
+            !grant.this_turn
+                && !grant
+                    .through_next_turn
+                    .is_some_and(|granted| grant.player == active && turn > granted)
+        });
     }
 
     /// "Until your next turn, your opponents can't cast spells from anywhere

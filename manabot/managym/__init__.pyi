@@ -551,6 +551,7 @@ class CastPermission:
     player_id: int
     cost: Optional[ManaCost]
     this_turn: bool
+    through_next_turn: bool
     own_turn_only: bool
     after_turn: Optional[int]
     source_permanent_id: Optional[int]

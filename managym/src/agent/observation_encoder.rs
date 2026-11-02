@@ -31,10 +31,10 @@ pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
 pub const PLAYER_DIM: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
 pub const LEGACY_CARD_DIM: usize = 41;
 /// v5 card columns replace v4's trailing validity flag, which moves to the
-/// new last column: 12 cast-permission terms, then announced X. A face-down
+/// new last column: 13 cast-permission terms, then announced X. A face-down
 /// card is foretold, so its permission's foretold term marks it.
 pub const CARD_PERMISSION_INDEX: usize = LEGACY_CARD_DIM - 1;
-pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 12;
+pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 13;
 pub const CARD_DIM: usize = CARD_X_INDEX + 2 + 1;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
 pub const LEGACY_PERMANENT_DIM: usize = 29;
@@ -888,6 +888,7 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
             out[base + 9] = bool_to_f32(permission.any_mana);
             out[base + 10] = bool_to_f32(permission.waterbend);
             out[base + 11] = bool_to_f32(permission.foretold);
+            out[base + 12] = bool_to_f32(permission.through_next_turn);
         }
         if let Some(x) = card.x {
             out[CARD_X_INDEX] = 1.0;

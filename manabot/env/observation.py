@@ -75,7 +75,7 @@ PLAYER_DIM = PLAYER_EXTRA_TURNS_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
-CARD_X_INDEX = CARD_PERMISSION_INDEX + 12
+CARD_X_INDEX = CARD_PERMISSION_INDEX + 13
 CARD_DIM = CARD_X_INDEX + 2 + 1
 LEGACY_PERMANENT_DIM = 29
 # V5 permanent terms start where v4's validity flag was; validity stays last.
@@ -738,6 +738,7 @@ class ObservationEncoder:
                 arr[base + 9] = float(permission.any_mana)
                 arr[base + 10] = float(permission.waterbend)
                 arr[base + 11] = float(permission.foretold)
+                arr[base + 12] = float(permission.through_next_turn)
             if card.x is not None:
                 arr[CARD_X_INDEX] = 1.0
                 arr[CARD_X_INDEX + 1] = float(card.x) / 10.0

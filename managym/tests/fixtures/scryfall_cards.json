@@ -248,6 +248,26 @@
     "oracle_text": "Whenever you cast a spell, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"\nExhaust — Waterbend {20}: Take an extra turn after this one. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)",
     "colors": []
   },
+  "Avatar Kyoshi": {
+    "name": "Avatar Kyoshi",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Lands you control have trample and hexproof.\n{T}: Add X mana of any one color, where X is the greatest power among creatures you control.",
+    "colors": []
+  },
+  "Avatar Roku": {
+    "name": "Avatar Roku",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 4 (Whenever this creature attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)\n{8}: Create a 4/4 red Dragon creature token with flying and firebending 4.",
+    "colors": []
+  },
   "Avatar's Wrath": {
     "name": "Avatar's Wrath",
     "mana_cost": "{2}{W}{W}",
@@ -3490,6 +3510,28 @@
     "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI, II — Scry 2, then draw a card.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
     "colors": [
       "U"
+    ]
+  },
+  "The Legend of Kyoshi": {
+    "name": "The Legend of Kyoshi",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Draw cards equal to the greatest power among creatures you control.\nII — Earthbend X, where X is the number of cards in your hand. That land becomes an Island in addition to its other types.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "The Legend of Roku": {
+    "name": "The Legend of Roku",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Exile the top three cards of your library. Until the end of your next turn, you may play those cards.\nII — Add one mana of any color.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "R"
     ]
   },
   "The Lion-Turtle": {

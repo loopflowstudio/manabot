@@ -479,8 +479,10 @@ impl Game {
     }
 
     /// Layer 7: power and toughness (CDA-aware or set base, plus static buffs,
-    /// records and +1/+1 counters).
-    fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
+    /// records and +1/+1 counters), without the rest of the characteristics
+    /// view: what a mana ability's output may read while that view lists the
+    /// ability (Avatar Kyoshi).
+    pub(crate) fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
         let index = self.static_index();
         self.pt_with(
             permanent_id,

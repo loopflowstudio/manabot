@@ -40,6 +40,8 @@ export interface CastPermission {
   /** Mana symbols paid to cast it; absent for a land play. */
   cost?: string;
   this_turn?: boolean;
+  /** Ends with the permitted player's next turn. */
+  through_next_turn?: boolean;
   own_turn_only?: boolean;
   /** Usable only on a turn numbered after this one. */
   after_turn?: number;

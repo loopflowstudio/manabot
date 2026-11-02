@@ -12675,13 +12675,19 @@ fn next_main_phase(s: &mut Scenario) {
     s.advance_to_active_step(0, StepKind::Main);
 }
 
+/// Put player 0's Saga onto the battlefield and resolve chapter I.
+fn enter_saga(s: &mut Scenario, name: &str) -> PermanentId {
+    let saga = put_onto_battlefield(s, 0, name);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    resolve_everything(s);
+    saga
+}
+
 /// Put player 0's Saga onto the battlefield at its last chapter and play
 /// through it, so it returns transformed; the back face's permanent.
 fn transformed_saga(s: &mut Scenario, name: &str) -> PermanentId {
-    let saga = put_onto_battlefield(s, 0, name);
+    let saga = enter_saga(s, name);
     let card = card_of(s, saga);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    settle(s);
     if let Some(saga) = s.game().state.card_to_permanent[card] {
         set_counters(s, saga, CounterKind::Lore, 2);
     }
@@ -12883,4 +12889,102 @@ fn avatar_kuruk_makes_spirits_and_takes_an_extra_turn() {
     );
     assert_eq!(s.active_player(), 1, "then the opponent's turn resumes");
     assert!(!offers_ability(&mut s, kuruk, 0), "exhaust: only once");
+}
+
+/// I draws the greatest power among your creatures; II earthbends a land by
+/// your hand size and makes it an Island; Avatar Kyoshi gives lands trample
+/// and hexproof and taps for that greatest power of one color.
+#[test]
+fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_avatar_kyoshi() {
+    let mut s = five_color_setup(&["The Legend of Kyoshi", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(0, "Craw Wurm"); // 6/4
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let hand_before = s.zone_size(0, ZoneType::Hand);
+    let saga = enter_saga(&mut s, "The Legend of Kyoshi");
+    let card = card_of(&s, saga);
+    assert_eq!(
+        s.zone_size(0, ZoneType::Hand),
+        hand_before + 6,
+        "I: draws 6"
+    );
+
+    next_main_phase(&mut s);
+    let hand = s.zone_size(0, ZoneType::Hand) as i32;
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, forest, CounterKind::PlusOnePlusOne), hand);
+    let forest_view = s.game().characteristics(forest);
+    assert!(forest_view.is_creature);
+    assert!(forest_view.added_subtypes.iter().any(|t| t == "Island"));
+
+    next_main_phase(&mut s);
+    settle(&mut s);
+    let kyoshi = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(s.game().state.cards[card].name, "Avatar Kyoshi");
+    let land = s.game().characteristics(forest);
+    assert!(
+        land.keywords.trample && land.keywords.hexproof,
+        "lands have both"
+    );
+    clear_summoning_sickness(&mut s, kyoshi);
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, kyoshi, 0);
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::Modal,
+        "choose a color"
+    );
+    choose_mode(&mut s, 4);
+    let greatest = s.game().characteristics(forest).power.max(6);
+    assert_eq!(
+        s.game().state.players[0].mana_pool.mana[4] as i32,
+        greatest,
+        "X is the greatest power: the earthbent Forest's or Craw Wurm's"
+    );
+}
+
+/// Whether a permission to play this exact exiled card stands.
+fn may_play_exiled(s: &Scenario, card: CardId) -> bool {
+    let object = s.game().current_object_ref(card);
+    s.game()
+        .state
+        .cast_permissions
+        .exile_grants
+        .iter()
+        .any(|grant| Some(grant.object) == object)
+}
+
+/// I exiles three cards its controller may play through their next turn,
+/// not after; II adds one mana of any color; Avatar Roku makes Dragons.
+#[test]
+fn the_legend_of_roku_lets_its_exiled_cards_be_played_through_your_next_turn() {
+    let mut s = five_color_setup(&["The Legend of Roku"]);
+    let library = library(&s, 0);
+    let top = library[library.len() - 3..].to_vec();
+    let saga = enter_saga(&mut s, "The Legend of Roku");
+    let card = card_of(&s, saga);
+    for exiled in &top {
+        assert_eq!(zone_of(&s, *exiled), Some(ZoneType::Exile));
+        assert!(may_play_exiled(&s, *exiled));
+    }
+    // The opponent's turn and the controller's next turn keep the grants.
+    s.advance_to_active_step(1, StepKind::End);
+    assert!(may_play_exiled(&s, top[0]), "through the next turn");
+    s.advance_to_active_step(0, StepKind::Main);
+    // II: one mana of any color, chosen as it resolves.
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 3);
+    assert_eq!(s.game().state.players[0].mana_pool.mana[3], 1, "red");
+    assert!(may_play_exiled(&s, top[0]));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!may_play_exiled(&s, top[0]), "ended with that turn");
+
+    next_main_phase(&mut s);
+    settle(&mut s);
+    let roku = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(s.game().state.cards[card].name, "Avatar Roku");
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, roku, 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Dragon").len(), 1);
 }

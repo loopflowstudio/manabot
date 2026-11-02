@@ -134,6 +134,9 @@ pub struct CastPermissionData {
     /// Ends in this turn's cleanup step.
     #[serde(default)]
     pub this_turn: bool,
+    /// Ends in the cleanup step of the permitted player's next turn.
+    #[serde(default)]
+    pub through_next_turn: bool,
     /// Usable only during the permitted player's turn.
     #[serde(default)]
     pub own_turn_only: bool,
@@ -1142,6 +1145,7 @@ impl Observation {
                     player_id: game.state.players[grant.player.0].id.0 as i32,
                     cost: game.grant_cast_cost(grant, card_id),
                     this_turn: grant.this_turn,
+                    through_next_turn: grant.through_next_turn.is_some(),
                     own_turn_only: grant.own_turn_only,
                     after_turn: grant.after_turn,
                     source_permanent_id: grant.source.and_then(|source| {
@@ -1752,6 +1756,7 @@ impl Observation {
             }
             for (key, set) in [
                 ("this_turn", permission.this_turn),
+                ("through_next_turn", permission.through_next_turn),
                 ("own_turn_only", permission.own_turn_only),
                 ("flash", permission.flash),
                 ("any_mana", permission.any_mana),

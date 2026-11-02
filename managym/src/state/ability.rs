@@ -364,6 +364,11 @@ pub enum EffectValue {
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
+    /// The greatest power among creatures `controller` controls (0 with
+    /// none).
+    GreatestPowerYouControl,
+    /// Cards in `controller`'s hand.
+    CardsInHand,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -576,8 +581,12 @@ pub enum Effect {
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
     OpponentsCastOnlyFromHand,
-    /// "Exile the top card of your library. You may play that card this turn."
-    ExileTopCardPlayThisTurn,
+    /// "Exile the top `count` cards of your library. You may play them
+    /// [`until`]."
+    ExileTopCardsToPlay {
+        count: usize,
+        until: PlayWindow,
+    },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
         chooser: LinkedChooser,
@@ -980,6 +989,15 @@ pub enum Effect {
     },
 }
 
+/// How long a player may play cards an effect exiled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum PlayWindow {
+    /// "this turn".
+    ThisTurn,
+    /// "until the end of your next turn".
+    ThroughYourNextTurn,
+}
+
 /// The event a delayed triggered ability created by
 /// [`Effect::CreateDelayedTrigger`] waits for (CR 603.7).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -1328,7 +1346,7 @@ impl Effect {
             | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
-            | Effect::ExileTopCardPlayThisTurn
+            | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree

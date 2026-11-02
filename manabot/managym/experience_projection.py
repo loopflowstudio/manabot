@@ -65,6 +65,7 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
         terms["cost"] = _mana_symbols(permission.cost)
     for key in (
         "this_turn",
+        "through_next_turn",
         "own_turn_only",
         "flash",
         "any_mana",

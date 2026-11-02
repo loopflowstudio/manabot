@@ -5,8 +5,8 @@ use crate::state::effect::{EffectDuration, Modification};
 use crate::state::{
     ability::{
         Ability, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn, LinkedChooser,
-        LinkedGrant, MilledBonus, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        LinkedGrant, MilledBonus, PaymentCost, PlayWindow, PlayerSelector, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -250,6 +250,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         the_fire_nation_drill(),
         the_last_agni_kai(),
         the_legend_of_kuruk(),
+        the_legend_of_kyoshi(),
+        the_legend_of_roku(),
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
         the_spirit_oasis(),
@@ -8833,6 +8835,131 @@ fn the_legend_of_kuruk() -> CardDefinition {
     }
 }
 
+fn the_legend_of_kyoshi() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter.)\nI — Draw cards equal to the greatest power among creatures you control.\nII — Earthbend X, where X is the number of cards in your hand. That land becomes an Island in addition to its other types.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.";
+    let back_text = "Lands you control have trample and hexproof.\n{T}: Add X mana of any one color, where X is the greatest power among creatures you control.";
+
+    CardDefinition {
+        key: "tla.the_legend_of_kyoshi",
+        scryfall_id: "4887ce64-7c98-4bd7-95db-0c43ab71cc6e",
+        name: "The Legend of Kyoshi".into(),
+        mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(
+                1,
+                vec![Effect::DrawCards {
+                    count: EffectValue::GreatestPowerYouControl,
+                }],
+            ),
+            chapter(
+                2,
+                vec![
+                    Effect::Earthbend {
+                        count: EffectValue::CardsInHand,
+                        target: TargetSpec::LandYouControl,
+                    },
+                    Effect::ApplyContinuous {
+                        affected: AffectedSpec::Target(TargetSpec::LandYouControl),
+                        modification: Modification::AddSubtypes(vec!["Island".into()]),
+                        duration: EffectDuration::Indefinite,
+                    },
+                ],
+            ),
+            chapter(3, return_transformed()),
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Avatar Kyoshi".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into()],
+            power: Some(5),
+            toughness: Some(4),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::YouControl(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                condition: None,
+                keywords: Keywords {
+                    trample: true,
+                    hexproof: true,
+                    ..Default::default()
+                },
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::AddOneColorManaValue {
+                    amount: EffectValue::GreatestPowerYouControl,
+                }],
+                ..Default::default()
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
+}
+
+fn the_legend_of_roku() -> CardDefinition {
+    let text_box = "(As this Saga enters and after your draw step, add a lore counter.)\nI — Exile the top three cards of your library. Until the end of your next turn, you may play those cards.\nII — Add one mana of any color.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.";
+    let back_text = "Firebending 4 (Whenever this creature attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)\n{8}: Create a 4/4 red Dragon creature token with flying and firebending 4.";
+
+    CardDefinition {
+        key: "tla.the_legend_of_roku",
+        scryfall_id: "95f2f5af-d405-4534-8683-5a9001f997b4",
+        name: "The Legend of Roku".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Saga".into()],
+        abilities: vec![
+            chapter(
+                1,
+                vec![Effect::ExileTopCardsToPlay {
+                    count: 3,
+                    until: PlayWindow::ThroughYourNextTurn,
+                }],
+            ),
+            chapter(2, vec![one_mana_of_any_color(None)]),
+            chapter(3, return_transformed()),
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Avatar Roku".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RRRR"),
+                    until_end_of_combat: true,
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{8}"),
+                effects: vec![Effect::CreateToken {
+                    token_name: "Dragon".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+                ..Default::default()
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
+}
+
 fn the_lion_turtle() -> CardDefinition {
     let text_box = "Reach, vigilance\nWhen The Lion-Turtle enters, you gain 3 life.\nThe Lion-Turtle can't attack or block unless there are three or more Lesson cards in your graveyard.\n{T}: Add one mana of any color.";
 
@@ -10687,7 +10814,10 @@ fn zuko_exiled_prince() -> CardDefinition {
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::ExileTopCardPlayThisTurn],
+            effects: vec![Effect::ExileTopCardsToPlay {
+                count: 1,
+                until: PlayWindow::ThisTurn,
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

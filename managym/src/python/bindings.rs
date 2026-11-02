@@ -1566,6 +1566,8 @@ pub struct PyCastPermission {
     #[pyo3(get)]
     pub this_turn: bool,
     #[pyo3(get)]
+    pub through_next_turn: bool,
+    #[pyo3(get)]
     pub own_turn_only: bool,
     #[pyo3(get)]
     pub after_turn: Option<u32>,
@@ -1588,6 +1590,7 @@ impl From<CastPermissionData> for PyCastPermission {
             player_id: value.player_id,
             cost: value.cost.map(Into::into),
             this_turn: value.this_turn,
+            through_next_turn: value.through_next_turn,
             own_turn_only: value.own_turn_only,
             after_turn: value.after_turn,
             source_permanent_id: value.source_permanent_id,
@@ -1606,6 +1609,7 @@ impl From<PyCastPermission> for CastPermissionData {
             player_id: value.player_id,
             cost: value.cost.map(Into::into),
             this_turn: value.this_turn,
+            through_next_turn: value.through_next_turn,
             own_turn_only: value.own_turn_only,
             after_turn: value.after_turn,
             source_permanent_id: value.source_permanent_id,

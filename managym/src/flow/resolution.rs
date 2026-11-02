@@ -98,6 +98,15 @@ impl Game {
             EffectValue::GreatestSharedCreatureType => {
                 self.greatest_shared_creature_type(controller) as i32
             }
+            EffectValue::GreatestPowerYouControl => self
+                .battlefield_permanents(controller)
+                .into_iter()
+                .filter(|id| self.permanent_is_battlefield_creature(*id))
+                .map(|id| self.effective_pt(id).0)
+                .max()
+                .unwrap_or(0)
+                .max(0),
+            EffectValue::CardsInHand => self.state.zones.size(ZoneType::Hand, controller) as i32,
             EffectValue::PermanentsSacrificedThisTurn => {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
@@ -1094,8 +1103,8 @@ impl Game {
                 }
                 None
             }
-            Effect::ExileTopCardPlayThisTurn => {
-                self.exile_top_card_play_this_turn(frame.controller);
+            Effect::ExileTopCardsToPlay { count, until } => {
+                self.exile_top_cards_to_play(frame.controller, *count, *until);
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {

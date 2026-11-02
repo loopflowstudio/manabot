@@ -437,6 +437,10 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::GreatestSharedCreatureType => {
             "the greatest number of creatures you control that share a creature type".into()
         }
+        EffectValue::GreatestPowerYouControl => {
+            "the greatest power among creatures you control".into()
+        }
+        EffectValue::CardsInHand => "the number of cards in your hand".into(),
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
@@ -592,7 +596,15 @@ fn effect_description(effect: &Effect) -> Option<String> {
         AirbendAll { predicate } => format!("Airbend all other {}. Their owners may cast them from exile for {{2}}", predicate_description(predicate,"permanents")),
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileSourceSpell => "Exile this spell".to_string(),
-        ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
+        ExileTopCardsToPlay { count, until } => format!(
+            "Exile the top {} of your library. You may play {} {}",
+            if *count == 1 { "card".to_string() } else { format!("{count} cards") },
+            if *count == 1 { "that card" } else { "those cards" },
+            match until {
+                crate::state::ability::PlayWindow::ThisTurn => "this turn",
+                crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
+            }
+        ),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
         TriggerModes { modes, up_to, unchosen } => format!(
@@ -860,4 +872,3 @@ mod tests {
         assert_eq!(description, "Choose 0–2 target creature you control for this clause: For each chosen target: Untap target creature you control. You may pay {1}{W}. If paid: Draw 2 cards. Otherwise: Deal 1 damage to you");
     }
 }
-

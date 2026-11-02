@@ -65,8 +65,8 @@ use managym::{
     state::{
         ability::{
             Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn,
-            LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
-            TriggerCondition, TriggerSubject,
+            LinkedChooser, LinkedGrant, PaymentCost, PlayWindow, PlayerSelector, TargetRequirement,
+            TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -517,7 +517,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Airbend { .. } => "Effect::Airbend",
         Effect::AirbendAll { .. } => "Effect::AirbendAll",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
-        Effect::ExileTopCardPlayThisTurn => "Effect::ExileTopCardPlayThisTurn",
+        Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
@@ -751,7 +751,10 @@ fn effect_witnesses() -> Vec<Effect> {
             },
         },
         Effect::OpponentsCastOnlyFromHand,
-        Effect::ExileTopCardPlayThisTurn,
+        Effect::ExileTopCardsToPlay {
+            count: 3,
+            until: PlayWindow::ThroughYourNextTurn,
+        },
         Effect::ExileLinked {
             chooser: LinkedChooser::TargetPlayer,
             zone: ZoneType::Battlefield,
@@ -2185,7 +2188,7 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 
 /// Defined tokens whose producing card is not defined yet, with that producer.
 /// When the producer lands, its reference makes the token leave this list.
-const TOKENS_AWAITING_PRODUCER: [(&str, &str); 1] = [("token.dragon", "The Legend of Roku")];
+const TOKENS_AWAITING_PRODUCER: [(&str, &str); 0] = [];
 
 /// Every `token.*` definition is a definition reference from a card that
 /// creates it (or awaits a named producer), and a created token's observation
@@ -2423,6 +2426,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         any_mana => [column(Card, PERMISSION + 9)],
         waterbend => [column(Card, PERMISSION + 10)],
         foretold => [column(Card, PERMISSION + 11)],
+        through_next_turn => [column(Card, PERMISSION + 12)],
     }));
     fields.extend(encoding!(RestrictedManaData {
         spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
