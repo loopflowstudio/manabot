@@ -1,141 +1,43 @@
-# MTG-214 Wave rename assumptions — 2026-10-29
+# T5 questions and assumptions
 
-- `.lf/wave/rules` → `.lf/wave/engine`: lf's `engine` Wave owns the Rules
-  chapter Projects and the same Linear initiative. Added the engine Wave id
-  (`74d9efbc…`) to its GOAL frontmatter, matching training's explicit id.
-- Academy and eval have empty lf goals and no checked-in files; none created.
-  Only training gets `config.yaml` (`workflow: iterate`), as directed.
-- The top-level `wave/` tree (old `pm:` charters, numbered plans) is historical
-  and cited by frozen experiments and code comments; left unrenamed, as are
-  `.lf/chapters/` records and wave body prose.
-- Live doc pointers moved to `.lf/wave/{engine,training}`. ARCHITECTURE now
-  assigns evaluation to Eval (previously Intelligence); reversible.
-- Eval split (Jack Heart's steer, 2026-10-29): MTG-212 and MTG-188 memory sections
-  moved verbatim to `.lf/wave/eval/MEMORY.md` with cross-pointers; MTG-175 moved
-  to eval in lf. No eval GOAL.md until Jack sets an objective.
+Accepted decisions and pending checks live in
+[jack-heart/a7234f-tla-t5-permanent.md](jack-heart/a7234f-tla-t5-permanent.md).
+Historical parent notes (D1, T2–T4, archive/CI work and MTG-214's Wave rename)
+are evidence, not directions for T5. Complete pre-compression notes:
+`bbb5101eb:scratch/questions.md`; older stacked notes:
+`1e9fd2d7c:scratch/questions.md` (lines 5–472).
 
-## Concept review (2026-10-29)
+## Current implementation assumptions
 
-- Resolved in `4dc25ad61`: `wave/README.md` opens with a note marking `wave/`
-  as the historical tree and naming the current Waves (academy, engine, eval,
-  training). Other `wave/intelligence` / `wave/rules` references cite existing
-  historical files and stay.
-- Not blocking, outside this Task: training's objective ends with "demonstrate
-  a repeatable challenge to the User under a protocol fixed before scoring",
-  which reads like evaluation. Moving it to an eval objective is Jack's choice;
-  this Task changes no objective.
-- Second pass after implement: no further change; no live `.lf/wave/{intelligence,rules}`
-  pointers remain.
-# Questions and assumptions
+- Surveil reuses LookAndSelect: select moves the inspected card to the
+  graveyard, decline keeps it. Kept cards retain order; exact for surveil 1,
+  the only amount authored. Supporting larger amounts needs ordering choices.
+- Copy exceptions share `Modification` with continuous records. The protocol
+  calls the field `copy_of` because Pydantic's `BaseModel.copy` occupies `copy`.
+- Airship uses self-relative `CreatureWithNamesakes` because
+  `check_static_condition` has no source. It reads private layer stages,
+  never recursively reads `characteristics()` during layer computation.
+- T4 owns `PlayerTurnHistory`, sacrifice bookkeeping and its column after
+  attacked. Text uses singular/plural correctly; no retained fixture holds
+  the old “1 permanents” / “1 cards” wording.
+- The engine measured 314 supported definitions (257 TLA eligible plus 57
+  others; four TLA and one ths unsupported). Earlier 239/266 notes were
+  pre-sync or based on stale main counts, not current measurements.
+- The permanent row's name/creature-types fields are Aura-set markers; the
+  card row states layered characteristics. Ward is printed unless abilities
+  are lost; no authored effect grants ward. Text and mana cost stay printed
+  until a modification changes them, then join `Characteristics`.
 
-Notes inherited from stacked parents that have since merged into main (D1
-decklist import, T2, afbd6a, 558daa, T3 and its characteristics view, T4,
-MTG-234, the 2026-10-30 Clean-machine Play and action-identity CI fixes) are
-retained at `1e9fd2d7c:scratch/questions.md` (lines 5–472). None selects work
-here; main carries their outcomes.
+## Reversible choice awaiting a separate product decision
 
-## T5 (a7234f) — 2026-10-30 operator choices
+Since 1a/2a the projection's `base_power` / `base_toughness` contain layered
+card-row P/T on the battlefield. No UI component reads them for printed P/T,
+and no other Python-visible source exposes printed P/T. Keep and document
+that value for T5; a printed-P/T accessor or field removal requires a follow-up
+protocol decision by Jack Heart. This is not a T5 blocker.
 
-- Started from main; stacked on T3 (`3cef39b8e`, its local main merge, not
-  yet pushed) per Jack Heart's design review.
-- Surveil reuses the LookAndSelect surface (select = graveyard, decline =
-  keep) instead of a new action type, which would change `ACTION_TYPE_DIM`.
-  Kept cards stay in order: exact for surveil 1, the only printed amount.
-- Joo Dee's fixture entry was added from Scryfall's card API with the refresh
-  script's fields, not a full bulk refresh (which reorders the file).
-- `world` reports 239 eligible definitions (T3's 236 plus Joo Dee, Ran and
-  Shaw, Phoenix Fleet Airship).
-- 2026-10-30 (T5 implementation, headless):
-  - Copy exceptions reuse T3's `Modification` rather than a separate
-    `CopyException` enum, so exceptions and layered records share one
-    vocabulary and token id.
-  - The protocol field is `copy_of`, because pydantic's `BaseModel.copy`
-    shadows `copy`.
-  - The Airship's static is a self-relative `StaticAbility::CreatureWithNamesakes`,
-    not a conditional `StaticTypeGrant`, since `check_static_condition` has no
-    source.
-  - `/verify` was not run before commits: that Loopflow skill finishes the Task
-    after merge, and T5 stops at demo.
-- 2026-10-30 (demo iteration): `ContinuationFrame.decision` means different
-  things per frame kind (obligation code for kind 6, trigger ordering class for
-  7/8, placement group for 9). The LLM text renderer had read all of them
-  through one obligation table, where slot 14 said "order triggers" although
-  the engine's 14 is `SearchDistinctLands`. The renderer now labels each kind
-  separately (`_frame_decision`), so the text for trigger frames changes
-  wording. No retained fixture holds that text.
-
-## T5 sync onto main — 2026-11-02 (headless)
-
-- Merged with T3's head `a18902e0e` as the base (main's T3 is its squash) so
-  only T5's own diff met the characteristics cache and T4.
-- T5's `PlayerTurnHistory`, player column, `update_turn_history` and
-  `StaticCondition::SacrificedThisTurnAtLeast` were dropped for T4's struct,
-  column position (after attacked) and `Condition`; the Airship trigger uses
-  T4's `intervening_if`. Decision codes keep main's numbering, Surveil is 22.
-- Singular wording ("sacrificed 1 permanent", "drew 1 card") replaced main's
-  test expectation "drew 1 cards"; no retained fixture holds that text.
-
-## T5 gate at the green head — 2026-11-02 (headless)
-
-- The supported-card count in `WORLDS.md` was derived by addition (main's
-  263 plus three), but the engine counts 314 eligible definitions. Main's
-  figure was already stale: T3 recorded 236, T4 added 75 cards and T5 three,
-  which is the 314 `set_cards` reports. The gate corrected the branch's
-  statements to the measured number and did not touch main's history.
-- `/verify` was not run before the gate commit, as for earlier T5 commits:
-  that Loopflow skill checks a merged change and finishes the Task, and
-  shipping is stopped.
-
-## T5 concept-review decisions 1a/2a — 2026-11-02 (headless)
-
-- `PermanentData.power`, `keywords`, `is_animated` and the card row's
-  layered fields now agree for a battlefield card (both read
-  `Game::characteristics`). The permanent row keeps its columns: Python
-  readers, the text renderer and the policy input index them, and the
-  decision changed `CardData`, not `PermanentData`. `PermanentData.name` /
-  `creature_types` stay the "set by an Aura" markers (fact rows), while the
-  card row's `name` is the layered name.
-- `Characteristics.types` is the layer-4 owner; `is_creature` and `is_land`
-  are kept as flags derived from it so the many readers of one bool stay as
-  they are. A static grant of the Creature type (none exists) would now make
-  the permanent a creature through `types`, as `is_land` already did for
-  Land.
-- Ward in the view is the printed ward unless abilities are lost. Nothing
-  grants ward, so there is no granted-ward layer yet; the trigger that
-  enforces ward is already suppressed by ability loss.
-- Text wording: "printed keywords" became "keywords" on the card line, since
-  the flags are layered on the battlefield; "card power/toughness" keeps its
-  name as the card line's label.
-- Evidence that embeds card rows with active effects moves; implement left
-  the re-records to gate, which owns the receipts.
-
-## T5 realign after 1a/2a — 2026-11-02 (headless)
-
-- CI on `e8fd88eed` failed only Academy UI's two live retained
-  choice-navigation cases (CHOOSE_TARGET, DISCARD): the recorded projection's
-  `base_power` / `base_toughness` are the card row's P/T, which 2a made
-  layered on the battlefield (earthbent 0/0 lands now 2/2 and 1/1, anthem
-  creatures 3/3). No UI component reads `base_power`; the projection's comment
-  had promised printed values for a "4/4 (2/2)" display. Printed P/T has no
-  other Python-visible source, so keeping the field printed means a new engine
-  accessor. Simpler reversible choice taken: re-record the fixture with
-  `scratch/tools/regen_choice_navigation.py`, document `base_power` as the
-  card row's value, and leave the printed-P/T question for Jack Heart (plan,
-  Remaining). Memory bullet corrected: evidence under active effects does move.
-- `/verify` was not run before the realign commit, as for every T5 commit:
-  that Loopflow skill checks a merged change, and shipping is stopped.
-
-## T5 concept review after 1a/2a — 2026-11-02 (headless)
-
-- Rules text and mana cost are CR characteristics but have no modifying
-  `Modification`, and a copy carries them materialized in its definition, so
-  `text_box` and `mana_cost` stay `Printed` in the `CardSource` guard with
-  that reason. The first effect that changes either moves it into
-  `Characteristics`; 2a's "add it to the view" clause applies then.
-- The projection's `base_power` / `base_toughness` (layered on the
-  battlefield since 2a, nothing reads them for a printed value) are a
-  protocol follow-up for Jack Heart, not a T5 product choice; the step
-  reports "nothing to change" rather than Blocked, since the PR waits for
-  Jack Heart's review in any case and shipping is stopped.
-- The realign commit `889948346` is local; PR #405's head is still
-  `e8fd88eed`. This step publishes nothing; gate pushes.
+The choice-navigation re-record (`889948346`) preserves recorded offer ids
+when labels repeat, keeping original state digests and offer order. Gate must
+publish that local change and verify the Playwright cases at the new head.
+Shipping remains stopped by steer f39fef34; `/verify` is not a pre-merge check
+because that skill finishes delivered Tasks.

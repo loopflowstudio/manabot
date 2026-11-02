@@ -1,43 +1,75 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, PR #405 open, no review yet, local head `889948346`,
-PR head `e8fd88eed` until gate pushes the realign commit, main `29660d00c`
-merged, 0 behind): implemented, demoed through native Commands and the
-LLM/Academy text path, synced onto main (T3's squash, the characteristics
-cache and T4). All three cards are defined and supported. Jack Heart's
-concept-review decisions 1a and 2a (below) are implemented (`16e28c304`),
-compressed (`924e520b4`) and realigned (`889948346`: the choice-navigation
-fixture re-recorded for layered card rows); the headless concept review
-after them found nothing further to change (below). CI at the pushed head
-is the gate's pending check (Remaining). Shipping is stopped per Jack Heart's latest steer
-f39fef34 ("run the graph through gate. Shipping stays stopped: no merge").
-The Task record shows "Auto-Ship approved by Session … for Jack Heart
-2026-11-02T21:35:52Z" and the Graph "running from land --wait-and-fix"; the
-steer is the later, explicit direction, so the PR waits for Jack Heart's
-review and nothing merges.
+As of 2026-11-02, local base `bbb5101eb`, PR #405 was last recorded at
+`e8fd88eed`; main `29660d00c` is merged. Joo Dee, One of Many, Ran and Shaw,
+and Phoenix Fleet Airship are defined and supported. Implementation and the
+native Command / LLM text demos are complete. Gate owns current-head checks,
+publication and the PR description refresh below.
 
-Two accepted models from T3 (`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`)
-are the base this builds on: continuous effects as records
-(`state/effect.rs`: `Modification` × `Affected` × `EffectDuration`), and open
-vocabularies as v5 fact rows (`FactKind`).
+**Shipping is stopped.** Jack Heart's latest steer f39fef34 says to run the
+Graph through gate, then stop for review: no merge. The Task's recorded
+2026-11-02T21:35:52Z auto-ship approval and “running from land --wait-and-fix”
+Graph label do not override this explicit direction.
 
-## Design review (Jack Heart, 2026-10-30, comment 10a31948) — accepted, done
+Prior review narratives and detailed check history:
+`bbb5101eb:scratch/jack-heart/a7234f-tla-t5-permanent.md`.
+The uncommitted implement note at compression entry confirmed no source
+changes since `924e520b4`; its corrected characteristic authority and completed
+deletion list are preserved here. Its original diff is also in
+`.lf/tmp/t5-compress-input.patch`.
 
-1. Stack on T3 #399 and drop the duplicate `sorcery_timing`. Done; T3's field
-   and `check_activation_terms` are the one implementation.
-2. Replace tensor-only copy identity with generic, composable
-   modified-characteristics observation (copy + general exceptions + layered
-   effects, tensor and tokens). Done as below.
-3. Sacrifice history on `TurnState`, shared with T4 raid. Done in T4's shape.
-4. Define Phoenix Fleet Airship. Done.
+## Accepted design
 
-## Cards
+Jack Heart, 2026-10-30, comment 10a31948: stack on T3 #399 and reuse its
+sorcery timing; observe copies and general exceptions through composable
+modified-characteristic facts and tokens; share sacrifice history with T4;
+define Phoenix Fleet Airship. All four are implemented. T3's continuous-effect
+records and v5 fact rows are the substrate
+(`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`).
 
-| Card | State |
-| --- | --- |
-| Joo Dee, One of Many | supported; surveil, token copy, sorcery timing |
-| Ran and Shaw | supported (out of `tla::INCOMPLETE`); nonlegendary copy |
-| Phoenix Fleet Airship | supported; end-step self-copy after a sacrifice, eight-namesake creature, crew 1, flying |
+Engine scope is copiable-value authority and dynamic ability inheritance for
+these three self-copy cards; arbitrary face-aware consumers finish in T6.
+Allocation and obligations remain in `docs/rules/tla/allocation.jsonl`.
+
+## Concept review with Jack Heart — decisions 1a/2a, 2026-11-02
+
+Jack Heart selected both changes before merge:
+
+- **1a:** Legendary is a layer-4 `Characteristics.is_legendary` value:
+  copiable supertypes minus `Nonlegendary` records. The legend rule reads
+  that view; remove `permanent_is_legendary`.
+- **2a:** Every battlefield `CardData` field stating a mutable characteristic
+  reads `Game::characteristics()`; off the battlefield it reads the printed
+  card. Classify every field as layered or printed by definition in
+  `tests/cards/observability.rs`, with an exhaustive destructure. Add missing
+  characteristics to the view rather than another printed reader.
+
+Implemented in `16e28c304`, simplified in `924e520b4`, evidence realigned in
+`889948346`. The guard classifies all 20 fields (9 layered, 11 printed with
+reasons). `Characteristics.types` owns type flags (`is_creature()` and
+`is_land()` derive from it); `ward` disappears under ability loss. Card rows
+use struct update over `printed_card_data`, with `CardTypeData::from_types`
+as the shared type builder and `Card::is_legendary` as the printed reader.
+The legend-rule/column-39 witness, all-layered-fields witness, off-battlefield
+witness and text-renderer test cover the split. Widths and protocol fields
+are unchanged. Battlefield card text now says “keywords,” not “printed
+keywords.”
+
+The headless concept review after 1a/2a found no further T5 product choice
+(`scratch/concept-review.html`):
+
+- Text box and mana cost stay printed because no current modification changes
+  them; copies materialize both in the definition. The first text-changing or
+  cost-setting effect must add the value to `Characteristics` and reclassify
+  it as layered.
+- `PermanentData.name` and `creature_types` are Aura-set markers for fact rows;
+  the card row's name is the actual layered name. Keep the permanent columns
+  consumed by the tensor, Python and text paths.
+- `base_power` / `base_toughness` now equal layered P/T on the battlefield.
+  A printed-P/T accessor or protocol removal is a separate decision (below).
+- Do not fold `CreatureWithCounters` and `CreatureWithNamesakes` before a
+  third self-animation condition justifies it. Mixed supertype casing predates
+  T5; readers are case-insensitive and tokens use the legendary flag.
 
 ## Model as implemented
 
@@ -50,8 +82,8 @@ vocabularies as v5 fact rows (`FactKind`).
   records the inputs. A departed source is copied from its retained card
   (LKI). The state hash includes `copy` when present.
 - **Exceptions share T3's vocabulary.** `Modification::Nonlegendary` is either
-  a copy exception or a record; the legend rule reads it through
-  `Game::permanent_is_legendary` (`flow/sba.rs`). `apply_copiable` returns
+  a copy exception or a record; the legend rule and battlefield card row read
+  `Game::characteristics(id).is_legendary`. `apply_copiable` returns
   false for rules effects; a debug assert guards authoring.
   `Effect::CreateTokenCopy { exceptions: Vec<Modification<EffectValue>> }`.
 - **Observation.** `PermanentData.copy: Option<CopyData { registry_key, name,
@@ -85,174 +117,22 @@ vocabularies as v5 fact rows (`FactKind`).
   `decision` by frame kind (obligation for kind 6, ordering class for 7/8,
   placement group for 9, delayed-trigger event for 10).
 
-## Concept review after the sync — 2026-11-02 (headless)
+## Evidence and failure context
 
-Checked the accepted model against the synced tree (`scratch/concept-review.html`).
-Nothing to change; no product choice is open. Re-run at `39dd86190` after the
-realign: no code or main change since, same outcome; the page's header and CI
-line were refreshed.
-
-- One owner per fact survived the sync: a copy is `Card.copy` and the root
-  definition; "sacrificed this turn" is T4's `PlayerTurnHistory`, read by
-  `Condition::SacrificedThisTurnAtLeast` and `EffectValue::PermanentsSacrificedThisTurn`;
-  every sacrifice (effect, cost, forced) increments it through
-  `sacrifice_permanent`. No `StaticCondition`, `CreateNonlegendaryCopy` or
-  second `sorcery_timing` remains.
-- The three cards follow set conventions: firebending is the attacks trigger
-  every TLA card uses; the copy exception is the shared `Modification`.
-- Not adopted, as before: folding `CreatureWithCounters` and
-  `CreatureWithNamesakes` (waits for a third self-animation condition).
-  Mixed `"legendary"` / `"Legendary"` supertype casing predates T5 (11 cards
-  on main; readers compare case-insensitively, and tokens carry `is_legendary`,
-  not the string); a cosmetic cleanup for any batch, not a T5 decision.
-
-## Concept review with Jack Heart — 2026-11-02 (at `2df025c20`, open)
-
-Page: `scratch/concept-review.html`. The headless reviews found nothing to
-change. This one checks the accepted decision 2 ("always see a permanent
-having modified abilities") against how the code reads one characteristic.
-
-- **Mismatch.** T3's `Game::characteristics()` (`flow/statics.rs:265`) is the
-  layered view that the rules and the observation share. Name, subtypes,
-  creature, animated, keywords, P/T and abilities are all in it. Legendary is
-  not. Two readers decide it on their own:
-  `Game::permanent_is_legendary` (`flow/sba.rs:16`) reads copiable supertypes
-  minus a `Nonlegendary` record, and the legend rule uses it.
-  `CardData.is_legendary` (`agent/observation.rs:1160`) reads printed
-  supertypes only, and the tensor column 39, the text "legendary yes/no" and
-  the tokens' `is_legendary` all use it.
-- **Why it's consistent today.** The only source of `Nonlegendary` is a copy
-  exception, which `create_token_copy` writes into the token's definition, so
-  the two readers agree. Their answers split when a record (not a copy
-  exception) says "isn't legendary": the legend rule spares the permanent, but
-  the policy and the text still say legendary. The `Modification` vocabulary
-  already allows this, since `Nonlegendary` is a layer-4 record.
-- **Proposed (not accepted).** Add `is_legendary` to `Characteristics`,
-  computed in layer 4 from copiable supertypes and records. The legend rule
-  reads `characteristics(id).is_legendary`, and `permanent_is_legendary` goes
-  away. `CardData.is_legendary` reads characteristics on the battlefield, the
-  same way `is_ally` already does, and the printed value elsewhere. No column,
-  token or text change. Proof: a directed test that applies a `Nonlegendary`
-  record outside a copy and checks the legend rule, column 39 and the text
-  line together.
-- **Not in question.** Writing copiable values into the definition at
-  creation is the rule (token copies don't track their source later), and
-  `Card.copy` records its inputs for observation.
-  `PlayerTurnHistory` has one owner.
-
-**Decided by Jack Heart (2026-11-02): 1a, 2a.**
-
-1a. Do it in T5, before merge. `Characteristics.is_legendary` (layer 4:
-copiable supertypes unless a `Nonlegendary` record removes it) becomes the
-one authority. Delete `permanent_is_legendary`; the legend rule reads
-`characteristics(id).is_legendary`.
-
-2a. Make it a rule: every `CardData` field that states a characteristic of a
-battlefield card reads `Game::characteristics()`. Off the battlefield, fields
-keep reading the printed card. `tests/cards/observability.rs` enforces this.
-For each `CardData` field it records whether the field is layered (and reads
-characteristics on the battlefield) or printed by definition (identity, token,
-costs paid when casting), so a new field must be classified before it
-compiles. Apply the rule to every current field, including subtypes such as
-Lesson and abilities such as ward. When a characteristic has no layered value
-yet, add it to `Characteristics` instead of reading the printed card.
-
-**Implemented (2026-11-02, headless, after the decisions):**
-
-- `Characteristics` (`flow/statics.rs`) gains `is_legendary` (layer 4:
-  copiable supertypes unless a `Nonlegendary` record), `types: CardTypes`
-  (layer 4: printed, static type grants, Creature when animated, Artifact for
-  an artifact-creature record; `is_creature()` / `is_land()` are methods
-  reading it, not separate fields) and
-  `ward` (printed ward unless abilities are lost). `permanent_is_legendary`
-  is deleted; `legend_groups` reads the view.
-- `Observation::card_data` reads the view for every characteristic field of a
-  battlefield card: name, power/toughness, legendary, Ally, Lesson, ward,
-  card types and keywords (`card_data` overrides `printed_card_data` with
-  struct update, so the split is visible in one place; `Card::is_legendary`
-  is the one printed-supertype reader). Printed by definition: identity (zone, owner, id,
-  registry key), token status, text box, mana cost, kicker, face-down,
-  cast permission and X. `CardTypeData::from_types` is the one builder.
-- `tests/cards/observability.rs`: `card_sources()` classifies every
-  `CardData` field as `Layered` or `Printed(reason)` through an exhaustive
-  destructure (a new field does not compile unclassified);
-  `layered_card_fields_read_characteristics_on_the_battlefield` applies
-  records (Nonlegendary, +1/+1, flying, Lesson, artifact creature, ability
-  loss, Ally) and Honest Work, then requires every Layered field to move
-  and no Printed field to;
-  `card_rows_off_the_battlefield_read_the_printed_card`;
-  `a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together`.
-  `Modification::Nonlegendary` is now `Seen::Card(39)`. The Toph granted-land
-  test no longer claims v4 is blind to the grant: card column 11 (land) shows
-  it in every version, v5 adds the granted-permanent column.
-- Python: the text's card line says "keywords" instead of "printed
-  keywords" (its battlefield flags are layered now);
-  `test_a_nonlegendary_record_reads_as_not_legendary_on_the_card_line` (a
-  renderer check: the engine-side proof is the Rust test above);
-  the `Card` stub, `managym/README.md` and `WORLDS.md` state the rule. No
-  column, width, token or protocol change; the Python encoder reads the same
-  rows, so parity holds without a change.
-- The Yip Yip! card test and `PermanentData.keywords`' doc had stated the
-  old contract (card entry keeps printed keywords); both now state the
-  layered one.
-- Evidence: a battlefield card row now equals its permanent's layered
-  values (P/T with counters and pumps, granted keywords and types). Implement
-  expected recorded observations with active effects to move; on
-  `e8fd88eed` only the choice-navigation fixture's projection did
-  (earthbent lands, anthem creatures), and realign re-recorded it
-  (Remaining). The kernel, authored-match, demo and trigger-order receipts
-  held.
-
-## Concept review after 1a/2a — 2026-11-02 (headless, at `889948346`)
-
-Page: `scratch/concept-review.html` (regenerated). Checked the accepted
-decisions against the implemented change. Nothing to change; no product
-choice is open for T5. The decisions imply the following, recorded so a
-later agent does not reopen them:
-
-- **One reader per characteristic, verified.** `Characteristics` carries
-  name, types, legendary, subtypes, keywords, ward, P/T and abilities;
-  `legend_groups` and `card_data` both read it, and `permanent_is_legendary`
-  is gone. The `CardSource` guard classifies all 20 `CardData` fields (9
-  layered, 11 printed with a reason). `WORLDS.md`, `managym/README.md` and
-  the `Card` stub state the rule in the same words.
-- **Rules text and mana cost stay printed, with a trigger to move them.**
-  Both are characteristics (CR 109.3), but no `Modification` changes them;
-  a copy carries the copied values because `create_token_copy` materializes
-  them into the definition, so the printed card is the layered value. The
-  guard's reasons say so. The first vocabulary entry that changes either one
-  (a cost-setting or text-changing effect) must add it to `Characteristics`
-  and reclassify the field as `Layered`; 2a's "add it to the view instead of
-  reading the printed card" applies at that moment, not before.
-- **`PermanentData.name` and the card row's `name` are different facts.**
-  The permanent row's `name` is the "set by an Aura" marker (a fact row);
-  the card row's `name` is the layered name every viewer reads. T3's shape,
-  not T5's; stated in `questions.md`.
-- **`base_power` / `base_toughness` are not a T5 choice.** The projection's
-  fields read the card row, so on the battlefield they equal `power` /
-  `toughness` since 2a; no UI, test or training reader uses them for a
-  printed value, and the comment that promised a "4/4 (2/2)" display never
-  had a consumer. The name now overstates what the field holds, and it is a
-  required field in the four protocol v1 schemas, so renaming or dropping it
-  is a protocol change for a separate Task (Remaining lists the three
-  options). The accepted T5 outcome (three cards, observed through the
-  shared contract) does not depend on it.
-
-## Sync onto main — 2026-11-02 (steer 6eae1230)
-
-- Merged with T3's head `a18902e0e` as the base (main's T3 is its squash), so
-  only T5's own diff met the cache and T4: ~60 hunks instead of ~1465.
-- Dropped T5's own `PlayerTurnHistory`, player column, `update_turn_history`
-  (engine undo is gone) and `StaticCondition` for T4's; Ran and Shaw keeps
-  T4's `intervening_if` with `CreateTokenCopy`.
-- Re-recorded in the sync: protocol schemas, semantic-kernel w17 evidence
-  (14 cases / 3396 commands), belief v3 receipt pins.
-- Integration (main) on #405 (`552636009`, 2026-10-30) failed only the four
-  `test_policy_choice_can_learn_either_preference[*-target-*]` cases. Cause:
-  the branch then stacked on T3 before `a18902e0e`, which erases the v5
-  timestamp-rank column with the definition in `verify/action_cases.py`'s
-  target tie. Main's T3 squash carries that change; the file passes on the
-  synced tree (25 passed, 2026-11-02). CI on `1e9fd2d7c` is running.
+- Sync used T3's pre-squash head `a18902e0e` as merge base, avoiding replay
+  of its squashed changes. T4 owns turn history and the sacrifice column;
+  Surveil appends code 22 after KeepCreatures 20 and Retarget 21.
+- Initial Integration (main) failure on #405 (`552636009`, 2026-10-30)
+  was four target-choice separability cases. T3 `a18902e0e` clears the v5
+  timestamp rank with the target's definition. Synced
+  `uv run --extra dev pytest tests/model/test_action_identity.py -q` passed 25.
+- The first demo failed because capture rejected decision codes above 13.
+  The native shared bound and kind-specific text labels repaired it;
+  `scratch/t5-demo.md` retains the negative result and subsequent demos.
+- Re-gate after sync re-recorded content-bound w17 receipts and precision
+  demos; the authored-match authority receipt remained byte-identical.
+  Release Playwright passed 25, skipped 2 environment-gated cases. The
+  subsequent 1a/2a CI failure and its repaired fixture are detailed below.
 
 ## Remaining
 
@@ -295,6 +175,18 @@ later agent does not reopen them:
 
 ## Delete — do not maintain
 
+- Removed spent T3 rewrite scripts `scratch/tools/convert_continuous.py` and
+  `scratch/tools/rust_followups.py`: the surviving engine already owns their
+  migrations. Removed `scratch/add_fixture.py` (its scratch input is absent;
+  Scryfall fixtures are maintained by the existing card tooling).
+- Removed `scratch/tools/probe_t5.py` and `scratch/tools/demo_t5_contract.py`:
+  probes for the repaired capture failure; the real text-path demos and
+  `test_joo_dee_surveil_and_copy_play_through_the_text_decision` survive.
+  Original scripts remain at `bbb5101eb:scratch/`; no live callers.
+
+- `Game::permanent_is_legendary` and battlefield `CardData` reads of printed
+  mutable characteristics: replaced by `Characteristics` and the exhaustive
+  layered/printed field guard. Done in `16e28c304`, compressed in `924e520b4`.
 - `Effect::CreateNonlegendaryCopy` (main) and `CreateTokenCopy { nonlegendary }`:
   replaced by `{ exceptions }`. Done.
 - The branch's duplicate `ActivatedAbilityDefinition.sorcery_timing`: T3's is
@@ -304,91 +196,19 @@ later agent does not reopen them:
 - T5's own `PlayerTurnHistory` and `StaticCondition::SacrificedThisTurnAtLeast`:
   T4's. Done at the sync.
 
-## Checks
+No remaining deletion targets in the accepted design.
 
-- 2026-11-02 (realign after 1a/2a, headless): CI on `e8fd88eed` passed all
-  jobs but Academy UI (two choice-navigation projection cases). Extension
-  rebuilt at HEAD; `uv run python scratch/tools/regen_choice_navigation.py`
-  then `uv run --extra dev pytest tests/academy/test_choice_navigation.py -q`:
-  5 failed before the re-record, 7 passed after. The Playwright proof is
-  CI's at the new head.
-- 2026-11-02 (compress, headless): debug `cargo test --test cards --test
-  rules_tests` (501 + 141 passed), clippy `--all-targets --all-features -D
-  warnings` clean. Observation output is unchanged, so no extension rebuild
-  or Python rerun; gate owns those.
-- 2026-11-02 (implement 1a/2a, headless): debug `cargo test --test cards
-  observability` (51), `--test cards tla::` (390) and `stx::` (19),
-  `--test rules_tests` legend / engine_events / cr_613 (24),
-  `search_state_contract` and `possible_worlds_tests` passed; `cargo fmt
-  --check` clean. Extension rebuilt; `uv run --extra dev pytest
-  tests/semantic/test_text_observation.py tests/verify/test_observation_parity.py
-  tests/academy/test_recorded_attempts.py tests/semantic/test_current_content.py
-  tests/env/test_skip_forced_decisions.py -q`: 75 passed. Clippy, the full
-  debug `cargo test`, conformance receipts and the evidence re-records are
-  gate's.
-- 2026-11-02 (gate at the green head `836042c07`, headless): the diff
-  against main carries no leftovers (no debug output, TODOs or transient
-  comments). The sync had duplicated three lines, which this gate removed:
-  `Player.turn_history` in `manabot/managym/__init__.pyi`, the
-  `turn_history` spread in `experience_projection._serialize_player` (the
-  second entry overwrote the first, so serialized output is unchanged) and
-  the `turn_history` label key in `tests/semantic/test_text_observation.py`.
-  Rust and TypeScript reject such duplicates at compile time, and clippy and
-  svelte-check pass in CI, so only Python carried them. The engine reports
-  314 supported definitions in `world` (`set_cards` over every set file: 257
-  TLA eligible, 4 TLA unsupported, 1 `ths` unsupported, 57 others), not the
-  266 the branch had stated (main's 263 was stale before T5, below), so
-  `WORLDS.md` and the PR body now say 314; the PR body's turn-history
-  bullets now claim only T5's own change (the projection, Python
-  construction and singular wording), since the field, column and
-  `Condition` are main's. `WORLDS.md` no longer lists "a static condition
-  on sacrifices this turn" as a T5 addition. Checks: `ruff check` and
-  `ruff format --check` on the three Python files; `uv run --extra dev
-  pytest tests/semantic/test_text_observation.py
-  tests/verify/test_observation_parity.py
-  tests/academy/test_recorded_attempts.py
-  tests/semantic/test_current_content.py -q` (70 passed, 53 s). No Rust,
-  fixture or frontend source changed, so the suites recorded below keep
-  their results.
-- 2026-11-02 (re-gate after the sync, headless): rebuilt the extension from
-  the synced tree. The authored-match authority receipt regenerated
-  byte-identical (`081bbbe7…`), so its SHA pins and `TERMINAL_STATE` stay.
-  `python -m academy.authored_match_parity write` moved only `relevant_source`
-  hashes; `public_commitment_parity verify` passed (142 commands, 69
-  commitments, 0 gaps). Re-recorded `trigger-order-w17.json` (content digest
-  `92b2f506…`, root `7073b445…`) from `manabot.verify.trigger_order.root` and
-  the precision demos with `scratch/tools/regen_play_demos.py` (revisions 30
-  and 66 unchanged; the manifest gains the three cards in name order).
-  Release Playwright (`npm run test:e2e:release`, ports 8031/5191): 25 passed,
-  2 skipped (deck-browser art cache and checkpoint cases, environment-gated),
-  including the three decision-surface Precision cases CI had failed. The
-  receipt suites (authored-match authority and parity, choice navigation,
-  trigger order, Learn evidence and setup, decision surface, belief state and
-  learning, continuation input): 72 passed.
-- 2026-11-02 (realign after the concept review, HEAD `9bf9c1928`): `gh run
-  view 41507203990 --json jobs` on `1e9fd2d7c`: Rust, Python unit, both
-  conformance, Clean-machine Play, Academy Integration and Integration (long)
-  passed; Academy UI and Integration (main) failed on the stale digests named
-  under Remaining. Main is unchanged since the sync (`origin/main` =
-  `4c8324a59`); no rerun of local suites.
-- 2026-11-02 (realign, HEAD `1e9fd2d7c`): `uv run --extra dev pytest
-  tests/model/test_action_identity.py -q` passed (25), confirming the CI
-  diagnosis above. The receipt suites
-  (`tests/academy/test_authored_match_parity.py test_authored_match_authority.py
-  test_choice_navigation.py test_trigger_order.py test_learn_evidence.py
-  test_decision_surface.py tests/belief/test_state.py test_learning.py
-  tests/verify/test_continuation_input.py`) ran 55 passed, 6 failed, all six
-  the stale digests named under Remaining.
-- 2026-11-02 (sync): debug `cargo test --no-fail-fast` (all targets after the
-  conformance re-record), text observation, observation parity, `tests/env/`,
-  belief state, experience protocol, vitest permanent notes and GameBoard
-  passed.
-- 2026-10-30 (gate, pre-sync tree): `cargo fmt --check`, debug `cargo test`
-  (21 targets, 0 failed), clippy `-D warnings` (`PYO3_PYTHON` must be
-  absolute), `semantic_conformance check`, the focused Python suites listed in
-  `AGENTS.md`, vitest (22) and `npm run check` passed.
-- 2026-10-30 (demo, headless, record in `scratch/t5-demo.md`): the first
-  pass found the text-path decision-code gap (fixed at `2963f8f87`, regression
-  `test_joo_dee_surveil_and_copy_play_through_the_text_decision`); the second
-  and third passes showed Joo Dee, Ran and Shaw and the Airship through the
-  text path.
+## Validation handoff
+
+Reusable evidence (2026-11-02): debug `cargo test --test cards --test
+rules_tests` passed 501 + 141 and clippy `--all-targets --all-features -- -D
+warnings` passed at `924e520b4`; extension rebuilt for `e8fd88eed`.
+The 1a/2a focused Python observation, parity, Academy, content and forced-choice
+suites passed 75. After fixture re-record, `uv run --extra dev pytest
+tests/academy/test_choice_navigation.py -q` passed 7 (5 failures beforehand).
+Full prior output and commands remain at the history reference above.
+
+Compression keeps all behavioral tests, shares the Ran and Shaw graveyard
+setup, uses `Characteristics::pt()` in T5 assertions and names the injected
+renderer test for what it proves. Production source and receipts are unchanged.
+`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --test cards tla::`: 390 passed; `uv run --extra dev pytest tests/semantic/test_text_observation.py::test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects -q`: 1 passed; format/lint and `git diff --check` clean. Gate retains current-head CI and acceptance checks.

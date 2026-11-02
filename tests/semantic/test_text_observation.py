@@ -756,11 +756,12 @@ def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
     assert "This turn:" not in decision.text
 
 
-def test_a_nonlegendary_record_reads_as_not_legendary_on_the_card_line() -> None:
-    """The card line states the legendary flag as the engine wrote it in the
-    card row (layered on the battlefield; `observability.rs` proves a
-    `Nonlegendary` record clears it), never re-derived from the printed card,
-    beside the permanent's effect line that explains it."""
+def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects() -> None:
+    """Conflicting injected data proves the renderer reads the engine's flag.
+
+    Rust observability tests prove real Nonlegendary effects clear that flag;
+    text rendering must not recalculate it from the permanent's effect list.
+    """
     env = priority_root((), ("Mountain", "Gray Ogre"))
     decision = capture_text_decision(env)
     payload = json.loads(decision.capture_json)

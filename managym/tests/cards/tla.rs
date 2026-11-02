@@ -7442,13 +7442,7 @@ fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature
     assert!(s.game().state.cards[copy.card].is_token);
     assert!(!copy.tapped);
     assert_eq!(counters(&s, token), 0);
-    assert_eq!(
-        {
-            let c = s.game().characteristics(token);
-            (c.power, c.toughness)
-        },
-        (2, 2)
-    );
+    assert_eq!(s.game().characteristics(token).pt(), (2, 2));
     assert_eq!(
         s.game().state.cards[copy.card].activated_abilities.len(),
         1,
@@ -8101,8 +8095,7 @@ fn court_official_and_ozai_make_the_target_player_choose_discards() {
     }
 }
 
-/// Player 0's Phoenix Fleet Airship and a Clue to sacrifice, in player 0's
-/// main phase with {2} to pay for it.
+/// Player 0's Phoenix Fleet Airship in their main phase, with no mana.
 fn airship_setup() -> (Scenario, PermanentId) {
     let mut s = five_color_unfunded_setup(&["Phoenix Fleet Airship"]);
     let airship = s.force_permanent_on_battlefield(0, "Phoenix Fleet Airship");
@@ -8218,13 +8211,7 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
             observed(&s, *id).is_animated,
             "the eighth makes all eight creatures"
         );
-        assert_eq!(
-            {
-                let c = s.game().characteristics(*id);
-                (c.power, c.toughness)
-            },
-            (4, 4)
-        );
+        assert_eq!(s.game().characteristics(*id).pt(), (4, 4));
     }
     assert!(!observed(&s, rival).is_animated);
 }
@@ -8263,13 +8250,20 @@ fn pillar_launch_untaps_and_grants_temporary_reach_and_stats() {
     assert!(!keywords(&s, creature).reach);
 }
 
-#[test]
-fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
+/// Player 0 can cast Ran and Shaw with three instant or sorcery cards in the
+/// graveyard, satisfying its copy trigger's intervening condition.
+fn ran_and_shaw_setup() -> Scenario {
     let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
     for _ in 0..3 {
         let lesson = library_card(&s, 0, "Waterbending Lesson");
         s.game_mut().move_card(lesson, ZoneType::Graveyard);
     }
+    s
+}
+
+#[test]
+fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
+    let mut s = ran_and_shaw_setup();
     cast(&mut s, "Ran and Shaw");
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
@@ -8297,11 +8291,7 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
 
 #[test]
 fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
-    let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
-    for _ in 0..3 {
-        let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_card(lesson, ZoneType::Graveyard);
-    }
+    let mut s = ran_and_shaw_setup();
     cast(&mut s, "Ran and Shaw");
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
@@ -8397,11 +8387,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
 
 #[test]
 fn ran_and_shaw_copy_ignores_the_sources_status_counters_and_effects() {
-    let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
-    for _ in 0..3 {
-        let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_card(lesson, ZoneType::Graveyard);
-    }
+    let mut s = ran_and_shaw_setup();
     cast(&mut s, "Ran and Shaw");
     for _ in 0..10 {
         if s.battlefield_permanents_named(0, "Ran and Shaw").len() == 1 {
@@ -8441,13 +8427,7 @@ fn ran_and_shaw_copy_ignores_the_sources_status_counters_and_effects() {
     let token = *dragons.iter().find(|id| **id != source).unwrap();
     assert!(!tapped(&s, token));
     assert_eq!(counters(&s, token), 0);
-    assert_eq!(
-        {
-            let c = s.game().characteristics(token);
-            (c.power, c.toughness)
-        },
-        (4, 4)
-    );
+    assert_eq!(s.game().characteristics(token).pt(), (4, 4));
     assert!(keywords(&s, token).flying);
     assert!(!keywords(&s, token).trample);
 }
@@ -8474,29 +8454,10 @@ fn ran_and_shaw_firebend_and_pump_only_the_dragons_present_until_end_of_turn() {
     s.set_player_mana_pool(0, "RRRR");
     activate(&mut s, dragon, 0);
     settle(&mut s);
-    assert_eq!(
-        {
-            let c = s.game().characteristics(dragon);
-            (c.power, c.toughness)
-        },
-        (6, 4)
-    );
-    assert_eq!(
-        {
-            let c = s.game().characteristics(ogre);
-            (c.power, c.toughness)
-        },
-        (2, 2),
-        "not a Dragon"
-    );
+    assert_eq!(s.game().characteristics(dragon).pt(), (6, 4));
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2), "not a Dragon");
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(
-        {
-            let c = s.game().characteristics(dragon);
-            (c.power, c.toughness)
-        },
-        (4, 4)
-    );
+    assert_eq!(s.game().characteristics(dragon).pt(), (4, 4));
 }
 
 #[test]
