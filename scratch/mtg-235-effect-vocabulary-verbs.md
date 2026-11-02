@@ -7,11 +7,11 @@ amendment to PR #412. The original pass and review rationale are preserved at
 The historical review page is retained at that commit; `scratch/concept-review.html`
 shows the current headless review.
 
-Status: recovery implementation complete. Existing edits from the interrupted
-Claude run are preserved in `98031f50f`; the amendment is at `efd4f6d26` after
-syncing main `29660d00`. Full automated acceptance, amended publication and
-subsequent delivery remain pending; green CI on the old PR head does not
-validate this amendment.
+Status: amendment verified for publication. Existing edits from the interrupted
+Claude run are preserved in `98031f50f`; the tested amendment is `24b8a8a8b`,
+synced with main `29660d00`. Final-source automated acceptance passed on
+2026-11-02; amended publication is the current operation. Subsequent delivery
+and MTG-225 integration remain pending.
 
 ## Outcome and authority
 
@@ -99,17 +99,21 @@ shrinks by more than half; these remaining rules are outside the accepted cut.
 
 ## Acceptance and remaining work
 
-- Required final-head acceptance: all directed card behavior tests pass unchanged
-  in debug; observability guards cover verbs/selectors and learning tokens;
-  native/Python observation parity and LLM text rendering pass. The guards and
-  directed choice tests exist, but the earlier 485-card pass predates recovery
-  fixes and is not proof of this full acceptance on the amendment.
+- Final-source acceptance passed: debug Rust suite 856 passed / 2 ignored,
+  including all 485 directed card tests unchanged, selector/token guards,
+  choice-lifetime tests and semantic conformance reproduction. Python consumers,
+  native/Python observation parity, LLM rendering, world admission, monitoring,
+  model and replay/parity suites: 391 passed / 1 skipped.
 - Refreshed semantic conformance, authored-match receipt, both parity corpora,
   five Academy fixtures and current belief receipt pins against the rebuilt
   extension. Historical receipts are unchanged. w17 and policy input v5 stay
   open in place; WORLDS.md records changed content/tokens.
-- Gate owns the full affected suites, observation/world admission and conformance
-  reproduction. Amended publication of #412 and delivery are still pending.
+- Academy type checking and build passed; decision-label Vitest 2 passed;
+  headless choice-navigation, Learn and trigger-order recovery 10 passed.
+  Retained final-source clippy (all targets/features), fmt and Ruff pass.
+  The installed cp312 extension matches the rebuilt wheel byte for byte.
+  Publication logs remain local under `.runs/publish-mtg-235/`. Delivery remains
+  separate from publication; old-head CI is not used as amendment proof.
 - Explicit integration dependency: MTG-225 (T6) has no published PR on this
   base. `TriggerCondition::Chapter` does not exist here; integration must replace
   it with `CountersReach { kind, at_least }` when T6 publishes, and migrate any
@@ -142,7 +146,7 @@ its final source (142 commands, no divergence). The complete recovery log is Cod
 `90147cf1e73340099716c86f29261341`); it preserves rebuild hashes and commands.
 Compression evidence is retained in session `session_068a02853c1f42b599b854fb7f585e0a`.
 
-Check-result: 2026-11-02 — `git diff --check` clean; full final-head acceptance deferred to gate/CI (prior focused results retained above).
+Check-result: 2026-11-02 — final-source acceptance at `24b8a8a8b`: Rust 856 passed / 2 ignored; Python 391 passed / 1 skipped; browser 10 passed; UI checks/build and 2 label tests passed; `git diff --check` clean. MTG-225 integration remains pending.
 
 ## Concept review after recovery — 2026-11-02
 
@@ -172,7 +176,6 @@ card ObjectRef. A shared authoring vocabulary does not erase those identities.
 Definitions remain the sole owner of rules and learning tokens. Academy and LLM
 labels consume the native resolution choice; no consumer gains its own rules or
 choice state. Changed content identity requires current w17 evidence while
-historical receipts and frozen observation widths stay intact. Next proof is
-the existing final-head acceptance above, especially unchanged debug card tests,
-selector observability, consumer parity and retained pending decisions. This
-review adds no test-pass or delivery claim; MTG-225 integration remains pending.
+historical receipts and frozen observation widths stay intact. At this review boundary, final-head acceptance was still pending; the publication
+checks recorded above now establish it. This concept review itself added no
+test-pass or delivery claim; MTG-225 integration remains pending.
