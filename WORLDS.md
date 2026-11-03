@@ -159,7 +159,8 @@ the value twins (`DealDamageValue`, `GainLifeValue`, `CreateTokensValue`,
 `AddManaValue`) merged on `EffectValue`; `DiscardTargetPlayer` is `Discard {
 what }`. With the 33 object-fused variants (`PutCountersOnSource`,
 `SacrificeTriggeringPermanent`, `ReturnGraveyardTarget`, `ExileAttached`,
-`TapTarget`, …) gone, `Effect` has 70 variants (was 107). "If you do" is
+`TapTarget`, …) gone, this amendment reduced `Effect` from 107 to 70 variants
+(71 after the T5 Surveil integration below). "If you do" is
 `Condition::Moved` over what the latest move or sacrifice moved; "if you
 controlled it" is `Condition::TargetControlledByYou`; `PlayerSelector::Owner`
 names the owner a move returns a card to. Behavior is unchanged except that a

@@ -7,11 +7,11 @@ amendment to PR #412. The original pass and review rationale are preserved at
 The historical review page is retained at that commit; `scratch/concept-review.html`
 shows the current headless review.
 
-Status: amendment verified for publication. Existing edits from the interrupted
-Claude run are preserved in `98031f50f`; the tested amendment is `059d37b01`,
-synced with main `230b2f563`. Final-source automated acceptance passed on
-2026-11-02; amended publication is the current operation. Subsequent delivery
-and MTG-225 integration remain pending.
+Status: the combined T5 source is verified for republication. Main `a8abf01b1`
+is integrated by `e5560fb22`; publication validation corrected one test assertion
+to call `Characteristics::is_creature()`. The latest results are in “Combined
+source publication verification” below; earlier counts describe earlier heads.
+Subsequent delivery and MTG-225 integration remain pending.
 
 ## Outcome and authority
 
@@ -89,7 +89,8 @@ No legacy schema adapter or parallel effect dispatcher remains. The duplicate
 `cardsets::tla::add_one_of` helper is removed; its callers use
 `Effect::mana_choice`. No additional deletion targets remain in this cut.
 
-Effect now has 70 variants, down from 107. Remaining object-in-name rules (14):
+The amendment reduced Effect from 107 to 70 variants; T5's Surveil brings the
+combined source to 71. Remaining object-in-name rules (14):
 ReturnMilledThisWay, DistributeCountersToTappedOpponentCreatures,
 EachPlayerKeepsCreatures, ExileTopCardPlayThisTurn, ExileUntilNonlandCastFree,
 ExileLinked, CastExiledWithSource, AttachSourceTo, OwnerPutsIntoLibrary,
@@ -207,3 +208,34 @@ projection changes viewer hashes. Native extension rebuilt and replaced
 atomically; broader gate results above describe the pre-T5 head, not this sync.
 The sync caller owns final verification and publication; this resolver does
 not push or land.
+
+## Combined source publication verification — 2026-11-02
+
+`lf sync` confirmed the branch is current with main `a8abf01b1`. Review of
+the actual base diff and merge resolution preserves the accepted selector,
+EffectValue and Chosen model alongside T5 token copies and Surveil. The full
+debug build found an integration error missed by the focused sync checks:
+the Each Earthbend test read `is_creature` as a field after main made it a
+method. Corrected only that assertion; no native implementation changed.
+WORLDS.md now distinguishes the 70-variant amendment from the combined 71.
+
+Final combined-source checks (logs under `.runs/republish-mtg-235/`):
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml`:
+  881 passed, 2 ignored, including all 502 card tests, selector/observability
+  guards, continuation contracts and semantic conformance reproduction.
+- Python consumers, native/Python observation parity, LLM text, world admission,
+  arena/monitoring, all model tests, disclosure, Academy fixture and both parity
+  corpora, and belief receipts: 404 passed, 1 skipped. Authored parity retains
+  142 commands; public parity retains 69 commitments and zero provider gaps.
+- Academy type check and production build passed; decision-label and permanent
+  notes Vitest: 9 passed. Headless Playwright choice-navigation, Learn and
+  trigger-order recovery: 10 passed; its servers stopped with the test command.
+- All-target/all-feature clippy, rustfmt, focused Ruff and diff whitespace checks
+  passed. Installed cp312 extension matches the sync's rebuilt wheel byte for
+  byte (SHA256 `81ad7d04358488793c555d565c7a39c6894ac5536bdf6aac8a3f3770fc2f86c8`).
+
+Fresh `lf task status MTG-225 --json` still reports no PR (implementation is
+running). T6 integration and delivery remain explicit dependencies. Publication
+does not merge, arm auto-merge or complete this Task. These results validate the
+combined local source; previous-head CI is not evidence for this amendment.

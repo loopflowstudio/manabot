@@ -270,7 +270,7 @@ fn each_selector_earthbends_every_selected_land() {
     s.pass_priority();
     for id in [first, second] {
         let view = s.game().characteristics(id);
-        assert!(view.is_creature);
+        assert!(view.is_creature());
         assert_eq!(view.power, 2);
         assert_eq!(view.toughness, 2);
         assert!(view.keywords.haste);
