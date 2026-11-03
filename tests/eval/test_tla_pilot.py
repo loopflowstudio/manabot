@@ -12,7 +12,13 @@ from typing import Literal
 import duckdb
 from etude.eval.block import write
 from etude.eval.records import MatchRecord
-from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
+from etude.experiment import (
+    Checkpoint,
+    Checkpoints,
+    ExperimentState,
+    TrainingRun,
+    read_experiment,
+)
 from etude.jobs import evaluation_spec
 from etude.run.declaration import declare
 from etude.run.records import ArtifactRef, Clock
@@ -88,6 +94,14 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
         if "initial" in matchup.tags:
             assert matchup.players[1].checkpoint.key.name == "u0.pt"
     assert eval(ExperimentState(experiment="tla_pilot")) == []
+
+
+def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
+    experiment = read_experiment(ROOT / "experiments/tla_pilot.py")
+    job = experiment.eval(_state((0,)))[0]
+    callback = evaluation_spec(job).play
+    assert callback.module == "experiments.tla_pilot"
+    assert callable(callback.load(job.repo))
 
 
 # Controlled outcomes exercise the analysis without running games or training.

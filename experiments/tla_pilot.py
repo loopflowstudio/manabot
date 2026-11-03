@@ -33,6 +33,7 @@ from etude.report import Curve, Matches, Report, Score
 from pydantic import Field
 import torch
 
+from experiments import tla_pilot
 from experiments.tla_corpus import Corpus
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -272,7 +273,9 @@ def eval(state: ExperimentState) -> list[Job]:
                 environment=environment(protocol),
                 matchups=matchups,
             ),
-            play=play,
+            # Etude discovers this file with runpy; callbacks need an importable
+            # module identity even when eval itself came from <run_path>.
+            play=tla_pilot.play,
             workers=1,
             max_hours=4,
         )

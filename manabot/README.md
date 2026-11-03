@@ -94,6 +94,14 @@ independent per-seat draws (including mirrors) or the retained distinct-pair
 contract. Stable population entry IDs distinguish events even when lists match;
 checkpoints still bind the world, never the population.
 
+Run its local evaluation from the training run's pinned source and native world.
+Local Etude evaluation needs an explicit directory for the pilot's replay evidence
+(rented jobs receive this directory from the launcher):
+
+```sh
+ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot.py --source r2://manabot/jobs
+```
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from
