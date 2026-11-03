@@ -10,7 +10,6 @@
 
 use std::{
     collections::BTreeMap,
-    fmt,
     sync::{Arc, OnceLock},
 };
 
@@ -46,19 +45,6 @@ pub struct ContentPack {
     public_definitions: OnceLock<Vec<serde_json::Value>>,
 }
 
-/// Omits the lazy `digest` and `public_definitions` caches: they derive from
-/// the definitions, and the catalog is shared across threads, so printing
-/// them would make a match's `Debug` depend on when another reader filled them.
-impl fmt::Debug for ContentPack {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ContentPack")
-            .field("schema_version", &self.schema_version)
-            .field("cards_by_name", &self.cards_by_name)
-            .field("definitions", &self.definitions)
-            .finish_non_exhaustive()
-    }
-}
-
 /// Every current card from `cardsets/` and the rules fixtures, in name order.
 fn default_order() -> Vec<CardDefinition> {
     crate::cardsets::catalog()
@@ -71,11 +57,11 @@ fn default_order() -> Vec<CardDefinition> {
         .collect()
 }
 
-static DEFAULT_CONTENT_PACK: OnceLock<Arc<ContentPack>> = OnceLock::new();
+static DEFAULT_CONTENT_PACK: OnceLock<ContentPack> = OnceLock::new();
 
-/// The process-wide catalog every match, authored setup and search fork shares.
-pub fn default_content_pack() -> Arc<ContentPack> {
-    Arc::clone(DEFAULT_CONTENT_PACK.get_or_init(|| Arc::new(ContentPack::default())))
+/// The process-wide catalog every match, authored setup and search fork reads.
+pub fn default_content_pack() -> &'static ContentPack {
+    DEFAULT_CONTENT_PACK.get_or_init(ContentPack::default)
 }
 
 impl ContentPack {

@@ -31,7 +31,7 @@ use managym::{
         observation::{EventEntityKind, KeywordData, Observation, PermanentData},
         policy_history::HistoryReference,
     },
-    cards::setups::authored_setup,
+    cards::{content_pack::default_content_pack, setups::authored_setup},
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
@@ -13838,13 +13838,10 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     pass_until(&mut s, ActionSpaceKind::Modal);
     let names = s.action_space().actions.len();
     assert!(names > 200, "every card name in the world: {names}");
-    let ogre_mode = s
-        .game()
-        .state
-        .content
+    let ogre_mode = default_content_pack()
         .definition_entries()
         .filter(|(id, d)| {
-            !d.is_token && !d.key.is_empty() && s.game().state.content.front_face(*id).is_none()
+            !d.is_token && !d.key.is_empty() && default_content_pack().front_face(*id).is_none()
         })
         .map(|(_, d)| d.name.clone())
         .collect::<std::collections::BTreeSet<_>>()

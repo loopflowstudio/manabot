@@ -363,7 +363,7 @@ pub fn admit_decklists(decklists: &[(String, Decklist)]) -> Result<Vec<DeckImpor
     let mut admitted = Vec::new();
     let mut rejected = BTreeMap::new();
     for (label, decklist) in decklists {
-        match admit_with_world(decklist, pool, &content) {
+        match admit_with_world(decklist, pool, content) {
             Ok(imported) => admitted.push(imported),
             Err(decklist) => {
                 rejected.insert(label.clone(), decklist);
@@ -402,7 +402,7 @@ mod tests {
     const VILLAIN: &str = "20 Island\n";
 
     fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
-        admit_with_world(decklist, pool, &default_content_pack())
+        admit_with_world(decklist, pool, default_content_pack())
     }
 
     fn import_match(hero: &str, villain: &str) -> Result<Vec<DeckImport>, DecklistError> {

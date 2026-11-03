@@ -2,6 +2,7 @@
 // Zone management, card movement, and utility methods on Game.
 
 use crate::{
+    cards::content_pack::default_content_pack,
     flow::{
         decision::Decision,
         event::GameEvent,
@@ -333,7 +334,7 @@ impl Game {
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
         let object_id = self.state.id_gen_mut().next_id();
-        let Some(card) = self.state.content.instantiate(name, controller, object_id) else {
+        let Some(card) = default_content_pack().instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
             return None;
         };
@@ -697,7 +698,7 @@ impl Game {
     /// Show a card's back face; false when it has none.
     fn show_back_face(&mut self, card: CardId) -> bool {
         let definition = self.state.cards[card].definition_id;
-        let Some(back) = self.state.content.back_face(definition) else {
+        let Some(back) = default_content_pack().back_face(definition) else {
             return false;
         };
         self.state.cards[card].turn_back_face_up(back);

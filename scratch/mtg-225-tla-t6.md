@@ -82,10 +82,6 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 - Other open PRs against main that overlap and may land first: MTG-235 #412
   (effect vocabulary, 66 files) and MTG-237 #413 (engine budget in CI). No
   order between them and T6 is recorded.
-- One-catalog item not met: `Arc<ContentPack>` remains on `GameState` (`content`).
-  The accepted note in t6-direction.md says it goes away. Tests swap it to prove
-  digests bind content, and `conformance.rs` clones it. An earlier note here
-  called this "allowed by the steer"; the steer does not say that.
 
 ## Decisions for Jack Heart's review
 
@@ -103,10 +99,12 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 
 ## Check
 
-2026-11-02, synced HEAD `a607c8b0c`: debug `cargo test --lib --tests
+2026-11-02, `GameState.content` removed: debug `cargo test --lib --tests
 --no-fail-fast` fails only `checked_semantic_conformance_evidence_reproduces`
-(re-record), `--test cards` 526 passed, clippy clean; pytest deferred to gate
-(last broad run before the sync: 22 Academy digest/identity failures).
+(re-record), `--test cards` 526 passed, clippy clean; catalog digest
+`02ac498d…2634`, length 355 and manifest hash `b8945b35…7a3c` match the
+pre-change commit `a44219dc1`. pytest and Academy UI have not run since the sync
+onto main (last broad pytest before it: 22 Academy digest/identity failures).
 
 ## One catalog (steer b222da8f)
 
@@ -122,6 +120,16 @@ became `submitted: bool` (serialized `"world": "world"`); Python keeps
 Authored setups are `AuthoredSetup` decklists named by preset or `pack_key`.
 `WorldIdentity` reads the catalog directly; world queries are infallible. Ward
 lowering stays in `register_card`, documented as the catalog's one normalization.
+
+`GameState.content` is gone: readers use `default_content_pack()`, now
+`&'static ContentPack`. Digest binding is proved by
+`GameState::deterministic_hash_over(&ContentPack)`. Clone cost is proved by giving
+cards large copy-on-write definitions (allocation receipt v2; the retained W2-208
+receipt is v1). `Card.definition` stays `Arc`: that copy-on-write seam needs it,
+and the direction only says "may". The conformance metamorphic relation
+`equal_content_pack_reallocation_preserves_trace` no longer has anything to
+reallocate, so it is removed; w17's `evidence.json` still lists it until the
+pending re-record.
 
 Proof at the refactor: catalog digest `6741f471…9827`, length 345 and the
 id→name manifest hash `f67e67ee…b603` are identical on `2c1ba169f` and on the

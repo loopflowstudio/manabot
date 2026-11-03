@@ -3,6 +3,7 @@
 
 use crate::{
     agent::action::ActionSpace,
+    cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::CardDefinition,
@@ -132,7 +133,7 @@ impl Game {
     /// clone.
     pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&CardDefinition> {
         let lki = self.object_lki(object_ref)?;
-        self.state.content.definition(lki.definition_id)
+        default_content_pack().definition(lki.definition_id)
     }
 
     pub(crate) fn record_object_lki(&mut self, lki: ObjectLki) {

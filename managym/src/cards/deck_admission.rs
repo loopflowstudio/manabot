@@ -108,7 +108,7 @@ pub fn check_decks(decks: &[Deck]) -> Vec<Vec<DeckIssue>> {
     let content = default_content_pack();
     decks
         .iter()
-        .map(|deck| admit_in_world(world_pool(), &content, deck))
+        .map(|deck| admit_in_world(world_pool(), content, deck))
         .collect()
 }
 

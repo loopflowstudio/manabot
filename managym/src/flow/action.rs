@@ -7,6 +7,7 @@ use crate::agent::ability_description::{
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
+    cards::content_pack::default_content_pack,
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
         card::ActivationZone,
@@ -43,9 +44,7 @@ impl Game {
                     if let Some(seat) = reference.player {
                         label.push_str(&format!(" — event: Seat {}", seat + 1));
                     } else if let Some(definition) = reference.definition.and_then(|id| {
-                        self.state
-                            .content
-                            .definition(crate::state::card::CardDefId(id))
+                        default_content_pack().definition(crate::state::card::CardDefId(id))
                     }) {
                         label.push_str(&format!(" — event: {}", definition.name));
                         if let Some(object) = reference.object {

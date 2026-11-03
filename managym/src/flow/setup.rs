@@ -145,7 +145,6 @@ impl Game {
                 trigger_enqueue_counter: 0,
                 rng,
                 id_gen,
-                content,
             }),
             policy_history: Default::default(),
             skip_trivial,

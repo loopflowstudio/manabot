@@ -6,6 +6,7 @@ use rand::RngCore;
 use serde::Serialize;
 
 use crate::{
+    cards::content_pack::{default_content_pack, ContentPack},
     flow::{combat::CombatState, game::GameState, turn::TurnState},
     state::{
         card::CardDefId,
@@ -165,8 +166,8 @@ fn no_cast_permissions(value: &&crate::flow::cast_permission::CastPermissions) -
     value.is_empty()
 }
 
-impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
-    fn from(state: &'a GameState) -> Self {
+impl<'a> CanonicalMatchState<'a> {
+    fn new(state: &'a GameState, content: &ContentPack) -> Self {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
@@ -195,7 +196,6 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_enqueue_counter,
             rng,
             id_gen,
-            content,
         } = state;
 
         let cards = cards
@@ -255,7 +255,7 @@ impl GameState {
     /// Canonical logical JSON used by higher-level state contracts that add
     /// authority outside `GameState` (for example, the current legal offer).
     pub(crate) fn deterministic_hash_value(&self) -> serde_json::Value {
-        serde_json::to_value(CanonicalMatchState::from(self))
+        serde_json::to_value(CanonicalMatchState::new(self, default_content_pack()))
             .expect("canonical match state contains only serializable values")
     }
 
@@ -265,7 +265,13 @@ impl GameState {
     /// and sorted entries from ordered maps. It never observes allocations,
     /// copied card definitions, compatibility card names, or formatting output.
     pub fn deterministic_hash(&self) -> MatchStateHash {
-        let canonical = CanonicalMatchState::from(self);
+        self.deterministic_hash_over(default_content_pack())
+    }
+
+    /// The hash this state would have in a world with `content`: the proof that
+    /// the hash binds the catalog's schema and digest, not its allocation.
+    pub fn deterministic_hash_over(&self, content: &ContentPack) -> MatchStateHash {
+        let canonical = CanonicalMatchState::new(self, content);
         let bytes = serde_json::to_vec(&canonical)
             .expect("canonical match state contains only serializable values");
         MatchStateHash {

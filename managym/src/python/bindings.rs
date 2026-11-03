@@ -3409,8 +3409,7 @@ impl PyEnv {
         Ok(py_dict.into_any().unbind())
     }
 
-    /// Read-only binding manifest for the exact immutable ContentPack used by
-    /// the current match. This is deliberately not repeated on observations.
+    /// Read-only binding manifest of the catalog the current match runs on. This is deliberately not repeated on observations.
     fn content_pack_manifest(&self, py: Python<'_>) -> PyResult<PyObject> {
         let env = self
             .inner

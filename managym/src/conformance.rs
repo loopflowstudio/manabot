@@ -17,7 +17,6 @@ use std::{
     fs,
     panic::{catch_unwind, AssertUnwindSafe},
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use rand::{Rng, SeedableRng};
@@ -722,7 +721,6 @@ fn build_evidence(manifest: &Manifest, cases: &[ReplayCase], matrix: &PhaseMatri
         ],
         metamorphic_checks: vec![
             "explicit_singletons_equal_trivial_step_collapse".to_string(),
-            "equal_content_pack_reallocation_preserves_trace".to_string(),
             "compatibility_card_renames_preserve_trace".to_string(),
             "fresh_and_cloned_roots_preserve_trace".to_string(),
         ],
@@ -1040,12 +1038,6 @@ fn rename_compatibility_cards(pair: &mut ConformancePair) {
     }
 }
 
-fn reallocate_content(pair: &mut ConformancePair) {
-    for game in [&mut pair.reference, &mut pair.optimized] {
-        game.state.content = Arc::new((*game.state.content).clone());
-    }
-}
-
 pub fn verify_metamorphic(
     orientation: Orientation,
     game_seed: u64,
@@ -1055,11 +1047,7 @@ pub fn verify_metamorphic(
     let mut baseline = ConformancePair::new(orientation, game_seed)?;
     let mut renamed = baseline.clone();
     rename_compatibility_cards(&mut renamed);
-    let mut reallocated = baseline.clone();
-    reallocate_content(&mut reallocated);
-    if baseline.checkpoint()? != renamed.checkpoint()?
-        || baseline.checkpoint()? != reallocated.checkpoint()?
-    {
+    if baseline.checkpoint()? != renamed.checkpoint()? {
         return Err("metamorphic initial checkpoint changed".to_string());
     }
     let mut rng = ChaCha8Rng::seed_from_u64(choice_seed);
@@ -1077,8 +1065,7 @@ pub fn verify_metamorphic(
         let action = selected_action(&baseline.optimized, index)?.2;
         let expected = baseline.apply_semantic_action(&action)?;
         let renamed_checkpoint = renamed.apply_semantic_action(&action)?;
-        let reallocated_checkpoint = reallocated.apply_semantic_action(&action)?;
-        if expected != renamed_checkpoint || expected != reallocated_checkpoint {
+        if expected != renamed_checkpoint {
             return Err(format!("metamorphic trace diverged at step {step}"));
         }
     }

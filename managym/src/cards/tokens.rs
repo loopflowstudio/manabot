@@ -608,7 +608,7 @@ mod tests {
     #[test]
     fn default_catalog_spans_every_definition_and_resolves_token_references() {
         let pack = default_content_pack();
-        let catalog = learning_catalog(&pack).unwrap();
+        let catalog = learning_catalog(pack).unwrap();
         assert_eq!(catalog.definition_offsets.len(), pack.len() + 1);
         assert_eq!(
             catalog.definition_ref_source_tokens.len(),

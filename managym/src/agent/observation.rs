@@ -1,5 +1,6 @@
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
+    cards::content_pack::default_content_pack,
     flow::{
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
@@ -467,12 +468,10 @@ pub struct CopyData {
 }
 
 impl CopyData {
-    fn new(game: &Game, copy: &CopyEffect, timestamp: i32) -> Self {
+    fn new(copy: &CopyEffect, timestamp: i32) -> Self {
         Self {
             registry_key: copy.of.0 as i32,
-            name: game
-                .state
-                .content
+            name: default_content_pack()
                 .definition(copy.of)
                 .map(|definition| definition.name.clone())
                 .unwrap_or_default(),
@@ -481,7 +480,6 @@ impl CopyData {
                 .iter()
                 .map(|exception| {
                     ContinuousEffectData::of_modification(
-                        game,
                         exception,
                         "Indefinite".into(),
                         Some(copy.of),
@@ -494,9 +492,8 @@ impl CopyData {
 }
 
 impl ContinuousEffectData {
-    fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+    fn new(effect: &ContinuousEffect) -> Self {
         Self::of_modification(
-            game,
             &effect.modification,
             format!("{:?}", effect.duration),
             effect.source,
@@ -507,7 +504,6 @@ impl ContinuousEffectData {
     /// One modification with its provenance: a record's, or a copy
     /// exception's (`CopyData`).
     fn of_modification(
-        game: &Game,
         modification: &Modification,
         duration: String,
         source: Option<CardDefId>,
@@ -518,7 +514,7 @@ impl ContinuousEffectData {
             duration,
             source_registry_key: source.map(|id| id.0 as i32),
             source_name: source
-                .and_then(|id| game.state.content.definition(id))
+                .and_then(|id| default_content_pack().definition(id))
                 .map(|definition| definition.name.clone()),
             timestamp,
             ..Default::default()
@@ -580,7 +576,7 @@ impl ContinuousEffectData {
             .effects
             .iter()
             .filter(|effect| Some(effect.affected) == affected)
-            .map(|effect| Self::new(game, effect))
+            .map(Self::new)
             .collect()
     }
 }
@@ -1239,7 +1235,7 @@ impl Observation {
             copy: game.state.cards[permanent.card]
                 .copy
                 .as_ref()
-                .map(|copy| CopyData::new(game, copy, permanent.timestamp.0 as i32)),
+                .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {

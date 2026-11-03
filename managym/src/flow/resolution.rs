@@ -5,6 +5,7 @@
 use std::collections::VecDeque;
 
 use crate::{
+    cards::content_pack::default_content_pack,
     flow::{
         decision::{
             Decision, EffectFrame, FrameFinalize, OptionalSacrifice, PaymentProgress,
@@ -227,7 +228,7 @@ impl Game {
         if current.definition_id == face {
             Some(current)
         } else {
-            self.state.content.definition(face)
+            default_content_pack().definition(face)
         }
     }
 
@@ -244,8 +245,7 @@ impl Game {
         printed.get(ability.ability_index).or_else(|| {
             let permanent = self.lookup_current_permanent(ability.source_ref).ok()?;
             let inherited = self.inherited_definition(permanent)?;
-            self.state
-                .content
+            default_content_pack()
                 .definition(inherited)?
                 .activated_abilities
                 .get(ability.ability_index - printed.len())
@@ -893,9 +893,7 @@ impl Game {
                 // no back face can't return transformed (CR 712.14a).
                 let returns = !self.state.cards[card].is_token
                     && (!*transformed
-                        || self
-                            .state
-                            .content
+                        || default_content_pack()
                             .back_face(self.state.cards[card].definition_id)
                             .is_some());
                 if returns && self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
@@ -1706,14 +1704,12 @@ impl Game {
             }
             Effect::NameAndExileFromTargetPlayer { count } => {
                 // Every name a deck may hold; names are public knowledge.
-                let names: std::collections::BTreeSet<String> = self
-                    .state
-                    .content
+                let names: std::collections::BTreeSet<String> = default_content_pack()
                     .definition_entries()
                     .filter(|(id, definition)| {
                         !definition.is_token
                             && !definition.key.is_empty()
-                            && self.state.content.front_face(*id).is_none()
+                            && default_content_pack().front_face(*id).is_none()
                     })
                     .map(|(_, definition)| definition.name.clone())
                     .collect();

@@ -9,7 +9,7 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
-    cards::content_pack::ContentPackManifest,
+    cards::content_pack::{default_content_pack, ContentPackManifest},
     decision::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
@@ -810,12 +810,12 @@ impl Env {
         info
     }
 
-    /// Manifest for the exact immutable content pack retained by this match.
+    /// Manifest of the catalog this match runs on.
     pub fn content_pack_manifest(&self) -> Result<ContentPackManifest, AgentError> {
-        let game = self.game.as_ref().ok_or_else(|| {
+        self.game.as_ref().ok_or_else(|| {
             AgentError("env.content_pack_manifest called before reset".to_string())
         })?;
-        Ok(game.state.content.manifest())
+        Ok(default_content_pack().manifest())
     }
 
     pub fn encode_observation(
@@ -1339,13 +1339,10 @@ impl Env {
 
 #[cfg(test)]
 mod content_pack_contract_tests {
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::collections::BTreeMap;
 
-    use super::Env;
-    use crate::{
-        cards::content_pack::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
-        state::player::PlayerConfig,
-    };
+    use super::{default_content_pack, Env};
+    use crate::{cards::content_pack::CONTENT_PACK_SCHEMA_VERSION, state::player::PlayerConfig};
 
     fn interactive_deck() -> BTreeMap<String, usize> {
         BTreeMap::from([
@@ -1391,10 +1388,14 @@ mod content_pack_contract_tests {
         let first_game = first.game.as_ref().expect("first game");
         let second_game = second.game.as_ref().expect("second game");
         assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
-        assert!(Arc::ptr_eq(&first_game.state.content, &admitted));
-        assert!(Arc::ptr_eq(&second_game.state.content, &admitted));
-        assert_eq!(first_game.state.content.content_digest(), expected_digest);
-        assert_eq!(second_game.state.content.content_digest(), expected_digest);
+        for (first_card, second_card) in first_game
+            .state
+            .cards
+            .iter()
+            .zip(second_game.state.cards.iter())
+        {
+            assert!(first_card.shares_definition_with(second_card));
+        }
 
         let manifest = first.content_pack_manifest().expect("content manifest");
         assert_eq!(manifest.schema_version, CONTENT_PACK_SCHEMA_VERSION);
@@ -1414,12 +1415,6 @@ mod content_pack_contract_tests {
         let root_life = first_game.state.players[0].life;
         let mut changed = first.fork().expect("changed sibling");
         let untouched = first.fork().expect("untouched sibling");
-        let pool = first.rollout_pool(1, 1, 0x208, 2000).expect("rollout pool");
-
-        for content in pool.content_pack_contract_refs() {
-            assert!(Arc::ptr_eq(content, &admitted));
-            assert_eq!(content.content_digest(), expected_digest);
-        }
 
         let action = changed.action_count().expect("changed action count");
         assert!(action > 0);
@@ -1437,8 +1432,6 @@ mod content_pack_contract_tests {
         assert_eq!(changed_game.state.players[0].life, root_life - 3);
 
         for branch in [changed_game, untouched_game] {
-            assert!(Arc::ptr_eq(&branch.state.content, &admitted));
-            assert_eq!(branch.state.content.content_digest(), expected_digest);
             for (root_card, branch_card) in root.state.cards.iter().zip(branch.state.cards.iter()) {
                 assert_eq!(root_card.definition_id, branch_card.definition_id);
                 assert!(root_card.shares_definition_with(branch_card));

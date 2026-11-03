@@ -1682,7 +1682,7 @@ fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
 }
 
 fn tokens_of(definition: &CardDefinition) -> Vec<(TokenKind, i32)> {
-    definition_tokens(definition, &default_content_pack()).unwrap()
+    definition_tokens(definition, default_content_pack()).unwrap()
 }
 
 fn spell(effects: Vec<Effect>) -> CardDefinition {
@@ -2099,7 +2099,7 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
 fn learning_tokens_never_carry_names_or_printed_text() {
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
-        let tokens = definition_tokens(definition, &pack).unwrap();
+        let tokens = definition_tokens(definition, pack).unwrap();
         for field in ["key", "scryfall_id", "name", "text_box"] {
             assert!(
                 !tokens.contains(&(TokenKind::Field, name_value(field))),
@@ -2339,7 +2339,7 @@ const TOKENS_AWAITING_PRODUCER: [(&str, &str); 0] = [];
 #[test]
 fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
     let pack = default_content_pack();
-    let catalog = learning_catalog(&pack).unwrap();
+    let catalog = learning_catalog(pack).unwrap();
     let tokens = managym::cardsets::catalog()
         .iter()
         .filter(|definition| definition.key.starts_with("token."))

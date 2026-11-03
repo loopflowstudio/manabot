@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     agent::policy_history::{HistoryReference, HISTORY_LIMIT},
+    cards::content_pack::default_content_pack,
     decision::{Observation, SemanticError},
     experience::DecisionContextView,
     flow::game::Game,
@@ -168,9 +169,7 @@ impl Game {
         }
         let mut definitions = BTreeMap::new();
         for id in ids {
-            let definition = self
-                .state
-                .content
+            let definition = default_content_pack()
                 .public_definition(CardDefId(id))
                 .ok_or_else(|| {
                     SemanticError::IllegalCommand(format!("missing public definition {id}"))
@@ -180,7 +179,7 @@ impl Game {
         let mut capture = DecisionCapture {
             capture_version: DECISION_CAPTURE_VERSION,
             world_version: crate::WORLD_VERSION.into(),
-            content_digest: self.state.content.content_digest(),
+            content_digest: default_content_pack().content_digest(),
             observation,
             objects,
             continuation,
