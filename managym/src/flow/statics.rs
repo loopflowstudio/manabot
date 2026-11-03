@@ -1170,6 +1170,21 @@ impl Game {
                 },
                 _ => false,
             },
+            Condition::Moved => frame.is_some_and(|frame| !frame.moved.is_empty()),
+            Condition::TargetControlledByYou => {
+                let Some(Target::Permanent(permanent_id)) =
+                    frame.and_then(EffectFrame::primary_target)
+                else {
+                    return false;
+                };
+                let last_controller = match self.state.permanents[permanent_id].as_ref() {
+                    Some(permanent) => Some(permanent.controller),
+                    None => self
+                        .departed_permanent_lki(permanent_id)
+                        .map(|lki| lki.controller),
+                };
+                last_controller == Some(controller)
+            }
             Condition::DiscardedThisWay(predicate) => frame.is_some_and(|frame| {
                 frame
                     .this_way
@@ -1508,10 +1523,7 @@ impl Game {
             if let Some((_, mana)) = BASIC_LAND_TYPES.iter().find(|(name, _)| *name == subtype) {
                 abilities.push(ActivatedAbilityDefinition {
                     tap_source: true,
-                    effects: vec![Effect::AddMana {
-                        mana: Mana::parse(mana),
-                        until_end_of_combat: false,
-                    }],
+                    effects: vec![Effect::add_mana(Mana::parse(mana))],
                     ..Default::default()
                 });
             }
@@ -1589,10 +1601,7 @@ impl Game {
             .collect();
         match colors.as_slice() {
             [] => None,
-            [mana] => Some(Effect::AddMana {
-                mana: mana.clone(),
-                until_end_of_combat: false,
-            }),
+            [mana] => Some(Effect::add_mana(mana.clone())),
             _ => Some(Effect::mana_choice(colors)),
         }
     }

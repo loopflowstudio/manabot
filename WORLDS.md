@@ -142,6 +142,34 @@ at cleanup and kept in last known information) apart from its marked damage.
 An entering counter replacement may be conditional. Observations add each
 player's `turn_history` and a permanent's `dealt_damage_this_turn`.
 
+Task MTG-235 (2026-11-02, same world) gives `Effect` verbs one object
+vocabulary: `ObjectSelector` (`This`, `Target`, `Triggering`, `Attached`,
+`CreatedThisWay`, `Grantor`, `Moved`, `You`, `Chosen`, `Each { of: Scope }`)
+names what every object verb acts on (`PutCounters`, `PutCountersFrom`,
+`Sacrifice`, `Move`, `Tap`, `Untap`, `RemoveCounters`, `RemoveAllCounters`,
+`Destroy`, `Airbend`, `GainControl`, `DealDamage`, `CounterSpell`,
+`CounterAbility`, `Earthbend`, `ApplyContinuous`), resolved by one
+`Game::select` with last known information for a departed source; `Chosen`
+is a resolution-time choice (`Decision::ChooseObject`, decision stage
+`resolution_choice`) for any verb. `AffectedSpec` folded into the selector;
+the "all of them" verbs (`MassDamage`, `DamageOpponentCreatures`,
+`AirbendAll`, `DestroyCreaturesLosingAbilities`) are the base verb over
+`Each`, Day of Black Sun composing ability loss and a simultaneous `Destroy`;
+the value twins (`DealDamageValue`, `GainLifeValue`, `CreateTokensValue`,
+`AddManaValue`) merged on `EffectValue`; `DiscardTargetPlayer` is `Discard {
+what }`. With the 33 object-fused variants (`PutCountersOnSource`,
+`SacrificeTriggeringPermanent`, `ReturnGraveyardTarget`, `ExileAttached`,
+`TapTarget`, …) gone, this amendment reduced `Effect` from 107 to 70 variants
+(71 after the T5 Surveil integration below). "If you do" is
+`Condition::Moved` over what the latest move or sacrifice moved; "if you
+controlled it" is `Condition::TargetControlledByYou`; `PlayerSelector::Owner`
+names the owner a move returns a card to. Behavior is unchanged except that a
+flashback spell returned to hand is exiled instead (CR 702.34a), which no
+card reaches, and a `Destroy` of one object now processes its events with
+the pre-destruction trigger sources (the simultaneous-batch rule), which no
+test distinguishes. Learning tokens and the content digest change, so w17
+evidence is re-recorded in place; no world or policy-input version changes.
+
 Task a7234f (TLA batch T5) extends w17 with token copies: a token that's a
 copy of a permanent takes its copiable values (its definition, including any
 copy effect already applied, CR 707.2), never its status, counters or non-copy

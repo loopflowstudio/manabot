@@ -8,15 +8,16 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{AffectedSpec, Effect, EffectValue, PlayerSelector, TargetSpec},
+        ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
         card::Keywords,
         effect::Modification,
         game_object::{CardId, PlayerId},
+        predicate::CardPredicate,
         zone::ZoneType,
     },
 };
 
-use crate::support::game::*;
+use crate::support::{game::*, play::select_card};
 
 fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
     let source_ref = s.game().current_object_ref(source);
@@ -62,10 +63,7 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
                 amount: EffectValue::Fixed(1),
             },
             Effect::Modal {
-                modes: vec![
-                    vec![Effect::GainLife { amount: 2 }],
-                    vec![Effect::GainLife { amount: 3 }],
-                ],
+                modes: vec![vec![Effect::gain_life(2)], vec![Effect::gain_life(3)]],
             },
         ],
     );
@@ -122,6 +120,200 @@ fn cr_603_5_optional_draw_is_chosen_at_resolution() {
     assert!(s.game().state.stack_objects.is_empty());
 }
 
+/// A verb over a `Chosen` selector suspends on the choice and then runs over
+/// the chosen permanent alone: "tap a creature you control" taps the one
+/// selected and leaves the other untapped.
+#[test]
+fn chosen_selector_offers_the_choice_for_any_verb() {
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_120,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert_ne!(first, second);
+    let permanents = &s.game().state.permanents;
+    let source = permanents[first].as_ref().unwrap().card;
+    let chosen = permanents[second].as_ref().unwrap().card;
+    queue_effects(
+        &mut s,
+        source,
+        vec![Effect::tap(ObjectSelector::chosen(
+            CardPredicate::creature(),
+        ))],
+    );
+    s.pass_priority();
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    assert!(
+        !s.action_space()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::Decline { .. })),
+        "the choice is not optional"
+    );
+    select_card(&mut s, chosen);
+    let permanents = &s.game().state.permanents;
+    assert!(permanents[second].as_ref().unwrap().tapped);
+    assert!(!permanents[first].as_ref().unwrap().tapped);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+/// Stopping a nested counter choice ends that instruction's object binding.
+#[test]
+fn chosen_selector_is_released_after_stopping_counter_removal() {
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_123,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let source = s.game().state.permanents[first].as_ref().unwrap().card;
+    let other = s.game().state.permanents[second].as_ref().unwrap().card;
+    queue_effects(
+        &mut s,
+        source,
+        vec![
+            Effect::put_counters(
+                ObjectSelector::This,
+                managym::state::permanent::CounterKind::PlusOnePlusOne,
+                1,
+            ),
+            Effect::RemoveCounters {
+                from: ObjectSelector::chosen(CardPredicate::creature()),
+                up_to: 1,
+                chosen: None,
+            },
+            Effect::tap(ObjectSelector::chosen(CardPredicate::creature())),
+        ],
+    );
+    s.pass_priority();
+    s.pass_priority();
+    s.pass_priority();
+    select_card(&mut s, source);
+    let stop = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::ChooseMode { mode: 1, .. }))
+        .expect("stop removing counters");
+    s.step_action(stop);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    select_card(&mut s, other);
+    assert!(!s.game().state.permanents[first].as_ref().unwrap().tapped);
+    assert!(s.game().state.permanents[second].as_ref().unwrap().tapped);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+/// An instruction with no eligible choice does nothing, including clearing
+/// the prior move result before a following "if you do" reads it.
+#[test]
+fn chosen_selector_without_candidates_does_not_reuse_a_previous_move() {
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_121,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let life = s.game().state.players[0].life;
+    queue_effects(
+        &mut s,
+        card,
+        vec![
+            Effect::exile(ObjectSelector::This),
+            Effect::exile(ObjectSelector::chosen(CardPredicate::creature())),
+            Effect::if_you_do(vec![Effect::gain_life(5)]),
+        ],
+    );
+    s.pass_priority();
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.players[0].life, life);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+/// Sacrifice consumes the preceding move's objects before replacing its result.
+#[test]
+fn moved_selector_sacrifices_the_returned_permanent() {
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_124,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let life = s.game().state.players[0].life;
+    queue_effects(
+        &mut s,
+        card,
+        vec![
+            Effect::exile(ObjectSelector::This),
+            Effect::return_to_battlefield(ObjectSelector::Moved, false),
+            Effect::Sacrifice {
+                what: ObjectSelector::Moved,
+                optional: false,
+            },
+            Effect::if_you_do(vec![Effect::gain_life(5)]),
+        ],
+    );
+    s.pass_priority();
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(
+        s.game().state.zones.zone_of(card),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(s.game().state.players[0].life, life + 5);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+/// Every land selected by one earthbend instruction becomes a creature;
+/// the selector's cardinality must not silently turn the instruction off.
+#[test]
+fn each_selector_earthbends_every_selected_land() {
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_122,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    let first = s.force_permanent_on_battlefield(0, "Mountain");
+    let second = s.force_permanent_on_battlefield(0, "Mountain");
+    assert_ne!(first, second);
+    let source = s.game().state.permanents[first].as_ref().unwrap().card;
+    queue_effects(
+        &mut s,
+        source,
+        vec![Effect::Earthbend {
+            count: EffectValue::Fixed(2),
+            what: ObjectSelector::each_you_control(CardPredicate {
+                card_type: Some(managym::state::card::CardType::Land),
+                ..Default::default()
+            }),
+        }],
+    );
+    s.pass_priority();
+    s.pass_priority();
+    s.pass_priority();
+    for id in [first, second] {
+        let view = s.game().characteristics(id);
+        assert!(view.is_creature());
+        assert_eq!(view.power, 2);
+        assert_eq!(view.toughness, 2);
+        assert!(view.keywords.haste);
+    }
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
 /// CR 603.6/603.7c, 400.7e: finding the first destination object is allowed;
 /// following it through a second zone change is not. Direct zone movement
 /// isolates the obligation; it does not assert an admitted-deck sequence.
@@ -141,7 +333,7 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
         card,
         vec![Effect::Earthbend {
             count: EffectValue::Fixed(1),
-            target: TargetSpec::LandYouControl,
+            what: ObjectSelector::Target(TargetSpec::LandYouControl),
         }],
     );
     s.pass_priority();
@@ -212,15 +404,15 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
         card,
         vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::AddKeywords(Keywords {
                     hexproof: true,
                     ..Default::default()
                 }),
             ),
             Effect::DealDamage {
-                amount: 1,
-                target: TargetSpec::Creature,
+                amount: EffectValue::Fixed(1),
+                what: ObjectSelector::Target(TargetSpec::Creature),
             },
         ],
     );

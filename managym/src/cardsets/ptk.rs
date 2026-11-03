@@ -1,5 +1,5 @@
 use crate::state::{
-    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -25,9 +25,9 @@ fn corrupt_court_official() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DiscardTargetPlayer {
+            effects: vec![Effect::Discard {
+                what: ObjectSelector::Target(TargetSpec::Opponent),
                 count: 1,
-                target: TargetSpec::Opponent,
             }],
         }],
         text_box: text_box.into(),

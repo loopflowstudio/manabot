@@ -1,8 +1,7 @@
 //! Modern Horizons.
-use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
-    ability::{Effect, EffectValue, TargetSpec},
+    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords},
     mana::ManaCost,
 };
@@ -25,14 +24,14 @@ fn fists_of_flame() -> CardDefinition {
                 count: EffectValue::Fixed(1),
             },
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::ModifyPt {
                     power: EffectValue::CardsDrawnMinus { subtract: 0 },
                     toughness: EffectValue::Fixed(0),
                 },
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::AddKeywords(Keywords {
                     trample: true,
                     ..Default::default()

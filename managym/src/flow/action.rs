@@ -9,6 +9,7 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
+        ability::Effect,
         card::ActivationZone,
         game_object::{CardId, ObjectId, PlayerId},
         mana::Mana,
@@ -19,7 +20,6 @@ use crate::{
 impl Game {
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
         use crate::flow::decision::Decision;
-        use crate::state::ability::Effect;
         match action {
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
@@ -124,22 +124,23 @@ impl Game {
                 _ => None,
             },
             Action::SelectCard { card, .. } => {
-                let sacrifice = matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::SacrificePayment { .. })
-                ) || self
-                    .state
-                    .suspended_decision
-                    .as_ref()
-                    .is_some_and(|s| matches!(s.decision, Decision::Sacrifice { .. }));
                 if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
                     Some(format!("Tap {} to crew", self.state.cards[*card].name))
                 } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
                     Some(format!("Tap {} to pay", self.state.cards[*card].name))
-                } else if sacrifice {
+                } else if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::SacrificePayment { .. })
+                ) {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
+                        Decision::ChooseObject { effect, .. } => Some(format!(
+                            "{} {}",
+                            choice_verb(effect),
+                            self.state.cards[*card].name
+                        )),
+
                         Decision::SearchBasicLand { to_hand: true, .. } => Some(format!(
                             "Reveal {} and put it into your hand",
                             self.state.cards[*card].name
@@ -896,5 +897,24 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<ObjectId>) -> Ac
             })
             .collect(),
         focus,
+    }
+}
+
+/// The word a `ChooseObject` action starts with: what the instruction does
+/// to the chosen permanent.
+fn choice_verb(effect: &Effect) -> &'static str {
+    match effect {
+        Effect::Sacrifice { .. } => "Sacrifice",
+        Effect::Tap { .. } => "Tap",
+        Effect::Untap { .. } => "Untap",
+        Effect::Destroy { .. } => "Destroy",
+        Effect::Move {
+            to: ZoneType::Exile,
+            ..
+        } => "Exile",
+        Effect::Move {
+            to: ZoneType::Hand, ..
+        } => "Return",
+        _ => "Choose",
     }
 }

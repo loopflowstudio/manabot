@@ -8,7 +8,9 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, Effect, ObjectSelector, PlayerSelector, TriggerCondition, TriggerSubject,
+        },
         card::Keywords,
         effect::Modification,
         game_object::{CardId, ObjectRef, PlayerId},
@@ -249,7 +251,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
         condition: TriggerCondition::Dies {
             subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
         },
-        effects: vec![Effect::GainLife { amount: 1 }],
+        effects: vec![Effect::gain_life(1)],
     };
     let mut expected_sources = Vec::new();
     for permanent_id in [first, second] {
@@ -327,7 +329,14 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         controller: PlayerId(0),
         source_card: card,
         source_ref: Some(old_ref),
-        effects: vec![Effect::ReturnSourceToBattlefieldTapped],
+        effects: vec![Effect::Move {
+            what: ObjectSelector::This,
+            to: ZoneType::Battlefield,
+            tapped: true,
+            under: Some(PlayerSelector::Owner),
+            with_counter: None,
+            linked: None,
+        }],
         this_turn: false,
     });
     s.game_mut().state.permanents[new_permanent]
