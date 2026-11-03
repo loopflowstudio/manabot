@@ -29,14 +29,25 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 An admitted L4 quote subsequently failed launch admission after source preparation,
 before acquiring a machine. The upstream cause of the changing replies remains
-unknown. The retained 2026-11-03 19:35 UTC audit exhausted all six configured GPU
-quotes and found no provider pods, unsettled GPU sessions or pilot cohort, with
-$0 paid compute. This is dated capacity evidence, not permanent unavailability;
+unknown. The 2026-11-03 19:35 UTC audit exhausted all six configured GPU quotes.
+After a later positive quote, the 20:16 UTC continuation audit again found no
+provider pods, unsettled GPU sessions or pilot cohort, with $0 paid compute:
+L4 failed admission and A4000 failed actual provider creation. Preparing the
+exact source once avoided repeated preparation delay but did not secure capacity.
+This is dated capacity evidence, not permanent unavailability;
 any later allocation still needs a fresh quote and cumulative-cost reconciliation.
 A local one-update/199-decision proof
 and 12 replay-valid evaluation games establish the connected implementation path,
 not GPU readiness, learning improvement or Elemental-relative pace. The full
 catalog/v5 policy and new population differ from the historical Elemental setup.
+
+Source preparation also fixes a runtime, not just a job recipe. After integrating
+PR #414, the retained corpus and local runtime both report w17 but different
+card digests; all 134 eligible decks still admit. Version-name and whole-deck
+admission checks therefore do not establish unchanged learning inputs or
+checkpoint/evaluation compatibility. The prepared historical request must be
+verified against its own native identity and evaluated on the matching runtime;
+shipping a newer implementation does not refresh frozen experimental evidence.
 
 Paired evaluation has two distinct requirements: exchanging policy/deck/seat
 assignments within each sampled pair, and comparing checkpoint gains across the

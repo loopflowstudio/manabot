@@ -114,10 +114,10 @@ def pilot_db() -> Iterator[duckdb.DuckDBPyConnection]:
             "CREATE TABLE matches (run VARCHAR, match VARCHAR, state VARCHAR, error VARCHAR)"
         )
         db.execute(
-            "CREATE TABLE seats (run VARCHAR, match VARCHAR, seat INTEGER, source VARCHAR)"
+            "CREATE TABLE seats (run VARCHAR, match VARCHAR, seat BIGINT, source VARCHAR)"
         )
         db.execute(
-            "CREATE TABLE games (run VARCHAR, match VARCHAR, seat INTEGER, game INTEGER, attempted BOOLEAN, valid BOOLEAN, score DOUBLE, terminated BOOLEAN, truncated BOOLEAN, failure VARCHAR)"
+            "CREATE TABLE games (run VARCHAR, match VARCHAR, seat BIGINT, game BIGINT, attempted BOOLEAN, valid BOOLEAN, score DOUBLE, terminated BOOLEAN, truncated BOOLEAN, failure VARCHAR)"
         )
         yield db
 
@@ -391,23 +391,19 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     pilot_db.execute("COPY games TO ? (FORMAT PARQUET)", [str(tables)])
     # Sealing fixture outcomes exercises the real statsdb projection and CLI,
     # with no worker, model inference, game or provider allocation.
+    columns = dict(
+        pilot_db.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_name = 'games' AND column_name NOT IN ('run', 'match') "
+            "ORDER BY ordinal_position"
+        ).fetchall()
+    )
     records = [
         MatchRecord(
             match=match,
             state="done",
             wall_ms=1,
-            columns={
-                "games": {
-                    "seat": "BIGINT",
-                    "game": "BIGINT",
-                    "attempted": "BOOLEAN",
-                    "valid": "BOOLEAN",
-                    "score": "DOUBLE",
-                    "terminated": "BOOLEAN",
-                    "truncated": "BOOLEAN",
-                    **({"failure": "VARCHAR"} if with_failure_column else {}),
-                }
-            },
+            columns={"games": columns},
         )
         for matchup in tournament.matchups
         for match in matchup.matches()

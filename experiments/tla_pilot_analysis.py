@@ -98,10 +98,11 @@ class _Game(StrictModel):
     game: int = Field(ge=0, lt=GAMES_PER_PAIR)
     attempted: bool
     valid: bool
-    score: Literal[0.0, 0.5, 1.0] | None
+    # Etude may omit columns whose values are all null.
+    score: Literal[0.0, 0.5, 1.0] | None = None
     terminated: bool
     truncated: bool
-    failure: str | None
+    failure: str | None = None
 
 
 class _Receipt(StrictModel):
@@ -161,17 +162,13 @@ def _pair_result(
     games: list[_Game] = []
     if receipt.state == "done" and game_columns:
         # The validated projection owns both SQL selection and row decoding.
-        columns = tuple(_Game.model_fields)
-        # Etude omits columns whose values are all null. Missing nullable result
-        # fields still mean no score/failure, while required fields must exist.
-        selection = [
-            f"NULL AS {column}"
-            if column in {"score", "failure"} and column not in game_columns
-            else column
-            for column in columns
-        ]
+        columns = tuple(
+            name
+            for name, field in _Game.model_fields.items()
+            if field.is_required() or name in game_columns
+        )
         rows = db.execute(
-            f"SELECT {', '.join(selection)} FROM games "
+            f"SELECT {', '.join(columns)} FROM games "
             "WHERE run = ? AND match = ? AND seat = 0 ORDER BY game",
             [receipt.run, key],
         ).fetchall()

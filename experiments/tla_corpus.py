@@ -152,8 +152,8 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
     if file_sha256(path) != source.sha256:
         raise ValueError("source digest mismatch")
     events: dict[str, dict[int, GameEvidence]] = {}
-    selected: set[str] = set()
-    trophies: list[Trophy] = []
+    # Insertion order retains source selection order; keys prevent reselection.
+    trophies: dict[str, Trophy] = {}
     scanned = 0
     exhausted = True
     with gzip.open(path, "rt", encoding="utf-8", newline="") as stream:
@@ -184,7 +184,7 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
             if row["game_number"] != "1" or row["won"] not in ("True", "False"):
                 raise ValueError(f"unexpected game result in row {scanned}")
             event_id = row["draft_id"]
-            if event_id in selected:
+            if event_id in trophies:
                 continue
             game = GameEvidence(
                 row=scanned,
@@ -212,16 +212,13 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
                 decklist, deck = admitted.decklist, admitted.deck
             except DeckImportError as error:
                 decklist, deck = error.decklists[event_id], None
-            trophies.append(
-                Trophy(
-                    event_id=event_id,
-                    draft_time=row["draft_time"],
-                    games=tuple(games[n] for n in sorted(games)),
-                    decklist=decklist,
-                    deck=deck,
-                )
+            trophies[event_id] = Trophy(
+                event_id=event_id,
+                draft_time=row["draft_time"],
+                games=tuple(games[n] for n in sorted(games)),
+                decklist=decklist,
+                deck=deck,
             )
-            selected.add(event_id)
             del events[event_id]
             if len(trophies) == target:
                 exhausted = False
@@ -232,7 +229,7 @@ def build_corpus(path: Path, source: Source, target: int = 1000) -> Corpus:
         world=managym.world_identity(),
         scanned_rows=scanned,
         exhausted=exhausted,
-        trophies=tuple(trophies),
+        trophies=tuple(trophies.values()),
     )
 
 

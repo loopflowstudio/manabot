@@ -144,7 +144,8 @@ observations only**: initialization vs heuristic 0/4, updated policy vs heuristi
 0/4, updated policy vs initialization 3/4. The pair is the first frozen pair;
 this local proof is explicitly separate from the GPU cohort. One update and
 one correlated deal provide no credible improvement or pace estimate. The
-predeclared 32-game/checkpoint GPU comparisons remain entirely unplayed.
+periodic and endpoint GPU comparisons remain unplayed; initialization results
+are reported above.
 
 ## Remaining acceptance
 
