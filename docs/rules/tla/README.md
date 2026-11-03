@@ -20,25 +20,17 @@ Rust consumers use `cards::content_pool`, `pool_content` and
 `admit_deck`/`check_decks` (against the world, never a pack), input parsing and
 consumer entry points.
 
-A defined TLA card is supported unless `tla::INCOMPLETE` marks it. TLA cards not
-yet defined do not exist in this world; their batch (T2–T7) authors them. The 81
-supported TLA cards are every other definition in `tla.rs`. These 14 are marked
-incomplete because a fixed setup still uses them:
+Every defined non-token TLA card is supported. Cards not yet defined remain
+unknown; tokens and rules fixtures are not deck entries. Jack Heart clarified
+on 2026-11-03 that known rules bugs in previously playable cards belong in bug
+Tasks without revoking playability. Playable does not mean bug-free.
 
-| Cards | Missing behavior | Owner |
-| --- | --- | --- |
-| Accumulate Wisdom | Controller orders the library remainder, rather than randomizing it | T2 private choices |
-| Suki, Kyoshi Warrior | CDA power applies outside the battlefield | T3 characteristics |
-| Water Tribe Rallier | Library power filter evaluates CDAs (notably Suki) | T3 authority / T2 selection |
-| Cat-Gator; Lightning Strike | “Any target” includes planeswalkers and battles (CR 115.4) | T3 target characteristics |
-| Badgermole Cub, Dai Li Agents, Haru, Hermitic Herbalist, Iroh, Toph | Not yet reviewed against their allocation obligations | T2 |
-| Great Divide Guide | Not yet reviewed | T3 |
-| Dragonfly Swarm | Not yet reviewed | T4 |
-| Ran and Shaw | Not yet reviewed | T5 |
-
-Rules tests in `managym/tests/rules/` witness card behavior as ordinary tests.
-Removing a card's incomplete marker is an ordinary code change reviewed with the
-tests that show the missing behavior.
+MTG-239 implements owner-chosen library remainder order for Accumulate Wisdom,
+contextual CDA power for Suki and Rallier's library filter, and shared any-target
+legality/damage for Cat-Gator and Lightning Strike. Card tests in
+`managym/cards/tests/cards/` and shared rules tests in `managym/tests/rules/`
+witness behavior; they do not qualify cards for admission. The former exclusion
+list is historical at `6d30c9013:docs/rules/tla/README.md`.
 
 The [allocation](allocation.jsonl) retains all 286 card identities, all 294 faces,
 and nine fixed tokens plus the Copy marker. Treasure is an explicit adjacent

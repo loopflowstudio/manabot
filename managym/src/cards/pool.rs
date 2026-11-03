@@ -5,9 +5,8 @@
 //! default pack, so it shares that pack's `CardDefId`s and digest; it is the
 //! only descriptor deck import and admission read. Authored setups' packs hold
 //! their decks' cards and are described for policy vocabularies only; they
-//! are fixed setups, never deck-admission targets. A defined card is eligible
-//! unless its set module marks it incomplete (`managym_cards::incomplete`); tokens
-//! and rules fixtures are never deck entries. Setup construction policy belongs
+//! are fixed setups, never deck-admission targets. Defined cards are eligible;
+//! tokens and rules fixtures are never deck entries. Setup construction policy belongs
 //! to the admission caller, not this catalog.
 
 use std::{
@@ -54,10 +53,6 @@ struct PoolRuntime {
 
 impl PoolRuntime {
     fn describe(pack_key: &str, content: Arc<ContentPack>) -> Self {
-        let incomplete = managym_cards::incomplete()
-            .iter()
-            .copied()
-            .collect::<BTreeMap<_, _>>();
         let mut definitions = content
             .definition_entries()
             .map(|(card_def_id, definition)| {
@@ -66,9 +61,7 @@ impl PoolRuntime {
                 } else if definition.key.is_empty() {
                     Some("A rules fixture, not a printed card".to_owned())
                 } else {
-                    incomplete
-                        .get(definition.key)
-                        .map(|reason| reason.to_string())
+                    None
                 };
                 PoolDefinition {
                     card_def_id,
@@ -167,9 +160,9 @@ mod tests {
             row(&pool, "Counterspell").eligibility,
             Eligibility::Eligible
         );
-        let marked = row(&pool, "Cat-Gator");
-        assert_eq!(marked.eligibility, Eligibility::Eligible);
-        assert!(marked.reason.is_none());
+        let cat_gator = row(&pool, "Cat-Gator");
+        assert_eq!(cat_gator.eligibility, Eligibility::Eligible);
+        assert!(cat_gator.reason.is_none());
         assert_eq!(row(&pool, "Ally").eligibility, Eligibility::Unsupported);
         let fixture = row(&pool, "Crossroads of Destiny");
         assert_eq!(fixture.eligibility, Eligibility::Unsupported);

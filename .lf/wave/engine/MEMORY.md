@@ -83,7 +83,8 @@ preserves accepted decisions, dated proof limits and source history.
 - Stable `CardDefId` values and deterministic state witnesses reproduce seeded
   traces without allocation-address or debug-format identity.
 - Card content is the engine's own `CardDefinition` written in its rules
-  types in `managym/src/cardsets/<set>.rs`, one function per card; the
+  types in `managym/cards/src/<set>.rs`, one function per card, with shared
+  types owned by `managym/state` (MTG-238, main `44388ad42`); the
   earlier checked-in typed IR and its compiler were deleted on 2026-10-30
   (`10eeb1f55`). There is one card representation and no card-name dispatch.
 - Priority, targeting, and attacker declarations have uncapped typed offers and
@@ -111,9 +112,10 @@ preserves accepted decisions, dated proof limits and source history.
   throughput workload. The implementation compares candidate and committed
   reference on one CI runner: identical T4 code measured 6.8k–10.3k steps/s
   across runner CPU models, so recorded wall times cannot budget another run.
-  Same-runner comparison and native random-legal `Env::step` throughput remain
-  interpretations awaiting Jack Heart's PR review; this throughput is not
-  comparable with the retired rul-9 Python Command runner's 588.5 steps/s.
+  Jack Heart subsequently accepted ordinary `Env::step` as the training proxy
+  during MTG-238 (recorded in `docs/development.md`, delivered `44388ad42`);
+  this throughput is not comparable with the retired rul-9 Python Command
+  runner's 588.5 steps/s or an end-to-end training measurement.
 - Search correctness needs every ordered action score and decision boundary.
   A digest of only simulation count and winning action misses changed losing
   scores. MTG-237 now hashes full scores; its historical T4/T5/T6 measurements
@@ -150,11 +152,19 @@ preserves accepted decisions, dated proof limits and source history.
   worst reply took 30.26% less time, total search 28.36% less and each step
   36.65% less, with identical full-score/step digests and counts. Delegated
   demo judgment on 2026-11-02 applied the retained-speedup rule; the production
-  reference now adopts that candidate's artifact with a reason and unchanged
+  reference then adopted that candidate's artifact with a reason and unchanged
   10% tolerance. Retaining the older, slower reference would allow loss of
   the optimization within the budget. This is curated native-workload evidence,
   not an end-to-end training result or shipping approval; the earlier accepted
   cost remains historical evidence.
+- MTG-238 delivered the next reference at main `44388ad42`: candidate
+  `1616b210f`, CI run 41699683808 (2026-11-03 UTC), with matching full-score/step
+  digests and counts on one runner. It retained 49.91% less worst-reply time,
+  43.93% less total-search time and 30.43% less time per step against
+  `4b5e9c0e4`, preserving the 10% tolerance. The baseline and investigation in
+  `docs/development.md` / `docs/research/engine-speed-2026-11.md` own the
+  measurements and rejected approaches. This upstream proof does not certify
+  MTG-239's corrected rules or any subsequent merged tree.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.
@@ -218,6 +228,31 @@ preserves accepted decisions, dated proof limits and source history.
   belief receipt pins) is re-recorded in place with no world or policy-input
   version bump (MTG-235, 2026-11-02; see WORLDS.md). A version number names a
   frozen world, not a merge.
+- Jack Heart clarified on 2026-11-03 (MTG-239, comment 1f3876a7) that known
+  rules bugs must not block previously playable cards; categorize defects as
+  bug Tasks. Playable does not mean bug-free. This supersedes the assistant's
+  strict-completeness admission proposal, while retaining MTG-239's five
+  fixes and whole-deck proof. Jack Heart explicitly limited that work to those
+  fixes, without a broader policy redesign or additional Tasks.
+- Off-battlefield power is contextual: CDAs read the spell controller on the
+  stack and the owner in other zones, including outside the game. Battlefield
+  power reads the layered view, including ability loss. Zone filters and
+  viewer card rows must use the same reader; printed-star fallback allowed
+  Rallier to select an ineligible Suki (MTG-239, 2026-11-03).
+- Owner-chosen library order is a shared native decision, with ordinary
+  SelectCard Commands, private inspection, explicit placement direction and
+  forced-singleton skipping. A test accepting either remainder order cannot
+  establish that the player was offered the choice. Native continuation and
+  LLM text need direct checks: captured viewer JSON omits continuation frames.
+  Reconnect and duplicate submission must preserve the actual pending order.
+- Correcting a legal choice can change a retained game's outcome, not just
+  its hashes. MTG-239's Rallier filter changed the open-w17 authored trace
+  from 142 Commands / 69 commitments to 135 / 66; Accumulate Wisdom inserted
+  explicit ordering Commands in navigation prefixes. Combined-runtime parity
+  after MTG-238 sync covers those current traces, not frozen evidence or
+  full rules acceptance. The prior tape remains at
+  `22e4aab71:conformance/authored-match-w17-v1/`; MTG-213's frozen corpus and
+  projected increase in eligible decks remain separate evidence.
 - Unknown primitives and oversized programs fail admission; they never become
   a generic unknown token or a silently truncated sequence.
 - Structured offers are legal by construction. Flat enumerate-then-cap action

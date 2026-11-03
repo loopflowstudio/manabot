@@ -82,7 +82,7 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
 
 
 def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:
-    source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Crossroads of Destiny\n"
+    source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Crossroads of Destiny\n1 Ally\nMain\n1 Ally\n"
     with pytest.raises(DeckImportError) as caught:
         _import_match(Decklist(source), Decklist(VILLAIN))
     assert list(caught.value.decklists) == ["hero"]
@@ -91,6 +91,8 @@ def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:
     assert {(issue.line, issue.code) for issue in decklist.issues} == {
         (2, "unknown"),
         (4, "unsupported"),
+        (5, "unsupported"),
+        (7, "unsupported"),
     }
     assert "hero deck.txt:2" in str(caught.value)
 

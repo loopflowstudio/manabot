@@ -21,11 +21,6 @@ use managym_state::{
     zone::ZoneType,
 };
 
-/// Defined cards whose behavior is incomplete. The fixed setups that name them
-/// still run them; the world does not support them for deck entry until their
-/// batch completes the missing behavior.
-pub(super) const INCOMPLETE: &[super::Incomplete] = &[];
-
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         aang_s_iceberg(),

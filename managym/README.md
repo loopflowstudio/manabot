@@ -29,7 +29,8 @@ Each card is a function in the file of its first printing's set under
 (`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
-support check (defined and not marked incomplete) and the set filter. Keep
+support check (defined non-token cards, excluding rules fixtures) and the set
+filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).
 

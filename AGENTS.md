@@ -259,9 +259,9 @@ tensor and the tokens: extend the exhaustive guards in
 mechanic a directed test there. Static and cost rows name a real card and its
 behavior test in `tests/cards/<set>.rs`, which the guard checks.
 
-Support is definition: the world pool is every defined card from every set, and
-a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
-with the missing behavior). Restrict to a set with `world::set_cards` /
+Support is definition: the world pool is every defined card from every set.
+Defined non-token cards are supported for deck entry; tokens, rules fixtures
+and unknown cards are rejected. Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
 or gate a card. Jack Heart clarified on 2026-11-03 that known rules bugs must
 not block previously playable cards from play; track those defects as bug

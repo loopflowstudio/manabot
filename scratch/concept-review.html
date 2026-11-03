@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MTG-239 · Card concept review</title>
+  <style>
+    :root { color-scheme: light dark; --ink: #252b30; --paper: #faf8f3; --muted: #565f66; --line: #b7bebd; --accent: #285f58; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink: #eeeae1; --paper: #1c2225; --muted: #bdc4c4; --line: #586360; --accent: #9bd0bb; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.65 system-ui, sans-serif; }
+    main { max-width: 790px; margin: auto; padding: 48px 24px 72px; }
+    header { color: var(--muted); font-size: .85rem; }
+    h1 { font: 600 clamp(1.9rem, 5vw, 2.65rem)/1.15 Georgia, serif; margin: 22px 0; }
+    h2 { font-size: 1.25rem; margin: 40px 0 12px; }
+    p { margin: 12px 0; }
+    code { font-size: .88em; overflow-wrap: anywhere; }
+    .decision { border-left: 3px solid var(--accent); padding-left: 20px; }
+    .scene { border-block: 1px solid var(--line); padding: 20px 0; margin: 20px 0; }
+    .label { font-weight: 650; color: var(--accent); }
+    .offers { display: flex; gap: 12px; flex-wrap: wrap; padding: 10px 0; }
+    .offer { border: 1px solid var(--line); padding: 10px 14px; }
+    .caption { color: var(--muted); font-size: .9rem; }
+    dl { margin: 18px 0; }
+    dt { font-weight: 650; margin-top: 20px; }
+    dd { margin: 5px 0 0; }
+    ol { padding-left: 24px; }
+    li { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    MTG-239 · concept-review · 2026-11-03<br>
+    Built from <code>scratch/mtg-239-complete-five-defined.md</code>,
+    <code>scratch/defined-card-completeness.md</code>, <code>AGENTS.md</code>,
+    <code>managym/README.md</code>, the native decision/target/power code,
+    and the card, text-observation and Academy reconnect tests.<br>
+    Reviewed change: <code>44388ad42..6d30c9013</code>.
+  </header>
+
+  <h1>No additional product decision is needed.</h1>
+  <div class="decision">
+    <p>The five fixes implement the accepted experience. No redesign or open
+    choice was found within this Task. This review adds no implementation work;
+    merged-tree validation and the real-path demo remain outstanding.</p>
+    <p>Jack Heart's November 3 direction remains in force: fix these five cards
+    and preserve playability when known bugs are discovered. Playable does not
+    mean bug-free. Broader admission policy and new Tasks are outside this step.</p>
+  </div>
+
+  <h2>The consequential mismatch: who chooses the order?</h2>
+  <section class="scene" aria-label="Before the fix">
+    <p class="label">Before · historical behavior</p>
+    <p>Choose one of Accumulate Wisdom's three inspected cards.</p>
+    <p><code>SelectCard → LookAndSelect → random remainder placement</code></p>
+    <p>The engine chose the order of the other two. A test accepting either
+    order could pass while the player's strategic choice was absent.</p>
+  </section>
+  <section class="scene" aria-label="Implemented interaction">
+    <p class="label">After · implemented contract</p>
+    <p>Choose the card to take. With Forest and Island remaining:</p>
+    <p><strong>Order the bottom cards</strong><br>
+    Choose the next card to put on the bottom, nearest the top first.
+    Each choice commits its placement.</p>
+    <div class="offers" aria-label="Illustrative legal offers">
+      <span class="offer">Put Forest next on the bottom</span>
+      <span class="offer">Put Island next on the bottom</span>
+    </div>
+    <p>Choose Forest → Forest above Island at the bottom.<br>
+    Choose Island → Island above Forest at the bottom.</p>
+    <p class="caption">Illustrative offers, not a live game. The sole remaining
+    placement is forced and skipped. Only the chooser sees the inspected cards.</p>
+    <p><code>SelectCard Command → OrderLibraryBottom → suspended native resolution</code></p>
+  </section>
+
+  <h2>Actions → concepts → authority</h2>
+  <dl>
+    <dt>Import a deck containing the five cards</dt>
+    <dd>Whole main deck and sideboard → shared defined-card eligibility →
+    <code>Decklist / admit_decklists</code>. These five exclusions are removed;
+    unknown and genuinely unsupported entries still fail admission.</dd>
+    <dt>Choose a damage target</dt>
+    <dd>Creature, player, planeswalker or battle → <code>AnyTarget</code> →
+    native legality and resolution checks. Damage uses current types and the
+    existing counter records. This adds no planeswalker or battle card.</dd>
+    <dt>Inspect Suki or choose a card with Rallier</dt>
+    <dd>Contextual power → <code>Game::card_power</code> → visible card rows
+    and zone predicates. The battlefield reads layered characteristics;
+    the stack reads the spell controller, other zones the owner.</dd>
+    <dt>Reconnect during ordering</dt>
+    <dd>Same pending decision → ordinary session resume and native suspended
+    state → revision-bound Commands. No browser draft or second ordering
+    authority is required.</dd>
+  </dl>
+
+  <h2>Failure and recovery</h2>
+  <p>A disconnect before placement preserves both pending offers in the retained
+  server session. Resuming returns that decision. A duplicate accepted Command
+  cannot place a second card; a stale Command cannot change the committed order.
+  Replay and forks carry the explicit choice. Process-crash durability is not
+  established by the reconnect proof.</p>
+  <p>Randomizing on reconnect, showing private cards to the opponent, hiding an
+  order in the UI, or offering Suki to Rallier above power three would invalidate
+  this contract. A future battle with a defeat trigger also needs more than
+  the present zero-defense shell behavior; that lifecycle is outside this Task.</p>
+  <p>Corrected current-world traces may change. Frozen worlds, checkpoints and
+  MTG-213's historical corpus retain their identity. The projected increase in
+  eligible decks is not a newly measured corpus.</p>
+
+  <h2>Review questions and disposition</h2>
+  <ol>
+    <li><strong>Who chooses the remainder order?</strong> Settled by the accepted
+    design: the acting player through shared native Commands, with explicit
+    placement direction and forced-singleton skipping.</li>
+    <li><strong>Does finding a bug make a previously playable card unavailable?</strong>
+    Settled by Jack Heart: preserve playability and track bugs. No broader
+    policy redesign or additional Task is authorized here.</li>
+    <li><strong>Is another product decision needed for these five fixes?</strong>
+    No. Gate and demo must still establish the remaining acceptance evidence.
+    Loop-or-next owns the following Graph decision.</li>
+  </ol>
+</main>
+</body>
+</html>
