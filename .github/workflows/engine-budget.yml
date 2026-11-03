@@ -29,6 +29,11 @@ jobs:
     name: Engine Budget
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    defaults:
+      run:
+        # Explicit Bash enables pipefail, so tee cannot hide a failed benchmark
+        # or budget comparison from the PR check.
+        shell: bash
     env:
       MEASURE: ${{ inputs.measure || '' }}
     steps:

@@ -38,13 +38,17 @@ choice, timings, integer output shape and simulation/choice evidence. No
 legacy path or remaining deletion target. The Clean-machine Play 120 s wait
 stays a launch proof, not a latency budget.
 
+Demo iteration removes the implicit `bash -e` execution of benchmark and
+comparison pipelines. Explicit job-level Bash owns failure propagation; the
+same commands, summaries, artifacts and 10% baseline remain on that path.
+
 ## Decisions
 
 - Accepted (Task brief, Jack Heart, 2026-11-02): both workloads budgeted at
   10% against a committed file; digests asserted identical; a 20% slowdown
   fixture; one-time T4/T5/T6 measurement; `uv` only; no induced load.
 - Implied by the accepted outcome (concept review 2026-11-02); not yet
-  confirmed by Jack Heart, whose PR review decides it (no PR exists yet):
+  confirmed by Jack Heart, whose PR review decides it:
   "committed baseline" is read as a
   committed *reference commit* rebuilt and measured A/B on the same runner,
   not committed absolute numbers. Evidence: one engine spread 6.8k-10.3k
@@ -108,80 +112,64 @@ second baseline command is needed.
 The normal path preserves scores and passes within budget. A timing or digest
 failure remains visible until fixed or deliberately adopted; recording keeps
 the tolerance and leaves the original run as evidence. A reference build
-failure retains the candidate recording for the same recovery, subject to the
-controlled proof still listed below. The two counterexamples already driving
-the design—different runner speeds and changed losing scores with the same
+failure retains the candidate recording for the same recovery, with the
+controlled proof and hosted evidence distinguished below. The two
+counterexamples already driving the design—different runner speeds and changed losing scores with the same
 winner—are addressed without changing the accepted workload or hiding failure.
 The reference/workload interpretations remain explicit for Jack Heart's PR
 review, not newly approved here. Next proof remains the existing gate and
 PR-path checks; this review requests no code rewrite or execution restart.
 
-## Status (reconciled 2026-11-02, realign)
+## Current evidence and remaining work — 2026-11-02
 
-Exists: workflow, both benchmarks, comparator, tests, baseline file,
-AGENTS.md note and `docs/development.md` section with the historical T4/T5/T6
-figures and their digest limitation. Completed workflow work at 078d37ef4
-is preserved. Main 29660d00c was merged at 49765237c and remains origin's
-current main as of this reconciliation. Compression at db008a1c6 changes
-neither digest bytes nor measured work.
+Implementation through `078d37ef4`, full-score digest repair `e5615edcc`,
+compression and sync are preserved at HEAD `24cfc0a8b`, which includes main
+`a8abf01b1`. Earlier realign/publication details and validation commands are
+retained at `24cfc0a8b:scratch/mtg-237-engine-performance-budget.md`;
+Engine memory remains for realign to reconcile.
 
-Full-score digest implementation: e5615edcc. The focused example tests are
-included in ordinary `cargo test`; benchmark-only edits select Rust too.
-No engine source, workload, timing boundary or tolerance changed. The new
-reference is e5615edcc7f6a7f1ef7adf83ce1a15f8302ac0b9, adopted using
-`record --reason` from successful CI measurement run
-https://github.com/loopflowstudio/manabot/actions/runs/41540798745.
-Artifact: `.cache/engine-budget-score-digest`. The job recorded 120 decisions,
-409.358 s total / 14.258 s worst, and 99,923 steps in 512 games at 6,829.1/s
-on AMD EPYC 7763. Those timings are orientation only, not a cross-run delta.
-The steps digest is unchanged. The three new full-score digests come from
-that artifact, not calculations or reinterpretation of historical results.
+The baseline names `e5615edcc7f6a7f1ef7adf83ce1a15f8302ac0b9`, adopted from
+successful dispatch [41540798745](https://github.com/loopflowstudio/manabot/actions/runs/41540798745).
+Its downloaded artifact (`.cache/engine-budget-score-digest`) matches every
+baseline value and measurement field: 120 decisions, 409.358 s total /
+14.258 s worst, 99,923 steps in 512 games at 6,829.1/s on EPYC 7763.
+These figures are orientation only. Historical T4/T5/T6 numbers and their
+winner-only digest limitation remain in `docs/development.md` and must stay
+in the PR body; the new full-score digests do not reinterpret old evidence.
 
-Remains, owned by later steps: affected gate suites and publication with the
-T4/T5/T6 figures and their limitation in the PR body. The PR run must confirm
-path selection, PR-head checkout, the two summary blocks, flagless same-runner
-comparison with the strengthened baseline, and artifact identity. Recovery
-after a reference build failure needs a separate controlled failure proof;
-a successful PR run alone cannot establish it. The first main run after
-merge confirms the push path. The measurement dispatch path passed in
-41540798745. Interactive demo remains its declared boundary; shipping is
-not authorized.
+Prior gate evidence: 855 debug Rust tests (including four digest fixtures),
+90 affected Python tests, actionlint, Rust formatting/Clippy and focused Ruff
+passed. These results predate the demo repair. No engine, benchmark, digest,
+tolerance or production baseline changes in this iteration require new
+performance measurements locally.
 
-The code Graph's realign step updated Engine memory with the same-runner
-evidence, full-score requirement, historical limits and candidate-first
-artifact recovery. The selected Wave has no child directories or child
-memories. The reference/workload interpretations still await Jack Heart's
-review; no new product decision arose in reconciliation.
+**Demo judgment: iterate.** The [demo record](engine-budget-demo.md) owns the
+observed PR runs, measurements, artifact paths and replay transcripts. Run
+41548559113 selected and recorded durable head `24cfc0a8b`, wrote both summaries
+and uploaded the correct artifact, but reported success while its comparator
+failed the throughput limit. Implicit `bash -e` let `tee` hide exit 1; replay
+with pipefail exits 1. The earlier passing run and CLI tests do not rebut this
+workflow defect. This is delegated headless judgment, not new human approval.
 
-Reply timings are sorted in place after summing: their original order is no
-longer used, so a cloned vector adds no information. Digest bytes, measured
-work and the baseline remain unchanged.
+The working repair sets job-level `defaults.run.shell: bash`, giving every
+run step Actions' pipefail behavior. Workflow edits select Python regressions
+as well as Engine Budget. Eight cases execute the actual run bodies: pass,
+20% slowdown, faster-but-changed digest, four benchmark pipeline failures,
+and reference-build recovery. The recovery fixture runs candidate binaries,
+records through the actual measurement shell, injects reference Cargo exit 42,
+copies the always-upload step's declared path and adopts it with the real
+`record --reason` CLI. Artifact contents prove recording happened before the
+failure; a separate execution ledger adds no evidence. Removing explicit Bash
+from a separate workflow copy made the slowdown and four benchmark cases
+reproduce the original defect.
 
-Existing validation retained: four debug digest tests, 57 comparator/CI-selection
-tests, formatting and focused Clippy passed before reconciliation; no executable
-code changed here. Full affected suites and PR verification belong to gate/CI.
+The recovery proof is local: copying represents upload/download, not GitHub
+transport. Gate owns affected suites. Publication/demo owns the repaired PR
+run and artifact inspection, and correcting the PR wording to **recorded before
+reference build, uploaded by the final always-run step**. Assess any remaining
+timing failure after enforcement works; do not widen the budget or adopt the
+marginal measurement to hide this bug. First main-push verification remains
+post-merge. The same-runner reference and native-throughput interpretations
+still await Jack Heart's PR review. Shipping is not authorized.
 
-Check (2026-11-02): `gh run view 41540798745 --json conclusion,headSha,event,url` → successful dispatch at e5615edcc; artifact/baseline equality verified with `uv run --no-project python`; `git diff --check` clean and `lf context` under both limits.
-
-## Publication verification (2026-11-02)
-
-`lf sync` completed without conflicts against origin/main 29660d00c and
-checkpointed the completed realign/concept-review notes at 4f828ec64.
-The complete debug Rust suite with `CARGO_PROFILE_DEV_OPT_LEVEL=1` and `-j 2`
-passed: 855 tests, including all four search-digest fixtures. The affected
-Python unit invocation (`tests/infra/`, clean-machine verifier and
-`deploy/play/tests/`) passed all 90 tests; the focused 57 comparator/selection
-checks also passed, including the injected 20% slowdown. Actionlint passed
-both workflows; Rust formatting, all-target/all-feature Clippy with warnings
-denied, and focused Python Ruff lint/format passed.
-The committed baseline exactly matches all values and measurement metadata
-in the retained artifact from successful dispatch 41540798745.
-
-Publication copy must retain the T4/T5/T6 table from docs/development.md and
-its different-CPU, old-digest limitations. The same-runner reference and
-native throughput interpretations remain for Jack Heart's review. PR-path
-execution (selection, durable head, both summary blocks, comparison and
-artifact identity), controlled reference-build-failure recovery, and the
-first main push remain unverified. Publishing enables the PR-path check;
-it supplies neither shipping approval nor Task completion. The Graph stops
-at its interactive demo boundary.
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 65 passed; focused Ruff lint/format and `git diff --check` pass. Gate owns broader affected suites; publication/demo owns the hosted proof above. `lf context` remains under both token and byte limits.

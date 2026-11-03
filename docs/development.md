@@ -179,7 +179,7 @@ neither skipped nor succeeded.
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/` | Python unit, integration |
-| `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
+| `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 

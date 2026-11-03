@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import re
+import shlex
+import shutil
 import subprocess
 import sys
+import textwrap
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/engine_budget.py"
 BASELINE = ROOT / "managym/perf/baseline.json"
+WORKFLOW = ROOT / ".github/workflows/engine-budget.yml"
 
 RUNNER = "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release"
 BASE = {
@@ -38,7 +44,10 @@ BASE = {
 
 def _run(*args: str | Path) -> tuple[int, str]:
     completed = subprocess.run(
-        [sys.executable, str(SCRIPT), *map(str, args)], capture_output=True, text=True
+        [sys.executable, str(SCRIPT), *map(str, args)],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     return completed.returncode, completed.stdout + completed.stderr
 
@@ -249,3 +258,184 @@ def test_committed_baseline_is_complete() -> None:
     assert set(baseline["bench_search"]["seeds"]) == {"1", "2", "3"}
     assert baseline["bench_steps"]["games"] == 512
     assert baseline["bench_steps"]["steps_per_s"] > 0
+
+
+# Execute the checked-in run bodies with Actions' shell flags. This deliberately
+# follows this workflow's small YAML shape, without adding a YAML dependency or
+# pretending to emulate the Actions service (checkout, upload and scheduling).
+def _workflow_step(name: str) -> str:
+    return (
+        WORKFLOW.read_text()
+        .split(f"      - name: {name}\n", 1)[1]
+        .split("      - ", 1)[0]
+    )
+
+
+def _workflow_run(
+    name: str, directory: Path, **environment: str
+) -> subprocess.CompletedProcess[str]:
+    step = _workflow_step(name)
+    run = re.search(r"^        run: (.+)$", step, re.MULTILINE)
+    assert run is not None
+    script = run[1]
+    if script == "|":
+        body = step[run.end() + 1 :]
+        lines = []
+        for line in body.splitlines():
+            if line and not line.startswith("          "):
+                break
+            lines.append(line)
+        script = textwrap.dedent("\n".join(lines))
+    defaults = WORKFLOW.read_text().split("    steps:", 1)[0]
+    shell = re.search(r"^        shell: (\S+)$", step, re.MULTILINE) or re.search(
+        r"^        shell: (\S+)$", defaults, re.MULTILINE
+    )
+    assert shell is None or shell[1] == "bash", (
+        "Add the configured shell's Actions flags"
+    )
+    # An unspecified Linux shell uses bash -e; explicit bash adds pipefail.
+    flags = ["--noprofile", "--norc", "-eo", "pipefail"] if shell else ["-e"]
+    return subprocess.run(
+        ["bash", *flags, "-c", script],
+        cwd=directory,
+        env={
+            **os.environ,
+            "GITHUB_STEP_SUMMARY": str(directory / "summary.md"),
+            **environment,
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def _executable(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(0o755)
+
+
+@pytest.mark.parametrize(
+    ("scale", "digests", "code", "message"),
+    [
+        (1.05, (11, 22, 33), 0, "PASS"),
+        (1.2, (11, 22, 33), 1, "FAIL: 3 check(s)"),
+        (0.8, (11, 23, 33), 1, "FAIL: 1 check(s)"),
+    ],
+)
+def test_workflow_comparison_propagates_failure_through_tee(
+    tmp_path: Path,
+    scale: float,
+    digests: tuple[int, int, int],
+    code: int,
+    message: str,
+) -> None:
+    (tmp_path / "scripts").mkdir()
+    shutil.copy2(SCRIPT, tmp_path / "scripts/engine_budget.py")
+    baseline = tmp_path / "managym/perf/baseline.json"
+    baseline.parent.mkdir(parents=True)
+    baseline.write_text(json.dumps(BASE))
+    artifact = _write_run(
+        tmp_path / ".cache/engine-budget", scale=scale, search_digests=digests
+    )
+    _write_run(artifact / "reference")
+
+    result = _workflow_run("Compare the candidate with the reference", tmp_path)
+
+    assert result.returncode == code, result.stdout + result.stderr
+    assert message in result.stdout
+    assert (tmp_path / "summary.md").read_text() == result.stdout
+
+
+@pytest.mark.parametrize("side", ["candidate", "reference"])
+@pytest.mark.parametrize("benchmark", ["bench_steps", "bench_search"])
+def test_workflow_benchmark_failure_survives_tee(
+    tmp_path: Path, side: str, benchmark: str
+) -> None:
+    candidate = "managym" if side == "candidate" else "other/managym"
+    for name in ("bench_steps", "bench_search"):
+        _executable(
+            tmp_path / candidate / "target/release/examples" / name,
+            f"echo '{name}: controlled output'\nexit {17 if name == benchmark else 0}",
+        )
+
+    result = _workflow_run(f"Run the {side}", tmp_path, CANDIDATE=candidate)
+
+    assert result.returncode == 17, result.stdout + result.stderr
+    artifact = tmp_path / ".cache/engine-budget"
+    if side == "reference":
+        artifact /= "reference"
+    assert (artifact / f"{benchmark}.jsonl").read_text() == (
+        f"{benchmark}: controlled output\n"
+    )
+    if benchmark == "bench_steps":
+        assert not (artifact / "bench_search.jsonl").exists()
+
+
+def test_reference_build_failure_leaves_an_adoptable_candidate(tmp_path: Path) -> None:
+    """Real workflow shells and record CLI; injected binaries, no Rust build or load.
+
+    The upload action is represented by copying its declared path after failure.
+    GitHub's artifact transport itself still requires PR-path verification.
+    """
+    fixture = _write_run(tmp_path / "fixture", scale=1.2)
+    for name in ("bench_steps", "bench_search"):
+        _executable(
+            tmp_path / "managym/target/release/examples" / name,
+            f"cat {shlex.quote(str(fixture / f'{name}.jsonl'))}",
+        )
+    binaries = tmp_path / "bin"
+    _executable(
+        binaries / "cargo",
+        'case "$*" in\n'
+        '  *other/managym/Cargo.toml*) echo "controlled reference build failure" >&2; exit 42;;\n'
+        "  *managym/Cargo.toml*) exit 0;;\n"
+        "  *) exit 99;;\nesac",
+    )
+    commit = "a" * 40
+    _executable(binaries / "git", f"echo {commit}")
+    _executable(binaries / "lscpu", "echo 'Model name: controlled CPU'")
+    _executable(binaries / "nproc", "echo 4")
+    environment = {
+        "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
+        "CANDIDATE": "managym",
+        "RUN_URL": "https://github.com/loopflowstudio/manabot/actions/runs/1",
+        "RUNNER_OS": "Linux",
+    }
+    # Use source order so moving the reference build before recording breaks
+    # recovery. After a failed run, ordinary subsequent Actions steps are skipped.
+    names = re.findall(r"^      - name: (.+)$", WORKFLOW.read_text(), re.MULTILINE)
+    for name in names[names.index("Build the candidate benchmarks") :]:
+        if name == "Upload the measurement":
+            pytest.fail("The controlled reference failure did not occur")
+        result = _workflow_run(name, tmp_path, **environment)
+        if result.returncode:
+            assert name == "Build the reference benchmarks", result.stderr
+            assert result.returncode == 42
+            assert "controlled reference build failure" in result.stderr
+            break
+    upload = _workflow_step("Upload the measurement")
+    assert "if: always()" in upload
+    assert "uses: actions/upload-artifact@v4" in upload
+    path = re.search(r"^          path: (.+)$", upload, re.MULTILINE)
+    assert path is not None
+    artifact = tmp_path / path[1]
+    assert not (artifact / "reference").exists()
+    downloaded = tmp_path / "downloaded"
+    shutil.copytree(artifact, downloaded)
+
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(BASE))
+    reason = "Controlled proof: reference no longer builds with current benchmarks"
+    code, output = _run(
+        "record", "--baseline", baseline, "--artifact", downloaded, "--reason", reason
+    )
+    assert code == 0, output
+    recorded = json.loads(baseline.read_text())
+    measurement = json.loads((downloaded / "measurement.json").read_text())
+    assert measurement["commit"] == commit
+    assert measurement["run"] == environment["RUN_URL"]
+    assert recorded["reference"] == {**measurement, "reason": reason}
+    assert recorded["tolerance"] == BASE["tolerance"]
+    assert recorded["bench_search"]["total_s"] == 360.0
+    assert recorded["bench_steps"]["digest"] == 44

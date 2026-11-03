@@ -1,88 +1,11 @@
 # Questions and assumptions
 
-Inherited Wave rename, decklist, TLA, evaluation and characteristics notes are
-historical context at `460732f81:scratch/questions.md`; they select no MTG-237
-work. Main's newer decklist decisions and the current Task decisions follow.
-
-## T5 historical questions and assumptions
-
-The following T5 notes and its sync record are inherited evidence from main
-`a8abf01b1`, not new directions or current validation for MTG-237.
-
-Accepted decisions and pending checks live in
-[jack-heart/a7234f-tla-t5-permanent.md](jack-heart/a7234f-tla-t5-permanent.md).
-Historical parent notes (D1, T2–T4, archive/CI work and MTG-214's Wave rename)
-are evidence, not directions for T5. Complete pre-compression notes:
-`bbb5101eb:scratch/questions.md`; older stacked notes:
-`1e9fd2d7c:scratch/questions.md` (lines 5–472).
-
-### T5 implementation assumptions
-
-- Surveil reuses LookAndSelect: select moves the inspected card to the
-  graveyard, decline keeps it. Kept cards retain order; exact for surveil 1,
-  the only amount authored. Supporting larger amounts needs ordering choices.
-- Copy exceptions share `Modification` with continuous records. The protocol
-  calls the field `copy_of` because Pydantic's `BaseModel.copy` occupies `copy`.
-- Airship uses self-relative `CreatureWithNamesakes` because
-  `check_static_condition` has no source. It reads private layer stages,
-  never recursively reads `characteristics()` during layer computation.
-- T4 owns `PlayerTurnHistory`, sacrifice bookkeeping and its column after
-  attacked. Text uses singular/plural correctly; no retained fixture holds
-  the old “1 permanents” / “1 cards” wording.
-- The engine measured 314 supported definitions (257 TLA eligible plus 57
-  others; four TLA and one ths unsupported). Earlier 239/266 notes were
-  pre-sync or based on stale main counts, not current measurements.
-- The permanent row's name/creature-types fields are Aura-set markers; the
-  card row states layered characteristics. Ward is printed unless abilities
-  are lost; no authored effect grants ward. Text and mana cost stay printed
-  until a modification changes them, then join `Characteristics`.
-
-### T5 reversible choice awaiting a separate product decision
-
-Since 1a/2a the projection's `base_power` / `base_toughness` contain layered
-card-row P/T on the battlefield. No UI component reads them for printed P/T,
-and no other Python-visible source exposes printed P/T. Keep and document
-that value for T5; a printed-P/T accessor or field removal requires a follow-up
-protocol decision by Jack Heart. This is not a T5 blocker.
-
-The choice-navigation re-record (`889948346`) preserves recorded offer ids
-when labels repeat, keeping original state digests and offer order. It is
-published; Academy UI passed at `bbb5101eb` (CI 41539137476). Gate subsequently
-confirmed all required CI at `1de85f7aa` (run 41541743395), plus local copy-fact
-parity coverage and its CI selection. The latter remain uncommitted; see the
-design's gate results for commands and evidence boundaries.
-Shipping remains stopped by steer f39fef34; `/verify` is not a pre-merge check
-because that skill finishes delivered Tasks.
-
-## MTG-216 (decklist disclosure) — 2026-10-30, implementation (headless)
-
-Jack Heart accepted one open/closed option, default open (supersedes the
-kickoff's four-way assumption). Reversible choices made while implementing:
-
-- No player-row "known" flag: an open main deck is never empty, so all-zero
-  `decklists` rows mean closed. The player width is untouched (67 after the
-  sync with main's T4 v5 widening) and the native width-binding rule is
-  unchanged.
-- No separate Python `DecklistHidden` class: refusals are `AgentError`
-  ("decklist closed: …"). `Game::determinize` and
-  `HiddenHandConstraints::for_viewer` assert; `Env` entry points check first.
-- Search refusal at match build lists observation-only kinds
-  (`checkpoint`, `heuristic`, `random`, `scripted_greedy`); every other kind is
-  refused in closed matches. Academy refuses its search villain in closed games.
-- Decklist pooling is semantic-pack only, like `known_hand`; generic-model
-  policies ignore the `decklists` buffer. Adding `decklist_projection` changes
-  the v5 semantic `ActorCritic` parameters, so v5 semantic checkpoints saved
-  before this change fail strict load (open world; none frozen).
-- Disclosure is not part of `world_binding` or deck identity: a checkpoint can
-  play both modes, and in a closed game it sees zero opponent rows.
-- `Deck.player()` (training deck pools) seats an open decklist; it takes no
-  disclosure argument. Closed games come from `MatchConfig.decklists` or
-  Academy only.
-- `canonical_replay`/`study` privacy validators do not check decklist maps:
-  frames carry no disclosure, and the engine projection is the authority.
-
-Inherited evaluation, MTG-17x/18x and card-evaluation notes (none select T4
-work) are at `ee42a8685:scratch/questions.md`, above "TLA direct-Rust decisions".
+Inherited T5 and decklist assumptions, their unresolved printed-P/T decision,
+and sync evidence are retained at `24cfc0a8b:scratch/questions.md` (T5's
+source is main `a8abf01b1`). Older Wave rename and evaluation context is at
+`460732f81:scratch/questions.md`. These histories select no MTG-237 work.
+The notes-only sync onto main `a8abf01b1` preserved both histories and all
+MTG-237 implementation. It supplied no shipping approval.
 
 ## MTG-237 (engine budget), 2026-11-02 — headless choices
 
@@ -138,31 +61,11 @@ work) are at `ee42a8685:scratch/questions.md`, above "TLA direct-Rust decisions"
   historical measurements; a new digest needs a new recording, not rewritten
   historical evidence. No open product choice; no shipping approval.
 
-## T5 historical sync onto main 230b2f563 — 2026-11-02
+## MTG-237 demo repair — 2026-11-02
 
-The design link above is absent in this checkout (removed with added scratch
-files at 2c6cdae5f); the retained assumptions supply the resolution context.
-Preserve T5's CopyView and layered battlefield P/T alongside main's decklist
-disclosure fields. Navigation prefixes, offer IDs and state digests stay fixed;
-recompute derived frame hashes for the combined projections. Reconcile the
-current authored-match parity receipt's source manifest with the merged source,
-then verify the unchanged command tape and behavioral evidence.
-
-The first focused run passed all navigation cases but found stale parity viewer
-hashes. The producer confirms that only `viewer_observation_sha256` and
-`viewer_state_sha256` differ: combined layered P/T and decklist projections
-require new hashes. State witnesses, command tape, transitions, presentation,
-and stale-object proof remain identical. Refreshed those derived hashes from
-the producer; no behavioral assertion was relaxed.
-
-Focused verification: navigation plus authored-match parity initially reported
-9 passed / 1 stale receipt; after correcting only the derived viewer hashes,
-the failed parity test passed (1 passed). The advice schema equals its Pydantic
-producer. Native extension rebuilt and replaced atomically. No push or landing.
-
-## MTG-237 sync onto main a8abf01b1 — 2026-11-02
-
-Resolved only the notes conflict by retaining both independent histories.
-MTG-237 decisions and completed implementation remain intact; inherited T5
-notes select no additional work. The waiting sync caller owns verification
-and publication after this recovery exits. No shipping approval.
+The bounded reference-build recovery proof uses injected benchmark binaries,
+Cargo failure and machine metadata, while executing the checked-in workflow's
+recording shell and the real adoption CLI. Copying the declared upload path is
+the simpler local substitute for GitHub artifact transport. This proves local
+failure-path recovery only; publication/demo retains the hosted-job evidence
+boundary. No production baseline move or load generation is needed.

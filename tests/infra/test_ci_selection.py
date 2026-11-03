@@ -71,7 +71,7 @@ def selected(
         (".github/workflows/ci.yml", JOBS),
         (".github/ci/select-tests.sh", JOBS),
         (".github/workflows/manabot-integration.yml", {"integration"}),
-        (".github/workflows/engine-budget.yml", {"engine_budget"}),
+        (".github/workflows/engine-budget.yml", {"python_unit", "engine_budget"}),
         ("managym/examples/bench_search.rs", {"rust", "engine_budget"}),
         ("managym/examples/bench_steps.rs", {"engine_budget"}),
         ("managym/examples/curated/mod.rs", {"engine_budget"}),
