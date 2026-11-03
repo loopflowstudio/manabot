@@ -1,12 +1,41 @@
-# TLA trophy pilot: implementation proof, GPU launch blocked
+# TLA trophy pilot: implementation proof, GPU launch pending
 
 As of 2026-11-03, the corpus, independent per-seat sampler, GPU job and paired
 evaluation runner are implemented. **The requested GPU pilot has not started.**
-Etude reports `RUNPOD_API_KEY is not set`, both directly and through the
-configured `manabot/prd` Doppler environment. No rental or job was created;
-paid compute spend is $0. The [frozen protocol](protocols/tla-trophy-213-v1.md)
-reserves at most $1 for its first L4 attempt within Jack Heart's $10 total cap.
-Authentication was not changed. The blocker was reported in the Task conversation.
+The earlier missing-credential claim was based on the wrong Doppler project.
+Jack Heart corrected it on 2026-11-03: `manabot/prd` supplies R2 artifact
+credentials and `etude/prd` supplies the RunPod key. No secret was copied or
+changed. Provider access uses both existing configurations:
+
+```sh
+doppler run --project manabot --config prd -- doppler run --project etude --config prd -- uv run etude availability l4 --timeout 20
+```
+
+At 19:35 UTC, all six configured GPU launch quotes rejected capacity: `l4`,
+`l4-etude`, `a4000`, `a4500`, `mtg188-a6000` and `mtg188-policy-l4`.
+Earlier at 19:28 UTC, L4 and A6000 briefly admitted quotes at $0.59/hour,
+with a $0.7375 maximum including 900 seconds of setup. The actual L4 submission
+(launch `f17df4be888e`, requested run `74e6147280ac`, exact source
+`d6ad09e42412aca7c6a235f5acfd7db1cd20051c`) then failed capacity admission
+at 19:33:20 UTC, after source preparation. No run or machine session was created.
+
+The discrepancy is not a stricter job hardware requirement: Etude 0.2.12's
+availability and launch quote both call the same `RunPodMachines.offer` /
+`RunPodAPI.quote` with the same template. All configured GPU templates have no
+data-center restriction. Provider catalog replies changed between sequential
+reads; their upstream cause remains unknown, and a quote reserves no capacity.
+The final read confirmed zero provider pods, no unsettled GPU sessions and no
+pilot cohort. **Paid compute remains $0; no teardown is outstanding.**
+The [launch audit](data/mtg213/launch-audit-20261103/receipt.json) retains quotes,
+timestamps, failed-admission diagnostics and allocation reconciliation.
+
+The [frozen protocol](protocols/tla-trophy-213-v1.md) reserves at most $1 for
+its first L4 attempt within Jack Heart's $10 total cap. His later direction
+authorizes an available configured GPU alternative within that cap, with any
+hardware/allocation deviation recorded before scoring. No alternative allocation
+occurred; the frozen source/corpus and analysis criteria remain unchanged.
+Current configured options are exhausted at the recorded observation time,
+not permanently unavailable. No queued work or retry loop was left running.
 
 The snapshot and local proof are published in the artifact store:
 
@@ -63,9 +92,9 @@ predeclared 32-game/checkpoint GPU comparisons remain entirely unplayed.
 
 ## Remaining acceptance
 
-Once provider credentials are available to the existing Etude launcher, run the
-committed, capped GPU job and report a paid-training milestone only after actual
-learner updates are observed. Retain initialization, periodic and endpoint
+Once a bounded launch quote admits available capacity and existing allocations
+are checked, the committed, capped GPU job remains to be run. The paid-training
+milestone requires observed learner updates. Retain initialization, periodic and endpoint
 comparisons, attempted/failed/missing denominators, uncertainty, decisions,
 compute and wall time. GPU training and Elemental-relative learning pace remain
 unresolved. The implementation's focused native/debug, corpus, recovery and

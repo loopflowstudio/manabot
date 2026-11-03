@@ -19,8 +19,15 @@ live in experiments/protocols/tla-trophy-213-v1.md.
 Jack Heart subsequently authorized GPUs and shipping enabling changes after
 checks, with a hard $10 total paid-compute cap covering setup, failures and
 retries. This does not inherit earlier campaigns' budgets or checkpoints. The
-first $1 L4 cap is an engineering allocation. Missing provider credentials left
-the paid run unstarted at reconciliation. A local one-update/199-decision proof
+first $1 L4 cap is an engineering allocation. Jack Heart corrected the credential
+location on 2026-11-03: provider access uses Doppler `etude/prd`, while artifact
+access uses `manabot/prd`; nested injection supplies both without copying secrets.
+Checking only the application project did not establish missing credentials.
+He authorized an available configured GPU alternative within the same cumulative
+cap, with hardware/allocation deviations recorded before scoring. Provider
+availability alone is not a reservation: an A6000 availability response was
+positive but the subsequent pilot launch quote rejected capacity. No paid run
+was started at reconciliation. A local one-update/199-decision proof
 and 12 replay-valid evaluation games establish the connected implementation path,
 not GPU readiness, learning improvement or Elemental-relative pace. The full
 catalog/v5 policy and new population differ from the historical Elemental setup.

@@ -35062,6 +35062,10 @@
    "sha256": "a662c802fb6ccf485ceb79ffe59869177e27981be32fae0b2359b5931f05bde3",
    "bytes": 510
   },
+  "experiments/data/mtg213/launch-audit-20261103/receipt.json": {
+   "sha256": "c76c15e4737fa807a69247ed19b05e861e4b7182b63972562dcd007615d56943",
+   "bytes": 9730
+  },
   "experiments/data/mtg213/local-proof-v1/_managym.cpython-312-darwin.so": {
    "sha256": "073fdbcb8058bec374fb981f3de1c0bea7bb344a68674455a4b6725ad854bd0e",
    "bytes": 7593280

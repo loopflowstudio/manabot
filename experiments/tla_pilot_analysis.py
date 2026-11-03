@@ -125,24 +125,28 @@ def _pair_result(
     environment_id: str,
     has_games: bool,
 ) -> PairResult:
-    count = Counts(
-        expected=GAMES_PER_PAIR,
-        expected_matches=1,
-        missing=GAMES_PER_PAIR,
-        missing_matches=1,
+    receipts = (
+        db.execute(
+            "SELECT m.run, m.state, m.error FROM matches m JOIN runs r USING (run) "
+            "WHERE m.match = ? AND r.environment = ?",
+            [key, environment_id],
+        ).fetchall()
+        if key is not None
+        else []
     )
-    result = PairResult(pair=pair, match=key, counts=count)
-    if key is None:
-        return result
-    receipts = db.execute(
-        "SELECT m.run, m.state, m.error FROM matches m JOIN runs r USING (run) "
-        "WHERE m.match = ? AND r.environment = ?",
-        [key, environment_id],
-    ).fetchall()
     if len(receipts) > 1:
         raise ValueError(f"repeated match {key}: frozen pilot forbids retries")
     if not receipts:
-        return result
+        return PairResult(
+            pair=pair,
+            match=key,
+            counts=Counts(
+                expected=GAMES_PER_PAIR,
+                expected_matches=1,
+                missing=GAMES_PER_PAIR,
+                missing_matches=1,
+            ),
+        )
     receipt = _Receipt.model_validate(
         dict(zip(("run", "state", "error"), receipts[0], strict=True))
     )
@@ -155,15 +159,8 @@ def _pair_result(
         sources += (None,)
     games: list[_Game] = []
     if receipt.state == "done" and has_games:
-        columns = (
-            "game",
-            "attempted",
-            "valid",
-            "score",
-            "terminated",
-            "truncated",
-            "failure",
-        )
+        # The validated projection owns both SQL selection and row decoding.
+        columns = tuple(_Game.model_fields)
         rows = db.execute(
             f"SELECT {', '.join(columns)} FROM games "
             "WHERE run = ? AND match = ? AND seat = 0 ORDER BY game",
