@@ -41,10 +41,10 @@ RECEIPT_PATH = (
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "26f7a1057aa7c4b8f6cc7772ae7aa86d889de59d3490558f5c364a921be7ed1c"
+    "d47f9ba28cecb38ed05a3bd69a598a7048f15858bcf4c2df4d2c1b181bae67e5"
 )
-COMMAND_COUNT = 142
-COMMITMENT_COUNT = 69
+COMMAND_COUNT = 135
+COMMITMENT_COUNT = 66
 # The hero discards an Island to Learn here; viewer 1 then admits 484 hands.
 DISCARD_REVISION = 30
 DECLINE_REVISION = 102

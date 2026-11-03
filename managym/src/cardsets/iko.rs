@@ -68,7 +68,7 @@ fn weaponize_the_monsters() -> CardDefinition {
             mana_cost: ManaCost::parse("{2}"),
             effects: vec![Effect::deal_damage(
                 2,
-                ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+                ObjectSelector::Target(TargetSpec::AnyTarget),
             )],
             ..Default::default()
         }],

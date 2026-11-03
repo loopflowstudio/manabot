@@ -20,6 +20,10 @@ pub enum CounterKind {
     Finality,
     /// No rules meaning of its own; cards count it (Zhao, the Moon Slayer).
     Conqueror,
+    /// Removed by damage to a planeswalker (CR 120.3c).
+    Loyalty,
+    /// Removed by damage to a battle (CR 120.3h).
+    Defense,
 }
 
 impl CounterKind {
@@ -33,10 +37,12 @@ impl CounterKind {
             CounterKind::Quest => "quest",
             CounterKind::Finality => "finality",
             CounterKind::Conqueror => "conqueror",
+            CounterKind::Loyalty => "loyalty",
+            CounterKind::Defense => "defense",
         }
     }
 
-    pub const ALL: [CounterKind; 7] = [
+    pub const ALL: [CounterKind; 9] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -44,6 +50,8 @@ impl CounterKind {
         CounterKind::Quest,
         CounterKind::Finality,
         CounterKind::Conqueror,
+        CounterKind::Loyalty,
+        CounterKind::Defense,
     ];
 }
 

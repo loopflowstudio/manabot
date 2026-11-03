@@ -150,6 +150,10 @@ impl Game {
                             self.state.cards[*card].name,
                             if *tapped { " tapped" } else { "" }
                         )),
+                        Decision::OrderLibraryBottom { .. } => Some(format!(
+                            "Put {} next on the bottom",
+                            self.state.cards[*card].name
+                        )),
                         Decision::Surveil { .. } => Some(format!(
                             "Put {} into your graveyard",
                             self.state.cards[*card].name

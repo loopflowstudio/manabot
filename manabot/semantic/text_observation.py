@@ -113,6 +113,7 @@ _STAGES = frozenset(
         "retarget",
         "resolution_cast",
         "surveil",
+        "order_library_bottom",
     )
 )
 
@@ -193,6 +194,7 @@ _OBLIGATIONS = (
     "keep creatures",
     "retarget",
     "surveil",
+    "order library bottom",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (

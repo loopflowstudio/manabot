@@ -32,7 +32,7 @@ fn mayhem_devil() -> CardDefinition {
             },
             effects: vec![Effect::deal_damage(
                 1,
-                ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+                ObjectSelector::Target(TargetSpec::AnyTarget),
             )],
         }],
         text_box: text_box.into(),

@@ -184,11 +184,11 @@ fn lightning_bolt() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![Effect::deal_damage(
             3,
-            ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+            ObjectSelector::Target(TargetSpec::AnyTarget),
         )],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
-            spec: TargetSpec::CreatureOrPlayer,
+            spec: TargetSpec::AnyTarget,
             min: 1,
             max: 1,
             another: false,

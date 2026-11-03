@@ -111,7 +111,7 @@
           "label": "Decline"
         }
       ],
-      "digest": "d0a45000eaa395d05bc6d8ad6194ce2f7bcd657ab05e8a1c8cfeefddc9843f63",
+      "digest": "e799ea4c4e246a5d8ee3c4504dbab099b6b36f1c4ffa22bc491f1340a8ea6527",
       "frame": {
         "protocol": 1,
         "match_id": "rIUnzBD4yaFqPXvtVfGxyQ",
@@ -438,7 +438,7 @@
                 "name": "Dragonfly Swarm",
                 "zone": "GRAVEYARD",
                 "owner_id": 0,
-                "power": 0,
+                "power": 7,
                 "toughness": 3,
                 "mana_value": 3,
                 "types": {
@@ -1728,6 +1728,10 @@
         },
         {
           "offer_id": 0,
+          "label": "Put Firebending Lesson next on the bottom"
+        },
+        {
+          "offer_id": 0,
           "label": "Play Mountain"
         },
         {
@@ -1771,11 +1775,11 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "18adbb4d841045a03f54395782aea880fefa207bdecbe332dbc074747812025b",
+      "digest": "f6281e4e770899daa9c9fc757646737965940796337dc3f3b580dd29f9b16caa",
       "frame": {
         "protocol": 1,
         "match_id": "IE0XGi4wr6pvVUmrmdRAlA",
-        "revision": 64,
+        "revision": 65,
         "frame_hash": "9eb390ae3ff8d2ad436713bb699cd9b81e26d9aca459351261f7e911faeeadbd",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
@@ -3052,7 +3056,7 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "0fc8db23084956824c7b076c4b6b922a2ab47cca4304d2dd2403becd6bbfc4a1",
+      "digest": "4335937809b472ab691b633a2d652c2ec0b56958f659a523b75348708c6be2b3",
       "frame": {
         "protocol": 1,
         "match_id": "rkapqzIxK4P6lzudTYPFMQ",
@@ -3312,7 +3316,7 @@
                 "name": "Dragonfly Swarm",
                 "zone": "HAND",
                 "owner_id": 0,
-                "power": 0,
+                "power": 3,
                 "toughness": 3,
                 "mana_value": 3,
                 "types": {
@@ -3617,19 +3621,18 @@
             "is_agent": false,
             "life": 23,
             "zone_counts": {
-              "LIBRARY": 21,
-              "HAND": 5,
+              "LIBRARY": 22,
+              "HAND": 4,
               "BATTLEFIELD": 13,
               "GRAVEYARD": 1,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 21,
+            "library_count": 22,
             "known_hand": {
               "13": 1,
-              "23": 1,
-              "24": 1
+              "23": 1
             },
             "main_counts": {
               "0": 8,
@@ -3658,6 +3661,7 @@
               "14": 2,
               "19": 2,
               "21": 2,
+              "24": 1,
               "26": 1,
               "27": 1
             },
@@ -3669,7 +3673,7 @@
               "14": 1,
               "28": 1
             },
-            "hand_hidden_count": 5,
+            "hand_hidden_count": 4,
             "hand": [],
             "graveyard": [
               {
@@ -4316,6 +4320,10 @@
         },
         {
           "offer_id": 0,
+          "label": "Put Tiger-Seal next on the bottom"
+        },
+        {
+          "offer_id": 0,
           "label": "Attack with Fire Nation Cadets"
         },
         {
@@ -4347,11 +4355,11 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "9c8d19c561a2b96ea1b79a7c75b301c88c6d42e3168eab40b17f6217a625cbf3",
+      "digest": "12c3b193ee09f8e137436843fdd7d6e26edfe94ead63aa82897dc86e1fd2516d",
       "frame": {
         "protocol": 1,
         "match_id": "QPEp4KpxWQR4tDYVer7XIA",
-        "revision": 36,
+        "revision": 37,
         "frame_hash": "ba77886746fb1ee5adafc8709954c1ec4d84e02a83ab1f4b95e68091f1085f40",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
@@ -5207,6 +5215,10 @@
         },
         {
           "offer_id": 0,
+          "label": "Put Tiger-Seal next on the bottom"
+        },
+        {
+          "offer_id": 0,
           "label": "Attack with Fire Nation Cadets"
         },
         {
@@ -5274,11 +5286,11 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "a9222fbe04fef42087229042d8145a61cf79886e6432e6a4dcdd50062d1fd9fe",
+      "digest": "28e0169fef8f696f85535e639300ea28673025fa06953f22f10bf82b7c700011",
       "frame": {
         "protocol": 1,
         "match_id": "5ALhUXX863ZgmiIdCCZU8A",
-        "revision": 56,
+        "revision": 57,
         "frame_hash": "08e1700ec1f034d21c8c3041b64761f24b184e11fee01094c6fc16bd0462b975",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",

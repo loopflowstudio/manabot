@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn unknown_unsupported_and_ambiguous_entries_name_their_lines() {
         let mut pool = content_pool(WORLD_POOL).unwrap();
-        let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n2 Accumulate Wisdom\nMain\n1 Accumulate Wisdom\n";
+        let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Crossroads of Destiny\n2 Crossroads of Destiny\nMain\n1 Crossroads of Destiny\n";
         let rejected = admit(&parse_decklist(source, "x"), &pool).unwrap_err();
         assert_eq!(rejected.source, source);
         for expected in [

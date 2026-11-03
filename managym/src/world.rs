@@ -95,8 +95,7 @@ mod tests {
         assert!(supports_card("Avatar Enthusiasts").unwrap());
         assert!(supports_card("Forest").unwrap());
         assert!(supports_card("Lightning Bolt").unwrap());
-        // Defined, but marked incomplete beside its definition.
-        assert!(!supports_card("Water Tribe Rallier").unwrap());
+        assert!(supports_card("Water Tribe Rallier").unwrap());
         assert!(supports_card("Counterspell").unwrap());
         assert!(!supports_card("Crossroads of Destiny").unwrap());
         assert!(!supports_card("Not A Card").unwrap());
@@ -106,7 +105,7 @@ mod tests {
             "Water Tribe Rallier",
             "Forest",
         ];
-        assert_eq!(unsupported_cards(deck).unwrap(), ["Water Tribe Rallier"]);
+        assert!(unsupported_cards(deck).unwrap().is_empty());
     }
 
     #[test]

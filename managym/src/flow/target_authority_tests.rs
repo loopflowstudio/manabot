@@ -161,7 +161,7 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
             vec![Target::Player(opponent)]
         );
         assert_eq!(
-            game.legal_targets_for_spec(&TargetSpec::CreatureOrPlayer, controller),
+            game.legal_targets_for_spec(&TargetSpec::AnyTarget, controller),
             vec![
                 Target::Player(PlayerId(0)),
                 Target::Player(PlayerId(1)),
@@ -399,7 +399,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             let own = controller == owner;
             let cases = [
                 (TargetSpec::Creature, own),
-                (TargetSpec::CreatureOrPlayer, own),
+                (TargetSpec::AnyTarget, own),
                 (TargetSpec::CreatureYouControl, own),
                 (TargetSpec::CreatureOpponentControls, false),
                 (

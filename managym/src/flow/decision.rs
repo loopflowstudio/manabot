@@ -299,8 +299,9 @@ pub enum Decision {
         looked: Vec<CardId>,
     },
     /// Look at top N, select up to K matching cards to hand, rest to the
-    /// bottom of the library in random order.
+    /// bottom of the library in the specified order.
     LookAndSelect {
+        random_order: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
         player: PlayerId,
@@ -310,6 +311,12 @@ pub enum Decision {
         selected: usize,
         min_select: usize,
         max_select: usize,
+    },
+    /// Order inspected library cards on the bottom, nearest the top first.
+    /// Each choice commits its placement; only unplaced cards remain visible.
+    OrderLibraryBottom {
+        player: PlayerId,
+        remaining: Vec<CardId>,
     },
     /// Search for up to `remaining` more land cards with different names,
     /// revealing each (Elemental Teachings). The revealed cards stay in the
@@ -437,6 +444,7 @@ impl Decision {
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
             | Decision::Surveil { player, .. }
+            | Decision::OrderLibraryBottom { player, .. }
             | Decision::LookAndSelect { player, .. }
             | Decision::Modal { player, .. }
             | Decision::Learn { player }
@@ -458,6 +466,7 @@ impl Decision {
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
+            Decision::OrderLibraryBottom { remaining, .. } => remaining,
             Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
@@ -644,8 +653,6 @@ impl Game {
         });
     }
 
-    /// Execute a frame's remaining effects. If an effect suspends for a
-    /// decision, park the frame; otherwise finalize the resolution.
     /// Suspend the resolution on `next`, or resume its frame when there is
     /// no further decision.
     fn continue_resolution(&mut self, mut suspended: SuspendedResolution, next: Option<Decision>) {
@@ -658,6 +665,8 @@ impl Game {
         }
     }
 
+    /// Execute a frame's remaining effects. If an effect suspends for a
+    /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while let Some(effect) = frame.queue.pop_front() {
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
@@ -944,6 +953,12 @@ impl Game {
                     .map(|card| self.state.cards[card].id)
                     .collect(),
             },
+            Decision::OrderLibraryBottom { player, remaining } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(*player, remaining.iter().copied(), false),
+                focus: self.card_focus(remaining),
+            },
             Decision::Surveil { player, looked } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
@@ -960,7 +975,7 @@ impl Game {
             } => {
                 let mut actions: Vec<Action> = looked
                     .iter()
-                    .filter(|card| predicate.matches_card(&self.state.cards[**card]))
+                    .filter(|card| self.card_matches_predicate(**card, predicate))
                     .map(|card| Action::SelectCard {
                         player: *player,
                         card: *card,
@@ -1457,13 +1472,14 @@ impl Game {
                     predicate,
                     selected,
                     reveal,
+                    random_order,
                     max_select,
                     ..
                 },
                 Action::SelectCard { card, .. },
             ) => {
                 let selectable =
-                    looked.contains(card) && predicate.matches_card(&self.state.cards[*card]);
+                    looked.contains(card) && self.card_matches_predicate(*card, predicate);
                 if !selectable {
                     let err = AgentError("card is not selectable".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -1481,11 +1497,11 @@ impl Game {
 
                 let more_selectable = looked
                     .iter()
-                    .any(|c| predicate.matches_card(&self.state.cards[*c]));
+                    .any(|c| self.card_matches_predicate(*c, predicate));
                 if *selected >= *max_select || !more_selectable {
                     let rest = std::mem::take(looked);
-                    self.bottom_in_random_order(rest);
-                    self.run_frame(suspended.frame);
+                    let decision = self.library_bottom_decision(player, rest, *random_order);
+                    self.continue_resolution(suspended, decision);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                 }
@@ -1493,6 +1509,8 @@ impl Game {
             }
             (
                 Decision::LookAndSelect {
+                    player,
+                    random_order,
                     looked,
                     selected,
                     min_select,
@@ -1503,15 +1521,31 @@ impl Game {
             ) => {
                 let any_selectable = looked
                     .iter()
-                    .any(|c| predicate.matches_card(&self.state.cards[*c]));
+                    .any(|c| self.card_matches_predicate(*c, predicate));
                 if *selected < *min_select && any_selectable {
                     let err = AgentError("selection is not optional yet".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
                 let rest = std::mem::take(looked);
-                self.bottom_in_random_order(rest);
-                self.run_frame(suspended.frame);
+                let decision = self.library_bottom_decision(*player, rest, *random_order);
+                self.continue_resolution(suspended, decision);
+                Ok(())
+            }
+            (Decision::OrderLibraryBottom { remaining, .. }, Action::SelectCard { card, .. }) => {
+                let Some(index) = remaining.iter().position(|candidate| candidate == card) else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError(
+                        "card is not in the pending library order".into(),
+                    ));
+                };
+                remaining.remove(index);
+                self.put_on_bottom_of_library(*card);
+                if remaining.is_empty() {
+                    self.run_frame(suspended.frame);
+                } else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                }
                 Ok(())
             }
             (Decision::SearchDistinctLands { .. }, Action::SelectCard { card, .. }) => {
@@ -1546,7 +1580,7 @@ impl Game {
                 Action::SelectCard { card, .. },
             ) => {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *owner)
-                    || !predicate.matches_card(&self.state.cards[*card])
+                    || !self.card_matches_predicate(*card, predicate)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError(
@@ -1835,7 +1869,7 @@ impl Game {
                 .zone_cards(ZoneType::Graveyard, *owner)
                 .iter()
                 .copied()
-                .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+                .filter(|card| self.card_matches_predicate(*card, predicate))
                 .collect(),
         }
     }
@@ -1866,8 +1900,8 @@ impl Game {
                 .iter()
                 .copied()
                 .filter(|card| {
-                    let card = &self.state.cards[*card];
-                    card.types.is_castable() && predicate.matches_card(card)
+                    self.state.cards[*card].types.is_castable()
+                        && self.card_matches_predicate(*card, predicate)
                 })
                 .collect(),
             ResolutionCastOffer::Exiled { card } => self
@@ -1887,7 +1921,7 @@ impl Game {
                     let definition = &self.state.cards[*card];
                     self.state.zones.contains(*card, ZoneType::Exile, *player)
                         && definition.types.is_castable()
-                        && predicate.matches_card(definition)
+                        && self.card_matches_predicate(*card, predicate)
                 })
                 .collect(),
             ResolutionCastOffer::LibraryTop { card } => (self
@@ -1921,7 +1955,7 @@ impl Game {
             .zone_cards(ZoneType::Hand, *owner)
             .iter()
             .copied()
-            .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+            .filter(|card| self.card_matches_predicate(*card, predicate))
             .collect();
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
         candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
@@ -1982,6 +2016,29 @@ impl Game {
         *self.state.suspended_decision_mut() = Some(suspended);
     }
 
+    /// Random placement and owner-chosen placement share the same library
+    /// move. A singleton is forced and needs no pending choice.
+    fn library_bottom_decision(
+        &mut self,
+        player: PlayerId,
+        mut cards: Vec<CardId>,
+        random_order: bool,
+    ) -> Option<Decision> {
+        if !random_order && cards.len() > 1 {
+            return Some(Decision::OrderLibraryBottom {
+                player,
+                remaining: cards,
+            });
+        }
+        if random_order {
+            cards.shuffle(self.state.rng_mut());
+        }
+        for card in cards {
+            self.put_on_bottom_of_library(card);
+        }
+        None
+    }
+
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
@@ -1991,15 +2048,6 @@ impl Game {
         if let Some(index) = library.iter().position(|c| *c == card) {
             library.remove(index);
             library.insert(0, card);
-        }
-    }
-
-    /// Put the given library cards on the bottom of their owners' libraries
-    /// in a random order.
-    pub(crate) fn bottom_in_random_order(&mut self, mut cards: Vec<CardId>) {
-        cards.shuffle(self.state.rng_mut());
-        for card in cards {
-            self.put_on_bottom_of_library(card);
         }
     }
 }

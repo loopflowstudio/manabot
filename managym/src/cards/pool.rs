@@ -169,8 +169,8 @@ mod tests {
             Eligibility::Eligible
         );
         let marked = row(&pool, "Cat-Gator");
-        assert_eq!(marked.eligibility, Eligibility::Unsupported);
-        assert!(marked.reason.is_some());
+        assert_eq!(marked.eligibility, Eligibility::Eligible);
+        assert!(marked.reason.is_none());
         assert_eq!(row(&pool, "Ally").eligibility, Eligibility::Unsupported);
         let fixture = row(&pool, "Crossroads of Destiny");
         assert_eq!(fixture.eligibility, Eligibility::Unsupported);

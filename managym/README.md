@@ -212,3 +212,12 @@ layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/training.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-7 viewer JSON is validated by the native observation types.
+
+`Game::card_power` reads contextual power in every zone: the layered view on
+the battlefield, and characteristic-defining abilities with the spell's
+controller or card's owner elsewhere (including outside the game). Zone
+filters use `card_matches_predicate`; printed-only matching belongs to
+structural definition checks and private layer stages. `LookAndSelect` names
+whether the remainder is random; chosen order suspends on native
+`OrderLibraryBottom`, placing cards nearest the top first through ordinary
+SelectCard Commands. Only the chooser sees the remaining inspected cards.

@@ -2,7 +2,7 @@
 //!
 //! The current `ActionSpace` and target legality queries remain authoritative.
 //! This module projects a narrow, uncapped typed view for priority pass,
-//! single `CreatureOrPlayer` target casts, complete combat declarations, and
+//! single `AnyTarget` target casts, complete combat declarations, and
 //! commuting waterbend payments,
 //! then lowers accepted IDs through the existing rules executor. It
 //! intentionally does not own match revisions, prompt persistence, recovery,
@@ -1013,7 +1013,7 @@ impl Game {
     ///
     /// Unsupported legacy actions remain available through `ActionSpace`; this
     /// experimental projection currently covers pass and non-kicked casts with
-    /// exactly one required `CreatureOrPlayer` target.
+    /// exactly one required `AnyTarget` target.
     pub fn structured_priority_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
@@ -1062,7 +1062,7 @@ impl Game {
                     let requirement = &requirements[0];
                     if requirement.min != 1
                         || requirement.max != 1
-                        || requirement.spec != TargetSpec::CreatureOrPlayer
+                        || requirement.spec != TargetSpec::AnyTarget
                     {
                         continue;
                     }

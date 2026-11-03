@@ -17,11 +17,11 @@ def test_checked_public_commitment_receipt_closes_selected_trace() -> None:
     receipt = verify_receipt()
 
     assert receipt["summary"] == {
-        "commands": 142,
-        "commitments": 69,
-        "unadmitted_commands": 73,
-        "tracker_records_per_viewer": {"0": 68, "1": 142},
-        "consumed_commitments": 55,
+        "commands": 135,
+        "commitments": 66,
+        "unadmitted_commands": 69,
+        "tracker_records_per_viewer": {"0": 68, "1": 135},
+        "consumed_commitments": 53,
         "rules_provider_gaps": 0,
         "identity_stream_mismatches": 0,
         "negative_proof_mutations": 0,
@@ -40,7 +40,7 @@ def test_checked_public_commitment_receipt_closes_selected_trace() -> None:
     assert len(stream_hashes) == 1
     assert {
         viewer: tracker["records"] for viewer, tracker in receipt["trackers"].items()
-    } == {"0": 68, "1": 142}
+    } == {"0": 68, "1": 135}
 
 
 def test_public_commitment_receipt_binds_hypothesis_atomicity_and_frozen_evidence() -> (

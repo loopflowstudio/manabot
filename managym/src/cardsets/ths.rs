@@ -19,7 +19,7 @@ fn lightning_strike() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![Effect::deal_damage(
             3,
-            ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+            ObjectSelector::Target(TargetSpec::AnyTarget),
         )],
         text_box: text_box.into(),
         ..Default::default()

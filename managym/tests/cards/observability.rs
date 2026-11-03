@@ -689,6 +689,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Scry { count: 1 },
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
+            random_order: true,
             reveal: false,
             look: EffectValue::Fixed(3),
             min_select: 0,
@@ -2676,7 +2677,7 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
 
 /// Where a `CardData` field reads while its card is on the battlefield (Jack
 /// Heart, 2026-11-02). A layered field reads `Game::characteristics` there
-/// and the printed card elsewhere; a printed field never states a
+/// and the printed card plus its CDAs elsewhere; a printed field never states a
 /// characteristic continuous effects change. The pattern is exhaustive, so a
 /// new field does not compile until it is classified.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3945,4 +3946,43 @@ fn a_later_record_has_a_later_order_than_an_earlier_one() {
             .keywords
             .flying
     );
+}
+
+#[test]
+fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
+    let mut s = five_color_setup(&["Suki, Kyoshi Warrior", "Gray Ogre"]);
+    s.force_card_in_hand(0, "Suki, Kyoshi Warrior");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let suki = observation
+        .agent_cards
+        .iter()
+        .find(|c| c.name == "Suki, Kyoshi Warrior" && c.zone == ZoneType::Hand)
+        .unwrap();
+    let row = listed_card_row(&observation, suki.id).unwrap();
+    assert_eq!(row[8], 0.2);
+    let tokens = tokens_of(&card_definition("Suki, Kyoshi Warrior"));
+    assert!(tokens.contains(&(
+        TokenKind::Variant,
+        name_value("PowerCda::CreaturesYouControl")
+    )));
+}
+
+#[test]
+fn library_order_and_any_target_are_distinct_learning_rules() {
+    let effect = |random_order| Effect::LookAndSelect {
+        random_order,
+        reveal: false,
+        look: EffectValue::Fixed(3),
+        min_select: 1,
+        max_select: 1,
+        predicate: CardPredicate::default(),
+    };
+    assert_ne!(
+        tokens_of(&spell(vec![effect(false)])),
+        tokens_of(&spell(vec![effect(true)]))
+    );
+    let tokens = tokens_of(&card_definition("Lightning Strike"));
+    assert!(tokens.contains(&(TokenKind::Variant, name_value("TargetSpec::AnyTarget"))));
 }

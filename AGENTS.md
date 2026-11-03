@@ -250,7 +250,9 @@ Support is definition: the world pool is every defined card from every set, and
 a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
 with the missing behavior). Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
-or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, the
+or gate a card. Jack Heart clarified on 2026-11-03 that known rules bugs must
+not block previously playable cards from play; track those defects as bug
+Tasks. Playable does not mean bug-free. A test about one card goes in `managym/tests/cards/<set>.rs`, the
 set file of that card; engine rules stay in `tests/rules/`, and shared scenario
 helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
