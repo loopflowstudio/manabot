@@ -163,6 +163,67 @@ pub enum GameEvent {
     },
 }
 
+/// The variant of a `GameEvent`, which trigger conditions are indexed by
+/// (`flow/triggers.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventKind {
+    PermanentSacrificed,
+    CardRevealed,
+    CardMoved,
+    DamageDealt,
+    LifeChanged,
+    SpellCast,
+    SpellResolved,
+    SpellCountered,
+    AbilityCountered,
+    AbilityTriggered,
+    CardDrawn,
+    PermanentTapped,
+    PermanentTargeted,
+    AttackersDeclared,
+    CombatAttackersDeclared,
+    BlockersDeclared,
+    CombatDamageDealt,
+    CountersPut,
+    Scried,
+    LibrarySearched,
+    CombatDamageToPlayers,
+    PermanentsDied,
+    TurnStarted,
+    StepStarted,
+}
+
+impl GameEvent {
+    pub fn kind(&self) -> EventKind {
+        match self {
+            GameEvent::PermanentSacrificed { .. } => EventKind::PermanentSacrificed,
+            GameEvent::CardRevealed { .. } => EventKind::CardRevealed,
+            GameEvent::CardMoved { .. } => EventKind::CardMoved,
+            GameEvent::DamageDealt { .. } => EventKind::DamageDealt,
+            GameEvent::LifeChanged { .. } => EventKind::LifeChanged,
+            GameEvent::SpellCast { .. } => EventKind::SpellCast,
+            GameEvent::SpellResolved { .. } => EventKind::SpellResolved,
+            GameEvent::SpellCountered { .. } => EventKind::SpellCountered,
+            GameEvent::AbilityCountered { .. } => EventKind::AbilityCountered,
+            GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
+            GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
+            GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
+            GameEvent::PermanentTargeted { .. } => EventKind::PermanentTargeted,
+            GameEvent::AttackersDeclared { .. } => EventKind::AttackersDeclared,
+            GameEvent::CombatAttackersDeclared { .. } => EventKind::CombatAttackersDeclared,
+            GameEvent::BlockersDeclared { .. } => EventKind::BlockersDeclared,
+            GameEvent::CombatDamageDealt { .. } => EventKind::CombatDamageDealt,
+            GameEvent::CountersPut { .. } => EventKind::CountersPut,
+            GameEvent::Scried { .. } => EventKind::Scried,
+            GameEvent::LibrarySearched { .. } => EventKind::LibrarySearched,
+            GameEvent::CombatDamageToPlayers { .. } => EventKind::CombatDamageToPlayers,
+            GameEvent::PermanentsDied { .. } => EventKind::PermanentsDied,
+            GameEvent::TurnStarted { .. } => EventKind::TurnStarted,
+            GameEvent::StepStarted { .. } => EventKind::StepStarted,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DamageTarget {
     Player(PlayerId),

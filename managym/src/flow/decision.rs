@@ -610,7 +610,7 @@ impl Game {
     }
 
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
-        self.state.suspended_decision = Some(SuspendedResolution {
+        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
             frame: EffectFrame {
                 source: None,
                 source_ref: None,
@@ -642,7 +642,7 @@ impl Game {
         match next {
             Some(decision) => {
                 suspended.decision = decision;
-                self.state.suspended_decision = Some(suspended);
+                *self.state.suspended_decision_mut() = Some(suspended);
             }
             None => self.run_frame(suspended.frame),
         }
@@ -651,7 +651,8 @@ impl Game {
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while let Some(effect) = frame.queue.pop_front() {
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
-                self.state.suspended_decision = Some(SuspendedResolution { frame, decision });
+                *self.state.suspended_decision_mut() =
+                    Some(SuspendedResolution { frame, decision });
                 return;
             }
         }
@@ -1044,7 +1045,7 @@ impl Game {
                 return Err(AgentError("mana color cannot complete the payment".into()));
             }
         }
-        let mut suspended = self.state.suspended_decision.take().unwrap();
+        let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
             (
                 Decision::Payment(PaymentProgress {
@@ -1061,7 +1062,7 @@ impl Game {
                 self.tap_permanent(*permanent, false);
                 *generic -= 1;
                 waterbend_paid.push(object);
-                self.state.suspended_decision = Some(suspended);
+                *self.state.suspended_decision_mut() = Some(suspended);
                 Ok(())
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
@@ -1070,7 +1071,7 @@ impl Game {
                     .produce_mana(payment.player, &cost)
                     .and_then(|()| self.spend_mana(payment.player, &cost))
                 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
                 }
                 if let Some(key) = payment.spends {
@@ -1114,10 +1115,10 @@ impl Game {
                 Action::ChooseMode { mode, .. },
             ) => {
                 let mana = &choices[*mode];
-                self.state.players[player.0].mana_pool.add(mana);
+                self.state.mana_pool_mut(*player).add(mana);
                 if let Some(resume) = resume.take() {
                     suspended.decision = *resume;
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     self.advance_mana_upfront()?;
                 } else {
                     // An activated mana ability retains its payer's priority;
@@ -1136,7 +1137,7 @@ impl Game {
                             .is_some_and(|p| p.card == *card)
                     });
                 let Some(selected) = selected else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal sacrifice selection".into()));
                 };
                 self.sacrifice_permanent(selected);
@@ -1156,7 +1157,7 @@ impl Game {
                 let selected =
                     self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
                 let Some(selected) = selected else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal creature to keep".into()));
                 };
                 let Decision::KeepCreatures {
@@ -1188,7 +1189,7 @@ impl Game {
                     .retarget_candidates(&suspended.decision)
                     .contains(target)
                 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal new target".into()));
                 }
                 self.change_stack_target(object, slot, *target);
@@ -1235,7 +1236,7 @@ impl Game {
                 let selected = self.state.card_to_permanent[*card]
                     .filter(|id| self.tapped_opponent_creatures(*player).contains(id));
                 let Some(selected) = selected else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal counter recipient".into()));
                 };
                 self.put_counters(selected, *kind, 1, *player);
@@ -1262,7 +1263,7 @@ impl Game {
                         .basic_land_search_candidates(player, subtype, *to_hand)
                         .contains(card)
                     {
-                        self.state.suspended_decision = Some(suspended);
+                        *self.state.suspended_decision_mut() = Some(suspended);
                         return Err(AgentError("not a matching card in library".into()));
                     }
                     if *to_hand {
@@ -1280,7 +1281,7 @@ impl Game {
                     selected.push(*card);
                     *remaining -= 1;
                     if *remaining > 0 {
-                        self.state.suspended_decision = Some(suspended);
+                        *self.state.suspended_decision_mut() = Some(suspended);
                         return Ok(());
                     }
                 }
@@ -1309,9 +1310,7 @@ impl Game {
                 }) {
                     for card in selected {
                         if let Some(id) = self.state.card_to_permanent[*card] {
-                            if let Some(permanent) = self.state.permanents[id].as_mut() {
-                                permanent.untap();
-                            }
+                            self.state.untap(id);
                         }
                     }
                     self.invalidate_mana_cache(player);
@@ -1329,7 +1328,7 @@ impl Game {
                         .library_search_candidates(player, predicate)
                         .contains(card)
                     {
-                        self.state.suspended_decision = Some(suspended);
+                        *self.state.suspended_decision_mut() = Some(suspended);
                         return Err(AgentError("not a matching card in library".into()));
                     }
                     self.reveal_card_to_hand(*card, player);
@@ -1349,7 +1348,7 @@ impl Game {
             ) => {
                 if let Action::SelectCard { card, .. } = action {
                     if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
-                        self.state.suspended_decision = Some(suspended);
+                        *self.state.suspended_decision_mut() = Some(suspended);
                         return Err(AgentError("discard must be from hand".into()));
                     }
                     self.move_card(*card, ZoneType::Graveyard);
@@ -1361,7 +1360,7 @@ impl Game {
                         .zone_cards(ZoneType::Hand, *player)
                         .is_empty();
                     if *remaining > 0 && !hand_empty {
-                        self.state.suspended_decision = Some(suspended);
+                        *self.state.suspended_decision_mut() = Some(suspended);
                         return Ok(());
                     }
                 }
@@ -1387,7 +1386,7 @@ impl Game {
                 Action::SelectCard { card, .. },
             ) => {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
                 self.move_card(*card, ZoneType::Graveyard);
@@ -1405,7 +1404,7 @@ impl Game {
                 {
                     self.run_frame(suspended.frame);
                 } else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                 }
                 Ok(())
             }
@@ -1423,7 +1422,7 @@ impl Game {
                 },
             ) => {
                 let Some(index) = remaining.iter().position(|candidate| candidate == card) else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("card is not in the pending scry".into()));
                 };
                 remaining.remove(index);
@@ -1441,7 +1440,7 @@ impl Game {
                     library.extend(top.iter().rev());
                     self.run_frame(suspended.frame);
                 } else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                 }
                 Ok(())
             }
@@ -1461,7 +1460,7 @@ impl Game {
                     looked.contains(card) && predicate.matches_card(&self.state.cards[*card]);
                 if !selectable {
                     let err = AgentError("card is not selectable".to_string());
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
                 let player = *player;
@@ -1482,7 +1481,7 @@ impl Game {
                     self.bottom_in_random_order(rest);
                     self.run_frame(suspended.frame);
                 } else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                 }
                 Ok(())
             }
@@ -1501,7 +1500,7 @@ impl Game {
                     .any(|c| predicate.matches_card(&self.state.cards[*c]));
                 if *selected < *min_select && any_selectable {
                     let err = AgentError("selection is not optional yet".to_string());
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
                 let rest = std::mem::take(looked);
@@ -1514,7 +1513,7 @@ impl Game {
                     .distinct_land_search_candidates(&suspended.decision)
                     .contains(card)
                 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a distinct land card in library".into()));
                 }
                 let Decision::SearchDistinctLands {
@@ -1528,7 +1527,7 @@ impl Game {
                 selected.push(*card);
                 *remaining -= 1;
                 if *remaining > 0 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                 } else {
                     self.finish_distinct_land_search(suspended);
                 }
@@ -1543,7 +1542,7 @@ impl Game {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *owner)
                     || !predicate.matches_card(&self.state.cards[*card])
                 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError(
                         "not a matching card in the revealed hand".into(),
                     ));
@@ -1557,7 +1556,7 @@ impl Game {
                     .resolution_cast_candidates(&suspended.decision)
                     .contains(card)
                 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
                 }
                 if let Decision::CastDuringResolution {
@@ -1594,7 +1593,7 @@ impl Game {
                     .linked_exile_candidates(&suspended.decision)
                     .contains(card)
                 {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not an offered card to exile".into()));
                 }
                 self.exile_linked(*card, grantee, source, grant);
@@ -1626,14 +1625,14 @@ impl Game {
                 Action::SelectCard { card, .. },
             ) => {
                 let Some(index) = revealed.iter().position(|c| c == card) else {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a revealed card".into()));
                 };
                 revealed.remove(index);
                 self.move_card(*card, ZoneType::Graveyard);
                 *remaining -= 1;
                 if *remaining > 0 && !revealed.is_empty() {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Ok(());
                 }
                 let owner = *owner;
@@ -1699,7 +1698,7 @@ impl Game {
             (Decision::Modal { modes, .. }, Action::ChooseMode { mode, .. }) => {
                 if *mode >= modes.len() {
                     let err = AgentError("modal mode out of range".to_string());
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
                 let effects = std::mem::take(&mut modes[*mode]);
@@ -1716,7 +1715,7 @@ impl Game {
                 Action::SelectCard { card, .. },
             ) => {
                 if !groups[0].contains(card) {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a legend in this group".into()));
                 }
                 keep.push(*card);
@@ -1727,7 +1726,7 @@ impl Game {
                         .as_ref()
                         .expect("legend")
                         .controller;
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                 } else {
                     self.perform_state_based_actions_with_legends(keep);
                 }
@@ -1737,7 +1736,7 @@ impl Game {
                 let player = *player;
                 if !self.state.zones.contains(*card, ZoneType::Hand, player) {
                     let err = AgentError("card to discard is not in hand".to_string());
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
                 self.move_card(*card, ZoneType::Graveyard);
@@ -1747,7 +1746,7 @@ impl Game {
             }
             (Decision::Learn { player }, Action::LearnTakeLesson { card, .. }) => {
                 if !self.eligible_lesson(*player, *card) {
-                    self.state.suspended_decision = Some(suspended);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError(
                         "card is not an available owned sideboard Lesson".to_string(),
                     ));
@@ -1762,7 +1761,7 @@ impl Game {
             }
             _ => {
                 let err = AgentError("action does not match pending decision".to_string());
-                self.state.suspended_decision = Some(suspended);
+                *self.state.suspended_decision_mut() = Some(suspended);
                 Err(err)
             }
         }
@@ -1969,7 +1968,7 @@ impl Game {
             revealed: std::mem::take(selected),
             remaining: *opponent_picks,
         };
-        self.state.suspended_decision = Some(suspended);
+        *self.state.suspended_decision_mut() = Some(suspended);
     }
 
     /// Move a library card to the bottom of its owner's library. Not a zone

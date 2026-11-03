@@ -193,7 +193,7 @@ mod tests {
             .snapshot_current_permanent(card)
             .expect("live permanent has snapshot facts");
         let mut object_lki = game.clone();
-        object_lki.state.object_lki.insert(lki.object_ref, lki);
+        object_lki.state.object_lki.insert(lki);
         assert_authority_change(&baseline, &object_lki, "object LKI");
 
         let mut rng = game.clone();

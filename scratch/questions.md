@@ -69,3 +69,49 @@ recording shell and the real adoption CLI. Copying the declared upload path is
 the simpler local substitute for GitHub artifact transport. This proves local
 failure-path recovery only; publication/demo retains the hosted-job evidence
 boundary. No production baseline move or load generation is needed.
+
+## Sync onto main 51fbacbbf — 2026-11-02
+
+Preserved MTG-237 demo assumptions and the new MTG-236 notes below.
+Main's complete inherited history remains at
+`51fbacbbf:scratch/questions.md`; the older T5/decklist history is already
+referenced above. These inherited notes select no new MTG-237 work and
+supply no shipping approval. Only this notes file required resolution.
+
+## MTG-236 (derived state revisions) — 2026-11-02, headless
+
+- `Revisions` has `characteristics`, `mana_pools` and `triggers`; the brief's
+  `offers` counter is omitted because no derivation caches offers today
+  (`current_action_space` is recomputed per decision), and a counter nothing
+  reads would be a setup nothing uses. Add it with its first consumer.
+- Mana pools get their own counter rather than joining `characteristics`:
+  one static condition reads them (`UnspentManaAtLeast`, The Lion-Turtle),
+  and pool writes happen on every mana tap and step boundary. `StaticIndex`
+  records whether a source reads the pools, and the views follow
+  `mana_pools` only then.
+- Only the write sites the probe showed hot in playouts moved to typed
+  accessors (events, taps, damage, life, pools, step flags, stack, trigger
+  queues, incarnations, zone moves). Every other write still advances all
+  counters through `DerefMut`; converting more is safe whenever a profile
+  asks for it, because debug builds recompute every cached value on read.
+- `TrackedState::move_card` advances `characteristics` for moves touching
+  the battlefield or a graveyard and `triggers` for the battlefield only;
+  hand, library, stack and exile moves advance nothing. Graveyard triggers
+  (`InGraveyard`) are matched by scanning graveyards, outside the index.
+- The bench machine carried load averages of 25–40 from other sessions
+  during every run, so absolute times here are not comparable to the
+  brief's (4.97 s / 151.8 s); deltas against the same-session baseline
+  and identical score digests are the evidence.
+
+## MTG-236 decision pass 1 — 2026-11-02, headless
+
+- Item 5 (interned subtypes) is deferred, not built: after items 1-4 the
+  release profile puts all of `Game::characteristics` at ~2% inclusive and
+  its string building under 1%, so interning cannot move the acceptance
+  numbers. Reversible: it stays listed in the PR body as deferred evidence
+  for Jack Heart, and a separate Task covers it or mana payment search if
+  the quiet-machine bench misses acceptance.
+- The quiet-machine `bench_search` thresholds are owned by the gate/CI
+  owner; this machine carried load 25-70 throughout (35 at this pass). The
+  headless equivalent is the 31% CPU-second drop with identical score
+  digests, projecting ~3.4 s / ~105 s against the 4.34 s / 128.7 s bound.

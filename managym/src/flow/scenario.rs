@@ -102,7 +102,7 @@ impl Game {
 
         let permanent_id = PermanentId(self.state.permanents.len());
         let mut permanent = Permanent::new(
-            self.state.id_gen.next_id(),
+            self.state.id_gen_mut().next_id(),
             card_id,
             &self.state.cards[card_id],
         );

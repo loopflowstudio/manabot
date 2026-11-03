@@ -53,11 +53,11 @@
         },
         {
           "path": "academy/server.py",
-          "sha256": "ef302ecfeb32ec389b0dfbbc44468f6bf11b99c2a4750e504de57b2bc5507da2"
+          "sha256": "b4fb3c9217aaf43d8208161538158ebf4e93bb27c8535e441480d64e297d7cd7"
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "f444e80b2c500335c64d8b955aea5314a1b2743f523fa60ec49f44313f9d57a6"
+          "sha256": "50de60cbd07e97fa3ec8bce039af6b1ed2d2cb70389cd5fce35329d88556301e"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "c17285cf7ee544f5c54290a0168973a335ee0a4fce2e4dad0cb4057637c83ec9"
+          "sha256": "122c1014d3e6ecaa80f53b93c323d583853a76afc9c94814895af9b15a5dd6ab"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -101,7 +101,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "cfd734ae3f4e99602995a723880f076889d90fe871a895962f32d4501dcad701"
+          "sha256": "13bb6df5dfbd75e8716df61c4baae718e015a9dfa6e5cd41c1c771ef2c2a9bd3"
         },
         {
           "path": "managym/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "50024976dac3c65724f015e0e4451dc56c6a38f18acd620421d023986f07117c"
+      "sha256": "98f7c16407f5ec900d07abbf28b14bd79809cce1334e91fe0bbbabe6cb28b156"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1488,16 +1488,16 @@
       "tracker_receipts": {
         "0": {
           "consumed_commitments": 21,
-          "history_digest": "3ecbb7151551888a7ffdb4cec942f40f1e29eb597e3901f932af51669cf345d6",
-          "posterior_digest": "bd8ebb238b9f8ddaa3afa5cc75e93969f9aa1dedfd8a154e6328ad0129442dc9",
-          "prior_digest": "d292a8dc44834d26cc3dbce70f4d859f754684b963f04cf5691fac252018d862",
+          "history_digest": "fb369946186cf1d56eb71f8755d1ff9f0d258b832da8a5ffcc348a15d1efe71f",
+          "posterior_digest": "3eef55b0ad26ff7600ef61c2457939a6f863f769912e865fbe78cd781041663f",
+          "prior_digest": "67e6603fcc879dc377fff0ff6830b5a4261d2c3550ab9737db779b6e7e253133",
           "records": 68
         },
         "1": {
           "consumed_commitments": 34,
-          "history_digest": "1ed7ecb22a3a17e9fda3a679b950eff3cf23d4f26eef8caadc8b68bbb50edf38",
-          "posterior_digest": "0c8c8ca75e27039ad1c9ff2ee1657e7e95191078f9598d60d2094ff404a274bf",
-          "prior_digest": "7a7b129eedfe19e351cdefab737cb7f77cf3314b556e3dc3f3aa4d64a9605967",
+          "history_digest": "3ab1d6a75f7378298920ba605203d52bb6127670397fe5cf69fd2e411a611ec9",
+          "posterior_digest": "0e887be023aa27b2055f8683144561f7aef5cdc5a9dfb89132d6f2f0a961f1f5",
+          "prior_digest": "ed0928db330bc92b2262296d2a5aa0752cf9e7193a0607e23194bfe8db21cc88",
           "records": 142
         }
       }
@@ -1520,16 +1520,16 @@
   "trackers": {
     "0": {
       "consumed_commitments": 21,
-      "history_digest": "3ecbb7151551888a7ffdb4cec942f40f1e29eb597e3901f932af51669cf345d6",
-      "posterior_digest": "bd8ebb238b9f8ddaa3afa5cc75e93969f9aa1dedfd8a154e6328ad0129442dc9",
-      "prior_digest": "d292a8dc44834d26cc3dbce70f4d859f754684b963f04cf5691fac252018d862",
+      "history_digest": "fb369946186cf1d56eb71f8755d1ff9f0d258b832da8a5ffcc348a15d1efe71f",
+      "posterior_digest": "3eef55b0ad26ff7600ef61c2457939a6f863f769912e865fbe78cd781041663f",
+      "prior_digest": "67e6603fcc879dc377fff0ff6830b5a4261d2c3550ab9737db779b6e7e253133",
       "records": 68
     },
     "1": {
       "consumed_commitments": 34,
-      "history_digest": "1ed7ecb22a3a17e9fda3a679b950eff3cf23d4f26eef8caadc8b68bbb50edf38",
-      "posterior_digest": "0c8c8ca75e27039ad1c9ff2ee1657e7e95191078f9598d60d2094ff404a274bf",
-      "prior_digest": "7a7b129eedfe19e351cdefab737cb7f77cf3314b556e3dc3f3aa4d64a9605967",
+      "history_digest": "3ab1d6a75f7378298920ba605203d52bb6127670397fe5cf69fd2e411a611ec9",
+      "posterior_digest": "0e887be023aa27b2055f8683144561f7aef5cdc5a9dfb89132d6f2f0a961f1f5",
+      "prior_digest": "ed0928db330bc92b2262296d2a5aa0752cf9e7193a0607e23194bfe8db21cc88",
       "records": 142
     }
   },

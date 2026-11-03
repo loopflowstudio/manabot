@@ -278,10 +278,18 @@ continuous-effect records and an Aura's `SetCharacteristics`. Code that the
 layer computation itself calls (static scopes, ability outputs) reads the
 private layer stages in `flow/statics.rs`, never the view.
 The view and its static-source index are computed once per state revision and
-shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` whose
-every mutable access advances the revision; only fields no characteristic
-reads (priority, the RNG) have non-advancing accessors. Debug builds recompute
-every cached view and index on read and assert they match.
+shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` with
+`Revisions` (`characteristics`, `mana_pools`, `triggers`): `DerefMut`
+advances every counter, and its typed accessors (`tap`, `mark_damage`,
+`events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
+their field feeds. Route a hot write through a typed accessor only when no
+layer, static condition or trigger source reads the field; debug builds
+recompute every cached view and index on read and assert they match, so a
+misclassified accessor fails `cargo test` in debug. Continuous-effect records
+live in `EffectRecords` (indexed by affected object and player); trigger
+sources are looked up per event kind through `TriggerIndex`
+(`flow/triggers.rs`), rebuilt on the `triggers` revision; departed-object
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

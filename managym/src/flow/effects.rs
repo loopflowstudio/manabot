@@ -51,7 +51,7 @@ impl Game {
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
-        let timestamp = self.state.id_gen.next_id();
+        let timestamp = self.state.id_gen_mut().next_id();
         let records: Vec<ContinuousEffect> = affected
             .into_iter()
             .map(|affected| ContinuousEffect {
@@ -82,19 +82,14 @@ impl Game {
     /// Records affecting the permanent's current incarnation, in timestamp
     /// order.
     pub fn effects_on(&self, permanent_id: PermanentId) -> impl Iterator<Item = &ContinuousEffect> {
-        let object = self.permanent_object_ref(permanent_id);
-        self.state
-            .effects
-            .iter()
-            .filter(move |effect| object.is_some_and(|object| effect.affects_object(object)))
+        self.permanent_object_ref(permanent_id)
+            .into_iter()
+            .flat_map(|object| self.state.effects.on(object))
     }
 
     /// Records affecting a player, in timestamp order.
     pub fn player_effects(&self, player: PlayerId) -> impl Iterator<Item = &ContinuousEffect> {
-        self.state
-            .effects
-            .iter()
-            .filter(move |effect| effect.affects_player(player))
+        self.state.effects.on_player(player)
     }
 
     pub(super) fn permanent_has_modification(

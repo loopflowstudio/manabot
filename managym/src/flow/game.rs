@@ -20,18 +20,20 @@ use crate::{
         decision::SuspendedResolution,
         event::GameEvent,
         priority::PriorityState,
-        statics::StaticsCache,
+        statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
         turn::TurnState,
     },
     state::{
+        card::ActivatedAbilityDefinition,
         game_object::{
-            CardId, CardVec, IdGenerator, Incarnation, ObjectLki, ObjectRef, PermanentId,
+            CardId, CardVec, IdGenerator, Incarnation, ObjectLkiLog, ObjectRef, PermanentId,
             PermanentVec, PlayerId, Target,
         },
         mana::Mana,
+        permanent::{CounterKind, Permanent},
         stack_object::StackObject,
-        zone::ZoneManager,
+        zone::{ZoneManager, ZoneType},
     },
 };
 
@@ -43,7 +45,7 @@ pub struct GameState {
     /// Current CR 400.7 generation for each stable physical card entity.
     pub object_incarnations: CardVec<Incarnation>,
     /// Last-known battlefield facts keyed by the departed exact object.
-    pub object_lki: BTreeMap<ObjectRef, ObjectLki>,
+    pub object_lki: ObjectLkiLog,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
     pub turn: TurnState,
@@ -63,7 +65,7 @@ pub struct GameState {
     pub exile_links: Vec<ExileLink>,
     /// Continuous effects from resolved spells and abilities, in timestamp
     /// order (`state::effect`).
-    pub effects: Vec<crate::state::effect::ContinuousEffect>,
+    pub effects: crate::state::effect::EffectRecords,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
     pub cast_permissions: CastPermissions,
     /// A resolution paused on a mid-resolution player decision.
@@ -227,39 +229,273 @@ pub enum PendingChoice {
     },
 }
 
-/// `GameState` with a revision that every mutable access advances. State
-/// can change only through `DerefMut` and the untracked accessors below, so a
-/// value derived from state at one revision is current while the revision is
-/// unchanged; `StaticsCache` keys on it. A mutable borrow that writes nothing
-/// still advances it.
+/// Counters for the data `Game` derives from state and caches in
+/// `DerivedCache`, each advanced by the writes that can change what its
+/// derivation reads:
+///
+/// - `characteristics`: permanents' characteristics and the static-source
+///   index, which read permanents, cards, the battlefield and graveyards,
+///   combat, continuous-effect records, and the turn's active player and
+///   history.
+/// - `mana_pools`: both players' pools, which a static condition may read
+///   ("as long as you have six or more unspent mana"). The cache compares it
+///   only while a static source with such a condition is on the battlefield.
+/// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
+///   permanents have triggered abilities, printed or granted.
+///
+/// `DerefMut` on `TrackedState` advances every counter. Its typed accessors
+/// write fields no derivation reads, or advance only the counters their
+/// field feeds. Debug builds recompute every cached value on read and assert
+/// it matches, so an accessor that leaves a counter behind fails tests
+/// rather than serving stale data.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Revisions {
+    pub characteristics: u64,
+    pub mana_pools: u64,
+    pub triggers: u64,
+}
+
+/// `GameState` with the `Revisions` its derived caches key on. State can
+/// change only through `DerefMut`, which advances every revision (a mutable
+/// borrow that writes nothing still advances them), and the accessors below,
+/// which advance exactly the revisions their field feeds.
 #[derive(Clone)]
 pub struct TrackedState {
     state: GameState,
-    revision: u64,
+    revisions: Revisions,
 }
 
 impl TrackedState {
     pub(crate) fn new(state: GameState) -> Self {
-        Self { state, revision: 0 }
+        Self {
+            state,
+            revisions: Revisions::default(),
+        }
     }
 
-    pub(crate) fn revision(&self) -> u64 {
-        self.revision
+    pub(crate) fn revisions(&self) -> Revisions {
+        self.revisions
     }
 
-    /// Priority, which no permanent's characteristics read; writing it keeps
-    /// the revision (debug builds check every cached view on read).
+    // Fields no cached derivation reads: writing them keeps every revision.
+
     pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
         &mut self.state.priority
     }
 
-    /// The game RNG, which no permanent's characteristics read.
     pub(crate) fn rng_mut(&mut self) -> &mut ChaCha8Rng {
         &mut self.state.rng
     }
+
+    /// Ids are read from the objects and records that carry them, never
+    /// from the generator.
+    pub(crate) fn id_gen_mut(&mut self) -> &mut IdGenerator {
+        &mut self.state.id_gen
+    }
+
+    pub(crate) fn events_mut(&mut self) -> &mut Vec<GameEvent> {
+        &mut self.state.events
+    }
+
+    pub(crate) fn pending_events_mut(&mut self) -> &mut Vec<GameEvent> {
+        &mut self.state.pending_events
+    }
+
+    pub(crate) fn observation_events_mut(&mut self) -> &mut Vec<GameEvent> {
+        &mut self.state.observation_events
+    }
+
+    /// The producible-mana cache has its own invalidation (`invalidate_mana_cache`).
+    pub(crate) fn mana_cache_mut(&mut self) -> &mut [Option<Mana>; 2] {
+        &mut self.state.mana_cache
+    }
+
+    pub(crate) fn stack_objects_mut(&mut self) -> &mut Vec<StackObject> {
+        &mut self.state.stack_objects
+    }
+
+    pub(crate) fn pending_triggers_mut(&mut self) -> &mut Vec<PendingTrigger> {
+        &mut self.state.pending_triggers
+    }
+
+    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<TriggerPlacement> {
+        &mut self.state.trigger_placement
+    }
+
+    pub(crate) fn trigger_enqueue_counter_mut(&mut self) -> &mut u64 {
+        &mut self.state.trigger_enqueue_counter
+    }
+
+    pub(crate) fn delayed_triggers_mut(&mut self) -> &mut Vec<DelayedTrigger> {
+        &mut self.state.delayed_triggers
+    }
+
+    pub(crate) fn suspended_decision_mut(&mut self) -> &mut Option<SuspendedResolution> {
+        &mut self.state.suspended_decision
+    }
+
+    pub(crate) fn object_lki_mut(&mut self) -> &mut ObjectLkiLog {
+        &mut self.state.object_lki
+    }
+
+    pub(crate) fn life_mut(&mut self, player: PlayerId) -> Option<&mut i32> {
+        self.state
+            .players
+            .get_mut(player.0)
+            .map(|player| &mut player.life)
+    }
+
+    /// Step progress flags, which only the game loop reads.
+    pub(crate) fn set_step_initialized(&mut self, value: bool) {
+        self.state.turn.step_initialized = value;
+    }
+
+    pub(crate) fn set_turn_based_actions_complete(&mut self, value: bool) {
+        self.state.turn.turn_based_actions_complete = value;
+    }
+
+    pub(crate) fn set_cleanup_priority(&mut self, value: bool) {
+        self.state.turn.cleanup_priority = value;
+    }
+
+    /// Advance to the next step; a new turn changes the active player and
+    /// resets the turn histories conditions read.
+    pub(crate) fn advance_step(&mut self) {
+        let turn_number = self.state.turn.turn_number;
+        self.state.turn.advance_step();
+        if self.state.turn.turn_number != turn_number {
+            self.revisions.characteristics += 1;
+            self.revisions.triggers += 1;
+        }
+    }
+
+    // Permanent fields no cached derivation reads: tapped state, damage,
+    // summoning sickness and activation limits. Counters, control,
+    // attachment, animation and combat status go through `DerefMut`.
+
+    fn permanent_untracked(&mut self, permanent_id: PermanentId) -> Option<&mut Permanent> {
+        self.state
+            .permanents
+            .get_mut(permanent_id.0)
+            .and_then(Option::as_mut)
+    }
+
+    /// Returns whether the permanent was untapped.
+    pub(crate) fn tap(&mut self, permanent_id: PermanentId) -> bool {
+        match self.permanent_untracked(permanent_id) {
+            Some(permanent) if !permanent.tapped => {
+                permanent.tap();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
+    pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
+        let Some(permanent) = self.permanent_untracked(permanent_id) else {
+            return;
+        };
+        let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
+        permanent.untap();
+        if removes_stun {
+            self.revisions.characteristics += 1;
+        }
+    }
+
+    pub(crate) fn mark_damage(&mut self, permanent_id: PermanentId, amount: i32, deathtouch: bool) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.take_damage(amount);
+            if deathtouch {
+                permanent.deathtouch_damage = true;
+            }
+        }
+    }
+
+    pub(crate) fn clear_damage(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.clear_damage();
+        }
+    }
+
+    pub(crate) fn clear_summoning_sickness(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.summoning_sick = false;
+        }
+    }
+
+    pub(crate) fn clear_permanent_turn_history(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.clear_turn_history();
+        }
+    }
+
+    pub(crate) fn record_activation(
+        &mut self,
+        permanent_id: PermanentId,
+        ability_index: usize,
+        ability: &ActivatedAbilityDefinition,
+    ) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.record_activation(ability_index, ability);
+        }
+    }
+
+    // Mana pools feed `mana_pools` only.
+
+    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+        self.revisions.mana_pools += 1;
+        &mut self.state.players[player.0].mana_pool
+    }
+
+    /// The ordinary and until-end-of-combat pools together.
+    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut Mana, &mut Mana) {
+        self.revisions.mana_pools += 1;
+        let player = &mut self.state.players[player.0];
+        (&mut player.mana_pool, &mut player.combat_mana_pool)
+    }
+
+    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+        self.revisions.mana_pools += 1;
+        &mut self.state.players[player.0].combat_mana_pool
+    }
+
+    // Zone changes feed the derivations that read the zones they touch.
+
+    /// Move `card` to `to_zone` under `holder`. Characteristics read the
+    /// battlefield and graveyards; the trigger index reads the battlefield.
+    pub(crate) fn move_card(&mut self, card: CardId, holder: PlayerId, to_zone: ZoneType) {
+        let from_zone = self.state.zones.zone_of(card);
+        let touches = |zone: ZoneType| matches!(zone, ZoneType::Battlefield | ZoneType::Graveyard);
+        if touches(to_zone) || from_zone.is_some_and(touches) {
+            self.revisions.characteristics += 1;
+        }
+        if to_zone == ZoneType::Battlefield || from_zone == Some(ZoneType::Battlefield) {
+            self.revisions.triggers += 1;
+        }
+        self.state.zones.move_card(card, holder, to_zone);
+    }
+
+    /// Advance the card's CR 400.7 incarnation as it leaves `from_zone`.
+    /// Only a battlefield object's exact identity reaches a cached derivation
+    /// (through its effect records and static attachments).
+    pub(crate) fn advance_incarnation(&mut self, card: CardId, from_zone: ZoneType) {
+        if from_zone == ZoneType::Battlefield {
+            self.revisions.characteristics += 1;
+            self.revisions.triggers += 1;
+        }
+        let incarnation = self
+            .state
+            .object_incarnations
+            .get_mut(card.0)
+            .expect("card entity must have an incarnation");
+        *incarnation = incarnation
+            .checked_next()
+            .expect("rules object incarnation overflow");
+    }
 }
 
-/// Formats as the state alone: the revision is bookkeeping, not game state.
+/// Formats as the state alone: the revisions are bookkeeping, not game state.
 impl std::fmt::Debug for TrackedState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.state.fmt(f)
@@ -276,7 +512,9 @@ impl Deref for TrackedState {
 
 impl DerefMut for TrackedState {
     fn deref_mut(&mut self) -> &mut GameState {
-        self.revision += 1;
+        self.revisions.characteristics += 1;
+        self.revisions.mana_pools += 1;
+        self.revisions.triggers += 1;
         &mut self.state
     }
 }
@@ -293,9 +531,10 @@ pub struct Game {
     /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
     pub state: TrackedState,
-    /// Characteristics and static sources derived from `state` at its current
-    /// revision. Never cloned or hashed.
-    pub(crate) statics_cache: RefCell<StaticsCache>,
+    /// Characteristics, static sources and trigger sources derived from
+    /// `state` at its current revisions; cloned with it (its `Arc`s are
+    /// immutable), never hashed.
+    pub(crate) derived: RefCell<DerivedCache>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
@@ -321,7 +560,7 @@ impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
-            statics_cache: Default::default(),
+            derived: RefCell::new(self.derived.borrow().clone()),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
@@ -337,6 +576,6 @@ impl Clone for Game {
 
 impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
-        std::mem::take(&mut self.state.observation_events)
+        std::mem::take(self.state.observation_events_mut())
     }
 }
