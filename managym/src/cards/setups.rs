@@ -335,6 +335,8 @@ mod tests {
             .unwrap();
         assert!(Arc::ptr_eq(&content, &default_content_pack()));
         first.deck.sideboard.insert("Water Tribe Rallier".into(), 1);
+        assert!(content_pack_for_match(&[first.clone(), second.clone()]).is_ok());
+        first.deck.sideboard.insert("Ally".into(), 1);
         assert!(content_pack_for_match(&[first, second.clone()]).is_err());
         // An authored pack key never admits decks outside its own setups.
         let mut novel = PlayerConfig::new("novel", BTreeMap::from([("Forest".into(), 20)]));

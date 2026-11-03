@@ -805,14 +805,16 @@ mod tests {
         // An unadmitted replacement fails before any game and keeps prior decks.
         let mut generated = deck("Island");
         generated.deck.main.insert("Cat-Gator".into(), 1);
+        let mut invalid = generated.clone();
+        invalid.deck.main.insert("Ally".into(), 1);
         assert!(vector
-            .set_training_decks(vec![decks[0].clone(), generated])
+            .set_training_decks(vec![decks[0].clone(), invalid])
             .is_err());
         vector
             .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
             .unwrap();
         assert_eq!(actual, vector.current_player_configs());
-        let replacement = vec![deck("Island"), deck("Swamp")];
+        let replacement = vec![generated, deck("Swamp")];
         vector.set_training_decks(replacement.clone()).unwrap();
         assert_eq!(actual, vector.current_player_configs());
         vector

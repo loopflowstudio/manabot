@@ -54,6 +54,10 @@ All deletion targets are complete; none remain:
 - `Game::bottom_in_random_order`: its sole caller now owns shuffle and
   placement together, sharing placement with a forced singleton. Both
   LookAndSelect exits reuse `continue_resolution` for suspension/resumption.
+- Admission tests using Accumulate Wisdom, Cat-Gator or Rallier as rejection
+  fixtures: replace them with the Ally token while preserving error assertions,
+  unchanged roots after failed replacement, and positive admission of those
+  cards. Existing unknown-card and rules-fixture rejection stays covered.
 
 ## Implementation outcome — 2026-11-03
 
@@ -117,10 +121,14 @@ Full acceptance remains open:
   suites, world-admission/monitor checks in AGENTS.md, and frontend
   generation/check/build plus focused browser interactions from
   `docs/development.md`. Pre-sync proof is not a substitute for these checks.
-- Engine Budget CI compares against the delivered `1616b210f` reference from
-  run 41699683808 with the unchanged 10% tolerance. Changed rules may move its
-  digest; any reference adoption requires this PR's own artifact and a reason,
-  not MTG-238's measurement or a local cross-machine timing comparison.
+- Engine Budget now adopts PR #415's `ea316ff14` artifact from run 41711692234
+  with the unchanged 10% tolerance. Explicit Accumulate Wisdom ordering and
+  Rallier/Suki library power evaluation reach the unchanged curated decks and
+  search rollouts. The old reference reproduced its digests; the candidate's
+  three search digests, step digest and count changed. Same-run timings passed
+  (5.280 → 4.986 s worst reply, 177.796 → 171.233 s total, 12874.6 → 12891.2
+  steps/s); this is a rules-reference update, not equivalent-gameplay speedup
+  evidence. Gate/CI still owns the repaired-head comparison.
 - Demo owns the final real-path walkthrough and human interaction judgment;
   the headless reconnect/shared-Command proof is available. Publication and
   delivery remain with the selected Graph. No product decision blocks these
@@ -140,7 +148,12 @@ ordering and Suki native/Python/text parity tests and Ruff passed. Exact
 commands are retained at `72e29f5de:scratch/mtg-239-complete-five-defined.md`;
 these focused results do not replace the gate above.
 
-Check result (reconciliation): `git diff --check` — passed; source inspection confirms the exclusion API/list/branch are absent and token/fixture rejection remains; no runtime code changed or tests repeated.
+CI recovery (November 3, comment d35e6e94): run 41711692234 exposed three Rust
+and four training-deck assertions that still rejected playable cards. Their
+fixtures now use the Ally token; positive checks admit all five cards, and
+checkpoint/replacement paths admit Accumulate Wisdom and Cat-Gator. Runtime
+rules and frozen evidence are unchanged. Current checks and remaining owners
+are recorded in [ci-recovery.md](ci-recovery.md).
 
 ## Accepted interaction and review limits — 2026-11-03
 
