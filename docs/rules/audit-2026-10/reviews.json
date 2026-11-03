@@ -6,7 +6,7 @@
       "inspected_owners": [
         "managym/src/flow/game.rs",
         "managym/state/src/card.rs",
-        "managym/src/cardsets/"
+        "managym/cards/src/"
       ],
       "evidence": [],
       "gap": "No independent complete-rules oracle. Unknown means unresolved, never assumed conformant.",
@@ -143,7 +143,7 @@
       "scope": "Definition data rather than physical printed cards; some parts are display-only.",
       "inspected_owners": [
         "managym/state/src/card.rs:CardDefinition",
-        "managym/src/cardsets/",
+        "managym/cards/src/",
         "managym/tests/fixtures/scryfall_cards.json"
       ],
       "evidence": [
