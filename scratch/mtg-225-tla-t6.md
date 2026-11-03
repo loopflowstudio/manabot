@@ -1,7 +1,8 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling — plan
 
-Status (2026-11-02): all 16 cards (25 allocated faces) and the one-catalog
-refactor are implemented on HEAD; no PR yet. Brief: Task MTG-225, allocation
+Status (2026-11-02): all 16 cards (25 allocated faces), the one-catalog
+refactor and the learner-cost repair (concept review below) are implemented on
+HEAD; no PR yet. Brief: Task MTG-225, allocation
 `planned_pr: T6`; direction in [t6-direction.md](t6-direction.md). One cohesive
 PR, then stop for Jack Heart's review.
 
@@ -94,10 +95,10 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 - MTG-235 #412 (effect vocabulary, 66 files) is still open and overlaps T6. No
   order between it and T6 is recorded.
 
-## Concept review (headless, 2026-11-02): learner cost and vocabulary labels — done
+## Learner cost and vocabulary labels (headless concept review, 2026-11-02) — done
 
-Both directions are implemented; neither changes rules, observations or frozen
-evidence.
+Both directions are implemented (`321efd76d`, `5e414d0c5`); neither changes
+rules, observations or frozen evidence.
 
 1. **Learning encodes only referenced definitions.** With autograd on,
    `ActorCritic._referenced_definitions` collects every catalog row a batch can
@@ -122,10 +123,6 @@ evidence.
    `elemental-world-v2` label for the `elemental-uniform` curriculum (a frozen
    regime check, left as it is).
 
-Still blocked on delivery order, not design: #414 (MTG-238) is open, so the
-crate move/Keywords integration and the w17 re-record wait for it. #412
-(MTG-235) is open with no recorded order against T6.
-
 ## Decisions for Jack Heart's review
 
 - **Retained authored-pack checkpoints.** Setup-bound checkpoints of authored
@@ -141,19 +138,7 @@ crate move/Keywords integration and the w17 re-record wait for it. #412
 
 ## Check
 
-2026-11-02 compress (one `definitions` path, `referenced_rows` returns unique rows): `pytest tests/model/test_inference.py tests/model/test_policy_catalog.py tests/semantic/test_current_content.py` 39 passed; worker test 5.4 s.
-2026-11-02, referenced encoding and label rename: `pytest tests/model/test_inference.py
-tests/model/test_recent_events.py tests/model/test_policy_catalog.py
-tests/semantic/test_current_content.py` plus the worker test: 49 passed, 1 skipped
-(extension not rebuilt). 2026-11-02, after merging main `a1a02a76f`: `cargo build --release --examples` passes; `grep 'pub content' managym/src/flow/game.rs` is empty. Earlier, `GameState.content` removed: debug `cargo test --lib --tests
---no-fail-fast` fails only `checked_semantic_conformance_evidence_reproduces`
-(re-record), `--test cards` 526 passed, clippy clean; catalog digest
-`02ac498d…2634`, length 355 and manifest hash `b8945b35…7a3c` match the
-pre-change commit `a44219dc1`. After the compress pass: same debug result
-(only that test fails), clippy clean, digest `02ac498d…2634` and length 355
-unchanged; `pytest tests/model/test_world.py tests/model/test_policy_catalog.py
-tests/test_package_boundaries.py` 31 passed (extension not rebuilt; gate owns it). pytest and Academy UI have not run since the sync
-onto main (last broad pytest before it: 22 Academy digest/identity failures).
+2026-11-02 at `5e414d0c5`: `pytest tests/model/test_inference.py tests/model/test_policy_catalog.py tests/semantic/test_current_content.py` 39 passed, worker test 5.4 s; Rust last checked at the compress pass (debug `cargo test --lib --tests` fails only `checked_semantic_conformance_evidence_reproduces`, `--test cards` 526 passed, clippy clean, digest `02ac498d…2634`, length 355); broad pytest and Academy UI not run since the main sync (gate, after #414).
 
 ## One catalog (steer b222da8f)
 
@@ -187,14 +172,15 @@ later card merges moved the digest as intended: on HEAD it is `02ac498d…2634`,
 and `CARD_DEFINITION_COUNT` = 355 = catalog length (330 eligible, 25 not deck
 entries, including 8 back faces).
 
-Measured cost (addressed by concept-review direction 1 above): authored vocabulary names now bind the
+Measured cost before the learner repair above: authored vocabulary names now bind the
 345-row world catalog. `SemanticCardEncoder("ur-lessons-vs-gw-allies", 64)`
 goes from 31 definitions / 3,598 expanded tokens / 4.9 ms per `definitions()` to
 345 / 51,909 / 45.3 ms (`elemental-world-v2` was 100 / 14,097 / 20.5 ms). The
 Etude worker fixture regime (`ataraxos_move_scalar`, hidden 8, 2 updates) takes
 5.07 s at `2c1ba169f` and 31.29 s on this branch, 26 s of it in `backward`.
 `test_etude_job.py::test_worker_runs_real_learner_and_reports_admitted_policy`
-therefore exceeds its 30 s budget and fails; left failing, not retuned.
+exceeded its 30 s budget; with referenced-row encoding it runs in 5.4 s,
+regime and limit unchanged.
 
 Re-record needed (not done; frozen evidence). Failure sets compared by running
 the same tests at `2c1ba169f`:
@@ -240,9 +226,9 @@ longer load (`checkpoint world/setup/input binding differs`, pinned by
 `test_retained_manifests_load_only_when_they_name_no_authored_pack`); their
 pack-sized encoder weights could not fit a world-sized encoder either, though no
 retained checkpoint file was tried. Manifests recording `pack_key: None` load
-through `current_binding_form`. `CURRENT_PACK_KEYS` stays as the names a recipe
-may give its vocabulary, all binding the world catalog; collapsing them to
-`world` would mean rewriting regimes and `execution.py`'s Elemental check.
+through `current_binding_form`. `FROZEN_VOCABULARY_LABELS` are the names older recipes
+gave their vocabulary, all binding the world catalog and accepted on read;
+fresh recipes write `world`.
 `MatchConfig.world` keeps a frozen regime's authored label and runs it like
 `None`. Curated manifests keep `semantic_pack_key`, resolved as a setup name.
 Public `register_card` stays for the content-sensitivity tests that extend a copy.
@@ -252,5 +238,7 @@ Public `register_card` stays for the content-sensitivity tests that extend a cop
 Wave memory stays read-only in this pass. Candidates once T6 lands:
 - One catalog (Jack Heart, 2026-11-02): authored setups are decklists; the "Shipped
   substrate" line on versioned packs and its per-pack identity need updating.
-- A vocabulary bound to the whole catalog has a real learner cost: 31 → 345
-  definitions took the worker fixture from 5 s to 31 s, mostly in `backward`.
+- A vocabulary bound to the whole catalog has a real learner cost (31 → 345
+  definitions took the worker fixture from 5 s to 31 s, mostly in `backward`);
+  encoding only the rows a batch references restores it. Keep inference on the
+  full cached table: the subset GRU is not bitwise equal to the full one.

@@ -48,5 +48,5 @@ Decision: the content-pack simplification is part of T6, not a separate Task.
 
 All target main, not T6 as first briefed: MTG-235 effect vocabulary (#412, open);
 MTG-236 derived state (#411, merged, in HEAD; its Task stays open on acceptance
-of absolute budgets); MTG-237 engine budget in CI (#413, open); MTG-238
-catalog-scale types (#414, open, merges before T6).
+of absolute budgets); MTG-237 engine budget in CI (#413, merged, in HEAD);
+MTG-238 catalog-scale types (#414, open, merges before T6).
