@@ -144,11 +144,16 @@ preserves accepted decisions, dated proof limits and source history.
   retaining a speedup requires a reason and the candidate's own CI artifact.
   Measure the durable PR head, not the ephemeral merge commit.
 - Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
-  indexed records and cache-carrying clones. MTG-237's synced candidate now
-  includes that engine, while its adopted reference predates it. The next
-  same-runner CI comparison measures that difference; older receipts cannot
-  establish a speedup or full-score equality for this synced engine. A kept
-  measured speedup moves the reference through its own artifact, with a reason.
+  indexed records and cache-carrying clones. Run 41555845634 (2026-11-03 UTC)
+  measured that engine at `4b5e9c0e4` against `88dc8c1ad` on one runner:
+  worst reply took 30.26% less time, total search 28.36% less and each step
+  36.65% less, with identical full-score/step digests and counts. Delegated
+  demo judgment on 2026-11-02 applied the retained-speedup rule; the production
+  reference now adopts that candidate's artifact with a reason and unchanged
+  10% tolerance. Retaining the older, slower reference would allow loss of
+  the optimization within the budget. This is curated native-workload evidence,
+  not an end-to-end training result or shipping approval; the earlier accepted
+  cost remains historical evidence.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.

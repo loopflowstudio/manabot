@@ -23,8 +23,9 @@ Headless decisions below are delegated judgment, not human statements.
   only comparison-failure transport has hosted proof.
 - Keep merged main `51fbacbbf`'s optimization. Run 41555845634 demonstrated
   30.26% less worst-reply time, 28.36% less total search time and 36.65% less
-  time per step, with matching digests/counts. Production adoption is complete;
-  publication and demo remain. The [design](mtg-237-engine-performance-budget.md)
+  time per step, with matching digests/counts. Production adoption and its
+  publication at `7cfd0f17e` are complete; PR text correction and demo verification
+  remain. The [design](mtg-237-engine-performance-budget.md)
   and [demo evidence](engine-budget-demo.md) own details.
 
 Inherited MTG-236 decisions (including deferred interning and quiet-machine

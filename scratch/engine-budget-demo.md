@@ -45,14 +45,22 @@ the earlier accepted-cost and T4/T5/T6 evidence remain. Direct reconciliation
 checked identity, every measurement, digests/counts, tolerance and deltas.
 No runtime, workflow, benchmark or threshold changed.
 
-**Remaining:** update PR #413's current-reference paragraph from the accepted
-cost to this retained speedup, publish, then verify the new same-engine
-comparison at demo. No separate measurement dispatch. Main-push verification
-remains post-merge; there is no shipping approval.
+**Remaining:** PR #413 publishes adoption/docs at `7cfd0f17e`, but its
+description still names the previous reference and says this speedup is pending.
+Update that description and publish final reconciliation edits. Run
+[41558082651](https://github.com/loopflowstudio/manabot/actions/runs/41558082651)
+is already measuring that head against the adopted reference; Engine Budget
+and broader suites were in progress at reconciliation on 2026-11-02. Demo owns
+result and artifact verification. No separate measurement dispatch. Main-push
+verification remains post-merge; there is no shipping approval.
 
 Evidence in `.cache/engine-budget-demo/pass-3/`: `pr-head/` (artifact),
 `pr-head.log`, `comparison.txt`, `record.txt`, `adopted-baseline.json`,
 `verified-result.json`, `adoption-check.json`, `pr.json`, `checks.json`.
+The retained `adoption-check.json` describes pass 2's old reference, not pass 3
+adoption. Reconciliation checked the production baseline directly against
+`pr-head/measurement.json` and both candidate JSONL files: exact identity and
+measurement equality, with tolerance 0.1. The stale receipt is retained as-is.
 At the retained snapshot Engine Budget, debug Rust, Python, conformance,
 Academy, clean-machine Play, long integration and package/install checks passed;
 main integration was running and Tests Result pending. Do not treat that

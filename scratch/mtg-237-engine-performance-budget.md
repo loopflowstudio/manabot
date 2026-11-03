@@ -37,11 +37,11 @@ The development guide owns the maintainer procedure and historical T4/T5/T6
 measurements. The [demo record](engine-budget-demo.md) owns hosted results,
 artifact paths, failure evidence and proof limits.
 
-## Delete — do not maintain
+## Completed simplification
 
 No remaining code deletion targets. Removed the winner/simulation-only digest
-in `e5615edcc` and implicit Bash execution in `79c623428`; keep the full-score
-and pipefail paths with their regression coverage. The Clean-machine Play
+in `e5615edcc` and implicit Bash execution in `79c623428`; the full-score
+and pipefail paths have regression coverage. The Clean-machine Play
 120 s wait remains a launch proof, not an engine latency budget.
 
 Working notes retain current decisions and evidence summaries rather than
@@ -77,6 +77,22 @@ Concept review at `9452c2115` found no open product choice under these
 interpretations. The original cross-run timings, incomplete digest and
 false-green `tee` pipeline remain counterexamples; their repairs stand.
 
+Headless concept review on 2026-11-02, after the current reconciliation:
+**nothing to change and no open product choice** under the recorded
+interpretations. The maintainer's normal path is a PR check with separate
+timing and correctness rows. On an unexplained failure, investigate or rerun;
+on a deliberate reference move, download the candidate and use
+`record --reason`, then review the committed baseline diff. This preserves
+the measurement identity and tolerance while replacing the reference and its
+measurements. If reference compilation fails, the candidate recording survives
+for that same adoption path. `Run`, `Baseline` and CI execution already express
+these responsibilities without another approval object or persistent lifecycle.
+The retained speedup changes the reference, not this interaction or model.
+No implementation direction follows from this review. The next proof remains
+the published head's hosted comparison and artifact verification at demo;
+PR description correction remains publication work. This conclusion grants
+neither human acceptance of the interpretations nor shipping approval.
+
 ## Current implementation and remaining work
 
 The production baseline now adopts run **41555845634**, candidate
@@ -90,17 +106,28 @@ artifact identity and every measurement were reconciled. Current-reference
 docs reflect this adoption and retain the earlier accepted-cost evidence.
 No runtime, benchmark or workflow change is needed for this iteration.
 
-Publication next updates PR #413's current-reference paragraph to the retained
-speedup, preserves older evidence, and publishes. Demo verifies the resulting
-same-engine comparison. Gate owns affected suites; main-push verification is
-post-merge. Hosted reference-build failure has only a controlled local proof;
-failed-job transport is proven after hosted comparison failure.
+Reconciliation on 2026-11-02 confirmed the production baseline exactly matches
+the downloaded candidate artifact, including identity and every measurement.
+Wave memory now reflects this measured result. Origin main remains `51fbacbbf`;
+the engine, benchmarks, comparator, workflow and focused tests are unchanged
+since measured candidate `4b5e9c0e4`.
+
+PR #413 already publishes head `7cfd0f17e` containing the adoption and docs.
+Its description still names the previous reference and says the speedup is
+pending. Remaining publication work is that description correction, preserving
+older evidence, and any final reconciliation edits. Run **41558082651** is
+already measuring this head against the adopted reference; Engine Budget and
+the broader suites were in progress at reconciliation. Demo owns the result
+and artifact verification. Main-push verification is post-merge. Hosted
+reference-build failure has only a controlled local proof; failed-job transport
+is proven after hosted comparison failure.
 
 Jack Heart's steer authorizes publication and the interactive demo boundary,
-not shipping. Delegated headless judgments are not new human feedback. Do not
-merge or close the Task. Later Graph steps own publication/demo; compress
-returns this diff without replaying them.
+not shipping. Delegated headless judgments are not new human feedback. Merge
+and Task completion remain outside the accepted scope. Same-runner and native
+throughput interpretations remain subject to PR review; no new product choice
+arose from this reconciliation.
 
-Check: `git diff --check` and `lf context` pass after curation; reuse the
-unchanged implementation's 65 focused tests from demo. No behavior changed;
-gate/publication/demo own subsequent checks.
+Check: `uv run --no-project python` artifact reconciliation, `git diff --check`
+and `lf context` pass; unchanged implementation retains 65 focused test passes;
+hosted run 41558082651 result/artifact verification remains with demo.
