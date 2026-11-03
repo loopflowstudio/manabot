@@ -13,6 +13,13 @@ results below. Local publication checks passed; CI, source freeze and a new
 capped training/evaluation attempt remain outstanding. No GPU learner update
 has yet been observed.
 
+Publication then integrated [PR #415](https://github.com/loopflowstudio/manabot/pull/415),
+whose five-card repairs change the native digest. The active prospective runner
+is now [v3](protocols/tla-trophy-213-v3.md), preserving the same 134 decks,
+v6/256 input and scientific/budget settings. V2 protocol bytes and its validated
+source remain unchanged. The local validation counts below describe the
+pre-sync v2 source; combined-runtime validation is recorded separately.
+
 ## Paid attempts (2026-11-03)
 
 | Run | Hardware | Result | Estimated cost |

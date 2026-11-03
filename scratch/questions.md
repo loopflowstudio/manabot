@@ -1,5 +1,13 @@
 # MTG-213 — decisions and assumptions (2026-11-03)
 
+Publication sync assumption: main advanced to PR #415 (`c823c9c8f`), whose five
+card repairs change the native world digest and admission. Preserve v1/v2
+protocol and regime bytes; use a new prospective **v3** identity for the merged
+runtime, with fresh initialization and the unchanged 134-entry population,
+v6/256 input, learning settings, budget and evaluation schedule. Do not expand
+the corpus just because admission expanded. Historical v2 code and validation
+remain at published commit `d655d37996d2702cd5fee6ac37db11d855e87640`.
+
 Jack Heart's comment 1540e0ad-743f-412b-ad5c-5cb55b03a0db supersedes the deferred
 Task brief: start preliminary fixed-corpus TLA self-play and evaluation now,
 rejecting whole unsupported decks. Comment 6434b4dd-5329-4904-9952-6493c9968b52

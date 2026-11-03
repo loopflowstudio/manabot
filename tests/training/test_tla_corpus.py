@@ -40,7 +40,7 @@ def _event(event: str, unsupported: str = "", wins: int = 7) -> list[dict[str, s
             "deck_Plains": "20" if n <= 3 else "19",
             "deck_Avatar Enthusiasts": "1" if n <= 3 else "2",
             "sideboard_Island": "1",
-            "sideboard_Accumulate Wisdom": str(int(unsupported == "sideboard")),
+            "sideboard_Ally": str(int(unsupported == "sideboard")),
             "deck_Not A Card": str(int(unsupported == "main")),
         }
         for n in range(1, wins + 1)
@@ -66,7 +66,7 @@ def test_trophies_freeze_final_build_and_whole_deck_admission(tmp_path: Path) ->
         "lea.plains",
         "lea.island",
     }
-    assert "1 Accumulate Wisdom" in corpus.trophies[1].decklist.source
+    assert "1 Ally" in corpus.trophies[1].decklist.source
     assert {issue.code for issue in corpus.trophies[1].decklist.issues} == {
         "unsupported"
     }
