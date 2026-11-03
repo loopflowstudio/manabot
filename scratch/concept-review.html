@@ -3,120 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-238 concept review: catalog-scale types</title>
+<title>MTG-238 · Concept review after T5 integration</title>
 <style>
-  :root {
-    --fg: #1d1a16; --bg: #fbf8f2; --muted: #6b645a; --rule: #d9d2c5;
-    --prop: #7a4a00; --prop-bg: #fff3dc; --del: #8a2a2a; --del-bg: #fbe9e7;
-    --code-bg: #f1ece2;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --fg: #e8e2d6; --bg: #17150f; --muted: #a39a8b; --rule: #3a352c;
-      --prop: #f0b45a; --prop-bg: #2b2210; --del: #f08c7a; --del-bg: #2d1a17;
-      --code-bg: #24211a;
-    }
-  }
-  html { background: var(--bg); color: var(--fg); }
-  body { max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem 5rem;
-    font: 17px/1.55 Georgia, "Iowan Old Style", serif; }
-  header { color: var(--muted); font-size: 0.9rem; border-bottom: 1px solid var(--rule);
-    padding-bottom: 1rem; margin-bottom: 2rem; }
-  header p { margin: 0.2rem 0; }
-  h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 0.6rem; font-weight: normal; }
-  h2 { font-size: 1.2rem; margin: 2.6rem 0 0.8rem; font-weight: normal;
-    border-top: 1px solid var(--rule); padding-top: 1.4rem; }
-  h3 { font-size: 1rem; margin: 1.6rem 0 0.4rem; font-weight: bold; }
-  p, li { margin: 0.5rem 0; }
-  ul, ol { padding-left: 1.4rem; }
-  code, pre { font: 0.86em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  code { background: var(--code-bg); padding: 0 0.25em; border-radius: 3px; }
-  pre { background: var(--code-bg); padding: 0.8rem 1rem; overflow-x: auto;
-    border-radius: 4px; margin: 0.6rem 0 1rem; }
-  pre code { background: none; padding: 0; }
-  .decision { border-left: 3px solid var(--prop); padding: 0.4rem 1rem; margin: 1.2rem 0; }
-  .proposed { background: var(--prop-bg); border-left: 3px solid var(--prop);
-    padding: 0.4rem 1rem; margin: 1rem 0; }
-  .proposed::before, .deleted::before { display: block; font-size: 0.75rem; letter-spacing: 0.06em;
-    text-transform: uppercase; color: var(--prop); margin-bottom: 0.3rem; }
-  .proposed::before { content: "Proposed — next implement"; }
-  .deleted { background: var(--del-bg); border-left: 3px solid var(--del);
-    padding: 0.4rem 1rem; margin: 1rem 0; }
-  .deleted::before { content: "Deleted by the proposal"; color: var(--del); }
-  .existing { border-left: 3px solid var(--rule); padding: 0.4rem 1rem; margin: 1rem 0; }
-  .existing::before { content: "On the branch today"; display: block; font-size: 0.75rem;
-    letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; }
-  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0 1.2rem; font-size: 0.95rem; }
-  th, td { text-align: left; vertical-align: top; padding: 0.45rem 0.6rem 0.45rem 0;
-    border-bottom: 1px solid var(--rule); }
-  th { font-weight: normal; color: var(--muted); font-size: 0.85rem; }
-  td.p { color: var(--prop); }
-  .muted { color: var(--muted); }
-  @media (max-width: 40rem) { body { font-size: 16px; } table { font-size: 0.88rem; } }
+:root { color-scheme: light dark; --bg:#fbf8f2; --fg:#242019; --muted:#665f54; --rule:#d7cdbc; --code:#eee7db; --accent:#805318; }
+@media(prefers-color-scheme:dark) { :root { --bg:#191711; --fg:#ece5d8; --muted:#bbb09d; --rule:#514737; --code:#2d281f; --accent:#e4b568; } }
+body { max-width:46rem; margin:auto; padding:2rem 1.2rem 4rem; background:var(--bg); color:var(--fg); font:17px/1.6 Georgia,serif; }
+header { color:var(--muted); font-size:.85rem; border-bottom:1px solid var(--rule); }
+h1 { font-size:1.8rem; line-height:1.2; font-weight:normal; margin-top:2rem; }
+h2 { font-size:1.2rem; margin-top:2.5rem; font-weight:normal; }
+code { font:.85em/1.5 ui-monospace,monospace; background:var(--code); padding:.1em .2em; overflow-wrap:anywhere; }
+.finding { border-left:3px solid var(--accent); padding-left:1rem; }
+dt { font-weight:bold; margin-top:1.4rem; } dd { margin:.4rem 0; }
 </style>
 </head>
 <body>
 <header>
-  <p>Task MTG-238 · Catalog-scale types · step: concept-review (Graph, headless, second pass) · 2026-11-02</p>
-  <p>Built from <code>scratch/mtg-238-catalog-scale-types.md</code>, <code>scratch/questions.md</code>,
-     <code>managym/state/src/card.rs</code>, <code>managym/src/flow/statics.rs</code>,
-     <code>content/semantic/current/learning_schema.json</code> and Jack Heart's steer of 2026-11-02.</p>
+<p>MTG-238 · concept-review · headless Graph step · 2026-11-02</p>
+<p>Built from <code>scratch/mtg-238-catalog-scale-types.md</code>, <code>scratch/questions.md</code>,
+<code>managym/state/src/card.rs</code>, <code>managym/state/src/permanent.rs</code>,
+<code>managym/src/flow/statics.rs</code>, <code>managym/src/flow/effects.rs</code>,
+<code>managym/cards/src/tla.rs</code>, <code>managym/cards/tests/cards/tla.rs</code>
+and Jack Heart’s November 2 steering.</p>
 </header>
-
-<h1>The batch is on the branch. Nothing to change and no open choice. The remaining work is the T6 sync.</h1>
-
-<div class="decision">
-  <p><strong>Outcome.</strong> The proposals from the first pass (a conditional <code>TypeGrant</code>,
-  one <code>BecomeCreature</code> record, sparse <code>Keywords</code> serialization) were approved by Jack Heart and
-  implemented as one content-digest-moving change, and the corpora were re-recorded once. This pass
-  finds no mismatch between the accepted shape and the code.</p>
-</div>
-
-<h2>Actions → concepts → APIs (all on the branch)</h2>
-
-<table>
-  <tr><th>Actor and action</th><th>Concept</th><th>API</th></tr>
-  <tr><td>Card author gives a creature flying</td><td><code>Keyword</code>, <code>Keywords</code> bitset</td>
-      <td><code>Keywords::of(&amp;[Keyword::Flying])</code>, <code>.has(..)</code>; serialized as the sequence of present keywords</td></tr>
-  <tr><td>Earthbend or crew turns a permanent into a creature</td><td><code>BecomeCreature</code> continuous-effect record</td>
-      <td><code>Game::animate_permanent</code> (earthbend); crew records the same variant until end of turn</td></tr>
-  <tr><td>"is a creature as long as …" (War Balloon)</td><td>conditional <code>StaticTypeGrant</code></td>
-      <td><code>condition: Some(SourceCountersAtLeast { Fire, 3 })</code>, asked of the source</td></tr>
-  <tr><td>Engine adds a counter</td><td>sparse <code>Counters</code></td>
-      <td><code>Counters::change</code>; serialization unchanged</td></tr>
-  <tr><td>Card author edits one card</td><td><code>managym-cards</code> crate</td>
-      <td>the engine reaches cards only through <code>catalog()</code> / <code>incomplete()</code></td></tr>
-</table>
-
-<h2>Checked this pass</h2>
-<ul>
-  <li>No <code>CreatureWithCounters</code>, <code>BecomeArtifactCreature</code>, <code>ControlsMatching</code> or
-      <code>Permanent.animated</code> remains in the three crates. The remaining <code>is_animated</code> fields are
-      derived characteristics, not stored state.</li>
-  <li><code>impl Serialize for Keywords</code> is <code>collect_seq(self.iter())</code>. Each keyword serializes
-      as its variant token, so adding a keyword leaves other cards' tokens unchanged.</li>
-  <li>The steer said "learning schema 9 → 10". The schema was already 10 before this branch, and the keyword
-      list changes token values, not the schema's kinds, roles or dtypes. So no bump is needed, as recorded in
-      <code>scratch/questions.md</code>. This is a stale number in the steer, not a product choice.</li>
-</ul>
-
-<h2>Still to do, already decided</h2>
-<div class="existing">
-<ul>
-  <li>At the T6 sync: Phoenix Fleet Airship's <code>CreatureWithNamesakes(8)</code> becomes
-      <code>TypeGrant { This, [Creature], ControlsAtLeast { 8, namesake } }</code>, and T5/T6's keyword literals and
-      the <code>src/state</code> and <code>cardsets/tla.rs</code> edits cross the crate move. After that, the corpora are re-recorded once more.</li>
-  <li>Landing order (Jack Heart, 2026-11-02): hold until MTG-225 publishes, then sync. MTG-225 has no open PR
-      as of this pass.</li>
-  <li>Follow-on outside this Task: <code>PyKeywords</code> on the Python surface.</li>
-</ul>
-</div>
-
+<h1>No design change or open choice for MTG-238.</h1>
+<p class="finding">The approved batch is implemented after the T5 sync. Airship’s namesake
+conversion is here. The earlier T6 hold is superseded: publication is against main for review,
+with no auto-merge. Full validation of the combined tree remains outstanding.</p>
+<h2>Actions → concepts → APIs</h2>
+<dl>
+<dt>Author “a creature as long as…”</dt>
+<dd>Before: <code>CreatureWithCounters</code> and <code>CreatureWithNamesakes</code>.
+Accepted and implemented: one <code>StaticTypeGrant</code> with a source condition.
+War Balloon asks <code>SourceCountersAtLeast</code>; Airship asks
+<code>ControlsAtLeast { count: 8, predicate: namesake }</code>.</dd>
+<dt>Crew a Vehicle or earthbend a land</dt>
+<dd>Before: a dedicated artifact-creature variant and stored earthbend flag.
+Accepted and implemented: <code>BecomeCreature</code> records with explicit duration.
+Crew uses <code>Effect::until_end_of_turn</code>; <code>Game::animate_permanent</code>
+adds earthbend’s type, base P/T and haste records for one object incarnation.</dd>
+<dt>Give a card flying; put a fire counter on a permanent</dt>
+<dd>Before: boolean keyword fields and a dense counter array. Accepted and implemented:
+<code>Keywords::of(&amp;[Keyword::Flying])</code> and <code>Counters::change</code>.
+Definitions serialize present keywords; counters keep their ordered sparse-map encoding.
+Evergreen observation columns stay stable.</dd>
+<dt>Edit and test a card</dt>
+<dd>Before: set files inside the engine. Accepted and implemented:
+<code>managym-cards → managym-state</code>, with the engine consuming <code>catalog()</code>.
+Card tests live beside sets and share engine scenario helpers.</dd>
+</dl>
+<h2>One play, loss of the condition, recovery</h2>
+<p>Seven Airships are not creatures from their static ability. The eighth makes all eight
+creatures through the same native characteristics the observation reads. An opponent’s
+Airship does not count. Losing an Airship removes that conditional grant; a separate crew
+effect still lasts until end of turn. No extra player action or Academy-only state is introduced.</p>
+<p>An earthbent land that dies can return tapped as a new object. Its former animation
+records do not affect the returned land. This object boundary, crew expiry and conditional
+ability loss are counterexamples to a permanent animation flag. Existing scenarios exercise
+threshold loss, ability loss, crew expiry and land return; this pass inspected them without
+rerunning tests.</p>
+<h2>The consequential distinction: same play, changed identity</h2>
+<p class="finding">Counter storage alone preserves serialization. The whole batch does not
+preserve state digests: removing the animation field and allocating effect records changes
+identity. Definition keyword lists also change content and token values. Current w17 evidence
+must use hash contract 12 and the current content binding; frozen worlds, checkpoints and
+historical receipts stay retained.</p>
+<p>Learning schema 10 already exists on main. This batch changes definition-derived values,
+not its kinds, roles or dtypes. The prior “9 → 10” wording does not require another schema
+bump. The boolean Python observation surface remains the accepted boundary for current
+evergreen keywords.</p>
+<h2>Next proof</h2>
+<p>The working design lists full combined-tree Rust debug/release, clippy, rebuilt-extension
+Python, arena-admission and focused Academy checks. Prior focused results and regenerated
+evidence are retained; pre-sync broad green results do not establish combined-tree correctness.
+This review changes no implementation and makes no publication or merge decision.</p>
 <h2>Questions</h2>
-<ol>
-  <li>None open.</li>
-</ol>
-
-<p class="muted">Written last, after <code>scratch/mtg-238-catalog-scale-types.md</code>.</p>
+<ol><li>No open product question within MTG-238. The separate printed-P/T protocol choice
+and future non-evergreen Python API remain outside this batch.</li></ol>
+<p>Outcome for loop-or-next: nothing to change and no open choice.</p>
 </body>
 </html>

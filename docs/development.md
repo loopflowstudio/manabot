@@ -34,7 +34,8 @@ Polish and validate only the current branch scope. **NEVER intentionally induce
 load for testing**; follow [TESTING.md](../TESTING.md) for resources and
 subprocesses, including benchmarks, debugging and demos.
 
-**Rust managym** (`managym/Cargo.toml`, `managym/src/**`):
+**Rust managym workspace** (`managym/Cargo.toml`, `managym/src/**`,
+`managym/state/**`, `managym/cards/**`):
 
 ```bash
 cd managym

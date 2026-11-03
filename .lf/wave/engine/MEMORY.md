@@ -158,13 +158,23 @@ preserves accepted decisions, dated proof limits and source history.
   serialization moves no digest; removing a serialized field moves the
   state-hash contract and re-records every corpus that embeds state digests
   (semantic-kernel, authored-match, both parity receipts, Academy fixtures).
-  Batch content-digest-moving changes: the `BecomeArtifactCreature` fold,
-  the keyword-list serialization and the count-to-condition rewrites moved
-  the content digest once, together.
-- Concurrent engine Tasks on one base (T6, MTG-235, MTG-236, MTG-238 on
-  `4c8324a59`) each rewrite the state types; a directory move in one forces
-  the rest across it. Sequence structural moves and vocabulary rewrites, or
-  publish the move first so the others rebase once.
+  Jack Heart approved batching the `BecomeArtifactCreature` fold,
+  keyword-list serialization and count-to-condition rewrites on 2026-11-02.
+  Learning schema 10 already existed on main; definition-derived token values
+  change without changing its kinds, roles or dtypes. Observation `KeywordData`
+  remains a boolean surface distinct from sparse definition serialization.
+- Jack Heart selected MTG-238 first on 2026-11-02, superseding the T6 hold
+  and stacking prerequisite: publish against main for review, no auto-merge;
+  T6 integrates the crate move afterward. Main's T5 sync supplied Airship's
+  namesake conversion. Source-relative names read layers 1–3 without asking
+  the static index; a conditional type grant can be evaluated during index
+  construction, so recursive characteristic reads are unsafe there.
+- Concurrent engine vocabulary changes cross structural crate moves. Source
+  identity for parity evidence must include the new rules and card crates.
+  An unchanged Command tape/game outcome does not imply unchanged object ids:
+  earthbend's continuous-effect records allocate ids. The combined T5/catalog
+  tree has focused proof and regenerated open w17 evidence; broad pre-sync
+  green results do not establish post-sync correctness.
 
 ## Architecture convergence (accepted 2026-07-17)
 

@@ -8223,7 +8223,10 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
     assert!(!observed(&s, rival).is_animated);
     until_end_of_turn(&mut s, fleet[0], Modification::LoseAllAbilities);
     assert!(!observed(&s, fleet[0]).is_animated);
-    assert!(observed(&s, fleet[1]).is_animated, "ability loss keeps the name");
+    assert!(
+        observed(&s, fleet[1]).is_animated,
+        "ability loss keeps the name"
+    );
     let eighth = card_of(&s, fleet[7]);
     s.game_mut().move_card(eighth, ZoneType::Graveyard);
     assert!(fleet[..7].iter().all(|id| !observed(&s, *id).is_animated));

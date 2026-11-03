@@ -6,13 +6,51 @@ use rand_chacha::ChaCha8Rng;
 use managym::{
     cards::content_pack::ContentPack,
     state::{
-        card::{CardDefId, CardDefinition},
+        card::{CardDefId, CardDefinition, Keyword, Keywords},
         game_object::{CardId, ObjectId, PlayerId},
+        permanent::{CounterKind, Counters},
         stack_object::{SpellOnStack, StackObject},
         zone::ZoneType,
     },
     Game, MATCH_STATE_HASH_VERSION,
 };
+
+#[test]
+fn sparse_counters_preserve_ordered_serialization_across_spill_and_removal() {
+    let mut counters = Counters::default();
+    // Insert out of order and exceed the two inline entries. Canonical bytes
+    // must match the previous dense representation, independently of storage.
+    counters.change(CounterKind::Fire, 3);
+    counters.change(CounterKind::Stun, 2);
+    counters.change(CounterKind::PlusOnePlusOne, 1);
+    assert_eq!(
+        serde_json::to_string(&counters).unwrap(),
+        r#"{"plus_one_plus_one":1,"stun":2,"fire":3}"#
+    );
+    let retained = counters.clone();
+    counters.change(CounterKind::Stun, -9);
+    assert_eq!(retained.get(CounterKind::Stun), 2);
+    assert_eq!(
+        serde_json::to_string(&counters).unwrap(),
+        r#"{"plus_one_plus_one":1,"fire":3}"#
+    );
+    counters.change(CounterKind::Fire, i32::MAX);
+    assert_eq!(counters.get(CounterKind::Fire), i32::MAX);
+    counters.change(CounterKind::Fire, i32::MIN);
+    counters.change(CounterKind::PlusOnePlusOne, -1);
+    assert!(counters.is_empty());
+    assert_eq!(serde_json::to_string(&counters).unwrap(), "{}");
+}
+
+#[test]
+fn keyword_serialization_contains_only_present_kinds_in_enum_order() {
+    let keywords = Keywords::of(&[Keyword::Haste, Keyword::Flying, Keyword::Haste]);
+    assert_eq!(
+        serde_json::to_string(&keywords).unwrap(),
+        r#"["flying","haste"]"#
+    );
+    assert_eq!(serde_json::to_string(&Keywords::default()).unwrap(), "[]");
+}
 
 fn interactive_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([

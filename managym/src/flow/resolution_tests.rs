@@ -362,7 +362,7 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
             game.resolve_top_of_stack();
             let characteristics = game.characteristics(land);
             assert!(characteristics.is_animated);
-            assert!(characteristics.is_creature);
+            assert!(characteristics.is_creature());
             assert_eq!(characteristics.pt(), (3, 3));
             assert!(characteristics.keywords.has(Keyword::Haste));
             let permanent = game.state.permanents[land].as_ref().unwrap();

@@ -1,39 +1,24 @@
 # MTG-238: catalog-scale types
 
-## Current direction — 2026-11-02, publication order changed
+## Accepted outcome and direction — 2026-11-02
 
-Jack Heart directed MTG-238 to go first. This supersedes the earlier hold for
-MTG-225 and the stacking prerequisite below. Sync onto main, complete the
-approved batch, validate and publish one PR for review without waiting for T6.
-Main now includes T5 (`a8abf01b1`), so the Phoenix Fleet Airship namesakes
-conversion belongs here. T6 will integrate the crate move afterward.
+Sparse counters, enum-backed keywords, separate rules/card crates and generic
+continuous effects and counted conditions replace catalog-sized fields and
+card-shaped predicates. Jack Heart approved the conditional TypeGrant,
+BecomeCreature fold and sparse keyword serialization as one content-digest
+batch on 2026-11-02.
 
-A read of `lf sync --manual` found overlapping T5 edits in the moved rules
-types, static characteristics, observations and regenerated w17 fixtures.
-That exploratory merge was aborted without discarding branch work; the Task
-Graph resumes at sync to resolve it. Preserve T5's effective-characteristics,
-copy and Nonlegendary behavior while applying the new keyword and type-grant
-APIs. Regenerate current-world evidence for the combined tree and run the
-required debug/release, extension, Python and arena-admission checks. Prior
-green results below predate this integration. Stop for review after publication;
-this direction does not authorize auto-merge.
+Jack Heart's later decisions that day (comments `f3e681f7` and `84c1ad84`)
+supersede the T6 dependency hold and effect-vocabulary stacking prerequisite:
+MTG-238 publishes against main first, as one PR for review, without auto-merge.
+T6 integrates the crate move afterward. Main includes T5, so Airship's namesake
+conversion belongs here. No product decision remains for this batch.
 
-Sync resolution (2026-11-02): main's T5 copy effects, Nonlegendary and layered
-observations are reconciled across the crate move. Airship now uses the
-conditional namesake TypeGrant; incoming keyword literals and animation
-records use the catalog APIs. The rebuilt extension regenerated all current
-w17 corpora, Academy fixtures and belief pins. Both parents retain the same
-142-Command tape and game outcome; main's object ids move because earthbend
-now allocates continuous-effect records. Parity source identity also covers
-the moved state and card crates. Full publication checks remain for Gate;
-the owned sync finishes with focused reconciliation tests and no direct push.
-
-Task: sparse counters, keyword enum, card-set crate, animation as a record,
-`CreatureWithNamesakes` as a counted predicate.
-Base: main `29660d00c` (T4 plus the ARCHITECTURE owners rename, merged in
-`ab9a5db94`). The Task says to start after MTG-225 (T6) publishes and to
-stack on the effect-vocabulary Task (MTG-235) if both are open; MTG-225 had no
-PR at any pass on 2026-11-02, so this branch sits on main (see Status).
+The sync onto main `a8abf01b1` is complete at merge `469b7eeba`, followed by
+observation-test fixes in `3ed5b5baa`. T5's copy effects, Nonlegendary and
+layered battlefield characteristics are preserved. The original plan and
+superseded publication hold are retained at
+`3ed5b5baa:scratch/mtg-238-catalog-scale-types.md`.
 
 ## Design (accepted shape, 2026-11-02; batch carried the same day)
 
@@ -46,7 +31,7 @@ PR at any pass on 2026-11-02, so this branch sits on main (see Status).
    `Keywords` as a `u64` bitset: `has`, `insert`, `union`, `without`,
    `names`, `iter`, `Keywords::of(&[Keyword])` (no `remove`; `without`
    is the only subtraction, as the engine's layer-6 loss needs). Serialized
-   as the sequence of keywords present in enum order (the `Counters` shape):
+   as the sequence of keywords present in enum order (absent kinds omitted):
    a definition's tokens carry only its keywords and a new keyword changes no
    other card's encoding. Evergreen keywords keep their card/permanent tensor
    columns through `KeywordData`; the observability guard matches `Keyword`
@@ -72,95 +57,115 @@ PR at any pass on 2026-11-02, so this branch sits on main (see Status).
    static index, which asks it while being built. A type grant's condition is
    asked of its source (`source_condition_holds`) and predicate matching asks
    animation only for type-reading predicates, so a counter or name question
-   never recurses.
+   never recurses. Phoenix Fleet Airship uses the same `TypeGrant` with
+   `ControlsAtLeast { count: 8, predicate: namesake }`; names compare the
+   source and candidate after layers 1–3 without asking the static index.
 5. **Crates** — `managym/Cargo.toml` is a workspace root (package +
    members). `managym-state` (`managym/state/`) holds the former `src/state/`
-   minus `hash.rs`; the engine re-exports it as `managym::state` and keeps
-   `state::hash`. `managym-cards` (`managym/cards/`) holds the set modules and
+   minus `hash.rs`, `player.rs` and `deck.rs`; the engine re-exports it as
+   `managym::state` and keeps `state::hash`. `managym-cards` (`managym/cards/`) holds the set modules and
    `catalog()` / `incomplete()`; the engine reaches cards only through those.
    `tests/cards` lives in `managym/cards/tests/` (engine as dev-dependency;
    `tests/support` mounted by path so each primitive stays defined once).
    `cargo test` in `managym/` runs all three through `default-members`.
 
-The content digest moved once, with items 2–4 together (2026-11-02):
-semantic-kernel evidence, the authored-match receipt, both parity receipts,
-the Academy fixtures and the belief v3 receipt pins were re-recorded with the
-same Commands and decision revisions; the learning schema stays 10 (tokens
-derive from the definitions).
+## Implemented behavior and evidence
 
-## Historical status (realign 2026-11-02, after compress)
+All five design items are implemented, including Airship's namesake condition
+and the removal of CreatureWithNamesakes and its dedicated readers. Incoming
+T5 keyword literals and animation records use the catalog APIs. The engine's
+Python-bound player/deck types remain in `src/state/`; shared scenario helpers
+remain in `managym/tests/support/` and card tests mount them by path.
 
-On the branch: items 1–5, WORLDS.md / managym README / AGENTS.md /
-conformance README records, the re-recorded corpora,
-`scripts/refresh_academy_fixtures.py`, the rebuilt extension.
+Counter serialization alone is byte-compatible. Removing `Permanent.animated`
+changes canonical state encoding; effect-record allocation also changes main's
+object ids. The accepted batch therefore uses hash contract 12 and regenerated
+open-world w17 evidence. Frozen worlds, checkpoints and historical receipts
+remain unchanged. Learning schema 10 already existed on main and remains 10:
+keyword lists change definition-derived token values, not kinds, roles or dtypes.
 
-Remaining, all at the sync onto T6. MTG-225 still has no PR; its branch has
-merged T5 (MTG-224, PR #405 onto main), which is where the Airship and the
-`Keywords` literals below come from, so one sync takes both:
+The combined-tree extension was rebuilt and installed atomically. Current w17
+semantic-kernel evidence (14 cases, 3,396 Commands, 15 Phase rows), authored
+match/parity (142 Commands, 858 viewer checks), public-commitment parity
+(69 commitments, no gaps), Academy fixtures and belief v3 pins were regenerated.
+Both parents retain the same authored Command tape and game outcome; the
+branch terminal digest is retained, while main's allocated object ids move.
+Parity source identity now includes the state and card crates.
 
-- Phoenix Fleet Airship: T5's `StaticAbility::CreatureWithNamesakes(u32)`
-  (its `card.rs`, `statics.rs` reader, `Card::creature_with_namesakes`,
-  `Game::creature_with_namesakes` and the one `tla.rs` definition) becomes
-  `TypeGrant { This, [Creature], ControlsAtLeast { 8, namesake } }` with
-  `CardPredicate.namesake` (shares the source's name; no name enters the
-  vocabulary). The field arrives with its reader, not before.
-- Convert T5/T6's `Keywords { x: true, ..Default::default() }` literals and
-  `.keywords.x` reads to `Keywords::of(&[Keyword::X])` / `.has(Keyword::X)`.
-- Carry T5/T6's `src/state/*` and `src/cardsets/tla.rs` edits across the
-  directory move (`managym/state/src/`, `managym/cards/src/`). T6 adds a
-  `copy: Option<CopyEffect>` field to the hashed card encoding with
-  `skip_serializing_if`, so it needs no further hash-version change.
+Post-sync focused validation passed 15 debug Rust card/observability checks and
+11 Python navigation/parity/belief checks. The initial Rust compile found
+23 merged assertions applying `Keywords::has` to observation `KeywordData`;
+`3ed5b5baa` corrected them to the retained boolean observation fields, and the
+rerun passed. No runtime code changed after the extension/evidence rebuild.
+Earlier full debug/clippy and Python results (864 passed, 1 skipped) predate the
+T5 integration and do not establish broad correctness of the combined tree.
 
-Landing order (Jack Heart's steer, 2026-11-02): the batch is approved; hold
-until MTG-225 publishes, then sync and publish. MTG-235 (#412) and MTG-236
-(#411) are published onto the same base and both edit `managym/src/state/*`,
-so whichever lands first also crosses this branch's crate move at the sync.
-MTG-225 also has an unpublished `jack/mtg-225-t6-one-catalog` WIP
-(`c774d401e`) rewriting `cards/content_pack.rs`, `pool.rs`, `setups.rs`,
-`world.rs` and `python/bindings.rs`, which this branch also edits; if it joins
-T6 before publication, the sync resolves those files against it too.
+## Concept review — combined T5/catalog tree, 2026-11-02
 
-Concept review (2026-11-02, headless, after compress): the implemented
-change matches the accepted shape and Jack Heart's approved batch; nothing to
-change and no open product choice. The steer's "learning schema 9 -> 10" is
-already satisfied (the schema was 10 before this branch; the keyword list
-changes token values, not the schema's kinds, roles or dtypes). The remaining
-work is the T6 sync above, which needs MTG-225 to publish.
+Outcome: nothing to change and no open product choice within MTG-238. Jack
+Heart's accepted batch still fits the implementation after the main sync;
+there is no new implement direction. The earlier review page's T6 hold is
+superseded, not a remaining design dependency.
 
-pr-publish (2026-11-02, headless): not published. The graph reached
-pr-publish from loop-or-next, but the publication boundary is Jack Heart's
-steer (hold until MTG-225 publishes, then sync) and the Task directive (stack
-on the open effect-vocabulary Task); MTG-225 still had no PR (implement
-running, `pr: null`) and main was still `29660d00c`, so `lf sync` had nothing
-to merge and a PR now would be against main with content the T6 sync rewrites.
-Blocker returned: MTG-225 unpublished. No code changed since compress's green
-checks, so they were not rerun. When MTG-225 publishes: `lf sync` onto its
-branch, do the three sync items above, rerun the Checks, then `lf pr publish`.
+The concrete interaction remains one native decision surface: a player crews
+Airship through its offered ability, or its eighth namesake makes it a creature
+without an extra action. `TypeGrant.condition` derives the latter from current
+state; crew records `BecomeCreature` until end of turn. Dropping below eight
+removes the conditional grant, while a separately active crew effect survives.
+Earthbend uses the same effect lifecycle with object-bound indefinite records;
+leaving and returning creates a new incarnation, so old animation cannot leak
+onto the returned land. Threshold loss, ability loss, expiry and object return
+are the counterexamples that would invalidate a permanently stored animation
+flag or a browser-derived creature state. Existing card scenarios cover the
+threshold, ability-loss, crew-expiry and land-return paths; this review read
+those scenarios and the implementation, and did not rerun them.
 
-Follow-on outside this Task: `PyKeywords` (`python/bindings.rs`) is still a
-14-bool struct on the Python surface (`.keywords.flying` in Academy and text
-observation); its sparse form is a Python API migration for the first
-non-evergreen keyword.
+The consequential distinction is retained: sparse counter serialization alone
+preserves bytes, but this combined batch changes definition tokens and state
+identity. Recovery must bind current evidence to the new content/hash contract
+while retaining frozen evidence; an unchanged Command tape is not an unchanged
+digest. Usage guidance already describes the card/rules crate ownership and
+native authority correctly. No further usage or skill changes are needed.
+The next proof remains the combined-tree gate below, including T5 behavior and
+the rebuilt-extension consumers; publication remains separate from merge.
 
-## Delete — do not maintain
+## Publication validation — 2026-11-02
 
-Done: `Permanent.animated` and its readers, `managym/src/cardsets/` and
-`managym/tests/cards/` (moved), the `Keywords` struct fields and tables,
-`StaticAbility::CreatureWithCounters`, `CounterThreshold`,
-`Card::creature_with_counters`, `Permanent::creature_by_counters`,
-`Modification::BecomeArtifactCreature`, `Game::becomes_artifact_creature`,
-`Condition::ControlsMatching`, the struct-form `Serialize for Keywords`.
-At the T6 sync: `CreatureWithNamesakes`, `Card::creature_with_namesakes`,
-`Game::creature_with_namesakes`.
+`lf sync --manual` confirmed the branch merges cleanly with current main.
+The combined-tree publication checks are complete:
 
-## Checks
+- Rust formatting and all-target/all-feature clippy passed. Full debug tests:
+  876 passed, 2 ignored; full release: 878 passed, 2 ignored. The two added
+  serialization regressions also passed in debug in the 10-test hash suite.
+- The broad Python run covered env, Academy, belief, semantic, verification,
+  model and package boundaries, plus the required arena-admission/monitoring
+  and CI/release suites: 956 passed, 1 skipped, with one stale authored-parity
+  source fingerprint. Regenerating that receipt changed only source hashes;
+  its Commands, witnesses and viewer results stayed identical. The corrected
+  parity and CI/release checks then passed (53 tests).
+- Academy permanent-note tests: 7 passed. Svelte check: no errors or warnings.
+  Frontend build passed. Ten isolated headless browser checks passed across
+  choice navigation, Learn and trigger ordering; both servers stopped.
+- Three formatting fixes and one merged test's `is_creature()` accessor were
+  corrected. No runtime behavior changed during publication validation.
+- Counter serialization now has a directed byte-level regression across
+  inline-storage spill, removal, clone independence and saturation. Sparse
+  keyword serialization has an ordered-present-kinds regression. CI selection
+  and release staging explicitly cover both moved crates.
 
-- `cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings`
-- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test` (debug) and `cargo test --release`
-- extension rebuild, then `uv run --extra dev pytest tests/env tests/academy tests/belief tests/semantic tests/verify tests/model tests/test_package_boundaries.py -q`
+The rebuilt extension matched the installed wheel before broad validation;
+the final formatted tree was also rebuilt and installed atomically. Its
+authored parity, native/Python observation parity and static-token checks all
+passed (28 tests).
+Logs are local under `.runs/mtg-238-publication/`. Frozen evidence is unchanged.
 
-Check result (2026-11-02, compress): `cargo fmt --check`, clippy `-D warnings`
-and debug `cargo test --no-fail-fast` green across the three crates (484 card
-tests); the earlier batch pass rebuilt the extension and ran the Python suite
-above (864 passed, 1 skipped). Release `cargo test`, a rebuilt-extension Python
-run on the compressed tree and the arena-admission suite are gate's.
+Publication against main and Jack Heart's review remain outstanding. Publication
+and merge are separate; no auto-merge is authorized. T6 is not a blocker.
+
+Outside this Task: `PyKeywords` remains a 14-boolean observation surface;
+the first non-evergreen keyword needs its fact representation and a Python API
+migration. All current keywords are evergreen, and the exhaustive observability
+guard requires an explicit decision for a new one. General layer dependency
+ordering and the Oracle-text generator remain outside this Task.
+
+Check result (realign, 2026-11-02): `git diff --check` — passed; existing post-sync focused proof retained, full combined-tree checks deferred to gate/CI.

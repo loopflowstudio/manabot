@@ -6562,7 +6562,10 @@ fn phoenix_fleet_airship() -> CardDefinition {
             subtypes: Vec::new(),
             condition: Some(Condition::ControlsAtLeast {
                 count: 8,
-                predicate: CardPredicate { namesake: true, ..Default::default() },
+                predicate: CardPredicate {
+                    namesake: true,
+                    ..Default::default()
+                },
             }),
         })],
         activated_abilities: vec![ActivatedAbilityDefinition {

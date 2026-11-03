@@ -87,17 +87,22 @@ rows; crew's "becomes an artifact creature" is the same `BecomeCreature`
 record on a printed artifact. Counts written into card-shaped types became
 conditions: War Balloon is a `TypeGrant` on itself "as long as" it has three
 fire counters (`StaticTypeGrant.condition`), Zhao's land-type overwrite holds
-"as long as" he has a conqueror counter, and "if you control a [predicate]"
-is `Condition::ControlsAtLeast { count, predicate }`. Removing the permanent
+"as long as" he has a conqueror counter, and Phoenix Fleet Airship uses
+`Condition::ControlsAtLeast { count: 8, predicate: namesake }` on its own
+Creature grant. Namesakes compare the source and candidate names after layers
+1–3 without recursing through the static index. Removing the permanent
 field changed the canonical encoding, so the match-state hash contract is
 **12**; the conditions and keyword lists moved the content digest and the
 learning tokens (schema still 10: tokens derive from the definitions), so
 `semantic-kernel-w17-v1`, the authored-match receipt, both parity receipts,
-the Academy fixtures and the belief v3 receipt pins were re-recorded once with
-the same Commands and decision revisions.
+the Academy fixtures and the belief v3 receipt pins were re-recorded for the
+batch and its integration with T5, retaining Commands and decision revisions.
+Earthbend's effect records allocate object ids, so the combined authored tape
+retains its game outcome while ids differ from main's pre-integration receipt.
 
 Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
-definition with a `serde` serializer: learning schema **9**, token values are
+definition with a `serde` serializer: initially learning schema **9**, now
+**10** with delayed-trigger object roles. Token values are
 stable hashes of Rust and printed names, and IR opcodes, roles and enums are
 gone. `BoundSemanticPack` binds by content digest and registry name. Manifests
 carry `pack_key` (replacing `compiled_semantics` with its IR and source hashes);

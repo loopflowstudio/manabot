@@ -2741,12 +2741,14 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
     let witnesses = [gran, swarm, drake];
     let before = witnesses.map(|id| card_json(&s, 0, id));
     let gran_card = s.game().state.permanents[gran].as_ref().unwrap().card;
-    s.game_mut().state.cards[gran_card].statics.push(StaticAbility::TypeGrant(StaticTypeGrant {
-        scope: StaticScope::This,
-        types: vec![CardType::Artifact],
-        subtypes: Vec::new(),
-        condition: None,
-    }));
+    s.game_mut().state.cards[gran_card]
+        .statics
+        .push(StaticAbility::TypeGrant(StaticTypeGrant {
+            scope: StaticScope::This,
+            types: vec![CardType::Artifact],
+            subtypes: Vec::new(),
+            condition: None,
+        }));
     for modification in [
         Modification::Nonlegendary,
         Modification::ModifyPt {
