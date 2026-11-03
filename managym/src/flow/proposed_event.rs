@@ -270,7 +270,7 @@ impl Game {
                             .enumerate()
                             .filter(|(_, ability)| {
                                 matches!(ability, StaticAbility::EntersTapped(predicate)
-                                    if predicate.matches_card(&self.state.cards[*card]))
+                                    if self.card_matches_predicate(*card, predicate))
                             })
                             .filter_map(move |(index, _)| {
                                 Some(ReplacementCandidate {

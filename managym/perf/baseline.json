@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "1616b210f7f4765aa8032debad50b7f18450e8b1",
+    "commit": "ea316ff14bc6376dcc302b65d7c9c9330cd512e9",
     "date": "2026-11-03",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41699683808",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41711692234",
     "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Retain MTG-238 shared-engine speedup from CI 41699683808: 30.43% less step time, 43.93% less total search time and 49.91% less worst-reply time, with identical decisions and ordered scores; preserve the 10% tolerance."
+    "reason": "Adopt MTG-239 rules changes from PR #415 CI 41711692234: Accumulate Wisdom now exposes bottom-order decisions and Rallier evaluates Suki power in the library in the unchanged curated decks. All three search digests and the step digest/count move (99923 to 101650); same-run timing checks pass. Preserve the 10% tolerance; this is a rules reference update, not equivalent-gameplay speedup evidence."
   },
   "bench_search": {
-    "worst_s": 5.272,
-    "total_s": 177.771,
+    "worst_s": 4.986,
+    "total_s": 171.233,
     "seeds": {
       "1": {
-        "worst_s": 5.272,
-        "total_s": 73.926,
-        "digest": 5192957023818819312
+        "worst_s": 4.986,
+        "total_s": 72.289,
+        "digest": 13733780288109658817
       },
       "2": {
-        "worst_s": 3.835,
-        "total_s": 51.385,
-        "digest": 14020561159006433540
+        "worst_s": 4.595,
+        "total_s": 49.218,
+        "digest": 5337676601429031145
       },
       "3": {
-        "worst_s": 5.165,
-        "total_s": 52.46,
-        "digest": 12455483057923843581
+        "worst_s": 3.714,
+        "total_s": 49.726,
+        "digest": 10035331835025021780
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 12862.7,
-    "steps": 99923,
+    "steps_per_s": 12891.2,
+    "steps": 101650,
     "games": 512,
-    "digest": 12247096877573042301
+    "digest": 15843333459759757527
   }
 }

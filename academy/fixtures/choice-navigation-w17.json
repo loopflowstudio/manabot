@@ -111,12 +111,12 @@
           "label": "Decline"
         }
       ],
-      "digest": "97d0494af92c5b11e7c79ba71af4492acf271ab3df4483969deeb411fcd10e50",
+      "digest": "c16da034508d5e291c7461f4742acc3a5262da9cbe028df9037afe3336a593bd",
       "frame": {
         "protocol": 1,
-        "match_id": "Ut6p-QPQkXgT1jCMKOMobQ",
+        "match_id": "kgC5-wVJVAK9wB38YayOWA",
         "revision": 75,
-        "frame_hash": "0a3c6bd42497f2716234d0d09cebdd8b5bc6582f8e137c1609931801c80b39cb",
+        "frame_hash": "2538fee1d99baa7b7b5cf0051bab449814c16601c0179bcbb3893d97440afb3e",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -438,7 +438,7 @@
                 "name": "Dragonfly Swarm",
                 "zone": "GRAVEYARD",
                 "owner_id": 0,
-                "power": 0,
+                "power": 7,
                 "toughness": 3,
                 "mana_value": 3,
                 "types": {
@@ -1728,6 +1728,10 @@
         },
         {
           "offer_id": 0,
+          "label": "Put Firebending Lesson next on the bottom"
+        },
+        {
+          "offer_id": 0,
           "label": "Play Mountain"
         },
         {
@@ -1771,17 +1775,17 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "95b5f494e6775f1aa3a82b9298534c07339a8dfbe32280049f9f2d9f6a3212d4",
+      "digest": "fe03fec1cb28c5297652f0bddc428a05d2f70d1f7b8ad62a3b48a4c6b6fd0084",
       "frame": {
         "protocol": 1,
-        "match_id": "HQstGNTSIjtCd_Cxms5j7Q",
-        "revision": 64,
-        "frame_hash": "55b65d7cfd15135359589ac2961d070fb48259abc88e84681e26c5d1aaac3c25",
+        "match_id": "Kx_DDpX8BOuEFTICA2TAyw",
+        "revision": 65,
+        "frame_hash": "38fe2f535b1a569d6c5e344d9957e422d77f20201389d4d4ac9129c90485a213",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 65,
+          "id": 66,
           "actor": 0,
           "kind": "learn",
           "title": "Learn",
@@ -3052,12 +3056,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "c6fe8af3074fe36ee51669662d9e93c9b9911fa3ae180d4b72b5fcce11606522",
+      "digest": "5a283da3a5ff3dbe06404689dc9cd0b19c9fed6c9fcdde050468b4679a1980c6",
       "frame": {
         "protocol": 1,
-        "match_id": "DdL6etiR2Zipro-Dld2pMw",
+        "match_id": "B_QmyYZqj6HCMp6SX2mRpA",
         "revision": 90,
-        "frame_hash": "0d0d36ed15530f83267aff8af5063b8f2de5b75de859e6802c7c3db28bdb7697",
+        "frame_hash": "7d66a6a7fe52805ccacbe386fc22d0102eb2cb687085d8156414cb163bbe282c",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3312,7 +3316,7 @@
                 "name": "Dragonfly Swarm",
                 "zone": "HAND",
                 "owner_id": 0,
-                "power": 0,
+                "power": 3,
                 "toughness": 3,
                 "mana_value": 3,
                 "types": {
@@ -3617,19 +3621,18 @@
             "is_agent": false,
             "life": 23,
             "zone_counts": {
-              "LIBRARY": 21,
-              "HAND": 5,
+              "LIBRARY": 22,
+              "HAND": 4,
               "BATTLEFIELD": 13,
               "GRAVEYARD": 1,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 21,
+            "library_count": 22,
             "known_hand": {
               "13": 1,
-              "23": 1,
-              "24": 1
+              "23": 1
             },
             "main_counts": {
               "0": 8,
@@ -3658,6 +3661,7 @@
               "14": 2,
               "19": 2,
               "21": 2,
+              "24": 1,
               "26": 1,
               "27": 1
             },
@@ -3669,7 +3673,7 @@
               "14": 1,
               "28": 1
             },
-            "hand_hidden_count": 5,
+            "hand_hidden_count": 4,
             "hand": [],
             "graveyard": [
               {
@@ -4389,6 +4393,10 @@
         },
         {
           "offer_id": 0,
+          "label": "Put Tiger-Seal next on the bottom"
+        },
+        {
+          "offer_id": 0,
           "label": "Attack with Fire Nation Cadets"
         },
         {
@@ -4420,17 +4428,17 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "48f4ec82b34ffb44e4bbf9703330b672f154ec1c2fa2b20a2cd1091359e12b73",
+      "digest": "07a6d62997c5bf87458d511b62d39eb54c3d9b8cafe1e3e8d87f6b9bbaeb6558",
       "frame": {
         "protocol": 1,
-        "match_id": "h6CVAwT8zvKGPLwacA_-wg",
-        "revision": 36,
-        "frame_hash": "ddefc6b6a72c6fc10dca9d32dbfa3867c612be8e02621f7cb773cc9b9badb131",
+        "match_id": "xtPjAETYb-jJ2xbUOByjGg",
+        "revision": 37,
+        "frame_hash": "5af56d3585318fd8a6db5b6f6423a3c4c42b59f571a6f878b804e5849e186a4c",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 37,
+          "id": 38,
           "actor": 0,
           "kind": "declare_blocker",
           "title": "Declare blockers",
@@ -5280,6 +5288,10 @@
         },
         {
           "offer_id": 0,
+          "label": "Put Tiger-Seal next on the bottom"
+        },
+        {
+          "offer_id": 0,
           "label": "Attack with Fire Nation Cadets"
         },
         {
@@ -5347,17 +5359,17 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "872e1f9746992b02251fe4dc0753ec4f7395d889e7cee1184967f5bb3236dd5c",
+      "digest": "4c789c381b8f50b1158af63942b82dd0b0c21b64745ed793044d324b0b7ec6e5",
       "frame": {
         "protocol": 1,
-        "match_id": "B9QslL4cieSuts9I7Om73A",
-        "revision": 56,
-        "frame_hash": "ad37d2b2879520945cec8d648d0a1f5963e978a11ddd67c7b74a7e15d71f779e",
+        "match_id": "wLjXV0KK1P895llWyYGiBQ",
+        "revision": 57,
+        "frame_hash": "a5ec990eeaade81a501c4e6b75ceb3e99b84a7849c7db7e6190b01932a5518e5",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 57,
+          "id": 58,
           "actor": 0,
           "kind": "pay_or_not",
           "title": "Resolution payment",

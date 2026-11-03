@@ -679,7 +679,7 @@ impl Game {
                 .filter_map(|card| self.current_object_ref(*card))
                 .map(Target::GraveyardCard)
                 .collect(),
-            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer => {
+            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::AnyTarget => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell | TargetSpec::SpellOrPermanent { .. } => self
@@ -717,7 +717,7 @@ impl Game {
             TargetSpec::PermanentYouControl { .. }
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
-                | TargetSpec::CreatureOrPlayer
+                | TargetSpec::AnyTarget
                 | TargetSpec::CreatureYouControl
                 | TargetSpec::CreatureOpponentControls
                 | TargetSpec::LandYouControl
@@ -1081,7 +1081,7 @@ impl Game {
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast { card, .. },
                 ) if self.spell_caster(*card) == trigger.controller
-                    && predicate.matches_card(&self.state.cards[*card]) =>
+                    && self.card_matches_predicate(*card, predicate) =>
                 {
                     spent.push(index);
                     Some(Target::StackSpell(*card))
@@ -1389,12 +1389,12 @@ impl Game {
             }
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.spell_caster(*card) == source_controller
-                    && predicate.matches_card(&self.state.cards[*card])
+                    && self.card_matches_predicate(*card, predicate)
             }
             (
                 TriggerCondition::PlayerCastsSpell { predicate },
                 GameEvent::SpellCast { card, .. },
-            ) => predicate.matches_card(&self.state.cards[*card]),
+            ) => self.card_matches_predicate(*card, predicate),
             (
                 TriggerCondition::AttacksWithAnother,
                 GameEvent::AttackersDeclared { attackers, .. },
@@ -1726,7 +1726,7 @@ impl Game {
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
             predicate.matches(
                 &self.state.cards[moved_card],
-                self.state.cards[moved_card].power.unwrap_or(0),
+                self.card_power(moved_card),
                 if animated { &[CardType::Creature] } else { &[] },
             )
         };

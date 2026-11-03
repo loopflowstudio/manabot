@@ -5,9 +5,9 @@
 //! (written in the `managym-state` rules types), listed in its set module's
 //! `cards()`; [`catalog`] gathers every set and is the only way the engine
 //! reaches them. New behavior is a new `Effect` (or other rules-type) variant,
-//! never card-specific logic. Every token lives in `tokens.rs`. A set module
-//! may mark a defined card incomplete beside its definitions
-//! ([`incomplete`]); every other defined card is supported. Card behavior
+//! never card-specific logic. Every token lives in `tokens.rs`. Defined
+//! non-token cards are supported; known rules bugs are tracked as Tasks,
+//! not deck-entry exclusions. Card behavior
 //! tests live in `tests/cards/<set>.rs` beside the sets.
 
 mod afr;
@@ -45,11 +45,6 @@ use std::sync::OnceLock;
 
 use managym_state::card::CardDefinition;
 
-/// A defined card whose behavior is known to be incomplete: `(key, missing
-/// behavior)`. It still runs in the fixed setups that name it, but the world
-/// does not support it for deck entry.
-pub type Incomplete = (&'static str, &'static str);
-
 /// Every card and token definition from every set, sorted by key.
 pub fn catalog() -> &'static [CardDefinition] {
     static CATALOG: OnceLock<Vec<CardDefinition>> = OnceLock::new();
@@ -61,11 +56,6 @@ pub fn catalog() -> &'static [CardDefinition] {
         definitions.sort_by_key(|definition| definition.key);
         definitions
     })
-}
-
-/// Defined cards whose behavior is incomplete, with the missing behavior.
-pub fn incomplete() -> &'static [Incomplete] {
-    tla::INCOMPLETE
 }
 
 const SETS: [fn() -> Vec<CardDefinition>; 30] = [

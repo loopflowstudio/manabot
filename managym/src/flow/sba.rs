@@ -6,6 +6,7 @@ use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
         game_object::{CardId, PermanentId, PlayerId},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -105,15 +106,23 @@ impl Game {
             // is a 0/0 and dies).
             let characteristics = self.characteristics(permanent_id);
             let zero_toughness = characteristics.is_creature() && characteristics.toughness <= 0;
-            // CR 704.5g — Creatures with lethal damage are destroyed.
-            let destroy = !zero_toughness
-                && self.has_lethal_damage(permanent_id, &characteristics)
-                && !characteristics.keywords.has(Keyword::Indestructible);
+            // CR 704.5i/v. No supported battle has a defeat trigger; if one
+            // is introduced, its pending trigger must delay this battle SBA.
+            let zero_counters = (characteristics.types.is_planeswalker()
+                && permanent.counter_count(CounterKind::Loyalty) == 0)
+                || (characteristics.types.is_battle()
+                    && permanent.counter_count(CounterKind::Defense) == 0);
             let legend_loser = legend_losers.contains(&permanent.card);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.
             let illegal_aura = self.aura_attachment_illegal(permanent_id);
-            if !zero_toughness && !destroy && !legend_loser && !illegal_aura {
+            let put_in_graveyard = zero_toughness || zero_counters || legend_loser || illegal_aura;
+            // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
+            // above do not destroy, even when lethal damage also applies.
+            let destroy = !put_in_graveyard
+                && self.has_lethal_damage(permanent_id, &characteristics)
+                && !characteristics.keywords.has(Keyword::Indestructible);
+            if !put_in_graveyard && !destroy {
                 continue;
             }
             let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
@@ -122,12 +131,7 @@ impl Game {
             let Some(event_ref) = self.object_event_ref(object_ref) else {
                 continue;
             };
-            candidates.push((
-                object_ref,
-                event_ref,
-                permanent.controller,
-                destroy && !legend_loser && !illegal_aura,
-            ));
+            candidates.push((object_ref, event_ref, permanent.controller, destroy));
         }
         candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
 

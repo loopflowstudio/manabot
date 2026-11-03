@@ -11,6 +11,7 @@ use crate::{
     state::{
         card::StaticAbility,
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        permanent::CounterKind,
     },
 };
 
@@ -176,8 +177,21 @@ impl Game {
                 if self.state.permanents[permanent_id].is_none() {
                     return false;
                 }
-                self.state
-                    .mark_damage(permanent_id, amount, source_has_deathtouch);
+                // CR 120.3: a permanent with several of these types receives
+                // every applicable result, but this remains one damage event.
+                let view = self.characteristics(permanent_id);
+                if view.is_creature() {
+                    self.state
+                        .mark_damage(permanent_id, amount, source_has_deathtouch);
+                } else if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                    permanent.dealt_damage_this_turn = true;
+                }
+                if view.types.is_planeswalker() {
+                    self.change_counters(permanent_id, CounterKind::Loyalty, -amount);
+                }
+                if view.types.is_battle() {
+                    self.change_counters(permanent_id, CounterKind::Defense, -amount);
+                }
                 self.emit(GameEvent::DamageDealt {
                     source: source_card,
                     target: DamageTarget::Permanent(permanent_id),

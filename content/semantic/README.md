@@ -18,10 +18,11 @@ extension. `current/setups.json` is ordinary deck/sideboard data naming cards by
 key.
 
 **Support is definition.** The world supports a card for deck entry when its set
-file defines it, unless that set file marks it incomplete (`tla::INCOMPLETE`, one
-reason per card). Incomplete cards still run in the fixed setups that name them.
-Tokens are never deck entries. Rules tests are ordinary tests; they never gate
-support. See the [TLA notes](../../docs/rules/tla/README.md) for the open TLA work.
+file defines it as a non-token card. Tokens, rules fixtures and unknown cards
+are rejected. Known rules bugs are tracked as Tasks without revoking
+playability; playable does not mean bug-free. Rules tests are ordinary tests;
+they never gate support. See the [TLA notes](../../docs/rules/tla/README.md) for
+the open TLA work.
 
 ## Packs and identity
 

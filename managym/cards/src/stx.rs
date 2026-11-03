@@ -161,12 +161,12 @@ fn igneous_inspiration() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::CreatureOrPlayer)),
+            Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::AnyTarget)),
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
-            spec: TargetSpec::CreatureOrPlayer,
+            spec: TargetSpec::AnyTarget,
             min: 1,
             max: 1,
             another: false,

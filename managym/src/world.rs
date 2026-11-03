@@ -3,9 +3,9 @@
 //! A world names rules meaning plus observation/action shape (see `WORLDS.md`).
 //! Any running engine knows its world: [`WORLD_VERSION`]. The world's cards are
 //! every definition in `managym-cards`, whatever its set; a card is *supported*
-//! when its set file defines it and does not mark it incomplete. Incomplete
-//! definitions still run in the fixed setups that name them but are not
-//! supported for arbitrary decks. [`set_cards`] narrows the pool to chosen
+//! when its set file defines it as a non-token card. Tokens and rules fixtures
+//! are not deck entries. Known rules bugs do not revoke playability.
+//! [`set_cards`] narrows the pool to chosen
 //! sets for deck generation or validation.
 //!
 //! This is an eligibility check only. Deck construction policy (counts,
@@ -95,8 +95,7 @@ mod tests {
         assert!(supports_card("Avatar Enthusiasts").unwrap());
         assert!(supports_card("Forest").unwrap());
         assert!(supports_card("Lightning Bolt").unwrap());
-        // Defined, but marked incomplete beside its definition.
-        assert!(!supports_card("Water Tribe Rallier").unwrap());
+        assert!(supports_card("Water Tribe Rallier").unwrap());
         assert!(supports_card("Counterspell").unwrap());
         assert!(!supports_card("Crossroads of Destiny").unwrap());
         assert!(!supports_card("Not A Card").unwrap());
@@ -106,7 +105,7 @@ mod tests {
             "Water Tribe Rallier",
             "Forest",
         ];
-        assert_eq!(unsupported_cards(deck).unwrap(), ["Water Tribe Rallier"]);
+        assert!(unsupported_cards(deck).unwrap().is_empty());
     }
 
     #[test]
