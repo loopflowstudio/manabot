@@ -1,7 +1,7 @@
 # MTG-239 — five defined cards
 
-Implementation plan, reconciled 2026-11-03 against `6d30c9013` and the
-subsequent admission cleanup. Jack Heart's
+Implementation plan, reconciled 2026-11-03 against `72e29f5de`, including
+the admission cleanup in `ae06995b1`. Jack Heart's
 Task directive and November 3 playability clarification are accepted scope;
 the admission cleanup and immediate ordering with clearer draw-order wording
 are accepted by Jack Heart (November 3, comment 6b64d212). One PR,
@@ -36,7 +36,7 @@ training run or corpus revision is included.
   authority. Remove bug-based eligibility exclusions; preserve token, fixture
   and unknown-card rejection and whole-list main/sideboard coverage.
 
-## Delete — do not maintain
+## Completed implementation cuts
 
 All deletion targets are complete; none remain:
 
@@ -45,8 +45,6 @@ All deletion targets are complete; none remain:
   token, rules-fixture and unknown-card rejection and whole-deck admission.
 - Live documentation of the incomplete-card exception and stale TLA exclusion
   list. Preserve historical evidence and the accepted bug-tracking direction.
-
-
 - TargetSpec::CreatureOrPlayer and its old text/fast-path assumptions: replace
   with AnyTarget, preserving ordering, exact target identity and ward handling.
 - Unconditional random remainder in LookAndSelect and the Accumulate Wisdom
@@ -77,6 +75,9 @@ playable cards belong in bug Tasks, not new play restrictions. AGENTS.md records
 that direction. The empty incomplete-card API, TLA list and pool exclusion branch are removed,
 and contributor/content/import/TLA docs now agree. Token, fixture and unknown
 restrictions remain. No broader admission-policy redesign or new Task was made.
+The earlier feedback against `6d30c9013` identified a real mismatch; the
+cleanup in `ae06995b1` resolves it. Immediate-order wording and the shared v5
+encoder test helper are retained in `72e29f5de`.
 
 Current open-w17 evidence was regenerated through its producers. Rallier’s
 correct CDA filter excludes Suki above power three at authored decision 90;
@@ -131,9 +132,15 @@ Its frozen cohort and running pilot, T6 content and T7 acceptance remain with
 their existing owners. No corpus rewrite, training run, broader admission
 redesign or additional Task is part of this change.
 
-Check result (cleanup): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 -p managym --lib cards::decklist::tests::` — 7 debug tests passed; `cargo fmt --check` passed; root release wheel rebuilt and installed atomically; `uv run --extra dev --extra play pytest` with the focused `test_five_completed_cards_admit_as_whole_decklists`, `test_decklist_errors_carry_each_failing_seat_with_line_issues`, `test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders` and `test_accumulate_wisdom_order_survives_reconnect_and_commits_once` nodes — 5 passed across admission and wording/reconnect runs. Full merged-tree validation, Engine Budget CI and demo remain with their declared later steps.
+Retained cleanup validation passed seven debug decklist tests, formatting,
+and five focused Python cases across whole-deck admission, rejection,
+ordering text/encoder parity and reconnect. The root release extension was
+rebuilt and installed atomically. After the helper consolidation, both
+ordering and Suki native/Python/text parity tests and Ruff passed. Exact
+commands are retained at `72e29f5de:scratch/mtg-239-complete-five-defined.md`;
+these focused results do not replace the gate above.
 
-Compression check: `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py::test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders tests/semantic/test_text_observation.py::test_suki_hand_power_reaches_text_and_both_encoders -q` — 2 passed; Ruff passed. Runtime unchanged in this step; gate retains the merged-tree suites.
+Check result (reconciliation): `git diff --check` — passed; source inspection confirms the exclusion API/list/branch are absent and token/fixture rejection remains; no runtime code changed or tests repeated.
 
 ## Accepted interaction and review limits — 2026-11-03
 
@@ -168,3 +175,13 @@ a future battle with a defeat trigger needs more than the current shell-only
 zero-defense behavior. The review page is `scratch/concept-review.html`.
 Merged-tree gate, Engine Budget CI, demo and publication keep their owners above;
 this review establishes no new acceptance evidence or additional Task.
+
+Concept-review outcome (loop 2, pass 2): nothing to change and no open product
+choice. Inspection of `72e29f5de` confirms that admission has no bug-exclusion
+branch, and the native ordering instruction states immediate commitment and
+automatic final placement. The existing tests exercise both possible orders,
+private inspection, retained-session recovery, duplicate/stale rejection and
+native/Python/text parity. These are inspected test contracts, not new test
+results. The normal path and recovery require no additional state owner or
+draft lifecycle. No implementation direction changed; loop-or-next owns the
+next Graph decision, with the remaining acceptance checks above still required.

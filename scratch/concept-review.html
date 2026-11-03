@@ -34,19 +34,22 @@
 <body>
 <main>
   <header>
-    MTG-239 · concept-review · 2026-11-03<br>
+    MTG-239 · concept-review · loop 2, pass 2 · 2026-11-03<br>
     Built from <code>scratch/mtg-239-complete-five-defined.md</code>,
     <code>scratch/defined-card-completeness.md</code>, <code>AGENTS.md</code>,
     <code>managym/README.md</code>, the native decision/target/power code,
     and the card, text-observation and Academy reconnect tests.<br>
-    Reviewed change: <code>44388ad42..6d30c9013</code>.
+    Initial review: <code>44388ad42..6d30c9013</code>;
+    reconciled through <code>72e29f5de</code>, including admission cleanup
+    <code>ae06995b1</code>.
   </header>
 
   <h1>No additional product decision is needed.</h1>
   <div class="decision">
     <p>The five fixes implement the accepted experience. Jack Heart accepted the admission cleanup and option 1a on November 3
     (comment 6b64d212): immediate ordering with clearer draw-order wording. Follow-up review identified an empty bug-based eligibility path; that path
-    and its stale documentation are now removed. Merged-tree validation and
+    and its stale documentation are now removed. This review finds nothing
+    further to change and no open product choice. Merged-tree validation and
     the real-path demo remain outstanding.</p>
     <p>Jack Heart's November 3 direction remains in force: fix these five cards
     and preserve playability when known bugs are discovered. Playable does not
@@ -83,7 +86,7 @@
   <dl>
     <dt>Import a deck containing the five cards</dt>
     <dd>Whole main deck and sideboard → shared defined-card eligibility →
-    <code>Decklist / admit_decklists</code>. These five exclusions are removed;
+    <code>Decklist / admit_decklists</code>. The bug-based exclusion mechanism is removed;
     unknown cards, tokens and rules fixtures still fail admission.</dd>
     <dt>Choose a damage target</dt>
     <dd>Creature, player, planeswalker or battle → <code>AnyTarget</code> →
@@ -112,6 +115,9 @@
   <p>Corrected current-world traces may change. Frozen worlds, checkpoints and
   MTG-213's historical corpus retain their identity. The projected increase in
   eligible decks is not a newly measured corpus.</p>
+  <p class="caption">This pass inspected the implementation and existing test
+  contracts at <code>72e29f5de</code>; it did not rerun runtime tests or establish
+  new acceptance evidence. No implementation direction changed.</p>
 
   <h2>Review questions and disposition</h2>
   <ol>

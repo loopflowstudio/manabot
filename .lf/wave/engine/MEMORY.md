@@ -234,6 +234,11 @@ preserves accepted decisions, dated proof limits and source history.
   strict-completeness admission proposal, while retaining MTG-239's five
   fixes and whole-deck proof. Jack Heart explicitly limited that work to those
   fixes, without a broader policy redesign or additional Tasks.
+  On November 3, Jack Heart accepted removal of the empty exclusion API/list
+  and pool branch (comment 6b64d212), preserving token, rules-fixture and
+  unknown-card rejection. An empty exclusion list still leaves bug-based
+  eligibility as a supported policy; deleting that mechanism and reconciling
+  its documentation makes admission agree with the decision.
 - Off-battlefield power is contextual: CDAs read the spell controller on the
   stack and the owner in other zones, including outside the game. Battlefield
   power reads the layered view, including ability loss. Zone filters and
@@ -245,6 +250,11 @@ preserves accepted decisions, dated proof limits and source history.
   establish that the player was offered the choice. Native continuation and
   LLM text need direct checks: captured viewer JSON omits continuation frames.
   Reconnect and duplicate submission must preserve the actual pending order.
+  Jack Heart selected immediate ordering with clearer draw-order wording on
+  2026-11-03 (comment 6b64d212): each choice commits the next card to be drawn
+  among the remainder; the final placement is automatic. A whole-order draft,
+  confirmation or undo lifecycle is not approved. Retained-session reconnect
+  evidence does not establish process-crash durability.
 - Correcting a legal choice can change a retained game's outcome, not just
   its hashes. MTG-239's Rallier filter changed the open-w17 authored trace
   from 142 Commands / 69 commitments to 135 / 66; Accumulate Wisdom inserted
