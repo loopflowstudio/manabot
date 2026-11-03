@@ -7,10 +7,9 @@ amendment to PR #412. The original pass and review rationale are preserved at
 The historical review page is retained at that commit; `scratch/concept-review.html`
 shows the current headless review.
 
-Status: the combined T5 source is verified for republication. Main `a8abf01b1`
-is integrated by `e5560fb22`; publication validation corrected one test assertion
-to call `Characteristics::is_creature()`. The latest results are in “Combined
-source publication verification” below; earlier counts describe earlier heads.
+Status: the combined cache/engine-budget source at `d22b55757` is verified for
+republication against main `a1a02a76f`. The latest results are in “Cache
+integration publication verification” below; earlier counts describe earlier heads.
 Subsequent delivery and MTG-225 integration remain pending.
 
 ## Outcome and authority
@@ -239,3 +238,34 @@ Fresh `lf task status MTG-225 --json` still reports no PR (implementation is
 running). T6 integration and delivery remain explicit dependencies. Publication
 does not merge, arm auto-merge or complete this Task. These results validate the
 combined local source; previous-head CI is not evidence for this amendment.
+
+## Cache integration publication verification — 2026-11-02
+
+`lf sync --manual` confirmed the branch is current with main `a1a02a76f`.
+Inspection of the actual base diff and merge resolution retains the accepted
+selector/value/Chosen model and upstream cache revisions. No implementation
+change was needed. The shared untap helper and typed mana-pool accessors remain
+the owners of those writes. All directed card behavior tests are unchanged.
+
+Final combined-source checks at `d22b55757` (logs in
+`.runs/publish-cache-mtg-235/`):
+
+- Full debug Rust suite with `CARGO_PROFILE_DEV_OPT_LEVEL=1` and `-j 2`:
+  885 passed, 2 ignored, including all 502 card tests, cache assertions,
+  selector/observability guards and semantic conformance reproduction.
+- Python heuristic, LLM text, native/Python observation parity, world admission,
+  monitoring, models, disclosure, Academy fixtures, both parity corpora and
+  belief receipts: 402 passed, 1 skipped. Authored parity retains 142 commands;
+  public parity retains 69 commitments with zero provider gaps. These checks
+  verify the sync's refreshed receipts against the combined source.
+- Academy type check and production build passed; label/permanent-notes Vitest:
+  9 passed. Headless navigation, Learn and trigger-order recovery: 10 passed.
+  Both browser servers exited; the isolated ports have no listeners.
+- All-target/all-feature clippy, rustfmt, focused Ruff and whitespace checks
+  passed. Installed extension matches the rebuilt wheel byte for byte (SHA256
+  `680cbd67d641848803171554a8964386cd819e966a5b9fa2a2827dd30b8e88ea`).
+
+MTG-225 still has no PR and is running implementation. Its integration remains
+pending; this publication does not complete MTG-235. Hosted CI, including the
+same-runner engine budget, was still running when these local checks finished;
+no performance-budget acceptance is claimed from the local checks.
