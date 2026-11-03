@@ -26,8 +26,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use managym::cards::content_pack::CardRegistry;
-use managym::cards::setups::authored_pack;
+use managym::cards::content_pack::default_content_pack;
 use managym::state::card::{AdditionalCost, CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
@@ -186,20 +185,13 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 
 #[test]
 fn every_registered_real_card_matches_scryfall() {
-    let registry = CardRegistry::default();
-    let research = std::sync::Arc::clone(&authored_pack("complexity").unwrap().content);
+    let registry = default_content_pack();
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
 
-    // The research-only cards use the same real-card checks without entering
-    // the default registry or changing its versioned content digest.
-    for def in registry.definitions().chain(
-        research
-            .definitions()
-            .filter(|def| registry.definition_id(&def.name).is_none()),
-    ) {
+    for def in registry.definitions() {
         let name = def.name.as_str();
         if def.is_token {
             continue;
@@ -344,7 +336,7 @@ fn every_registered_real_card_matches_scryfall() {
 /// NOT_REAL_CARDS must track actual registrations, so the list can't rot.
 #[test]
 fn not_real_cards_are_registered() {
-    let registry = CardRegistry::default();
+    let registry = default_content_pack();
     let names: BTreeSet<String> = registry.definitions().map(|d| d.name.clone()).collect();
     for name in NOT_REAL_CARDS {
         assert!(

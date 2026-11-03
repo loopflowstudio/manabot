@@ -1,17 +1,17 @@
-//! What a running engine knows about its cards beyond their rules: the packs a
-//! match runs against, which cards are supported, and how the policy reads a
-//! card.
+//! What a running engine knows about its cards beyond their rules: the one
+//! catalog every match runs against, which cards are supported, and how the
+//! policy reads a card.
 //!
 //! Card rules are the engine's own [`CardDefinition`](crate::state::card::CardDefinition)
 //! values written in `cardsets/`, one file per printed set; nothing here
-//! interprets or lowers them.
-//! - [`content_pack`]: the immutable catalog a match runs against.
-//! - [`setups`]: the authored decklists and the packs they run on.
-//! - [`pool`]: per-pack descriptor rows with support (eligibility).
+//! interprets them beyond the catalog's one normalization (ward's trigger).
+//! - [`content_pack`]: the immutable catalog every match runs against.
+//! - [`setups`]: the authored decklists over that catalog.
+//! - [`pool`]: the world pool's descriptor rows with support (eligibility).
 //! - [`deck_admission`]: development construction admission of a submitted deck.
 //! - [`decklist`]: decklist files, name resolution and import.
 //! - [`tokens`]: learning tokens derived from the definitions themselves.
-//! - `fixtures`: rules fixtures registered in the default pack that are not
+//! - `fixtures`: rules fixtures registered in the catalog that are not
 //!   printed cards.
 
 pub mod content_pack;
@@ -22,11 +22,9 @@ mod pool;
 pub mod setups;
 pub mod tokens;
 
-pub use pool::{content_pool, pool_content, ContentPool, Eligibility, PoolDefinition};
+pub use pool::{content_pool, world_pool, ContentPool, Eligibility, PoolDefinition};
 
-pub(crate) use setups::content_pack_for_match;
-
-/// A content catalog request that cannot be satisfied: an unknown pack,
+/// A content catalog request that cannot be satisfied: an unknown pool,
 /// setup or card, or a definition the learning tokens cannot encode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContentError(pub String);

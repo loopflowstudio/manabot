@@ -72,8 +72,8 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     )
     config = session.trace.config
     assert (
-        session.env.content_pack_manifest()["pack_key"]
-        == CURATED_PACK.semantic_pack_key
+        session.env.content_pack_manifest()["content_digest"]
+        == managym.world_identity()["card_digest"]
     )
     assert sum(config.hero_deck.values()) == (40 if reverse else 41)
     assert sum(config.villain_deck.values()) == (41 if reverse else 40)
@@ -125,8 +125,8 @@ def test_jeong_uses_its_explicit_empty_setup(tmp_path, reverse):
     assert session.trace.config.villain_sideboard == {}
     assert session.asset_pack == JEONG_INCREMENT_PACK.reference
     assert (
-        session.env.content_pack_manifest()["pack_key"]
-        == JEONG_INCREMENT_PACK.semantic_pack_key
+        session.env.content_pack_manifest()["content_digest"]
+        == managym.world_identity()["card_digest"]
     )
 
 

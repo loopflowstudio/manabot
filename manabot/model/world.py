@@ -3,9 +3,10 @@
 Two binding forms exist. A world binding (`deck_world`) names the installed
 world and its card digest (`world_digest`) beside the shared rules and input
 contract: the model may play any deck the world admits, whatever decks trained
-it. A setup binding (`checkpoint_world`) names the exact setups of an authored
-or default match; the Elemental packs bind their complete authored roster.
-Neither form records how a model trained.
+it. A setup binding (`checkpoint_world`) names the exact setups of a match on
+the world's one catalog; a match within the Elemental roster binds the
+complete roster, and a binding of more than two setups admits any pair of
+them. Neither form records how a model trained.
 """
 
 from __future__ import annotations
@@ -23,7 +24,9 @@ from manabot.semantic.policy_catalog import learning_schema_path
 import managym
 
 WORLD = managym.WORLD_VERSION
-_ROSTER_PACKS = {"elemental-world-v1", "elemental-world-v2"}
+# The authored setup whose decks form the Elemental roster (`elemental-world-v1`
+# names the same decks).
+_ROSTER_SETUP = "optional_payments"
 
 
 def _digest(value: Any) -> str:
@@ -64,25 +67,13 @@ def validate_agent_setup(
         validate_agent_decks(agent, player_configs)
         return
     actual = _setups(player_configs)
-    pack_key = binding["content_manifest"].get("pack_key")
-    roster_world = pack_key in _ROSTER_PACKS
+    roster_world = len(binding["setups"]) > 2
     if not roster_world and not allow_deck_repetition:
         if actual != binding["setups"]:
             raise ValueError("checkpoint setup differs from the execution match")
         return
-
     if len(actual) != 2 or any(setup not in binding["setups"] for setup in actual):
         raise ValueError("execution deck is outside checkpoint's exact setup roster")
-    if roster_world:
-        if any(p.world != pack_key for p in player_configs):
-            raise ValueError("Elemental execution requires its explicit content pack")
-        return
-    if any(p.world not in (None, pack_key) for p in player_configs):
-        raise ValueError("execution content pack differs from the checkpoint")
-    if actual != binding["setups"] and any(p.world != pack_key for p in player_configs):
-        raise ValueError(
-            "repeated decks require the checkpoint's explicit content pack"
-        )
 
 
 def validate_agent_decks(
@@ -117,14 +108,10 @@ def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
-    pack_key = (
-        managym.WORLD_SETUP
-        if _binds_world(binding)
-        else binding["content_manifest"].get("pack_key")
-    )
-    if pack_key is not None and agent.config.world != pack_key:
+    """A world-bound policy reads the world's complete semantic program input."""
+    if _binds_world(binding) and agent.config.world != managym.WORLD_SETUP:
         raise ValueError(
-            "authored matchup checkpoint requires its complete semantic program input"
+            "world checkpoint requires its complete semantic program input"
         )
 
 
@@ -174,37 +161,33 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
     engine = managym.Env(seed=0)
     engine.reset(configs)
     manifest = engine.content_pack_manifest()
-    pack_key = manifest.get("pack_key")
-    if pack_key in _ROSTER_PACKS:
-        # The authored world admits every pair, including mirrors. Bind the
-        # complete native roster, while collection still uses its actual pair.
-        setups = _setups(
-            [
-                managym.authored_deck_setup(pack_key, key)
-                for key in managym.authored_deck_keys(pack_key)
-            ]
-        )
-    else:
-        setups = _setups(configs)
+    roster = _setups(
+        [
+            managym.authored_deck_setup(_ROSTER_SETUP, key)
+            for key in managym.authored_deck_keys(_ROSTER_SETUP)
+        ]
+    )
+    actual = _setups(configs)
+    in_roster = all(setup in roster for setup in actual)
+    # The Elemental roster admits every pair, including mirrors. Bind the
+    # complete roster, while collection still uses its actual pair.
+    setups = roster if in_roster else actual
     return {
         **_input_binding(observation_space),
         "setups": setups,
         "content_manifest": manifest,
         "learning_schema_sha256": (
             _digest(BoundSemanticPack.bind(manifest).schema.raw)
-            if pack_key in _ROSTER_PACKS
-            else _schema_file_digest(pack_key)
+            if in_roster
+            else _schema_file_digest(None)
         ),
     }
 
 
 def checkpoint_configs(binding: Mapping[str, Any]) -> list[managym.PlayerConfig]:
-    """Reconstruct a representative root without dropping authored pack identity."""
-    pack_key = binding["content_manifest"].get("pack_key")
-    if pack_key is not None and not isinstance(pack_key, str):
-        raise ValueError("invalid authored content pack selection")
+    """Reconstruct a representative root of the binding's setups."""
     return [
-        managym.PlayerConfig(str(index), setup["deck"], setup["sideboard"], pack_key)
+        managym.PlayerConfig(str(index), setup["deck"], setup["sideboard"])
         for index, setup in enumerate(binding["setups"][:2])
     ]
 
@@ -223,6 +206,20 @@ def expected_world(
     return checkpoint_world(configs, observation_space)
 
 
+def current_binding_form(binding: Mapping[str, Any]) -> dict:
+    """A retained binding in the form this runtime writes.
+
+    Bindings of the world's catalog recorded `pack_key: None` in their content
+    manifest before the catalog was the only pack; that field carries nothing
+    now. An authored pack's non-null key stays, so its binding never matches.
+    """
+    manifest = binding.get("content_manifest")
+    if isinstance(manifest, Mapping) and manifest.get("pack_key", "") is None:
+        manifest = {key: value for key, value in manifest.items() if key != "pack_key"}
+        return {**binding, "content_manifest": manifest}
+    return dict(binding)
+
+
 def validate_checkpoint_world(
     checkpoint: Mapping[str, Any], observation_space: Any, player_configs=None
 ) -> dict:
@@ -235,7 +232,7 @@ def validate_checkpoint_world(
         expected = expected_world(binding, observation_space, player_configs)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error
-    if _digest(binding) != _digest(expected):
+    if _digest(current_binding_form(binding)) != _digest(expected):
         raise ValueError(
             "checkpoint world/setup/input binding differs from this runtime"
         )

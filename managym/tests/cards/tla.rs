@@ -31,7 +31,7 @@ use managym::{
         observation::{EventEntityKind, KeywordData, Observation, PermanentData},
         policy_history::HistoryReference,
     },
-    cards::setups::authored_pack,
+    cards::setups::authored_setup,
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
@@ -10560,7 +10560,7 @@ fn cleanup_sba_grants_priority_and_then_repeats_mandatory_discard() {
 
 #[test]
 fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
-    let semantic = authored_pack("two_deck").unwrap();
+    let semantic = authored_setup("two_deck").unwrap();
     let mut ur = semantic
         .player_config("UR candidate", "ur_lessons")
         .unwrap();

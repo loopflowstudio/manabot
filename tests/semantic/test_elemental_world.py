@@ -77,10 +77,10 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
             expected = managym.authored_deck_setup(PACK, key)
             assert actual.decklist == expected.decklist
             assert actual.sideboard == expected.sideboard
-            assert actual.world == PACK
+            assert actual.world is None
         engine = managym.Env(seed=164)
         engine.reset(configs)
-        assert engine.content_pack_manifest()["pack_key"] == PACK
+        assert "pack_key" not in engine.content_pack_manifest()
 
 
 def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
@@ -98,14 +98,11 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
             == binding
         )
     bad = pair.to_rust()
-    bad[0] = managym.PlayerConfig("wrong pool", bad[0].decklist, {}, PACK)
+    bad[0] = managym.PlayerConfig("wrong pool", bad[0].decklist, {})
     with pytest.raises(ValueError, match="outside checkpoint"):
         validate_agent_setup(agent, bad)
-    missing_pack = [
-        managym.PlayerConfig(p.name, p.decklist, p.sideboard) for p in pair.to_rust()
-    ]
-    with pytest.raises(ValueError, match="explicit content pack"):
-        validate_agent_setup(agent, missing_pack)
+    with pytest.raises(ValueError, match="retired"):
+        managym.PlayerConfig("legacy", bad[0].decklist, {}, PACK)
     drifted = deepcopy(binding)
     drifted["setups"][0]["sideboard"] = {}
     with pytest.raises(ValueError, match="invalid setup|binding differs"):
@@ -134,7 +131,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
         Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
     )
     pack = BoundSemanticPack.from_env(native)
-    assert pack.definition_count == 100
+    assert pack.definition_count == managym.CARD_DEFINITION_COUNT
     assert pack.schema.raw["schema_version"] == 10
     pack.pad_catalog()
     tensors = {
@@ -307,7 +304,7 @@ def test_academy_records_a_real_elemental_command_with_the_exact_pack(
     )
     assert result["status"] == "accepted"
     assert session.env is not None
-    assert session.env.content_pack_manifest()["pack_key"] == PACK
+    assert "pack_key" not in session.env.content_pack_manifest()
     assert session.trace is not None
     assert (
         session.trace.config.hero_sideboard

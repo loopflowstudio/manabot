@@ -38,8 +38,9 @@ structured offers and proposed events; conformance fixtures live under
 superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
 and the w2-182/198/199 benchmark reports under `experiments/`).
 
-Authored setups come from `AuthoredPack::player_config` (Python:
-`managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
+Authored setups come from `AuthoredSetup::player_config` (Python:
+`managym.authored_deck_setup(setup, deck_key)`, naming the setup by preset or
+by the `pack_key` frozen evidence records). Carry that complete config
 when swapping seats or rebuilding roots: deck and sideboard together identify
 an authored setup. `PlayerConfig::new` intentionally gives custom setups an
 empty sideboard; it does not infer one from card names or a matching main deck.
@@ -139,15 +140,15 @@ The optional [policy-history v1 projection](../docs/training.md#policy-inputs) i
 derived suffix updated at the native event append. Observation reads share it;
 clone and diagnostic injection must preserve its documented lifecycle.
 
-`PlayerConfig.world` explicitly selects what a match runs on. Both seats
-must name the same value. An authored pack key runs only that pack's own
-setups. `"world"` (`managym.WORLD_SETUP`, set by `Deck.player()`) submits the
-decks to the installed world: each must pass `development-v1` admission against
-the world's supported cards (see [decklist import](../docs/decklist-import.md)).
-Unknown packs or partial bindings fail reset. Omitting it preserves exact-pair
-selection.
-Python `MatchHypers.authored` carries this binding for same-deck matches so replay
-cannot silently use generic card definitions.
+Every match, authored or not, runs on the world's one catalog
+(`cards::content_pack::default_content_pack`): every set-file definition in name
+order, so authored setups are decklists over the world pool, not packs.
+`PlayerConfig.submitted` (Python: `world="world"`, `managym.WORLD_SETUP`, set by
+`Deck.player()`) submits a deck to the installed world: it must pass
+`development-v1` admission against the world's supported cards (see [decklist
+import](../docs/decklist-import.md)) or reset fails. Fixed setups and tests leave
+it unset and run as given, including cards their set files mark incomplete.
+Any other `world` value is rejected: authored content packs are retired.
 
 Mana feasibility and production share typed costs and pools. `Mana.lesson`
 retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson

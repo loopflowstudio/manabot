@@ -19,11 +19,13 @@ use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
 
 use super::{
-    content_pool,
     deck_admission::{admit_in_world, DeckIssue, DeckSection},
-    pool_content, ContentError, ContentPool, PoolDefinition,
+    world_pool, ContentPool, PoolDefinition,
 };
-use crate::{cards::content_pack::ContentPack, state::deck::Deck, world::WORLD_POOL};
+use crate::{
+    cards::content_pack::{default_content_pack, ContentPack},
+    state::deck::Deck,
+};
 
 pub const DIALECT: &str = "counted-lines-v1";
 /// Operational bound on one source document, not a construction rule.
@@ -75,36 +77,21 @@ pub struct DeckImport {
 /// Decklists that failed admission, keyed by the caller's label (a seat, or a
 /// position in a supply), each carrying its line diagnostics.
 #[derive(Clone, Debug)]
-pub enum DecklistError {
-    /// The installed world could not be read.
-    World(ContentError),
-    Rejected(BTreeMap<String, Decklist>),
-}
+pub struct DecklistError(pub BTreeMap<String, Decklist>);
 
 impl std::fmt::Display for DecklistError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::World(error) => write!(f, "{error}"),
-            Self::Rejected(decklists) => {
-                let mut lines = Vec::new();
-                for (label, decklist) in decklists {
-                    for issue in &decklist.issues {
-                        let line = issue.line.map_or("-".to_owned(), |line| line.to_string());
-                        lines.push(format!(
-                            "{label} {}:{line}: {}",
-                            decklist.filename, issue.message
-                        ));
-                    }
-                }
-                write!(f, "{}", lines.join("; "))
+        let mut lines = Vec::new();
+        for (label, decklist) in &self.0 {
+            for issue in &decklist.issues {
+                let line = issue.line.map_or("-".to_owned(), |line| line.to_string());
+                lines.push(format!(
+                    "{label} {}:{line}: {}",
+                    decklist.filename, issue.message
+                ));
             }
         }
-    }
-}
-
-impl From<ContentError> for DecklistError {
-    fn from(error: ContentError) -> Self {
-        Self::World(error)
+        write!(f, "{}", lines.join("; "))
     }
 }
 
@@ -371,12 +358,12 @@ fn admit_with_world(
 /// Admit labelled decklists against the installed world, rejecting the whole
 /// input when any document has an issue; nothing is silently filtered.
 pub fn admit_decklists(decklists: &[(String, Decklist)]) -> Result<Vec<DeckImport>, DecklistError> {
-    let pool = content_pool(WORLD_POOL)?;
-    let content = pool_content(WORLD_POOL)?;
+    let pool = world_pool();
+    let content = default_content_pack();
     let mut admitted = Vec::new();
     let mut rejected = BTreeMap::new();
     for (label, decklist) in decklists {
-        match admit_with_world(decklist, &pool, &content) {
+        match admit_with_world(decklist, pool, &content) {
             Ok(imported) => admitted.push(imported),
             Err(decklist) => {
                 rejected.insert(label.clone(), decklist);
@@ -386,7 +373,7 @@ pub fn admit_decklists(decklists: &[(String, Decklist)]) -> Result<Vec<DeckImpor
     if rejected.is_empty() {
         Ok(admitted)
     } else {
-        Err(DecklistError::Rejected(rejected))
+        Err(DecklistError(rejected))
     }
 }
 
@@ -415,7 +402,7 @@ mod tests {
     const VILLAIN: &str = "20 Island\n";
 
     fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
-        admit_with_world(decklist, pool, &pool_content(WORLD_POOL).unwrap())
+        admit_with_world(decklist, pool, &default_content_pack())
     }
 
     fn import_match(hero: &str, villain: &str) -> Result<Vec<DeckImport>, DecklistError> {
@@ -466,7 +453,7 @@ mod tests {
 
     #[test]
     fn names_resolve_by_normalized_key_and_sum_counts() {
-        let pool = content_pool(WORLD_POOL).unwrap();
+        let pool = world_pool().clone();
         let reformatted = parse_decklist(
             "10 mountain\n5 Forest\n5  FOREST\n2 Avatar Enthusiasts\nSideboard\n1 Island",
             "x",
@@ -491,7 +478,7 @@ mod tests {
 
     #[test]
     fn unknown_unsupported_and_ambiguous_entries_name_their_lines() {
-        let mut pool = content_pool(WORLD_POOL).unwrap();
+        let mut pool = world_pool().clone();
         let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n2 Accumulate Wisdom\nMain\n1 Accumulate Wisdom\n";
         let rejected = admit(&parse_decklist(source, "x"), &pool).unwrap_err();
         assert_eq!(rejected.source, source);
@@ -519,7 +506,7 @@ mod tests {
 
     /// The pool with Forest renamed to a two-face registry name.
     fn double_faced_pool() -> ContentPool {
-        let mut pool = content_pool(WORLD_POOL).unwrap();
+        let mut pool = world_pool().clone();
         for row in &mut pool.definitions {
             if row.registry_name == "Forest" {
                 row.registry_name = "Front Face // Back Face".into();
@@ -556,9 +543,7 @@ mod tests {
             "1001 Forest",
         ] {
             let error = import_match(source, VILLAIN).unwrap_err();
-            let DecklistError::Rejected(rejected) = &error else {
-                panic!("{error}");
-            };
+            let DecklistError(rejected) = &error;
             assert_eq!(rejected.keys().collect::<Vec<_>>(), ["hero"]);
             assert!(error.to_string().starts_with("hero hero.txt:"));
         }

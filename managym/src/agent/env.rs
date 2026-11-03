@@ -224,9 +224,9 @@ impl Env {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        // Validate explicit content and setup bindings at the fallible environment
-        // boundary, before Game construction can panic on invalid content.
-        crate::cards::content_pack_for_match(&player_configs)
+        // Admit submitted decks at the fallible environment boundary, before
+        // Game construction can panic on them.
+        crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         self.action_trace = Some(NativeActionTrace {

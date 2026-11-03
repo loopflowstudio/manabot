@@ -73,6 +73,13 @@ prefix is gone). Content digests, state digests and learning tokens changed, so
 w17 conformance, authored-match, parity and Academy fixtures were re-recorded
 with the same Commands and decision revisions; the learning schema stays 9.
 
+MTG-225 (2026-11-02, same world) made the catalog the only content: authored
+setups are decklists over it rather than packs of their own cards, so every
+match runs on the catalog's `CardDefId`s and digest (unchanged). Matches of an
+authored setup therefore change state digests and manifests: their conformance
+cases, receipts and Academy fixtures need re-recording, and checkpoints bound
+to an authored pack's manifest no longer load.
+
 Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
 definition with a `serde` serializer: learning schema **9**, token values are
 stable hashes of Rust and printed names, and IR opcodes, roles and enums are

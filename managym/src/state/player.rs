@@ -12,8 +12,21 @@ pub struct PlayerConfig {
     pub name: String,
     #[serde(flatten)]
     pub deck: Deck,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub world: Option<String>,
+    /// The deck was submitted to the world ([`crate::world::WORLD_POOL`]):
+    /// game creation admits it by development construction
+    /// ([`crate::cards::deck_admission::admit_submitted`]). Fixed setups and
+    /// tests leave it unset and run as given. Serialized as
+    /// `"world": "world"`, the form traces have always recorded.
+    #[serde(
+        rename = "world",
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_submission"
+    )]
+    pub submitted: bool,
+}
+
+fn serialize_submission<S: serde::Serializer>(_: &bool, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(crate::world::WORLD_POOL)
 }
 
 impl PlayerConfig {
@@ -21,8 +34,14 @@ impl PlayerConfig {
         Self {
             name: name.into(),
             deck: Deck::new(decklist, BTreeMap::new()),
-            world: None,
+            submitted: false,
         }
+    }
+
+    /// Submit the deck to the world, so game creation admits it.
+    pub fn submit_to_world(mut self) -> Self {
+        self.submitted = true;
+        self
     }
 
     pub fn with_sideboard(mut self, sideboard: BTreeMap<String, usize>) -> Self {

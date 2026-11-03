@@ -1,10 +1,12 @@
-//! The immutable card catalog a match runs against.
+//! The world's one immutable card catalog.
 //!
 //! A [`ContentPack`] maps registry names to stable [`CardDefId`]s and shared
-//! [`CardDefinition`]s. The default pack holds every current card; authored
-//! setups and pools build keyed packs from chosen definitions
-//! ([`ContentPack::from_definitions`]). Packs carry a digest and manifest so
-//! derived consumers bind to exactly one content identity.
+//! [`CardDefinition`]s. A process holds one ([`default_content_pack`]): every
+//! definition in `cardsets/` plus the rules fixtures, in name order, with each
+//! double-faced card's back face registered right after its front. Every
+//! match, authored setup and search fork runs on it. Its digest and manifest
+//! name the world's cards for derived consumers (the world identity, learning
+//! catalogs, checkpoints).
 
 use std::{
     collections::BTreeMap,
@@ -32,16 +34,12 @@ pub struct ContentPackManifest {
     pub world_version: String,
     pub schema_version: u32,
     pub content_digest: String,
-    /// The authored setup or pool this pack was built for; `None` for the
-    /// default pack.
-    pub pack_key: Option<String>,
     pub definitions: Vec<ContentPackDefinitionManifest>,
 }
 
 #[derive(Clone)]
 pub struct ContentPack {
     pub schema_version: u32,
-    pack_key: Option<String>,
     cards_by_name: BTreeMap<String, CardDefId>,
     definitions: Vec<Arc<CardDefinition>>,
     /// Each back face's row and its front's (CR 712.1), derived from the
@@ -52,22 +50,17 @@ pub struct ContentPack {
 }
 
 /// Omits the lazy `digest` and `public_definitions` caches: they derive from
-/// the definitions, and the default pack is shared across threads, so printing
+/// the definitions, and the catalog is shared across threads, so printing
 /// them would make a match's `Debug` depend on when another reader filled them.
 impl fmt::Debug for ContentPack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ContentPack")
             .field("schema_version", &self.schema_version)
-            .field("pack_key", &self.pack_key)
             .field("cards_by_name", &self.cards_by_name)
             .field("definitions", &self.definitions)
             .finish_non_exhaustive()
     }
 }
-
-/// Legacy Rust name retained for conformance callers. Match state owns a
-/// shared `Arc<ContentPack>` rather than cloning this value.
-pub type CardRegistry = ContentPack;
 
 /// Every current card from `cardsets/` and the rules fixtures, in name order.
 fn default_order() -> Vec<CardDefinition> {
@@ -83,7 +76,7 @@ fn default_order() -> Vec<CardDefinition> {
 
 static DEFAULT_CONTENT_PACK: OnceLock<Arc<ContentPack>> = OnceLock::new();
 
-/// Process-wide immutable pack used by ordinary matches and every search fork.
+/// The process-wide catalog every match, authored setup and search fork shares.
 pub fn default_content_pack() -> Arc<ContentPack> {
     Arc::clone(DEFAULT_CONTENT_PACK.get_or_init(|| Arc::new(ContentPack::default())))
 }
@@ -106,7 +99,7 @@ impl ContentPack {
             .clone()
     }
 
-    /// Read-only descriptor for binding derived consumers to this exact pack.
+    /// Read-only descriptor for binding derived consumers to the catalog.
     ///
     /// Registry names are used only at the adapter boundary. Runtime match
     /// facts and learning projections continue to carry typed definition IDs.
@@ -115,7 +108,6 @@ impl ContentPack {
             world_version: crate::WORLD_VERSION.into(),
             schema_version: self.schema_version,
             content_digest: self.content_digest(),
-            pack_key: self.pack_key.clone(),
             definitions: self
                 .definition_entries()
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
@@ -127,21 +119,13 @@ impl ContentPack {
     }
 }
 
+/// A freshly allocated catalog. Matches share [`default_content_pack`]; a
+/// separate allocation exists to show that match state identity ignores it.
 impl Default for ContentPack {
     fn default() -> Self {
-        Self::from_definitions(None, default_order())
-    }
-}
-
-impl ContentPack {
-    /// A pack of exactly `definitions`, in order.
-    pub(crate) fn from_definitions(
-        pack_key: Option<String>,
-        definitions: Vec<CardDefinition>,
-    ) -> Self {
+        let definitions = default_order();
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
-            pack_key,
             cards_by_name: BTreeMap::new(),
             back_faces: BTreeMap::new(),
             digest: OnceLock::new(),
@@ -153,18 +137,20 @@ impl ContentPack {
         }
         out
     }
+}
 
-    /// The authored setup or pool this pack was built for.
-    pub fn pack_key(&self) -> Option<&str> {
-        self.pack_key.as_deref()
-    }
-
+impl ContentPack {
+    /// Append `definition`, and then its back face, as the next rows.
+    ///
+    /// Registration is the catalog's one normalization of a definition: ward
+    /// (CR 702.21) is a triggered ability, "Whenever this permanent becomes
+    /// the target of a spell or ability an opponent controls, counter it
+    /// unless that player pays [cost]", so a set file states ward once as a
+    /// keyword and the catalog adds the trigger. Besides the catalog's own
+    /// construction, only content-sensitivity tests extend a copy.
     pub fn register_card(&mut self, mut definition: CardDefinition) {
         self.digest.take();
         self.public_definitions.take();
-        // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
-        // becomes the target of a spell or ability an opponent controls,
-        // counter it unless that player pays [cost]."
         if let Some(ward_cost) = definition.ward().cloned() {
             definition.abilities.push(Ability::Triggered {
                 intervening_if: None,
