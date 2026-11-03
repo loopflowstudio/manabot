@@ -1407,7 +1407,7 @@ mod tests {
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&obs, &config).unwrap();
         assert_eq!(encoded.facts.len(), 512 * FACT_DIM);
-        for (index, row) in encoded.facts.chunks_exact(FACT_DIM).enumerate() {
+        for (index, row) in encoded.facts.as_chunks::<FACT_DIM>().0.iter().enumerate() {
             if index < 140 {
                 assert_eq!(row[FACT_VALID_INDEX], 1.0);
                 assert_eq!(row[FACT_ORDER_INDEX], (index / 2 + 1) as f32);
