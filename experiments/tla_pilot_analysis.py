@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 from etude.experiment import ExperimentState, observe
 import numpy as np
+import numpy.typing as npt
 from pydantic import Field
 
 from experiments.tla_pilot import (
@@ -234,7 +235,6 @@ def analyze(
     reports: list[PilotAnalysis] = []
     for run in state.runs:
         comparisons: list[Comparison] = []
-        initial_scores: list[float] = []
         for planned in comparison_schedule(run, protocol):
             checkpoint = planned.checkpoint
             # The scheduler constructs matches in frozen pair order. Keep absent
@@ -248,20 +248,6 @@ def analyze(
                 _pair_result(db, pair, key, environment_id, has_games)
                 for pair, key in zip(protocol.pairs, keys, strict=True)
             ]
-            scores = [pair.score for pair in pairs if pair.score is not None]
-            if planned.update == 0:
-                initial_scores = scores
-            gain = None
-            if planned.anchor == "heuristic" and len(scores) == len(
-                initial_scores
-            ) == len(protocol.pairs):
-                gain = bootstrap_mean_interval(
-                    [
-                        later - earlier
-                        for later, earlier in zip(scores, initial_scores, strict=True)
-                    ],
-                    indices,
-                )
             comparisons.append(
                 Comparison(
                     update=planned.update,
@@ -271,12 +257,9 @@ def analyze(
                     clocks=checkpoint.clocks if checkpoint else {},
                     counts=_total([pair.counts for pair in pairs]),
                     pairs=pairs,
-                    heuristic_gain=gain,
-                    score=bootstrap_mean_interval(scores, indices)
-                    if len(scores) == len(protocol.pairs)
-                    else None,
                 )
             )
+        comparisons = _estimate_scores(comparisons, indices)
         issues: list[str] = []
         if not any(c.endpoint and c.update for c in comparisons):
             issues.append("No successful trained endpoint is retained.")
@@ -316,6 +299,36 @@ def analyze(
             )
         )
     return reports
+
+
+def _estimate_scores(
+    comparisons: list[Comparison], indices: npt.NDArray[np.int64]
+) -> list[Comparison]:
+    """Estimate complete blocks, then gains against the explicit initialization.
+
+    Pair order comes from the frozen schedule; comparison order is irrelevant.
+    Incomplete blocks never enter either the score or paired-gain estimate.
+    """
+    complete: dict[tuple[int | None, Anchor], npt.NDArray[np.float64]] = {}
+    for comparison in comparisons:
+        scores = [pair.score for pair in comparison.pairs if pair.score is not None]
+        if len(scores) == len(comparison.pairs):
+            complete[comparison.update, comparison.anchor] = np.asarray(
+                scores, dtype=np.float64
+            )
+    initial = complete.get((0, "heuristic"))
+    estimates: list[Comparison] = []
+    for comparison in comparisons:
+        scores = complete.get((comparison.update, comparison.anchor))
+        score = gain = None
+        if scores is not None:
+            score = bootstrap_mean_interval(scores, indices)
+            if comparison.anchor == "heuristic" and initial is not None:
+                gain = bootstrap_mean_interval(scores - initial, indices)
+        estimates.append(
+            comparison.model_copy(update={"score": score, "heuristic_gain": gain})
+        )
+    return estimates
 
 
 def main() -> None:

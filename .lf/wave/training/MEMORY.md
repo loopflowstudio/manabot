@@ -25,9 +25,15 @@ access uses `manabot/prd`; nested injection supplies both without copying secret
 Checking only the application project did not establish missing credentials.
 He authorized an available configured GPU alternative within the same cumulative
 cap, with hardware/allocation deviations recorded before scoring. Provider
-availability alone is not a reservation: an A6000 availability response was
-positive but the subsequent pilot launch quote rejected capacity. No paid run
-was started at reconciliation. A local one-update/199-decision proof
+availability and launch quotes are not reservations: Etude 0.2.12 uses the same
+template/offer path for both, but catalog responses changed between reads.
+An admitted L4 quote subsequently failed launch admission after source preparation,
+before acquiring a machine. The upstream cause of the changing replies remains
+unknown. The retained 2026-11-03 19:35 UTC audit exhausted all six configured GPU
+quotes and found no provider pods, unsettled GPU sessions or pilot cohort, with
+$0 paid compute. This is dated capacity evidence, not permanent unavailability;
+any later allocation still needs a fresh quote and cumulative-cost reconciliation.
+A local one-update/199-decision proof
 and 12 replay-valid evaluation games establish the connected implementation path,
 not GPU readiness, learning improvement or Elemental-relative pace. The full
 catalog/v5 policy and new population differ from the historical Elemental setup.

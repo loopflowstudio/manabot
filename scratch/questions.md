@@ -38,5 +38,13 @@ The earlier local-only/no-merge assumptions are superseded.
   Etude's Report panels have no custom inference hook, so the companion
   `experiments.tla_pilot_analysis` CLI owns the qualified JSON result.
 
+- Launch continuation (2026-11-03): source preparation took about five minutes
+  and capacity disappeared before admission again. Prepare once with Etude's
+  existing `source.freeze`, retain the typed `Run` under `.runs/mtg213/`, then
+  quote and submit that same request through `client.launch_cohort`. This avoids
+  repeating git history preparation between quote and admission; it changes no
+  job, corpus, source identity, resource limits or provider policy. MTG-239
+  retains ownership of general launcher improvements.
+
 Inherited unrelated notes remain at
 22e4aab716f2b582d704b88dc5d22cb1547ce623:scratch/questions.md.

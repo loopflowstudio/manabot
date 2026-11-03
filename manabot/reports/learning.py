@@ -17,7 +17,7 @@ from matplotlib.figure import Figure
 import numpy as np
 
 from manabot.eval.monitor import MonitorResult
-from manabot.eval.results import EvaluationRow, RateInterval
+from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_interval
 from manabot.infra.identity import canonical_sha256
 
 if TYPE_CHECKING:
@@ -108,17 +108,13 @@ def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
                     "deck cohort must contain both candidate seats per deal"
                 )
             blocks.append(sum(r.score_a == 1 for r in pair) / 2)
-        draws = np.asarray(blocks)[indices].mean(axis=1)
-        lo, hi = np.quantile(draws, [0.025, 0.975])
         summaries.append(
             DeckResult(
                 deck,
                 sum(r.score_a == 1 for r in selected),
                 sum(r.score_a == 0.5 for r in selected),
                 len(selected),
-                RateInterval(
-                    mean=float(np.mean(blocks)), lower=float(lo), upper=float(hi)
-                ),
+                bootstrap_mean_interval(blocks, indices),
             )
         )
     if result.win is not None:

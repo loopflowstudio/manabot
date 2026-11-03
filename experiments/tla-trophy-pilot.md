@@ -11,6 +11,27 @@ changed. Provider access uses both existing configurations:
 doppler run --project manabot --config prd -- doppler run --project etude --config prd -- uv run etude availability l4 --timeout 20
 ```
 
+The latest continuation, prompted by Jack Heart's 20:03 UTC capacity update,
+also failed admission. L4 launch `949ad568707d` / requested run `9453ce06ef46`
+quoted $0.59/hour (maximum $0.7375), then lost capacity during source
+preparation. The source is `b8835f63b4e7132ae6fd3f86cc73cefa6716e57f`.
+Etude's existing `source.freeze` then prepared request `d8ff03724b8a` once,
+removing that preparation delay from the next quote-to-admission interval.
+At 20:15 UTC an A4000 alternative quoted $0.25/hour (maximum $0.3125 under
+the unchanged $1 job cap). Its selection was recorded before submission,
+within Jack Heart's alternative-GPU authorization. RunPod refused the actual
+create: no A4000 was available in any data center. Launch `95efe5e43df8`
+recorded no acquired machine. No hardware deviation actually ran.
+
+At **20:16 UTC**, reconciliation again confirmed zero provider pods, no
+unsettled GPU sessions, no pilot cohort and **$0 cumulative pilot spend**.
+No retry or queued work remains. The [continuation audit and prepared request](
+data/mtg213/launch-audit-20261103-resume/receipt.json) retain the exact source,
+quotes, refusal and cleanup evidence; `prepared-run.json` beside it retains
+the typed Etude request for a future authorized continuation after fresh
+capacity and cost checks. A positive catalog quote did not establish rentable
+capacity even with source preparation completed. No learner milestone was sent.
+
 At 19:35 UTC, all six configured GPU launch quotes rejected capacity: `l4`,
 `l4-etude`, `a4000`, `a4500`, `mtg188-a6000` and `mtg188-policy-l4`.
 Earlier at 19:28 UTC, L4 and A6000 briefly admitted quotes at $0.59/hour,
@@ -33,7 +54,7 @@ The [frozen protocol](protocols/tla-trophy-213-v1.md) reserves at most $1 for
 its first L4 attempt within Jack Heart's $10 total cap. His later direction
 authorizes an available configured GPU alternative within that cap, with any
 hardware/allocation deviation recorded before scoring. No alternative allocation
-occurred; the frozen source/corpus and analysis criteria remain unchanged.
+ran; the frozen corpus, recipe and analysis criteria remain unchanged.
 Current configured options are exhausted at the recorded observation time,
 not permanently unavailable. No queued work or retry loop was left running.
 
