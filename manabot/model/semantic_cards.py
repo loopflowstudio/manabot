@@ -134,43 +134,37 @@ class SemanticCardEncoder(nn.Module):
             ids, len(self.definition_rows), self.definition_rows
         )
 
-    def definitions(self, referenced: torch.Tensor | None = None) -> torch.Tensor:
+    def definitions(self, rows: torch.Tensor | None = None) -> torch.Tensor:
         """Encode catalog programs into a [definitions + 1, hidden] table; row 0
         is the zero padding row and every consumer indexes by catalog row + 1.
 
-        With `referenced` (catalog rows + 1, any shape, duplicates allowed),
-        only those programs run through the GRU and the rest of the table is
-        zero. Each program is encoded independently, so referenced rows equal
-        the full encoding and parameter gradients are identical: unreferenced
-        rows receive none. Training uses this because the catalog grows with
-        the world while a batch references a small subset; inference caches
-        the full table once per policy scope instead.
+        With `rows` (unique catalog rows + 1, from `referenced_rows`), only
+        those programs run through the GRU and the rest of the table is zero.
+        Each program is encoded independently, so selected rows equal the full
+        encoding and parameter gradients are identical: unreferenced rows
+        receive none. Training uses this because the catalog grows with the
+        world while a batch references a small subset; inference caches the
+        full table once per policy scope instead.
         """
-        if referenced is None:
-            selected = None
-            tokens, lengths = self.tokens, self.lengths
-        else:
-            selected = referenced[referenced > 0].unique()
-            tokens = self.tokens[selected - 1]
-            lengths = self.lengths[selected - 1]
-        width = self.token_embedding.embedding_dim
-        if selected is not None and len(selected) == 0:
-            return self.token_embedding.weight.new_zeros((len(self.tokens) + 1, width))
+        count = len(self.tokens)
+        if rows is None:
+            rows = torch.arange(1, count + 1, device=self.tokens.device)
+        table = self.token_embedding.weight.new_zeros(
+            (count + 1, self.token_embedding.embedding_dim)
+        )
+        if len(rows) == 0:
+            return table
         packed = nn.utils.rnn.pack_padded_sequence(
-            self.token_embedding(tokens),
-            lengths.cpu(),
+            self.token_embedding(self.tokens[rows - 1]),
+            self.lengths[rows - 1].cpu(),
             batch_first=True,
             enforce_sorted=False,
         )
         _, state = self.encoder(packed)
-        if selected is None:
-            return torch.cat((state.new_zeros((1, width)), state[0]))
-        return state.new_zeros((len(self.tokens) + 1, width)).index_copy(
-            0, selected, state[0]
-        )
+        return table.index_copy(0, rows, state[0])
 
     def referenced_rows(self, ids: list[torch.Tensor]) -> torch.Tensor:
-        """Catalog rows + 1 named by admissible transport IDs in `ids`.
+        """Unique catalog rows + 1 named by admissible transport IDs in `ids`.
 
         Inadmissible IDs are skipped here, not rejected: each consumer admits
         its own references and raises its own error, and padding is ignored.
@@ -184,7 +178,7 @@ class SemanticCardEncoder(nn.Module):
                 & (values < len(self.definition_rows))
             )
             found.append(self.definition_rows[values[admissible].long()])
-        rows = torch.cat(found)
+        rows = torch.cat(found).unique()
         return rows[rows > 0]
 
     def embed_definitions(

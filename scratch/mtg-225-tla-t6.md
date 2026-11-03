@@ -102,9 +102,10 @@ evidence.
 1. **Learning encodes only referenced definitions.** With autograd on,
    `ActorCritic._referenced_definitions` collects every catalog row a batch can
    index (visible cards, permanents, known hands, decklists, public history,
-   relations) and `SemanticCardEncoder.definitions(referenced)` runs the GRU
-   over those programs only, scattering them into the full-size table (other
-   rows zero). Without autograd, and in `PolicyInference`'s cached table, the
+   relations) as unique rows (`SemanticCardEncoder.referenced_rows`), and
+   `definitions(rows)` runs the GRU over those programs only, scattering them
+   into the full-size table (other rows zero); `rows=None` selects every row
+   through the same path. Without autograd, and in `PolicyInference`'s cached table, the
    full catalog is still encoded: the subset GRU differs from the full one by
    ~1e-8 rounding, and unprepared no-grad inference must stay bitwise equal to
    serving (`test_scope_rejects_autograd_closed_and_changed_policy`). Proof:
@@ -140,6 +141,7 @@ crate move/Keywords integration and the w17 re-record wait for it. #412
 
 ## Check
 
+2026-11-02 compress (one `definitions` path, `referenced_rows` returns unique rows): `pytest tests/model/test_inference.py tests/model/test_policy_catalog.py tests/semantic/test_current_content.py` 39 passed; worker test 5.4 s.
 2026-11-02, referenced encoding and label rename: `pytest tests/model/test_inference.py
 tests/model/test_recent_events.py tests/model/test_policy_catalog.py
 tests/semantic/test_current_content.py` plus the worker test: 49 passed, 1 skipped

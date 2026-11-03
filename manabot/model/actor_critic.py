@@ -517,15 +517,14 @@ class ActorCritic(nn.Module):
             # Learning encodes only referenced definitions (same values within
             # float rounding, identical gradient support); without autograd the
             # full table keeps unprepared inference bitwise equal to serving.
-            definitions = (
-                obs.scope.catalog()
-                if isinstance(obs, PreparedObservation)
-                else self.semantic_cards.definitions(
+            if isinstance(obs, PreparedObservation):
+                definitions = obs.scope.catalog()
+            elif torch.is_grad_enabled():
+                definitions = self.semantic_cards.definitions(
                     self._referenced_definitions(obs, permanent_ids)
-                    if torch.is_grad_enabled()
-                    else None
                 )
-            )
+            else:
+                definitions = self.semantic_cards.definitions()
             assert definitions is not None
             cards, known = self.semantic_cards(obs, definitions, references)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
@@ -681,7 +680,7 @@ class ActorCritic(nn.Module):
     def _referenced_definitions(
         self, obs: Dict[str, torch.Tensor], permanent_ids: torch.Tensor
     ) -> torch.Tensor:
-        """Every catalog row (+1) this batch can index: visible cards,
+        """Unique catalog rows + 1 this batch can index: visible cards,
         permanents, known hands, decklists, public history and relations.
 
         A source added to the forward pass must be added here, or its rows
