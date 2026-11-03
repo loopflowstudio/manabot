@@ -68,10 +68,14 @@ of fact embeddings. This rules out compaction under those unchanged semantics,
 not compression under every possible new contract. Dropping facts, excluding the
 deck or retrying for a lucky sample would change the accepted experiment.
 
-On 2026-11-03 the primary operator selected prospective input v6 with
-`max_facts=512` under Jack Heart's bug-fix authorization (comment 5d6cf81e);
-Jack Heart confirmed the repair direction in 0c17ad58. The operator chose 512
-as an engineering allocation, not proof that every reachable state fits.
+On 2026-11-03 the primary operator initially selected prospective input v6
+with 512 fact rows under Jack Heart's bug-fix authorization (comment 5d6cf81e),
+then selected **256 for the pilot** after his question about that capacity
+(78f4c226). Comment be5b1394 relays Jack Heart's explicit confirmation of the
+immediate larger-capacity hotfix; 0c17ad58 was an operator-issued run reason,
+not separate human confirmation. Broader representation/history/memory design
+belongs to a separate Task. Generic fresh v6 still defaults to 512. The pilot's
+256 rows are an engineering allocation, not proof that every reachable state fits.
 The implemented contract derives allocation, scalar/vector/Python encoding,
 model shapes and checkpoint receipts from the versioned configuration. Frozen
 v5 stays at 128 and legacy serialization omits the new field. Timestamp
@@ -81,12 +85,21 @@ All twelve columns, ordering and provenance remain unchanged, and overflow
 stays fatal. A 128-row v6 buffer encodes exactly like v5 while saved configuration
 still binds the version separately.
 
+The 23:20 UTC launcher, local tracking and configured artifact-store reads
+found no v2 execution/scoring evidence, permitting amendment of the prepared
+v2 bindings to 256. Earlier 512 preparation remains at
+`1af50386fdc4d96b936e81a8c32fae3054dc2c5c`; the pre-amendment read and separate
+512/256 replay receipts remain in `.runs/mtg213/`. Executed or scored bindings
+require a new prospective identity rather than an in-place amendment.
+
 Prospective protocol/regime `tla-trophy-213-v2` and experiment `tla_pilot_v2`
-bind the selected runtime and the same 134 entries, weights, recipe and paired
+bind v6/256, the selected runtime and the same 134 entries, weights, recipe and paired
 evaluation schedule. Fresh initialization/evaluation are required; the evaluator
 rejects v1 runs. The retained 87-action prefix matches the pre-command frame on
 the selected runtime, with all 140 facts equal across v6 scalar/vector/Python
-paths; both v5 encoders retain the original overflow. This establishes repair
+paths at capacity 256; both v5 encoders retain the original overflow. A controlled
+boundary fixture retains all 256 distinct rows and rejects 258 in native/Python
+encoding. This establishes repair
 of the counterexample, not a successful training run or universal capacity.
 Historical v1 execution uses pinned source; its inputs and results remain
 unchanged. The prospective contract is in experiments/protocols/tla-trophy-213-v2.md;

@@ -9,8 +9,9 @@ down, with no provider pods or unsettled sessions at that read.
 The subsequently accepted [prospective v2 repair](protocols/tla-trophy-213-v2.md)
 selects policy input v6 and an explicit 256 fact rows for the pilot; generic
 fresh v6 configuration defaults to 512. It preserves v5 and all
-results below. Full gate, source freeze and a new capped training/evaluation
-attempt remain outstanding; no GPU learner update has yet been observed.
+results below. Local publication checks passed; CI, source freeze and a new
+capped training/evaluation attempt remain outstanding. No GPU learner update
+has yet been observed.
 
 ## Paid attempts (2026-11-03)
 
@@ -169,8 +170,16 @@ rejects 258 facts at the 256 bound. The new local receipt is
 This allocation does not establish capacity for every legal state or a measured
 end-to-end speedup.
 
-Full affected gate/CI, publication and an exact source freeze remain before the
-next capped attempt. That attempt requires fresh reconciliation of both $0.7375
+Local publication validation covers 510 distinct passing Python tests (2 skipped),
+895 passing debug Rust tests (2 ignored), Ruff, Rust fmt/clippy and a rebuilt
+native extension. The numerical fixture now uses a deterministic four-decision
+quota instead of waiting for complete games under its extreme policy. Two
+recovery checks rejected a commit change during validation and passed when
+rerun with HEAD fixed; recovery admission remains unchanged. These are local
+implementation checks, not GPU or strength results.
+
+CI and an exact source freeze remain before the next capped attempt.
+That attempt requires fresh reconciliation of both $0.7375
 reservations and provider billing, new v2 initialization and the unchanged
 evaluation schedule. Actual GPU learner updates, periodic/endpoint checkpoints
 and learning/Elemental-pace evidence remain unmet. No paid-training milestone

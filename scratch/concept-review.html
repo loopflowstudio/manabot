@@ -22,12 +22,16 @@
   Built from <code>scratch/mtg-213.md</code>, <code>scratch/questions.md</code>,
   <code>experiments/protocols/tla-trophy-213-v2.md</code>,
   <code>experiments/tla_pilot_v2.py</code>, <code>experiments/tla_pilot_analysis.py</code>,
-  <code>manabot/infra/config.py</code>, the native/Python encoders and operator comment 78f4c226.
+  <code>manabot/infra/config.py</code>, <code>docs/training.md</code>,
+  <code>docs/observation-architecture.html</code>, the native/Python encoders,
+  and comments 78f4c226 / be5b1394. Reviewed implementation: <code>78bde5442</code>.
 </header>
 <main>
-<h1>Use 256 facts for the prospective pilot.</h1>
-<p class="decision"><strong>Implemented; full gate and paid training remain.</strong>
-The operator selected 256 following Jack Heart's question. The 23:20 UTC
+<h1>No further design decision is needed for the hotfix.</h1>
+<p class="decision"><strong>Review outcome: no design change and no open product choice.</strong>
+The explicit v6/256 pilot is implemented; full gate and paid training remain.
+The operator selected 256 following Jack Heart's question, and comment be5b1394
+relays his confirmation of the immediate capacity hotfix. The 23:20 UTC
 launcher/local/R2 check found no v2 execution or scoring, so the prepared v2
 bindings were amended in place. The retained replay passes at 256.</p>
 
@@ -43,6 +47,10 @@ policy observes, not 140 different game mechanics.</p>
     <tr><td>v6 · 256 rows</td><td>116 rows beyond this case</td><td>Selected pilot; replay and boundary checks pass</td></tr>
   </tbody>
 </table>
+<p><strong>Before:</strong> a legal game could require 140 facts while its frozen
+policy input allowed only 128. <strong>After, implemented:</strong> select a new
+pilot contract with enough capacity for this retained case; preserve the original
+failure. A deck exception or hidden truncation would change the experiment.</p>
 <p>The recipe, runner and protocol now agree on the selected pilot capacity of
 256. Configuration already owns the
 capacity. No new encoder concept is needed. The generic fresh-v6 default stays
@@ -59,7 +67,7 @@ capacity. No new encoder concept is needed. The generic fresh-v6 default stays
     <tr><td>Assess improvement</td><td>Complete comparisons + uncertainty</td><td><code>experiments.tla_pilot_analysis</code></td></tr>
   </tbody>
 </table>
-<p><strong>Proposed usage:</strong> select the explicit v6/256 pilot, freeze its
+<p><strong>Accepted usage; paid execution outstanding:</strong> select the explicit v6/256 pilot, freeze its
 verified source, initialize fresh, then train and evaluate. Each seat draws
 independently from the same 134 entries, including mirrors. Report the launch
 milestone only after GPU learner updates are observed.</p>
@@ -68,8 +76,12 @@ milestone only after GPU learner updates are observed.</p>
 <p>Keep the original v1 failure, checkpoints, evaluation and costs. This repair
 starts a new input/runtime identity; it cannot resume or relabel v1 evidence.
 The pre-amendment execution/scoring check is retained in
-<code>.runs/mtg213/v2-pre-amendment-state.json</code>. Within an unchanged contract, ordinary recovery
-retains run identity; missing checkpoints and failed games stay in the schedule.</p>
+<code>.runs/mtg213/v2-pre-amendment-state.json</code>. Within an unchanged contract,
+use the existing supported recovery path and preserve failure accounting;
+missing checkpoints and failed games stay in the schedule. This is not a promise
+of exact CUDA process recovery. The worker rejects policy-only
+<code>etude continue</code>; declared learner continuation requires its admitted
+exports.</p>
 <p>256 halves fact-buffer storage relative to 512. It establishes neither an
 end-to-end speedup nor complete legal-state coverage. A state above 256 must
 still fail and retain evidence. Dropping facts or excluding the deck would
@@ -82,7 +94,8 @@ new operational cohort replenishes the budget.</p>
 <ol>
   <li><strong>Which capacity is selected?</strong> Explicit 256 for the pilot,
   chosen by the operator following Jack Heart's question. 512 was also an
-  operator choice; comment 0c17ad58 was not separate human confirmation.</li>
+  operator choice; comment 0c17ad58 was not separate human confirmation.
+  Comment be5b1394 relays his explicit confirmation of the hotfix.</li>
   <li><strong>May prepared v2 bindings change?</strong> The completed launcher/local/R2 check
   found no v2 execution/scoring; the prepared bindings were amended in place.
   The earlier 512 preparation remains in git at <code>1af50386f</code>.</li>
@@ -90,6 +103,9 @@ new operational cohort replenishes the budget.</p>
   agrees across native scalar/vector/Python at 256; a fixture rejects 258 facts.
   V5 overflow and rank/128 normalization remain unchanged. Gate and the
   caller-owned paid pilot can supply the still-missing training/evaluation proof.</li>
+  <li><strong>Must state, history or memory be redesigned first?</strong> No.
+  Those alternatives belong to the separate design Task. The immediate hotfix
+  preserves the existing semantics; no unresolved product choice blocks it.</li>
 </ol>
 </main>
 </html>
