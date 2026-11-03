@@ -902,12 +902,18 @@ impl Game {
                 }
             }
             Decision::OpponentSplitsRevealed {
-                player, revealed, ..
+                player,
+                revealed: cards,
+                ..
+            }
+            | Decision::OrderLibraryBottom {
+                player,
+                remaining: cards,
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, revealed.iter().copied(), false),
-                focus: self.card_focus(revealed),
+                actions: select_cards(*player, cards.iter().copied(), false),
+                focus: self.card_focus(cards),
             },
             Decision::Discard { player, .. } | Decision::OptionalDiscardDraw { player, .. } => {
                 ActionSpace {
@@ -930,7 +936,11 @@ impl Game {
                 }
             }
 
-            Decision::SelectMilled { player, cards, .. } => ActionSpace {
+            Decision::SelectMilled { player, cards, .. }
+            | Decision::Surveil {
+                player,
+                looked: cards,
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(*player, cards.iter().copied(), true),
@@ -951,22 +961,7 @@ impl Game {
                         })
                     })
                     .collect(),
-                focus: remaining
-                    .iter()
-                    .map(|card| self.state.cards[card].id)
-                    .collect(),
-            },
-            Decision::OrderLibraryBottom { player, remaining } => ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, remaining.iter().copied(), false),
                 focus: self.card_focus(remaining),
-            },
-            Decision::Surveil { player, looked } => ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, looked.iter().copied(), true),
-                focus: self.card_focus(looked),
             },
             Decision::LookAndSelect {
                 player,
@@ -991,10 +986,7 @@ impl Game {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
                     actions,
-                    focus: looked
-                        .iter()
-                        .map(|card| self.state.cards[card].id)
-                        .collect(),
+                    focus: self.card_focus(looked),
                 }
             }
             Decision::Modal { player, modes } => ActionSpace {

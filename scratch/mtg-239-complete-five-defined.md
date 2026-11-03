@@ -1,200 +1,129 @@
 # MTG-239 — five defined cards
 
-Implementation plan, reconciled 2026-11-03 against `72e29f5de`, including
-the admission cleanup in `ae06995b1`. Jack Heart's
-Task directive and November 3 playability clarification are accepted scope;
-the admission cleanup and immediate ordering with clearer draw-order wording
-are accepted by Jack Heart (November 3, comment 6b64d212). One PR,
-with publication and broader acceptance owned by later code Graph steps.
+Accepted scope: Jack Heart's Task directive and November 3 clarification
+(comment 1f3876a7), plus exclusion removal and immediate ordering with clearer
+draw-order wording (comment 6b64d212). One PR, #415; subsequent code Graph steps
+own gate, demo and publication. CI recovery follows comment d35e6e94 and is
+recorded in [ci-recovery.md](ci-recovery.md). No product decision is unresolved.
 
-## Outcome and design
+## Outcome and implementation
 
-Make Accumulate Wisdom, Cat-Gator, Lightning Strike, Suki, Kyoshi Warrior and
-Water Tribe Rallier faithful through the existing rules and deck admission.
-The official September 25, 2026 [Comprehensive Rules](https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt)
-confirm owner-chosen library order (401.4), four any-target categories (115.4),
-CDA evaluation in all zones (604.3), and loyalty/defense removal from damage
-(120.3c/h). No new planeswalker/battle cards, battle combat system, T6 content,
-training run or corpus revision is included.
+Complete Accumulate Wisdom, Cat-Gator, Lightning Strike, Suki, Kyoshi Warrior
+and Water Tribe Rallier through shared rules and whole-deck admission.
+The September 25, 2026 [Comprehensive Rules](https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt)
+are the design's rules reference: owner-chosen library order (401.4), four
+any-target categories (115.4), CDAs in all zones (604.3), and loyalty/defense
+removal from damage (120.3c/h).
 
-- Give LookAndSelect an explicit remainder-order rule. Random-order cards
-  retain it; Accumulate Wisdom suspends on an uncapped native bottom-order
-  choice. Each SelectCard commits the next card, nearest the top first. Use
-  existing Commands, card focus, private inspection and forced-decision skip.
-  Append a continuation code and text stage; keep frozen widths/codes stable.
-- Replace the misleading CreatureOrPlayer specification with AnyTarget across
-  its existing callers (all printed any-target cards). Legal and resolution
-  checks share layered types and hexproof. Damage marks creatures and removes
-  loyalty/defense counters as applicable, with one damage event and lifelink.
-  Zero-counter unsupported-shell fixtures exercise ordinary graveyard SBAs;
-  no new catalog card is implied.
-- Add a contextual card-power reader: battlefield uses the layered view;
-  stack uses controller; other zones/outside use owner. Reuse the existing CDA
-  evaluator. Route zone power filters and visible card rows through it.
-  Ability loss removes the battlefield CDA; leaving restores the off-field CDA.
-- Support defined non-token cards through the existing Decklist/admit_decklists
-  authority. Remove bug-based eligibility exclusions; preserve token, fixture
-  and unknown-card rejection and whole-list main/sideboard coverage.
+- `LookAndSelect.random_order` preserves random placement for other cards.
+  Accumulate Wisdom suspends on uncapped `OrderLibraryBottom`: ordinary
+  SelectCard Commands place the next card nearest the top first. Each choice
+  commits immediately; native forced-decision skipping places the last card.
+  Continuation code 23, the text stage and definition tokens expose the rule
+  without changing frozen widths or existing codes.
+- `AnyTarget` replaces CreatureOrPlayer across printed any-target cards.
+  Legality and resolution share layered types and hexproof. Damage marks
+  creatures and removes loyalty/defense for every applicable type, with one
+  damage event and lifelink. Non-destruction graveyard SBAs take precedence
+  over lethal destruction; counter descriptions reuse canonical names.
+- `Game::card_power` reads the layered battlefield view, the controller's CDA
+  on the stack, and the owner's CDA elsewhere (including outside the game).
+  Zone predicates and visible card rows share it. Ability loss removes the
+  battlefield CDA; leaving restores the off-field CDA. Rallier excludes Suki
+  when its library power exceeds three.
+- Defined non-token cards are admitted through Decklist/admit_decklists;
+  token, rules-fixture and unknown-card rejection remains. Known rules bugs
+  belong in bug Tasks, not play restrictions; playable does not mean bug-free.
+  Whole-list main/sideboard and training-source/checkpoint/replacement tests
+  preserve positive admission and rejected-replacement root identity.
 
-## Completed implementation cuts
+Inspection decisions share action construction only when the candidate list
+and decline behavior agree. Their distinct decisions, commitment rules,
+visibility and ordering remain owned by the existing resolution path. Scry
+and LookAndSelect reuse `card_focus` instead of repeating object-ID projection.
 
-All deletion targets are complete; none remain:
+## Delete — do not maintain
 
-- `managym_cards::Incomplete`, `managym_cards::incomplete`, the empty
-  `tla::INCOMPLETE` list and the pool's bug-based exclusion branch. Preserve
-  token, rules-fixture and unknown-card rejection and whole-deck admission.
-- Live documentation of the incomplete-card exception and stale TLA exclusion
-  list. Preserve historical evidence and the accepted bug-tracking direction.
-- TargetSpec::CreatureOrPlayer and its old text/fast-path assumptions: replace
-  with AnyTarget, preserving ordering, exact target identity and ward handling.
-- Unconditional random remainder in LookAndSelect and the Accumulate Wisdom
-  test that accepts either order: preserve random semantics on other cards.
-- Printed-power fallbacks in contextual zone predicates/observations: preserve
-  printed-only structural matching where no game context is involved.
-- `Game::bottom_in_random_order`: its sole caller now owns shuffle and
-  placement together, sharing placement with a forced singleton. Both
-  LookAndSelect exits reuse `continue_resolution` for suspension/resumption.
-- Admission tests using Accumulate Wisdom, Cat-Gator or Rallier as rejection
-  fixtures: replace them with the Ally token while preserving error assertions,
-  unchanged roots after failed replacement, and positive admission of those
-  cards. Existing unknown-card and rules-fixture rejection stays covered.
+Completed; no remaining deletion targets:
 
-## Implementation outcome — 2026-11-03
+- `managym_cards::{Incomplete, incomplete}`, `tla::INCOMPLETE`, the pool's
+  bug-based exclusion branch, and live documentation of that exception.
+- `TargetSpec::CreatureOrPlayer` and its old text/fast-path assumptions.
+- Unconditional random LookAndSelect remainders and the Accumulate Wisdom
+  test that accepted either order without offering a choice.
+- Printed-power fallbacks in contextual predicates/observations; printed-only
+  structural checks and private layer stages remain necessary.
+- `Game::bottom_in_random_order`: placement and shuffle now belong to
+  `library_bottom_decision`; both selection exits use `continue_resolution`.
+- Negative admission fixtures using playable cards; Ally now supplies the
+  rejection while repaired-card, unknown-card and rules-fixture coverage stays.
 
-The deletion cuts are implemented. Directed native and Python tests cover
-the five cards, whole lists in main and sideboard, actual ordering Commands,
-private inspection, stale rejection, replay/fork identity, native/Python/text
-observations, definition tokens and loyalty/defense fact rows. The rebuilt
-cp312 extension was installed atomically. Academy reconnect preserves the
-ordering decision and duplicate submission commits it only once.
+## Interaction contract and limits
 
-State-based deaths group non-destruction graveyard moves before checking lethal
-damage, so candidate admission and the commit path share one precedence rule.
-Counter descriptions reuse canonical names except the two display spellings.
-The ordering encoder proof reads the native observation: captured viewer JSON
-omits continuation frames, which the proof must exercise.
+Jack Heart selected immediate ordering (option 1a), without a draft,
+confirmation or undo lifecycle. The shared instruction explains draw order
+and automatic final placement: choosing Forest before Island leaves Forest
+above Island at the bottom. Academy and LLM text consume that native instruction.
+A future partial-order revision would need an explicit shared rules decision.
 
-Jack Heart’s November 3 steer keeps this focused: known bugs in previously
-playable cards belong in bug Tasks, not new play restrictions. AGENTS.md records
-that direction. The empty incomplete-card API, TLA list and pool exclusion branch are removed,
-and contributor/content/import/TLA docs now agree. Token, fixture and unknown
-restrictions remain. No broader admission-policy redesign or new Task was made.
-The earlier feedback against `6d30c9013` identified a real mismatch; the
-cleanup in `ae06995b1` resolves it. Immediate-order wording and the shared v5
-encoder test helper are retained in `72e29f5de`.
+The suspended resolution owns the remaining private cards. Revision-bound
+Commands preserve replay and fork identity; reconnect restores the actual
+pending choice, duplicate submission cannot place another card, and stale
+submission cannot revise a commitment. The reconnect proof covers a retained
+server session, not process-crash durability. Neither consumer may hide a
+choice, choose automatically, or reveal inspected cards to the opponent.
+Encoder parity reads native observations directly because captured viewer JSON
+omits continuation frames; both encoders explicitly use v5.
 
-Current open-w17 evidence was regenerated through its producers. Rallier’s
-correct CDA filter excludes Suki above power three at authored decision 90;
-the resulting game has 135 Commands and 66 commitments instead of 142/69.
-The old trace remains at `22e4aab71:conformance/authored-match-w17-v1/`. Three
-navigation prefixes now explicitly order Accumulate Wisdom’s remainder; all
-prior deliberate choices retain their IDs/labels and reach the intended
-positions. Demo/trigger fixtures and current belief hashes bind the new content;
-historical hashes, frozen receipts and MTG-213 corpus bytes are unchanged.
+No new planeswalker/battle definitions or battle combat system are included.
+Controlled shells cover damage and zero-counter SBAs; a future battle defeat
+trigger needs additional handling. MTG-213's frozen cohort and running pilot,
+T6 content and T7 acceptance retain their owners. The 134-to-306 eligible-deck
+figure is a projection, not a new measurement. No training run, corpus rewrite,
+broader policy redesign or additional Task is authorized here.
 
-Recorded pre-sync proof includes 17 directed card/observability tests and 11
-SBA tests in debug, admission and consumer checks, native/Python/text parity,
-navigation/reconnect, trigger-order, demo and belief receipts, plus formatting
-and lint. These results establish the pre-sync implementation; they do not
-certify the merged tree. Their detailed commands remain at
-`60b8071f8:scratch/mtg-239-complete-five-defined.md`.
+## Evidence and remaining acceptance
 
-## Integration and remaining checks
+MTG-238 / PR #414 delivered at `44388ad42`, integrated in `05eb48489`.
+Definitions/tests now live in `managym/cards`, shared types in `managym/state`;
+sparse counters, scalable keywords and upstream optimizations are preserved.
+The root release extension was rebuilt and installed atomically after sync
+and after CI recovery.
 
-MTG-238 / PR #414 delivered at `44388ad42` and was merged here in `05eb48489`.
-Definitions and card tests now live in `managym/cards`; shared rules types,
-including sparse loyalty/defense counters, live in `managym/state`. Scalable
-keywords and the upstream engine optimizations are preserved. No architecture
-handoff remains. The original Task base `22e4aab71` is historical evidence.
+Open-w17 evidence was regenerated through its producers (`6d30c9013`):
+14 semantic-kernel cases / 3,473 Commands; authored parity with 135 Commands /
+816 viewer checks; 66 commitments / zero gaps. Rallier's corrected filter at
+decision 90 changes the game from 142 Commands / 69 commitments. Three
+navigation prefixes add explicit remainder ordering while retaining prior
+chosen IDs/labels and intended positions. Demo/trigger fixtures and current
+belief hashes bind the new content. Historical hashes, frozen receipts and
+MTG-213 corpus bytes are unchanged; the prior authored tape remains at
+`22e4aab71:conformance/authored-match-w17-v1/`.
 
-After sync, the root release wheel was rebuilt and installed atomically. The
-combined runtime regenerated the 14-case / 3,473-Command semantic kernel and
-both parity receipts (135 Commands / 816 viewer checks; 66 commitments / zero
-gaps). Three Lightning Strike debug tests and 14 parity/navigation/belief tests
-passed; `6d30c9013` retains the completed receipt refresh. Reconciliation also
-checked whole-deck admission and both text/native encoder cases on that runtime.
+Focused pre-sync and post-sync results are retained at
+`60b8071f8:scratch/mtg-239-complete-five-defined.md` and
+`72e29f5de:scratch/mtg-239-complete-five-defined.md`. The full prior plan/review
+history is `8c3389884:scratch/mtg-239-complete-five-defined.md`; the earlier
+claim that admission guidance agreed was incorrect at `6d30c9013` and was
+resolved by the exclusion cleanup in `ae06995b1`. The accepted review page is
+`scratch/concept-review.html`; causal policy evidence remains in
+[defined-card-completeness.md](defined-card-completeness.md).
 
-Implementation remaining: no known missing behavior within these five fixes.
-Full acceptance remains open:
+CI run 41711692234 exposed three Rust and four training-deck rejection
+fixtures still naming playable cards. `8c3389884` repairs them and adopts
+PR #415's own `ea316ff14` Engine Budget artifact. All timing checks passed;
+the changed search/step digests and step count follow the corrected rules in
+unchanged benchmark decks. The previous reference reproduced its digests.
+The 10% tolerance stays unchanged; this is not equivalent-workload speedup
+evidence. [CI recovery](ci-recovery.md) retains exact checks and timing deltas.
 
-- Gate owns the merged-tree debug Cargo suite, clippy, affected Python/model
-  suites, world-admission/monitor checks in AGENTS.md, and frontend
-  generation/check/build plus focused browser interactions from
-  `docs/development.md`. Pre-sync proof is not a substitute for these checks.
-- Engine Budget now adopts PR #415's `ea316ff14` artifact from run 41711692234
-  with the unchanged 10% tolerance. Explicit Accumulate Wisdom ordering and
-  Rallier/Suki library power evaluation reach the unchanged curated decks and
-  search rollouts. The old reference reproduced its digests; the candidate's
-  three search digests, step digest and count changed. Same-run timings passed
-  (5.280 → 4.986 s worst reply, 177.796 → 171.233 s total, 12874.6 → 12891.2
-  steps/s); this is a rules-reference update, not equivalent-gameplay speedup
-  evidence. Gate/CI still owns the repaired-head comparison.
-- Demo owns the final real-path walkthrough and human interaction judgment;
-  the headless reconnect/shared-Command proof is available. Publication and
-  delivery remain with the selected Graph. No product decision blocks these
-  fixes; the no-new-battle-card boundary still excludes defeat-trigger/combat
-  support for future battle definitions.
+Gate owns the affected debug Cargo suites (including targets CI never reached),
+clippy, Python/model/world-admission/monitor checks, frontend build/check and
+focused browser interactions per `docs/development.md`. Main integration's
+later evaluation/smoke steps were skipped and remain required. Publication
+owns the repaired head and fresh Engine Budget comparison; demo owns the final
+real-path walkthrough and interaction judgment. Focused checks and source
+inspection do not establish merged-tree acceptance, demo acceptance or new
+shipping approval.
 
-MTG-213's 134-to-306 eligible-deck projection is not a measured new corpus.
-Its frozen cohort and running pilot, T6 content and T7 acceptance remain with
-their existing owners. No corpus rewrite, training run, broader admission
-redesign or additional Task is part of this change.
-
-Retained cleanup validation passed seven debug decklist tests, formatting,
-and five focused Python cases across whole-deck admission, rejection,
-ordering text/encoder parity and reconnect. The root release extension was
-rebuilt and installed atomically. After the helper consolidation, both
-ordering and Suki native/Python/text parity tests and Ruff passed. Exact
-commands are retained at `72e29f5de:scratch/mtg-239-complete-five-defined.md`;
-these focused results do not replace the gate above.
-
-CI recovery (November 3, comment d35e6e94): run 41711692234 exposed three Rust
-and four training-deck assertions that still rejected playable cards. Their
-fixtures now use the Ally token; positive checks admit all five cards, and
-checkpoint/replacement paths admit Accumulate Wisdom and Cat-Gator. Runtime
-rules and frozen evidence are unchanged. Current checks and remaining owners
-are recorded in [ci-recovery.md](ci-recovery.md).
-
-## Accepted interaction and review limits — 2026-11-03
-
-Jack Heart accepted the exclusion cleanup and option 1a (comment 6b64d212):
-immediate native SelectCard Commands with clearer draw-order wording. The
-follow-up review corrected the earlier review's claim that admission guidance
-already agreed: the empty API and pool branch still permitted bug-based
-eligibility at `6d30c9013`. That mechanism and its documentation are now removed.
-The earlier review is retained at `ae06995b1:scratch/mtg-239-complete-five-defined.md`;
-no product decision remains open.
-
-The shared instruction says: “Choose which remaining card to draw first. It
-goes above the other remaining cards on the bottom. Each choice commits
-immediately; the last card is placed automatically.” With Forest and Island
-remaining, choosing Forest leaves Forest above Island at the bottom; choosing
-Island reverses that order. Academy and LLM text consume this native instruction.
-No draft, confirmation or undo lifecycle is approved. A future effect leaving
-many cards could motivate revising a partial order, but that needs a shared
-rules decision, never browser-only undo.
-
-The native suspended resolution owns the remaining private cards. Ordinary
-revision-bound Commands preserve placement, replay and fork identity. Reconnect
-must return the actual pending choice; duplicate submission cannot place another
-card and stale submission cannot revise a commitment. The reconnect proof covers
-a retained server session, not process-crash durability. Neither navigation nor
-a consumer may hide an order, choose it automatically, or expose private cards
-to the opponent. The tests compare native observations directly because captured
-viewer JSON omits continuation frames; both encoders explicitly use v5.
-
-Other retained counterexamples: Rallier must not offer Suki above power three;
-a future battle with a defeat trigger needs more than the current shell-only
-zero-defense behavior. The review page is `scratch/concept-review.html`.
-Merged-tree gate, Engine Budget CI, demo and publication keep their owners above;
-this review establishes no new acceptance evidence or additional Task.
-
-Concept-review outcome (loop 2, pass 2): nothing to change and no open product
-choice. Inspection of `72e29f5de` confirms that admission has no bug-exclusion
-branch, and the native ordering instruction states immediate commitment and
-automatic final placement. The existing tests exercise both possible orders,
-private inspection, retained-session recovery, duplicate/stale rejection and
-native/Python/text parity. These are inspected test contracts, not new test
-results. The normal path and recovery require no additional state owner or
-draft lifecycle. No implementation direction changed; loop-or-next owns the
-next Graph decision, with the remaining acceptance checks above still required.
+Simplification validation: debug `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards -j 2` with `accumulate_wisdom` and `-- scry surveil elemental_teachings ostrich` filters → 17 passed; `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py tests/academy/test_choice_navigation.py -q -k 'accumulate_wisdom or suki_hand_power'` → 3 passed. Root release wheel rebuilt and cp312 extension installed atomically; `cargo fmt --manifest-path managym/Cargo.toml --check` and `git diff --check` passed. `academy.authored_match_parity.write_receipt()` rebuilt 135 Commands / 816 viewer checks; comparison with the prior receipt proved only source provenance changed (including the preceding admission/CI repairs). Gate retains the broader checks above.
