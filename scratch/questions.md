@@ -32,5 +32,12 @@ The earlier local-only/no-merge assumptions are superseded.
   is not taken over. The CPU proof's backward cost remains evidence for that
   shared work, not permission for a parallel optimization experiment.
 
+- Analysis interpretation (2026-11-03): all frozen milestones remain expected
+  even if an early endpoint exists; an unknown endpoint keeps two explicit
+  comparison slots. Failed Etude callbacks retain failed-match counts, while
+  their unknown game attempts remain missing (attempted games is a lower bound).
+  Etude's Report panels have no custom inference hook, so the companion
+  `experiments.tla_pilot_analysis` CLI owns the qualified JSON result.
+
 Inherited unrelated notes remain at
 22e4aab716f2b582d704b88dc5d22cb1547ce623:scratch/questions.md.

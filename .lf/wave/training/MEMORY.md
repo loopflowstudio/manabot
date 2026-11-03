@@ -3,6 +3,37 @@
 Evaluation memory (hosted LLM comparisons, inference receipts and evidence
 reuse) lives in `.lf/wave/eval/MEMORY.md`.
 
+## Fixed-corpus TLA pilot (MTG-213, 2026-11-03)
+
+Jack Heart replaced the deferred full-TLA plan with a preliminary trophy-deck
+self-play pilot and evaluation on the same frozen eligible population. Each seat
+draws independently and uniformly, including mirrors. Unsupported main-deck or
+sideboard cards exclude the whole list; no substitutions or replacement events.
+Live fetching and a held-out-deck split are deferred, so independent evaluation
+seeds do not establish held-out-deck generalization. The first snapshot contains
+1,000 observed seven-win events from the permitted public game dump, 134 eligible
+and 866 rejected. Source-order event selection is not uniform sampling of all
+TLA drafts; missing source losses remain unknown. Corpus and protocol provenance
+live in experiments/protocols/tla-trophy-213-v1.md.
+
+Jack Heart subsequently authorized GPUs and shipping enabling changes after
+checks, with a hard $10 total paid-compute cap covering setup, failures and
+retries. This does not inherit earlier campaigns' budgets or checkpoints. The
+first $1 L4 cap is an engineering allocation. Missing provider credentials left
+the paid run unstarted at reconciliation. A local one-update/199-decision proof
+and 12 replay-valid evaluation games establish the connected implementation path,
+not GPU readiness, learning improvement or Elemental-relative pace. The full
+catalog/v5 policy and new population differ from the historical Elemental setup.
+
+Paired evaluation has two distinct requirements: exchanging policy/deck/seat
+assignments within each sampled pair, and comparing checkpoint gains across the
+same complete pair schedule. Retained per-game failure rows and score curves do
+not establish the latter. Missing matches/checkpoints remain in the expected
+schedule, and incomplete comparisons cannot support a qualified learning claim.
+The pilot's paired-gain analysis remains unfinished; its live plan is in scratch,
+with retained empirical limits in experiments/tla-trophy-pilot.md. Training has
+no child memory directories at this reconciliation.
+
 ## Training consolidation and credit (MTG-179, 2026-10-22)
 
 Jack Heart accepted one maintained RL execution path: TrainingRegime,

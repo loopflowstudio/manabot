@@ -8,6 +8,7 @@ shared replay-checked evaluator. Neither path fetches or changes deck eligibilit
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from decimal import Decimal
 import json
 import os
@@ -25,7 +26,7 @@ from etude.eval.records import (
     Matchup,
     Model,
 )
-from etude.experiment import ExperimentState
+from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Report, Score
@@ -51,6 +52,9 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = "tla_pilot"
 REGIME = ROOT / "experiments/regimes/tla-trophy-213-v1.json"
 PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v1.json"
+GAMES_PER_PAIR = 4
+
+type Anchor = Literal["heuristic", "initial"]
 
 
 class Pair(StrictModel):
@@ -172,7 +176,7 @@ def _source() -> list[Path]:
     ]
 
 
-def _environment(protocol: Protocol) -> Environment:
+def environment(protocol: Protocol) -> Environment:
     return Environment(
         name="tla-trophy-213-v1",
         files=canonical_sha256(
@@ -186,52 +190,87 @@ def _environment(protocol: Protocol) -> Environment:
     )
 
 
-def eval(state: ExperimentState) -> list[Job]:
-    """Initialization, scheduled checkpoints and endpoint against fixed anchors.
+@dataclass(frozen=True)
+class ScheduledComparison:
+    """One expected comparison; absent checkpoints leave an unplayable slot."""
 
-    The initial policy remains the checkpoint opponent for every later export.
-    Etude owns already-delivered matches, so polling never replays scored games.
+    update: int | None
+    anchor: Anchor
+    endpoint: bool
+    checkpoint: Checkpoint | None
+    matchup: Matchup | None
+
+
+def comparison_schedule(
+    run: TrainingRun, protocol: Protocol
+) -> list[ScheduledComparison]:
+    """One schedule for execution and analysis, including missing comparisons.
+
+    Frozen milestones remain expected even for an early endpoint. Until a run
+    finishes, its endpoint has unknown coordinates. Only comparisons with both
+    required checkpoints can be played, but all slots count in the analysis.
     """
-    _, protocol = frozen()
     source = _source()
     inference = Inference(source=source)
     heuristic = Code(name="heuristic", source=source, config={"kind": "heuristic"})
-    matchups: list[Matchup] = []
     conditions = tuple(pair.model_dump(mode="json") for pair in protocol.pairs)
-    for run in state.runs:
-        checkpoints = {int(c.clocks["updates"]): c for c in run.checkpoints}
-        wanted = {0, *protocol.milestones}
-        final = run.final
-        if final is not None:
-            endpoint = int(final.clocks["updates"])
-            checkpoints[endpoint] = final
-            wanted.add(endpoint)
-        initial = checkpoints.get(0)
-        for update, checkpoint in sorted(checkpoints.items()):
-            if update not in wanted:
+    checkpoints = {int(c.clocks["updates"]): c for c in run.checkpoints}
+    endpoint = int(run.final.clocks["updates"]) if run.final else None
+    wanted = {0, *protocol.milestones}
+    if endpoint is not None:
+        wanted.add(endpoint)
+    updates: list[int | None] = sorted(wanted)
+    if endpoint is None:
+        updates.append(None)
+    initial = checkpoints.get(0)
+    anchors: dict[Anchor, Model | Code | None] = {
+        "heuristic": heuristic,
+        "initial": initial.model(inference) if initial else None,
+    }
+    schedule: list[ScheduledComparison] = []
+    for update in updates:
+        checkpoint = checkpoints.get(update) if update is not None else None
+        candidate = checkpoint.model(inference) if checkpoint else None
+        for label, anchor in anchors.items():
+            if update == 0 and label == "initial":
                 continue
-            candidate = checkpoint.model(inference)
-            anchors = [("heuristic", heuristic)]
-            if update and initial is not None:
-                anchors.append(("initial", initial.model(inference)))
-            for label, anchor in anchors:
-                matchups.append(
-                    Matchup(
+            schedule.append(
+                ScheduledComparison(
+                    update=update,
+                    anchor=label,
+                    endpoint=update == endpoint,
+                    checkpoint=checkpoint,
+                    matchup=Matchup(
                         name=f"{run.name} u{update} vs {label}",
                         players=(candidate, anchor),
                         conditions=conditions,
-                        games=4,
+                        games=GAMES_PER_PAIR,
                         tags=(label,),
                     )
+                    if candidate is not None and anchor is not None
+                    else None,
                 )
+            )
+    return schedule
+
+
+def eval(state: ExperimentState) -> list[Job]:
+    """Play available comparisons; Etude owns already-delivered matches."""
+    _, protocol = frozen()
+    matchups = tuple(
+        comparison.matchup
+        for run in state.runs
+        for comparison in comparison_schedule(run, protocol)
+        if comparison.matchup is not None
+    )
     if not matchups:
         return []
     return [
         evaluation(
             Benchmark(
                 name="tla-trophy-paired-v1",
-                environment=_environment(protocol),
-                matchups=tuple(matchups),
+                environment=environment(protocol),
+                matchups=matchups,
             ),
             play=play,
             workers=1,
@@ -299,7 +338,7 @@ def play(match: Match) -> Tables:
     source = regime.deck_source
     assert source is not None and source.entry_ids is not None
     pair = Pair.model_validate(match.conditions)
-    if pair not in protocol.pairs or match.games != 4:
+    if pair not in protocol.pairs or match.games != GAMES_PER_PAIR:
         raise ValueError("evaluation conditions differ from frozen schedule")
     matchup = DeckMatchup(
         population_sha256=protocol.corpus_sha256,
@@ -344,7 +383,7 @@ def play(match: Match) -> Tables:
     )
     by_leg = {row.leg: row for row in result.rows}
     rows: list[Row] = []
-    for leg in range(4):
+    for leg in range(GAMES_PER_PAIR):
         row = by_leg.get(leg)
         valid = row is not None and row.valid
         score = row.score_a if valid else None
@@ -362,6 +401,7 @@ def play(match: Match) -> Tables:
                     "corpus_sha256": protocol.corpus_sha256,
                     "score": score if seat == 0 or score is None else 1 - score,
                     "valid": valid,
+                    "attempted": row is not None,
                     "terminated": row.terminated if row else False,
                     "truncated": row.truncated if row else False,
                     "failure": row.failure if row else result.error or "missing game",
@@ -372,6 +412,7 @@ def play(match: Match) -> Tables:
 
 
 def report() -> Report:
+    """Descriptive curves; `experiments.tla_pilot_analysis` owns qualified claims."""
     return Report(
         score=Score(table="games", value="score", reference=0.5),
         clock="updates",

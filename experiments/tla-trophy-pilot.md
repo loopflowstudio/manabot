@@ -71,3 +71,27 @@ compute and wall time. GPU training and Elemental-relative learning pace remain
 unresolved. The implementation's focused native/debug, corpus, recovery and
 paired-evaluation checks passed; broader gate/CI checks and shipping remain
 separate from this implementation proof.
+
+The Etude score curves are descriptive. The companion analysis reads retained
+Etude blocks and training checkpoints to evaluate the frozen criterion:
+
+```sh
+uv run --extra artifacts --extra evaluation python -m experiments.tla_pilot_analysis --source r2://manabot/jobs --out .runs/mtg213-analysis.json
+```
+
+It reports each checkpoint/anchor and all eight pair identities, valid W/D/L,
+expected/attempted/failed/missing games and matches, and checkpoint clocks.
+Attempted games is a lower bound when a failed callback left no per-game
+receipt: its failed match is counted and its unknown games remain missing.
+Every frozen milestone remains expected even for an early endpoint; an absent
+successful endpoint retains two slots with unknown update coordinates.
+
+The 2,000 seeded bootstrap resamples move entire four-leg pairs together and
+reuse the same pair draws across checkpoints. The JSON includes heuristic gains
+relative to initialization, their 95% intervals, and endpoint vs initialization
+intervals. `success` is true only when the complete schedule meets all three
+frozen criteria; false is a complete negative result, and null with `issues`
+means no qualified learning claim. Different evaluation source versions also
+withhold qualification. Each training run is analyzed separately. Controlled
+fixtures establish this analysis behavior, not a scientific result for the
+unstarted GPU pilot; no frozen protocol criteria or historical evidence changed.
