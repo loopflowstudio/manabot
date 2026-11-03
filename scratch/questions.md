@@ -3,7 +3,9 @@
 [The plan](mtg-238-catalog-scale-types.md) owns accepted scope, implementation,
 evidence and remaining validation. Jack Heart approved keyword capacity option
 1a and MTG-238-first delivery; no product choice blocks this batch. PR #414 stays
-for review against main, without auto-merge; T6 integrates afterward.
+against main; T6 integrates afterward. On 2026-11-03 Jack Heart authorized
+shipping once the engine-speed batch finishes validation, superseding the
+earlier review-only/no-auto-merge boundary.
 
 - KeywordBits is private ordinal storage so controlled word-boundary fixtures
   exercise production operations without declaring fictional mechanics. Storage

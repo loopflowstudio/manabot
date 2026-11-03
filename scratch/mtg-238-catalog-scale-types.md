@@ -8,7 +8,10 @@ sparse keyword serialization together on 2026-11-02 (`4092cdb4`). Later that day
 stack prerequisite: publish against main for review; T6 integrates the crate
 move afterward. Main's T5 supplied Airship, so its namesake conversion is here.
 Recovery direction `d19b72d6` retains PR [#414](https://github.com/loopflowstudio/manabot/pull/414).
-No auto-merge or landing is authorized; publication is separate from acceptance.
+Jack Heart authorized landing on 2026-11-03 once the engine-speed batch finishes
+validation ("go for it when done"), superseding the earlier review-only boundary.
+The speed loop and current evidence are in `scratch/engine-speed-loop.md` and
+`docs/research/engine-speed-2026-11.md`.
 
 Jack Heart subsequently selected concept-review **1a** (`0544142c`, reinforced
 by `8a0f7f33`): remove the single-word keyword capacity limit now. This resolves
@@ -314,3 +317,21 @@ current belief receipts retain their numerical/scalar checks and exclude all
 historical receipts. Audit anchors and index retain all 3,322 dispositions.
 The combined engine still needs fresh hosted Engine Budget assessment; the
 isolated 2.6% local result must not be reported as its hosted performance.
+
+## Engine-speed loop outcome — 2026-11-03
+
+The optimized runtime is checkpointed at 1616b210f. Dedicated CI 41699683808
+compares it with reference 4b5e9c0e4 on one AMD EPYC 7763: 30.43% less regular
+Env::step time (43.74% higher throughput), 43.93% less total Search-64 time
+(78.33% higher throughput), and 49.91% less worst-reply time. Every decision,
+count and full-score digest matches. The candidate's own artifact becomes the
+reference under the existing retained-speedup rule; tolerance stays 10%.
+
+The final source passes 893 debug and 893 release Rust tests (2 ignored each),
+fmt/clippy, 945 Python tests (1 skipped), and 17 budget tests. The rebuilt cp312
+extension preserves exact definitions, tokens, world identity and game evidence;
+authored parity changes source fingerprints only. The durable investigation,
+rejected experiments and next dependency/ownership designs are in
+`docs/research/engine-speed-2026-11.md`. Jack Heart accepted Env::step as the
+training proxy, and authorized landing after validation. Final publication,
+current-head CI and merged-outcome verification remain before Task completion.

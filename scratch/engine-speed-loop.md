@@ -218,3 +218,40 @@ tradeoff; do not expand validation into an unrelated training benchmark project.
 Jack Heart authorized shipping on 2026-11-03: "go for it when done." Finish
 validation and hosted performance acceptance, then land and verify the merged
 outcome. This supersedes the earlier review-only/no-merge boundary for this batch.
+- 12 repeat candidates were faster than both controls, but control times still
+  varied (3.768/4.343s versus 3.398/3.622s). Retain the shared allocation removal
+  with the combined batch; do not claim its apparent 13.45% as an isolated gain.
+- Combined repeated ABBA: 6.029s → 3.8955s (-35.39%); previous combined
+  comparison was -38.47%. Large combined gain persists, but exact attribution
+  of remaining small effects has reached this shared host's noise floor.
+- Final local Search-64: 96.252s total, 2.923s worst, all score digests exact.
+  Against the fresh 148.454s/4.800s control: -35.17% total, -39.10% worst.
+  Broader reuse of payment/SBA/characteristic results needs the explicit
+  dependency design in docs/research/engine-speed-2026-11.md. Stop speculative
+  local changes here, validate the combined batch, and use hosted timing for
+  acceptance. This is a practical measurement/design boundary, not a claim
+  that the engine has no remaining optimization opportunities.
+
+## Final validation and delivery
+
+Loopflow's PR-open operation checkpointed/published the runtime changes as
+1616b210f7f4765aa8032debad50b7f18450e8b1. The runtime source is identical to the
+final tested candidate; retain that checkpoint rather than rewriting history.
+Hosted CI 41699683808 measures it; packaging 41699683742 passed.
+
+Full debug/release Rust: 893 passed, 2 ignored each. Fmt/clippy pass. Release
+cp312 wheel rebuilt and atomically installed. Definitions 307,652 bytes, catalog
+449,297 bytes and world identity 107 bytes are byte-identical to cf069's installed
+extension. Authored parity changes only identity.relevant_source; all 142
+Commands / 143 checkpoints / 858 viewer checks are exact. Public parity retains
+69 commitments, zero gaps. Broad Python consumers are running; hosted timing
+acceptance and final landing remain pending.
+
+Hosted Engine Budget 41699683808 passed at 1616b210f on AMD EPYC 7763.
+Reference 4b5e9c0e4 vs candidate, same runner: steps 11.166→7.768s
+(-30.43%, +43.74% throughput); search 317.027→177.771s (-43.93%, +78.33%
+throughput); worst reply 10.526→5.272s (-49.91%). All counts and full-score
+and step digests match. Adopted the candidate's own artifact with the retained-
+speedup reason and unchanged 10% tolerance. Budget tests: 17 passed.
+Broad Python suite: 945 passed, 1 skipped in 289.68s. Final proof/docs/reference
+publication and waited landing are next; runtime source remains 1616b210f.
