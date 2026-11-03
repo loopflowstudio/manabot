@@ -233,6 +233,8 @@ preserves accepted decisions, dated proof limits and source history.
 - Cache-preserving writes and generic continuous effects must compose: allocate
   timestamps through the typed ID accessor, return before a tracked mutation
   for an empty batch, and retain full invalidation for nonempty effect records.
+  Empty batches preserve derived-cache revisions, but `record_continuous`
+  still allocates a timestamp: they are not complete state/hash no-ops.
   This is the MTG-238/derived-state-cache merge's ownership invariant, not a
   new performance claim.
 

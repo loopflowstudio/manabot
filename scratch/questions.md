@@ -77,4 +77,9 @@ Realign repaired the live audit references and reconciled the index's existing
 CR 400.7j anchor drift with its authored review. Offline inventory validation
 and the exact Python Unit Tests command passed; the pinned raw TXT was not
 available for source-based regeneration. Frozen audit evidence is unchanged.
-The plan records the remaining merged-engine checks, republication and review.
+The stopped publication attempt subsequently completed debug/release Rust,
+formatting, clippy, the extension rebuild and focused consumers; the plan
+records those results. Its broad Python consumer log has no completion result.
+PR #414 already contains recovery head `0a9509a9b` and is mergeable; broad
+consumer completion, pending CI and the final review handoff remain. No
+completed check is inferred from the interrupted attempt alone.

@@ -1,5 +1,64 @@
 # MTG-238: catalog-scale types
 
+## Interactive concept review — 2026-11-02
+
+Jack Heart requested this review in the primary Task conversation. This section
+is a proposal under discussion, not approval to expand implementation. The
+earlier headless reviews' “no open choice” applies to the accepted batch; this
+review asks whether to extend its completion boundary. Preserve the existing
+repair work and the MTG-238-first, review-before-merge direction.
+
+Accepted experience: author a card once in the shared rules types; the engine,
+learning tokens and viewer-safe observations describe that same behavior.
+Playing Airship offers ordinary crew; controlling eight namesakes grants its
+creature type without a new user action. Losing the eighth removes that static
+grant; a separate crew record remains until end of turn. Replaying the same
+Commands in the bound world restores the result. An earthbent land that leaves
+and returns is a new object and must lose its former animation. Forked caches
+are derived machinery, never a second source of rules.
+
+One mismatch to discuss: `Keywords(u64)` and `Keyword::bit` bind the rules
+vocabulary to 64 parameterless keyword variants. Today's 14 fit; parameterized
+abilities such as ward and firebending use separate rules types. This is a
+storage limit, not an observed gameplay failure, and the Task's motivation
+about all keyword abilities does not establish when 64 parameterless variants
+will be needed. Sparse serialization already hides internal bit positions, so
+removing this limit need not change today's definition bytes, tokens or digests.
+
+Proposed extension (not implemented or approved): keyword-set capacity grows
+with the declared vocabulary, while `of`, `has`, `insert`, `union`, `without`
+and deterministic present-keyword serialization retain their meaning. Choose
+storage in implementation; do not ask Jack Heart to select a container. No new
+cards, mechanics, tensor columns, world bump or Python API migration is implied.
+The existing requirement still makes the first real non-evergreen mechanic
+reach fact rows, native/Python policy encoders, text and learning tokens together.
+
+Draft authoring guidance if accepted: “Declare a parameterless keyword once in
+the rules enum and use `Keywords::of`. Vocabulary growth must not alias or drop
+an existing keyword. Keep present-keyword serialization order stable. A new
+mechanic is complete only when its behavior and every shared observation path
+are present; use fact rows for non-evergreen kinds.” Existing crate, native
+authority and duration guidance stays unchanged. Draft agent instruction if
+accepted: “When changing keyword storage, preserve existing wire bytes and test
+membership, union and removal across a machine-word boundary. Never widen a
+frozen observation version or regenerate evidence to hide a storage regression.”
+
+Counterexamples and next proof: a keyword beyond bit 63 must remain independent
+of bit 0 through insert/union/removal and clone/fork; existing present-keyword
+bytes and learning tokens must remain identical. Test representation boundaries
+with controlled fixtures rather than inventing supported mechanics. Preserve the
+Airship threshold/crew-expiry and land-return cases. A changed existing digest
+would refute the storage-only proposal, requiring investigation before publication.
+An isolated `cargo check -p managym-cards` checks definitions without the engine;
+behavioral tests and rebuilding the linked Python extension still use the engine.
+
+Open question in this conversation: **1a** complete this storage boundary in
+MTG-238 (recommended), or **1b** retain the current 64-variant capacity explicitly
+and defer that work. No answer has been recorded. This review changes no runtime
+code, runs no gameplay tests, and does not restart, publish or merge the Task.
+The interactive review owns `scratch/concept-review.html`; keep its proposal
+distinct from the Graph's accepted recovery requirements.
+
 ## Accepted outcome and direction — 2026-11-02
 
 Sparse counters, enum-backed keywords, separate rules/card crates and generic
@@ -18,8 +77,10 @@ PR [#414](https://github.com/loopflowstudio/manabot/pull/414) was published
 at `3235684b8`. Jack Heart's recovery direction (`d19b72d6`, 2026-11-02)
 retains that PR and review boundary after main advanced. The subsequent sync
 onto `a1a02a76f` is complete at `bb9853218`, incorporating `51fbacbbf`'s
-derived-state caches and engine performance CI. Recovery validation and
-republication remain; no auto-merge or landing is authorized.
+derived-state caches and engine performance CI. Recovery checkpoints through
+`0a9509a9b` are already on PR #414, which is mergeable against main
+`a1a02a76f`. Final consumer validation and publication handoff remain; no
+auto-merge or landing is authorized.
 
 The earlier T5 sync at `469b7eeba` and observation-test fixes in `3ed5b5baa`
 preserve copy effects, Nonlegendary and layered battlefield characteristics.
@@ -111,9 +172,19 @@ T5 integration and do not establish broad correctness of the combined tree.
 
 Outcome: nothing to change and no open product choice within MTG-238. Jack
 Heart's accepted batch still fits the implementation after the cache sync at
-`bb9853218` and the live audit-reference repair;
+`bb9853218` and the live audit-reference repair through `0a9509a9b`;
 there is no new implement direction. The earlier review page's T6 hold is
 superseded, not a remaining design dependency.
+
+This review rechecked the current conditional-grant reader, animation writer,
+sparse serializers, Airship threshold/ability-loss scenarios and fork identity
+scenario against the accepted model. The recovery checkpoints change live
+audit references and notes, not the engine model. No usage or skill revision
+is needed. The next proof is the unfinished broad consumer suite and the
+publication checks recorded below; completed recovery checks remain evidence
+for this engine tree. This step ran no tests, made no implementation changes
+and did not refresh remote CI status. The review page now reflects that
+boundary rather than listing the completed Rust/extension checks as remaining.
 
 The concrete interaction remains one native decision surface: a player crews
 Airship through its offered ability, or its eighth namesake makes it a creature
@@ -143,9 +214,9 @@ must invalidate the fork's affected views without changing its parent. A
 stale creature type after threshold loss or a returned land retaining haste
 would violate the same accepted contract, regardless of cache reuse. The
 effect writer, tracked accessors, fork-isolation scenarios and effect-lifecycle
-scenarios were inspected in this pass; tests were not rerun. Recovery's next
-proof remains the merged-engine debug checks (including cache recomputation
-assertions), release checks and rebuilt-extension consumers listed below.
+scenarios were inspected in that concept review; tests were not rerun there.
+The subsequent recovery checks below cover the merged engine, including debug
+cache-recomputation assertions; broad consumer validation remains open.
 
 One wording clarification: an empty affected set preserves derived-cache
 revisions, not all state. `record_continuous` still allocates its timestamp
@@ -206,14 +277,34 @@ and frozen audit receipts and source metadata are unchanged. The pinned raw TXT
 is unavailable locally, so source-based regeneration was not claimed; offline
 validation and exact agreement with authored overrides cover this repair.
 
-Remaining work is recovery validation of the cache/catalog combination (debug
-and release Rust, clippy/format, rebuilt-extension consumers and required
-Python/arena checks), followed by republication of the same PR and Jack Heart's
-review. The earlier broad proof cannot substitute for these merged-engine
-checks. Engine Budget now applies: its hosted comparison and any required
-baseline adoption must retain the candidate artifact and reason under the
-existing policy; no new performance result or baseline change is claimed here.
-T6 remains downstream, not a blocker. No product decision is needed.
+Recovery evidence from the stopped publication attempt is retained under
+`.runs/mtg-238-recovery/`. Both full Rust suites completed: 882 passed and
+2 ignored in debug (development optimization level 1, assertions enabled)
+and release. Workspace formatting and all-target/all-feature clippy passed.
+The exact Python Unit Tests command passed all 103 tests after the final two
+card-directory owner references were repaired in `0a9509a9b`; website checks
+passed 21 tests. The fresh wheel was byte-identical to the installed extension
+and was installed atomically. Authored parity, native/Python observation parity
+and static-token checks then passed all 28 tests. No runtime source changed
+between these checks and `0a9509a9b`.
+
+The publication attempt ended on a provider-capacity error, not a recorded
+validation failure. Its broad Python consumer log ends during progress with no
+summary or successful exit receipt; it establishes no complete run. Remaining
+local validation is the broad env/Academy/belief/semantic/verify/model and
+package-boundary suite plus arena admission/monitoring, using `tests/verify`
+(the earlier `tests/verification` invocation collected nothing). Its command is
+`uv run --extra dev --extra play --extra notebook --extra artifacts --extra reports pytest tests/env tests/academy tests/belief tests/semantic tests/verify tests/model tests/test_package_boundaries.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`.
+
+At reconciliation, PR #414 points to `0a9509a9b`, is mergeable, and has no
+auto-merge request. CI run `41566136106` has passed Python Unit Tests and
+Semantic Kernel Conformance; the remaining checks, including Engine Budget,
+are pending. Final publication preparation/handoff remains with the caller,
+followed by Jack Heart's review. Completed recovery checks need not be replayed
+without a relevant source change. Any required performance-baseline adoption
+must retain the candidate artifact and reason under the existing policy; no
+new performance result or baseline change is claimed here. T6 remains
+downstream, not a blocker. No product decision is needed.
 
 Outside this Task: `PyKeywords` remains a 14-boolean observation surface;
 the first non-evergreen keyword needs its fact representation and a Python API
@@ -221,4 +312,4 @@ migration. All current keywords are evergreen, and the exhaustive observability
 guard requires an explicit decision for a new one. General layer dependency
 ordering and the Oracle-text generator remain outside this Task.
 
-Check result (realign, 2026-11-02): `uv run --python 3.12 --extra dev pytest tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/` — 103 passed; merged-engine recovery checks remain with gate/publication.
+Check result (realign, 2026-11-02): `uv run --python 3.12 --extra dev pytest tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/` — 103 passed (reused completed recovery evidence); broad consumer completion and pending CI remain with publication.
