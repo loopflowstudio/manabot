@@ -256,6 +256,20 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
+**Current reference.** Commit `88dc8c1ad` was adopted from
+[CI run 41552162812](https://github.com/loopflowstudio/manabot/actions/runs/41552162812)
+(2026-11-03 UTC, AMD EPYC 7763): 6,104.0 steps/s, 14.857 s worst search
+reply and 433.796 s total. It establishes the initial budget at merged main
+`a8abf01b1`, including decklist disclosure (`230b2f563`) and T5 token copies
+and effective battlefield characteristics (`a8abf01b1`). On that same runner,
+the older `e5615edcc` reference measured 6,774.5 steps/s: the candidate used
+**10.98% more time per step** (9.90% fewer steps/s), correctly failing the
+10% budget. Search timings and all full-score/step digests and counts passed.
+Delegated demo judgment accepted this measured cost of the already-merged
+engine; the source comparison does not isolate its cause. The budget PR has
+no native source diff from that main commit. Adoption preserves the **10%
+tolerance** and the failed run as evidence; it is not shipping approval.
+
 Measured once on 2026-11-02 with the original search digest (steps/s; worst Search-64
 reply; total over 3 seeds x 40 decisions), each on its own runner:
 

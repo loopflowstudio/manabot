@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "e5615edcc7f6a7f1ef7adf83ce1a15f8302ac0b9",
-    "date": "2026-11-02",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41540798745",
+    "commit": "88dc8c1ad25cd99cca6026581a569f5c2f63ee1b",
+    "date": "2026-11-03",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41552162812",
     "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Strengthen bench_search to digest every ordered action score and decision boundary, retaining simulation counts and chosen actions. No engine, workload or tolerance change; replaces the winner-only digest limitation."
+    "reason": "Establish the initial budget at merged main a8abf01b1, including decklist disclosure (230b2f563) and T5 token copies and effective battlefield characteristics (a8abf01b1). Delegated demo judgment accepts the measured 10.98% greater time per step (6104.0 vs 6774.5 steps/s) against the older e5615edcc reference in https://github.com/loopflowstudio/manabot/actions/runs/41552162812. Search timings and all digests/counts passed; this PR has no native source diff from that merged main. Preserve the 10% tolerance; this adoption grants no shipping approval."
   },
   "bench_search": {
-    "worst_s": 14.258,
-    "total_s": 409.358,
+    "worst_s": 14.857,
+    "total_s": 433.796,
     "seeds": {
       "1": {
-        "worst_s": 14.258,
-        "total_s": 179.232,
+        "worst_s": 14.857,
+        "total_s": 190.413,
         "digest": 5192957023818819312
       },
       "2": {
-        "worst_s": 8.573,
-        "total_s": 107.842,
+        "worst_s": 9.052,
+        "total_s": 114.066,
         "digest": 14020561159006433540
       },
       "3": {
-        "worst_s": 12.61,
-        "total_s": 122.284,
+        "worst_s": 13.251,
+        "total_s": 129.317,
         "digest": 12455483057923843581
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 6829.1,
+    "steps_per_s": 6104.0,
     "steps": 99923,
     "games": 512,
     "digest": 12247096877573042301

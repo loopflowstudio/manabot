@@ -13,7 +13,7 @@ Configured path: `.github/workflows/ci.yml`,
 
 ## Review authority and progress
 
-This is decision pass 1, run headlessly under the instruction to stand in for
+The original review below is decision pass 1, run headlessly under the instruction to stand in for
 Jack Heart at demo. No human observed this run or supplied new feedback.
 The conclusions below are the agent's delegated judgment, not statements or
 shipping approval from Jack Heart. His retained steer authorizes publication
@@ -125,3 +125,119 @@ fixture. An implicit-shell copy reproduces failure in the slowdown and all
 four benchmark regression cases. The working design records the focused
 check result and remaining gate/publication/demo work. This response does not
 replace the original run evidence or claim the repaired PR has run yet.
+
+## Decision pass 2 — 2026-11-02
+
+This review uses delegated headless judgment. Jack Heart supplied no new
+observation or approval. His retained publication/demo boundary still excludes
+shipping. The pass-1 failure remains valid historical evidence; this pass
+evaluates the repair at published head `88dc8c1ad25cd99cca6026581a569f5c2f63ee1b`.
+
+The intended progress was explicit Bash failure propagation, regressions through
+the actual workflow commands, candidate recovery after a reference-build failure,
+and corrected publication wording. The PR now says measurements are recorded
+before the reference build and uploaded in the final always-run step.
+
+Observed locally in pass 2:
+
+- `uv run --extra dev pytest tests/infra/test_engine_budget.py
+  tests/infra/test_ci_selection.py -q`: **65 passed in 2.20 s**. These include
+  the 20% slowdown and faster-but-changed-score comparisons through `tee`,
+  failures in each of the four benchmark pipelines, and candidate adoption
+  after injected reference Cargo exit 42. The recovery proof executes the
+  workflow's recording body and the real `record --reason` command. It copies
+  the upload path locally; it does not prove hosted transport after failure.
+- Replaying the original false-green run's downloaded artifact through the
+  repaired comparison command and configured pipefail shell exits **1**,
+  retaining exactly the throughput failure. No benchmark was rerun or timing
+  changed. Transcript:
+  `.cache/engine-budget-demo/pass-2/retained-failure.txt`; summary:
+  `.cache/engine-budget-demo/pass-2/retained-failure-summary.md`.
+- The repaired PR's Python Unit Tests job passed. Engine Budget run
+  [41552162812](https://github.com/loopflowstudio/manabot/actions/runs/41552162812/job/125642805847)
+  **failed correctly**, with comparison exit 1 under the logged shell
+  `/usr/bin/bash --noprofile --norc -e -o pipefail {0}`. Candidate and reference
+  builds, measurements, candidate recording and final artifact upload succeeded.
+  Both measurement summaries are present. This directly closes the hosted
+  false-green defect; it does not establish an in-budget candidate.
+
+| Metric | Same-runner reference | Candidate | Result |
+|---|---:|---:|---|
+| Worst search reply | 13.913 s | 14.857 s | Pass |
+| Total search | 411.956 s | 433.796 s | Pass |
+| Step throughput | 6,774.5/s | 6,104.0/s | Fail: minimum 6,158.6/s |
+| Search digests, step digest and counts | Committed values | Identical | Pass |
+
+The candidate takes **10.98% more time per step** than this reference
+(`6774.5 / 6104 - 1`), equivalent to 9.90% fewer steps/s. The comparator's
+10% duration budget correctly uses reference throughput divided by 1.1.
+
+The actual always-run upload produced
+[artifact 13193795768](https://github.com/loopflowstudio/manabot/actions/runs/41552162812/artifacts/13193795768)
+despite the comparison failure. `gh run download` retrieved it into
+`.cache/engine-budget-demo/pass-2/pr-head/`. Its measurement names the exact
+published head `88dc8c1ad25cd99cca6026581a569f5c2f63ee1b`, this run, and an AMD
+EPYC 7763 runner. Replaying the downloaded comparison also exits 1. The real
+`record --reason` command successfully adopted it into temporary
+`.cache/engine-budget-demo/pass-2/adopted-baseline.json`, preserving all
+measurement identity fields and tolerance 0.1. Transcript:
+`.cache/engine-budget-demo/pass-2/record.txt`; hosted log:
+`.cache/engine-budget-demo/pass-2/pr-head.log`.
+
+This proves actual failed-job transport and adoption after a comparison
+failure. Reference-build failure still has the bounded local proof described
+above; no hosted reference-build failure was induced or claimed.
+
+## Pass-2 judgment and next implementation
+
+**Iterate, for a baseline reconciliation only.** The enforcement repair holds;
+the published PR still fails its unchanged throughput budget. Pass 1's
+false-green defect and absent recovery fixture are repaired. This is material
+observed progress, not another pass with the same unresolved defect.
+
+The committed reference `e5615edcc` predates merged main changes `230b2f563`
+(decklist disclosure) and `a8abf01b1` (T5 token copies and effective battlefield
+characteristics). `git diff a8abf01b1 HEAD -- managym/src` is empty. The diff
+from the reference includes those upstream engine changes; the throughput
+workload is unchanged, and CI uses the same benchmark sources on both sides.
+This is an older engine reference, not evidence of runtime code introduced by
+the budget PR. The source comparison does not isolate which upstream change
+caused the measured cost. Two same-runner results now fail throughput near the
+threshold; do not dismiss the current failure as established runner noise.
+
+Under the instruction to stand in for Jack Heart, the agent accepts anchoring
+this new budget to the already-merged engine and explicitly retaining this
+measured cost. This is delegated demo judgment, **not a human statement or
+shipping approval**. Reverting accepted upstream functionality or broadening
+this Task into engine optimization would exceed the intended initial-budget
+outcome. The 10% tolerance remains unchanged, and the earlier failed runs remain
+evidence. No new design or workflow concept is required.
+
+The next implementation should run the documented `record --reason` command
+against this downloaded artifact to update the production baseline, with a
+reason naming the synchronized main changes and the observed 10.98% per-step
+cost (plus the run link). Update the current-baseline documentation and PR
+description without rewriting historical T4/T5/T6 or full-score receipts.
+Republish and inspect the resulting candidate/reference comparison. The exact
+artifact above is sufficient; no separate measurement dispatch, engine change,
+threshold relaxation or artificial load is needed. Production baseline adoption
+was demonstrated only in a temporary file during this demo; the implementation
+response below records the subsequent production adoption.
+
+At review, Rust, Python unit, both conformance jobs, Academy integration/UI,
+Clean-machine Play and long integration passed; main integration was still
+running and Tests Result had not completed. The first main-push check remains
+post-merge. No HTML page or human browser observation is claimed on this
+headless surface. This demo closes no Session, restarts no Graph and authorizes
+no merge.
+
+## Baseline implementation response — 2026-11-02
+
+The production baseline now adopts this run's exact candidate through
+`record --reason`, explicitly accepting the merged engine's measured 10.98%
+per-step cost and retaining tolerance 0.1. Artifact identity, every measurement,
+and unchanged digests/counts were checked directly. Current-reference guidance
+in `docs/development.md` now cites this run; historical receipts remain intact.
+No runtime or workflow code changed. The next publication/demo owns updating
+the PR copy and inspecting the new comparison; this response claims no new
+hosted run or shipping approval.
