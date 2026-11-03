@@ -6,6 +6,10 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      measure:
+        description: Engine Budget only; commit or branch to benchmark with this ref's benchmarks and record without comparing
+        default: ''
 
 # A newer PR revision replaces its obsolete run. Main and manual runs retain
 # independent groups, so publication does not cancel another main verification.
@@ -28,6 +32,7 @@ jobs:
       semantic_conformance: ${{ steps.classify.outputs.semantic_conformance }}
       frontend: ${{ steps.classify.outputs.frontend }}
       clean_machine_play: ${{ steps.classify.outputs.clean_machine_play }}
+      engine_budget: ${{ steps.classify.outputs.engine_budget }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,8 +43,11 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
+          MEASURE: ${{ inputs.measure || '' }}
         run: |
-          if [ "$EVENT" = workflow_dispatch ]; then
+          if [ -n "$MEASURE" ]; then
+            bash .github/ci/select-tests.sh --only engine_budget | tee -a "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = workflow_dispatch ]; then
             bash .github/ci/select-tests.sh --all | tee -a "$GITHUB_OUTPUT"
           elif [ "$EVENT" = pull_request ]; then
             git diff --no-renames --name-only -z HEAD^1 HEAD | bash .github/ci/select-tests.sh | tee -a "$GITHUB_OUTPUT"
@@ -312,10 +320,21 @@ jobs:
             .cache/clean-machine/launch.log
           if-no-files-found: warn
 
+  # Release benchmarks against managym/perf/baseline.json on a runner of
+  # their own; a dispatch with `measure` benchmarks that commit and records
+  # it without comparing (docs/development.md, Engine performance budget).
+  engine-budget:
+    name: Engine Budget
+    needs: [changes]
+    if: needs.changes.outputs.engine_budget == 'true'
+    uses: ./.github/workflows/engine-budget.yml
+    with:
+      measure: ${{ inputs.measure || '' }}
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-conformance, frontend, clean-machine-play]
+    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-conformance, frontend, clean-machine-play, engine-budget]
     if: always()
     steps:
       - name: Check all jobs
@@ -332,6 +351,7 @@ jobs:
             semantic-conformance=${{ needs.semantic-conformance.result }}
             frontend=${{ needs.frontend.result }}
             clean-machine-play=${{ needs.clean-machine-play.result }}
+            engine-budget=${{ needs.engine-budget.result }}
         run: |
           [ "$CHANGES" = success ] || exit 1
           failed=0
