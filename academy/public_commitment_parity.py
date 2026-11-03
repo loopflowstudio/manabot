@@ -41,7 +41,7 @@ RECEIPT_PATH = (
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "6d47da910f637afe9f6fe8aba8c046e75e86d587d0d08afbf93e5230610ed45d"
+    "39e71426948587f50d682a17a52d4ffd068ff13fe1f805c83ca608fbb66715d3"
 )
 COMMAND_COUNT = 142
 COMMITMENT_COUNT = 69

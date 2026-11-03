@@ -258,3 +258,59 @@ No baseline adoption or speedup claim follows. This hosted result predates the
 nested-predicate repair; publication starts new CI for it, which is not yet
 completed proof. Main remains `a1a02a76f`; PR #414 remains for review, with no
 auto-merge or Task completion.
+
+
+## Engine-speed investigation — 2026-11-03
+
+Jack Heart asked to investigate engine speed. Three hosted candidate/reference
+comparisons on one runner each show a sustained cost, not just one outlier:
+
+| CI run | PR head | Worst reply cost | Total search cost | Time per step cost |
+|---|---|---:|---:|---:|
+| 41567370391 | cfa3aa182 | +9.14% | +9.42% | +10.24% |
+| 41571694122 | 95c7eb7ed | +8.84% | +7.71% | +9.56% |
+| 41573344240 | dc8b86dc2 | +11.63% | +9.95% | +9.26% |
+
+All full-score digests and the step digest/count match the committed reference.
+The latest run fails worst reply (8.551s vs 7.660s); total search is 258.896s
+vs 235.464s and throughput 11,173.5 vs 12,207.8 steps/s. CPU models differ
+between runs; only the within-run ratios above are comparable. Artifacts are
+retained at `.runs/mtg-238-speed/<run>/`.
+
+A two-second sample of the actual native step workload and release disassembly
+show separate calls to small CardTypes queries after their move to managym-state
+(17 is_land and 34 is_creature call sites). Adding ordinary inline hints removes
+those calls. EffectRecords::on/on_player receive the same hint so the lookup and
+iterator consumption can optimize together across the crate boundary. No storage,
+API, serialization, rules, benchmark or budget change accompanies the 15 hints.
+
+Local M4 Max/macOS 26.0.1/rustc 1.98.1 experiments use serial unchanged workloads,
+with binaries saved before each change. ABBA step comparisons measured 1.37%
+less elapsed time from type-query hints, then 1.82% less from effect-lookup hints.
+A separate animation-grant predicate reorder measured +0.05% (no useful change)
+and was discarded. The retained patch's full Search-64 comparison against
+unchanged dc8b86dc2 measured 142.877s vs 146.698s total (-2.60%), worst reply
+4.643s vs 4.758s (-2.42%). All three ordered-score digests match; every step
+experiment has 512 completed games, 99,923 steps and digest 12247096877573042301.
+These are local smoke measurements, not hosted acceptance or an explanation of
+the entire branch cost. No baseline adoption or tolerance change is justified.
+
+While measuring, main advanced to MTG-235's effect-vocabulary merge 22e4aab71.
+The original comparison remains pinned above; it does not measure the subsequent
+combined branch. Sync preserves ObjectSelector, sparse counters, keyword enum,
+crate ownership and record-based animation. Fresh combined validation follows.
+
+
+Combined-source validation: full debug and release Rust each pass 891 tests
+with 2 ignored; workspace fmt/clippy pass. The release cp312 extension was
+rebuilt and atomically installed. The broad affected Python command (prior
+consumer suite plus heuristic and rules-inventory checks) passes 945 tests,
+1 skipped, in 310.87s. Authored replay retains identical Commands, offers,
+actors, revisions and action counts in every one of its 142 decisions;
+858 viewer checks and 69 public commitments pass. Kernel recording retains
+14 cases / 3,396 Commands / 15 Phase rows, with only content identity and replay
+hashes changed. Academy fixture Commands reach the same decision revisions;
+current belief receipts retain their numerical/scalar checks and exclude all
+historical receipts. Audit anchors and index retain all 3,322 dispositions.
+The combined engine still needs fresh hosted Engine Budget assessment; the
+isolated 2.6% local result must not be reported as its hosted performance.

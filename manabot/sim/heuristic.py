@@ -67,26 +67,22 @@ import managym
 Polarity = Literal["harmful", "beneficial"]
 
 # Effects that act on a spell's target, by what they do to that target's
-# controller. Names are the engine's `Effect` variants.
+# controller. Names are the engine's `Effect` variants; a `Move` of the target
+# off the battlefield (exile, bounce, tuck) reads as `MoveTargetAway`.
 HARMFUL_EFFECTS = frozenset(
     {
         "DealDamage",
-        "DealDamageValue",
         "TargetCreaturesDealPowerDamageToLastTarget",
         "Destroy",
-        "Exile",
-        "ExileWithControllerToken",
-        "ExileUntilSourceLeaves",
-        "ReturnToHand",
-        "ReturnToHandDrawIfControlled",
+        "MoveTargetAway",
         "CounterSpell",
         "CounterUnlessPays",
-        "DiscardTargetPlayer",
+        "Discard",
     }
 )
 BENEFICIAL_EFFECTS = frozenset(
     {
-        "UntapTarget",
+        "Untap",
         "GrantKeywordsToTarget",
         "Earthbend",
         "BuffTargetValue",
@@ -98,6 +94,10 @@ BENEFICIAL_EFFECTS = frozenset(
 IMPLICIT_TARGET_EFFECTS = frozenset(
     {"CounterUnlessPays", "TargetCreaturesDealPowerDamageToLastTarget"}
 )
+# Fields through which a verb names the object (`ObjectSelector`) or player
+# (`PlayerSelector`) it acts on; a `{"Target": spec}` selector is the spell's
+# target.
+SELECTOR_FIELDS = ("what", "on", "from", "player")
 
 # ---------------------------------------------------------------------------
 # Card knowledge derived from the engine card definitions
@@ -133,18 +133,48 @@ _TARGET_MODIFICATIONS = {
 }
 
 
+def _target_of(body: Any) -> Any | None:
+    """The target spec an effect body acts on: its `target` field or a
+    `Target` object selector."""
+    if not isinstance(body, dict):
+        return None
+    if "target" in body:
+        return body["target"]
+    for field in SELECTOR_FIELDS:
+        selector = body.get(field)
+        if isinstance(selector, dict) and "Target" in selector:
+            return selector["Target"]
+    return None
+
+
+def _spec_name(spec: Any) -> str:
+    """A target spec's variant name (unit variants serialize as strings)."""
+    return spec if isinstance(spec, str) else next(iter(spec))
+
+
 def _variant(effect: Effect) -> tuple[str, Any]:
     """An effect's variant name and body (unit variants serialize as strings).
 
     `ApplyContinuous` reads as what it does to whom: a fixed P/T change on the
     target is `BuffTarget`, any other on the target `BuffTargetValue`, a
     keyword, subtype or unblockability grant to the target its `*Target`
-    name, and a P/T change on the source `ModifyUntilEot`. Other continuous
-    effects keep their name and carry no polarity.
+    name, and a P/T change on the source `ModifyUntilEot`. A `Move` of a
+    battlefield target anywhere but the battlefield is `MoveTargetAway`
+    (returning a graveyard card is not). Other continuous effects keep their
+    name and carry no polarity.
     """
     if isinstance(effect, str):
         return effect, {}
     ((name, body),) = effect.items()
+    if name == "Move":
+        target = _target_of(body)
+        if (
+            target is not None
+            and body["to"] != "Battlefield"
+            and "Graveyard" not in _spec_name(target)
+        ):
+            return "MoveTargetAway", {"target": target}
+        return name, body
     if name != "ApplyContinuous":
         return name, body
     affected = body["affected"]
@@ -152,7 +182,7 @@ def _variant(effect: Effect) -> tuple[str, Any]:
     if modification == "ModifyPt":
         power, toughness = change["power"], change["toughness"]
         fixed = "Fixed" in power and "Fixed" in toughness
-        if affected == "Source" and fixed:
+        if affected == "This" and fixed:
             return "ModifyUntilEot", {
                 "power_delta": power["Fixed"],
                 "toughness_delta": toughness["Fixed"],
@@ -191,9 +221,7 @@ def _target_effects(effects: list[Effect]) -> list[tuple[str, Any]]:
         name, body = _variant(effect)
         for nested in _children(name, body):
             found.extend(_target_effects(nested))
-        if name in IMPLICIT_TARGET_EFFECTS or (
-            isinstance(body, dict) and "target" in body
-        ):
+        if name in IMPLICIT_TARGET_EFFECTS or _target_of(body) is not None:
             found.append((name, body))
     return found
 
@@ -207,8 +235,8 @@ def _specs(effects: list[Effect]) -> list[Any]:
             continue
         if name == "TargetClause":
             specs.append(body["requirement"]["spec"])
-        elif "target" in body:
-            specs.append(body["target"])
+        elif (spec := _target_of(body)) is not None:
+            specs.append(spec)
         for key, value in body.items():
             if key == "modes":
                 for mode in value:
@@ -221,8 +249,7 @@ def _specs(effects: list[Effect]) -> list[Any]:
 def _selector(spec: Any) -> str:
     """A target spec's variant in snake case: `CreatureOrPlayer` is
     `creature_or_player`."""
-    name = spec if isinstance(spec, str) else next(iter(spec))
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", _spec_name(spec)).lower()
 
 
 def _damage(effects: list[Effect], kicked: bool) -> int:
@@ -237,14 +264,25 @@ def _damage(effects: list[Effect], kicked: bool) -> int:
         for nested in _children(name, body):
             best = max(best, _damage(nested, kicked))
         if name == "DealDamage":
-            best = max(best, body["amount"])
-        elif name == "DealDamageValue" and "GraveyardMatching" in body["amount"]:
-            best = max(best, body["amount"]["GraveyardMatching"]["base"])
+            best = max(best, _fixed_damage(body["amount"]))
     return best
 
 
-def _counts_lessons(amount: dict[str, Any]) -> bool:
+def _fixed_damage(amount: Any) -> int:
+    """The damage an `EffectValue` surely deals: a fixed amount, or the base
+    of a graveyard count; 0 for a value the heuristic does not rate."""
+    if isinstance(amount, dict):
+        if "Fixed" in amount:
+            return int(amount["Fixed"])
+        if "GraveyardMatching" in amount:
+            return int(amount["GraveyardMatching"]["base"])
+    return 0
+
+
+def _counts_lessons(amount: Any) -> bool:
     """Whether a damage amount grows per Lesson in the caster's graveyard."""
+    if not isinstance(amount, dict):
+        return False
     predicate = amount.get("GraveyardMatching", {}).get("predicate", {})
     return predicate.get("subtype") == "Lesson" and not any(
         value for key, value in predicate.items() if key != "subtype"
@@ -292,7 +330,7 @@ def derive_targeted_spells(
             damage=_damage(effects, kicked=False),
             kicked_damage=_damage(effects, kicked=True),
             lesson_damage=any(
-                name == "DealDamageValue" and _counts_lessons(body["amount"])
+                name == "DealDamage" and _counts_lessons(body["amount"])
                 for name, body in targeted
             ),
             pump=(

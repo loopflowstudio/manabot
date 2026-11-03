@@ -29,30 +29,9 @@ fn prophetic_prism() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::Modal {
-                modes: vec![
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("W"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("U"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("B"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("R"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("G"),
-                        until_end_of_combat: false,
-                    }],
-                ],
-            }],
+            effects: vec![Effect::mana_choice(
+                ["W", "U", "B", "R", "G"].map(Mana::parse),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),

@@ -110,7 +110,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
                 Condition::Kicked,
                 Condition::TargetMatches(CardPredicate::creature()),
             ]),
-            then: vec![Effect::Discard],
+            then: vec![Effect::discard()],
             otherwise: vec![],
         }],
         ..Default::default()
@@ -122,7 +122,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::TargetDealtDamageThisTurn),
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         }],
         ..Default::default()
     };
@@ -136,7 +136,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
                 condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
             },
             intervening_if: None,
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         }],
         ..Default::default()
     };
@@ -147,7 +147,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::SourceTapped),
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         }],
         ..Default::default()
     };
@@ -161,7 +161,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
                 condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
             },
             intervening_if: None,
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         }],
         ..Default::default()
     };

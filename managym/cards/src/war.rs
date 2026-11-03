@@ -1,6 +1,6 @@
 //! War of the Spark.
 use managym_state::{
-    ability::{Ability, Effect, TargetSpec, TriggerCondition},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -30,10 +30,10 @@ fn mayhem_devil() -> CardDefinition {
                 controller_only: false,
                 another: false,
             },
-            effects: vec![Effect::DealDamage {
-                amount: 1,
-                target: TargetSpec::CreatureOrPlayer,
-            }],
+            effects: vec![Effect::deal_damage(
+                1,
+                ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()

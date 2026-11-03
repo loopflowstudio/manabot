@@ -64,9 +64,9 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn,
-            LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
-            TriggerCondition, TriggerSubject,
+            Ability, Condition, DelayedEvent, Effect, EffectValue, Except, LinkedChooser,
+            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector, Scope,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -334,30 +334,80 @@ fn duration_code(duration: EffectDuration) -> f32 {
     }
 }
 
-/// The token each `AffectedSpec` contributes; no wildcard.
-fn affected_token(affected: &AffectedSpec) -> &'static str {
-    match affected {
-        AffectedSpec::You => "AffectedSpec::You",
-        AffectedSpec::Source => "AffectedSpec::Source",
-        AffectedSpec::Target(_) => "AffectedSpec::Target",
-        AffectedSpec::TriggeringPermanent => "AffectedSpec::TriggeringPermanent",
-        AffectedSpec::EachYouControl(_) => "AffectedSpec::EachYouControl",
-        AffectedSpec::EachMatching(_) => "AffectedSpec::EachMatching",
-        AffectedSpec::EachOpponentControls(_) => "AffectedSpec::EachOpponentControls",
-        AffectedSpec::EachTargetPlayerControls(_) => "AffectedSpec::EachTargetPlayerControls",
+/// The token each `ObjectSelector` contributes; no wildcard.
+fn selector_token(selector: &ObjectSelector) -> &'static str {
+    match selector {
+        ObjectSelector::This => "ObjectSelector::This",
+        ObjectSelector::Target(_) => "ObjectSelector::Target",
+        ObjectSelector::Triggering => "ObjectSelector::Triggering",
+        ObjectSelector::Attached => "ObjectSelector::Attached",
+        ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
+        ObjectSelector::Grantor => "ObjectSelector::Grantor",
+        ObjectSelector::Moved => "ObjectSelector::Moved",
+        ObjectSelector::You => "ObjectSelector::You",
+        ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
+        ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn affected_witnesses() -> [AffectedSpec; 8] {
+fn selector_witnesses() -> [ObjectSelector; 10] {
     [
-        AffectedSpec::You,
-        AffectedSpec::Source,
-        AffectedSpec::Target(TargetSpec::Creature),
-        AffectedSpec::TriggeringPermanent,
-        AffectedSpec::EachYouControl(CardPredicate::creature()),
-        AffectedSpec::EachMatching(CardPredicate::creature()),
-        AffectedSpec::EachOpponentControls(CardPredicate::creature()),
-        AffectedSpec::EachTargetPlayerControls(CardPredicate::creature()),
+        ObjectSelector::This,
+        ObjectSelector::Target(TargetSpec::Creature),
+        ObjectSelector::Triggering,
+        ObjectSelector::Attached,
+        ObjectSelector::CreatedThisWay,
+        ObjectSelector::Grantor,
+        ObjectSelector::Moved,
+        ObjectSelector::You,
+        ObjectSelector::another_chosen(CardPredicate::creature()),
+        ObjectSelector::Each {
+            of: Scope::YouControl,
+            predicate: CardPredicate::creature(),
+            except: None,
+            max_mana_value: Some(Box::new(EffectValue::X)),
+        },
+    ]
+}
+
+/// The token each `Scope` of an `Each` selector contributes; no wildcard.
+fn scope_token(scope: Scope) -> &'static str {
+    match scope {
+        Scope::YouControl => "Scope::YouControl",
+        Scope::OpponentsControl => "Scope::OpponentsControl",
+        Scope::Battlefield => "Scope::Battlefield",
+        Scope::TargetPlayerControls => "Scope::TargetPlayerControls",
+    }
+}
+
+/// The token each `Except` contributes; no wildcard.
+fn except_token(except: Except) -> &'static str {
+    match except {
+        Except::This => "Except::This",
+        Except::Target => "Except::Target",
+    }
+}
+
+/// The token each `PlayerSelector` contributes; no wildcard.
+fn player_selector_token(player: &PlayerSelector) -> &'static str {
+    match player {
+        PlayerSelector::You => "PlayerSelector::You",
+        PlayerSelector::EachOpponent => "PlayerSelector::EachOpponent",
+        PlayerSelector::TriggeringPlayer => "PlayerSelector::TriggeringPlayer",
+        PlayerSelector::Target(_) => "PlayerSelector::Target",
+        PlayerSelector::TargetController => "PlayerSelector::TargetController",
+        PlayerSelector::Owner => "PlayerSelector::Owner",
+    }
+}
+
+fn player_selector_witnesses() -> [PlayerSelector; 6] {
+    [
+        PlayerSelector::You,
+        PlayerSelector::EachOpponent,
+        PlayerSelector::TriggeringPlayer,
+        PlayerSelector::Target(Box::new(TargetSpec::Player)),
+        PlayerSelector::TargetController,
+        PlayerSelector::Owner,
     ]
 }
 
@@ -439,42 +489,30 @@ fn effect_token(effect: &Effect) -> &'static str {
     match effect {
         Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
-        Effect::PutCountersOnTriggeringPermanent { .. } => {
-            "Effect::PutCountersOnTriggeringPermanent"
-        }
         Effect::OptionalPayment { .. } => "Effect::OptionalPayment",
         Effect::Sacrifice { .. } => "Effect::Sacrifice",
         Effect::DealDamageToPlayer { .. } => "Effect::DealDamageToPlayer",
         Effect::DrainLife { .. } => "Effect::DrainLife",
-        Effect::ReturnGraveyardTarget { .. } => "Effect::ReturnGraveyardTarget",
         Effect::MillCards { .. } => "Effect::MillCards",
         Effect::MillAndSelect { .. } => "Effect::MillAndSelect",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
         Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
         Effect::OptionalDiscardDraw { .. } => "Effect::OptionalDiscardDraw",
-        Effect::DiscardTargetPlayer { .. } => "Effect::DiscardTargetPlayer",
         Effect::Destroy { .. } => "Effect::Destroy",
-        Effect::Exile { .. } => "Effect::Exile",
-        Effect::ReturnToHandDrawIfControlled { .. } => "Effect::ReturnToHandDrawIfControlled",
-        Effect::Discard => "Effect::Discard",
-        Effect::DealDamageValue { .. } => "Effect::DealDamageValue",
-        Effect::PutCountersValue { .. } => "Effect::PutCountersValue",
+        Effect::Discard { .. } => "Effect::Discard",
         Effect::If { .. } => "Effect::If",
-        Effect::ReturnToHand { .. } => "Effect::ReturnToHand",
         Effect::DealDamage { .. } => "Effect::DealDamage",
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
         Effect::DrawCards { .. } => "Effect::DrawCards",
         Effect::LoseLife { .. } => "Effect::LoseLife",
-        Effect::MassDamage { .. } => "Effect::MassDamage",
-        Effect::DamageOpponentCreatures { .. } => "Effect::DamageOpponentCreatures",
-        Effect::CreateTokensValue { .. } => "Effect::CreateTokensValue",
-        Effect::ExileWithControllerToken { .. } => "Effect::ExileWithControllerToken",
         Effect::CreateToken { .. } => "Effect::CreateToken",
-        Effect::PutCountersOnSource { .. } => "Effect::PutCountersOnSource",
         Effect::PutCounters { .. } => "Effect::PutCounters",
-        Effect::TapSource => "Effect::TapSource",
-        Effect::UntapSource => "Effect::UntapSource",
+        Effect::PutCountersFrom { .. } => "Effect::PutCountersFrom",
+        Effect::Move { .. } => "Effect::Move",
+        Effect::Tap { .. } => "Effect::Tap",
+        Effect::Untap { .. } => "Effect::Untap",
+        Effect::RemoveAllCounters { .. } => "Effect::RemoveAllCounters",
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
@@ -488,14 +526,9 @@ fn effect_token(effect: &Effect) -> &'static str {
             "Effect::TargetCreaturesDealPowerDamageToLastTarget"
         }
         Effect::Earthbend { .. } => "Effect::Earthbend",
-        Effect::ReturnSourceToBattlefieldTapped => "Effect::ReturnSourceToBattlefieldTapped",
-        Effect::ExileUntilSourceLeaves { .. } => "Effect::ExileUntilSourceLeaves",
         Effect::AddMana { .. } => "Effect::AddMana",
-        Effect::UntapTarget { .. } => "Effect::UntapTarget",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
-        Effect::PutCountersOnEachMatching { .. } => "Effect::PutCountersOnEachMatching",
         Effect::Airbend { .. } => "Effect::Airbend",
-        Effect::AirbendAll { .. } => "Effect::AirbendAll",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
         Effect::ExileTopCardPlayThisTurn => "Effect::ExileTopCardPlayThisTurn",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
@@ -506,56 +539,34 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::RevealHandDiscardChosen { .. } => "Effect::RevealHandDiscardChosen",
         Effect::SearchLandsOpponentSplits { .. } => "Effect::SearchLandsOpponentSplits",
         Effect::PlaceTargetInLibrary { .. } => "Effect::PlaceTargetInLibrary",
-        Effect::SacrificeSource { .. } => "Effect::SacrificeSource",
-        Effect::MaySacrifice { .. } => "Effect::MaySacrifice",
         Effect::MayOnceEachTurn { .. } => "Effect::MayOnceEachTurn",
         Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
         Effect::WhenYouDo { .. } => "Effect::WhenYouDo",
         Effect::TriggerModes { .. } => "Effect::TriggerModes",
-        Effect::PutSourceCountersOnTarget { .. } => "Effect::PutSourceCountersOnTarget",
-        Effect::ExileAndReturn { .. } => "Effect::ExileAndReturn",
-        Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
-        Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
-        Effect::ExileAttached => "Effect::ExileAttached",
-        Effect::TapAttached => "Effect::TapAttached",
-        Effect::RemoveAllCountersFromAttached => "Effect::RemoveAllCountersFromAttached",
         Effect::DistributeCountersToTappedOpponentCreatures { .. } => {
             "Effect::DistributeCountersToTappedOpponentCreatures"
         }
-        Effect::ReturnGrantorToHand => "Effect::ReturnGrantorToHand",
-        Effect::ShuffleAttachedIntoLibrary => "Effect::ShuffleAttachedIntoLibrary",
-        Effect::ReturnSourceToHand => "Effect::ReturnSourceToHand",
-        Effect::ReturnSourceToBattlefield { .. } => "Effect::ReturnSourceToBattlefield",
         Effect::CreateDelayedTrigger { .. } => "Effect::CreateDelayedTrigger",
-        Effect::SacrificeTriggeringPermanent => "Effect::SacrificeTriggeringPermanent",
-        Effect::PutTriggeringCountersOnSource => "Effect::PutTriggeringCountersOnSource",
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::MoveSourceFromGraveyard { .. } => "Effect::MoveSourceFromGraveyard",
         Effect::ReturnMilledThisWay { .. } => "Effect::ReturnMilledThisWay",
         Effect::MayDiscard { .. } => "Effect::MayDiscard",
-        Effect::ExileSourceAndReturn { .. } => "Effect::ExileSourceAndReturn",
         Effect::GainControl { .. } => "Effect::GainControl",
-        Effect::PutCountersOnCreatedToken { .. } => "Effect::PutCountersOnCreatedToken",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
         Effect::CounterAbility { .. } => "Effect::CounterAbility",
-        Effect::ExileWithSource { .. } => "Effect::ExileWithSource",
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
-        Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
-        Effect::AddManaValue { .. } => "Effect::AddManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
         Effect::SearchLibraryToHand { .. } => "Effect::SearchLibraryToHand",
-        Effect::TapTarget { .. } => "Effect::TapTarget",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
     }
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 108;
+const EFFECT_VARIANTS: usize = 71;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -571,25 +582,35 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::CreateTokenCopy {
             exceptions: vec![Modification::Nonlegendary],
         },
-        Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 1)),
-        Effect::PutCountersOnTriggeringPermanent { count: 1 },
+        Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
+        Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+        Effect::PutCountersFrom {
+            from: ObjectSelector::Triggering,
+            on: ObjectSelector::This,
+        },
+        Effect::may_sacrifice(CardPredicate::creature(), true),
+        Effect::exile_linked(
+            ObjectSelector::Target(target()),
+            LinkedExile::UntilSourceLeaves,
+        ),
+        Effect::tap(ObjectSelector::Attached),
+        Effect::untap(ObjectSelector::This),
+        Effect::RemoveAllCounters {
+            from: ObjectSelector::Attached,
+        },
+        Effect::RemoveCounters {
+            from: ObjectSelector::Target(target()),
+            up_to: 2,
+            chosen: None,
+        },
         Effect::OptionalPayment {
             cost: PaymentCost::Waterbend { generic: 2 },
             if_paid: draw(),
-            if_declined: vec![Effect::Discard],
-        },
-        Effect::Sacrifice {
-            predicate: creature(),
+            if_declined: vec![Effect::discard()],
         },
         Effect::DealDamageToPlayer {
             player: PlayerSelector::You,
             amount: EffectValue::Fixed(1),
-        },
-        Effect::ReturnGraveyardTarget {
-            target: TargetSpec::GraveyardCardYouOwn {
-                predicate: creature(),
-            },
-            to: GraveyardReturn::Hand,
         },
         Effect::MillCards {
             count: EffectValue::Fixed(2),
@@ -616,68 +637,27 @@ fn effect_witnesses() -> Vec<Effect> {
             to_hand: false,
         },
         Effect::OptionalDiscardDraw { count: 1, up_to: 1 },
-        Effect::DiscardTargetPlayer {
-            count: 1,
-            target: TargetSpec::Opponent,
-        },
-        Effect::Destroy { target: target() },
-        Effect::Exile { target: target() },
-        Effect::ReturnToHandDrawIfControlled { target: target() },
-        Effect::Discard,
-        Effect::DealDamageValue {
-            amount: value(),
-            target: target(),
-        },
-        Effect::PutCountersValue {
-            count: value(),
-            target: target(),
+        Effect::destroy(ObjectSelector::Target(target())),
+        Effect::Discard {
+            what: ObjectSelector::Target(TargetSpec::Opponent),
+            count: 2,
         },
         Effect::If {
             condition: Condition::YourTurn,
             then: draw(),
             otherwise: vec![],
         },
-        Effect::ReturnToHand { target: target() },
-        Effect::DealDamage {
-            amount: 1,
-            target: target(),
-        },
+        Effect::deal_damage(value(), ObjectSelector::Target(target())),
         Effect::CounterSpell {
-            target: TargetSpec::Spell,
+            what: ObjectSelector::Target(TargetSpec::Spell),
         },
         Effect::DrawCards { count: value() },
         Effect::LoseLife {
             player: PlayerSelector::TriggeringPlayer,
             amount: EffectValue::Fixed(2),
         },
-        Effect::MassDamage { amount: 1 },
-        Effect::DamageOpponentCreatures { amount: 1 },
-        Effect::CreateTokensValue {
-            token_name: "Clue".into(),
-            count: value(),
-        },
-        Effect::ExileWithControllerToken {
-            target: target(),
-            token_name: "Clue".into(),
-        },
-        Effect::CreateToken {
-            token_name: "Clue".into(),
-            count: 1,
-            tapped_and_attacking: false,
-            attach_source: false,
-        },
-        Effect::PutCountersOnSource {
-            count: EffectValue::Fixed(1),
-            kind: CounterKind::PlusOnePlusOne,
-        },
-        Effect::PutCounters {
-            count: 1,
-            target: target(),
-            kind: CounterKind::Stun,
-        },
-        Effect::TapSource,
-        Effect::UntapSource,
-        Effect::GainLife { amount: 1 },
+        Effect::create_tokens("Clue", value()),
+        Effect::gain_life(value()),
         Effect::OnNthResolutionThisTurn {
             n: 2,
             effect: Box::new(Effect::DrawCards {
@@ -696,7 +676,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::PutTopCardsInHand { count: 1 },
         Effect::Learn,
         Effect::Modal {
-            modes: vec![draw(), vec![Effect::Discard]],
+            modes: vec![draw(), vec![Effect::discard()]],
         },
         Effect::CounterUnlessPays {
             cost: PaymentCost::Mana(ManaCost::parse("{2}")),
@@ -704,33 +684,20 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::TargetCreaturesDealPowerDamageToLastTarget,
         Effect::Earthbend {
             count: EffectValue::Fixed(1),
-            target: TargetSpec::LandYouControl,
+            what: ObjectSelector::Target(TargetSpec::LandYouControl),
         },
-        Effect::ReturnSourceToBattlefieldTapped,
-        Effect::ExileUntilSourceLeaves { target: target() },
         Effect::AddMana {
             mana: Mana::parse("R"),
+            amount: EffectValue::ExcessDamage,
             until_end_of_combat: true,
         },
-        Effect::UntapTarget { target: target() },
         Effect::ForEachTarget { effects: draw() },
-        Effect::PutCountersOnEachMatching {
-            count: EffectValue::SourcePower,
-            predicate: creature(),
-            other: true,
-        },
         Effect::Airbend {
-            target: TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Land],
-                    ..Default::default()
-                },
-            },
-        },
-        Effect::AirbendAll {
-            predicate: CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
+            what: ObjectSelector::Each {
+                of: Scope::Battlefield,
+                predicate: CardPredicate::creature(),
+                except: Some(Except::Target),
+                max_mana_value: None,
             },
         },
         Effect::OpponentsCastOnlyFromHand,
@@ -783,14 +750,6 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::PlaceTargetInLibrary {
             second_from_top: true,
         },
-        Effect::SacrificeSource {
-            then: vec![Effect::Scry { count: 2 }],
-        },
-        Effect::MaySacrifice {
-            predicate: creature(),
-            another: true,
-            then: draw(),
-        },
         Effect::MayOnceEachTurn { effects: draw() },
         Effect::CastLibraryTopFree,
         Effect::WhenYouDo { effects: draw() },
@@ -799,71 +758,35 @@ fn effect_witnesses() -> Vec<Effect> {
             unchosen: false,
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
         },
-        Effect::PutSourceCountersOnTarget {
-            target: TargetSpec::CreatureYouControl,
-        },
-        Effect::ExileAndReturn {
-            target: TargetSpec::CreatureYouControl,
-        },
-        Effect::ExileSourceSpell,
-        Effect::DestroyCreaturesLosingAbilities {
-            max_mana_value: EffectValue::X,
-        },
         Effect::AttachSourceTo {
             target: TargetSpec::CreatureYouControl,
         },
-        Effect::ExileAttached,
-        Effect::TapAttached,
-        Effect::RemoveAllCountersFromAttached,
         Effect::DistributeCountersToTappedOpponentCreatures {
             kind: CounterKind::Stun,
             count: 3,
         },
-        Effect::ReturnGrantorToHand,
-        Effect::ShuffleAttachedIntoLibrary,
-        Effect::ReturnSourceToHand,
-        Effect::ReturnSourceToBattlefield {
-            counter: CounterKind::Finality,
-        },
         Effect::CreateDelayedTrigger {
             event: DelayedEvent::CreatureDiesThisTurn,
-            effects: vec![Effect::GainLife { amount: 1 }],
+            effects: vec![Effect::gain_life(1)],
         },
-        Effect::SacrificeTriggeringPermanent,
-        Effect::PutTriggeringCountersOnSource,
         Effect::ForPlayer {
             player: PlayerSelector::TargetController,
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::MoveSourceFromGraveyard {
-            to: ZoneType::Exile,
-            then: vec![Effect::Discard],
-        },
         Effect::ReturnMilledThisWay {
             predicate: CardPredicate::creature(),
         },
         Effect::MayDiscard {
-            then: vec![Effect::Discard],
-        },
-        Effect::ExileSourceAndReturn {
-            player: PlayerSelector::EachOpponent,
+            then: vec![Effect::discard()],
         },
         Effect::GainControl {
             player: PlayerSelector::You,
-            target: TargetSpec::Creature,
+            what: ObjectSelector::Target(TargetSpec::Creature),
             duration: EffectDuration::EndOfTurn,
         },
-        Effect::PutCountersOnCreatedToken {
-            count: EffectValue::OwnedPermanentsOpponentsControl,
-        },
         Effect::CopyTriggeringObject,
-        Effect::ExileWithSource {
-            target: TargetSpec::GraveyardCard {
-                predicate: CardPredicate::default(),
-            },
-        },
         Effect::CastExiledWithSource {
             predicate: CardPredicate::subtype("Ally"),
         },
@@ -871,18 +794,10 @@ fn effect_witnesses() -> Vec<Effect> {
             target: TargetSpec::SpellOrAbilityWithSingleTarget,
         },
         Effect::CounterAbility {
-            target: TargetSpec::Ability,
-        },
-        Effect::GainLifeValue {
-            amount: EffectValue::ExcessDamage,
+            what: ObjectSelector::Target(TargetSpec::Ability),
         },
         Effect::AddOneColorManaValue {
             amount: EffectValue::GreatestSharedCreatureType,
-        },
-        Effect::AddManaValue {
-            mana: Mana::parse("R"),
-            amount: EffectValue::ExcessDamage,
-            until_end_of_combat: true,
         },
         Effect::FightLastTarget,
         Effect::SearchLibraryToHand {
@@ -890,14 +805,6 @@ fn effect_witnesses() -> Vec<Effect> {
                 subtypes_any: vec!["Lesson".into(), "Noble".into()],
                 ..Default::default()
             },
-        },
-        Effect::TapTarget {
-            target: TargetSpec::Creature,
-        },
-        Effect::RemoveCounters {
-            up_to: 3,
-            chosen: None,
-            target: TargetSpec::Creature,
         },
     ]
 }
@@ -1048,6 +955,8 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
         Condition::DiscardedThisWay(_) => "Condition::DiscardedThisWay",
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
+        Condition::Moved => "Condition::Moved",
+        Condition::TargetControlledByYou => "Condition::TargetControlledByYou",
     }
 }
 
@@ -1082,6 +991,8 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::TriggeringHadCounters,
         Condition::DiscardedThisWay(CardPredicate::creature()),
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
+        Condition::Moved,
+        Condition::TargetControlledByYou,
     ]
 }
 
@@ -1453,7 +1364,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             ability: Box::new(Ability::Triggered {
                 condition: TriggerCondition::YouScry,
                 intervening_if: None,
-                effects: vec![Effect::Discard],
+                effects: vec![Effect::discard()],
             }),
         }),
     ]
@@ -1590,7 +1501,7 @@ fn every_condition_reaches_the_learning_tokens() {
     for condition in witnesses {
         let tokens = tokens_of(&spell(vec![Effect::If {
             condition: condition.clone(),
-            then: vec![Effect::Discard],
+            then: vec![Effect::discard()],
             otherwise: vec![],
         }]));
         let expected = (TokenKind::Variant, name_value(condition_token(&condition)));
@@ -1605,7 +1516,7 @@ fn an_intervening_if_reaches_the_learning_tokens() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::AttackedThisTurn),
-            effects: vec![Effect::Discard],
+            effects: vec![Effect::discard()],
         }],
         ..Default::default()
     };
@@ -1660,9 +1571,9 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
     );
     for (on_player, modification) in witnesses {
         let affected = if on_player {
-            AffectedSpec::You
+            ObjectSelector::You
         } else {
-            AffectedSpec::Source
+            ObjectSelector::This
         };
         let effect = Effect::ApplyContinuous {
             affected,
@@ -1678,7 +1589,7 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
     }
     for duration in [EffectDuration::EndOfTurn, EffectDuration::Indefinite] {
         let effect = Effect::ApplyContinuous {
-            affected: AffectedSpec::Source,
+            affected: ObjectSelector::This,
             modification: Modification::CantBeBlocked,
             duration,
         };
@@ -1686,18 +1597,78 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         assert!(tokens_of(&spell(vec![effect])).contains(&(TokenKind::Variant, name_value(&name))));
         assert!(duration_code(duration) > 0.0);
     }
-    for affected in affected_witnesses() {
-        let name = affected_token(&affected);
+    let scopes = [
+        Scope::YouControl,
+        Scope::OpponentsControl,
+        Scope::Battlefield,
+        Scope::TargetPlayerControls,
+    ];
+    let excepts = [None, Some(Except::This), Some(Except::Target)];
+    for (scope, except) in scopes.into_iter().zip(excepts.into_iter().cycle()) {
+        let affected = ObjectSelector::Each {
+            of: scope,
+            predicate: CardPredicate::creature(),
+            except,
+            max_mana_value: None,
+        };
         let effect = Effect::ApplyContinuous {
             affected,
             modification: Modification::CantBeBlocked,
             duration: EffectDuration::EndOfTurn,
+        };
+        let tokens = tokens_of(&spell(vec![effect]));
+        let name = scope_token(scope);
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(name))),
+            "{name}"
+        );
+        if let Some(except) = except {
+            let name = except_token(except);
+            assert!(
+                tokens.contains(&(TokenKind::Variant, name_value(name))),
+                "{name}"
+            );
+        }
+    }
+}
+
+/// Every selector a verb can act through, every player a verb can name and
+/// both exile links reach the tokens, and two verbs that differ only in
+/// their selector are different token sequences of one shape.
+#[test]
+fn every_object_and_player_selector_reaches_the_learning_tokens() {
+    for selector in selector_witnesses() {
+        let name = selector_token(&selector);
+        let tokens = tokens_of(&spell(vec![Effect::tap(selector)]));
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(name))),
+            "{name}"
+        );
+    }
+    for player in player_selector_witnesses() {
+        let name = player_selector_token(&player);
+        let effect = Effect::Move {
+            what: ObjectSelector::Moved,
+            to: ZoneType::Battlefield,
+            tapped: false,
+            under: Some(player),
+            with_counter: None,
+            linked: None,
         };
         assert!(
             tokens_of(&spell(vec![effect])).contains(&(TokenKind::Variant, name_value(name))),
             "{name}"
         );
     }
+    for linked in [LinkedExile::WithSource, LinkedExile::UntilSourceLeaves] {
+        let effect = Effect::exile_linked(ObjectSelector::This, linked);
+        let name = format!("LinkedExile::{linked:?}");
+        assert!(tokens_of(&spell(vec![effect])).contains(&(TokenKind::Variant, name_value(&name))));
+    }
+    let this = tokens_of(&spell(vec![Effect::exile(ObjectSelector::This)]));
+    let attached = tokens_of(&spell(vec![Effect::exile(ObjectSelector::Attached)]));
+    assert_ne!(this, attached);
+    assert_eq!(this.len(), attached.len(), "the verb's shape is shared");
 }
 
 // ---------------------------------------------------------------------------

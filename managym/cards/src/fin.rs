@@ -1,6 +1,6 @@
 //! Final Fantasy.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     permanent::CounterKind,
@@ -32,10 +32,11 @@ fn sazh_s_chocobo() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()

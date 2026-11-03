@@ -1,5 +1,5 @@
 use managym_state::{
-    ability::{Effect, TargetSpec},
+    ability::{Effect, ObjectSelector, TargetSpec},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -17,10 +17,10 @@ fn lightning_strike() -> CardDefinition {
         name: "Lightning Strike".into(),
         mana_cost: Some(ManaCost::parse("{1}{R}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::DealDamage {
-            amount: 3,
-            target: TargetSpec::CreatureOrPlayer,
-        }],
+        spell_effects: vec![Effect::deal_damage(
+            3,
+            ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }

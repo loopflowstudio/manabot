@@ -7,7 +7,7 @@ use crate::{
     agent::action::Action,
     flow::game::Game,
     state::{
-        ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
+        ability::{Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
         effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
@@ -132,8 +132,8 @@ fn clause(spec: TargetSpec, effects: Vec<Effect>) -> Effect {
 
 fn damage() -> Effect {
     Effect::DealDamage {
-        amount: 1,
-        target: TargetSpec::Creature,
+        amount: EffectValue::Fixed(1),
+        what: ObjectSelector::Target(TargetSpec::Creature),
     }
 }
 
@@ -162,7 +162,7 @@ fn hexproof(game: &mut Game, id: PermanentId, value: bool) {
 
 fn pause() -> Effect {
     Effect::Modal {
-        modes: vec![vec![], vec![Effect::GainLife { amount: 2 }]],
+        modes: vec![vec![], vec![Effect::gain_life(2)]],
     }
 }
 
@@ -179,7 +179,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clones() {
                     TargetSpec::Creature,
                     vec![
                         Effect::until_end_of_turn(
-                            AffectedSpec::Target(TargetSpec::Creature),
+                            ObjectSelector::Target(TargetSpec::Creature),
                             Modification::AddKeywords(hexproof_keywords()),
                         ),
                         pause(),
@@ -254,7 +254,7 @@ fn resolution_all_invalid_suppresses_every_effect_but_mixed_slots_remain_fixed()
                             Effect::ForEachTarget {
                                 effects: vec![damage()],
                             },
-                            Effect::GainLife { amount: 7 },
+                            Effect::gain_life(7),
                         ],
                     }],
                     vec![Target::Permanent(first), Target::Permanent(second)],
@@ -302,11 +302,11 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
                     clause(TargetSpec::CreatureOpponentControls, vec![damage()]),
                     clause(
                         TargetSpec::Creature,
-                        vec![Effect::PutCounters {
-                            count: 2,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: TargetSpec::Creature,
-                        }],
+                        vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            CounterKind::PlusOnePlusOne,
+                            2,
+                        )],
                     ),
                 ],
                 vec![Target::Permanent(victim); 2],
@@ -347,13 +347,13 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
                     vec![
                         Effect::Earthbend {
                             count: EffectValue::Fixed(1),
-                            target: spec.clone(),
+                            what: ObjectSelector::Target(spec.clone()),
                         },
-                        Effect::PutCounters {
-                            count: 2,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: spec,
-                        },
+                        Effect::put_counters(
+                            ObjectSelector::Target(spec),
+                            CounterKind::PlusOnePlusOne,
+                            2,
+                        ),
                     ],
                 )],
                 vec![Target::Permanent(land)],
@@ -380,10 +380,10 @@ fn resolution_zero_optional_targets_and_untargeted_effects_resolve() {
                 let effects = vec![if targeted {
                     Effect::TargetClause {
                         requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
-                        effects: vec![damage(), Effect::GainLife { amount: 7 }],
+                        effects: vec![damage(), Effect::gain_life(7)],
                     }
                 } else {
-                    Effect::GainLife { amount: 7 }
+                    Effect::gain_life(7)
                 }];
                 stack(&mut game, entry, controller, effects, vec![], vec![]);
                 game.resolve_top_of_stack();
@@ -407,9 +407,7 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 vec![clause(
                     TargetSpec::Creature,
                     vec![
-                        Effect::ReturnToHand {
-                            target: TargetSpec::Creature,
-                        },
+                        Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Creature)),
                         pause(),
                         damage(),
                     ],
@@ -460,15 +458,9 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                 vec![clause(
                     spec.clone(),
                     vec![
-                        Effect::ReturnGraveyardTarget {
-                            target: spec.clone(),
-                            to: crate::state::ability::GraveyardReturn::Hand,
-                        },
+                        Effect::return_to_hand(ObjectSelector::Target(spec.clone())),
                         pause(),
-                        Effect::ReturnGraveyardTarget {
-                            target: spec,
-                            to: crate::state::ability::GraveyardReturn::Hand,
-                        },
+                        Effect::return_to_hand(ObjectSelector::Target(spec)),
                     ],
                 )],
                 vec![Target::GraveyardCard(original)],
@@ -510,7 +502,7 @@ fn resolution_positional_power_damage_never_substitutes_an_illegal_victim() {
                 controller,
                 vec![
                     Effect::TargetCreaturesDealPowerDamageToLastTarget,
-                    Effect::GainLife { amount: 7 },
+                    Effect::gain_life(7),
                 ],
                 vec![Target::Permanent(attacker), Target::Permanent(victim)],
                 vec![0, 1],
@@ -558,7 +550,7 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
                     clause(
                         TargetSpec::Creature,
                         vec![Effect::until_end_of_turn(
-                            AffectedSpec::Target(TargetSpec::Creature),
+                            ObjectSelector::Target(TargetSpec::Creature),
                             Modification::AddKeywords(hexproof_keywords()),
                         )],
                     ),
@@ -680,7 +672,7 @@ fn counter_spell_cannot_affect_an_ability() {
         context: Some(Target::StackAbility(ability)),
         player: None,
         inline_effects: Some(vec![Effect::CounterSpell {
-            target: TargetSpec::Spell,
+            what: ObjectSelector::Target(TargetSpec::Spell),
         }]),
         x: 0,
     }));
@@ -713,7 +705,7 @@ fn counter_ability_counters_an_ability_and_cannot_target_a_spell() {
         Entry::Spell,
         PlayerId(0),
         vec![Effect::CounterAbility {
-            target: spec.clone(),
+            what: ObjectSelector::Target(spec.clone()),
         }],
         vec![Target::StackAbility(ability)],
         vec![0],

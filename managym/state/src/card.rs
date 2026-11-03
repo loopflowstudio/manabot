@@ -2,8 +2,8 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Condition, Effect, PaymentCost, TargetRequirement,
-        TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
+        TargetRequirement, TargetSpec,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -475,6 +475,7 @@ impl ActivatedAbilityDefinition {
         match effect {
             Effect::AddMana {
                 mana,
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: false,
             } => Some(vec![mana.clone()]),
             Effect::Modal { modes } => modes
@@ -482,6 +483,7 @@ impl ActivatedAbilityDefinition {
                 .map(|effects| match effects.as_slice() {
                     [Effect::AddMana {
                         mana,
+                        amount: EffectValue::Fixed(1),
                         until_end_of_combat: false,
                     }] => Some(mana.clone()),
                     _ => None,

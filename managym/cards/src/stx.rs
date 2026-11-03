@@ -1,10 +1,9 @@
 //! Strixhaven: School of Mages.
-use managym_state::ability::AffectedSpec;
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, StaticAbility},
     mana::ManaCost,
@@ -34,9 +33,9 @@ fn divide_by_zero() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{U}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::ReturnToHand {
-                target: TargetSpec::SpellOrPermanent { min_mana_value: 1 },
-            },
+            Effect::return_to_hand(ObjectSelector::Target(TargetSpec::SpellOrPermanent {
+                min_mana_value: 1,
+            })),
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {
@@ -63,11 +62,11 @@ fn enthusiastic_study() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(3, 1),
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
             ),
             Effect::Learn,
@@ -162,10 +161,7 @@ fn igneous_inspiration() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::DealDamage {
-                amount: 3,
-                target: TargetSpec::CreatureOrPlayer,
-            },
+            Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::CreatureOrPlayer)),
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {

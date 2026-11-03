@@ -2,7 +2,7 @@
 //! with `is_token: true`, so copy effects treat tokens and cards alike. Each is
 //! keyed by name and carries the Scryfall id of its first token printing.
 use managym_state::{
-    ability::{Ability, AffectedSpec, Effect, EffectValue, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, StaticAbility,
@@ -143,6 +143,7 @@ fn dragon() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RRRR"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -156,7 +157,7 @@ fn food() -> CardDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{2}"),
             sacrifice_source: true,
-            effects: vec![Effect::GainLife { amount: 3 }],
+            effects: vec![Effect::gain_life(3)],
             ..Default::default()
         }],
         ..token(
@@ -202,7 +203,7 @@ fn monk() -> CardDefinition {
                 },
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 1),
             )],
         }],
@@ -228,6 +229,7 @@ fn soldier() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -259,19 +261,13 @@ fn spirit() -> CardDefinition {
 }
 
 fn treasure() -> CardDefinition {
-    let any_color = ["W", "U", "B", "R", "G"].map(|color| {
-        vec![Effect::AddMana {
-            mana: Mana::parse(color),
-            until_end_of_combat: false,
-        }]
-    });
     CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             sacrifice_source: true,
-            effects: vec![Effect::Modal {
-                modes: any_color.into(),
-            }],
+            effects: vec![Effect::mana_choice(
+                ["W", "U", "B", "R", "G"].map(Mana::parse),
+            )],
             ..Default::default()
         }],
         ..token(

@@ -7,7 +7,7 @@
   "manifest": {
     "world_version": "w17",
     "schema_version": 1,
-    "content_digest": "6d57aa677982667ade56a12a6e1274871ec3d70adaf9d25e2b0a03c2f197429c",
+    "content_digest": "c332828cf186de3f473074e96537f54e23e4378f9d62061aa7fcb47d944248ea",
     "pack_key": "ur-lessons-vs-gw-allies",
     "definitions": [
       {
@@ -138,57 +138,57 @@
   },
   "prefix": [
     {
-      "before_digest": "12fdfcf60d8d9cdb4ff11fe572471dd39028e32afa421876880807b81efce0cf",
+      "before_digest": "fbdcb7389ea314cca523e50780bf02b4037513fbe3221ba6119acbaefcd951c5",
       "offer_id": 0,
       "label": "Play Mountain"
     },
     {
-      "before_digest": "4d94f77d4b189e15cee1babad12cbc01e2caa6eb14951a74f6be0b5c4a7a928c",
+      "before_digest": "8b0a3bcc6749d9a4b3c4d3201d1440d131a9f8663506795efd7f30449397ebe5",
       "offer_id": 0,
       "label": "Play Island"
     },
     {
-      "before_digest": "b49321a96c359447841521c89bb8e3628c491dd1fbc2dcf6010f0f21a0b56d6e",
+      "before_digest": "4983b9b4e21670f811d1b09e6c0b6d2cc82feb9b35ab69fd3bf2d52283bed9df",
       "offer_id": 0,
       "label": "Cast Tiger-Seal"
     },
     {
-      "before_digest": "b76cc2bc1f5bf8e615391bb17470a0caad998242a0c7a14c2dc6e70326f6df7a",
+      "before_digest": "da908272db62ee5ada4617c84420f063e13c7c099d06d4d1866f08f9bc56ece8",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "bc84abb91405e222b1c0b7205cffaac227b93cdb632d83962165f1c089b30190",
+      "before_digest": "87f0c78d44aa6d511e7489e453bda53873e36d7bfb12add3d7aeec1c268cf31f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "aeb1fdb0188fd02d02a5e8cbd55bbf86e26e20d3fd7295e311361d6753625a7f",
+      "before_digest": "6a8e63a18c852e96833cd8e04c928e2736f77c2e633b0c3d618efb78c3463f13",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "b31c42e133dcf81476186dc8d88ef095cb2841518eae715321cede97db51effe",
+      "before_digest": "c431133b36ce115877aa4dda547d4fc8a501687b0c7b693cc67f7178d580b529",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "0833d7a4dcb6915b0be3eaff6e81a3142e974d28afccb43649ee4147adf26d2a",
+      "before_digest": "cb42fd947b1003162b95ca9e3679a97c92fc9cca74090337b59e69c44eb7d04a",
       "offer_id": 0,
       "label": "Play Island"
     },
     {
-      "before_digest": "558e62f29bbc9d8b542e74ed2f379bd7f6420c28faca5f82e7948048b5da86c8",
+      "before_digest": "bf4662ae2b58795949cc0afe6319f3a4d9f4dfb8f363fa1b6e0e20b8fa111a59",
       "offer_id": 0,
       "label": "Cast Divide by Zero"
     },
     {
-      "before_digest": "bec2d50d2b2d9f9ff6dbe3f2c42c6dd7fb82871cf0c78a6f85b0585e19af9e96",
+      "before_digest": "12a251d470a2d3b6ffbee01dfccc688896271bf4263bc30af074e45f0a47bad8",
       "offer_id": 0,
       "label": "Target Tiger-Seal"
     }
   ],
-  "decision_digest": "58a0c8dd69a4764fec87a677b2f69f400640b403d75be49530734def7a5565e4",
+  "decision_digest": "f316f1735a2c37f29ffc7e4fa6467e04364ed81da850881539ceb94c90a40e5a",
   "decision_revision": 14,
   "decision_kind": "LEARN"
 }

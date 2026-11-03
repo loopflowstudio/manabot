@@ -1,6 +1,6 @@
 //! Shadows over Innistrad.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     permanent::CounterKind,
@@ -32,12 +32,7 @@ fn tireless_tracker() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Clue".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Clue", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -49,10 +44,11 @@ fn tireless_tracker() -> CardDefinition {
                     controller_only: true,
                     another: false,
                 },
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
         ],
         text_box: text_box.into(),

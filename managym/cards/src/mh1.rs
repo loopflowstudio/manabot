@@ -1,8 +1,7 @@
 //! Modern Horizons.
-use managym_state::ability::AffectedSpec;
 use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Effect, EffectValue, TargetSpec},
+    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
     mana::ManaCost,
 };
@@ -25,14 +24,14 @@ fn fists_of_flame() -> CardDefinition {
                 count: EffectValue::Fixed(1),
             },
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::ModifyPt {
                     power: EffectValue::CardsDrawnMinus { subtract: 0 },
                     toughness: EffectValue::Fixed(0),
                 },
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
             ),
         ],

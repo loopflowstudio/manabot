@@ -1,8 +1,7 @@
 //! Khans of Tarkir.
-use managym_state::ability::AffectedSpec;
 use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Ability, Effect, TriggerCondition},
+    ability::{Ability, Effect, ObjectSelector, TriggerCondition},
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -34,7 +33,7 @@ fn monastery_swiftspear() -> CardDefinition {
                 },
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 1),
             )],
         }],

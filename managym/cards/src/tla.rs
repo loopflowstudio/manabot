@@ -1,12 +1,11 @@
 //! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
-use managym_state::ability::AffectedSpec;
 use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
-        Ability, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn, LinkedChooser,
-        LinkedGrant, MilledBonus, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Condition, DelayedEvent, Effect, EffectValue, Except, LinkedChooser, LinkedExile,
+        LinkedGrant, MilledBonus, ObjectSelector, PaymentCost, PlayerSelector, Scope,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -343,22 +342,24 @@ fn aang_s_iceberg() -> CardDefinition {
                     another: true,
                     max_x: false,
                 },
-                effects: vec![Effect::ExileUntilSourceLeaves {
-                    target: TargetSpec::Permanent {
+                effects: vec![Effect::exile_linked(
+                    ObjectSelector::Target(TargetSpec::Permanent {
                         predicate: CardPredicate {
                             not_card_types: vec![CardType::Land],
                             ..Default::default()
                         },
-                    },
-                }],
+                    }),
+                    LinkedExile::UntilSourceLeaves,
+                )],
             }],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}"),
             waterbend: true,
-            effects: vec![Effect::SacrificeSource {
-                then: vec![Effect::Scry { count: 2 }],
-            }],
+            effects: vec![
+                Effect::sacrifice_this(),
+                Effect::if_you_do(vec![Effect::Scry { count: 2 }]),
+            ],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -406,7 +407,7 @@ fn aang_s_journey() -> CardDefinition {
                     to_hand: true,
                 }],
             },
-            Effect::GainLife { amount: 2 },
+            Effect::gain_life(2),
         ],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}"))],
         text_box: text_box.into(),
@@ -449,12 +450,12 @@ fn aang_the_last_airbender() -> CardDefinition {
                         max_x: false,
                     },
                     effects: vec![Effect::Airbend {
-                        target: TargetSpec::Permanent {
+                        what: ObjectSelector::Target(TargetSpec::Permanent {
                             predicate: CardPredicate {
                                 not_card_types: vec![CardType::Land],
                                 ..Default::default()
                             },
-                        },
+                        }),
                     }],
                 }],
             },
@@ -467,7 +468,7 @@ fn aang_the_last_airbender() -> CardDefinition {
                     },
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
                 )],
             },
@@ -507,14 +508,14 @@ fn abandoned_air_temple() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{3}{W}"),
-            effects: vec![Effect::PutCountersOnEachMatching {
-                count: EffectValue::Fixed(1),
-                predicate: CardPredicate {
+            effects: vec![Effect::put_counters(
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
-                },
-                other: false,
-            }],
+                }),
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
             ..Default::default()
         }],
         replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
@@ -579,7 +580,7 @@ fn agna_qel_a() -> CardDefinition {
                 Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 },
-                Effect::Discard,
+                Effect::discard(),
             ],
             ..Default::default()
         }],
@@ -609,12 +610,7 @@ fn air_nomad_legacy() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::YouControl(CardPredicate {
@@ -652,7 +648,7 @@ fn airbender_ascension() -> CardDefinition {
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
                     effects: vec![Effect::Airbend {
-                        target: TargetSpec::Creature,
+                        what: ObjectSelector::Target(TargetSpec::Creature),
                     }],
                 }],
             },
@@ -661,10 +657,11 @@ fn airbender_ascension() -> CardDefinition {
                     subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
                 },
                 intervening_if: None,
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::Quest,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Quest,
+                    1,
+                )],
             },
             Ability::Triggered {
                 condition: TriggerCondition::BeginningOfYourEndStep,
@@ -674,9 +671,17 @@ fn airbender_ascension() -> CardDefinition {
                 }),
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
-                    effects: vec![Effect::ExileAndReturn {
-                        target: TargetSpec::CreatureYouControl,
-                    }],
+                    effects: vec![
+                        Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
+                        Effect::Move {
+                            what: ObjectSelector::Moved,
+                            to: ZoneType::Battlefield,
+                            tapped: false,
+                            under: Some(PlayerSelector::Owner),
+                            with_counter: None,
+                            linked: None,
+                        },
+                    ],
                 }],
             },
         ],
@@ -697,17 +702,17 @@ fn airbender_s_reversal() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::Destroy {
-                    target: TargetSpec::Permanent {
+                vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             attacking: true,
                             card_type: Some(CardType::Creature),
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
                 vec![Effect::Airbend {
-                    target: TargetSpec::CreatureYouControl,
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 }],
             ],
         }],
@@ -728,12 +733,12 @@ fn airbending_lesson() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::Airbend {
-                target: TargetSpec::Permanent {
+                what: ObjectSelector::Target(TargetSpec::Permanent {
                     predicate: CardPredicate {
                         not_card_types: vec![CardType::Land],
                         ..Default::default()
                     },
-                },
+                }),
             },
             Effect::DrawCards {
                 count: EffectValue::Fixed(1),
@@ -764,18 +769,7 @@ fn airship_engine_room() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["U", "R"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -829,7 +823,7 @@ fn appa_loyal_sky_bison() -> CardDefinition {
         unchosen: false,
         modes: vec![
             vec![Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
             )],
             vec![Effect::TargetClause {
@@ -843,12 +837,12 @@ fn appa_loyal_sky_bison() -> CardDefinition {
                     })
                 },
                 effects: vec![Effect::Airbend {
-                    target: TargetSpec::PermanentYouControl {
+                    what: ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             not_card_types: vec![CardType::Land],
                             ..Default::default()
                         },
-                    },
+                    }),
                 }],
             }],
         ],
@@ -923,7 +917,7 @@ fn appa_steadfast_guardian() -> CardDefinition {
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::Airbend {
-                            target: nonland_you_control,
+                            what: ObjectSelector::Target(nonland_you_control),
                         }],
                     }],
                 }],
@@ -936,12 +930,7 @@ fn appa_steadfast_guardian() -> CardDefinition {
                     }),
                 },
                 intervening_if: None,
-                effects: vec![Effect::CreateToken {
-                    token_name: "Ally".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Ally", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -986,10 +975,7 @@ fn avatar_destiny() -> CardDefinition {
                     count: EffectValue::TriggeringPower,
                     target: None,
                 },
-                Effect::MoveSourceFromGraveyard {
-                    to: ZoneType::Hand,
-                    then: vec![],
-                },
+                Effect::move_to(ObjectSelector::This, ZoneType::Hand),
                 Effect::ReturnMilledThisWay {
                     predicate: CardPredicate::creature(),
                 },
@@ -1025,10 +1011,11 @@ fn avatar_enthusiasts() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1054,15 +1041,20 @@ fn avatar_s_wrath() -> CardDefinition {
                     another: false,
                     max_x: false,
                 },
-                effects: vec![Effect::AirbendAll {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
+                effects: vec![Effect::Airbend {
+                    what: ObjectSelector::Each {
+                        of: Scope::Battlefield,
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                        except: Some(Except::Target),
+                        max_mana_value: None,
                     },
                 }],
             },
             Effect::OpponentsCastOnlyFromHand,
-            Effect::ExileSourceSpell,
+            Effect::exile(ObjectSelector::This),
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -1099,7 +1091,7 @@ fn azula_always_lies() -> CardDefinition {
                         max_x: false,
                     },
                     effects: vec![Effect::until_end_of_turn(
-                        AffectedSpec::Target(TargetSpec::Creature),
+                        ObjectSelector::Target(TargetSpec::Creature),
                         Modification::pump(-1, -1),
                     )],
                 }],
@@ -1112,11 +1104,11 @@ fn azula_always_lies() -> CardDefinition {
                         another: false,
                         max_x: false,
                     },
-                    effects: vec![Effect::PutCounters {
-                        count: 1,
-                        kind: CounterKind::PlusOnePlusOne,
-                        target: TargetSpec::Creature,
-                    }],
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 }],
                 vec![
                     Effect::TargetClause {
@@ -1129,7 +1121,7 @@ fn azula_always_lies() -> CardDefinition {
                             max_x: false,
                         },
                         effects: vec![Effect::until_end_of_turn(
-                            AffectedSpec::Target(TargetSpec::Creature),
+                            ObjectSelector::Target(TargetSpec::Creature),
                             Modification::pump(-1, -1),
                         )],
                     },
@@ -1142,11 +1134,11 @@ fn azula_always_lies() -> CardDefinition {
                             another: false,
                             max_x: false,
                         },
-                        effects: vec![Effect::PutCounters {
-                            count: 1,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: TargetSpec::Creature,
-                        }],
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
                     },
                 ],
             ],
@@ -1177,6 +1169,7 @@ fn azula_cunning_usurper() -> CardDefinition {
                 },
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
                     until_end_of_combat: true,
                 }],
             },
@@ -1237,6 +1230,7 @@ fn azula_on_the_hunt() -> CardDefinition {
                 },
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
                     until_end_of_combat: true,
                 }],
             },
@@ -1250,12 +1244,7 @@ fn azula_on_the_hunt() -> CardDefinition {
                         player: PlayerSelector::You,
                         amount: EffectValue::Fixed(1),
                     },
-                    Effect::CreateToken {
-                        token_name: "Clue".into(),
-                        count: 1,
-                        tapped_and_attacking: false,
-                        attach_source: false,
-                    },
+                    Effect::create_tokens("Clue", 1),
                 ],
             },
         ],
@@ -1281,7 +1270,7 @@ fn ba_sing_se() -> CardDefinition {
             mana_cost: ManaCost::parse("{2}{G}"),
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
             ..Default::default()
         }],
@@ -1316,7 +1305,7 @@ fn badgermole() -> CardDefinition {
             },
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
@@ -1352,7 +1341,7 @@ fn badgermole_cub() -> CardDefinition {
             },
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(1),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         triggered_mana_abilities: vec![TriggeredManaAbility {
@@ -1387,10 +1376,10 @@ fn barrels_of_blasting_jelly() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{5}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DealDamage {
-                    amount: 5,
-                    target: TargetSpec::Creature,
-                }],
+                effects: vec![Effect::deal_damage(
+                    5,
+                    ObjectSelector::Target(TargetSpec::Creature),
+                )],
                 ..Default::default()
             },
         ],
@@ -1416,22 +1405,21 @@ fn beetle_headed_merchants() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             intervening_if: None,
-            effects: vec![Effect::MaySacrifice {
-                predicate: CardPredicate {
-                    card_types_any: vec![CardType::Creature, CardType::Artifact],
-                    ..Default::default()
-                },
-                another: true,
-                then: vec![
+            effects: vec![
+                Effect::may_sacrifice(
+                    CardPredicate {
+                        card_types_any: vec![CardType::Creature, CardType::Artifact],
+                        ..Default::default()
+                    },
+                    true,
+                ),
+                Effect::if_you_do(vec![
                     Effect::DrawCards {
                         count: EffectValue::Fixed(1),
                     },
-                    Effect::PutCountersOnSource {
-                        count: EffectValue::Fixed(1),
-                        kind: CounterKind::PlusOnePlusOne,
-                    },
-                ],
-            }],
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                ]),
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1461,7 +1449,7 @@ fn beifong_s_bounty_hunters() -> CardDefinition {
             intervening_if: None,
             effects: vec![Effect::Earthbend {
                 count: EffectValue::TriggeringPower,
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         text_box: text_box.into(),
@@ -1526,7 +1514,7 @@ fn bitter_work() -> CardDefinition {
             mana_cost: ManaCost::parse("{4}"),
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(4),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
             ..Default::default()
         }],
@@ -1555,10 +1543,11 @@ fn boar_q_pine() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1585,18 +1574,7 @@ fn boiling_rock_prison() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["B", "R"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -1626,6 +1604,7 @@ fn boiling_rock_rioter() -> CardDefinition {
                 },
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
+                    amount: EffectValue::Fixed(1),
                     until_end_of_combat: true,
                 }],
             },
@@ -1641,11 +1620,12 @@ fn boiling_rock_rioter() -> CardDefinition {
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_cost: Some(CardPredicate::subtype("Ally")),
-            effects: vec![Effect::ExileWithSource {
-                target: TargetSpec::GraveyardCard {
+            effects: vec![Effect::exile_linked(
+                ObjectSelector::Target(TargetSpec::GraveyardCard {
                     predicate: CardPredicate::default(),
-                },
-            }],
+                }),
+                LinkedExile::WithSource,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -1663,14 +1643,21 @@ fn boomerang_basics() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{U}")),
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::ReturnToHandDrawIfControlled {
-            target: TargetSpec::Permanent {
+        spell_effects: vec![
+            Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Permanent {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Land],
                     ..Default::default()
                 },
-            },
-        }],
+            })),
+            Effect::if_you_do(vec![Effect::If {
+                condition: Condition::TargetControlledByYou,
+                then: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+                otherwise: vec![],
+            }]),
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -1687,17 +1674,17 @@ fn bumi_bash() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::DealDamageValue {
+                vec![Effect::DealDamage {
                     amount: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         },
                     },
-                    target: TargetSpec::Creature,
+                    what: ObjectSelector::Target(TargetSpec::Creature),
                 }],
-                vec![Effect::Destroy {
-                    target: TargetSpec::Permanent {
+                vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Land),
                             any_of: vec![
@@ -1713,7 +1700,7 @@ fn bumi_bash() -> CardDefinition {
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
             ],
         }],
         text_box: text_box.into(),
@@ -1746,10 +1733,11 @@ fn bumi_king_of_three_trials() -> CardDefinition {
                 }),
                 unchosen: false,
                 modes: vec![
-                    vec![Effect::PutCountersOnSource {
-                        count: EffectValue::Fixed(3),
-                        kind: CounterKind::PlusOnePlusOne,
-                    }],
+                    vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        3,
+                    )],
                     vec![Effect::TargetClause {
                         requirement: TargetRequirement::one(TargetSpec::Player),
                         effects: vec![Effect::ForPlayer {
@@ -1761,7 +1749,7 @@ fn bumi_king_of_three_trials() -> CardDefinition {
                         requirement: TargetRequirement::one(TargetSpec::LandYouControl),
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(3),
-                            target: TargetSpec::LandYouControl,
+                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
                         }],
                     }],
                 ],
@@ -1791,23 +1779,28 @@ fn buzzard_wasp_colony() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::MaySacrifice {
-                    predicate: CardPredicate {
-                        card_types_any: vec![CardType::Artifact, CardType::Creature],
-                        ..Default::default()
-                    },
-                    another: false,
-                    then: vec![Effect::DrawCards {
+                effects: vec![
+                    Effect::may_sacrifice(
+                        CardPredicate {
+                            card_types_any: vec![CardType::Artifact, CardType::Creature],
+                            ..Default::default()
+                        },
+                        false,
+                    ),
+                    Effect::if_you_do(vec![Effect::DrawCards {
                         count: EffectValue::Fixed(1),
-                    }],
-                }],
+                    }]),
+                ],
             },
             Ability::Triggered {
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
                 },
                 intervening_if: Some(Condition::TriggeringHadCounters),
-                effects: vec![Effect::PutTriggeringCountersOnSource],
+                effects: vec![Effect::PutCountersFrom {
+                    from: ObjectSelector::Triggering,
+                    on: ObjectSelector::This,
+                }],
             },
         ],
         text_box: text_box.into(),
@@ -1838,12 +1831,7 @@ fn callous_inspector() -> CardDefinition {
                     player: PlayerSelector::You,
                     amount: EffectValue::Fixed(1),
                 },
-                Effect::CreateToken {
-                    token_name: "Clue".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                },
+                Effect::create_tokens("Clue", 1),
             ],
         }],
         text_box: text_box.into(),
@@ -1869,12 +1857,7 @@ fn canyon_crawler() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Food".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Food", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             zone: ActivationZone::Hand,
@@ -1913,14 +1896,14 @@ fn cat_gator() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DealDamageValue {
+            effects: vec![Effect::DealDamage {
                 amount: EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         subtype: Some("Swamp".into()),
                         ..Default::default()
                     },
                 },
-                target: TargetSpec::CreatureOrPlayer,
+                what: ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
             }],
         }],
         text_box: text_box.into(),
@@ -1946,14 +1929,14 @@ fn cat_owl() -> CardDefinition {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::UntapTarget {
-                target: TargetSpec::Permanent {
+            effects: vec![Effect::untap(ObjectSelector::Target(
+                TargetSpec::Permanent {
                     predicate: CardPredicate {
                         card_types_any: vec![CardType::Artifact, CardType::Creature],
                         ..Default::default()
                     },
                 },
-            }],
+            ))],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1991,9 +1974,7 @@ fn combustion_man() -> CardDefinition {
                             player: PlayerSelector::You,
                             amount: EffectValue::SourcePower,
                         }],
-                        if_declined: vec![Effect::Destroy {
-                            target: permanent(),
-                        }],
+                        if_declined: vec![Effect::destroy(ObjectSelector::Target(permanent()))],
                     }],
                 }],
             }],
@@ -2014,7 +1995,7 @@ fn combustion_technique() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::DealDamageValue {
+            Effect::DealDamage {
                 amount: EffectValue::GraveyardMatching {
                     base: 2,
                     predicate: CardPredicate {
@@ -2022,10 +2003,10 @@ fn combustion_technique() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                target: TargetSpec::Creature,
+                what: ObjectSelector::Target(TargetSpec::Creature),
             },
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::ExileIfWouldDie,
             ),
         ],
@@ -2059,7 +2040,7 @@ fn compassionate_healer() -> CardDefinition {
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 1 }, Effect::Scry { count: 1 }],
+            effects: vec![Effect::gain_life(1), Effect::Scry { count: 1 }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2077,9 +2058,7 @@ fn crashing_wave() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
             Effect::ForEachTarget {
-                effects: vec![Effect::TapTarget {
-                    target: TargetSpec::Creature,
-                }],
+                effects: vec![Effect::tap(ObjectSelector::Target(TargetSpec::Creature))],
             },
             Effect::DistributeCountersToTappedOpponentCreatures {
                 kind: CounterKind::Stun,
@@ -2117,15 +2096,15 @@ fn crescent_island_temple() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::CreateTokensValue {
-                    token_name: "Monk".into(),
-                    count: EffectValue::BattlefieldMatching {
+                effects: vec![Effect::create_tokens(
+                    "Monk",
+                    EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
                         },
                     },
-                }],
+                )],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -2135,12 +2114,7 @@ fn crescent_island_temple() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Monk".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Monk", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -2169,12 +2143,7 @@ fn cruel_administrator() -> CardDefinition {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Soldier".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Soldier", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2192,15 +2161,10 @@ fn cunning_maneuver() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(3, 1),
             ),
-            Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Clue", 1),
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -2232,7 +2196,7 @@ fn curious_farm_animals() -> CardDefinition {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 3 }],
+            effects: vec![Effect::gain_life(3)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{2}"),
@@ -2251,14 +2215,14 @@ fn curious_farm_animals() -> CardDefinition {
                     another: false,
                     max_x: false,
                 },
-                effects: vec![Effect::Destroy {
-                    target: TargetSpec::Permanent {
+                effects: vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_types_any: vec![CardType::Artifact, CardType::Enchantment],
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
             }],
             ..Default::default()
         }],
@@ -2278,12 +2242,10 @@ fn cycle_of_renewal() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::Sacrifice {
-                predicate: CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
-                },
-            },
+            Effect::sacrifice(CardPredicate {
+                card_type: Some(CardType::Land),
+                ..Default::default()
+            }),
             Effect::SearchBasicLand {
                 subtype: None,
                 count: EffectValue::Fixed(2),
@@ -2328,7 +2290,7 @@ fn dai_li_agents() -> CardDefinition {
                         },
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
-                            target: TargetSpec::LandYouControl,
+                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
                         }],
                     },
                     Effect::TargetClause {
@@ -2342,7 +2304,7 @@ fn dai_li_agents() -> CardDefinition {
                         },
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
-                            target: TargetSpec::LandYouControl,
+                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
                         }],
                     },
                 ],
@@ -2383,7 +2345,7 @@ fn dai_li_indoctrination() -> CardDefinition {
                 }],
                 vec![Effect::Earthbend {
                     count: EffectValue::Fixed(2),
-                    target: TargetSpec::LandYouControl,
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
                 }],
             ],
         }],
@@ -2401,9 +2363,20 @@ fn day_of_black_sun() -> CardDefinition {
         name: "Day of Black Sun".into(),
         mana_cost: Some(ManaCost::parse("{X}{B}{B}")),
         types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::DestroyCreaturesLosingAbilities {
-            max_mana_value: EffectValue::X,
-        }],
+        spell_effects: {
+            // "Those creatures": the same set, fixed as each instruction
+            // resolves; nothing resolves between the two.
+            let creatures = ObjectSelector::Each {
+                of: Scope::Battlefield,
+                predicate: CardPredicate::creature(),
+                except: None,
+                max_mana_value: Some(Box::new(EffectValue::X)),
+            };
+            vec![
+                Effect::until_end_of_turn(creatures.clone(), Modification::LoseAllAbilities),
+                Effect::destroy(creatures),
+            ]
+        },
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2426,9 +2399,9 @@ fn deadly_precision() -> CardDefinition {
             another: false,
             or_mana: Some(ManaCost::parse("{4}")),
         }))],
-        spell_effects: vec![Effect::Destroy {
-            target: TargetSpec::Creature,
-        }],
+        spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+            TargetSpec::Creature,
+        ))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2450,7 +2423,7 @@ fn deserter_s_disciple() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                ObjectSelector::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
                         card_type: Some(CardType::Creature),
                         max_power: Some(2),
@@ -2570,7 +2543,7 @@ fn earth_kingdom_general() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::Earthbend {
                     count: EffectValue::Fixed(2),
-                    target: TargetSpec::LandYouControl,
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
                 }],
             },
             Ability::Triggered {
@@ -2579,7 +2552,7 @@ fn earth_kingdom_general() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::MayOnceEachTurn {
-                    effects: vec![Effect::GainLifeValue {
+                    effects: vec![Effect::GainLife {
                         amount: EffectValue::X,
                     }],
                 }],
@@ -2607,8 +2580,8 @@ fn earth_kingdom_jailer() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::ExileUntilSourceLeaves {
-                target: TargetSpec::PermanentOpponentControls {
+            effects: vec![Effect::exile_linked(
+                ObjectSelector::Target(TargetSpec::PermanentOpponentControls {
                     predicate: CardPredicate {
                         card_types_any: vec![
                             CardType::Artifact,
@@ -2618,8 +2591,9 @@ fn earth_kingdom_jailer() -> CardDefinition {
                         min_mana_value: Some(3),
                         ..Default::default()
                     },
-                },
-            }],
+                }),
+                LinkedExile::UntilSourceLeaves,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2642,7 +2616,7 @@ fn earth_kingdom_protectors() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             sacrifice_source: true,
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                ObjectSelector::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
                         subtype: Some("Ally".into()),
                         ..Default::default()
@@ -2685,11 +2659,11 @@ fn earth_kingdom_soldier() -> CardDefinition {
                     max_x: false,
                 },
                 effects: vec![Effect::ForEachTarget {
-                    effects: vec![Effect::PutCounters {
-                        count: 1,
-                        kind: CounterKind::PlusOnePlusOne,
-                        target: TargetSpec::CreatureYouControl,
-                    }],
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 }],
             }],
         }],
@@ -2720,25 +2694,26 @@ fn earth_kings_lieutenant() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::PutCountersOnEachMatching {
-                    count: EffectValue::Fixed(1),
-                    predicate: CardPredicate {
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::each_other_you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
                         subtype: Some("Ally".into()),
                         ..Default::default()
-                    },
-                    other: true,
-                }],
+                    }),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
         ],
         text_box: text_box.into(),
@@ -2758,7 +2733,7 @@ fn earth_rumble() -> CardDefinition {
         spell_effects: vec![
             Effect::Earthbend {
                 count: EffectValue::Fixed(2),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             },
             Effect::WhenYouDo {
                 effects: vec![
@@ -2844,7 +2819,7 @@ fn earth_village_ruffians() -> CardDefinition {
             },
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         text_box: text_box.into(),
@@ -2870,7 +2845,7 @@ fn earthbender_ascension() -> CardDefinition {
                 effects: vec![
                     Effect::Earthbend {
                         count: EffectValue::Fixed(2),
-                        target: TargetSpec::LandYouControl,
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
                     },
                     Effect::SearchBasicLand {
                         subtype: None,
@@ -2892,10 +2867,7 @@ fn earthbender_ascension() -> CardDefinition {
                 intervening_if: None,
                 // The reflexive trigger's "if" is asked as it would trigger.
                 effects: vec![
-                    Effect::PutCountersOnSource {
-                        count: EffectValue::Fixed(1),
-                        kind: CounterKind::Quest,
-                    },
+                    Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
                     Effect::If {
                         condition: Condition::SourceCountersAtLeast {
                             kind: CounterKind::Quest,
@@ -2903,13 +2875,13 @@ fn earthbender_ascension() -> CardDefinition {
                         },
                         then: vec![Effect::WhenYouDo {
                             effects: vec![
-                                Effect::PutCounters {
-                                    count: 1,
-                                    kind: CounterKind::PlusOnePlusOne,
-                                    target: TargetSpec::CreatureYouControl,
-                                },
+                                Effect::put_counters(
+                                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                                    CounterKind::PlusOnePlusOne,
+                                    1,
+                                ),
                                 Effect::until_end_of_turn(
-                                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
                                     Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
                                 ),
                             ],
@@ -2936,7 +2908,7 @@ fn earthbending_lesson() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::Earthbend {
             count: EffectValue::Fixed(4),
-            target: TargetSpec::LandYouControl,
+            what: ObjectSelector::Target(TargetSpec::LandYouControl),
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2959,7 +2931,7 @@ fn earthen_ally() -> CardDefinition {
             mana_cost: ManaCost::parse("{2}{W}{U}{B}{R}{G}"),
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(5),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
             ..Default::default()
         }],
@@ -3011,7 +2983,7 @@ fn energybending() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::EachYouControl(CardPredicate {
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Land),
                     ..Default::default()
                 }),
@@ -3044,11 +3016,11 @@ fn enter_the_avatar_state() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::AddSubtypes(vec!["Avatar".into()]),
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::AddKeywords(Keywords::of(&[
                     Keyword::Flying,
                     Keyword::FirstStrike,
@@ -3082,11 +3054,9 @@ fn fancy_footwork() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::ForEachTarget {
             effects: vec![
-                Effect::UntapTarget {
-                    target: TargetSpec::Creature,
-                },
+                Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
                 Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::Creature),
+                    ObjectSelector::Target(TargetSpec::Creature),
                     Modification::pump(2, 2),
                 ),
             ],
@@ -3118,7 +3088,7 @@ fn fatal_fissure() -> CardDefinition {
             event: DelayedEvent::TargetDiesThisTurn,
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(4),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         text_box: text_box.into(),
@@ -3152,11 +3122,11 @@ fn fated_firepower() -> CardDefinition {
 fn fire_lord_zuko() -> CardDefinition {
     let text_box = "Firebending X, where X is Fire Lord Zuko's power. (Whenever this creature attacks, add X {R}. This mana lasts until end of combat.)\nWhenever you cast a spell from exile and whenever a permanent you control enters from exile, put a +1/+1 counter on each creature you control.";
     let counter_each_creature = || {
-        vec![Effect::PutCountersOnEachMatching {
-            count: EffectValue::Fixed(1),
-            predicate: CardPredicate::creature(),
-            other: false,
-        }]
+        vec![Effect::put_counters(
+            ObjectSelector::each_you_control(CardPredicate::creature()),
+            CounterKind::PlusOnePlusOne,
+            1,
+        )]
     };
 
     CardDefinition {
@@ -3175,7 +3145,7 @@ fn fire_lord_zuko() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::AddManaValue {
+                effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::SourcePower,
                     until_end_of_combat: true,
@@ -3219,12 +3189,7 @@ fn fire_nation_attacks() -> CardDefinition {
         name: "Fire Nation Attacks".into(),
         mana_cost: Some(ManaCost::parse("{4}{R}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::CreateToken {
-            token_name: "Soldier".into(),
-            count: 2,
-            tapped_and_attacking: false,
-            attach_source: false,
-        }],
+        spell_effects: vec![Effect::create_tokens("Soldier", 2)],
         statics: vec![StaticAbility::Flashback(ManaCost::parse("{8}{R}"))],
         text_box: text_box.into(),
         ..Default::default()
@@ -3259,13 +3224,14 @@ fn fire_nation_cadets() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RR"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{2}"),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 0),
             )],
             ..Default::default()
@@ -3307,13 +3273,13 @@ fn fire_nation_engineer() -> CardDefinition {
                     another: true,
                     max_x: false,
                 },
-                effects: vec![Effect::PutCounters {
-                    count: 1,
-                    kind: CounterKind::PlusOnePlusOne,
-                    target: TargetSpec::PermanentYouControl {
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: creature_or_vehicle,
-                    },
-                }],
+                    }),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             }],
         }],
         text_box: text_box.into(),
@@ -3340,12 +3306,7 @@ fn fire_nation_raider() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             intervening_if: Some(Condition::AttackedThisTurn),
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3367,7 +3328,7 @@ fn fire_nation_palace() -> CardDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{1}{R}"),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::Firebending(4),
             )],
             ..Default::default()
@@ -3402,17 +3363,12 @@ fn fire_nation_warship() -> CardDefinition {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             crew: Some(2),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::BecomeCreature,
             )],
             ..Default::default()
@@ -3443,13 +3399,16 @@ fn fire_navy_trebuchet() -> CardDefinition {
             effects: vec![
                 Effect::CreateToken {
                     token_name: "Ballistic Boulder".into(),
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     tapped_and_attacking: true,
                     attach_source: false,
                 },
                 Effect::CreateDelayedTrigger {
                     event: DelayedEvent::NextEndStepForCreatedToken,
-                    effects: vec![Effect::SacrificeTriggeringPermanent],
+                    effects: vec![Effect::Sacrifice {
+                        what: ObjectSelector::Triggering,
+                        optional: false,
+                    }],
                 },
             ],
         }],
@@ -3477,15 +3436,17 @@ fn fire_sages() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{1}{R}{R}"),
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -3508,21 +3469,13 @@ fn firebender_ascension() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::CreateToken {
-                    token_name: "Soldier".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Soldier", 1)],
             },
             Ability::Triggered {
                 condition: TriggerCondition::YourAttackingCreatureTriggers,
                 intervening_if: None,
                 effects: vec![
-                    Effect::PutCountersOnSource {
-                        count: EffectValue::Fixed(1),
-                        kind: CounterKind::Quest,
-                    },
+                    Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
                     Effect::If {
                         condition: Condition::SourceCountersAtLeast {
                             kind: CounterKind::Quest,
@@ -3555,14 +3508,14 @@ fn firebending_lesson() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::If {
             condition: Condition::Kicked,
-            then: vec![Effect::DealDamage {
-                amount: 5,
-                target: TargetSpec::Creature,
-            }],
-            otherwise: vec![Effect::DealDamage {
-                amount: 2,
-                target: TargetSpec::Creature,
-            }],
+            then: vec![Effect::deal_damage(
+                5,
+                ObjectSelector::Target(TargetSpec::Creature),
+            )],
+            otherwise: vec![Effect::deal_damage(
+                2,
+                ObjectSelector::Target(TargetSpec::Creature),
+            )],
         }],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -3600,7 +3553,7 @@ fn firebending_student() -> CardDefinition {
                     },
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::pump(1, 1),
                 )],
             },
@@ -3609,7 +3562,7 @@ fn firebending_student() -> CardDefinition {
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::AddManaValue {
+                effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::SourcePower,
                     until_end_of_combat: true,
@@ -3672,7 +3625,7 @@ fn flexible_waterbender() -> CardDefinition {
             mana_cost: ManaCost::parse("{3}"),
             waterbend: true,
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::SetBasePt {
                     power: Some(EffectValue::Fixed(5)),
                     toughness: Some(EffectValue::Fixed(2)),
@@ -3703,14 +3656,14 @@ fn flopsie_bumi_s_buddy() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::PutCountersOnEachMatching {
-                count: EffectValue::Fixed(1),
-                predicate: CardPredicate {
+            effects: vec![Effect::put_counters(
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
-                },
-                other: false,
-            }],
+                }),
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::YouControl(CardPredicate {
@@ -3746,18 +3699,7 @@ fn foggy_bottom_swamp() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["B", "G"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -3805,12 +3747,7 @@ fn foggy_swamp_spirit_keeper() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-            effects: vec![Effect::CreateToken {
-                token_name: "Spirit".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Spirit", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3833,10 +3770,11 @@ fn foggy_swamp_vinebender() -> CardDefinition {
             own_turn_only: true,
             mana_cost: ManaCost::parse("{5}"),
             waterbend: true,
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
             ..Default::default()
         }],
         statics: vec![StaticAbility::BlockRestriction(
@@ -3867,12 +3805,7 @@ fn forecasting_fortune_teller() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3889,15 +3822,15 @@ fn gather_the_white_lotus() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{4}{W}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::CreateTokensValue {
-                token_name: "Ally".into(),
-                count: EffectValue::BattlefieldMatching {
+            Effect::create_tokens(
+                "Ally",
+                EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         subtype: Some("Plains".into()),
                         ..Default::default()
                     },
                 },
-            },
+            ),
             Effect::Scry { count: 2 },
         ],
         text_box: text_box.into(),
@@ -3925,7 +3858,7 @@ fn geyser_leaper() -> CardDefinition {
                 Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 },
-                Effect::Discard,
+                Effect::discard(),
             ],
             ..Default::default()
         }],
@@ -3965,7 +3898,7 @@ fn giant_koi() -> CardDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 waterbend: true,
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::CantBeBlocked,
                 )],
                 ..Default::default()
@@ -4026,7 +3959,7 @@ fn glider_staff() -> CardDefinition {
                     max_x: false,
                 },
                 effects: vec![Effect::Airbend {
-                    target: TargetSpec::Creature,
+                    what: ObjectSelector::Target(TargetSpec::Creature),
                 }],
             }],
         }],
@@ -4096,7 +4029,7 @@ fn gran_gran() -> CardDefinition {
                 Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 },
-                Effect::Discard,
+                Effect::discard(),
             ],
         }],
         text_box: text_box.into(),
@@ -4172,11 +4105,11 @@ fn guru_pathik() -> CardDefinition {
                         another: true,
                         ..TargetRequirement::one(TargetSpec::CreatureYouControl)
                     },
-                    effects: vec![Effect::PutCounters {
-                        count: 1,
-                        kind: CounterKind::PlusOnePlusOne,
-                        target: TargetSpec::CreatureYouControl,
-                    }],
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 }],
             },
         ],
@@ -4210,14 +4143,14 @@ fn hakoda_selfless_commander() -> CardDefinition {
             sacrifice_source: true,
             effects: vec![
                 Effect::until_end_of_turn(
-                    AffectedSpec::EachYouControl(CardPredicate {
+                    ObjectSelector::each_you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),
                     Modification::pump(0, 5),
                 ),
                 Effect::until_end_of_turn(
-                    AffectedSpec::EachYouControl(CardPredicate {
+                    ObjectSelector::each_you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),
@@ -4295,7 +4228,7 @@ fn haru_hidden_talent() -> CardDefinition {
             },
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(1),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         text_box: text_box.into(),
@@ -4329,15 +4262,15 @@ fn heartless_act() -> CardDefinition {
                         another: false,
                         max_x: false,
                     },
-                    effects: vec![Effect::Destroy {
-                        target: TargetSpec::Permanent {
+                    effects: vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
                             predicate: CardPredicate {
                                 no_counters: true,
                                 card_type: Some(CardType::Creature),
                                 ..Default::default()
                             },
                         },
-                    }],
+                    ))],
                 }],
                 vec![Effect::TargetClause {
                     requirement: TargetRequirement {
@@ -4349,9 +4282,9 @@ fn heartless_act() -> CardDefinition {
                         max_x: false,
                     },
                     effects: vec![Effect::RemoveCounters {
+                        from: ObjectSelector::Target(TargetSpec::Creature),
                         up_to: 3,
                         chosen: None,
-                        target: TargetSpec::Creature,
                     }],
                 }],
             ],
@@ -4364,17 +4297,20 @@ fn heartless_act() -> CardDefinition {
 fn hei_bai_spirit_of_balance() -> CardDefinition {
     let text_box = "Whenever Hei Bai enters or attacks, you may sacrifice another creature or artifact. If you do, put two +1/+1 counters on Hei Bai.\nWhen Hei Bai leaves the battlefield, put its counters on target creature you control.";
     let feed = || {
-        vec![Effect::MaySacrifice {
-            predicate: CardPredicate {
-                card_types_any: vec![CardType::Creature, CardType::Artifact],
-                ..Default::default()
-            },
-            another: true,
-            then: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(2),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
-        }]
+        vec![
+            Effect::may_sacrifice(
+                CardPredicate {
+                    card_types_any: vec![CardType::Creature, CardType::Artifact],
+                    ..Default::default()
+                },
+                true,
+            ),
+            Effect::if_you_do(vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                2,
+            )]),
+        ]
     };
 
     CardDefinition {
@@ -4407,8 +4343,9 @@ fn hei_bai_spirit_of_balance() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::PutSourceCountersOnTarget {
-                    target: TargetSpec::CreatureYouControl,
+                effects: vec![Effect::PutCountersFrom {
+                    from: ObjectSelector::This,
+                    on: ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 }],
             },
         ],
@@ -4462,7 +4399,7 @@ fn hog_monkey() -> CardDefinition {
             intervening_if: None,
             condition: TriggerCondition::BeginningOfYourCombat,
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                ObjectSelector::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
                         with_counter: true,
                         card_type: Some(CardType::Creature),
@@ -4475,10 +4412,11 @@ fn hog_monkey() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(2),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                2,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -4499,10 +4437,7 @@ fn honest_work() -> CardDefinition {
         statics: vec![
             StaticAbility::AttachedHas(ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("1"),
-                    until_end_of_combat: false,
-                }],
+                effects: vec![Effect::add_mana(Mana::parse("1"))],
                 ..Default::default()
             }),
             StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
@@ -4517,7 +4452,12 @@ fn honest_work() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::TapAttached, Effect::RemoveAllCountersFromAttached],
+            effects: vec![
+                Effect::tap(ObjectSelector::Attached),
+                Effect::RemoveAllCounters {
+                    from: ObjectSelector::Attached,
+                },
+            ],
         }],
         spell_effects: vec![Effect::AttachSourceTo {
             target: TargetSpec::CreatureOpponentControls,
@@ -4549,14 +4489,14 @@ fn how_to_start_a_riot() -> CardDefinition {
             Effect::TargetClause {
                 requirement: TargetRequirement::one(TargetSpec::Creature),
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::Creature),
+                    ObjectSelector::Target(TargetSpec::Creature),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
                 )],
             },
             Effect::TargetClause {
                 requirement: TargetRequirement::one(TargetSpec::Player),
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::EachTargetPlayerControls(CardPredicate::creature()),
+                    ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
                     Modification::pump(2, 0),
                 )],
             },
@@ -4588,7 +4528,7 @@ fn iguana_parrot() -> CardDefinition {
                 },
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 1),
             )],
         }],
@@ -4615,12 +4555,7 @@ fn invasion_reinforcements() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4658,14 +4593,14 @@ fn invasion_submersible() -> CardDefinition {
                     another: true,
                     max_x: false,
                 },
-                effects: vec![Effect::ReturnToHand {
-                    target: TargetSpec::Permanent {
+                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             not_card_types: vec![CardType::Land],
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
             }],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -4673,11 +4608,8 @@ fn invasion_submersible() -> CardDefinition {
             mana_cost: ManaCost::parse("{3}"),
             waterbend: true,
             effects: vec![
-                Effect::indefinitely(AffectedSpec::Source, Modification::BecomeCreature),
-                Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(3),
-                    kind: CounterKind::PlusOnePlusOne,
-                },
+                Effect::indefinitely(ObjectSelector::This, Modification::BecomeCreature),
+                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 3),
             ],
             ..Default::default()
         }],
@@ -4702,7 +4634,7 @@ fn invasion_tactics() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::EachYouControl(CardPredicate::creature()),
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
                     Modification::pump(2, 2),
                 )],
             },
@@ -4745,6 +4677,7 @@ fn iroh_grand_lotus() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RR"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -4765,11 +4698,14 @@ fn iroh_s_demonstration() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::DamageOpponentCreatures { amount: 1 }],
-                vec![Effect::DealDamage {
-                    amount: 4,
-                    target: TargetSpec::Creature,
-                }],
+                vec![Effect::deal_damage(
+                    1,
+                    ObjectSelector::each(Scope::OpponentsControl, CardPredicate::creature()),
+                )],
+                vec![Effect::deal_damage(
+                    4,
+                    ObjectSelector::Target(TargetSpec::Creature),
+                )],
             ],
         }],
         text_box: text_box.into(),
@@ -4799,12 +4735,7 @@ fn iroh_tea_master() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::CreateToken {
-                    token_name: "Food".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Food", 1)],
             },
             Ability::Triggered {
                 condition: TriggerCondition::BeginningOfYourCombat,
@@ -4822,20 +4753,17 @@ fn iroh_tea_master() -> CardDefinition {
                             if_paid: vec![
                                 Effect::GainControl {
                                     player: PlayerSelector::EachOpponent,
-                                    target: yours(),
+                                    what: ObjectSelector::Target(yours()),
                                     duration: EffectDuration::Indefinite,
                                 },
                                 Effect::WhenYouDo {
                                     effects: vec![
-                                        Effect::CreateToken {
-                                            token_name: "Ally".into(),
-                                            count: 1,
-                                            tapped_and_attacking: false,
-                                            attach_source: false,
-                                        },
-                                        Effect::PutCountersOnCreatedToken {
-                                            count: EffectValue::OwnedPermanentsOpponentsControl,
-                                        },
+                                        Effect::create_tokens("Ally", 1),
+                                        Effect::put_counters(
+                                            ObjectSelector::CreatedThisWay,
+                                            CounterKind::PlusOnePlusOne,
+                                            EffectValue::OwnedPermanentsOpponentsControl,
+                                        ),
                                     ],
                                 },
                             ],
@@ -4899,12 +4827,7 @@ fn jasmine_dragon_tea_shop() -> CardDefinition {
             ActivatedAbilityDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{5}"),
-                effects: vec![Effect::CreateToken {
-                    token_name: "Ally".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Ally", 1)],
                 ..Default::default()
             },
         ],
@@ -4933,6 +4856,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -4940,10 +4864,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{3}"),
             effects: vec![
-                Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                },
+                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
                 Effect::CreateDelayedTrigger {
                     event: DelayedEvent::YouNextCastThisTurn(CardPredicate::subtype("Lesson")),
                     effects: vec![Effect::CopyTriggeringObject],
@@ -4973,11 +4894,11 @@ fn jeong_jeongs_deserters() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::PutCounters {
-                count: 1,
-                kind: CounterKind::PlusOnePlusOne,
-                target: TargetSpec::Creature,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::Target(TargetSpec::Creature),
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5003,14 +4924,14 @@ fn jet_freedom_fighter() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DealDamageValue {
+                effects: vec![Effect::DealDamage {
                     amount: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Creature),
                             ..Default::default()
                         },
                     },
-                    target: TargetSpec::CreatureOpponentControls,
+                    what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
                 }],
             },
             Ability::Triggered {
@@ -5028,11 +4949,11 @@ fn jet_freedom_fighter() -> CardDefinition {
                         max_x: false,
                     },
                     effects: vec![Effect::ForEachTarget {
-                        effects: vec![Effect::PutCounters {
-                            count: 1,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: TargetSpec::Creature,
-                        }],
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
                     }],
                 }],
             },
@@ -5053,7 +4974,7 @@ fn jet_s_brainwashing() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::CantBlock,
             ),
             Effect::If {
@@ -5061,25 +4982,18 @@ fn jet_s_brainwashing() -> CardDefinition {
                 then: vec![
                     Effect::GainControl {
                         player: PlayerSelector::You,
-                        target: TargetSpec::Creature,
+                        what: ObjectSelector::Target(TargetSpec::Creature),
                         duration: EffectDuration::EndOfTurn,
                     },
-                    Effect::UntapTarget {
-                        target: TargetSpec::Creature,
-                    },
+                    Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
                     Effect::until_end_of_turn(
-                        AffectedSpec::Target(TargetSpec::Creature),
+                        ObjectSelector::Target(TargetSpec::Creature),
                         Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
                     ),
                 ],
                 otherwise: vec![],
             },
-            Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Clue", 1),
         ],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{3}"))],
         text_box: text_box.into(),
@@ -5107,10 +5021,11 @@ fn joo_dee_one_of_many() -> CardDefinition {
                 Effect::Surveil { count: 1 },
                 Effect::CreateTokenCopy { exceptions: vec![] },
                 Effect::Sacrifice {
-                    predicate: CardPredicate {
+                    what: ObjectSelector::chosen(CardPredicate {
                         card_types_any: vec![CardType::Artifact, CardType::Creature],
                         ..Default::default()
-                    },
+                    }),
+                    optional: false,
                 },
             ],
             ..Default::default()
@@ -5147,12 +5062,7 @@ fn june_bounty_hunter() -> CardDefinition {
             }),
             own_turn_only: true,
             mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -5176,10 +5086,11 @@ fn katara_bending_prodigy() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::SourceTapped),
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{6}"),
@@ -5234,12 +5145,7 @@ fn katara_water_tribe_s_hope() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             own_turn_only: true,
@@ -5247,7 +5153,7 @@ fn katara_water_tribe_s_hope() -> CardDefinition {
             waterbend: true,
             x_min: 1,
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::EachYouControl(CardPredicate {
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
@@ -5280,22 +5186,18 @@ fn knowledge_seeker() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Clue".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Clue", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -5320,7 +5222,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
             },
             effects: vec![Effect::CreateToken {
                 token_name: "Ally".into(),
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped_and_attacking: false,
                 attach_source: true,
             }],
@@ -5421,18 +5323,7 @@ fn kyoshi_village() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["G", "W"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -5459,12 +5350,7 @@ fn kyoshi_warriors() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5543,11 +5429,11 @@ fn long_feng_grand_secretariat() -> CardDefinition {
                 }),
             },
             intervening_if: None,
-            effects: vec![Effect::PutCounters {
-                count: 1,
-                kind: CounterKind::PlusOnePlusOne,
-                target: TargetSpec::CreatureYouControl,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5573,12 +5459,7 @@ fn lost_days() -> CardDefinition {
                     },
                 },
             },
-            Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Clue", 1),
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -5620,17 +5501,18 @@ fn mai_jaded_edge() -> CardDefinition {
                 },
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 1),
             )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::DoubleStrike,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::DoubleStrike,
+                1,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -5693,7 +5575,7 @@ fn master_pakku() -> CardDefinition {
                     },
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::pump(1, 1),
                 )],
             },
@@ -5774,18 +5656,7 @@ fn meditation_pools() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["G", "U"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -5810,7 +5681,7 @@ fn merchant_of_many_hats() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             zone: ActivationZone::Graveyard,
             mana_cost: ManaCost::parse("{2}{B}"),
-            effects: vec![Effect::ReturnSourceToHand],
+            effects: vec![Effect::return_to_hand(ObjectSelector::This)],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -5836,12 +5707,7 @@ fn messenger_hawk() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
@@ -5872,11 +5738,11 @@ fn meteor_sword() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::Destroy {
-                target: TargetSpec::Permanent {
+            effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
                     predicate: CardPredicate::default(),
                 },
-            }],
+            ))],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             sorcery_timing: true,
@@ -5920,18 +5786,7 @@ fn misty_palms_oasis() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["W", "B"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -5976,7 +5831,7 @@ fn momo_friendly_flier() -> CardDefinition {
                 }),
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 1),
             )],
         }],
@@ -6008,17 +5863,12 @@ fn momo_playful_pet() -> CardDefinition {
                 up_to: None,
                 unchosen: false,
                 modes: vec![
-                    vec![Effect::CreateToken {
-                        token_name: "Food".into(),
-                        count: 1,
-                        tapped_and_attacking: false,
-                        attach_source: false,
-                    }],
-                    vec![Effect::PutCounters {
-                        count: 1,
-                        kind: CounterKind::PlusOnePlusOne,
-                        target: TargetSpec::CreatureYouControl,
-                    }],
+                    vec![Effect::create_tokens("Food", 1)],
+                    vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                     vec![Effect::Scry { count: 2 }],
                 ],
             }],
@@ -6046,10 +5896,10 @@ fn mongoose_lizard() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DealDamage {
-                amount: 1,
-                target: TargetSpec::CreatureOrPlayer,
-            }],
+            effects: vec![Effect::deal_damage(
+                1,
+                ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+            )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             zone: ActivationZone::Hand,
@@ -6090,18 +5940,7 @@ fn north_pole_gates() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["W", "U"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -6128,18 +5967,18 @@ fn north_pole_patrol() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{3}"),
                 waterbend: true,
-                effects: vec![Effect::TapTarget {
-                    target: TargetSpec::CreatureOpponentControls,
-                }],
+                effects: vec![Effect::tap(ObjectSelector::Target(
+                    TargetSpec::CreatureOpponentControls,
+                ))],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::UntapTarget {
-                    target: TargetSpec::PermanentYouControl {
+                effects: vec![Effect::untap(ObjectSelector::Target(
+                    TargetSpec::PermanentYouControl {
                         predicate: CardPredicate::default(),
                     },
-                }],
+                ))],
                 ..Default::default()
             },
         ],
@@ -6200,12 +6039,7 @@ fn obsessive_pursuit() -> CardDefinition {
                 player: PlayerSelector::You,
                 amount: EffectValue::Fixed(1),
             },
-            Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Clue", 1),
         ]
     };
     let attacking_creature = || TargetSpec::Permanent {
@@ -6243,14 +6077,15 @@ fn obsessive_pursuit() -> CardDefinition {
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::one(attacking_creature()),
                     effects: vec![
-                        Effect::PutCountersValue {
-                            count: EffectValue::PermanentsSacrificedThisTurn,
-                            target: attacking_creature(),
-                        },
+                        Effect::put_counters(
+                            ObjectSelector::Target(attacking_creature()),
+                            CounterKind::PlusOnePlusOne,
+                            EffectValue::PermanentsSacrificedThisTurn,
+                        ),
                         Effect::If {
                             condition: Condition::SacrificedThisTurnAtLeast { count: 3 },
                             then: vec![Effect::until_end_of_turn(
-                                AffectedSpec::Target(attacking_creature()),
+                                ObjectSelector::Target(attacking_creature()),
                                 Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
                             )],
                             otherwise: vec![],
@@ -6276,16 +6111,14 @@ fn octopus_form() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::pump(1, 1),
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
             ),
-            Effect::UntapTarget {
-                target: TargetSpec::CreatureYouControl,
-            },
+            Effect::untap(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -6312,18 +6145,7 @@ fn omashu_city() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["R", "G"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -6345,22 +6167,22 @@ fn origin_of_metalbending() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::Destroy {
-                    target: TargetSpec::Permanent {
+                vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_types_any: vec![CardType::Artifact, CardType::Enchantment],
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
                 vec![
-                    Effect::PutCounters {
-                        count: 1,
-                        kind: CounterKind::PlusOnePlusOne,
-                        target: TargetSpec::CreatureYouControl,
-                    },
+                    Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    ),
                     Effect::until_end_of_turn(
-                        AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
                         Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
                     ),
                 ],
@@ -6394,10 +6216,11 @@ fn ostrich_horse() -> CardDefinition {
                     card_type: Some(CardType::Land),
                     ..Default::default()
                 },
-                if_declined: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                }],
+                if_declined: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
                 if_milled: None,
             }],
         }],
@@ -6422,8 +6245,8 @@ fn otter_penguin() -> CardDefinition {
             intervening_if: None,
             condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
             effects: vec![
-                Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 2)),
-                Effect::until_end_of_turn(AffectedSpec::Source, Modification::CantBeBlocked),
+                Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 2)),
+                Effect::until_end_of_turn(ObjectSelector::This, Modification::CantBeBlocked),
             ],
         }],
         text_box: text_box.into(),
@@ -6443,13 +6266,10 @@ fn ozai_s_cruelty() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::DealDamage {
-                amount: 2,
-                target: TargetSpec::Player,
-            },
-            Effect::DiscardTargetPlayer {
+            Effect::deal_damage(2, ObjectSelector::Target(TargetSpec::Player)),
+            Effect::Discard {
+                what: ObjectSelector::Target(TargetSpec::Player),
                 count: 2,
-                target: TargetSpec::Player,
             },
         ],
         text_box: text_box.into(),
@@ -6478,6 +6298,7 @@ fn ozai_the_phoenix_king() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RRRR"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -6507,13 +6328,8 @@ fn path_to_redemption() -> CardDefinition {
             mana_cost: ManaCost::parse("{5}"),
             sacrifice_source: true,
             effects: vec![
-                Effect::ExileAttached,
-                Effect::CreateToken {
-                    token_name: "Ally".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                },
+                Effect::exile(ObjectSelector::Attached),
+                Effect::create_tokens("Ally", 1),
             ],
             ..Default::default()
         }],
@@ -6571,7 +6387,7 @@ fn phoenix_fleet_airship() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             crew: Some(1),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::BecomeCreature,
             )],
             ..Default::default()
@@ -6592,16 +6408,14 @@ fn pillar_launch() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(2, 2),
             ),
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Reach])),
             ),
-            Effect::UntapTarget {
-                target: TargetSpec::Creature,
-            },
+            Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -6636,10 +6450,11 @@ fn pirate_peddlers() -> CardDefinition {
                 controller_only: true,
                 another: true,
             },
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::PlusOnePlusOne,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6728,12 +6543,7 @@ fn pretending_poxbearers() -> CardDefinition {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6757,9 +6567,7 @@ fn price_of_freedom() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::Destroy {
-                target: artifact_or_land(),
-            },
+            Effect::destroy(ObjectSelector::Target(artifact_or_land())),
             Effect::ForPlayer {
                 player: PlayerSelector::TargetController,
                 effects: vec![Effect::OptionalPayment {
@@ -6811,15 +6619,14 @@ fn professor_zei_anthropologist() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{1}"),
                 sacrifice_source: true,
-                effects: vec![Effect::ReturnGraveyardTarget {
-                    target: TargetSpec::GraveyardCardYouOwn {
+                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::GraveyardCardYouOwn {
                         predicate: CardPredicate {
                             card_types_any: vec![CardType::Instant, CardType::Sorcery],
                             ..Default::default()
                         },
                     },
-                    to: GraveyardReturn::Hand,
-                }],
+                ))],
                 ..Default::default()
             },
         ],
@@ -6850,10 +6657,10 @@ fn rabaroo_troop() -> CardDefinition {
             },
             effects: vec![
                 Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
                 ),
-                Effect::GainLife { amount: 1 },
+                Effect::gain_life(1),
             ],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -6897,6 +6704,7 @@ fn ran_and_shaw() -> CardDefinition {
                 },
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
                     until_end_of_combat: true,
                 }],
             },
@@ -6921,7 +6729,7 @@ fn ran_and_shaw() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}{R}"),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::EachYouControl(CardPredicate {
+                ObjectSelector::each_you_control(CardPredicate {
                     subtype: Some("Dragon".into()),
                     ..Default::default()
                 }),
@@ -6958,14 +6766,8 @@ fn raucous_audience() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                then: vec![Effect::AddMana {
-                    mana: Mana::parse("GG"),
-                    until_end_of_combat: false,
-                }],
-                otherwise: vec![Effect::AddMana {
-                    mana: Mana::parse("G"),
-                    until_end_of_combat: false,
-                }],
+                then: vec![Effect::add_mana(Mana::parse("GG"))],
+                otherwise: vec![Effect::add_mana(Mana::parse("G"))],
             }],
             ..Default::default()
         }],
@@ -6983,17 +6785,10 @@ fn raven_eagle() -> CardDefinition {
         vec![Effect::TargetClause {
             requirement: TargetRequirement::up_to(1, graveyard_card()),
             effects: vec![
-                Effect::Exile {
-                    target: graveyard_card(),
-                },
+                Effect::exile(ObjectSelector::Target(graveyard_card())),
                 Effect::If {
                     condition: Condition::TargetCardExiled(CardPredicate::creature()),
-                    then: vec![Effect::CreateToken {
-                        token_name: "Clue".into(),
-                        count: 1,
-                        tapped_and_attacking: false,
-                        attach_source: false,
-                    }],
+                    then: vec![Effect::create_tokens("Clue", 1)],
                     otherwise: vec![],
                 },
             ],
@@ -7048,17 +6843,17 @@ fn razor_rings() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{W}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::DealDamage {
-                amount: 4,
-                target: TargetSpec::Permanent {
+            Effect::deal_damage(
+                4,
+                ObjectSelector::Target(TargetSpec::Permanent {
                     predicate: CardPredicate {
                         in_combat: true,
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
-                },
-            },
-            Effect::GainLifeValue {
+                }),
+            ),
+            Effect::GainLife {
                 amount: EffectValue::ExcessDamage,
             },
         ],
@@ -7095,12 +6890,7 @@ fn realm_of_koh() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{3}{B}"),
-            effects: vec![Effect::CreateToken {
-                token_name: "Spirit".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Spirit", 1)],
             ..Default::default()
         }],
         replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
@@ -7131,13 +6921,10 @@ fn rebellious_captives() -> CardDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{6}"),
             effects: vec![
-                Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(2),
-                    kind: CounterKind::PlusOnePlusOne,
-                },
+                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
                 Effect::Earthbend {
                     count: EffectValue::Fixed(2),
-                    target: TargetSpec::LandYouControl,
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
                 },
             ],
             ..Default::default()
@@ -7186,7 +6973,7 @@ fn rockalanche() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            target: TargetSpec::LandYouControl,
+            what: ObjectSelector::Target(TargetSpec::LandYouControl),
         }],
         statics: vec![StaticAbility::Flashback(ManaCost::parse("{5}{G}"))],
         text_box: text_box.into(),
@@ -7232,6 +7019,7 @@ fn rough_rhino_cavalry() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RR"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -7239,12 +7027,9 @@ fn rough_rhino_cavalry() -> CardDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{8}"),
             effects: vec![
-                Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(2),
-                    kind: CounterKind::PlusOnePlusOne,
-                },
+                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
                 Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
                 ),
             ],
@@ -7273,14 +7058,12 @@ fn rowdy_snowballers() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![
-                Effect::TapTarget {
-                    target: TargetSpec::CreatureOpponentControls,
-                },
-                Effect::PutCounters {
-                    count: 1,
-                    kind: CounterKind::Stun,
-                    target: TargetSpec::CreatureOpponentControls,
-                },
+                Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
+                Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    CounterKind::Stun,
+                    1,
+                ),
             ],
         }],
         text_box: text_box.into(),
@@ -7300,14 +7083,14 @@ fn ruinous_waterbending() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::EachMatching(CardPredicate::creature()),
+                ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
                 Modification::pump(-2, -2),
             ),
             Effect::If {
                 condition: Condition::Kicked,
                 then: vec![Effect::CreateDelayedTrigger {
                     event: DelayedEvent::CreatureDiesThisTurn,
-                    effects: vec![Effect::GainLife { amount: 1 }],
+                    effects: vec![Effect::gain_life(1)],
                 }],
                 otherwise: vec![],
             },
@@ -7403,10 +7186,11 @@ fn sandbender_scavengers() -> CardDefinition {
                     another: true,
                 },
                 intervening_if: None,
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
             Ability::Triggered {
                 condition: TriggerCondition::Dies {
@@ -7415,15 +7199,15 @@ fn sandbender_scavengers() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::OptionalPayment {
                     cost: PaymentCost::Mana(ManaCost::default()),
-                    if_paid: vec![Effect::MoveSourceFromGraveyard {
-                        to: ZoneType::Exile,
-                        then: vec![Effect::WhenYouDo {
-                            effects: vec![Effect::ReturnGraveyardTarget {
-                                target: within_power(),
-                                to: GraveyardReturn::Battlefield,
-                            }],
-                        }],
-                    }],
+                    if_paid: vec![
+                        Effect::move_to(ObjectSelector::This, ZoneType::Exile),
+                        Effect::if_you_do(vec![Effect::WhenYouDo {
+                            effects: vec![Effect::return_to_battlefield(
+                                ObjectSelector::Target(within_power()),
+                                false,
+                            )],
+                        }]),
+                    ],
                     if_declined: vec![],
                 }],
             },
@@ -7444,18 +7228,18 @@ fn sandbenders_storm() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::Destroy {
-                    target: TargetSpec::Permanent {
+                vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             min_power: Some(4),
                             card_type: Some(CardType::Creature),
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
                 vec![Effect::Earthbend {
                     count: EffectValue::Fixed(3),
-                    target: TargetSpec::LandYouControl,
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
                 }],
             ],
         }],
@@ -7491,7 +7275,7 @@ fn secret_tunnel() -> CardDefinition {
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::until_end_of_turn(
-                        AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
                         Modification::CantBeBlocked,
                     )],
                 }],
@@ -7583,18 +7367,7 @@ fn serpents_pass() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["U", "B"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -7639,7 +7412,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
             predicate: noncreature(),
         },
         effects: vec![Effect::until_end_of_turn(
-            AffectedSpec::Source,
+            ObjectSelector::This,
             Modification::pump(1, 1),
         )],
     };
@@ -7663,12 +7436,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
                 condition: TriggerCondition::YouCastSpell {
                     predicate: noncreature(),
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Ally".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Ally", 1)],
             },
         ],
         statics: vec![
@@ -7697,17 +7465,10 @@ fn sold_out() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{3}{B}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::Exile {
-                target: TargetSpec::Creature,
-            },
+            Effect::exile(ObjectSelector::Target(TargetSpec::Creature)),
             Effect::If {
                 condition: Condition::TargetDealtDamageThisTurn,
-                then: vec![Effect::CreateToken {
-                    token_name: "Clue".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                then: vec![Effect::create_tokens("Clue", 1)],
                 otherwise: vec![],
             },
         ],
@@ -7754,10 +7515,11 @@ fn sokka_bold_boomeranger() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::PlusOnePlusOne,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
         ],
         text_box: text_box.into(),
@@ -7812,7 +7574,7 @@ fn sokka_s_haiku() -> CardDefinition {
                     max_x: false,
                 },
                 effects: vec![Effect::CounterSpell {
-                    target: TargetSpec::Spell,
+                    what: ObjectSelector::Target(TargetSpec::Spell),
                 }],
             },
             Effect::DrawCards {
@@ -7836,14 +7598,14 @@ fn sokka_s_haiku() -> CardDefinition {
                     another: false,
                     max_x: false,
                 },
-                effects: vec![Effect::UntapTarget {
-                    target: TargetSpec::Permanent {
+                effects: vec![Effect::untap(ObjectSelector::Target(
+                    TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         },
                     },
-                }],
+                ))],
             },
         ],
         text_box: text_box.into(),
@@ -7896,7 +7658,7 @@ fn south_pole_voyager() -> CardDefinition {
                 }),
             },
             effects: vec![
-                Effect::GainLife { amount: 1 },
+                Effect::gain_life(1),
                 Effect::OnNthResolutionThisTurn {
                     n: 2,
                     effect: Box::new(Effect::DrawCards {
@@ -7927,16 +7689,16 @@ fn southern_air_temple() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::PutCountersOnEachMatching {
-                    count: EffectValue::BattlefieldMatching {
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    CounterKind::PlusOnePlusOne,
+                    EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
                         },
                     },
-                    predicate: CardPredicate::creature(),
-                    other: false,
-                }],
+                )],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -7946,11 +7708,11 @@ fn southern_air_temple() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::PutCountersOnEachMatching {
-                    count: EffectValue::Fixed(1),
-                    predicate: CardPredicate::creature(),
-                    other: false,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             },
         ],
         text_box: text_box.into(),
@@ -7968,7 +7730,7 @@ fn sozins_comet() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![Effect::until_end_of_turn(
-            AffectedSpec::EachYouControl(CardPredicate::creature()),
+            ObjectSelector::each_you_control(CardPredicate::creature()),
             Modification::Firebending(5),
         )],
         statics: vec![StaticAbility::Foretell(ManaCost::parse("{2}{R}"))],
@@ -8004,7 +7766,7 @@ fn sparring_dummy() -> CardDefinition {
                         subtype: Some("Lesson".into()),
                         ..Default::default()
                     },
-                    effects: vec![Effect::GainLife { amount: 2 }],
+                    effects: vec![Effect::gain_life(2)],
                 }),
             }],
             ..Default::default()
@@ -8031,13 +7793,13 @@ fn spirit_water_revival() -> CardDefinition {
                     Effect::DrawCards {
                         count: EffectValue::Fixed(7),
                     },
-                    Effect::indefinitely(AffectedSpec::You, Modification::NoMaximumHandSize),
+                    Effect::indefinitely(ObjectSelector::You, Modification::NoMaximumHandSize),
                 ],
                 otherwise: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(2),
                 }],
             },
-            Effect::ExileSourceSpell,
+            Effect::exile(ObjectSelector::This),
         ],
         additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{6}"))],
         text_box: text_box.into(),
@@ -8077,12 +7839,7 @@ fn suki_courageous_rescuer() -> CardDefinition {
                 }),
             },
             intervening_if: None,
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -8108,7 +7865,7 @@ fn suki_kyoshi_warrior() -> CardDefinition {
             },
             effects: vec![Effect::CreateToken {
                 token_name: "Ally".into(),
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
                 attach_source: false,
             }],
@@ -8141,18 +7898,7 @@ fn sun_blessed_peak() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![Effect::mana_choice(["R", "W"].map(Mana::parse))],
                 ..Default::default()
             },
         ],
@@ -8179,7 +7925,7 @@ fn sun_warriors() -> CardDefinition {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::AddManaValue {
+            effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::BattlefieldMatching {
                     predicate: CardPredicate::creature(),
@@ -8189,12 +7935,7 @@ fn sun_warriors() -> CardDefinition {
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -8265,7 +8006,7 @@ fn team_avatar() -> CardDefinition {
                 }),
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::TriggeringPermanent,
+                ObjectSelector::Triggering,
                 Modification::ModifyPt {
                     power: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
@@ -8286,14 +8027,14 @@ fn team_avatar() -> CardDefinition {
             zone: ActivationZone::Hand,
             discard_source: true,
             mana_cost: ManaCost::parse("{2}{W}"),
-            effects: vec![Effect::DealDamageValue {
+            effects: vec![Effect::DealDamage {
                 amount: EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
                 },
-                target: TargetSpec::Creature,
+                what: ObjectSelector::Target(TargetSpec::Creature),
             }],
             ..Default::default()
         }],
@@ -8329,18 +8070,18 @@ fn teo_spirited_glider() -> CardDefinition {
                 Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 },
-                Effect::Discard,
+                Effect::discard(),
                 Effect::If {
                     condition: Condition::DiscardedThisWay(CardPredicate {
                         not_card_types: vec![CardType::Land],
                         ..Default::default()
                     }),
                     then: vec![Effect::WhenYouDo {
-                        effects: vec![Effect::PutCounters {
-                            count: 1,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: TargetSpec::CreatureYouControl,
-                        }],
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
                     }],
                     otherwise: vec![],
                 },
@@ -8377,7 +8118,7 @@ fn the_boulder_ready_to_rumble() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         text_box: text_box.into(),
@@ -8404,12 +8145,7 @@ fn the_earth_king() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Bear".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Bear", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -8463,17 +8199,17 @@ fn the_fire_nation_drill() -> CardDefinition {
             effects: vec![Effect::OptionalPayment {
                 cost: PaymentCost::Mana(ManaCost::default()),
                 if_paid: vec![
-                    Effect::TapSource,
+                    Effect::tap(ObjectSelector::This),
                     Effect::WhenYouDo {
-                        effects: vec![Effect::Destroy {
-                            target: TargetSpec::Permanent {
+                        effects: vec![Effect::destroy(ObjectSelector::Target(
+                            TargetSpec::Permanent {
                                 predicate: CardPredicate {
                                     card_type: Some(CardType::Creature),
                                     max_power: Some(4),
                                     ..Default::default()
                                 },
                             },
-                        }],
+                        ))],
                     },
                 ],
                 if_declined: vec![],
@@ -8483,7 +8219,7 @@ fn the_fire_nation_drill() -> CardDefinition {
             ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{1}"),
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::EachOpponentControls(CardPredicate::default()),
+                    ObjectSelector::each(Scope::OpponentsControl, CardPredicate::default()),
                     Modification::LoseKeywords(Keywords::of(&[
                         Keyword::Hexproof,
                         Keyword::Indestructible,
@@ -8494,7 +8230,7 @@ fn the_fire_nation_drill() -> CardDefinition {
             ActivatedAbilityDefinition {
                 crew: Some(2),
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::BecomeCreature,
                 )],
                 ..Default::default()
@@ -8516,12 +8252,15 @@ fn the_last_agni_kai() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
             Effect::FightLastTarget,
-            Effect::AddManaValue {
+            Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::ExcessDamage,
                 until_end_of_combat: false,
             },
-            Effect::until_end_of_turn(AffectedSpec::You, Modification::KeepUnspentMana(Color::Red)),
+            Effect::until_end_of_turn(
+                ObjectSelector::You,
+                Modification::KeepUnspentMana(Color::Red),
+            ),
         ],
         targeting: vec![
             TargetRequirement {
@@ -8565,34 +8304,13 @@ fn the_lion_turtle() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 3 }],
+            effects: vec![Effect::gain_life(3)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
-            effects: vec![Effect::Modal {
-                modes: vec![
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("W"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("U"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("B"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("R"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("G"),
-                        until_end_of_combat: false,
-                    }],
-                ],
-            }],
+            effects: vec![Effect::mana_choice(
+                ["W", "U", "B", "R", "G"].map(Mana::parse),
+            )],
             ..Default::default()
         }],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
@@ -8632,18 +8350,13 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             effects: vec![
                 Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
@@ -8653,7 +8366,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
                     Modification::BecomeCreature,
                 ),
                 Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
@@ -8666,7 +8379,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
                     },
                 ),
                 Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
@@ -8676,7 +8389,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
                     Modification::AddSubtypes(vec!["Construct".into()]),
                 ),
                 Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
@@ -8829,12 +8542,12 @@ fn tiger_seal() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-                effects: vec![Effect::UntapSource],
+                effects: vec![Effect::untap(ObjectSelector::This)],
             },
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::BeginningOfYourUpkeep,
-                effects: vec![Effect::TapSource],
+                effects: vec![Effect::tap(ObjectSelector::This)],
             },
         ],
         text_box: text_box.into(),
@@ -8857,12 +8570,7 @@ fn tolls_of_war() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Clue".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Clue", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -8876,12 +8584,7 @@ fn tolls_of_war() -> CardDefinition {
                         }),
                     }),
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Ally".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Ally", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -8917,10 +8620,9 @@ fn toph_hardheaded_teacher() -> CardDefinition {
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::one(instant_or_sorcery()),
                     effects: vec![Effect::MayDiscard {
-                        then: vec![Effect::ReturnGraveyardTarget {
-                            target: instant_or_sorcery(),
-                            to: GraveyardReturn::Hand,
-                        }],
+                        then: vec![Effect::return_to_hand(ObjectSelector::Target(
+                            instant_or_sorcery(),
+                        ))],
                     }],
                 }],
             },
@@ -8932,17 +8634,17 @@ fn toph_hardheaded_teacher() -> CardDefinition {
                 effects: vec![
                     Effect::Earthbend {
                         count: EffectValue::Fixed(1),
-                        target: TargetSpec::LandYouControl,
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
                     },
                     Effect::If {
                         condition: Condition::TriggeringSpellMatches(CardPredicate::subtype(
                             "Lesson",
                         )),
-                        then: vec![Effect::PutCounters {
-                            count: 1,
-                            kind: CounterKind::PlusOnePlusOne,
-                            target: TargetSpec::LandYouControl,
-                        }],
+                        then: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::LandYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
                         otherwise: vec![],
                     },
                 ],
@@ -8973,7 +8675,7 @@ fn toph_the_blind_bandit() -> CardDefinition {
             },
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         statics: vec![StaticAbility::CharacteristicPower(
@@ -9002,7 +8704,7 @@ fn toph_the_first_metalbender() -> CardDefinition {
             condition: TriggerCondition::BeginningOfYourEndStep,
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
-                target: TargetSpec::LandYouControl,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
             }],
         }],
         statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
@@ -9038,12 +8740,7 @@ fn treetop_freedom_fighters() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            }],
+            effects: vec![Effect::create_tokens("Ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -9082,8 +8779,8 @@ fn true_ancestry() -> CardDefinition {
                     another: false,
                     max_x: false,
                 },
-                effects: vec![Effect::ReturnGraveyardTarget {
-                    target: TargetSpec::GraveyardCardYouOwn {
+                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::GraveyardCardYouOwn {
                         predicate: CardPredicate {
                             card_types_any: vec![
                                 CardType::Artifact,
@@ -9096,15 +8793,9 @@ fn true_ancestry() -> CardDefinition {
                             ..Default::default()
                         },
                     },
-                    to: GraveyardReturn::Hand,
-                }],
+                ))],
             },
-            Effect::CreateToken {
-                token_name: "Clue".into(),
-                count: 1,
-                tapped_and_attacking: false,
-                attach_source: false,
-            },
+            Effect::create_tokens("Clue", 1),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -9125,10 +8816,8 @@ fn trusty_boomerang() -> CardDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{1}"),
             effects: vec![
-                Effect::TapTarget {
-                    target: TargetSpec::Creature,
-                },
-                Effect::ReturnGrantorToHand,
+                Effect::tap(ObjectSelector::Target(TargetSpec::Creature)),
+                Effect::return_to_hand(ObjectSelector::Grantor),
             ],
             ..Default::default()
         })],
@@ -9165,6 +8854,7 @@ fn tundra_tank() -> CardDefinition {
                 },
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
+                    amount: EffectValue::Fixed(1),
                     until_end_of_combat: true,
                 }],
             },
@@ -9174,7 +8864,7 @@ fn tundra_tank() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
                 )],
             },
@@ -9182,7 +8872,7 @@ fn tundra_tank() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             crew: Some(1),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::BecomeCreature,
             )],
             ..Default::default()
@@ -9208,14 +8898,14 @@ fn turtle_duck() -> CardDefinition {
             mana_cost: ManaCost::parse("{3}"),
             effects: vec![
                 Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::SetBasePt {
                         power: Some(EffectValue::Fixed(4)),
                         toughness: None,
                     },
                 ),
                 Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
                 ),
             ],
@@ -9247,7 +8937,7 @@ fn twin_blades() -> CardDefinition {
                     target: TargetSpec::CreatureYouControl,
                 },
                 Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
                     Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike])),
                 ),
             ],
@@ -9297,7 +8987,7 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
                     },
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::pump(1, 1),
                 )],
             },
@@ -9310,7 +9000,7 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
                     cost: PaymentCost::Mana(ManaCost::parse("{1}")),
                     if_paid: vec![Effect::WhenYouDo {
                         effects: vec![Effect::until_end_of_turn(
-                            AffectedSpec::Target(TargetSpec::Creature),
+                            ObjectSelector::Target(TargetSpec::Creature),
                             Modification::CantBlock,
                         )],
                     }],
@@ -9347,7 +9037,7 @@ fn ty_lee_chi_blocker() -> CardDefinition {
                     },
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::pump(1, 1),
                 )],
             },
@@ -9359,11 +9049,9 @@ fn ty_lee_chi_blocker() -> CardDefinition {
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
                     effects: vec![
-                        Effect::TapTarget {
-                            target: TargetSpec::Creature,
-                        },
+                        Effect::tap(ObjectSelector::Target(TargetSpec::Creature)),
                         Effect::ApplyContinuous {
-                            affected: AffectedSpec::Target(TargetSpec::Creature),
+                            affected: ObjectSelector::Target(TargetSpec::Creature),
                             modification: Modification::DoesntUntap,
                             duration: EffectDuration::WhileYouControlSource,
                         },
@@ -9405,6 +9093,7 @@ fn uncle_iroh() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -9423,18 +9112,15 @@ fn united_front() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{X}{W}{W}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::CreateTokensValue {
-                token_name: "Ally".into(),
-                count: EffectValue::X,
-            },
-            Effect::PutCountersOnEachMatching {
-                count: EffectValue::Fixed(1),
-                predicate: CardPredicate {
+            Effect::create_tokens("Ally", EffectValue::X),
+            Effect::put_counters(
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
-                },
-                other: false,
-            },
+                }),
+                CounterKind::PlusOnePlusOne,
+                1,
+            ),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -9459,12 +9145,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Food".into(),
-                    count: 1,
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Food", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -9514,21 +9195,19 @@ fn vengeful_villagers() -> CardDefinition {
             },
             intervening_if: None,
             effects: vec![
-                Effect::TapTarget {
-                    target: TargetSpec::CreatureOpponentControls,
-                },
-                Effect::MaySacrifice {
-                    predicate: CardPredicate {
+                Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
+                Effect::may_sacrifice(
+                    CardPredicate {
                         card_types_any: vec![CardType::Artifact, CardType::Creature],
                         ..Default::default()
                     },
-                    another: false,
-                    then: vec![Effect::PutCounters {
-                        count: 1,
-                        kind: CounterKind::Stun,
-                        target: TargetSpec::CreatureOpponentControls,
-                    }],
-                },
+                    false,
+                ),
+                Effect::if_you_do(vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    CounterKind::Stun,
+                    1,
+                )]),
             ],
         }],
         text_box: text_box.into(),
@@ -9556,6 +9235,7 @@ fn vindictive_warden() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -9596,7 +9276,7 @@ fn walltop_sentries() -> CardDefinition {
                     ..Default::default()
                 },
             }),
-            effects: vec![Effect::GainLife { amount: 2 }],
+            effects: vec![Effect::gain_life(2)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -9624,10 +9304,11 @@ fn wan_shi_tong_librarian() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![
-                    Effect::PutCountersOnSource {
-                        count: EffectValue::X,
-                        kind: CounterKind::PlusOnePlusOne,
-                    },
+                    Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        EffectValue::X,
+                    ),
                     Effect::DrawCards {
                         count: EffectValue::Half(Box::new(EffectValue::X)),
                     },
@@ -9637,10 +9318,7 @@ fn wan_shi_tong_librarian() -> CardDefinition {
                 condition: TriggerCondition::OpponentSearchesLibrary,
                 intervening_if: None,
                 effects: vec![
-                    Effect::PutCountersOnSource {
-                        count: EffectValue::Fixed(1),
-                        kind: CounterKind::PlusOnePlusOne,
-                    },
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
                     Effect::DrawCards {
                         count: EffectValue::Fixed(1),
                     },
@@ -9671,7 +9349,7 @@ fn wandering_musicians() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::EachYouControl(CardPredicate {
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
@@ -9700,17 +9378,18 @@ fn war_balloon() -> CardDefinition {
             ActivatedAbilityDefinition {
                 crew: Some(3),
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Source,
+                    ObjectSelector::This,
                     Modification::BecomeCreature,
                 )],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::Fire,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Fire,
+                    1,
+                )],
                 ..Default::default()
             },
         ],
@@ -9750,9 +9429,9 @@ fn wartime_protestors() -> CardDefinition {
                 }),
             },
             effects: vec![
-                Effect::PutCountersOnTriggeringPermanent { count: 1 },
+                Effect::put_counters(ObjectSelector::Triggering, CounterKind::PlusOnePlusOne, 1),
                 Effect::until_end_of_turn(
-                    AffectedSpec::TriggeringPermanent,
+                    ObjectSelector::Triggering,
                     Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
                 ),
             ],
@@ -9777,7 +9456,7 @@ fn water_tribe_captain() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{5}"),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::EachYouControl(CardPredicate {
+                ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
@@ -9838,10 +9517,7 @@ fn waterbender_ascension() -> CardDefinition {
             },
             intervening_if: None,
             effects: vec![
-                Effect::PutCountersOnSource {
-                    count: EffectValue::Fixed(1),
-                    kind: CounterKind::Quest,
-                },
+                Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
                 Effect::If {
                     condition: Condition::SourceCountersAtLeast {
                         kind: CounterKind::Quest,
@@ -9858,7 +9534,7 @@ fn waterbender_ascension() -> CardDefinition {
             mana_cost: ManaCost::parse("{4}"),
             waterbend: true,
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::Creature),
+                ObjectSelector::Target(TargetSpec::Creature),
                 Modification::CantBeBlocked,
             )],
             ..Default::default()
@@ -9885,7 +9561,7 @@ fn waterbending_lesson() -> CardDefinition {
             Effect::OptionalPayment {
                 cost: PaymentCost::Waterbend { generic: 2 },
                 if_paid: vec![],
-                if_declined: vec![Effect::Discard],
+                if_declined: vec![Effect::discard()],
             },
         ],
         text_box: text_box.into(),
@@ -9932,7 +9608,7 @@ fn watery_grasp() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{5}"),
             waterbend: true,
-            effects: vec![Effect::ShuffleAttachedIntoLibrary],
+            effects: vec![Effect::move_to(ObjectSelector::Attached, ZoneType::Library)],
             ..Default::default()
         }],
         spell_effects: vec![Effect::AttachSourceTo {
@@ -10059,8 +9735,13 @@ fn wolfbat() -> CardDefinition {
             intervening_if: None,
             effects: vec![Effect::OptionalPayment {
                 cost: PaymentCost::Mana(ManaCost::parse("{B}")),
-                if_paid: vec![Effect::ReturnSourceToBattlefield {
-                    counter: CounterKind::Finality,
+                if_paid: vec![Effect::Move {
+                    what: ObjectSelector::This,
+                    to: ZoneType::Battlefield,
+                    tapped: false,
+                    under: None,
+                    with_counter: Some(CounterKind::Finality),
+                    linked: None,
                 }],
                 if_declined: vec![],
             }],
@@ -10082,7 +9763,7 @@ fn yip_yip() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::until_end_of_turn(
-                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 Modification::pump(2, 2),
             ),
             Effect::If {
@@ -10091,7 +9772,7 @@ fn yip_yip() -> CardDefinition {
                     ..Default::default()
                 }),
                 then: vec![Effect::until_end_of_turn(
-                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
                     Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
                 )],
                 otherwise: vec![],
@@ -10188,6 +9869,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
                 },
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
                     until_end_of_combat: true,
                 }],
             },
@@ -10199,7 +9881,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
                     another: true,
                 },
                 effects: vec![Effect::until_end_of_turn(
-                    AffectedSpec::EachYouControl(CardPredicate::creature()),
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
                     Modification::pump(1, 0),
                 )],
             },
@@ -10241,10 +9923,11 @@ fn zhao_the_moon_slayer() -> CardDefinition {
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{7}"),
-            effects: vec![Effect::PutCountersOnSource {
-                count: EffectValue::Fixed(1),
-                kind: CounterKind::Conqueror,
-            }],
+            effects: vec![Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::Conqueror,
+                1,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -10254,14 +9937,13 @@ fn zhao_the_moon_slayer() -> CardDefinition {
 
 fn zuko_conflicted() -> CardDefinition {
     let text_box = "At the beginning of your first main phase, choose one that hasn't been chosen and you lose 2 life —\n• Draw a card.\n• Put a +1/+1 counter on Zuko.\n• Add {R}.\n• Exile Zuko, then return him to the battlefield under an opponent's control.";
-    let mode = |effect: Effect| {
-        vec![
-            Effect::LoseLife {
-                player: PlayerSelector::You,
-                amount: EffectValue::Fixed(2),
-            },
-            effect,
-        ]
+    let mode = |effects: Vec<Effect>| {
+        let mut mode = vec![Effect::LoseLife {
+            player: PlayerSelector::You,
+            amount: EffectValue::Fixed(2),
+        }];
+        mode.extend(effects);
+        mode
     };
 
     CardDefinition {
@@ -10281,20 +9963,26 @@ fn zuko_conflicted() -> CardDefinition {
                 up_to: None,
                 unchosen: true,
                 modes: vec![
-                    mode(Effect::DrawCards {
+                    mode(vec![Effect::DrawCards {
                         count: EffectValue::Fixed(1),
-                    }),
-                    mode(Effect::PutCountersOnSource {
-                        count: EffectValue::Fixed(1),
-                        kind: CounterKind::PlusOnePlusOne,
-                    }),
-                    mode(Effect::AddMana {
-                        mana: Mana::parse("R"),
-                        until_end_of_combat: false,
-                    }),
-                    mode(Effect::ExileSourceAndReturn {
-                        player: PlayerSelector::EachOpponent,
-                    }),
+                    }]),
+                    mode(vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )]),
+                    mode(vec![Effect::add_mana(Mana::parse("R"))]),
+                    mode(vec![
+                        Effect::exile(ObjectSelector::This),
+                        Effect::Move {
+                            what: ObjectSelector::Moved,
+                            to: ZoneType::Battlefield,
+                            tapped: false,
+                            under: Some(PlayerSelector::EachOpponent),
+                            with_counter: None,
+                            linked: None,
+                        },
+                    ]),
                 ],
             }],
         }],
@@ -10323,6 +10011,7 @@ fn zuko_exiled_prince() -> CardDefinition {
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RRR"),
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             }],
         }],
@@ -10347,24 +10036,23 @@ fn zuko_s_conviction() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![Effect::If {
             condition: Condition::Kicked,
-            then: vec![Effect::ReturnGraveyardTarget {
-                target: TargetSpec::GraveyardCardYouOwn {
+            then: vec![Effect::return_to_battlefield(
+                ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    },
+                }),
+                true,
+            )],
+            otherwise: vec![Effect::return_to_hand(ObjectSelector::Target(
+                TargetSpec::GraveyardCardYouOwn {
                     predicate: CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
                 },
-                to: GraveyardReturn::BattlefieldTapped,
-            }],
-            otherwise: vec![Effect::ReturnGraveyardTarget {
-                target: TargetSpec::GraveyardCardYouOwn {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    },
-                },
-                to: GraveyardReturn::Hand,
-            }],
+            ))],
         }],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -10395,8 +10083,8 @@ fn zuko_s_exile() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{5}")),
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::ExileWithControllerToken {
-            target: TargetSpec::Permanent {
+        spell_effects: vec![
+            Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
                 predicate: CardPredicate {
                     card_types_any: vec![
                         CardType::Artifact,
@@ -10405,9 +10093,12 @@ fn zuko_s_exile() -> CardDefinition {
                     ],
                     ..Default::default()
                 },
+            })),
+            Effect::ForPlayer {
+                player: PlayerSelector::TargetController,
+                effects: vec![Effect::create_tokens("Clue", 1)],
             },
-            token_name: "Clue".into(),
-        }],
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -10429,23 +10120,9 @@ fn mana_of(amounts: [u8; 6], spend: Option<ManaUse>) -> Mana {
     }
 }
 
-/// A modal mana effect with one mode per amount it may add.
-fn add_one_of(options: impl Iterator<Item = Mana>) -> Effect {
-    Effect::Modal {
-        modes: options
-            .map(|mana| {
-                vec![Effect::AddMana {
-                    mana,
-                    until_end_of_combat: false,
-                }]
-            })
-            .collect(),
-    }
-}
-
 /// "Add one mana of any color": one mode per color, W through G.
 fn one_mana_of_any_color(spend: Option<ManaUse>) -> Effect {
-    add_one_of(COLOR_SLOTS.map(|slot| {
+    Effect::mana_choice(COLOR_SLOTS.map(|slot| {
         let mut amounts = [0; 6];
         amounts[slot] = 1;
         mana_of(amounts, spend)
@@ -10455,7 +10132,7 @@ fn one_mana_of_any_color(spend: Option<ManaUse>) -> Effect {
 /// "Add two mana in any combination of colors": one mode per unordered pair
 /// (WW, WU, ..., GG), each restricted to `spend`.
 fn two_mana_in_any_combination(spend: ManaUse) -> Effect {
-    add_one_of(COLOR_SLOTS.flat_map(|first| {
+    Effect::mana_choice(COLOR_SLOTS.flat_map(|first| {
         (first..COLOR_SLOTS.end).map(move |second| {
             let mut amounts = [0; 6];
             amounts[first] += 1;

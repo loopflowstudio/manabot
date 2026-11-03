@@ -82,9 +82,10 @@ preserves accepted decisions, dated proof limits and source history.
   copying card content.
 - Stable `CardDefId` values and deterministic state witnesses reproduce seeded
   traces without allocation-address or debug-format identity.
-- Current cards are Rust `CardDefinition`s built from engine rules types;
-  runtime execution and learning tokens share those definitions. The earlier
-  selected two-deck typed IR is historical, not a current authoring layer.
+- Card content is the engine's own `CardDefinition` written in its rules
+  types in `managym/src/cardsets/<set>.rs`, one function per card; the
+  earlier checked-in typed IR and its compiler were deleted on 2026-10-30
+  (`10eeb1f55`). There is one card representation and no card-name dispatch.
 - Priority, targeting, and attacker declarations have uncapped typed offers and
   atomic revision-bound commands. The structured decoder preserved 6,435/6,435
   shared decisions and handled more than 32 legal choices.
@@ -184,9 +185,39 @@ preserves accepted decisions, dated proof limits and source history.
 - Steal Phase's invariants, not its shapes: incarnation and LKI, typed meaning,
   proposed-event replacement flow, explicit legal interaction, and viewer-safe
   projection.
-- Jack Heart's 2026-10-29 authoring decision supersedes typed IR on the
-  current path: use engine-native Rust definitions, with no second vocabulary
-  or runtime natural-language parser. Historical evidence keeps its readers.
+- Prefer typed rules data over runtime natural-language parsing. Since
+  2026-10-30 that data is the Rust `CardDefinition` itself, not a separate IR.
+- `Effect` is a verb over an `ObjectSelector` (Jack Heart's concept review,
+  2026-11-02, MTG-235). The object a verb acts on (`This`, `Target`,
+  `Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `You`, `Chosen`,
+  `Each`) is never written into the verb's name; one `Game::select` resolves
+  it, with last known information for a departed source. A verb whose rule
+  depends on which object it hit is an `If` composition ("if you do" is
+  `Condition::Moved`). Reason: each fused variant was its own resolution arm,
+  observability row and opaque learning token, so nothing transferred between
+  cards and the slope reached ~400 variants at Standard scale. The accepted
+  amendment folds `AffectedSpec` into `ObjectSelector`, merges value twins on
+  `EffectValue`, and uses the base verb over `Each` for batch effects. There
+  are 70 Effect variants (previously 107) and 14 remaining object-in-name rules
+  in the plan's inventory. Directed card behavior tests are unchanged; the
+  interrupted run's 485-card debug pass predates recovery fixes, so it does
+  not establish final-amendment acceptance. Apply the same test to
+  future mechanics: a new rules-type variant names a new rule, not a new
+  object for an existing verb.
+- `Chosen` suspends a supported object verb before selection, binds its chosen
+  permanent for that instruction, then clears it even when a nested counter
+  choice stops. Player-affecting verbs resolve the same selector through
+  `resolve_affected`; stack abilities have no card `ObjectRef`, so
+  `CounterAbility` reads its retained clause target. `moved` records the latest
+  Move/Sacrifice independently of discard/mill's `this_way`; an impossible or
+  declined choice must clear it before a following "if you do". These are
+  recovery lessons from MTG-235 (2026-11-02), covered by focused selector tests.
+- Learning tokens and the content digest derive from definitions, so a
+  vocabulary change moves them without changing behavior; w17 evidence
+  (conformance, authored-match receipts, parity corpora, Academy fixtures,
+  belief receipt pins) is re-recorded in place with no world or policy-input
+  version bump (MTG-235, 2026-11-02; see WORLDS.md). A version number names a
+  frozen world, not a merge.
 - Unknown primitives and oversized programs fail admission; they never become
   a generic unknown token or a silently truncated sequence.
 - Structured offers are legal by construction. Flat enumerate-then-cap action
@@ -344,7 +375,9 @@ preserves accepted decisions, dated proof limits and source history.
   and Study fork/return before optimizing another benchmark-only
   representation.
 - Preserve dense-state speed as card semantics and event histories grow.
-- Let the next creator-selected content increment pressure the rules types naturally
-  without turning each card into a one-off kernel exception.
+- Let the next content increment pressure the rules types naturally without
+  turning each card into a one-off variant; count the variants that serve one
+  card and compose rather than fuse (MTG-235 halved the fused set; remaining
+  one-card verbs are the next candidates).
 - Keep exactness non-negotiable without allowing proof infrastructure to become
   a substitute for playing the world.

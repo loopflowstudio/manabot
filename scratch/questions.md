@@ -34,3 +34,10 @@ Historical inherited notes are retained at `3ed5b5baa:scratch/questions.md`
 `a1a02a76f:scratch/questions.md`. Uncommitted pre-compression notes are preserved
 in `.runs/mtg-238-compress/questions-before.md`. Engine memory now records the
 accepted 1a direction and its focused compatibility evidence.
+
+
+Speed investigation and MTG-235 integration (2026-11-03): see the current plan's
+engine-speed section and `.runs/mtg-238-speed/`. Main's accepted effect vocabulary
+landed at 22e4aab71; its prior notes remain at that commit's scratch/questions.md.
+The local inlining repair is measured separately from the required integration.
+No measured speedup or passing budget is yet claimed for their combined source.
