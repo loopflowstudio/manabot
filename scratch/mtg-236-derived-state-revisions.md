@@ -1,16 +1,19 @@
 # MTG-236: derived state revisions, indexed effect records, cache-carrying clones
 
-Task brief: `.lf/prompts/20261102-120246-*-summary.md` (Jack Heart's concept
-review of 2026-11-02, Performance section). Base `4c8324a59` (T4 landed);
-`origin/main` is still that commit. Branch head `86af3387f`, two commits.
+Task brief: [.lf current directive](../.lf/prompts/20261102-160437-d0a2fbad-54dc-4d18-a85e-9117cbafece0-0I3Lcf-summary.md)
+(Jack Heart's concept review of 2026-11-02, Performance section).
+Original measurement base: `4c8324a59` (T4 landed). Current checkout base:
+`a8abf01b1` (T5 integrated); reviewed head: `d2136d4ad`.
 
 ## Status (reconciled 2026-11-02)
 
-Items 1-4 exist and are checked (below). Item 5 is not implemented and is
-dropped from this Task (settled at the 2026-11-02 concept review, below;
-reversible). Remaining: the quiet-machine acceptance measurement,
-publication with the measured delta in the PR body, and ordering against
-T5/T6, which touch the same files.
+Items 1-4 exist and are checked (below); subtype interning remains deferred.
+PR #411 is published, synced with T5, and approved for shipping by Jack Heart
+(see Shipping approval). The headless demo below advances to the remaining
+delivery steps. Quiet-machine latency acceptance remains unmeasured; this
+decision does not certify those thresholds or complete the Task. Earlier
+publication and T5-ordering entries below describe their dated state and are
+superseded by the sync and shipping sections.
 
 ## Outcome (brief's payoff order)
 
@@ -254,3 +257,166 @@ The rerun passed: four public-commitment tests plus main's native belief
 projection receipt test (5 passed in 33.28 s). Together with the three authored
 parity tests and eight directed debug Rust tests, the focused sync proof is
 green. Full post-sync CI and quiet-machine latency acceptance remain separate.
+
+## Shipping approval (2026-11-02)
+
+Jack Heart reviewed the current result and said "lg2m ship it" in the primary
+Task conversation. Ship PR #411 through the remaining code Graph. The current
+synced head is `d2136d4ad`; focused sync proof is recorded above and CI is
+running. Preserve the quiet-machine 4.34 s / 128.7 s acceptance gap explicitly
+in the durable PR description: shipping approval is not a latency measurement.
+Subtype interning remains deferred in the reviewed implementation.
+
+Before landing, refresh the PR copy's stale statements: T5 PR #405 is integrated
+at main `a8abf01b1`; the public-commitment receipt changed content-bound tracker
+digests as well as source hashes after that sync. All state/command/privacy
+proofs and frozen evidence references remained identical. The original 31%
+CPU measurement predates this sync and is not a new measurement of this head.
+
+## Demo decision pass 1 — 2026-11-02 (headless)
+
+Experience reviewed: Academy's UR Lessons versus GW Allies match through
+the real `GameSession` server, headless engine, persisted replay and public
+commitment/hypothesis paths, with the derived-state implementation at
+`d2136d4ada56ffb06e98d0d52146b2ccc7433e98`.
+The design is the Outcome and Concept review sections above; implementation
+is [PR #411](https://github.com/loopflowstudio/manabot/pull/411).
+
+**Decision: advance.** The preceding implementation intended to avoid
+unnecessary recomputation without changing play. Its retained evidence shows
+31% less user CPU time and matching benchmark digests before the T5 sync.
+New evidence in this pass establishes the synced implementation still
+reproduces the configured match and viewer contract. No concrete repairable
+implementation defect surfaced that warrants returning to implement.
+
+Fresh demonstration command (completed, exit 0):
+
+```sh
+uv run --extra dev --extra play pytest tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py -q
+```
+
+Observed: **7 passed in 31.07 s**. These tests execute the receipt producers,
+including FastAPI `TestClient` against the real Academy app; they do not merely
+read retained JSON. No receipt was rewritten in this demo.
+
+- Live, headless and replay agree on 142 commands, 143 checkpoints and 142
+  ordered transition groups per surface, with 858 viewer projection checks
+  and no first divergence. Both player replay projections are admitted;
+  spectator projection is refused.
+- Object `96@3` is rejected as stale, and a retained command is rejected for
+  stale revision, preserving state witnesses and semantic event cursors.
+- Public commitment proof reproduces 69 commitments, 55 consumed commitments,
+  and zero provider gaps, identity-stream mismatches or negative-proof
+  mutations. Materializing a hypothesis with support size 484 preserves the
+  source match, event cursor and viewer observation. Frozen RUL-9 and INT-12
+  references remain unchanged.
+- Supporting evidence:
+  [authored-match receipt](../conformance/authored-match-parity-w17-v1/release-live-headless-replay-seed-0.json),
+  [public-commitment receipt](../conformance/public-commitment-parity-w17-v1/release-live-replay-hypothesis-seed-0.json),
+  [authored producer](../academy/authored_match_parity.py), and
+  [commitment producer](../academy/public_commitment_parity.py).
+  The latter normalizes the relevant-source identity only for comparison;
+  behavioral fields remain strict. The authored receipt comparison is exact.
+
+Fresh remote evidence at this head: [CI run 41549044249](https://github.com/loopflowstudio/manabot/actions/runs/41549044249)
+has successful debug Rust tests (debug assertions retained), Academy UI,
+Academy integration, protocol and semantic conformance, clean-machine Play,
+Python unit tests and long integration. Main integration was still running
+at the last check. Package builds/install checks also succeeded in
+[run 41549044194](https://github.com/loopflowstudio/manabot/actions/runs/41549044194);
+publication was skipped. PR #411 was open and mergeable. `WORLDS.md` has no
+diff against checkout base `a8abf01b1`.
+
+Human feedback: the existing Shipping approval section records Jack Heart's
+exact statement, "lg2m ship it". No person participated in this headless
+demo, and there is no new human observation or approval. Acting under the
+requested stand-in authority, the reviewer interprets that explicit approval,
+the preserved contract and the demonstrated CPU reduction as grounds to
+advance delivery with the already disclosed measurement gap. No design
+change was made or newly attributed to Jack Heart.
+
+Limits and next action: host load averages were 28.00 / 27.59 / 21.94 before
+the demonstration. The brief requires a quiet machine or CI runner for
+`bench_search`, so it was not rerun here. The 4.34 s worst-reply / 128.7 s total
+bound remains unverified, and the older CPU delta is not a measurement of
+this synced head. Complete the remaining delivery checks and correct the PR
+body's stale T5 overlap, source-only receipt-change and measurement-head
+statements as already directed above. Retain the latency gap in that body;
+do not claim the Task's performance acceptance is met. No further product
+judgment is needed for this demo decision. No servers or other long-lived
+processes were started; the test process exited.
+
+Review record: `scratch/mtg-236-derived-state-revisions.md` (this section).
+No `scratch/demo.html` was generated: this invocation is headless with no
+rendering surface; the interactive runbook requirement does not apply.
+
+## Gate plan — 2026-11-02
+
+Compare against checkout base `a8abf01b1`, including the existing uncommitted
+headless-demo notes. Changed paths are the 17 `flow` modules listed by the
+Task snapshot, `search_state.rs`, four `state` modules, AGENTS.md and the two
+current w17 parity receipts. The implementation changes cache invalidation,
+effect/LKI indexes and fork reuse; it changes no UI, world, schema or Python API.
+
+`.github/ci/select-tests.sh` selects all eight CI areas for the native sources
+and receipts. Use those existing exact-head CI results for the full matrix;
+there is no content-keyed local runner. Locally run focused debug and release
+search-state contracts, continuous-effect/identity/trigger rule tests and the
+Ozai mana-condition and Joo Dee copy cases. Add cache-sharing and invalidation
+assertions to the existing fork identity regression: existing semantic tests
+alone would also pass if clones silently started cold again. Then run required
+rustfmt and clippy (`--all-targets --all-features`, pinned PyO3 interpreter),
+serially with two Cargo jobs and CI's optimized debug assertions.
+
+Retain the immediately preceding 7-test Python demo result: its native sources,
+receipts and test inputs have not changed. CI owns the broad native suite and
+browser/integration matrix; there is no new UI interaction to capture locally.
+Prior full release results predate T5; the focused release run checks the merged
+paths without repeating the entire package. Quiet-machine latency measurement
+is deferred: current load averages are 19.21 / 24.21 / 21.43. No benchmark is
+started on this busy host. The 4.34 s / 128.7 s bounds remain unverified.
+
+## Gate results — 2026-11-02
+
+Review found no implementation defect requiring a native-source change.
+Extended `managym/tests/search_state_contract.rs` to assert that warmed views
+survive cloning and event draining, a departed object's view is invalidated,
+and fork invalidation preserves the parent's cached view and witness. These
+assertions test the promised reuse without timing thresholds. Native sources,
+world identity and receipt inputs are unchanged; no extension rebuild or
+receipt regeneration is necessary for this test-only addition.
+
+Commands below ran serially; all completed without failure or timeout:
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml --test search_state_contract` — 4 passed, including the strengthened fork regression.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml --test rules_tests cr_613` — 6 passed (layers, expiry, hashing and fork restoration).
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml --test rules_tests cr_400` — 6 passed (identity/LKI and related stale-reference cases).
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml --test rules_tests cr_603` — 7 passed (ordering, matching and resolution).
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml --test cards ozai_keeps_unspent` — 1 passed (mana-conditioned characteristics).
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml --test cards joo_dee` — 4 passed (merged copy/decision behavior).
+- `cargo test --release -j 2 --manifest-path managym/Cargo.toml --test search_state_contract` — 4 passed.
+- `cargo test --release -j 2 --manifest-path managym/Cargo.toml --test rules_tests <filter>` — `rules::cr_613_continuous_effects`: 6 passed; `rules::cr_400_identity`: 3 passed; `rules::cr_603_triggers`: 6 passed (three sequential invocations).
+- `cargo test --release -j 2 --manifest-path managym/Cargo.toml --test cards <filter>` — `ozai_keeps_unspent`: 1 passed; `joo_dee`: 4 passed (two sequential invocations).
+- `cargo fmt --check --manifest-path managym/Cargo.toml` — passed.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy -j 2 --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings` — passed.
+- `git diff --check` — passed.
+- `gh pr view 411 --json headRefOid,statusCheckRollup` — at published `d2136d4ad`, 15 checks passed, package publication skipped, main integration still running; the aggregate has not reported yet. The unpublished test additions have local debug/release proof, not a new CI result.
+
+The immediately preceding Python demo's 7 passes remain applicable to unchanged
+native/Python/receipt inputs. CI owns the full debug and browser matrix. The
+prior full release matrix predates the T5 merge; this pass adds focused release
+coverage of the merged paths, not a new whole-package release certification.
+The busy host precludes the brief's quiet-machine benchmark; no latency target
+is marked passed and no new performance number is claimed.
+
+Prepared corrected delivery copy in `scratch/pr-title.txt`,
+`scratch/pr-body.md` and `scratch/.pr-copy-ref`. It distinguishes the historical
+31% CPU improvement from the synced head, records T5 integration and the
+content-bound receipt digest refresh, and retains the outstanding latency
+acceptance. Publication should consume that copy and retain this evidence in
+the PR before scratch cleanup. The remote PR body has not been edited here.
+
+Gate can advance to the delivery step with these explicit limits. Landing
+still requires successful CI, including any checks selected by publishing the
+test addition. Shipping approval is already recorded above; Task performance
+acceptance remains open. No background process remains from this gate.
