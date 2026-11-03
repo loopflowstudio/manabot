@@ -266,9 +266,15 @@ the older `e5615edcc` reference measured 6,774.5 steps/s: the candidate used
 **10.98% more time per step** (9.90% fewer steps/s), correctly failing the
 10% budget. Search timings and all full-score/step digests and counts passed.
 Delegated demo judgment accepted this measured cost of the already-merged
-engine; the source comparison does not isolate its cause. The budget PR has
-no native source diff from that main commit. Adoption preserves the **10%
-tolerance** and the failed run as evidence; it is not shipping approval.
+engine; the source comparison does not isolate its cause. The measured head
+`88dc8c1ad` has no native source diff from that main commit. Adoption preserves
+the **10% tolerance** and the failed run as evidence; it is not shipping approval.
+
+The budget PR subsequently synchronized with main `51fbacbbf`, which adds
+derived-state revisions and cache-carrying clones. The reference above predates
+that optimization; its figures do not measure the synchronized candidate.
+The next CI comparison measures both engines on one runner. Any retained
+speedup moves the reference using that candidate's own artifact and a reason.
 
 Measured once on 2026-11-02 with the original search digest (steps/s; worst Search-64
 reply; total over 3 seeds x 40 decisions), each on its own runner:

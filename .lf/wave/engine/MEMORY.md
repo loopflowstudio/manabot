@@ -117,7 +117,13 @@ preserves accepted decisions, dated proof limits and source history.
   A digest of only simulation count and winning action misses changed losing
   scores. MTG-237 now hashes full scores; its historical T4/T5/T6 measurements
   retain the old limitation and establish no full-score equality. The new
-  baseline comes from CI run 41540798745, not reinterpreted historical output.
+  first full-score baseline came from CI run 41540798745, not reinterpreted
+  historical output. Delegated demo judgment on 2026-11-02 subsequently
+  accepted run 41552162812 at `88dc8c1ad` as the initial reference for merged
+  main `a8abf01b1`, explicitly retaining its measured 10.98% greater per-step
+  cost against the older engine. This is not a human statement or shipping
+  approval. The tolerance stays 10%; the source comparison does not isolate
+  which upstream change caused the cost.
   Detailed measurements and the adoption procedure live in
   `docs/development.md#engine-performance-budget`.
 - A green CI job does not prove budget enforcement: PR run 41548559113
@@ -125,15 +131,24 @@ preserves accepted decisions, dated proof limits and source history.
   `bash -e` let `tee` mask exit 1. Explicit `defaults.run.shell: bash` enables
   pipefail. Regression coverage must execute the workflow's pipelines, not
   just the comparator CLI, and cover failed benchmarks as well as over-budget
-  or changed-digest comparisons. The repair has controlled local proof;
-  repaired hosted enforcement remains unverified.
+  or changed-digest comparisons. Repaired hosted run 41552162812 failed the
+  throughput comparison correctly and retained a downloadable, adoptable
+  artifact. Its search timings and all digests/counts passed; 65 focused
+  tests cover the controlled pipeline and recovery paths.
 - Record the candidate before building the reference so an incompatible
   reference still leaves an adoptable measurement; upload follows in the final
   always-run step. A controlled reference-build failure proves local adoption
-  with the real recording CLI, but copying the artifact path locally does not
-  prove GitHub transport after failure. Moving digests, accepting a cost or
+  with the real recording CLI. Hosted transport and adoption after comparison
+  failure are proven by run 41552162812; hosted reference-build failure
+  remains unexercised. Moving digests, accepting a cost or
   retaining a speedup requires a reason and the candidate's own CI artifact.
   Measure the durable PR head, not the ephemeral merge commit.
+- Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
+  indexed records and cache-carrying clones. MTG-237's synced candidate now
+  includes that engine, while its adopted reference predates it. The next
+  same-runner CI comparison measures that difference; older receipts cannot
+  establish a speedup or full-score equality for this synced engine. A kept
+  measured speedup moves the reference through its own artifact, with a reason.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.

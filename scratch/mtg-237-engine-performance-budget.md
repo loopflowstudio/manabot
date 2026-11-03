@@ -86,9 +86,27 @@ same commands, summaries, artifacts and 10% baseline remain on that path.
   engine match; changing tolerance or buying a dedicated runner needs later
   evidence, outside this Task.
 
-Concept review found no additional product choice or code rewrite necessary.
-The same-runner and native-workload interpretations above still await Jack
-Heart's PR review. No shipping approval follows from headless review.
+Concept review at `9452c2115` (2026-11-02, after baseline adoption and sync):
+**nothing to change and no open product choice under the retained headless
+interpretations.** The maintainer reads `compare` checks, downloads the run,
+then uses `record --reason` to adopt its candidate. A `Run` is measured evidence;
+the `Baseline` is the chosen reference plus tolerance and reason, not another
+execution lifecycle. CI owns execution and transport; the CLI owns comparison
+and adoption. No additional state or API is needed.
+
+The normal path, rejected slowdown/changed-score path and reference-build
+recovery preserve that interaction. The retained counterexamples still matter:
+cross-run absolute timings cannot provide this budget, a winner-only digest
+cannot preserve scores, and a comparator failure hidden by `tee` cannot fail
+the PR. Their repairs remain in place. Adopting a candidate changes the reference,
+not the tolerance or its historical failed-run evidence. Syncing the engine
+does not itself adopt a reference or establish a speedup; the next proof is
+the synced candidate's same-runner comparison at publication/demo.
+
+The same-runner and native-workload interpretations above remain subject to
+Jack Heart's PR review. Existing usage guidance expresses this model; no code
+rewrite or new implementation direction follows. No shipping approval follows
+from headless review.
 
 ## Retained evidence
 
@@ -127,7 +145,8 @@ itself was not induced.
 
 **Current demo decision: iterate only to reconcile the initial baseline with
 already-merged main.** The reference predates `230b2f563` and `a8abf01b1`;
-this PR has no native source diff from `a8abf01b1`. Under delegated headless
+the measured head `88dc8c1ad` has no native source diff from `a8abf01b1`.
+Under delegated headless
 review authority, accept that synchronized engine as the initial budget's
 reference while explicitly recording the measured cost; this is not new
 human feedback or shipping approval. The detailed judgment and proof limits
@@ -142,20 +161,31 @@ run link and delegated judgment. The current-reference section in
 T4/T5/T6 or full-score receipts. Tolerance remains 0.1; no engine, benchmark,
 workflow or digest changed.
 
-Check: direct artifact reconciliation verified every measurement identity and
-benchmark field, unchanged tolerance and all digests/counts, and no native
-source diff from merged main `a8abf01b1`; `git diff --check` passed. The retained
-`uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q`
-result (65 passed) still applies to unchanged code; no benchmarks were rerun.
-`lf context` after compression: scratch and memory within token and byte limits.
+## Reconciliation after upstream sync — 2026-11-02
+
+Sync `9452c2115` includes merged main `51fbacbbf` (MTG-236: derived-state
+revisions, indexed effect/trigger records and cache-carrying clones). This
+candidate has no native source diff from that newer main; it does differ from
+the adopted reference's engine. The baseline adoption remains complete and
+valid, but the next comparison is no longer two recordings of the same engine.
+No new timing or full-score equality result follows from the sync. MTG-236's
+earlier CPU-time reduction and its outstanding quiet-machine absolute targets
+are separate evidence, not acceptance of this candidate's 10% relative budget.
+
+Engine memory now records the accepted cost, repaired hosted enforcement and
+the distinction between hosted comparison-failure recovery and locally simulated
+reference-build recovery. There are no immediate child memory directories under
+the selected Engine scope. Historical demo transcripts and the baseline's
+recorded reason remain unchanged. Existing 65-test evidence applies to unchanged
+comparator/workflow code; the synced engine's checks belong to gate/CI.
+
+Check: `uv run --no-project --python 3.12 python` artifact/source reconciliation and `git diff --check` passed; `lf context` reports scratch and memory within both limits.
 
 Remaining: publication updates the PR's current-baseline paragraph to run
 41552162812 and its measured accepted cost, and replaces the stale claim that
 hosted enforcement is unverified with the pass-2 failure/upload/download proof.
-Republish and inspect the new same-runner check at demo. Hosted reference-build
+Republish and inspect the synced candidate's same-runner check at demo. A
+measured speedup, if retained, needs adoption from that new candidate artifact
+with a reason; no such result is available yet. Hosted reference-build
 failure remains locally simulated only, and main-push verification stays
 post-merge. No separate measurement dispatch or shipping approval.
-
-Proposed Engine memory reconciliation (read-only during implementation):
-replace the stale current-baseline and unverified-hosted-enforcement statements
-with the pass-2 evidence and adoption above when the Graph reaches realign.
