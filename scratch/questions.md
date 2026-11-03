@@ -202,3 +202,10 @@ now creates effect records; the branch's terminal state digest is retained.
 The rebuilt extension was installed atomically. Focused post-sync proof:
 Airship/War Balloon, Ran and Shaw, copy facts and layered observations, plus
 Academy retained navigation/parity and the four belief receipt bindings.
+
+Focused post-sync verification passed: 15 debug Rust card/observability checks
+and 11 Python navigation/parity/belief checks. The first Rust compile found
+23 assertions where the merge combined `KeywordData` observations with the
+`Keywords::has` API; those assertions now read the retained boolean observation
+fields. The focused Rust rerun passed. This correction changes tests only;
+the rebuilt extension and regenerated evidence remain current. No push.

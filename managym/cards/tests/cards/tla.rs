@@ -4707,12 +4707,12 @@ fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
     let badgermole = s.game().state.card_to_permanent[card].unwrap();
     assert_eq!(counters(&s, forest), 2);
     assert!(s.game().characteristics(forest).is_animated);
-    assert!(observed_keywords(&s, forest).has(Keyword::Trample));
-    assert!(observed_keywords(&s, countered).has(Keyword::Trample));
-    assert!(!observed_keywords(&s, ogre).has(Keyword::Trample));
-    assert!(!observed_keywords(&s, stunned).has(Keyword::Trample));
-    assert!(!observed_keywords(&s, badgermole).has(Keyword::Trample));
-    assert!(!observed_keywords(&s, theirs).has(Keyword::Trample));
+    assert!(observed_keywords(&s, forest).trample);
+    assert!(observed_keywords(&s, countered).trample);
+    assert!(!observed_keywords(&s, ogre).trample);
+    assert!(!observed_keywords(&s, stunned).trample);
+    assert!(!observed_keywords(&s, badgermole).trample);
+    assert!(!observed_keywords(&s, theirs).trample);
 }
 
 #[test]
@@ -4928,17 +4928,17 @@ fn turtle_duck_sets_base_power_and_gains_trample_until_end_of_turn() {
     let mut s = five_color_unfunded_setup(&["Turtle-Duck"]);
     let duck = s.force_permanent_on_battlefield(0, "Turtle-Duck");
     add_counters(&mut s, duck, CounterKind::PlusOnePlusOne, 1);
-    assert!(!observed_keywords(&s, duck).has(Keyword::Trample));
+    assert!(!observed_keywords(&s, duck).trample);
 
     s.set_player_mana_pool(0, "3");
     activate(&mut s, duck, 0);
     settle(&mut s);
     assert_eq!(s.game().characteristics(duck).pt(), (5, 5));
-    assert!(observed_keywords(&s, duck).has(Keyword::Trample));
+    assert!(observed_keywords(&s, duck).trample);
 
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().characteristics(duck).pt(), (1, 5));
-    assert!(!observed_keywords(&s, duck).has(Keyword::Trample));
+    assert!(!observed_keywords(&s, duck).trample);
 }
 
 fn equip(s: &mut Scenario, equipment: PermanentId, creature: PermanentId) {
@@ -5061,13 +5061,13 @@ fn glider_staff_airbends_a_creature_and_gives_its_bearer_flying() {
     );
     let staff = s.game().state.card_to_permanent[staff].expect("staff entered");
     assert_eq!(s.game().characteristics(ours).pt(), (2, 2));
-    assert!(!observed_keywords(&s, ours).has(Keyword::Flying));
+    assert!(!observed_keywords(&s, ours).flying);
 
     s.set_player_mana_pool(0, "2");
     assert_eq!(observed(&s, staff).attached_to, None);
     equip(&mut s, staff, ours);
     assert_eq!(s.game().characteristics(ours).pt(), (3, 3));
-    assert!(observed_keywords(&s, ours).has(Keyword::Flying));
+    assert!(observed_keywords(&s, ours).flying);
     assert_eq!(observed(&s, staff).attached_to, Some(observed(&s, ours).id));
 
     s.advance_to_active_step(1, StepKind::Main);
@@ -5369,7 +5369,7 @@ fn war_balloon_flies_once_it_has_three_fire_counters() {
     }
     assert!(is_creature(&s, balloon));
     assert_eq!(s.game().characteristics(balloon).pt(), (4, 3));
-    assert!(observed_keywords(&s, balloon).has(Keyword::Flying));
+    assert!(observed_keywords(&s, balloon).flying);
     s.advance_to_active_step(1, StepKind::Main);
     assert!(is_creature(&s, balloon), "not limited to this turn");
 }
@@ -5812,14 +5812,14 @@ fn the_mechanist_makes_clues_and_flies_them_until_end_of_turn() {
     assert!(tapped(&s, mechanist));
     assert!(is_creature(&s, clue));
     assert_eq!(s.game().characteristics(clue).pt(), (3, 1));
-    assert!(observed_keywords(&s, clue).has(Keyword::Flying));
+    assert!(observed_keywords(&s, clue).flying);
     assert!(observed(&s, clue)
         .temp_subtypes
         .contains(&"Construct".to_owned()));
 
     s.advance_to_active_step(1, StepKind::Main);
     assert!(!is_creature(&s, clue), "until end of turn");
-    assert!(!observed_keywords(&s, clue).has(Keyword::Flying));
+    assert!(!observed_keywords(&s, clue).flying);
 }
 
 #[test]
@@ -5867,7 +5867,7 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     s.game_mut().state.players[0]
         .mana_pool
         .add(&Mana::restricted_to(lesson, [0, 0, 0, 0, 1, 0]));
-    assert!(!observed_keywords(&s, ozai).has(Keyword::Flying));
+    assert!(!observed_keywords(&s, ozai).flying);
 
     declare_attackers(&mut s, &[ozai]);
     settle(&mut s);
@@ -5886,7 +5886,7 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     assert!(observed_keywords(&s, ozai).indestructible);
 
     s.set_player_mana_pool(0, "RRRRR");
-    assert!(!observed_keywords(&s, ozai).has(Keyword::Flying), "five unspent");
+    assert!(!observed_keywords(&s, ozai).flying, "five unspent");
     let card = card_of(&s, ozai);
     s.game_mut().move_card(card, ZoneType::Graveyard);
     s.advance_to_active_step(1, StepKind::Main);
@@ -6359,7 +6359,7 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     permanent.change_counters(CounterKind::PlusOnePlusOne, 2);
     permanent.change_counters(CounterKind::Stun, 1);
     assert_eq!(s.game().characteristics(drake).pt(), (4, 4));
-    assert!(observed_keywords(&s, drake).has(Keyword::Flying));
+    assert!(observed_keywords(&s, drake).flying);
     assert_eq!(observed(&s, drake).counters.get("stun"), Some(&1));
     assert_eq!(observed(&s, drake).name, None, "the printed name applies");
 
@@ -6369,7 +6369,7 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
         assert_eq!(counters_of(&s, drake, kind), 0, "{kind:?} removed");
     }
     assert_eq!(s.game().characteristics(drake).pt(), (1, 1));
-    assert!(!observed_keywords(&s, drake).has(Keyword::Flying));
+    assert!(!observed_keywords(&s, drake).flying);
     assert_eq!(s.game().characteristics(drake).name, "Humble Merchant");
     assert!(s.game().characteristics(drake).has_subtype("Citizen"));
     assert!(!s.game().characteristics(drake).has_subtype("Drake"));
@@ -8241,7 +8241,7 @@ fn phoenix_fleet_airship_crews_with_one_power() {
     settle(&mut s);
     assert!(tapped(&s, elves));
     assert!(observed(&s, airship).is_animated);
-    assert!(observed_keywords(&s, airship).has(Keyword::Flying));
+    assert!(observed_keywords(&s, airship).flying);
 }
 
 #[test]
@@ -11229,7 +11229,7 @@ fn earth_rumble_wrestlers_grow_with_a_land_creature_or_a_land_entry_this_turn() 
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     assert!(keywords(&s, wrestlers).has(Keyword::Reach));
     assert_eq!(s.game().characteristics(wrestlers).pt(), (3, 4));
-    assert!(!observed_keywords(&s, wrestlers).has(Keyword::Trample));
+    assert!(!observed_keywords(&s, wrestlers).trample);
 
     cast(&mut s, "Earthbending Lesson");
     assert!(s.choose_target(Target::Permanent(forest)));
@@ -11239,7 +11239,7 @@ fn earth_rumble_wrestlers_grow_with_a_land_creature_or_a_land_entry_this_turn() 
         (4, 4),
         "a land creature"
     );
-    assert!(observed_keywords(&s, wrestlers).has(Keyword::Trample));
+    assert!(observed_keywords(&s, wrestlers).trample);
 
     let mut s = five_color_setup(&["Earth Rumble Wrestlers", "Forest"]);
     let wrestlers = s.force_permanent_on_battlefield(0, "Earth Rumble Wrestlers");
@@ -11249,14 +11249,14 @@ fn earth_rumble_wrestlers_grow_with_a_land_creature_or_a_land_entry_this_turn() 
         (4, 4),
         "a land entered"
     );
-    assert!(observed_keywords(&s, wrestlers).has(Keyword::Trample));
+    assert!(observed_keywords(&s, wrestlers).trample);
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(
         s.game().characteristics(wrestlers).pt(),
         (3, 4),
         "a new turn"
     );
-    assert!(!observed_keywords(&s, wrestlers).has(Keyword::Trample));
+    assert!(!observed_keywords(&s, wrestlers).trample);
 }
 
 /// Attack with player 0's `attackers`, let player 1 decline to block, and
