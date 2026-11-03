@@ -1,14 +1,16 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling — plan
 
-Status (2026-11-02): all 16 cards and the one-catalog refactor are merged here; not published. Jack Heart's delivery order (2026-11-02): MTG-238 #414 goes first; T6 integrates it afterward. Jack Heart's steer (2026-11-02, comment
-b222da8f) adds the content-pack simplification to T6; see
-[t6-direction.md](t6-direction.md). Brief: Task MTG-225 (16 cards, allocation
-`planned_pr: T6`); direction in [t6-direction.md](t6-direction.md). One
-cohesive PR, then stop for Jack Heart's review.
+Status (2026-11-02): all 16 cards (25 allocated faces) and the one-catalog
+refactor are implemented on HEAD; no PR yet. Brief: Task MTG-225, allocation
+`planned_pr: T6`; direction in [t6-direction.md](t6-direction.md). One cohesive
+PR, then stop for Jack Heart's review.
 
-Base: T6 started on main `4c8324a59` (T3 + T4) while T5 #405 synced onto
-main, then merged T5's synced head `836042c07` (2026-11-02, four small
-conflicts), so it is stacked on T5 with T5's copy effects available.
+Delivery order (Jack Heart, 2026-11-02): MTG-238 #414 merges first, and T6
+integrates it afterward. #414 is open and unreviewed, so integration is not yet
+possible. This does not approve merging either PR.
+
+Base: HEAD contains main `51fbacbbf`, which carries T5 as a squash; the T5 stack
+is over. T5 head `2df025c20` was the merge base for that sync.
 
 ## Model
 
@@ -25,8 +27,10 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
   battlefield turns it front face up (CR 712.8a, 400.7). Transforming keeps
   the same permanent (counters, damage, attacking; CR 712.9). "Return it
   transformed" enters with the back face up (`ZoneEntry.transformed`,
-  CR 712.14). A card with no back face (a token copy) ignores transform
-  instructions (CR 701.28c).
+  CR 712.14). A card with no back face ignores transform instructions
+  (CR 701.28c). A token copy of a double-faced permanent has both faces and is
+  transformed if the original is, so it can transform (CR 707.8a; the earlier
+  "cannot transform" proposal is superseded, see questions.md).
 - **Sagas (CR 714).** `CounterKind::Lore`. Chapter abilities are
   `TriggerCondition::Chapter { n }` triggered abilities ("I, II" = two
   abilities). A Saga enters with one lore counter (714.3a); after the draw
@@ -67,47 +71,42 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 
 ## Remaining
 
-- After #414 lands: integrate it here (managym-state/managym-cards crate move,
-  Keywords API). #414 owns Phoenix Fleet Airship's conversion to a conditional
-  TypeGrant and already incorporates main's T5.
-- Gate: re-record w17 evidence (list below); Academy UI checks have not run.
-- Decide (Jack Heart): the one-catalog encoder cost, below. Until then
-  `test_etude_job.py::test_worker_runs_real_learner_and_reports_admitted_policy`
-  exceeds its 30 s limit.
-- Not done: a retained checkpoint bound to an authored pack no longer loads.
+- Integrate #414 after it lands: managym-state/managym-cards crate move and
+  Keywords API. #414 owns Phoenix Fleet Airship's conditional TypeGrant, rebinds
+  the same mutable w17 receipts (match-state hash contract 12) and allocates
+  object ids for earthbend records. Re-recording before this integration would
+  be repeated by it.
+- Re-record w17 evidence (list below), rebuild the extension from the integrated
+  source and run the full debug Rust, pytest and Academy UI checks. Academy UI
+  has not run on this branch.
+- Other open PRs against main that overlap and may land first: MTG-235 #412
+  (effect vocabulary, 66 files) and MTG-237 #413 (engine budget in CI). No
+  order between them and T6 is recorded.
+- One-catalog item not met: `Arc<ContentPack>` remains on `GameState` (`content`).
+  The accepted note in t6-direction.md says it goes away. Tests swap it to prove
+  digests bind content, and `conformance.rs` clones it. An earlier note here
+  called this "allowed by the steer"; the steer does not say that.
 
-## Checks
+## Decisions for Jack Heart's review
 
-- 2026-11-02 (sync onto main `51fbacbbf`: decklists, T5 squash, MTG-236 derived
-  state): resolved against T5 head `2df025c20` as the real shared base, because
-  main carries T5 as a squash (8 conflicting files instead of 101). Reconciled:
-  `PlayerConfig.submitted` with `disclosure`; `EventKind::Bent` and index kinds
-  for T6's trigger conditions; `TriggerIndex` now includes abilities inherited
-  through `HasAbilitiesOfSource` (Koh). Debug `cargo test --lib --tests` fails
-  only `checked_semantic_conformance_evidence_reproduces` (re-record at gate);
-  `--test cards` 526 passed; clippy clean. w17 evidence and fixtures are the
-  textual merge, not re-recorded.
-- 2026-11-02 (compress): debug `cargo test --lib --tests --no-fail-fast` fails only
-  `checked_semantic_conformance_evidence_reproduces` (re-record at gate); clippy
-  clean. Extension not rebuilt and pytest not rerun; gate owns both.
-- 2026-11-02: debug `cargo test --tests` green except Scryfall fixture (fixed) and
-  semantic-kernel w17 evidence (content digest moved; re-record at gate).
-- 2026-11-02 (one catalog + face fixes merged, HEAD): debug `cargo test --lib
-  --tests --no-fail-fast` fails only
-  `checked_semantic_conformance_evidence_reproduces`; `--test cards` 523 passed;
-  clippy clean. pytest semantic, policy catalog, academy, heuristic, parity,
-  env, authored matchup, mirror admission, training decks, package boundaries:
-  22 Academy failures, all retained-identity or digest drift awaiting re-record
-  (authored match, choice navigation, decision surface, learn evidence/setup,
-  public commitment, trigger order); 4 more were a stale `permanent_dim` pin,
-  fixed. tests/training as a whole not run here.
-- 2026-11-02 (all 16 cards, T5 gate head `2df025c20` merged): debug
-  `cargo test --tests --no-fail-fast` fails only
-  `checked_semantic_conformance_evidence_reproduces` (w17 content digest moved;
-  re-record at gate); Python text/parity/protocol 62 passed.
-- 2026-11-02 (after T5 merge, extension rebuilt): debug lib/cards/conformance/
-  rules targets green; pytest tests/semantic tests/env + parity 276 passed;
-  experience protocol 14 passed. Academy UI checks not run (no node_modules).
+- **One-catalog encoder cost.** Every vocabulary name now binds the world catalog
+  (cost below), so `test_etude_job.py::test_worker_runs_real_learner_and_reports_admitted_policy`
+  exceeds its 30 s limit (rechecked on HEAD, 2026-11-02). Choice: accept the
+  world-sized encoder and change the test's regime or limit, or have an authored
+  policy encode only its decks' definitions over the catalog's rows. Left failing.
+- **Retained authored-pack checkpoints.** Setup-bound checkpoints of authored
+  packs no longer load (Compatibility, below). Accept, or add a reader.
+- **Copy of a transformed permanent.** Follows CR 707.8a rather than the earlier
+  "cannot transform" proposal; a house rule would need to be requested.
+- **Back-face colors** follow Scryfall face data (questions.md); check them
+  against the printed cards.
+
+## Check
+
+2026-11-02, synced HEAD `a607c8b0c`: debug `cargo test --lib --tests
+--no-fail-fast` fails only `checked_semantic_conformance_evidence_reproduces`
+(re-record), `--test cards` 526 passed, clippy clean; pytest deferred to gate
+(last broad run before the sync: 22 Academy digest/identity failures).
 
 ## One catalog (steer b222da8f)
 
@@ -124,10 +123,12 @@ Authored setups are `AuthoredSetup` decklists named by preset or `pack_key`.
 `WorldIdentity` reads the catalog directly; world queries are infallible. Ward
 lowering stays in `register_card`, documented as the catalog's one normalization.
 
-Proof: catalog digest `6741f471…9827`, length 345 and the id→name manifest
-hash `f67e67ee…b603` are identical on `2c1ba169f` and on the branch;
-`content_pool("world")` and `world_identity()` give the same digest;
-`CARD_DEFINITION_COUNT` = 345 = catalog length.
+Proof at the refactor: catalog digest `6741f471…9827`, length 345 and the
+id→name manifest hash `f67e67ee…b603` are identical on `2c1ba169f` and on the
+branch; `content_pool("world")` and `world_identity()` give the same digest. The
+later card merges moved the digest as intended: on HEAD it is `02ac498d…2634`,
+and `CARD_DEFINITION_COUNT` = 355 = catalog length (330 eligible, 25 not deck
+entries, including 8 back faces).
 
 Measured cost, for Jack Heart to decide: authored vocabulary names now bind the
 345-row world catalog. `SemanticCardEncoder("ur-lessons-vs-gw-allies", 64)`
@@ -187,5 +188,12 @@ may give its vocabulary, all binding the world catalog; collapsing them to
 `world` would mean rewriting regimes and `execution.py`'s Elemental check.
 `MatchConfig.world` keeps a frozen regime's authored label and runs it like
 `None`. Curated manifests keep `semantic_pack_key`, resolved as a setup name.
-Kept, allowed by the steer: `Arc<ContentPack>` on game state and public
-`register_card`, which content-sensitivity tests use to extend a copy.
+Public `register_card` stays for the content-sensitivity tests that extend a copy.
+
+## Proposed Wave memory
+
+Wave memory stays read-only in this pass. Candidates once T6 lands:
+- One catalog (Jack Heart, 2026-11-02): authored setups are decklists; the "Shipped
+  substrate" line on versioned packs and its per-pack identity need updating.
+- A vocabulary bound to the whole catalog has a real learner cost: 31 → 345
+  definitions took the worker fixture from 5 s to 31 s, mostly in `backward`.

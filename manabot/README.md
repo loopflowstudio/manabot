@@ -307,12 +307,11 @@ padded token count. Referenced definitions are expanded into the parent sequence
 The embedding runs over the padded array; the packed GRU skips padding. These
 counts describe representation cost, not observed learning difficulty.
 
-`manabot.semantic.policy_catalog` owns explicit native/IR admission. Policy
-construction checks compiled pack, IR and source hashes and complete native
-coverage before joining transport IDs. The selected product catalog remains the
-only registered policy catalog; research catalogs need their own checked IR and
-schema admission. In particular, the native Jeong increment alone is not policy
-admission: its `Rebel` subtype is absent from the current learning schema.
+`manabot.semantic.policy_catalog` owns explicit native admission. Policy
+construction checks the engine's learning catalog against the world pool's
+content digest and complete native coverage before joining transport IDs. A
+policy names its vocabulary from `CURRENT_PACK_KEYS`; every name binds the
+world's one catalog.
 
 ### Explicit research evaluation matrices
 
