@@ -27,27 +27,43 @@ He authorized an available configured GPU alternative within the same cumulative
 cap, with hardware/allocation deviations recorded before scoring. Provider
 availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
-An admitted L4 quote subsequently failed launch admission after source preparation,
-before acquiring a machine. The upstream cause of the changing replies remains
-unknown. The 2026-11-03 19:35 UTC audit exhausted all six configured GPU quotes.
-After a later positive quote, the 20:16 UTC continuation audit again found no
-provider pods, unsettled GPU sessions or pilot cohort, with $0 paid compute:
-L4 failed admission and A4000 failed actual provider creation. Preparing the
-exact source once avoided repeated preparation delay but did not secure capacity.
-This is dated capacity evidence, not permanent unavailability;
-any later allocation still needs a fresh quote and cumulative-cost reconciliation.
-A local one-update/199-decision proof
-and 12 replay-valid evaluation games establish the connected implementation path,
-not GPU readiness, learning improvement or Elemental-relative pace. The full
-catalog/v5 policy and new population differ from the historical Elemental setup.
+Preparing the exact source once avoided repeated preparation delay but did not
+reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
+rentals. The retained 20:48 UTC reconciliation records both torn down, no pods or
+unsettled GPU sessions, $0.06508817 estimated spend and $1.475 reserved pending
+provider billing. A fresh quote and cumulative-cost reconciliation remain
+necessary for any later allocation; capacity is no longer the observed blocker.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
 card digests; all 134 eligible decks still admit. Version-name and whole-deck
 admission checks therefore do not establish unchanged learning inputs or
-checkpoint/evaluation compatibility. The prepared historical request must be
-verified against its own native identity and evaluated on the matching runtime;
-shipping a newer implementation does not refresh frozen experimental evidence.
+checkpoint/evaluation compatibility. The prepared b8835f63b source was verified
+against all 1,327 bundled files and its rebuilt native world matched the corpus.
+Prospective correction 2adbd0758 changed only a host-dependent timing test;
+native, learner, corpus, recipe and evaluator bytes stayed identical. Training
+and initialization evaluation used that pin. Shipping newer implementation
+does not refresh frozen evidence. Exact clock-accounting fixtures use injected
+durations, not inequalities between hardware-dependent learning and I/O time.
+
+The L4 run passed 32 CUDA admission tests and its optimizer probe, then failed
+its first collection before any learner update. Seven legal Fire Nation Drill
+activations over ten opposing permanents generated 140 keyword-removal fact
+rows, exceeding frozen v5's 128. Native and Python encoders agree; replay matches
+the retained frame and error at stream 181, seed 31482, action 87. Cross-platform
+replay shares source/world, not Linux/macOS binary bytes. Whole-deck admission
+and CUDA admission therefore do not establish reachable-state input capacity.
+Encoding errors remain fatal, outside gameplay quarantine. The representation
+repair is unresolved; dropping facts, excluding the deck or retrying for a lucky
+sample would change the accepted experiment. No new input contract is accepted.
+Thirteen games completed before the batch failed but supplied no learner update;
+settled learner counters do not measure all attempted simulation work.
+
+Initialization evaluation completed all eight pairs/four legs: 3 wins, 29 losses,
+32 replay passes. The full schedule still expects 288 games, with 256 missing,
+no trained endpoint and no qualified learning result. A separate CPU proof has
+one update/199 decisions and 12 valid games. Neither establishes GPU learning or
+Elemental-relative pace; the full catalog/v5 policy and population differ.
 
 Paired evaluation has two distinct requirements: exchanging policy/deck/seat
 assignments within each sampled pair, and comparing checkpoint gains across the
@@ -62,6 +78,11 @@ A failed callback without per-game receipts counts as a failed match while its
 unknown games remain missing: attempted games is a lower bound, not zero-cost
 or successful evidence. Descriptive Etude curves do not qualify a learning claim;
 the companion analysis does, only with a complete cohort and consistent sources.
+Etude runpy discovery requires canonically imported callbacks. Its table
+projection can omit all-null columns; readers supply defaults only for optional
+fields, preserving required-column failures. Local evidence-writing evaluation
+requires an explicit ETUDE_OUTPUT_DIR. These execution/reader repairs preserve
+the frozen schedule and criterion, not missing experimental outcomes.
 Retained empirical limits live in experiments/tla-trophy-pilot.md. Training has
 no child memory directories at this reconciliation (2026-11-03).
 

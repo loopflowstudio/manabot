@@ -125,7 +125,7 @@ def _pair_result(
     pair: Pair,
     key: str | None,
     environment_id: str,
-    game_columns: set[str],
+    game_columns: tuple[str, ...],
 ) -> PairResult:
     receipts = (
         db.execute(
@@ -161,19 +161,14 @@ def _pair_result(
         sources += (None,)
     games: list[_Game] = []
     if receipt.state == "done" and game_columns:
-        # The validated projection owns both SQL selection and row decoding.
-        columns = tuple(
-            name
-            for name, field in _Game.model_fields.items()
-            if field.is_required() or name in game_columns
-        )
         rows = db.execute(
-            f"SELECT {', '.join(columns)} FROM games "
+            f"SELECT {', '.join(game_columns)} FROM games "
             "WHERE run = ? AND match = ? AND seat = 0 ORDER BY game",
             [receipt.run, key],
         ).fetchall()
         games = [
-            _Game.model_validate(dict(zip(columns, row, strict=True))) for row in rows
+            _Game.model_validate(dict(zip(game_columns, row, strict=True)))
+            for row in rows
         ]
     if len({game.game for game in games}) != len(games):
         raise ValueError(f"duplicate legs in {key}")
@@ -228,12 +223,23 @@ def analyze(
     if state.experiment != EXPERIMENT:
         raise ValueError("analysis requires the TLA pilot experiment")
     environment_id = environment(protocol).identity
-    game_columns = {
+    available_columns = {
         row[0]
         for row in db.execute(
             "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
         ).fetchall()
     }
+    # One validated projection serves every pair. Keep required columns in the
+    # query so malformed tables fail; only absent nullable fields get defaults.
+    game_columns = (
+        tuple(
+            name
+            for name, field in _Game.model_fields.items()
+            if field.is_required() or name in available_columns
+        )
+        if available_columns
+        else ()
+    )
     indices = np.random.default_rng(protocol.bootstrap_seed).integers(
         0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
     )

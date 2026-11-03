@@ -85,9 +85,12 @@ def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
         opponent = extra["seat_decks"][1 - extra["player_a_seat"]]
         return f"{deck} vs {opponent}"
 
-    decks = [cell(r) for r in result.rows]
-    if None in decks:
-        return ()
+    by_deck: dict[str, list[EvaluationRow]] = {}
+    for row in result.rows:
+        deck = cell(row)
+        if deck is None:
+            return ()
+        by_deck.setdefault(deck, []).append(row)
     rng = np.random.default_rng(result.protocol.bootstrap_seed)
     indices = rng.integers(
         0,
@@ -95,8 +98,7 @@ def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
         (result.protocol.bootstrap_replicates, len(result.protocol.deal_seeds)),
     )
     summaries: list[DeckResult] = []
-    for deck in sorted(set(d for d in decks if d is not None)):
-        selected = [r for r in result.rows if cell(r) == deck]
+    for deck, selected in sorted(by_deck.items()):
         blocks: list[float] = []
         for seed in result.protocol.deal_seeds:
             pair = [r for r in selected if r.deal_seed == seed]
