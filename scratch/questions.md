@@ -46,8 +46,12 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   activations over ten permanents produce two keyword-removal facts each.
   Encoding errors are deliberately fatal. No padding, truncation, quarantine,
   deck exclusion or unchanged paid retry resolves the shared representation
-  decision. Design/review must establish lossless v5 compaction or a prospective
-  versioned contract before further paid work. Neither is accepted or proven.
+  decision. The 2026-11-03 implementation audit established 140 distinct tuples
+  with seven distinct timestamps, zero exact duplicates, matching capture and
+  70 rendered text records. Lossless compaction cannot preserve unchanged v5
+  row meanings here. A prospective version/world decision is required before
+  paid work; the concrete proposal and its limits are in `scratch/mtg-213.md`.
+  It is not selected or implemented. Existing v5 evidence remains unchanged.
 
 Current results, reservations and remaining work: `scratch/mtg-213.md`;
 retained receipts: `experiments/tla-trophy-pilot.md`. Detailed decision chronology

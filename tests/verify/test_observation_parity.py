@@ -445,7 +445,8 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     pump.duration, pump.timestamp = "EndOfTurn", base + 1
     grant = managym.ContinuousEffect()
     grant.modification, grant.keywords = "AddKeywords", ["flying", "trample"]
-    grant.duration, grant.timestamp = "EndOfTurn", base + 2
+    # Together with the pump and copy exceptions, this covers all durations.
+    grant.duration, grant.timestamp = "WhileYouControlSource", base + 2
     grant.source_registry_key = theirs.registry_key
     mine.effects = [pump, grant]
     # Copy exceptions share the modification vocabulary, but have their own
@@ -507,7 +508,7 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     # The agent's player row comes first; its record is the latest.
     np.testing.assert_allclose(
         effects[:, [FACT_OBJECT_INDEX, FACT_VALUE_INDEX, FACT_DURATION_INDEX]],
-        [[1, 0, 1], [own + 1, 0.2, 1], [own + 1, 0, 1], [own + 1, 0, 1]],
+        [[1, 0, 1], [own + 1, 0.2, 1], [own + 1, 0, 3], [own + 1, 0, 3]],
     )
     assert effects[:, FACT_ORDER_INDEX].tolist() == [5, 3, 4, 4]
     assert effects[2, FACT_SOURCE_INDEX] == theirs.registry_key + 1
@@ -519,6 +520,63 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     v4 = env.encode_observation(obs, 4)
     assert v4["agent_permanents"].shape[-1] == 29
     assert v4["agent_cards"].shape[-1] == 41
+
+
+def test_v5_keeps_effect_provenance_at_capacity_and_rejects_overflow() -> None:
+    """Repeated modifications retain their provenance, even at the v5 limit."""
+    # Pin the frozen contract, independently of the encoder's current constants.
+    capacity = 128
+    env = managym.Env(seed=11, skip_trivial=False)
+    env.reset(make_player_configs())
+    env.scenario_force_battlefield(0, "Mountain")
+    env.scenario_force_battlefield(1, "Forest")
+    obs = env.scenario_refresh()
+    mine, theirs = obs.agent_permanents[0], obs.opponent_permanents[0]
+    base = max(mine.id, theirs.id)
+    durations = ("EndOfTurn", "Indefinite", "WhileYouControlSource")
+    sources = (None, mine.registry_key, theirs.registry_key)
+    effects: list[managym.ContinuousEffect] = []
+    # Each record contributes two distinct keyword facts. Do not fold repeated
+    # removals into the effective keywords: their timestamps remain observable.
+    for index in range(capacity // 2 + 1):
+        effect = managym.ContinuousEffect()
+        effect.modification = "LoseKeywords"
+        effect.keywords = ["hexproof", "indestructible"]
+        effect.timestamp = base + index + 1
+        effect.duration = durations[index % len(durations)]
+        effect.source_registry_key = sources[index % len(sources)]
+        effects.append(effect)
+    mine.effects = effects[:-1]
+    obs.agent_permanents = [mine]
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    native = env.encode_observation(obs, 5)
+    reference = encoder.encode(obs)
+    for key, value in reference.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    facts = native["facts"]
+    assert facts.shape == (capacity, 12)
+    assert len(np.unique(facts, axis=0)) == capacity
+    assert facts[:, FACT_VALID_INDEX].tolist() == [1] * capacity
+    for index, effect in enumerate(effects[:-1]):
+        rows = facts[index * 2 : index * 2 + 2]
+        assert rows[:, FACT_ORDER_INDEX].tolist() == [index + 3] * 2
+        assert rows[:, FACT_DURATION_INDEX].tolist() == [index % 3 + 1] * 2
+        source = effect.source_registry_key
+        assert (
+            rows[:, FACT_SOURCE_INDEX].tolist()
+            == [0 if source is None else source + 1] * 2
+        )
+
+    mine.effects = effects
+    obs.agent_permanents = [mine]
+    message = "observation capacity exceeded: facts 130 > 128"
+    with pytest.raises(ValueError, match=message):
+        encoder.encode(obs)
+    with pytest.raises(ValueError, match=message):
+        env.encode_observation(obs, 5)
+    buffers = {key: value[0] for key, value in encoder.allocate(1).items()}
+    with pytest.raises(ValueError, match=message):
+        env.encode_observation_into(obs, buffers)
 
 
 def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:

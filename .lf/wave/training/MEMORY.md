@@ -32,7 +32,8 @@ reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
 rentals. The retained 20:48 UTC reconciliation records both torn down, no pods or
 unsettled GPU sessions, $0.06508817 estimated spend and $1.475 reserved pending
 provider billing. A fresh quote and cumulative-cost reconciliation remain
-necessary for any later allocation; capacity is no longer the observed blocker.
+necessary for any later allocation; provider availability is no longer the
+observed blocker.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
@@ -49,7 +50,7 @@ durations, not inequalities between hardware-dependent learning and I/O time.
 The L4 run passed 32 CUDA admission tests and its optimizer probe, then failed
 its first collection before any learner update. Seven legal Fire Nation Drill
 activations over ten opposing permanents generated 140 keyword-removal fact
-rows, exceeding frozen v5's 128. Native and Python encoders agree; replay matches
+rows, exceeding frozen v5's 128. Native and Python agree on that failure; replay matches
 the retained frame and error at stream 181, seed 31482, action 87. Cross-platform
 replay shares source/world, not Linux/macOS binary bytes. Whole-deck admission
 and CUDA admission therefore do not establish reachable-state input capacity.
@@ -58,6 +59,13 @@ repair is unresolved; dropping facts, excluding the deck or retrying for a lucky
 sample would change the accepted experiment. No new input contract is accepted.
 Thirteen games completed before the batch failed but supplied no learner update;
 settled learner counters do not measure all attempted simulation work.
+
+Agreement on one retained failure is not general encoder parity. The subsequent
+reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
+while native used 3. The bounded Python repair preserves native's contract and
+the parity fixture covers all three durations. It does not repair capacity or
+refresh the pinned pilot's runtime evidence. A capacity proposal must preserve
+duration, timestamp and source distinctions, not merely fit this one frame.
 
 Initialization evaluation completed all eight pairs/four legs: 3 wins, 29 losses,
 32 replay passes. The full schedule still expects 288 games, with 256 missing,
