@@ -165,6 +165,14 @@ preserves accepted decisions, dated proof limits and source history.
   `docs/development.md` / `docs/research/engine-speed-2026-11.md` own the
   measurements and rejected approaches. This upstream proof does not certify
   MTG-239's corrected rules or any subsequent merged tree.
+- Rules corrections can change benchmark work even when the decklists stay
+  fixed. MTG-239's PR #415 run 41711692234 (2026-11-03) passed same-run timing
+  checks but changed all three search digests and the step digest/count
+  (99,923 to 101,650); the old reference reproduced its committed digests.
+  Those decks exercise the corrected ordering and contextual-power rules.
+  The branch adopted its own candidate artifact with a reason and unchanged
+  10% tolerance. This is a rules reference update, not equivalent-workload
+  speedup evidence or acceptance of the subsequent repaired head.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.
@@ -239,6 +247,12 @@ preserves accepted decisions, dated proof limits and source history.
   unknown-card rejection. An empty exclusion list still leaves bug-based
   eligibility as a supported policy; deleting that mechanism and reconciling
   its documentation makes admission agree with the decision.
+- Admission tests need stable reasons for rejection. MTG-239's first published
+  CI run found three native and four training tests still treating repaired
+  cards as unsupported. Token fixtures now preserve the negative paths,
+  alongside positive repaired-card admission and unchanged roots after a
+  rejected replacement. Tests of source, checkpoint and replacement admission
+  are separate consumers of the same policy; a catalog-only pass misses them.
 - Off-battlefield power is contextual: CDAs read the spell controller on the
   stack and the owner in other zones, including outside the game. Battlefield
   power reads the layered view, including ability loss. Zone filters and

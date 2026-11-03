@@ -34,14 +34,15 @@
 <body>
 <main>
   <header>
-    MTG-239 · concept-review · loop 2, pass 2 · 2026-11-03<br>
+    MTG-239 · concept-review after CI recovery · 2026-11-03<br>
     Built from <code>scratch/mtg-239-complete-five-defined.md</code>,
-    <code>scratch/defined-card-completeness.md</code>, <code>AGENTS.md</code>,
+    <code>scratch/defined-card-completeness.md</code>,
+    <code>scratch/ci-recovery.md</code>, <code>AGENTS.md</code>,
     <code>managym/README.md</code>, the native decision/target/power code,
-    and the card, text-observation and Academy reconnect tests.<br>
+    and the card, training-deck, text-observation and Academy reconnect tests.<br>
     Initial review: <code>44388ad42..6d30c9013</code>;
-    reconciled through <code>72e29f5de</code>, including admission cleanup
-    <code>ae06995b1</code>.
+    reviewed through <code>e5627dd98</code>, including admission cleanup
+    <code>ae06995b1</code> and CI recovery <code>8c3389884</code>.
   </header>
 
   <h1>No additional product decision is needed.</h1>
@@ -49,8 +50,9 @@
     <p>The five fixes implement the accepted experience. Jack Heart accepted the admission cleanup and option 1a on November 3
     (comment 6b64d212): immediate ordering with clearer draw-order wording. Follow-up review identified an empty bug-based eligibility path; that path
     and its stale documentation are now removed. This review finds nothing
-    further to change and no open product choice. Merged-tree validation and
-    the real-path demo remain outstanding.</p>
+    further to change and no open product choice. The CI recovery preserves
+    these decisions. Repaired-head validation and the real-path demo remain
+    outstanding; this review supplies no demo acceptance or shipping approval.</p>
     <p>Jack Heart's November 3 direction remains in force: fix these five cards
     and preserve playability when known bugs are discovered. Playable does not
     mean bug-free. Broader admission policy and new Tasks are outside this step.</p>
@@ -103,6 +105,11 @@
   </dl>
 
   <h2>Failure and recovery</h2>
+  <p>Import a list containing the five repaired cards → admitted. Add an Ally
+  token → rejected with the offending card identified. Remove the token →
+  admitted again. The same authority checks training sources and checkpoint
+  setups. A rejected training-deck replacement preserves existing roots;
+  a valid replacement applies to later roots without changing current games.</p>
   <p>A disconnect before placement preserves both pending offers in the retained
   server session. Resuming returns that decision. A duplicate accepted Command
   cannot place a second card; a stale Command cannot change the committed order.
@@ -115,8 +122,13 @@
   <p>Corrected current-world traces may change. Frozen worlds, checkpoints and
   MTG-213's historical corpus retain their identity. The projected increase in
   eligible decks is not a newly measured corpus.</p>
+  <p>The recovered tests use a token to exercise rejection while positively
+  admitting the repaired cards. Changed benchmark digests follow corrected
+  gameplay in unchanged decks; the existing budget procedure records the PR's
+  own artifact and reason. Neither repair introduces a new product concept or
+  justifies restoring the old behavior.</p>
   <p class="caption">This pass inspected the implementation and existing test
-  contracts at <code>72e29f5de</code>; it did not rerun runtime tests or establish
+  contracts at <code>e5627dd98</code>; it did not rerun runtime tests or establish
   new acceptance evidence. No implementation direction changed.</p>
 
   <h2>Review questions and disposition</h2>
@@ -130,7 +142,8 @@
     <li><strong>Is another product decision needed for these five fixes?</strong>
     No. Jack Heart selected immediate native ordering Commands with clearer
     draw-order wording; the proposed rearrange-before-commit
-    redesign is unapproved. Gate and demo must still establish the remaining acceptance evidence.
+    redesign is unapproved. No new design is proposed by this review.
+    Gate and demo must still establish the remaining acceptance evidence.
     Loop-or-next owns the following Graph decision.</li>
   </ol>
 </main>

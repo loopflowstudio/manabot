@@ -2,8 +2,8 @@
 
 Accepted scope: Jack Heart's Task directive and November 3 clarification
 (comment 1f3876a7), plus exclusion removal and immediate ordering with clearer
-draw-order wording (comment 6b64d212). One PR, #415; subsequent code Graph steps
-own gate, demo and publication. CI recovery follows comment d35e6e94 and is
+draw-order wording (comment 6b64d212). One PR, #415; the code Graph retains
+gate, demo and delivery. CI recovery follows comment d35e6e94 and is
 recorded in [ci-recovery.md](ci-recovery.md). No product decision is unresolved.
 
 ## Outcome and implementation
@@ -84,11 +84,34 @@ broader policy redesign or additional Task is authorized here.
 
 ## Evidence and remaining acceptance
 
+Concept review after CI recovery (2026-11-03, `e5627dd98`): nothing further
+to change and no open product choice. Jack Heart's accepted admission and
+immediate-ordering decisions still describe the implemented interaction.
+The recovery changes rejection fixtures, not eligibility: an imported list
+with the five cards is admitted, adding an Ally token fails, and a rejected
+training-deck replacement leaves the existing roots intact. Removing that
+token permits replacement for later roots without rewriting current games.
+These failure/recovery cases preserve one admission authority across import,
+training sources and checkpoints; they require no new user-facing concept.
+
+Shared inspection-action construction retains separate pending decisions and
+their commitment rules. Ordering still commits through native SelectCard
+Commands, with retained-session reconnect and automatic final placement;
+there is no draft to persist or undo. A changed rules benchmark digest calls
+for an explained reference update under the existing budget procedure, not
+restoration of random ordering or bug-based admission. The existing usage
+guidance needs no further change. This is source/contract review, not a new
+runtime proof: the next proof remains repaired-head gate and real-path demo,
+with the counterexamples and durability limits above unchanged.
+
 MTG-238 / PR #414 delivered at `44388ad42`, integrated in `05eb48489`.
 Definitions/tests now live in `managym/cards`, shared types in `managym/state`;
 sparse counters, scalable keywords and upstream optimizations are preserved.
 The root release extension was rebuilt and installed atomically after sync
 and after CI recovery.
+On November 3, reconciliation confirmed remote main remains `44388ad42`;
+no newer upstream integration is pending. Engine has no child memory scopes
+in this checkout.
 
 Open-w17 evidence was regenerated through its producers (`6d30c9013`):
 14 semantic-kernel cases / 3,473 Commands; authored parity with 135 Commands /
@@ -117,13 +140,29 @@ unchanged benchmark decks. The previous reference reproduced its digests.
 The 10% tolerance stays unchanged; this is not equivalent-workload speedup
 evidence. [CI recovery](ci-recovery.md) retains exact checks and timing deltas.
 
-Gate owns the affected debug Cargo suites (including targets CI never reached),
-clippy, Python/model/world-admission/monitor checks, frontend build/check and
-focused browser interactions per `docs/development.md`. Main integration's
-later evaluation/smoke steps were skipped and remain required. Publication
-owns the repaired head and fresh Engine Budget comparison; demo owns the final
-real-path walkthrough and interaction judgment. Focused checks and source
-inspection do not establish merged-tree acceptance, demo acceptance or new
-shipping approval.
+The simplification at `e5627dd98` shares identical action construction while
+preserving separate decision semantics. Its focused debug checks passed 17
+card cases and three Python consumer cases; the release extension was rebuilt.
+The refreshed authored parity receipt retains 135 Commands / 816 viewer checks;
+its diff from `8c3389884` changes source provenance only. Exact commands and
+results remain at `e5627dd98:scratch/mtg-239-complete-five-defined.md`.
 
-Simplification validation: debug `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards -j 2` with `accumulate_wisdom` and `-- scry surveil elemental_teachings ostrich` filters → 17 passed; `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py tests/academy/test_choice_navigation.py -q -k 'accumulate_wisdom or suki_hand_power'` → 3 passed. Root release wheel rebuilt and cp312 extension installed atomically; `cargo fmt --manifest-path managym/Cargo.toml --check` and `git diff --check` passed. `academy.authored_match_parity.write_receipt()` rebuilt 135 Commands / 816 viewer checks; comparison with the prior receipt proved only source provenance changed (including the preceding admission/CI repairs). Gate retains the broader checks above.
+Publication verification on November 3: all 11 jobs in CI run `41734880466`
+passed for runtime head `e5627dd98`. This includes the complete debug Cargo
+suite, Python/model/world-admission/monitor checks, Academy build/check and
+release browser interactions, both conformance jobs, clean-machine play,
+and main integration's previously skipped evaluation/report/smoke steps.
+The fresh Engine Budget comparison preserves all digests/counts and passes
+the unchanged 10% tolerance. Linux/macOS package build and install workflow
+`41734880090` also passed.
+
+Supplemental local checks passed: 70 parity/navigation/Learn/content/learning/
+belief tests, all-target/all-feature clippy, Cargo formatting, changed-Python
+Ruff and `git diff --check`. [CI recovery](ci-recovery.md) records the exact
+test paths, interpreter-path retry and same-run budget measurements.
+`lf sync --manual` found no upstream changes beyond main `44388ad42`.
+Publication changes only review notes; runtime code remains the tested head.
+
+Demo owns the final real-path walkthrough and interaction judgment. Automated
+validation does not establish demo acceptance, post-merge verification or new
+shipping approval. Publication neither arms auto-merge nor completes the Task.
