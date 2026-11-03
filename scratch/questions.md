@@ -75,3 +75,10 @@ larger-capacity hotfix; broader representation/history/memory design belongs
 to a separate Task. The primary conversation owns
 `docs/observation-architecture.html` and README diagrams; preserve those
 contributions for delivery. They do not change model behavior.
+
+Publication validation assumption: the deliberately extreme numerical-policy
+fixture tests finite log probabilities and optimizer updates on four real
+decisions per stream; it does not require complete games. Its implicit two-seat
+collection stalled during the broad suite. Select the existing one-seat quota
+and a fixed Torch seed for this fixture only. Production two-seat training and
+the pilot's frozen recipe remain unchanged.

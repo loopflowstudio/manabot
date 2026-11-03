@@ -286,6 +286,7 @@ class ExtremeAgent(ActorCritic):
 
 
 def test_extreme_real_collector_to_learner() -> None:
+    torch.manual_seed(213)
     space = ObservationSpace()
     agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
         DEVICE
@@ -296,6 +297,9 @@ def test_extreme_real_collector_to_learner() -> None:
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
+        # This numerical fixture needs four decisions per stream. Two-seat
+        # collection waits for whole games, which this extreme policy can stall.
+        learning_seats="one",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
