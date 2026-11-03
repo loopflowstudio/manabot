@@ -8,6 +8,7 @@ use managym::{
             Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
             TriggerSubject,
         },
+        card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
@@ -337,7 +338,9 @@ fn cr_702_trample_with_deathtouch_assigns_one_lethal() {
         .as_ref()
         .expect("mammoth should exist")
         .card;
-    s.game_mut().state.cards[mammoth_card].keywords.deathtouch = true;
+    s.game_mut().state.cards[mammoth_card]
+        .keywords
+        .insert(Keyword::Deathtouch);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
@@ -574,7 +577,9 @@ fn cr_702_double_strike_with_trample_interaction() {
         .as_ref()
         .expect("ace should exist")
         .card;
-    s.game_mut().state.cards[ace_card].keywords.trample = true;
+    s.game_mut().state.cards[ace_card]
+        .keywords
+        .insert(Keyword::Trample);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();

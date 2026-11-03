@@ -17,7 +17,6 @@ use serde::Deserialize;
 use super::ContentError;
 use crate::{
     cards::content_pack::{default_content_pack, ContentPack},
-    cardsets,
     state::{card::CardDefinition, player::PlayerConfig},
 };
 
@@ -120,7 +119,7 @@ pub fn authored_pack_for_key(pack_key: &str) -> Result<&'static AuthoredPack, Co
 }
 
 fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentError> {
-    let catalog = cardsets::catalog();
+    let catalog = managym_cards::catalog();
     let by_key = catalog
         .iter()
         .map(|definition| (definition.key, definition))

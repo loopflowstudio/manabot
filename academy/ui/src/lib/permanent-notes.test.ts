@@ -64,14 +64,14 @@ describe('permanent notes', () => {
         { modification: 'LoseAllAbilities', duration: 'EndOfTurn', source: 'Day of Black Sun', timestamp: 3 },
         { modification: 'ModifyPt', power: 2, toughness: 0, duration: 'EndOfTurn', timestamp: 4 },
         { modification: 'AddKeywords', keywords: ['flying', 'first_strike'], duration: 'EndOfTurn', timestamp: 5 },
-        { modification: 'BecomeArtifactCreature', duration: 'Indefinite', timestamp: 6 },
+        { modification: 'BecomeCreature', duration: 'Indefinite', timestamp: 6 },
       ],
     });
     expect(permanentNotes(ogre, [ogre])).toEqual([
       'until end of turn: loses all abilities (Day of Black Sun)',
       'until end of turn: +2/+0',
       'until end of turn: flying, first strike',
-      'is an artifact creature',
+      'is also a creature',
     ]);
     expect(
       effectNote({ modification: 'KeepUnspentMana', color: 'Red', duration: 'EndOfTurn', timestamp: 1 }),

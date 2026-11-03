@@ -20,3 +20,13 @@
 - Current w17 receipts are open-world evidence: Rallier’s corrected filter
   changes the authored match, and Accumulate Wisdom adds explicit Commands to
   three navigation prefixes. Prior bytes remain at the base git reference.
+
+## Sync onto main — 2026-11-03
+
+- Main at `44388ad4211b4292cc161a3087eb1230b2005737` delivered the card/state
+  crate split, scalable keywords and sparse counters. Preserve those owners and
+  APIs while carrying all five MTG-239 fixes into them. Earlier MTG-238 notes
+  remain at that commit’s `scratch/questions.md`.
+- Current w17 receipts must be regenerated from the combined runtime: neither
+  side’s hashes represent both changes. Preserve this branch’s explicit library
+  ordering Commands and fixed match behavior; historical receipts stay unchanged.

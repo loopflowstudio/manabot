@@ -15,7 +15,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.0",
         "resulting_revision": 1,
-        "resulting_state_digest": "75d6955fb23d70283ca0d6c83da2310b6a77f4724144f9294e67c1fb6682ce96"
+        "resulting_state_digest": "68e4267b052a15930147d04869fc3ce6df7407ff25060eb891792c36eb18602c"
       },
       "encountered_definition_ids": [
         1
@@ -92,8 +92,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "75d6955fb23d70283ca0d6c83da2310b6a77f4724144f9294e67c1fb6682ce96",
-        "before": "4637baaaa451da426de030c1810fef2da1c6dfe37520324cef2da71a6ba86c91"
+        "after": "68e4267b052a15930147d04869fc3ce6df7407ff25060eb891792c36eb18602c",
+        "before": "cf82fb9a879e72fca2c0be5e2b9dfd46005230a06eed6223f1b92b214c8a17ba"
       },
       "to_revision": 1
     },
@@ -112,7 +112,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.1",
         "resulting_revision": 2,
-        "resulting_state_digest": "5a4f2c569c9d179adcfe24dda8c1c42920d65a4a9a78883f53702494d195709a"
+        "resulting_state_digest": "8f102468ab59d0b071e52dda2791e8d5b15106df2b87da983280eccdf8d4799c"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -142,8 +142,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "5a4f2c569c9d179adcfe24dda8c1c42920d65a4a9a78883f53702494d195709a",
-        "before": "75d6955fb23d70283ca0d6c83da2310b6a77f4724144f9294e67c1fb6682ce96"
+        "after": "8f102468ab59d0b071e52dda2791e8d5b15106df2b87da983280eccdf8d4799c",
+        "before": "68e4267b052a15930147d04869fc3ce6df7407ff25060eb891792c36eb18602c"
       },
       "to_revision": 2
     },
@@ -162,7 +162,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.2",
         "resulting_revision": 3,
-        "resulting_state_digest": "c7c42ce6518c3f70f37acdfdd3e5079bb4d2bd69f835b9502f0cb9df7275d1e8"
+        "resulting_state_digest": "3c3b86918aadb81e2b3f058ef5e9e470bc69f04e2bbf3d58ccf94fd8c436aa88"
       },
       "encountered_definition_ids": [
         1,
@@ -364,8 +364,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "c7c42ce6518c3f70f37acdfdd3e5079bb4d2bd69f835b9502f0cb9df7275d1e8",
-        "before": "5a4f2c569c9d179adcfe24dda8c1c42920d65a4a9a78883f53702494d195709a"
+        "after": "3c3b86918aadb81e2b3f058ef5e9e470bc69f04e2bbf3d58ccf94fd8c436aa88",
+        "before": "8f102468ab59d0b071e52dda2791e8d5b15106df2b87da983280eccdf8d4799c"
       },
       "to_revision": 3
     },
@@ -384,7 +384,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.1",
         "resulting_revision": 4,
-        "resulting_state_digest": "691ee16ca747678101139ef9ba251aecf9790ed17ed54ab2f885757dee1da192"
+        "resulting_state_digest": "55328d5d1469d06b1bd236117227de88c851e81870db92089f8dbd2d2f328271"
       },
       "encountered_definition_ids": [
         0,
@@ -525,8 +525,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "691ee16ca747678101139ef9ba251aecf9790ed17ed54ab2f885757dee1da192",
-        "before": "c7c42ce6518c3f70f37acdfdd3e5079bb4d2bd69f835b9502f0cb9df7275d1e8"
+        "after": "55328d5d1469d06b1bd236117227de88c851e81870db92089f8dbd2d2f328271",
+        "before": "3c3b86918aadb81e2b3f058ef5e9e470bc69f04e2bbf3d58ccf94fd8c436aa88"
       },
       "to_revision": 4
     },
@@ -545,7 +545,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.3",
         "resulting_revision": 5,
-        "resulting_state_digest": "72bc0a16be2396002051c1e82889b9385d8e36e0405756404c73c3d88dd52ae2"
+        "resulting_state_digest": "d1c81422f38712a39fed85336c55311f2b79a042c05ee8a11cf02fb1e8a3a71a"
       },
       "encountered_definition_ids": [
         1
@@ -666,8 +666,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "72bc0a16be2396002051c1e82889b9385d8e36e0405756404c73c3d88dd52ae2",
-        "before": "691ee16ca747678101139ef9ba251aecf9790ed17ed54ab2f885757dee1da192"
+        "after": "d1c81422f38712a39fed85336c55311f2b79a042c05ee8a11cf02fb1e8a3a71a",
+        "before": "55328d5d1469d06b1bd236117227de88c851e81870db92089f8dbd2d2f328271"
       },
       "to_revision": 5
     },
@@ -686,7 +686,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.2",
         "resulting_revision": 6,
-        "resulting_state_digest": "784d857f05a7c9c5466ba283794f29caa6dd909de82ff6504def7dcc54822454"
+        "resulting_state_digest": "4da2736ade187c4121d38965ffb124b5be2b3ef1e4454fb15621af535c0a98e8"
       },
       "encountered_definition_ids": [
         3
@@ -761,8 +761,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "784d857f05a7c9c5466ba283794f29caa6dd909de82ff6504def7dcc54822454",
-        "before": "72bc0a16be2396002051c1e82889b9385d8e36e0405756404c73c3d88dd52ae2"
+        "after": "4da2736ade187c4121d38965ffb124b5be2b3ef1e4454fb15621af535c0a98e8",
+        "before": "d1c81422f38712a39fed85336c55311f2b79a042c05ee8a11cf02fb1e8a3a71a"
       },
       "to_revision": 6
     },
@@ -781,7 +781,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.3",
         "resulting_revision": 7,
-        "resulting_state_digest": "baf635e291e686dafd4b8ba20b35c78db7ccd02d5424a629bf0fe73e276dd78c"
+        "resulting_state_digest": "e3c36545604d2cc7e2abd4e97b03607fb4bfa774a262234ffc31aaf9b7df1ca3"
       },
       "encountered_definition_ids": [
         0,
@@ -940,8 +940,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "baf635e291e686dafd4b8ba20b35c78db7ccd02d5424a629bf0fe73e276dd78c",
-        "before": "784d857f05a7c9c5466ba283794f29caa6dd909de82ff6504def7dcc54822454"
+        "after": "e3c36545604d2cc7e2abd4e97b03607fb4bfa774a262234ffc31aaf9b7df1ca3",
+        "before": "4da2736ade187c4121d38965ffb124b5be2b3ef1e4454fb15621af535c0a98e8"
       },
       "to_revision": 7
     },
@@ -960,7 +960,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.4",
         "resulting_revision": 8,
-        "resulting_state_digest": "a6683c3deb95b53d25dd0908a26f345bd92b21f84700b9daac357f0c51732641"
+        "resulting_state_digest": "f9b6beac989578f08405a3ab212f12c203c035e1b3969a53956e9a34fd5d5d76"
       },
       "encountered_definition_ids": [
         3
@@ -1090,8 +1090,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "a6683c3deb95b53d25dd0908a26f345bd92b21f84700b9daac357f0c51732641",
-        "before": "baf635e291e686dafd4b8ba20b35c78db7ccd02d5424a629bf0fe73e276dd78c"
+        "after": "f9b6beac989578f08405a3ab212f12c203c035e1b3969a53956e9a34fd5d5d76",
+        "before": "e3c36545604d2cc7e2abd4e97b03607fb4bfa774a262234ffc31aaf9b7df1ca3"
       },
       "to_revision": 8
     },
@@ -1110,7 +1110,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.4",
         "resulting_revision": 9,
-        "resulting_state_digest": "32d436952525684fabe02c35e3ac47a2fba6663928a4ea96fe7e83304a43e28e"
+        "resulting_state_digest": "21bfd848066200d4c3513d733fd65ed5a0df3f4b0dc498f4d0063ea196258abd"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1140,8 +1140,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "32d436952525684fabe02c35e3ac47a2fba6663928a4ea96fe7e83304a43e28e",
-        "before": "a6683c3deb95b53d25dd0908a26f345bd92b21f84700b9daac357f0c51732641"
+        "after": "21bfd848066200d4c3513d733fd65ed5a0df3f4b0dc498f4d0063ea196258abd",
+        "before": "f9b6beac989578f08405a3ab212f12c203c035e1b3969a53956e9a34fd5d5d76"
       },
       "to_revision": 9
     },
@@ -1160,7 +1160,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.5",
         "resulting_revision": 10,
-        "resulting_state_digest": "e787293031c77f52b1a99562d786ed048ef04d4d7d79b8306d88f823165c5e67"
+        "resulting_state_digest": "850b2a297fe88ee5bbdba13df3fca7cdbb249e3c9aefac2d420f271d5c48bca0"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1222,8 +1222,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e787293031c77f52b1a99562d786ed048ef04d4d7d79b8306d88f823165c5e67",
-        "before": "32d436952525684fabe02c35e3ac47a2fba6663928a4ea96fe7e83304a43e28e"
+        "after": "850b2a297fe88ee5bbdba13df3fca7cdbb249e3c9aefac2d420f271d5c48bca0",
+        "before": "21bfd848066200d4c3513d733fd65ed5a0df3f4b0dc498f4d0063ea196258abd"
       },
       "to_revision": 10
     },
@@ -1242,7 +1242,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.5",
         "resulting_revision": 11,
-        "resulting_state_digest": "825f29b039862eb88a4877458f76aed314bd98d05ac51cd33a56b783d933b9a4"
+        "resulting_state_digest": "39fd182fed0a902596d07e1db6a1a7910d71b75054771bec8b41165a87994dfe"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1288,8 +1288,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "825f29b039862eb88a4877458f76aed314bd98d05ac51cd33a56b783d933b9a4",
-        "before": "e787293031c77f52b1a99562d786ed048ef04d4d7d79b8306d88f823165c5e67"
+        "after": "39fd182fed0a902596d07e1db6a1a7910d71b75054771bec8b41165a87994dfe",
+        "before": "850b2a297fe88ee5bbdba13df3fca7cdbb249e3c9aefac2d420f271d5c48bca0"
       },
       "to_revision": 11
     },
@@ -1308,7 +1308,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.6",
         "resulting_revision": 12,
-        "resulting_state_digest": "b54b8a01503ba7c0a4c58e0aef4da036edc827e4d93c5c44a9306405cf06c283"
+        "resulting_state_digest": "d152bf6caf737c05bd4a8934a2f3351772676a2e5ace46952ce1fe94ae91592e"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1338,8 +1338,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "b54b8a01503ba7c0a4c58e0aef4da036edc827e4d93c5c44a9306405cf06c283",
-        "before": "825f29b039862eb88a4877458f76aed314bd98d05ac51cd33a56b783d933b9a4"
+        "after": "d152bf6caf737c05bd4a8934a2f3351772676a2e5ace46952ce1fe94ae91592e",
+        "before": "39fd182fed0a902596d07e1db6a1a7910d71b75054771bec8b41165a87994dfe"
       },
       "to_revision": 12
     },
@@ -1358,7 +1358,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.7",
         "resulting_revision": 13,
-        "resulting_state_digest": "1eac9dd4d52c24524a15b5832b015dffdea9814c919745436dc145cdb0b743aa"
+        "resulting_state_digest": "a3a9e8ac66a1c25c4edff5dbc530bb28dad9434829205e2fdf37a32e54e70de7"
       },
       "encountered_definition_ids": [
         0
@@ -1433,8 +1433,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "1eac9dd4d52c24524a15b5832b015dffdea9814c919745436dc145cdb0b743aa",
-        "before": "b54b8a01503ba7c0a4c58e0aef4da036edc827e4d93c5c44a9306405cf06c283"
+        "after": "a3a9e8ac66a1c25c4edff5dbc530bb28dad9434829205e2fdf37a32e54e70de7",
+        "before": "d152bf6caf737c05bd4a8934a2f3351772676a2e5ace46952ce1fe94ae91592e"
       },
       "to_revision": 13
     },
@@ -1453,7 +1453,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.8",
         "resulting_revision": 14,
-        "resulting_state_digest": "bda5ff787d9d17c8223658661ae7d04752f207330f9d6429668753dfc7bd0dda"
+        "resulting_state_digest": "0c3be968a9986847caff81ed6a27090c21c5fd212b0a7a5d4ad180f8c02c427f"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1483,8 +1483,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "bda5ff787d9d17c8223658661ae7d04752f207330f9d6429668753dfc7bd0dda",
-        "before": "1eac9dd4d52c24524a15b5832b015dffdea9814c919745436dc145cdb0b743aa"
+        "after": "0c3be968a9986847caff81ed6a27090c21c5fd212b0a7a5d4ad180f8c02c427f",
+        "before": "a3a9e8ac66a1c25c4edff5dbc530bb28dad9434829205e2fdf37a32e54e70de7"
       },
       "to_revision": 14
     },
@@ -1503,7 +1503,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.9",
         "resulting_revision": 15,
-        "resulting_state_digest": "a47127daa1ecf5246a75e5cd68ff1031d527df102fe7c9d13c92e1fc6ae992e9"
+        "resulting_state_digest": "b52131555c11ca8d85d9c7b56e18f707d40cf04d96f4dccce81bb16cbe97e2dd"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1533,8 +1533,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "a47127daa1ecf5246a75e5cd68ff1031d527df102fe7c9d13c92e1fc6ae992e9",
-        "before": "bda5ff787d9d17c8223658661ae7d04752f207330f9d6429668753dfc7bd0dda"
+        "after": "b52131555c11ca8d85d9c7b56e18f707d40cf04d96f4dccce81bb16cbe97e2dd",
+        "before": "0c3be968a9986847caff81ed6a27090c21c5fd212b0a7a5d4ad180f8c02c427f"
       },
       "to_revision": 15
     },
@@ -1553,7 +1553,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.10",
         "resulting_revision": 16,
-        "resulting_state_digest": "832f36cadc0b5d3439d723417e17bb1e19e6b53c699f524f45b0915b5c1da551"
+        "resulting_state_digest": "446d15ea156de31ea1d932fa68fc576d267c7743866ce902ad5eae20ec580936"
       },
       "encountered_definition_ids": [
         9
@@ -1607,8 +1607,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "832f36cadc0b5d3439d723417e17bb1e19e6b53c699f524f45b0915b5c1da551",
-        "before": "a47127daa1ecf5246a75e5cd68ff1031d527df102fe7c9d13c92e1fc6ae992e9"
+        "after": "446d15ea156de31ea1d932fa68fc576d267c7743866ce902ad5eae20ec580936",
+        "before": "b52131555c11ca8d85d9c7b56e18f707d40cf04d96f4dccce81bb16cbe97e2dd"
       },
       "to_revision": 16
     },
@@ -1627,7 +1627,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.11",
         "resulting_revision": 17,
-        "resulting_state_digest": "6bff2fd1555f6c98f9d40e58bff153a12d8d4d59ff4364c06761e136065c21b6"
+        "resulting_state_digest": "c68c4c3f34c7ff86c49528a56258a679a4183c28d4f6c8e7f7e5706772cd7a52"
       },
       "encountered_definition_ids": [
         3,
@@ -1950,8 +1950,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "6bff2fd1555f6c98f9d40e58bff153a12d8d4d59ff4364c06761e136065c21b6",
-        "before": "832f36cadc0b5d3439d723417e17bb1e19e6b53c699f524f45b0915b5c1da551"
+        "after": "c68c4c3f34c7ff86c49528a56258a679a4183c28d4f6c8e7f7e5706772cd7a52",
+        "before": "446d15ea156de31ea1d932fa68fc576d267c7743866ce902ad5eae20ec580936"
       },
       "to_revision": 17
     },
@@ -1970,7 +1970,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.6",
         "resulting_revision": 18,
-        "resulting_state_digest": "4797eb211305219cfa0cbe78aa148fae147aa77b34b75e8aea197f92172bbfcf"
+        "resulting_state_digest": "f9bc40280bac10b3dabfd4faca2dc3c1fa32e16c1e2cf205ecbb99de88895b1c"
       },
       "encountered_definition_ids": [
         2
@@ -2045,8 +2045,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "4797eb211305219cfa0cbe78aa148fae147aa77b34b75e8aea197f92172bbfcf",
-        "before": "6bff2fd1555f6c98f9d40e58bff153a12d8d4d59ff4364c06761e136065c21b6"
+        "after": "f9bc40280bac10b3dabfd4faca2dc3c1fa32e16c1e2cf205ecbb99de88895b1c",
+        "before": "c68c4c3f34c7ff86c49528a56258a679a4183c28d4f6c8e7f7e5706772cd7a52"
       },
       "to_revision": 18
     },
@@ -2065,7 +2065,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.7",
         "resulting_revision": 19,
-        "resulting_state_digest": "19680573d962ea52c09cbd4ad81e4d3a944e07b159ea8709c4e44aa4f733baa2"
+        "resulting_state_digest": "6d71b6d5506ad70250d05ca55ec170902c6cf129655ff6916adb3b53ec40191d"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -2095,8 +2095,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "19680573d962ea52c09cbd4ad81e4d3a944e07b159ea8709c4e44aa4f733baa2",
-        "before": "4797eb211305219cfa0cbe78aa148fae147aa77b34b75e8aea197f92172bbfcf"
+        "after": "6d71b6d5506ad70250d05ca55ec170902c6cf129655ff6916adb3b53ec40191d",
+        "before": "f9bc40280bac10b3dabfd4faca2dc3c1fa32e16c1e2cf205ecbb99de88895b1c"
       },
       "to_revision": 19
     },
@@ -2115,7 +2115,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.8",
         "resulting_revision": 20,
-        "resulting_state_digest": "415ad6685593107be32217a1621b96df10030467e3ab1449366e97fd52fc7d93"
+        "resulting_state_digest": "5e49fd78bd1568490804db0d9bdebe7e3da818faf1d1a03f6582f9f5c9bc5916"
       },
       "encountered_definition_ids": [
         16
@@ -2174,8 +2174,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "415ad6685593107be32217a1621b96df10030467e3ab1449366e97fd52fc7d93",
-        "before": "19680573d962ea52c09cbd4ad81e4d3a944e07b159ea8709c4e44aa4f733baa2"
+        "after": "5e49fd78bd1568490804db0d9bdebe7e3da818faf1d1a03f6582f9f5c9bc5916",
+        "before": "6d71b6d5506ad70250d05ca55ec170902c6cf129655ff6916adb3b53ec40191d"
       },
       "to_revision": 20
     },
@@ -2194,7 +2194,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.9",
         "resulting_revision": 21,
-        "resulting_state_digest": "e4c593d1f088a53229d1cb3536e5ebdeabf39615a1cd1633b06ee0ac3ae38b2b"
+        "resulting_state_digest": "fc0d17c60184b51abebf544781e886842dfb2e7ae9a52542b77b7810387fc1b5"
       },
       "encountered_definition_ids": [
         1,
@@ -2329,8 +2329,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e4c593d1f088a53229d1cb3536e5ebdeabf39615a1cd1633b06ee0ac3ae38b2b",
-        "before": "415ad6685593107be32217a1621b96df10030467e3ab1449366e97fd52fc7d93"
+        "after": "fc0d17c60184b51abebf544781e886842dfb2e7ae9a52542b77b7810387fc1b5",
+        "before": "5e49fd78bd1568490804db0d9bdebe7e3da818faf1d1a03f6582f9f5c9bc5916"
       },
       "to_revision": 21
     },
@@ -2349,7 +2349,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.10",
         "resulting_revision": 22,
-        "resulting_state_digest": "84f2c85153129a8eba30332a92a153e3b4ce0d8049fee9b3dd0fdfc102252f45"
+        "resulting_state_digest": "172abb4e41f615e2e010cc3ab30aa1dae23c8a09e9391322fd118a2e5d2dc1d0"
       },
       "encountered_definition_ids": [
         16,
@@ -2565,8 +2565,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "84f2c85153129a8eba30332a92a153e3b4ce0d8049fee9b3dd0fdfc102252f45",
-        "before": "e4c593d1f088a53229d1cb3536e5ebdeabf39615a1cd1633b06ee0ac3ae38b2b"
+        "after": "172abb4e41f615e2e010cc3ab30aa1dae23c8a09e9391322fd118a2e5d2dc1d0",
+        "before": "fc0d17c60184b51abebf544781e886842dfb2e7ae9a52542b77b7810387fc1b5"
       },
       "to_revision": 22
     },
@@ -2585,7 +2585,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.12",
         "resulting_revision": 23,
-        "resulting_state_digest": "c127ffae8942936cbbbb6ac62acebf130515a09c78cd0fbca40e9c494472e45a"
+        "resulting_state_digest": "bfea2362e2fd93a1da1200cc65fec92b45bfc88bff85ca3f0761998174c58a76"
       },
       "encountered_definition_ids": [
         0
@@ -2637,8 +2637,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "c127ffae8942936cbbbb6ac62acebf130515a09c78cd0fbca40e9c494472e45a",
-        "before": "84f2c85153129a8eba30332a92a153e3b4ce0d8049fee9b3dd0fdfc102252f45"
+        "after": "bfea2362e2fd93a1da1200cc65fec92b45bfc88bff85ca3f0761998174c58a76",
+        "before": "172abb4e41f615e2e010cc3ab30aa1dae23c8a09e9391322fd118a2e5d2dc1d0"
       },
       "to_revision": 23
     },
@@ -2657,7 +2657,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.13",
         "resulting_revision": 24,
-        "resulting_state_digest": "20d374e8cacfed034e034deae0ed91a7a0c084f8887fdb53ba646f66cc3aa377"
+        "resulting_state_digest": "94aa2c8d37d699c48b94ce12a7573e0a2c8619b9933392aeda48141a4e7ffe2e"
       },
       "encountered_definition_ids": [
         28
@@ -2716,8 +2716,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "20d374e8cacfed034e034deae0ed91a7a0c084f8887fdb53ba646f66cc3aa377",
-        "before": "c127ffae8942936cbbbb6ac62acebf130515a09c78cd0fbca40e9c494472e45a"
+        "after": "94aa2c8d37d699c48b94ce12a7573e0a2c8619b9933392aeda48141a4e7ffe2e",
+        "before": "bfea2362e2fd93a1da1200cc65fec92b45bfc88bff85ca3f0761998174c58a76"
       },
       "to_revision": 24
     },
@@ -2736,7 +2736,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.14",
         "resulting_revision": 25,
-        "resulting_state_digest": "22320609e83fd8be085131cb7fc80d35f316e7a4063179c986fbd2ad8d52a36c"
+        "resulting_state_digest": "88761437c59eb5eca0bfaed6ea35973509089ec509475d816cd7bd7139843f2e"
       },
       "encountered_definition_ids": [
         0,
@@ -2919,8 +2919,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "22320609e83fd8be085131cb7fc80d35f316e7a4063179c986fbd2ad8d52a36c",
-        "before": "20d374e8cacfed034e034deae0ed91a7a0c084f8887fdb53ba646f66cc3aa377"
+        "after": "88761437c59eb5eca0bfaed6ea35973509089ec509475d816cd7bd7139843f2e",
+        "before": "94aa2c8d37d699c48b94ce12a7573e0a2c8619b9933392aeda48141a4e7ffe2e"
       },
       "to_revision": 25
     },
@@ -2939,7 +2939,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.15",
         "resulting_revision": 26,
-        "resulting_state_digest": "7421b0f662e41cfca5471f97b591e0815d889335abd9e686ac833c7696851662"
+        "resulting_state_digest": "99a4917e28e137632bfc0d7e1ec99ce05ce1a0ae5baaef089de84f95f1b0666d"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -2969,8 +2969,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "7421b0f662e41cfca5471f97b591e0815d889335abd9e686ac833c7696851662",
-        "before": "22320609e83fd8be085131cb7fc80d35f316e7a4063179c986fbd2ad8d52a36c"
+        "after": "99a4917e28e137632bfc0d7e1ec99ce05ce1a0ae5baaef089de84f95f1b0666d",
+        "before": "88761437c59eb5eca0bfaed6ea35973509089ec509475d816cd7bd7139843f2e"
       },
       "to_revision": 26
     },
@@ -2989,7 +2989,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.16",
         "resulting_revision": 27,
-        "resulting_state_digest": "bf498eac281e02998d1fdf43737e8d72e22a765683f341a11264c4f90b3e3d27"
+        "resulting_state_digest": "d93cf9f4ca24f13e99dba05cd9abcf2726847008cebddf14f845970b663594f8"
       },
       "encountered_definition_ids": [
         9
@@ -3043,8 +3043,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "bf498eac281e02998d1fdf43737e8d72e22a765683f341a11264c4f90b3e3d27",
-        "before": "7421b0f662e41cfca5471f97b591e0815d889335abd9e686ac833c7696851662"
+        "after": "d93cf9f4ca24f13e99dba05cd9abcf2726847008cebddf14f845970b663594f8",
+        "before": "99a4917e28e137632bfc0d7e1ec99ce05ce1a0ae5baaef089de84f95f1b0666d"
       },
       "to_revision": 27
     },
@@ -3063,7 +3063,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.17",
         "resulting_revision": 28,
-        "resulting_state_digest": "5fdb0cd79d598413081f5ee1f81e5517018cbe613c226b76da16476a61b57ffe"
+        "resulting_state_digest": "b45c05a36974d35e085f6e094bfe9ecf7bc27c0be36587e59b6046ab76fb6608"
       },
       "encountered_definition_ids": [
         25
@@ -3145,8 +3145,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "5fdb0cd79d598413081f5ee1f81e5517018cbe613c226b76da16476a61b57ffe",
-        "before": "bf498eac281e02998d1fdf43737e8d72e22a765683f341a11264c4f90b3e3d27"
+        "after": "b45c05a36974d35e085f6e094bfe9ecf7bc27c0be36587e59b6046ab76fb6608",
+        "before": "d93cf9f4ca24f13e99dba05cd9abcf2726847008cebddf14f845970b663594f8"
       },
       "to_revision": 28
     },
@@ -3165,7 +3165,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.11",
         "resulting_revision": 29,
-        "resulting_state_digest": "feb69477311e098013ff2d278f5d2df9594a9f6c110669cc51bb3533b234c117"
+        "resulting_state_digest": "35e2e6887fb60271a92aa805adf9fd18f693598564efefde1b3e1120bb4afff6"
       },
       "encountered_definition_ids": [
         4,
@@ -3227,8 +3227,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "feb69477311e098013ff2d278f5d2df9594a9f6c110669cc51bb3533b234c117",
-        "before": "5fdb0cd79d598413081f5ee1f81e5517018cbe613c226b76da16476a61b57ffe"
+        "after": "35e2e6887fb60271a92aa805adf9fd18f693598564efefde1b3e1120bb4afff6",
+        "before": "b45c05a36974d35e085f6e094bfe9ecf7bc27c0be36587e59b6046ab76fb6608"
       },
       "to_revision": 29
     },
@@ -3247,7 +3247,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.12",
         "resulting_revision": 30,
-        "resulting_state_digest": "953417ff9d357e9488e6c68d0d6e590006e780439c47a2f5abdd8be9ca5c9f6a"
+        "resulting_state_digest": "e06bdc3a4ea26303ee4d4d5b90b3723b334f8dd924facc2acf603b7bc70c63c5"
       },
       "encountered_definition_ids": [
         1,
@@ -3400,8 +3400,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "953417ff9d357e9488e6c68d0d6e590006e780439c47a2f5abdd8be9ca5c9f6a",
-        "before": "feb69477311e098013ff2d278f5d2df9594a9f6c110669cc51bb3533b234c117"
+        "after": "e06bdc3a4ea26303ee4d4d5b90b3723b334f8dd924facc2acf603b7bc70c63c5",
+        "before": "35e2e6887fb60271a92aa805adf9fd18f693598564efefde1b3e1120bb4afff6"
       },
       "to_revision": 30
     },
@@ -3420,7 +3420,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.13",
         "resulting_revision": 31,
-        "resulting_state_digest": "9b4eabecccb0483fecf626175c151a6bec53d1f523c94faeac96f67f2cfd4fd9"
+        "resulting_state_digest": "ec48f542cb88f6dff23b4f48f5a9a58ee7a38bc9a549498c1c400709b9d10dba"
       },
       "encountered_definition_ids": [
         1,
@@ -3584,8 +3584,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "9b4eabecccb0483fecf626175c151a6bec53d1f523c94faeac96f67f2cfd4fd9",
-        "before": "953417ff9d357e9488e6c68d0d6e590006e780439c47a2f5abdd8be9ca5c9f6a"
+        "after": "ec48f542cb88f6dff23b4f48f5a9a58ee7a38bc9a549498c1c400709b9d10dba",
+        "before": "e06bdc3a4ea26303ee4d4d5b90b3723b334f8dd924facc2acf603b7bc70c63c5"
       },
       "to_revision": 31
     },
@@ -3604,7 +3604,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.14",
         "resulting_revision": 32,
-        "resulting_state_digest": "632aabe0289749cf82d3a584d2b9d97df96feecdb4fd919dcf843d964570c887"
+        "resulting_state_digest": "ca13839a9db56e453385cdefed96752d22aedf9d28714b360e6320565dbc7ca6"
       },
       "encountered_definition_ids": [
         2
@@ -3681,8 +3681,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "632aabe0289749cf82d3a584d2b9d97df96feecdb4fd919dcf843d964570c887",
-        "before": "9b4eabecccb0483fecf626175c151a6bec53d1f523c94faeac96f67f2cfd4fd9"
+        "after": "ca13839a9db56e453385cdefed96752d22aedf9d28714b360e6320565dbc7ca6",
+        "before": "ec48f542cb88f6dff23b4f48f5a9a58ee7a38bc9a549498c1c400709b9d10dba"
       },
       "to_revision": 32
     },
@@ -3701,7 +3701,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.15",
         "resulting_revision": 33,
-        "resulting_state_digest": "6c8c277a8dd81b9129b08ad07367d0fd82c91367b56b480bb3b5a496f93f452a"
+        "resulting_state_digest": "571e8555de08283c1838d28a88afb32162d100ef7f0d5a947effc11198dfad3f"
       },
       "encountered_definition_ids": [
         25
@@ -3802,8 +3802,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "6c8c277a8dd81b9129b08ad07367d0fd82c91367b56b480bb3b5a496f93f452a",
-        "before": "632aabe0289749cf82d3a584d2b9d97df96feecdb4fd919dcf843d964570c887"
+        "after": "571e8555de08283c1838d28a88afb32162d100ef7f0d5a947effc11198dfad3f",
+        "before": "ca13839a9db56e453385cdefed96752d22aedf9d28714b360e6320565dbc7ca6"
       },
       "to_revision": 33
     },
@@ -3822,7 +3822,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.18",
         "resulting_revision": 34,
-        "resulting_state_digest": "81f0c4f02c06ad5e2f9373e84d70eccb32e868e382f4c6300259fd075f76defb"
+        "resulting_state_digest": "6775ce4fe8c334292fb376d6cdc1ca9a81941a8eecd9e04ad0aee3be8afb293d"
       },
       "encountered_definition_ids": [
         0,
@@ -3989,8 +3989,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "81f0c4f02c06ad5e2f9373e84d70eccb32e868e382f4c6300259fd075f76defb",
-        "before": "6c8c277a8dd81b9129b08ad07367d0fd82c91367b56b480bb3b5a496f93f452a"
+        "after": "6775ce4fe8c334292fb376d6cdc1ca9a81941a8eecd9e04ad0aee3be8afb293d",
+        "before": "571e8555de08283c1838d28a88afb32162d100ef7f0d5a947effc11198dfad3f"
       },
       "to_revision": 34
     },
@@ -4009,7 +4009,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.19",
         "resulting_revision": 35,
-        "resulting_state_digest": "f720f03c9e6543c1ee7c9f98187c864d58ef07923cf7494596c0727e7c49c1ba"
+        "resulting_state_digest": "a73d7cb8a849ff75c6e0a83255e23ed20ff192a964eb57f1be7a15e30a9cbe49"
       },
       "encountered_definition_ids": [
         2,
@@ -4152,8 +4152,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "f720f03c9e6543c1ee7c9f98187c864d58ef07923cf7494596c0727e7c49c1ba",
-        "before": "81f0c4f02c06ad5e2f9373e84d70eccb32e868e382f4c6300259fd075f76defb"
+        "after": "a73d7cb8a849ff75c6e0a83255e23ed20ff192a964eb57f1be7a15e30a9cbe49",
+        "before": "6775ce4fe8c334292fb376d6cdc1ca9a81941a8eecd9e04ad0aee3be8afb293d"
       },
       "to_revision": 35
     },
@@ -4172,7 +4172,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.16",
         "resulting_revision": 36,
-        "resulting_state_digest": "c750e6def9537eadee8dea0660bf2ad8e921d53b12ea02260b4f2e6c4d5a4215"
+        "resulting_state_digest": "050dfb6d8b482c0d5fec91b8b17644f58a00dd9aaa90ec793c773d6c72ade9a6"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -4202,8 +4202,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "c750e6def9537eadee8dea0660bf2ad8e921d53b12ea02260b4f2e6c4d5a4215",
-        "before": "f720f03c9e6543c1ee7c9f98187c864d58ef07923cf7494596c0727e7c49c1ba"
+        "after": "050dfb6d8b482c0d5fec91b8b17644f58a00dd9aaa90ec793c773d6c72ade9a6",
+        "before": "a73d7cb8a849ff75c6e0a83255e23ed20ff192a964eb57f1be7a15e30a9cbe49"
       },
       "to_revision": 36
     },
@@ -4222,7 +4222,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.17",
         "resulting_revision": 37,
-        "resulting_state_digest": "bc9037ba801a06c456378353c3464c64f8425aef0f80316ded42f85dd0d94b10"
+        "resulting_state_digest": "50ebac21f494214e42d6dca9cc162620d2509bce0cc1310584099f5fd8207fd8"
       },
       "encountered_definition_ids": [
         3
@@ -4305,8 +4305,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "bc9037ba801a06c456378353c3464c64f8425aef0f80316ded42f85dd0d94b10",
-        "before": "c750e6def9537eadee8dea0660bf2ad8e921d53b12ea02260b4f2e6c4d5a4215"
+        "after": "50ebac21f494214e42d6dca9cc162620d2509bce0cc1310584099f5fd8207fd8",
+        "before": "050dfb6d8b482c0d5fec91b8b17644f58a00dd9aaa90ec793c773d6c72ade9a6"
       },
       "to_revision": 37
     },
@@ -4325,7 +4325,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.20",
         "resulting_revision": 38,
-        "resulting_state_digest": "b350416680f6c43f714f87209e6f7d848fc40e837d42378f246fafc262669829"
+        "resulting_state_digest": "0e26af556f1929f32642ad71f6d2d05573e09f8b7aac52fb125f14f986295cdf"
       },
       "encountered_definition_ids": [
         0
@@ -4400,8 +4400,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "b350416680f6c43f714f87209e6f7d848fc40e837d42378f246fafc262669829",
-        "before": "bc9037ba801a06c456378353c3464c64f8425aef0f80316ded42f85dd0d94b10"
+        "after": "0e26af556f1929f32642ad71f6d2d05573e09f8b7aac52fb125f14f986295cdf",
+        "before": "50ebac21f494214e42d6dca9cc162620d2509bce0cc1310584099f5fd8207fd8"
       },
       "to_revision": 38
     },
@@ -4420,7 +4420,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.21",
         "resulting_revision": 39,
-        "resulting_state_digest": "40cc8836c3cd5c3a5d25c0a17951ed1f45cc743cbfdeae4b0fb30233b6b25a8c"
+        "resulting_state_digest": "cffbf4c151f36c0ca99108fa068e0f6fdab4c8978b1f078b6f85c041f6ff2e25"
       },
       "encountered_definition_ids": [
         0,
@@ -4578,8 +4578,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "40cc8836c3cd5c3a5d25c0a17951ed1f45cc743cbfdeae4b0fb30233b6b25a8c",
-        "before": "b350416680f6c43f714f87209e6f7d848fc40e837d42378f246fafc262669829"
+        "after": "cffbf4c151f36c0ca99108fa068e0f6fdab4c8978b1f078b6f85c041f6ff2e25",
+        "before": "0e26af556f1929f32642ad71f6d2d05573e09f8b7aac52fb125f14f986295cdf"
       },
       "to_revision": 39
     },
@@ -4598,7 +4598,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.22",
         "resulting_revision": 40,
-        "resulting_state_digest": "8d23eb73062c6ae8d40fffe3d33d3735752154eb2145bfa81dde756bcbb04726"
+        "resulting_state_digest": "767a331f6e48decb313898f98fd48fb34b98bae9b72d30f0186adff7e0291d8f"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -4628,8 +4628,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8d23eb73062c6ae8d40fffe3d33d3735752154eb2145bfa81dde756bcbb04726",
-        "before": "40cc8836c3cd5c3a5d25c0a17951ed1f45cc743cbfdeae4b0fb30233b6b25a8c"
+        "after": "767a331f6e48decb313898f98fd48fb34b98bae9b72d30f0186adff7e0291d8f",
+        "before": "cffbf4c151f36c0ca99108fa068e0f6fdab4c8978b1f078b6f85c041f6ff2e25"
       },
       "to_revision": 40
     },
@@ -4648,7 +4648,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.23",
         "resulting_revision": 41,
-        "resulting_state_digest": "928ad4c1040474391035d5dc552f81cdc3d8cb32d2521e63a7d6b2c591b53cbd"
+        "resulting_state_digest": "4006faf1bb9bfbabaf6b401ee17ae0efe632157e7e78c374fbc4f2bcc1658d05"
       },
       "encountered_definition_ids": [
         27
@@ -4662,7 +4662,7 @@
         "choices": [],
         "confirm_label": "Do not attack with White Lotus Reinforcements",
         "focus": [
-          111
+          112
         ],
         "help": null,
         "id": 1,
@@ -4671,12 +4671,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 111,
+              "display_id": 112,
               "entity_id": 78,
               "label": "White Lotus Reinforcements",
               "subject": {
                 "id": {
-                  "entity": 111,
+                  "entity": 112,
                   "incarnation": 2
                 },
                 "kind": "object"
@@ -4699,8 +4699,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "928ad4c1040474391035d5dc552f81cdc3d8cb32d2521e63a7d6b2c591b53cbd",
-        "before": "8d23eb73062c6ae8d40fffe3d33d3735752154eb2145bfa81dde756bcbb04726"
+        "after": "4006faf1bb9bfbabaf6b401ee17ae0efe632157e7e78c374fbc4f2bcc1658d05",
+        "before": "767a331f6e48decb313898f98fd48fb34b98bae9b72d30f0186adff7e0291d8f"
       },
       "to_revision": 41
     },
@@ -4719,7 +4719,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.24",
         "resulting_revision": 42,
-        "resulting_state_digest": "ae1dfb7b3be3b18bf9f00fba8f8e493b41823618e12e2e1886cb591e2e3dd9bf"
+        "resulting_state_digest": "2bcad968d151d648c4c82d2d5bc2fe240f2c4e19e821cf38b011f35ed2feeb8e"
       },
       "encountered_definition_ids": [
         0,
@@ -4941,8 +4941,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "ae1dfb7b3be3b18bf9f00fba8f8e493b41823618e12e2e1886cb591e2e3dd9bf",
-        "before": "928ad4c1040474391035d5dc552f81cdc3d8cb32d2521e63a7d6b2c591b53cbd"
+        "after": "2bcad968d151d648c4c82d2d5bc2fe240f2c4e19e821cf38b011f35ed2feeb8e",
+        "before": "4006faf1bb9bfbabaf6b401ee17ae0efe632157e7e78c374fbc4f2bcc1658d05"
       },
       "to_revision": 42
     },
@@ -4961,7 +4961,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.18",
         "resulting_revision": 43,
-        "resulting_state_digest": "f37d8f4242bebd92fad624b39589689acf4235ef49471eaf824f772625617072"
+        "resulting_state_digest": "b96bf01907fec012481dde9993366ff95a855317213aa6980328ab18443db99b"
       },
       "encountered_definition_ids": [
         5
@@ -5020,8 +5020,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "f37d8f4242bebd92fad624b39589689acf4235ef49471eaf824f772625617072",
-        "before": "ae1dfb7b3be3b18bf9f00fba8f8e493b41823618e12e2e1886cb591e2e3dd9bf"
+        "after": "b96bf01907fec012481dde9993366ff95a855317213aa6980328ab18443db99b",
+        "before": "2bcad968d151d648c4c82d2d5bc2fe240f2c4e19e821cf38b011f35ed2feeb8e"
       },
       "to_revision": 43
     },
@@ -5040,7 +5040,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.19",
         "resulting_revision": 44,
-        "resulting_state_digest": "d4688381172d34f456908ebd20a9d5420e07076d17da6fea6a9817d5f2a23634"
+        "resulting_state_digest": "6980797de66e35d4bb9cafc5449af02f3a00a1b101501204931a7456dff6cf8e"
       },
       "encountered_definition_ids": [
         1,
@@ -5190,8 +5190,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "d4688381172d34f456908ebd20a9d5420e07076d17da6fea6a9817d5f2a23634",
-        "before": "f37d8f4242bebd92fad624b39589689acf4235ef49471eaf824f772625617072"
+        "after": "6980797de66e35d4bb9cafc5449af02f3a00a1b101501204931a7456dff6cf8e",
+        "before": "b96bf01907fec012481dde9993366ff95a855317213aa6980328ab18443db99b"
       },
       "to_revision": 44
     },
@@ -5210,7 +5210,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.20",
         "resulting_revision": 45,
-        "resulting_state_digest": "990e80d54ff73c4fac21ef9a263d0e50f813ff3137785fddafebc517bbd74622"
+        "resulting_state_digest": "90943ff7dfe620e68e70d8ad1ef799813c171b37fd53d51c3f3aac0ead41f0d0"
       },
       "encountered_definition_ids": [
         1,
@@ -5416,8 +5416,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "990e80d54ff73c4fac21ef9a263d0e50f813ff3137785fddafebc517bbd74622",
-        "before": "d4688381172d34f456908ebd20a9d5420e07076d17da6fea6a9817d5f2a23634"
+        "after": "90943ff7dfe620e68e70d8ad1ef799813c171b37fd53d51c3f3aac0ead41f0d0",
+        "before": "6980797de66e35d4bb9cafc5449af02f3a00a1b101501204931a7456dff6cf8e"
       },
       "to_revision": 45
     },
@@ -5436,7 +5436,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.21",
         "resulting_revision": 46,
-        "resulting_state_digest": "271b43a8d649bd472d83960f25cee098576cf2f22eb09c070617adaa44c01042"
+        "resulting_state_digest": "ec4d412f4b6f9a113a6b89025363c1a533e43c3df67b7e1b8fe5ef65365f582d"
       },
       "encountered_definition_ids": [
         2
@@ -5544,8 +5544,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "271b43a8d649bd472d83960f25cee098576cf2f22eb09c070617adaa44c01042",
-        "before": "990e80d54ff73c4fac21ef9a263d0e50f813ff3137785fddafebc517bbd74622"
+        "after": "ec4d412f4b6f9a113a6b89025363c1a533e43c3df67b7e1b8fe5ef65365f582d",
+        "before": "90943ff7dfe620e68e70d8ad1ef799813c171b37fd53d51c3f3aac0ead41f0d0"
       },
       "to_revision": 46
     },
@@ -5564,7 +5564,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.25",
         "resulting_revision": 47,
-        "resulting_state_digest": "002e76892633c0d0f3c06790f3345e6b2f484a18ff04fc3f3dd823c54f8a8594"
+        "resulting_state_digest": "8cc726ac3c1436040119909911ad70dad90dbbf8f6e28a857fae5fe3604ec48b"
       },
       "encountered_definition_ids": [
         26
@@ -5580,14 +5580,14 @@
         "choices": [],
         "confirm_label": "Activate ability: Water Tribe Rallier",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 0,
         "label": "Activate ability: Water Tribe Rallier",
         "source": {
           "id": {
-            "entity": 118,
+            "entity": 119,
             "incarnation": 3
           },
           "kind": "object"
@@ -5595,12 +5595,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -5623,8 +5623,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "002e76892633c0d0f3c06790f3345e6b2f484a18ff04fc3f3dd823c54f8a8594",
-        "before": "271b43a8d649bd472d83960f25cee098576cf2f22eb09c070617adaa44c01042"
+        "after": "8cc726ac3c1436040119909911ad70dad90dbbf8f6e28a857fae5fe3604ec48b",
+        "before": "ec4d412f4b6f9a113a6b89025363c1a533e43c3df67b7e1b8fe5ef65365f582d"
       },
       "to_revision": 47
     },
@@ -5643,7 +5643,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.26",
         "resulting_revision": 48,
-        "resulting_state_digest": "ab90fea36250c08f0b079d3b45d1b16ba9a961966e98368606c9d7d7dad88860"
+        "resulting_state_digest": "5d0f9b11d4ae6b0bf2ea238aae8c4d43cce52d31be68270a19e0e41c56a1d5ac"
       },
       "encountered_definition_ids": [
         26
@@ -5659,7 +5659,7 @@
         "choices": [],
         "confirm_label": "Tap Water Tribe Rallier to help pay",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 2,
@@ -5668,12 +5668,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -5696,8 +5696,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "ab90fea36250c08f0b079d3b45d1b16ba9a961966e98368606c9d7d7dad88860",
-        "before": "002e76892633c0d0f3c06790f3345e6b2f484a18ff04fc3f3dd823c54f8a8594"
+        "after": "5d0f9b11d4ae6b0bf2ea238aae8c4d43cce52d31be68270a19e0e41c56a1d5ac",
+        "before": "8cc726ac3c1436040119909911ad70dad90dbbf8f6e28a857fae5fe3604ec48b"
       },
       "to_revision": 48
     },
@@ -5716,7 +5716,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.27",
         "resulting_revision": 49,
-        "resulting_state_digest": "890d729703bf72d7f81c7e3ff0b24d4134c62cce3de46bbde9907d82895fb67f"
+        "resulting_state_digest": "b21f11d34f760928f133831aaa0439eaf34187d6c3a3c3bb1242320294650c44"
       },
       "encountered_definition_ids": [
         10
@@ -5732,7 +5732,7 @@
         "choices": [],
         "confirm_label": "Tap Compassionate Healer to help pay",
         "focus": [
-          116
+          117
         ],
         "help": null,
         "id": 1,
@@ -5741,12 +5741,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 116,
+              "display_id": 117,
               "entity_id": 46,
               "label": "Compassionate Healer",
               "subject": {
                 "id": {
-                  "entity": 116,
+                  "entity": 117,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -5769,8 +5769,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "890d729703bf72d7f81c7e3ff0b24d4134c62cce3de46bbde9907d82895fb67f",
-        "before": "ab90fea36250c08f0b079d3b45d1b16ba9a961966e98368606c9d7d7dad88860"
+        "after": "b21f11d34f760928f133831aaa0439eaf34187d6c3a3c3bb1242320294650c44",
+        "before": "5d0f9b11d4ae6b0bf2ea238aae8c4d43cce52d31be68270a19e0e41c56a1d5ac"
       },
       "to_revision": 49
     },
@@ -5789,7 +5789,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.28",
         "resulting_revision": 50,
-        "resulting_state_digest": "9a4ec7b31cd1b817fe0a75fd68ea9b794b9ea6f400bd35d3d025402824b1d881"
+        "resulting_state_digest": "6924bee722d8bc1f01364d86328653cc75cc41f52082af637861ad4b585b1652"
       },
       "encountered_definition_ids": [
         0,
@@ -5818,12 +5818,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -5877,8 +5877,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "9a4ec7b31cd1b817fe0a75fd68ea9b794b9ea6f400bd35d3d025402824b1d881",
-        "before": "890d729703bf72d7f81c7e3ff0b24d4134c62cce3de46bbde9907d82895fb67f"
+        "after": "6924bee722d8bc1f01364d86328653cc75cc41f52082af637861ad4b585b1652",
+        "before": "b21f11d34f760928f133831aaa0439eaf34187d6c3a3c3bb1242320294650c44"
       },
       "to_revision": 50
     },
@@ -5897,7 +5897,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.29",
         "resulting_revision": 51,
-        "resulting_state_digest": "6c00134aaca4ae0daf632fe6826c1a914942ea8db2c4ee520b7427ad84783a5f"
+        "resulting_state_digest": "60beeb1c0c0d7850c4710cdcbeb732885b3e61f91de989691e621adbdd5054e5"
       },
       "encountered_definition_ids": [
         0,
@@ -5952,8 +5952,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "6c00134aaca4ae0daf632fe6826c1a914942ea8db2c4ee520b7427ad84783a5f",
-        "before": "9a4ec7b31cd1b817fe0a75fd68ea9b794b9ea6f400bd35d3d025402824b1d881"
+        "after": "60beeb1c0c0d7850c4710cdcbeb732885b3e61f91de989691e621adbdd5054e5",
+        "before": "6924bee722d8bc1f01364d86328653cc75cc41f52082af637861ad4b585b1652"
       },
       "to_revision": 51
     },
@@ -5972,7 +5972,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.30",
         "resulting_revision": 52,
-        "resulting_state_digest": "36f825096fe91d23d05e8597ab7847d8b56933819a5d608c4c4a57b8b8a5fef9"
+        "resulting_state_digest": "379e91daddc780a14d1a5d685ff2b456bea4b6e57c765a3f9cfccc5c9cdb35d7"
       },
       "encountered_definition_ids": [
         26
@@ -5997,12 +5997,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -6041,8 +6041,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "36f825096fe91d23d05e8597ab7847d8b56933819a5d608c4c4a57b8b8a5fef9",
-        "before": "6c00134aaca4ae0daf632fe6826c1a914942ea8db2c4ee520b7427ad84783a5f"
+        "after": "379e91daddc780a14d1a5d685ff2b456bea4b6e57c765a3f9cfccc5c9cdb35d7",
+        "before": "60beeb1c0c0d7850c4710cdcbeb732885b3e61f91de989691e621adbdd5054e5"
       },
       "to_revision": 52
     },
@@ -6061,7 +6061,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.31",
         "resulting_revision": 53,
-        "resulting_state_digest": "cc0e125f0c496a45fb93832367f07af3b77fff44206446da215253c5dbedfb70"
+        "resulting_state_digest": "9a87b953490ad66933bb8ddee7ab64ffc28752a45b0c7e2e2cf6dbb24f649d96"
       },
       "encountered_definition_ids": [
         3
@@ -6138,8 +6138,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "cc0e125f0c496a45fb93832367f07af3b77fff44206446da215253c5dbedfb70",
-        "before": "36f825096fe91d23d05e8597ab7847d8b56933819a5d608c4c4a57b8b8a5fef9"
+        "after": "9a87b953490ad66933bb8ddee7ab64ffc28752a45b0c7e2e2cf6dbb24f649d96",
+        "before": "379e91daddc780a14d1a5d685ff2b456bea4b6e57c765a3f9cfccc5c9cdb35d7"
       },
       "to_revision": 53
     },
@@ -6158,7 +6158,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.32",
         "resulting_revision": 54,
-        "resulting_state_digest": "8f354e6190caca8af3450df71979647d554289efd04e868b2fa6a9c8db5caf04"
+        "resulting_state_digest": "ed190332a21307a9b2b9d092bcacc510b06219fdff908dae9a3b7eef2cc93811"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -6188,8 +6188,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8f354e6190caca8af3450df71979647d554289efd04e868b2fa6a9c8db5caf04",
-        "before": "cc0e125f0c496a45fb93832367f07af3b77fff44206446da215253c5dbedfb70"
+        "after": "ed190332a21307a9b2b9d092bcacc510b06219fdff908dae9a3b7eef2cc93811",
+        "before": "9a87b953490ad66933bb8ddee7ab64ffc28752a45b0c7e2e2cf6dbb24f649d96"
       },
       "to_revision": 54
     },
@@ -6208,7 +6208,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.33",
         "resulting_revision": 55,
-        "resulting_state_digest": "ac9cfb45edd31a92ad0dd571f969fb413f655fe52564ff4a6e9c80ba6da55302"
+        "resulting_state_digest": "bb0f2dca7dbe610a131be54efd186ad194d0a9fc9f2765e58257e8029b833ce2"
       },
       "encountered_definition_ids": [
         27
@@ -6222,7 +6222,7 @@
         "choices": [],
         "confirm_label": "Do not attack with White Lotus Reinforcements",
         "focus": [
-          111
+          112
         ],
         "help": null,
         "id": 1,
@@ -6231,12 +6231,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 111,
+              "display_id": 112,
               "entity_id": 78,
               "label": "White Lotus Reinforcements",
               "subject": {
                 "id": {
-                  "entity": 111,
+                  "entity": 112,
                   "incarnation": 2
                 },
                 "kind": "object"
@@ -6259,8 +6259,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "ac9cfb45edd31a92ad0dd571f969fb413f655fe52564ff4a6e9c80ba6da55302",
-        "before": "8f354e6190caca8af3450df71979647d554289efd04e868b2fa6a9c8db5caf04"
+        "after": "bb0f2dca7dbe610a131be54efd186ad194d0a9fc9f2765e58257e8029b833ce2",
+        "before": "ed190332a21307a9b2b9d092bcacc510b06219fdff908dae9a3b7eef2cc93811"
       },
       "to_revision": 55
     },
@@ -6279,7 +6279,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.34",
         "resulting_revision": 56,
-        "resulting_state_digest": "5a899d6c51838bc0520996c7a184c717e010410f4343b2e5ee9e3705271dc648"
+        "resulting_state_digest": "e542f1b955a80bc38b20b0aa08bf352501bfc399372a7b74d4f3f825a4123631"
       },
       "encountered_definition_ids": [
         0,
@@ -6438,8 +6438,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "5a899d6c51838bc0520996c7a184c717e010410f4343b2e5ee9e3705271dc648",
-        "before": "ac9cfb45edd31a92ad0dd571f969fb413f655fe52564ff4a6e9c80ba6da55302"
+        "after": "e542f1b955a80bc38b20b0aa08bf352501bfc399372a7b74d4f3f825a4123631",
+        "before": "bb0f2dca7dbe610a131be54efd186ad194d0a9fc9f2765e58257e8029b833ce2"
       },
       "to_revision": 56
     },
@@ -6458,7 +6458,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.35",
         "resulting_revision": 57,
-        "resulting_state_digest": "3b63cc310cf474400ba14a692f354ec30633d203aebca6b2e970728d19f5a8bf"
+        "resulting_state_digest": "43d669bcd53c022cb93bd60e3a4ea6fd86512574bd7f7a4ae1ddf43163a56e23"
       },
       "encountered_definition_ids": [
         0
@@ -6474,7 +6474,7 @@
         "choices": [],
         "confirm_label": "Target Forest",
         "focus": [
-          114
+          115
         ],
         "help": null,
         "id": 4,
@@ -6483,12 +6483,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 114,
+              "display_id": 115,
               "entity_id": 56,
               "label": "Forest",
               "subject": {
                 "id": {
-                  "entity": 114,
+                  "entity": 115,
                   "incarnation": 1
                 },
                 "kind": "object"
@@ -6573,8 +6573,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "3b63cc310cf474400ba14a692f354ec30633d203aebca6b2e970728d19f5a8bf",
-        "before": "5a899d6c51838bc0520996c7a184c717e010410f4343b2e5ee9e3705271dc648"
+        "after": "43d669bcd53c022cb93bd60e3a4ea6fd86512574bd7f7a4ae1ddf43163a56e23",
+        "before": "e542f1b955a80bc38b20b0aa08bf352501bfc399372a7b74d4f3f825a4123631"
       },
       "to_revision": 57
     },
@@ -6593,7 +6593,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.22",
         "resulting_revision": 58,
-        "resulting_state_digest": "ba45513dc125e0d62d48d320edcb24a49bc987479348d59e7950c7195a4f6770"
+        "resulting_state_digest": "0315207c9b47c00e7de887adec9aeccc134880475614e57f11a4c9955205dc52"
       },
       "encountered_definition_ids": [
         1,
@@ -6779,8 +6779,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "ba45513dc125e0d62d48d320edcb24a49bc987479348d59e7950c7195a4f6770",
-        "before": "3b63cc310cf474400ba14a692f354ec30633d203aebca6b2e970728d19f5a8bf"
+        "after": "0315207c9b47c00e7de887adec9aeccc134880475614e57f11a4c9955205dc52",
+        "before": "43d669bcd53c022cb93bd60e3a4ea6fd86512574bd7f7a4ae1ddf43163a56e23"
       },
       "to_revision": 58
     },
@@ -6799,7 +6799,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.23",
         "resulting_revision": 59,
-        "resulting_state_digest": "68694b73028e29b3cc61162ccc81f2eb6e8dc877f18349792bf6ee7bf35d6088"
+        "resulting_state_digest": "e401ceff41408abc296f88951376f9e35bad538dce28ad838f7bbbe90f74a525"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -6829,8 +6829,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "68694b73028e29b3cc61162ccc81f2eb6e8dc877f18349792bf6ee7bf35d6088",
-        "before": "ba45513dc125e0d62d48d320edcb24a49bc987479348d59e7950c7195a4f6770"
+        "after": "e401ceff41408abc296f88951376f9e35bad538dce28ad838f7bbbe90f74a525",
+        "before": "0315207c9b47c00e7de887adec9aeccc134880475614e57f11a4c9955205dc52"
       },
       "to_revision": 59
     },
@@ -6849,7 +6849,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.24",
         "resulting_revision": 60,
-        "resulting_state_digest": "2fcb3df434605f2238b5d5c31f1b88f38bf7341c51eeea1f9f00a0f8e8a1beee"
+        "resulting_state_digest": "24d9e4175055c57a6b7b4b9fd669413b635cd08dee33c30c26218ff143eb33e7"
       },
       "encountered_definition_ids": [
         2,
@@ -6867,14 +6867,14 @@
         "choices": [],
         "confirm_label": "Activate ability: Clue",
         "focus": [
-          133
+          135
         ],
         "help": null,
         "id": 0,
         "label": "Activate ability: Clue",
         "source": {
           "id": {
-            "entity": 133,
+            "entity": 135,
             "incarnation": 0
           },
           "kind": "object"
@@ -6882,12 +6882,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 133,
+              "display_id": 135,
               "entity_id": 86,
               "label": "Clue",
               "subject": {
                 "id": {
-                  "entity": 133,
+                  "entity": 135,
                   "incarnation": 0
                 },
                 "kind": "object"
@@ -6941,8 +6941,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "2fcb3df434605f2238b5d5c31f1b88f38bf7341c51eeea1f9f00a0f8e8a1beee",
-        "before": "68694b73028e29b3cc61162ccc81f2eb6e8dc877f18349792bf6ee7bf35d6088"
+        "after": "24d9e4175055c57a6b7b4b9fd669413b635cd08dee33c30c26218ff143eb33e7",
+        "before": "e401ceff41408abc296f88951376f9e35bad538dce28ad838f7bbbe90f74a525"
       },
       "to_revision": 60
     },
@@ -6961,7 +6961,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.25",
         "resulting_revision": 61,
-        "resulting_state_digest": "6b56c5d1f9e283ffeca017d4f56ce497c69f38c640b1ec70d81fbb7789970ab5"
+        "resulting_state_digest": "2c497bea9e429cb09d7afcc5188ee85f9b0bf8b27c4f7759c9381d6f45d26324"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -7023,8 +7023,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "6b56c5d1f9e283ffeca017d4f56ce497c69f38c640b1ec70d81fbb7789970ab5",
-        "before": "2fcb3df434605f2238b5d5c31f1b88f38bf7341c51eeea1f9f00a0f8e8a1beee"
+        "after": "2c497bea9e429cb09d7afcc5188ee85f9b0bf8b27c4f7759c9381d6f45d26324",
+        "before": "24d9e4175055c57a6b7b4b9fd669413b635cd08dee33c30c26218ff143eb33e7"
       },
       "to_revision": 61
     },
@@ -7043,7 +7043,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.36",
         "resulting_revision": 62,
-        "resulting_state_digest": "373b394b80f70ee1cebc4c98196636651d403f189a6eee69c6ed107be95a3efa"
+        "resulting_state_digest": "7640d48d0dc3d4878a31596ee65caf0ef98ec30304da88cbfb6f4fe4fa97b9b0"
       },
       "encountered_definition_ids": [
         26
@@ -7059,14 +7059,14 @@
         "choices": [],
         "confirm_label": "Activate ability: Water Tribe Rallier",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 0,
         "label": "Activate ability: Water Tribe Rallier",
         "source": {
           "id": {
-            "entity": 118,
+            "entity": 119,
             "incarnation": 3
           },
           "kind": "object"
@@ -7074,12 +7074,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7102,8 +7102,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "373b394b80f70ee1cebc4c98196636651d403f189a6eee69c6ed107be95a3efa",
-        "before": "6b56c5d1f9e283ffeca017d4f56ce497c69f38c640b1ec70d81fbb7789970ab5"
+        "after": "7640d48d0dc3d4878a31596ee65caf0ef98ec30304da88cbfb6f4fe4fa97b9b0",
+        "before": "2c497bea9e429cb09d7afcc5188ee85f9b0bf8b27c4f7759c9381d6f45d26324"
       },
       "to_revision": 62
     },
@@ -7122,7 +7122,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.37",
         "resulting_revision": 63,
-        "resulting_state_digest": "4c1d938745c4f7a950974c9501b474c36f71e79413386a1aceff7303ca739ae7"
+        "resulting_state_digest": "058d6b168deb3c01df7d7e4197f3dd66e893d0228b92d1877ffd0ed4795ba5cf"
       },
       "encountered_definition_ids": [
         27
@@ -7136,7 +7136,7 @@
         "choices": [],
         "confirm_label": "Tap White Lotus Reinforcements to help pay",
         "focus": [
-          111
+          112
         ],
         "help": null,
         "id": 0,
@@ -7145,12 +7145,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 111,
+              "display_id": 112,
               "entity_id": 78,
               "label": "White Lotus Reinforcements",
               "subject": {
                 "id": {
-                  "entity": 111,
+                  "entity": 112,
                   "incarnation": 2
                 },
                 "kind": "object"
@@ -7173,8 +7173,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "4c1d938745c4f7a950974c9501b474c36f71e79413386a1aceff7303ca739ae7",
-        "before": "373b394b80f70ee1cebc4c98196636651d403f189a6eee69c6ed107be95a3efa"
+        "after": "058d6b168deb3c01df7d7e4197f3dd66e893d0228b92d1877ffd0ed4795ba5cf",
+        "before": "7640d48d0dc3d4878a31596ee65caf0ef98ec30304da88cbfb6f4fe4fa97b9b0"
       },
       "to_revision": 63
     },
@@ -7193,7 +7193,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.38",
         "resulting_revision": 64,
-        "resulting_state_digest": "f169924108ed7619bb2affb2458c08d8aa3a648df6835d0fa7a0f41cd38e7e08"
+        "resulting_state_digest": "f2300d23185e5b476d934dc74c380886474f050022d96bde57e1f8abb4fda350"
       },
       "encountered_definition_ids": [
         0,
@@ -7222,12 +7222,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7250,8 +7250,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "f169924108ed7619bb2affb2458c08d8aa3a648df6835d0fa7a0f41cd38e7e08",
-        "before": "4c1d938745c4f7a950974c9501b474c36f71e79413386a1aceff7303ca739ae7"
+        "after": "f2300d23185e5b476d934dc74c380886474f050022d96bde57e1f8abb4fda350",
+        "before": "058d6b168deb3c01df7d7e4197f3dd66e893d0228b92d1877ffd0ed4795ba5cf"
       },
       "to_revision": 64
     },
@@ -7270,7 +7270,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.39",
         "resulting_revision": 65,
-        "resulting_state_digest": "2cc8856f2c4802059c78cc99d2c4e26ece8cbb9b14845a4fd4b5cb94eeed2ea6"
+        "resulting_state_digest": "aca4fade2b754623e80f27e503e8ca9f2af49e9de25dfcf916e56982796661b9"
       },
       "encountered_definition_ids": [
         26
@@ -7286,14 +7286,14 @@
         "choices": [],
         "confirm_label": "Activate ability: Water Tribe Rallier",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 0,
         "label": "Activate ability: Water Tribe Rallier",
         "source": {
           "id": {
-            "entity": 118,
+            "entity": 119,
             "incarnation": 3
           },
           "kind": "object"
@@ -7301,12 +7301,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7329,8 +7329,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "2cc8856f2c4802059c78cc99d2c4e26ece8cbb9b14845a4fd4b5cb94eeed2ea6",
-        "before": "f169924108ed7619bb2affb2458c08d8aa3a648df6835d0fa7a0f41cd38e7e08"
+        "after": "aca4fade2b754623e80f27e503e8ca9f2af49e9de25dfcf916e56982796661b9",
+        "before": "f2300d23185e5b476d934dc74c380886474f050022d96bde57e1f8abb4fda350"
       },
       "to_revision": 65
     },
@@ -7349,7 +7349,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.40",
         "resulting_revision": 66,
-        "resulting_state_digest": "2d02208e13f34b97287d97b8c54e9f1ce9794b3e78be8dfbd3aa09ec83fa561c"
+        "resulting_state_digest": "6a9cfa192fc07415402940d1431016e9c9f69422ebd658034996ce426e1dcdba"
       },
       "encountered_definition_ids": [
         9,
@@ -7368,7 +7368,7 @@
         "choices": [],
         "confirm_label": "Tap Badgermole Cub to help pay",
         "focus": [
-          127
+          128
         ],
         "help": null,
         "id": 2,
@@ -7377,12 +7377,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 127,
+              "display_id": 128,
               "entity_id": 43,
               "label": "Badgermole Cub",
               "subject": {
                 "id": {
-                  "entity": 127,
+                  "entity": 128,
                   "incarnation": 6
                 },
                 "kind": "object"
@@ -7405,8 +7405,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "2d02208e13f34b97287d97b8c54e9f1ce9794b3e78be8dfbd3aa09ec83fa561c",
-        "before": "2cc8856f2c4802059c78cc99d2c4e26ece8cbb9b14845a4fd4b5cb94eeed2ea6"
+        "after": "6a9cfa192fc07415402940d1431016e9c9f69422ebd658034996ce426e1dcdba",
+        "before": "aca4fade2b754623e80f27e503e8ca9f2af49e9de25dfcf916e56982796661b9"
       },
       "to_revision": 66
     },
@@ -7425,7 +7425,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.41",
         "resulting_revision": 67,
-        "resulting_state_digest": "4ee230e49cae8fad6199fe8f4b8a7f9368669efdf77a84695747d19d8ff226d5"
+        "resulting_state_digest": "eee32b31519c2bd93e8f33cbd905892d1b92b98b5d21e82804133512caeb76d6"
       },
       "encountered_definition_ids": [
         26
@@ -7441,7 +7441,7 @@
         "choices": [],
         "confirm_label": "Tap Water Tribe Rallier to help pay",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 1,
@@ -7450,12 +7450,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7478,8 +7478,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "4ee230e49cae8fad6199fe8f4b8a7f9368669efdf77a84695747d19d8ff226d5",
-        "before": "2d02208e13f34b97287d97b8c54e9f1ce9794b3e78be8dfbd3aa09ec83fa561c"
+        "after": "eee32b31519c2bd93e8f33cbd905892d1b92b98b5d21e82804133512caeb76d6",
+        "before": "6a9cfa192fc07415402940d1431016e9c9f69422ebd658034996ce426e1dcdba"
       },
       "to_revision": 67
     },
@@ -7498,7 +7498,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.42",
         "resulting_revision": 68,
-        "resulting_state_digest": "d8494b77f99e9d6d6445a9181330dab2072dffa4167960eb9ee042d8c70b18d0"
+        "resulting_state_digest": "b0f2f0494e3d16af2b028f2d91b350261df9908dea31c8d14b3e99756cc99f3c"
       },
       "encountered_definition_ids": [
         0,
@@ -7527,12 +7527,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7555,8 +7555,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "d8494b77f99e9d6d6445a9181330dab2072dffa4167960eb9ee042d8c70b18d0",
-        "before": "4ee230e49cae8fad6199fe8f4b8a7f9368669efdf77a84695747d19d8ff226d5"
+        "after": "b0f2f0494e3d16af2b028f2d91b350261df9908dea31c8d14b3e99756cc99f3c",
+        "before": "eee32b31519c2bd93e8f33cbd905892d1b92b98b5d21e82804133512caeb76d6"
       },
       "to_revision": 68
     },
@@ -7575,7 +7575,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.43",
         "resulting_revision": 69,
-        "resulting_state_digest": "6787d7f49a0d9a9e53adab2a0c65b377f5f2dc98b8c8ad7a34e662c8cf9f5aac"
+        "resulting_state_digest": "d3df557924c80914205b84dae0d450d1902136e8444468c1179250ff567c01a4"
       },
       "encountered_definition_ids": [
         3,
@@ -7667,8 +7667,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "6787d7f49a0d9a9e53adab2a0c65b377f5f2dc98b8c8ad7a34e662c8cf9f5aac",
-        "before": "d8494b77f99e9d6d6445a9181330dab2072dffa4167960eb9ee042d8c70b18d0"
+        "after": "d3df557924c80914205b84dae0d450d1902136e8444468c1179250ff567c01a4",
+        "before": "b0f2f0494e3d16af2b028f2d91b350261df9908dea31c8d14b3e99756cc99f3c"
       },
       "to_revision": 69
     },
@@ -7687,7 +7687,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.44",
         "resulting_revision": 70,
-        "resulting_state_digest": "f768995d848d4beb12831678b1a3f6a6a4b8d36fae7864cdad9e1af2b87b25ab"
+        "resulting_state_digest": "f6471fb17c9b8eb6ee598a2b2cf32c3af77ef992a072193bb49a7a9084070097"
       },
       "encountered_definition_ids": [
         26
@@ -7712,12 +7712,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7756,8 +7756,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "f768995d848d4beb12831678b1a3f6a6a4b8d36fae7864cdad9e1af2b87b25ab",
-        "before": "6787d7f49a0d9a9e53adab2a0c65b377f5f2dc98b8c8ad7a34e662c8cf9f5aac"
+        "after": "f6471fb17c9b8eb6ee598a2b2cf32c3af77ef992a072193bb49a7a9084070097",
+        "before": "d3df557924c80914205b84dae0d450d1902136e8444468c1179250ff567c01a4"
       },
       "to_revision": 70
     },
@@ -7776,7 +7776,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.45",
         "resulting_revision": 71,
-        "resulting_state_digest": "74372c225a7e499d3eac9606beada2d994c97a840deee3abc5a12d0ecf3811a5"
+        "resulting_state_digest": "00d626da6977177c0c9594012e8f52ba5991b1b94f8473bc8aa776e0ea07b6ff"
       },
       "encountered_definition_ids": [
         0
@@ -7853,8 +7853,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "74372c225a7e499d3eac9606beada2d994c97a840deee3abc5a12d0ecf3811a5",
-        "before": "f768995d848d4beb12831678b1a3f6a6a4b8d36fae7864cdad9e1af2b87b25ab"
+        "after": "00d626da6977177c0c9594012e8f52ba5991b1b94f8473bc8aa776e0ea07b6ff",
+        "before": "f6471fb17c9b8eb6ee598a2b2cf32c3af77ef992a072193bb49a7a9084070097"
       },
       "to_revision": 71
     },
@@ -7873,7 +7873,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.46",
         "resulting_revision": 72,
-        "resulting_state_digest": "8378b2e26a5388976a134dd07c22e3e0b6bbd67a20e0fff66b9aa581c6d342dc"
+        "resulting_state_digest": "7eb4862fd84af27310f3a40a6d7cf86fc0baddb9175228e7685b248489c4a785"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -7903,8 +7903,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8378b2e26a5388976a134dd07c22e3e0b6bbd67a20e0fff66b9aa581c6d342dc",
-        "before": "74372c225a7e499d3eac9606beada2d994c97a840deee3abc5a12d0ecf3811a5"
+        "after": "7eb4862fd84af27310f3a40a6d7cf86fc0baddb9175228e7685b248489c4a785",
+        "before": "00d626da6977177c0c9594012e8f52ba5991b1b94f8473bc8aa776e0ea07b6ff"
       },
       "to_revision": 72
     },
@@ -7923,7 +7923,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.47",
         "resulting_revision": 73,
-        "resulting_state_digest": "3af7d86946aaac35d81c2990fae84b07dc34db4ec31a96ca0242b324927b914a"
+        "resulting_state_digest": "73795c34969cbe4815614d696a82b6aa99aac23302a0914e0f7c26cc417a4301"
       },
       "encountered_definition_ids": [
         9,
@@ -7942,7 +7942,7 @@
         "choices": [],
         "confirm_label": "Attack with Compassionate Healer",
         "focus": [
-          116
+          117
         ],
         "help": null,
         "id": 0,
@@ -7951,12 +7951,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 116,
+              "display_id": 117,
               "entity_id": 46,
               "label": "Compassionate Healer",
               "subject": {
                 "id": {
-                  "entity": 116,
+                  "entity": 117,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -7982,7 +7982,7 @@
           "kind": {
             "attackers": [
               {
-                "entity": 116,
+                "entity": 117,
                 "incarnation": 3
               }
             ],
@@ -8010,7 +8010,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 116,
+          "source_id": 117,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -8053,8 +8053,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "3af7d86946aaac35d81c2990fae84b07dc34db4ec31a96ca0242b324927b914a",
-        "before": "8378b2e26a5388976a134dd07c22e3e0b6bbd67a20e0fff66b9aa581c6d342dc"
+        "after": "73795c34969cbe4815614d696a82b6aa99aac23302a0914e0f7c26cc417a4301",
+        "before": "7eb4862fd84af27310f3a40a6d7cf86fc0baddb9175228e7685b248489c4a785"
       },
       "to_revision": 73
     },
@@ -8073,7 +8073,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.48",
         "resulting_revision": 74,
-        "resulting_state_digest": "5db8cfa79686393e6dfcbe6d41dfafdb3728fbc0bd38f72aa84b184c8a3b7152"
+        "resulting_state_digest": "5bf7da94bc1a36df561eae978d0592c38cc3c6b837534724ff74fd6d7af4b429"
       },
       "encountered_definition_ids": [
         3
@@ -8126,8 +8126,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5db8cfa79686393e6dfcbe6d41dfafdb3728fbc0bd38f72aa84b184c8a3b7152",
-        "before": "3af7d86946aaac35d81c2990fae84b07dc34db4ec31a96ca0242b324927b914a"
+        "after": "5bf7da94bc1a36df561eae978d0592c38cc3c6b837534724ff74fd6d7af4b429",
+        "before": "73795c34969cbe4815614d696a82b6aa99aac23302a0914e0f7c26cc417a4301"
       },
       "to_revision": 74
     },
@@ -8146,7 +8146,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.26",
         "resulting_revision": 75,
-        "resulting_state_digest": "19f2ccf94873689e50d7a9d14bae9420d0a4093bdcad2702c0538f7c9c5fa0b9"
+        "resulting_state_digest": "d56e5914200309de1c6b3469fa1aa0301e4745b934b38a6b013f86080f5e0c62"
       },
       "encountered_definition_ids": [
         9,
@@ -8167,7 +8167,7 @@
         "choices": [],
         "confirm_label": "Forecasting Fortune Teller: do not block",
         "focus": [
-          130
+          132
         ],
         "help": null,
         "id": 1,
@@ -8176,12 +8176,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 130,
+              "display_id": 132,
               "entity_id": 13,
               "label": "Forecasting Fortune Teller",
               "subject": {
                 "id": {
-                  "entity": 130,
+                  "entity": 132,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -8209,7 +8209,7 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 116,
+                "entity": 117,
                 "incarnation": 3
               },
               "kind": "object"
@@ -8254,7 +8254,7 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 1,
-          "source_id": 116,
+          "source_id": 117,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -8280,8 +8280,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "19f2ccf94873689e50d7a9d14bae9420d0a4093bdcad2702c0538f7c9c5fa0b9",
-        "before": "5db8cfa79686393e6dfcbe6d41dfafdb3728fbc0bd38f72aa84b184c8a3b7152"
+        "after": "d56e5914200309de1c6b3469fa1aa0301e4745b934b38a6b013f86080f5e0c62",
+        "before": "5bf7da94bc1a36df561eae978d0592c38cc3c6b837534724ff74fd6d7af4b429"
       },
       "to_revision": 75
     },
@@ -8300,7 +8300,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.49",
         "resulting_revision": 76,
-        "resulting_state_digest": "7ac54d0b6d96239ce95e3c496fac16c98c382649e25f0dcd9bd880597ebc189d"
+        "resulting_state_digest": "55e7f9cd7ce25bd92425a6615eb224d7d1f5deb2397f91a3eef0a3f94679d22e"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -8377,8 +8377,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "7ac54d0b6d96239ce95e3c496fac16c98c382649e25f0dcd9bd880597ebc189d",
-        "before": "19f2ccf94873689e50d7a9d14bae9420d0a4093bdcad2702c0538f7c9c5fa0b9"
+        "after": "55e7f9cd7ce25bd92425a6615eb224d7d1f5deb2397f91a3eef0a3f94679d22e",
+        "before": "d56e5914200309de1c6b3469fa1aa0301e4745b934b38a6b013f86080f5e0c62"
       },
       "to_revision": 76
     },
@@ -8397,7 +8397,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.27",
         "resulting_revision": 77,
-        "resulting_state_digest": "b4812b75c0753d23d58a305bdd18f1496ae1d666c174b7831377e68bf61f639d"
+        "resulting_state_digest": "aafde33f3ddb723bced041908e0d93f9fcc522f88e53fb071396c3ec99b05463"
       },
       "encountered_definition_ids": [
         2
@@ -8472,8 +8472,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "b4812b75c0753d23d58a305bdd18f1496ae1d666c174b7831377e68bf61f639d",
-        "before": "7ac54d0b6d96239ce95e3c496fac16c98c382649e25f0dcd9bd880597ebc189d"
+        "after": "aafde33f3ddb723bced041908e0d93f9fcc522f88e53fb071396c3ec99b05463",
+        "before": "55e7f9cd7ce25bd92425a6615eb224d7d1f5deb2397f91a3eef0a3f94679d22e"
       },
       "to_revision": 77
     },
@@ -8492,7 +8492,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.28",
         "resulting_revision": 78,
-        "resulting_state_digest": "644d88a0c71b1a04c35cf2c956d437796d679eec5d1f8d6cb6d0f4de07174f86"
+        "resulting_state_digest": "5057a013e7f2a849eed79d3406e1e5bfcaf0e98959c68b88dc15f5668b63331c"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -8522,8 +8522,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "644d88a0c71b1a04c35cf2c956d437796d679eec5d1f8d6cb6d0f4de07174f86",
-        "before": "b4812b75c0753d23d58a305bdd18f1496ae1d666c174b7831377e68bf61f639d"
+        "after": "5057a013e7f2a849eed79d3406e1e5bfcaf0e98959c68b88dc15f5668b63331c",
+        "before": "aafde33f3ddb723bced041908e0d93f9fcc522f88e53fb071396c3ec99b05463"
       },
       "to_revision": 78
     },
@@ -8542,7 +8542,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.29",
         "resulting_revision": 79,
-        "resulting_state_digest": "97b7da643424433ff828a3938f85cb7b3adcb95bebd70de077c5b34345568265"
+        "resulting_state_digest": "2077c8a337f85569ef39cb8c924914e021a21e558aee258b62b7544ddbe491b9"
       },
       "encountered_definition_ids": [
         18
@@ -8558,7 +8558,7 @@
         "choices": [],
         "confirm_label": "Attack with Forecasting Fortune Teller",
         "focus": [
-          130
+          132
         ],
         "help": null,
         "id": 0,
@@ -8567,12 +8567,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 130,
+              "display_id": 132,
               "entity_id": 13,
               "label": "Forecasting Fortune Teller",
               "subject": {
                 "id": {
-                  "entity": 130,
+                  "entity": 132,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -8598,7 +8598,7 @@
           "kind": {
             "attackers": [
               {
-                "entity": 130,
+                "entity": 132,
                 "incarnation": 3
               }
             ],
@@ -8623,7 +8623,7 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 130,
+                "entity": 132,
                 "incarnation": 3
               },
               "kind": "object"
@@ -8651,7 +8651,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 130,
+          "source_id": 132,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 1,
@@ -8683,7 +8683,7 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 2,
-          "source_id": 130,
+          "source_id": 132,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 1,
@@ -8709,8 +8709,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "97b7da643424433ff828a3938f85cb7b3adcb95bebd70de077c5b34345568265",
-        "before": "644d88a0c71b1a04c35cf2c956d437796d679eec5d1f8d6cb6d0f4de07174f86"
+        "after": "2077c8a337f85569ef39cb8c924914e021a21e558aee258b62b7544ddbe491b9",
+        "before": "5057a013e7f2a849eed79d3406e1e5bfcaf0e98959c68b88dc15f5668b63331c"
       },
       "to_revision": 79
     },
@@ -8729,7 +8729,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.30",
         "resulting_revision": 80,
-        "resulting_state_digest": "c92362ffb9942b7bb4ac875418de4e20bf5aa1e13d19a6c67069364de5f4eb1e"
+        "resulting_state_digest": "777e9d03662da7062e5c951611dcb9b4cb59d4da146e862f5d2133e3abc96c4b"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -8791,8 +8791,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "c92362ffb9942b7bb4ac875418de4e20bf5aa1e13d19a6c67069364de5f4eb1e",
-        "before": "97b7da643424433ff828a3938f85cb7b3adcb95bebd70de077c5b34345568265"
+        "after": "777e9d03662da7062e5c951611dcb9b4cb59d4da146e862f5d2133e3abc96c4b",
+        "before": "2077c8a337f85569ef39cb8c924914e021a21e558aee258b62b7544ddbe491b9"
       },
       "to_revision": 80
     },
@@ -8811,7 +8811,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.50",
         "resulting_revision": 81,
-        "resulting_state_digest": "9fb704cb66da10726f19931094619771fa573db9cb473037f104f6c9bcf230c6"
+        "resulting_state_digest": "d3d4fca222dc151550d71e44d989a569a297a7daf6f12b3d96bcf8da434c80c1"
       },
       "encountered_definition_ids": [
         26
@@ -8827,14 +8827,14 @@
         "choices": [],
         "confirm_label": "Activate ability: Water Tribe Rallier",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 0,
         "label": "Activate ability: Water Tribe Rallier",
         "source": {
           "id": {
-            "entity": 118,
+            "entity": 119,
             "incarnation": 3
           },
           "kind": "object"
@@ -8842,12 +8842,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -8870,8 +8870,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "9fb704cb66da10726f19931094619771fa573db9cb473037f104f6c9bcf230c6",
-        "before": "c92362ffb9942b7bb4ac875418de4e20bf5aa1e13d19a6c67069364de5f4eb1e"
+        "after": "d3d4fca222dc151550d71e44d989a569a297a7daf6f12b3d96bcf8da434c80c1",
+        "before": "777e9d03662da7062e5c951611dcb9b4cb59d4da146e862f5d2133e3abc96c4b"
       },
       "to_revision": 81
     },
@@ -8890,7 +8890,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.51",
         "resulting_revision": 82,
-        "resulting_state_digest": "dfe86cb385b96d2620e4586080dd3938e12f55273fab4931d1c57c6da0711de9"
+        "resulting_state_digest": "c36803762a12df97f61000e35838cc7cc2fd7542ce823e85a144c97a83918a5a"
       },
       "encountered_definition_ids": [
         10
@@ -8906,7 +8906,7 @@
         "choices": [],
         "confirm_label": "Tap Compassionate Healer to help pay",
         "focus": [
-          116
+          117
         ],
         "help": null,
         "id": 1,
@@ -8915,12 +8915,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 116,
+              "display_id": 117,
               "entity_id": 46,
               "label": "Compassionate Healer",
               "subject": {
                 "id": {
-                  "entity": 116,
+                  "entity": 117,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -8943,8 +8943,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "dfe86cb385b96d2620e4586080dd3938e12f55273fab4931d1c57c6da0711de9",
-        "before": "9fb704cb66da10726f19931094619771fa573db9cb473037f104f6c9bcf230c6"
+        "after": "c36803762a12df97f61000e35838cc7cc2fd7542ce823e85a144c97a83918a5a",
+        "before": "d3d4fca222dc151550d71e44d989a569a297a7daf6f12b3d96bcf8da434c80c1"
       },
       "to_revision": 82
     },
@@ -8963,7 +8963,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.52",
         "resulting_revision": 83,
-        "resulting_state_digest": "fb438fe884e66f4a8a54a7bdf2f0f8781a4ab19f2eaf6614d9c3c4cd352e57b6"
+        "resulting_state_digest": "bbfa78cec46ad4e91940c046a8648a7aa6e78bca0b1b1981b65d7d7889385a3f"
       },
       "encountered_definition_ids": [
         26
@@ -8979,7 +8979,7 @@
         "choices": [],
         "confirm_label": "Tap Water Tribe Rallier to help pay",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 1,
@@ -8988,12 +8988,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -9016,8 +9016,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "fb438fe884e66f4a8a54a7bdf2f0f8781a4ab19f2eaf6614d9c3c4cd352e57b6",
-        "before": "dfe86cb385b96d2620e4586080dd3938e12f55273fab4931d1c57c6da0711de9"
+        "after": "bbfa78cec46ad4e91940c046a8648a7aa6e78bca0b1b1981b65d7d7889385a3f",
+        "before": "c36803762a12df97f61000e35838cc7cc2fd7542ce823e85a144c97a83918a5a"
       },
       "to_revision": 83
     },
@@ -9036,7 +9036,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.53",
         "resulting_revision": 84,
-        "resulting_state_digest": "23da9e96a04cde1d9449342245409ce21ab1df3662ef5c3e15ba7eef12b53a83"
+        "resulting_state_digest": "0964cf2ea38dd48f6616be0f6324dfd4c431e5d679f0c523e6f1fc9fb48bf197"
       },
       "encountered_definition_ids": [
         0,
@@ -9070,12 +9070,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -9116,8 +9116,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "23da9e96a04cde1d9449342245409ce21ab1df3662ef5c3e15ba7eef12b53a83",
-        "before": "fb438fe884e66f4a8a54a7bdf2f0f8781a4ab19f2eaf6614d9c3c4cd352e57b6"
+        "after": "0964cf2ea38dd48f6616be0f6324dfd4c431e5d679f0c523e6f1fc9fb48bf197",
+        "before": "bbfa78cec46ad4e91940c046a8648a7aa6e78bca0b1b1981b65d7d7889385a3f"
       },
       "to_revision": 84
     },
@@ -9136,7 +9136,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.54",
         "resulting_revision": 85,
-        "resulting_state_digest": "a0e677608b27370bb9ff2ff3fce55740417d849a46a8ad620b68e0a4e620c60f"
+        "resulting_state_digest": "c45e076db5c2cb73f46f35383b8f36102b86672649f7505477061ea2c8cceb72"
       },
       "encountered_definition_ids": [
         10,
@@ -9188,8 +9188,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "a0e677608b27370bb9ff2ff3fce55740417d849a46a8ad620b68e0a4e620c60f",
-        "before": "23da9e96a04cde1d9449342245409ce21ab1df3662ef5c3e15ba7eef12b53a83"
+        "after": "c45e076db5c2cb73f46f35383b8f36102b86672649f7505477061ea2c8cceb72",
+        "before": "0964cf2ea38dd48f6616be0f6324dfd4c431e5d679f0c523e6f1fc9fb48bf197"
       },
       "to_revision": 85
     },
@@ -9208,7 +9208,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.55",
         "resulting_revision": 86,
-        "resulting_state_digest": "3d34de96130da51831c122961aa6ef270dd0ce40081f2a0b94dc727a786960e4"
+        "resulting_state_digest": "2c0d4c1dfd50fc9e9999c29cb091705e0b99963dddefb0fd5872bef9c8aab9cf"
       },
       "encountered_definition_ids": [
         3,
@@ -9263,8 +9263,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "3d34de96130da51831c122961aa6ef270dd0ce40081f2a0b94dc727a786960e4",
-        "before": "a0e677608b27370bb9ff2ff3fce55740417d849a46a8ad620b68e0a4e620c60f"
+        "after": "2c0d4c1dfd50fc9e9999c29cb091705e0b99963dddefb0fd5872bef9c8aab9cf",
+        "before": "c45e076db5c2cb73f46f35383b8f36102b86672649f7505477061ea2c8cceb72"
       },
       "to_revision": 86
     },
@@ -9283,7 +9283,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.56",
         "resulting_revision": 87,
-        "resulting_state_digest": "c69909121651862f70bbf7a3c801f34b829dbfc21f89df1f008eefe99b49fdba"
+        "resulting_state_digest": "8e466cab1db2c912ef1002676082ae869a9a44f27c23c9283ac743cdca83ae5f"
       },
       "encountered_definition_ids": [
         26
@@ -9299,14 +9299,14 @@
         "choices": [],
         "confirm_label": "Activate ability: Water Tribe Rallier",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 0,
         "label": "Activate ability: Water Tribe Rallier",
         "source": {
           "id": {
-            "entity": 118,
+            "entity": 119,
             "incarnation": 3
           },
           "kind": "object"
@@ -9314,12 +9314,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -9342,8 +9342,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "c69909121651862f70bbf7a3c801f34b829dbfc21f89df1f008eefe99b49fdba",
-        "before": "3d34de96130da51831c122961aa6ef270dd0ce40081f2a0b94dc727a786960e4"
+        "after": "8e466cab1db2c912ef1002676082ae869a9a44f27c23c9283ac743cdca83ae5f",
+        "before": "2c0d4c1dfd50fc9e9999c29cb091705e0b99963dddefb0fd5872bef9c8aab9cf"
       },
       "to_revision": 87
     },
@@ -9362,7 +9362,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.57",
         "resulting_revision": 88,
-        "resulting_state_digest": "726648a641371e97e12eafb1c665fba09290588eb840f312caf972249c4b7233"
+        "resulting_state_digest": "bafd5661f9573ae6208cca780cdce9f9b711330fad1c56fee284b91a30c22c9b"
       },
       "encountered_definition_ids": [
         9,
@@ -9381,7 +9381,7 @@
         "choices": [],
         "confirm_label": "Tap Badgermole Cub to help pay",
         "focus": [
-          127
+          128
         ],
         "help": null,
         "id": 1,
@@ -9390,12 +9390,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 127,
+              "display_id": 128,
               "entity_id": 43,
               "label": "Badgermole Cub",
               "subject": {
                 "id": {
-                  "entity": 127,
+                  "entity": 128,
                   "incarnation": 6
                 },
                 "kind": "object"
@@ -9418,8 +9418,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "726648a641371e97e12eafb1c665fba09290588eb840f312caf972249c4b7233",
-        "before": "c69909121651862f70bbf7a3c801f34b829dbfc21f89df1f008eefe99b49fdba"
+        "after": "bafd5661f9573ae6208cca780cdce9f9b711330fad1c56fee284b91a30c22c9b",
+        "before": "8e466cab1db2c912ef1002676082ae869a9a44f27c23c9283ac743cdca83ae5f"
       },
       "to_revision": 88
     },
@@ -9438,7 +9438,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.58",
         "resulting_revision": 89,
-        "resulting_state_digest": "5725e12cd613720e48902bd20d3c63021725cf561d83eacd034b333fcce16954"
+        "resulting_state_digest": "d61974ae3c01638e06f1748e4b2c67939dadc5cb952fedf9e455434334b1d75e"
       },
       "encountered_definition_ids": [
         0,
@@ -9467,12 +9467,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -9495,8 +9495,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5725e12cd613720e48902bd20d3c63021725cf561d83eacd034b333fcce16954",
-        "before": "726648a641371e97e12eafb1c665fba09290588eb840f312caf972249c4b7233"
+        "after": "d61974ae3c01638e06f1748e4b2c67939dadc5cb952fedf9e455434334b1d75e",
+        "before": "bafd5661f9573ae6208cca780cdce9f9b711330fad1c56fee284b91a30c22c9b"
       },
       "to_revision": 89
     },
@@ -9515,7 +9515,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.59",
         "resulting_revision": 90,
-        "resulting_state_digest": "9c416967b8e933f8d5adf6a52cfbbe71bcc71252145b4404838c4e5f82302004"
+        "resulting_state_digest": "792ee2011310d1a3730e1c949e1c7b180d83c24188b897d2c632eb5ba07d67d9"
       },
       "encountered_definition_ids": [
         13,
@@ -9604,8 +9604,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "9c416967b8e933f8d5adf6a52cfbbe71bcc71252145b4404838c4e5f82302004",
-        "before": "5725e12cd613720e48902bd20d3c63021725cf561d83eacd034b333fcce16954"
+        "after": "792ee2011310d1a3730e1c949e1c7b180d83c24188b897d2c632eb5ba07d67d9",
+        "before": "d61974ae3c01638e06f1748e4b2c67939dadc5cb952fedf9e455434334b1d75e"
       },
       "to_revision": 90
     },
@@ -9624,7 +9624,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.60",
         "resulting_revision": 91,
-        "resulting_state_digest": "0706ca379f2a8b755870202ce4404686454b00431c063142b02297673e30fa24"
+        "resulting_state_digest": "3c946981dd54262ed3e6471fb05ace23cf048e33e76f2dd27cff40385ee8b88f"
       },
       "encountered_definition_ids": [
         3,
@@ -9651,12 +9651,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -9697,8 +9697,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "0706ca379f2a8b755870202ce4404686454b00431c063142b02297673e30fa24",
-        "before": "9c416967b8e933f8d5adf6a52cfbbe71bcc71252145b4404838c4e5f82302004"
+        "after": "3c946981dd54262ed3e6471fb05ace23cf048e33e76f2dd27cff40385ee8b88f",
+        "before": "792ee2011310d1a3730e1c949e1c7b180d83c24188b897d2c632eb5ba07d67d9"
       },
       "to_revision": 91
     },
@@ -9717,7 +9717,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.61",
         "resulting_revision": 92,
-        "resulting_state_digest": "efc29e046a2990fc49865ae641efac3fd0a3e43c078f0d607b6e191a0e511244"
+        "resulting_state_digest": "4457605160fd1b849ec427e4053852d5096649c2a4cca60897574ae8e72fcdf9"
       },
       "encountered_definition_ids": [
         3
@@ -9794,8 +9794,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "efc29e046a2990fc49865ae641efac3fd0a3e43c078f0d607b6e191a0e511244",
-        "before": "0706ca379f2a8b755870202ce4404686454b00431c063142b02297673e30fa24"
+        "after": "4457605160fd1b849ec427e4053852d5096649c2a4cca60897574ae8e72fcdf9",
+        "before": "3c946981dd54262ed3e6471fb05ace23cf048e33e76f2dd27cff40385ee8b88f"
       },
       "to_revision": 92
     },
@@ -9814,7 +9814,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.62",
         "resulting_revision": 93,
-        "resulting_state_digest": "1c5ee4790cdb4e78fe5b8210543ee3dac22a7cc81ca039b01a72f99a3175fd8d"
+        "resulting_state_digest": "a0252bad1b05362574c12c66b9c5c69c8ad070d3620d3ee6e03ee4d9835099e3"
       },
       "encountered_definition_ids": [
         0,
@@ -9973,8 +9973,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "1c5ee4790cdb4e78fe5b8210543ee3dac22a7cc81ca039b01a72f99a3175fd8d",
-        "before": "efc29e046a2990fc49865ae641efac3fd0a3e43c078f0d607b6e191a0e511244"
+        "after": "a0252bad1b05362574c12c66b9c5c69c8ad070d3620d3ee6e03ee4d9835099e3",
+        "before": "4457605160fd1b849ec427e4053852d5096649c2a4cca60897574ae8e72fcdf9"
       },
       "to_revision": 93
     },
@@ -9993,7 +9993,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.63",
         "resulting_revision": 94,
-        "resulting_state_digest": "8e7f3062ea9f305ec1f618b24cf1a0770007aad45960e764d0953adf8fd83dbb"
+        "resulting_state_digest": "59f834991cc82db757300a28e6f66a5604886305abda950d7257d5c653b60e3c"
       },
       "encountered_definition_ids": [
         3
@@ -10062,8 +10062,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "8e7f3062ea9f305ec1f618b24cf1a0770007aad45960e764d0953adf8fd83dbb",
-        "before": "1c5ee4790cdb4e78fe5b8210543ee3dac22a7cc81ca039b01a72f99a3175fd8d"
+        "after": "59f834991cc82db757300a28e6f66a5604886305abda950d7257d5c653b60e3c",
+        "before": "a0252bad1b05362574c12c66b9c5c69c8ad070d3620d3ee6e03ee4d9835099e3"
       },
       "to_revision": 94
     },
@@ -10082,7 +10082,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.64",
         "resulting_revision": 95,
-        "resulting_state_digest": "06b9cb62609a104aa3951d154897eba8b10cb9673f776b40c7dd0b7f6f825ab5"
+        "resulting_state_digest": "8728e705fd63a7cf802f43bd89cbe40721cdbe69412129340bc382f5f016daa9"
       },
       "encountered_definition_ids": [
         27
@@ -10096,7 +10096,7 @@
         "choices": [],
         "confirm_label": "Do not attack with White Lotus Reinforcements",
         "focus": [
-          111
+          112
         ],
         "help": null,
         "id": 1,
@@ -10105,12 +10105,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 111,
+              "display_id": 112,
               "entity_id": 78,
               "label": "White Lotus Reinforcements",
               "subject": {
                 "id": {
-                  "entity": 111,
+                  "entity": 112,
                   "incarnation": 2
                 },
                 "kind": "object"
@@ -10180,8 +10180,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "06b9cb62609a104aa3951d154897eba8b10cb9673f776b40c7dd0b7f6f825ab5",
-        "before": "8e7f3062ea9f305ec1f618b24cf1a0770007aad45960e764d0953adf8fd83dbb"
+        "after": "8728e705fd63a7cf802f43bd89cbe40721cdbe69412129340bc382f5f016daa9",
+        "before": "59f834991cc82db757300a28e6f66a5604886305abda950d7257d5c653b60e3c"
       },
       "to_revision": 95
     },
@@ -10200,7 +10200,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.31",
         "resulting_revision": 96,
-        "resulting_state_digest": "fb1abbb58431550fbccc8e594d84cf518f0dca6fbf5885214601074e7a5f2f95"
+        "resulting_state_digest": "d411aae072e068992b9cb14035b57386935874bfeca0b6de1fadfb4d158aefcc"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -10230,8 +10230,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "fb1abbb58431550fbccc8e594d84cf518f0dca6fbf5885214601074e7a5f2f95",
-        "before": "06b9cb62609a104aa3951d154897eba8b10cb9673f776b40c7dd0b7f6f825ab5"
+        "after": "d411aae072e068992b9cb14035b57386935874bfeca0b6de1fadfb4d158aefcc",
+        "before": "8728e705fd63a7cf802f43bd89cbe40721cdbe69412129340bc382f5f016daa9"
       },
       "to_revision": 96
     },
@@ -10250,7 +10250,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.32",
         "resulting_revision": 97,
-        "resulting_state_digest": "a76e4aeddab62ed32deab1063700462de0c93bb37d94e7f51ba241635e27e85f"
+        "resulting_state_digest": "941fecd97a0c3c779d5ea64c659737ecdac85eb2578cd7ef89d84fdb930fafeb"
       },
       "encountered_definition_ids": [
         1,
@@ -10363,8 +10363,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "a76e4aeddab62ed32deab1063700462de0c93bb37d94e7f51ba241635e27e85f",
-        "before": "fb1abbb58431550fbccc8e594d84cf518f0dca6fbf5885214601074e7a5f2f95"
+        "after": "941fecd97a0c3c779d5ea64c659737ecdac85eb2578cd7ef89d84fdb930fafeb",
+        "before": "d411aae072e068992b9cb14035b57386935874bfeca0b6de1fadfb4d158aefcc"
       },
       "to_revision": 97
     },
@@ -10383,7 +10383,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.33",
         "resulting_revision": 98,
-        "resulting_state_digest": "d3125b41979e3a0eb136417040fda9ab4ba8be243726956cff9e73179118af41"
+        "resulting_state_digest": "e285c676255bce113053dd21192e6fca62bc7e4c3bc708b5f289fd0d5c7a83bb"
       },
       "encountered_definition_ids": [
         25
@@ -10464,8 +10464,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "d3125b41979e3a0eb136417040fda9ab4ba8be243726956cff9e73179118af41",
-        "before": "a76e4aeddab62ed32deab1063700462de0c93bb37d94e7f51ba241635e27e85f"
+        "after": "e285c676255bce113053dd21192e6fca62bc7e4c3bc708b5f289fd0d5c7a83bb",
+        "before": "941fecd97a0c3c779d5ea64c659737ecdac85eb2578cd7ef89d84fdb930fafeb"
       },
       "to_revision": 98
     },
@@ -10484,7 +10484,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.34",
         "resulting_revision": 99,
-        "resulting_state_digest": "52989204140b4f8aefcc0530493e3f651d020c78f96d63ce6c689d4ef3fe7ac5"
+        "resulting_state_digest": "4adc859d0057058a1b1be0fdc9f40ad566257c1a57eba07db18d2e4e87e81d50"
       },
       "encountered_definition_ids": [
         5
@@ -10543,8 +10543,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "52989204140b4f8aefcc0530493e3f651d020c78f96d63ce6c689d4ef3fe7ac5",
-        "before": "d3125b41979e3a0eb136417040fda9ab4ba8be243726956cff9e73179118af41"
+        "after": "4adc859d0057058a1b1be0fdc9f40ad566257c1a57eba07db18d2e4e87e81d50",
+        "before": "e285c676255bce113053dd21192e6fca62bc7e4c3bc708b5f289fd0d5c7a83bb"
       },
       "to_revision": 99
     },
@@ -10563,7 +10563,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.35",
         "resulting_revision": 100,
-        "resulting_state_digest": "caea76be9fb11095b618aae8d3ca88a1ac6056f258f5576ab6aa442f0c411020"
+        "resulting_state_digest": "e58c6b2839249914cc39f00e1b41090801831a3c4cabcf7a985a468ef84bbe53"
       },
       "encountered_definition_ids": [
         1,
@@ -10586,7 +10586,7 @@
         "choices": [],
         "confirm_label": "Target Water Tribe Rallier",
         "focus": [
-          118
+          119
         ],
         "help": null,
         "id": 8,
@@ -10595,12 +10595,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 118,
+              "display_id": 119,
               "entity_id": 76,
               "label": "Water Tribe Rallier",
               "subject": {
                 "id": {
-                  "entity": 118,
+                  "entity": 119,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -10650,7 +10650,7 @@
             },
             "target": {
               "id": {
-                "entity": 118,
+                "entity": 119,
                 "incarnation": 3
               },
               "kind": "object"
@@ -10702,8 +10702,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "caea76be9fb11095b618aae8d3ca88a1ac6056f258f5576ab6aa442f0c411020",
-        "before": "52989204140b4f8aefcc0530493e3f651d020c78f96d63ce6c689d4ef3fe7ac5"
+        "after": "e58c6b2839249914cc39f00e1b41090801831a3c4cabcf7a985a468ef84bbe53",
+        "before": "4adc859d0057058a1b1be0fdc9f40ad566257c1a57eba07db18d2e4e87e81d50"
       },
       "to_revision": 100
     },
@@ -10722,7 +10722,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.36",
         "resulting_revision": 101,
-        "resulting_state_digest": "1cb80b3badd407a9aead8705cfbcafd9131c83f00f2fa63bad189f071db85122"
+        "resulting_state_digest": "c046b48f379ae336586909f4d4f9d4c9da910d584241043ebd068dc7648e4087"
       },
       "encountered_definition_ids": [
         5,
@@ -10783,8 +10783,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "1cb80b3badd407a9aead8705cfbcafd9131c83f00f2fa63bad189f071db85122",
-        "before": "caea76be9fb11095b618aae8d3ca88a1ac6056f258f5576ab6aa442f0c411020"
+        "after": "c046b48f379ae336586909f4d4f9d4c9da910d584241043ebd068dc7648e4087",
+        "before": "e58c6b2839249914cc39f00e1b41090801831a3c4cabcf7a985a468ef84bbe53"
       },
       "to_revision": 101
     },
@@ -10803,7 +10803,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.37",
         "resulting_revision": 102,
-        "resulting_state_digest": "649eed1bcb47e8e73f3a51a998529293de4497ba06c233218766af33a8fad8cb"
+        "resulting_state_digest": "db77db0e34280bcab84212d9709e048f23bdf34cbf65a7fbb17707c910278cb9"
       },
       "encountered_definition_ids": [
         2,
@@ -10825,7 +10825,7 @@
         "choices": [],
         "confirm_label": "Target Tiger-Seal",
         "focus": [
-          148
+          151
         ],
         "help": null,
         "id": 1,
@@ -10834,12 +10834,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 148,
+              "display_id": 151,
               "entity_id": 39,
               "label": "Tiger-Seal",
               "subject": {
                 "id": {
-                  "entity": 148,
+                  "entity": 151,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -10889,7 +10889,7 @@
             },
             "target": {
               "id": {
-                "entity": 148,
+                "entity": 151,
                 "incarnation": 3
               },
               "kind": "object"
@@ -10928,7 +10928,7 @@
             },
             "target": {
               "id": {
-                "entity": 148,
+                "entity": 151,
                 "incarnation": 3
               },
               "kind": "object"
@@ -11038,8 +11038,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "649eed1bcb47e8e73f3a51a998529293de4497ba06c233218766af33a8fad8cb",
-        "before": "1cb80b3badd407a9aead8705cfbcafd9131c83f00f2fa63bad189f071db85122"
+        "after": "db77db0e34280bcab84212d9709e048f23bdf34cbf65a7fbb17707c910278cb9",
+        "before": "c046b48f379ae336586909f4d4f9d4c9da910d584241043ebd068dc7648e4087"
       },
       "to_revision": 102
     },
@@ -11058,7 +11058,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.38",
         "resulting_revision": 103,
-        "resulting_state_digest": "45ba247da722318f803c81324f302bccf2f33629a5f3f25a84d8533a4e22e5a0"
+        "resulting_state_digest": "1cf01476e06d974b47ecbe6b70dad75bcd09540ca24e57ab69c513c8afb60713"
       },
       "encountered_definition_ids": [
         5,
@@ -11132,7 +11132,7 @@
             "kind": "died",
             "objects": [
               {
-                "entity": 118,
+                "entity": 119,
                 "incarnation": 3
               }
             ]
@@ -11204,7 +11204,7 @@
           "event_type": "PERMANENTS_DIED",
           "from_zone": -1,
           "ordinal": 3,
-          "source_id": 118,
+          "source_id": 119,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": -1,
@@ -11215,8 +11215,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "45ba247da722318f803c81324f302bccf2f33629a5f3f25a84d8533a4e22e5a0",
-        "before": "649eed1bcb47e8e73f3a51a998529293de4497ba06c233218766af33a8fad8cb"
+        "after": "1cf01476e06d974b47ecbe6b70dad75bcd09540ca24e57ab69c513c8afb60713",
+        "before": "db77db0e34280bcab84212d9709e048f23bdf34cbf65a7fbb17707c910278cb9"
       },
       "to_revision": 103
     },
@@ -11235,7 +11235,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.39",
         "resulting_revision": 104,
-        "resulting_state_digest": "944b3519b37a74607265ded00137982998a50abee4cdb6a796210c4ca4bccec7"
+        "resulting_state_digest": "fefbcc86d02dd1b9fe19af8d4df543d96a010b3bd6f95f44a1efc0811e60394f"
       },
       "encountered_definition_ids": [
         0,
@@ -11253,7 +11253,7 @@
         "choices": [],
         "confirm_label": "Do not attack with Forecasting Fortune Teller",
         "focus": [
-          130
+          132
         ],
         "help": null,
         "id": 1,
@@ -11262,12 +11262,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 130,
+              "display_id": 132,
               "entity_id": 13,
               "label": "Forecasting Fortune Teller",
               "subject": {
                 "id": {
-                  "entity": 130,
+                  "entity": 132,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -11339,8 +11339,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "944b3519b37a74607265ded00137982998a50abee4cdb6a796210c4ca4bccec7",
-        "before": "45ba247da722318f803c81324f302bccf2f33629a5f3f25a84d8533a4e22e5a0"
+        "after": "fefbcc86d02dd1b9fe19af8d4df543d96a010b3bd6f95f44a1efc0811e60394f",
+        "before": "1cf01476e06d974b47ecbe6b70dad75bcd09540ca24e57ab69c513c8afb60713"
       },
       "to_revision": 104
     },
@@ -11359,7 +11359,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.65",
         "resulting_revision": 105,
-        "resulting_state_digest": "18a8e19c1bdddd18092e69541a7c88214bc2ff847261cef48926b67cf5796d4a"
+        "resulting_state_digest": "cc24605e7e5c0492bb67efe2f381410e2f9feda015feeabc24fa1f4a55dd987c"
       },
       "encountered_definition_ids": [
         0
@@ -11436,8 +11436,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "18a8e19c1bdddd18092e69541a7c88214bc2ff847261cef48926b67cf5796d4a",
-        "before": "944b3519b37a74607265ded00137982998a50abee4cdb6a796210c4ca4bccec7"
+        "after": "cc24605e7e5c0492bb67efe2f381410e2f9feda015feeabc24fa1f4a55dd987c",
+        "before": "fefbcc86d02dd1b9fe19af8d4df543d96a010b3bd6f95f44a1efc0811e60394f"
       },
       "to_revision": 105
     },
@@ -11456,7 +11456,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.66",
         "resulting_revision": 106,
-        "resulting_state_digest": "dde92d3cf19b536ef981985a497bff9a13027e70471224c636f7fd4e79acbb9f"
+        "resulting_state_digest": "434ea07f41af2a2911944f78db9a86a9591e4dee7cb6819fcda22a71f68f661a"
       },
       "encountered_definition_ids": [
         0,
@@ -11644,8 +11644,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "dde92d3cf19b536ef981985a497bff9a13027e70471224c636f7fd4e79acbb9f",
-        "before": "18a8e19c1bdddd18092e69541a7c88214bc2ff847261cef48926b67cf5796d4a"
+        "after": "434ea07f41af2a2911944f78db9a86a9591e4dee7cb6819fcda22a71f68f661a",
+        "before": "cc24605e7e5c0492bb67efe2f381410e2f9feda015feeabc24fa1f4a55dd987c"
       },
       "to_revision": 106
     },
@@ -11664,7 +11664,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.67",
         "resulting_revision": 107,
-        "resulting_state_digest": "59109f7df80a89a8596ac149795d614357962ee0c1445ef18de175da4fb3df80"
+        "resulting_state_digest": "9cfbd6640f22f80e7172e6af086d163786176fd4b50ab4772cebcc45c7ed1f56"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -11694,8 +11694,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "59109f7df80a89a8596ac149795d614357962ee0c1445ef18de175da4fb3df80",
-        "before": "dde92d3cf19b536ef981985a497bff9a13027e70471224c636f7fd4e79acbb9f"
+        "after": "9cfbd6640f22f80e7172e6af086d163786176fd4b50ab4772cebcc45c7ed1f56",
+        "before": "434ea07f41af2a2911944f78db9a86a9591e4dee7cb6819fcda22a71f68f661a"
       },
       "to_revision": 107
     },
@@ -11714,7 +11714,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.68",
         "resulting_revision": 108,
-        "resulting_state_digest": "09dac7a47ebfda2c15cf59f9911824bd785c4bd8abce5376e9289240a4622ce4"
+        "resulting_state_digest": "bb7b2513aacf6aa94c901639c05c2428e0acf06e497eef6559fc9c094b639f04"
       },
       "encountered_definition_ids": [
         9
@@ -11731,7 +11731,7 @@
         "choices": [],
         "confirm_label": "Do not attack with Badgermole Cub",
         "focus": [
-          145
+          147
         ],
         "help": null,
         "id": 1,
@@ -11740,12 +11740,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 145,
+              "display_id": 147,
               "entity_id": 44,
               "label": "Badgermole Cub",
               "subject": {
                 "id": {
-                  "entity": 145,
+                  "entity": 147,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -11768,8 +11768,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "09dac7a47ebfda2c15cf59f9911824bd785c4bd8abce5376e9289240a4622ce4",
-        "before": "59109f7df80a89a8596ac149795d614357962ee0c1445ef18de175da4fb3df80"
+        "after": "bb7b2513aacf6aa94c901639c05c2428e0acf06e497eef6559fc9c094b639f04",
+        "before": "9cfbd6640f22f80e7172e6af086d163786176fd4b50ab4772cebcc45c7ed1f56"
       },
       "to_revision": 108
     },
@@ -11788,7 +11788,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.69",
         "resulting_revision": 109,
-        "resulting_state_digest": "eb04c6af1788e7d5ef6c2ff08e602017f45ba23d7e06d32d76a937f57e086a8b"
+        "resulting_state_digest": "adac449f004ff45762e938ae49f98b014def9fcce0baf505710959b2020ad426"
       },
       "encountered_definition_ids": [
         9
@@ -11805,7 +11805,7 @@
         "choices": [],
         "confirm_label": "Do not attack with Badgermole Cub",
         "focus": [
-          127
+          128
         ],
         "help": null,
         "id": 1,
@@ -11814,12 +11814,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 127,
+              "display_id": 128,
               "entity_id": 43,
               "label": "Badgermole Cub",
               "subject": {
                 "id": {
-                  "entity": 127,
+                  "entity": 128,
                   "incarnation": 6
                 },
                 "kind": "object"
@@ -11842,8 +11842,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "eb04c6af1788e7d5ef6c2ff08e602017f45ba23d7e06d32d76a937f57e086a8b",
-        "before": "09dac7a47ebfda2c15cf59f9911824bd785c4bd8abce5376e9289240a4622ce4"
+        "after": "adac449f004ff45762e938ae49f98b014def9fcce0baf505710959b2020ad426",
+        "before": "bb7b2513aacf6aa94c901639c05c2428e0acf06e497eef6559fc9c094b639f04"
       },
       "to_revision": 109
     },
@@ -11862,7 +11862,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.70",
         "resulting_revision": 110,
-        "resulting_state_digest": "27d5a4d107665bad71e7fb79d3e25af58d7c106aae6286e09881b13268425479"
+        "resulting_state_digest": "6a856bda2af134c38340bd6ccf3a745b4a3f56c80188fe163211b63bdc00a59d"
       },
       "encountered_definition_ids": [
         10
@@ -11878,7 +11878,7 @@
         "choices": [],
         "confirm_label": "Attack with Compassionate Healer",
         "focus": [
-          116
+          117
         ],
         "help": null,
         "id": 0,
@@ -11887,12 +11887,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 116,
+              "display_id": 117,
               "entity_id": 46,
               "label": "Compassionate Healer",
               "subject": {
                 "id": {
-                  "entity": 116,
+                  "entity": 117,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -11915,8 +11915,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "27d5a4d107665bad71e7fb79d3e25af58d7c106aae6286e09881b13268425479",
-        "before": "eb04c6af1788e7d5ef6c2ff08e602017f45ba23d7e06d32d76a937f57e086a8b"
+        "after": "6a856bda2af134c38340bd6ccf3a745b4a3f56c80188fe163211b63bdc00a59d",
+        "before": "adac449f004ff45762e938ae49f98b014def9fcce0baf505710959b2020ad426"
       },
       "to_revision": 110
     },
@@ -11935,7 +11935,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.71",
         "resulting_revision": 111,
-        "resulting_state_digest": "cdc979b1a65d02bc922879db8db1faf83af396d4027c9e7d9ec7d8541ac6d8bb"
+        "resulting_state_digest": "50e7fc5de11bcb8a294165b52612797d352be23bb302f24a846daca5e57624f7"
       },
       "encountered_definition_ids": [
         0
@@ -11951,7 +11951,7 @@
         "choices": [],
         "confirm_label": "Do not attack with Forest",
         "focus": [
-          114
+          115
         ],
         "help": null,
         "id": 1,
@@ -11960,12 +11960,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 114,
+              "display_id": 115,
               "entity_id": 56,
               "label": "Forest",
               "subject": {
                 "id": {
-                  "entity": 114,
+                  "entity": 115,
                   "incarnation": 1
                 },
                 "kind": "object"
@@ -11988,8 +11988,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "cdc979b1a65d02bc922879db8db1faf83af396d4027c9e7d9ec7d8541ac6d8bb",
-        "before": "27d5a4d107665bad71e7fb79d3e25af58d7c106aae6286e09881b13268425479"
+        "after": "50e7fc5de11bcb8a294165b52612797d352be23bb302f24a846daca5e57624f7",
+        "before": "6a856bda2af134c38340bd6ccf3a745b4a3f56c80188fe163211b63bdc00a59d"
       },
       "to_revision": 111
     },
@@ -12008,7 +12008,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.72",
         "resulting_revision": 112,
-        "resulting_state_digest": "242206e9e0327a9d7d6238082713d3c1c5febe3e577878da925211de772ba570"
+        "resulting_state_digest": "f8e024e848b162ef969bc921254411d5d5ee4fbfe8e04f691ca659c99bc95009"
       },
       "encountered_definition_ids": [
         9,
@@ -12028,7 +12028,7 @@
         "choices": [],
         "confirm_label": "Do not attack with White Lotus Reinforcements",
         "focus": [
-          111
+          112
         ],
         "help": null,
         "id": 1,
@@ -12037,12 +12037,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 111,
+              "display_id": 112,
               "entity_id": 78,
               "label": "White Lotus Reinforcements",
               "subject": {
                 "id": {
-                  "entity": 111,
+                  "entity": 112,
                   "incarnation": 2
                 },
                 "kind": "object"
@@ -12068,7 +12068,7 @@
           "kind": {
             "attackers": [
               {
-                "entity": 116,
+                "entity": 117,
                 "incarnation": 3
               }
             ],
@@ -12096,7 +12096,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 116,
+          "source_id": 117,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -12139,8 +12139,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "242206e9e0327a9d7d6238082713d3c1c5febe3e577878da925211de772ba570",
-        "before": "cdc979b1a65d02bc922879db8db1faf83af396d4027c9e7d9ec7d8541ac6d8bb"
+        "after": "f8e024e848b162ef969bc921254411d5d5ee4fbfe8e04f691ca659c99bc95009",
+        "before": "50e7fc5de11bcb8a294165b52612797d352be23bb302f24a846daca5e57624f7"
       },
       "to_revision": 112
     },
@@ -12159,7 +12159,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.73",
         "resulting_revision": 113,
-        "resulting_state_digest": "271af5c613190ec0b5bb552b10cf29a515ecc65565a198e1762ea1ef67255465"
+        "resulting_state_digest": "b8af21ce1598a283e8ffcae45ac95055afb4082f476c12b42be0ac006122af85"
       },
       "encountered_definition_ids": [
         3
@@ -12212,8 +12212,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "271af5c613190ec0b5bb552b10cf29a515ecc65565a198e1762ea1ef67255465",
-        "before": "242206e9e0327a9d7d6238082713d3c1c5febe3e577878da925211de772ba570"
+        "after": "b8af21ce1598a283e8ffcae45ac95055afb4082f476c12b42be0ac006122af85",
+        "before": "f8e024e848b162ef969bc921254411d5d5ee4fbfe8e04f691ca659c99bc95009"
       },
       "to_revision": 113
     },
@@ -12232,7 +12232,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.40",
         "resulting_revision": 114,
-        "resulting_state_digest": "d7f5043a583bdfcf67d5477830a186469fba81d89c0ba408ea9814ed479c3fd9"
+        "resulting_state_digest": "fac4c39a5474e98af051f01853ecc261330033420e74e07c396d36b54f80f2bf"
       },
       "encountered_definition_ids": [
         10,
@@ -12251,8 +12251,8 @@
         "choices": [],
         "confirm_label": "Block Compassionate Healer with Tiger-Seal",
         "focus": [
-          148,
-          116
+          151,
+          117
         ],
         "help": null,
         "id": 0,
@@ -12261,12 +12261,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 148,
+              "display_id": 151,
               "entity_id": 39,
               "label": "Tiger-Seal",
               "subject": {
                 "id": {
-                  "entity": 148,
+                  "entity": 151,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -12276,12 +12276,12 @@
           },
           {
             "object": {
-              "display_id": 116,
+              "display_id": 117,
               "entity_id": 46,
               "label": "Compassionate Healer",
               "subject": {
                 "id": {
-                  "entity": 116,
+                  "entity": 117,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -12304,8 +12304,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "d7f5043a583bdfcf67d5477830a186469fba81d89c0ba408ea9814ed479c3fd9",
-        "before": "271af5c613190ec0b5bb552b10cf29a515ecc65565a198e1762ea1ef67255465"
+        "after": "fac4c39a5474e98af051f01853ecc261330033420e74e07c396d36b54f80f2bf",
+        "before": "b8af21ce1598a283e8ffcae45ac95055afb4082f476c12b42be0ac006122af85"
       },
       "to_revision": 114
     },
@@ -12324,7 +12324,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.41",
         "resulting_revision": 115,
-        "resulting_state_digest": "0651fd0bdea32d02861453eb2289483ce4d4df4b2581dd62f4750ac929584cec"
+        "resulting_state_digest": "0e2d65413ccd7e8d333c2bdd902c5bf49705a8ecdc6b73f18ab8668b1506a0ec"
       },
       "encountered_definition_ids": [
         9,
@@ -12348,7 +12348,7 @@
         "choices": [],
         "confirm_label": "Forecasting Fortune Teller: do not block",
         "focus": [
-          130
+          132
         ],
         "help": null,
         "id": 1,
@@ -12357,12 +12357,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 130,
+              "display_id": 132,
               "entity_id": 13,
               "label": "Forecasting Fortune Teller",
               "subject": {
                 "id": {
-                  "entity": 130,
+                  "entity": 132,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -12387,12 +12387,12 @@
           "importance": "normal",
           "kind": {
             "attacker": {
-              "entity": 116,
+              "entity": 117,
               "incarnation": 3
             },
             "blockers": [
               {
-                "entity": 148,
+                "entity": 151,
                 "incarnation": 3
               }
             ],
@@ -12413,14 +12413,14 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 148,
+                "entity": 151,
                 "incarnation": 3
               },
               "kind": "object"
             },
             "target": {
               "id": {
-                "entity": 116,
+                "entity": 117,
                 "incarnation": 3
               },
               "kind": "object"
@@ -12441,14 +12441,14 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 116,
+                "entity": 117,
                 "incarnation": 3
               },
               "kind": "object"
             },
             "target": {
               "id": {
-                "entity": 148,
+                "entity": 151,
                 "incarnation": 3
               },
               "kind": "object"
@@ -12468,11 +12468,11 @@
             "kind": "died",
             "objects": [
               {
-                "entity": 148,
+                "entity": 151,
                 "incarnation": 3
               },
               {
-                "entity": 116,
+                "entity": 117,
                 "incarnation": 3
               }
             ]
@@ -12496,10 +12496,10 @@
           "event_type": "BLOCKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 116,
+          "source_id": 117,
           "source_incarnation": 3,
           "source_kind": 4,
-          "target_id": 148,
+          "target_id": 151,
           "target_incarnation": 3,
           "target_kind": 4,
           "to_zone": -1
@@ -12529,10 +12529,10 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 2,
-          "source_id": 148,
+          "source_id": 151,
           "source_incarnation": 3,
           "source_kind": 4,
-          "target_id": 116,
+          "target_id": 117,
           "target_incarnation": 3,
           "target_kind": 4,
           "to_zone": -1
@@ -12564,10 +12564,10 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 4,
-          "source_id": 116,
+          "source_id": 117,
           "source_incarnation": 3,
           "source_kind": 4,
-          "target_id": 148,
+          "target_id": 151,
           "target_incarnation": 3,
           "target_kind": 4,
           "to_zone": -1
@@ -12613,7 +12613,7 @@
           "event_type": "PERMANENTS_DIED",
           "from_zone": -1,
           "ordinal": 7,
-          "source_id": 148,
+          "source_id": 151,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": -1,
@@ -12630,7 +12630,7 @@
           "event_type": "PERMANENTS_DIED",
           "from_zone": -1,
           "ordinal": 8,
-          "source_id": 116,
+          "source_id": 117,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": -1,
@@ -12641,8 +12641,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "0651fd0bdea32d02861453eb2289483ce4d4df4b2581dd62f4750ac929584cec",
-        "before": "d7f5043a583bdfcf67d5477830a186469fba81d89c0ba408ea9814ed479c3fd9"
+        "after": "0e2d65413ccd7e8d333c2bdd902c5bf49705a8ecdc6b73f18ab8668b1506a0ec",
+        "before": "fac4c39a5474e98af051f01853ecc261330033420e74e07c396d36b54f80f2bf"
       },
       "to_revision": 115
     },
@@ -12661,7 +12661,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.74",
         "resulting_revision": 116,
-        "resulting_state_digest": "08961f8109cff3d139ba5891759895f1e06c5b413d0f06932e7b77e187f4a5eb"
+        "resulting_state_digest": "5c299fc09a55c13647b155c870e33b560d52e07d320ae88c294d4562902212f8"
       },
       "encountered_definition_ids": [
         0,
@@ -12820,8 +12820,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "08961f8109cff3d139ba5891759895f1e06c5b413d0f06932e7b77e187f4a5eb",
-        "before": "0651fd0bdea32d02861453eb2289483ce4d4df4b2581dd62f4750ac929584cec"
+        "after": "5c299fc09a55c13647b155c870e33b560d52e07d320ae88c294d4562902212f8",
+        "before": "0e2d65413ccd7e8d333c2bdd902c5bf49705a8ecdc6b73f18ab8668b1506a0ec"
       },
       "to_revision": 116
     },
@@ -12840,7 +12840,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.75",
         "resulting_revision": 117,
-        "resulting_state_digest": "d8fa461684259271b157107a69236939853f03eac01c34e11c46604293fa6975"
+        "resulting_state_digest": "24115a3f7622f834ec01e2dd669fd8e261c9aa7cb60e135a4d22c3650d9bb435"
       },
       "encountered_definition_ids": [
         13
@@ -12857,7 +12857,7 @@
         "choices": [],
         "confirm_label": "Put on stack next — Earth King's Lieutenant — When this enters the battlefield: Put 1 +1/+1 counters on each other Ally creature you control",
         "focus": [
-          157
+          160
         ],
         "help": null,
         "id": 0,
@@ -12866,12 +12866,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 157,
+              "display_id": 160,
               "entity_id": 47,
               "label": "Earth King's Lieutenant",
               "subject": {
                 "id": {
-                  "entity": 157,
+                  "entity": 160,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -12955,8 +12955,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "d8fa461684259271b157107a69236939853f03eac01c34e11c46604293fa6975",
-        "before": "08961f8109cff3d139ba5891759895f1e06c5b413d0f06932e7b77e187f4a5eb"
+        "after": "24115a3f7622f834ec01e2dd669fd8e261c9aa7cb60e135a4d22c3650d9bb435",
+        "before": "5c299fc09a55c13647b155c870e33b560d52e07d320ae88c294d4562902212f8"
       },
       "to_revision": 117
     },
@@ -12975,7 +12975,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.76",
         "resulting_revision": 118,
-        "resulting_state_digest": "7b4b2ce288915ee3f2fd589ea54ed5935c0f6e994dd3dfa5153b987f43123370"
+        "resulting_state_digest": "f15c880caaf41e9b486ea2adee82e82955d8cf3e95dab3b2de6b5caac5da1e32"
       },
       "encountered_definition_ids": [
         0,
@@ -13133,8 +13133,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "7b4b2ce288915ee3f2fd589ea54ed5935c0f6e994dd3dfa5153b987f43123370",
-        "before": "d8fa461684259271b157107a69236939853f03eac01c34e11c46604293fa6975"
+        "after": "f15c880caaf41e9b486ea2adee82e82955d8cf3e95dab3b2de6b5caac5da1e32",
+        "before": "24115a3f7622f834ec01e2dd669fd8e261c9aa7cb60e135a4d22c3650d9bb435"
       },
       "to_revision": 118
     },
@@ -13153,7 +13153,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.77",
         "resulting_revision": 119,
-        "resulting_state_digest": "c3826376f7f47944fc914751ed6ad9136a0262868adb1778e964df158ef571de"
+        "resulting_state_digest": "cd494a5742cb8447e0887522c50d8906ea3f719a539f741b65e3891aa7f61969"
       },
       "encountered_definition_ids": [
         13
@@ -13170,7 +13170,7 @@
         "choices": [],
         "confirm_label": "Put on stack next — Earth King's Lieutenant — When another Ally permanent you control enters the battlefield: Put 1 +1/+1 counters on this",
         "focus": [
-          157
+          160
         ],
         "help": null,
         "id": 0,
@@ -13179,12 +13179,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 157,
+              "display_id": 160,
               "entity_id": 47,
               "label": "Earth King's Lieutenant",
               "subject": {
                 "id": {
-                  "entity": 157,
+                  "entity": 160,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -13223,8 +13223,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "c3826376f7f47944fc914751ed6ad9136a0262868adb1778e964df158ef571de",
-        "before": "7b4b2ce288915ee3f2fd589ea54ed5935c0f6e994dd3dfa5153b987f43123370"
+        "after": "cd494a5742cb8447e0887522c50d8906ea3f719a539f741b65e3891aa7f61969",
+        "before": "f15c880caaf41e9b486ea2adee82e82955d8cf3e95dab3b2de6b5caac5da1e32"
       },
       "to_revision": 119
     },
@@ -13243,7 +13243,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.78",
         "resulting_revision": 120,
-        "resulting_state_digest": "3bf860c685d5242cb39ec4e9d7b96aac665f80d638ca2f8a1948925470524ab2"
+        "resulting_state_digest": "b02d8d202265fd3b11888d1bce28c1cff10481845a3f01a5c2df5870879cef2b"
       },
       "encountered_definition_ids": [
         12,
@@ -13262,7 +13262,7 @@
         "choices": [],
         "confirm_label": "Put on stack next — Earth Kingdom Jailer — When this enters the battlefield: Exile target (artifact or creature or enchantment) permanent with mana value at least 3 an opponent controls until this leaves the battlefield",
         "focus": [
-          161
+          164
         ],
         "help": null,
         "id": 0,
@@ -13271,12 +13271,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 161,
+              "display_id": 164,
               "entity_id": 50,
               "label": "Earth Kingdom Jailer",
               "subject": {
                 "id": {
-                  "entity": 161,
+                  "entity": 164,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -13391,8 +13391,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "3bf860c685d5242cb39ec4e9d7b96aac665f80d638ca2f8a1948925470524ab2",
-        "before": "c3826376f7f47944fc914751ed6ad9136a0262868adb1778e964df158ef571de"
+        "after": "b02d8d202265fd3b11888d1bce28c1cff10481845a3f01a5c2df5870879cef2b",
+        "before": "cd494a5742cb8447e0887522c50d8906ea3f719a539f741b65e3891aa7f61969"
       },
       "to_revision": 120
     },
@@ -13411,7 +13411,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.42",
         "resulting_revision": 121,
-        "resulting_state_digest": "846714fbcf3e8d62657307be935d8357d5d17188bc9051e581f266e5158b052c"
+        "resulting_state_digest": "06e29f79797b377e5e70d3e41707e6fad850f5d57bba49c1d0685c7d3090d555"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -13441,8 +13441,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "846714fbcf3e8d62657307be935d8357d5d17188bc9051e581f266e5158b052c",
-        "before": "3bf860c685d5242cb39ec4e9d7b96aac665f80d638ca2f8a1948925470524ab2"
+        "after": "06e29f79797b377e5e70d3e41707e6fad850f5d57bba49c1d0685c7d3090d555",
+        "before": "b02d8d202265fd3b11888d1bce28c1cff10481845a3f01a5c2df5870879cef2b"
       },
       "to_revision": 121
     },
@@ -13461,7 +13461,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.43",
         "resulting_revision": 122,
-        "resulting_state_digest": "41399cdd91b8d8239dc1f90918f5b79cf5cd1c64745c0d8a9aa1acb6c362815b"
+        "resulting_state_digest": "494994fa474f7b78a06d3568c507ea3013cf6c04857211a1c95183d1d02da84d"
       },
       "encountered_definition_ids": [
         1,
@@ -13616,8 +13616,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "41399cdd91b8d8239dc1f90918f5b79cf5cd1c64745c0d8a9aa1acb6c362815b",
-        "before": "846714fbcf3e8d62657307be935d8357d5d17188bc9051e581f266e5158b052c"
+        "after": "494994fa474f7b78a06d3568c507ea3013cf6c04857211a1c95183d1d02da84d",
+        "before": "06e29f79797b377e5e70d3e41707e6fad850f5d57bba49c1d0685c7d3090d555"
       },
       "to_revision": 122
     },
@@ -13636,7 +13636,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.44",
         "resulting_revision": 123,
-        "resulting_state_digest": "44ae5a9249621f6068f6cd6c14c82baf71e5512474a1ce67a65de40c7929f9f2"
+        "resulting_state_digest": "3f709487b6e29f046d56b1d5ac4463381614f2ef3d0469ead9f686a44b6cb82d"
       },
       "encountered_definition_ids": [
         18
@@ -13652,7 +13652,7 @@
         "choices": [],
         "confirm_label": "Do not attack with Forecasting Fortune Teller",
         "focus": [
-          130
+          132
         ],
         "help": null,
         "id": 1,
@@ -13661,12 +13661,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 130,
+              "display_id": 132,
               "entity_id": 13,
               "label": "Forecasting Fortune Teller",
               "subject": {
                 "id": {
-                  "entity": 130,
+                  "entity": 132,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -13736,8 +13736,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "44ae5a9249621f6068f6cd6c14c82baf71e5512474a1ce67a65de40c7929f9f2",
-        "before": "41399cdd91b8d8239dc1f90918f5b79cf5cd1c64745c0d8a9aa1acb6c362815b"
+        "after": "3f709487b6e29f046d56b1d5ac4463381614f2ef3d0469ead9f686a44b6cb82d",
+        "before": "494994fa474f7b78a06d3568c507ea3013cf6c04857211a1c95183d1d02da84d"
       },
       "to_revision": 123
     },
@@ -13756,7 +13756,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.79",
         "resulting_revision": 124,
-        "resulting_state_digest": "d704c2a3c0568f4d946fd0fe5d17f2da603630c22ee099374ebc9eabb9012ede"
+        "resulting_state_digest": "3effb7a1c0c003d85ffdceb1721d1cae89fd5fccb20203e75af5ca1c7e112341"
       },
       "encountered_definition_ids": [
         0,
@@ -13913,8 +13913,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "d704c2a3c0568f4d946fd0fe5d17f2da603630c22ee099374ebc9eabb9012ede",
-        "before": "44ae5a9249621f6068f6cd6c14c82baf71e5512474a1ce67a65de40c7929f9f2"
+        "after": "3effb7a1c0c003d85ffdceb1721d1cae89fd5fccb20203e75af5ca1c7e112341",
+        "before": "3f709487b6e29f046d56b1d5ac4463381614f2ef3d0469ead9f686a44b6cb82d"
       },
       "to_revision": 124
     },
@@ -13933,7 +13933,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.80",
         "resulting_revision": 125,
-        "resulting_state_digest": "91f98b91d539730ba96c625fef34eef933f12d90dc1defe0cc1f1a1c0971dfd1"
+        "resulting_state_digest": "3b65d162515ab8608e30da48bbf6046b5f9e8a4d0eae9b0531ebc4c64eed7253"
       },
       "encountered_definition_ids": [
         23
@@ -13949,7 +13949,7 @@
         "choices": [],
         "confirm_label": "Put on stack next — South Pole Voyager — When a Ally permanent you control enters the battlefield: You gain 1 life. If this is resolution 2 of this ability this turn: Draw 1 cards",
         "focus": [
-          153
+          156
         ],
         "help": null,
         "id": 1,
@@ -13958,12 +13958,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 153,
+              "display_id": 156,
               "entity_id": 74,
               "label": "South Pole Voyager",
               "subject": {
                 "id": {
-                  "entity": 153,
+                  "entity": 156,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14032,8 +14032,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "91f98b91d539730ba96c625fef34eef933f12d90dc1defe0cc1f1a1c0971dfd1",
-        "before": "d704c2a3c0568f4d946fd0fe5d17f2da603630c22ee099374ebc9eabb9012ede"
+        "after": "3b65d162515ab8608e30da48bbf6046b5f9e8a4d0eae9b0531ebc4c64eed7253",
+        "before": "3effb7a1c0c003d85ffdceb1721d1cae89fd5fccb20203e75af5ca1c7e112341"
       },
       "to_revision": 125
     },
@@ -14052,7 +14052,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.81",
         "resulting_revision": 126,
-        "resulting_state_digest": "6522cd674baffbee4d13aea6c760d3c114055f5e8f451e8d7ecd10acd4bd2854"
+        "resulting_state_digest": "196872829fb14e991c519255b2f814b4ed01fb2f293623ad256c2983b48134f7"
       },
       "encountered_definition_ids": [
         3
@@ -14129,8 +14129,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "6522cd674baffbee4d13aea6c760d3c114055f5e8f451e8d7ecd10acd4bd2854",
-        "before": "91f98b91d539730ba96c625fef34eef933f12d90dc1defe0cc1f1a1c0971dfd1"
+        "after": "196872829fb14e991c519255b2f814b4ed01fb2f293623ad256c2983b48134f7",
+        "before": "3b65d162515ab8608e30da48bbf6046b5f9e8a4d0eae9b0531ebc4c64eed7253"
       },
       "to_revision": 126
     },
@@ -14149,7 +14149,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.82",
         "resulting_revision": 127,
-        "resulting_state_digest": "ebbdf2d586338071e9a3ec7980dc0a4dab69618642a3c9297b57843f901787c9"
+        "resulting_state_digest": "ba31146c63f73c7834d7ef2c89c74ce2c311a1198adef54b19cb7862f3500a02"
       },
       "encountered_definition_ids": [
         12
@@ -14165,7 +14165,7 @@
         "choices": [],
         "confirm_label": "Attack with Earth Kingdom Jailer",
         "focus": [
-          161
+          164
         ],
         "help": null,
         "id": 0,
@@ -14174,12 +14174,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 161,
+              "display_id": 164,
               "entity_id": 50,
               "label": "Earth Kingdom Jailer",
               "subject": {
                 "id": {
-                  "entity": 161,
+                  "entity": 164,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14202,8 +14202,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "ebbdf2d586338071e9a3ec7980dc0a4dab69618642a3c9297b57843f901787c9",
-        "before": "6522cd674baffbee4d13aea6c760d3c114055f5e8f451e8d7ecd10acd4bd2854"
+        "after": "ba31146c63f73c7834d7ef2c89c74ce2c311a1198adef54b19cb7862f3500a02",
+        "before": "196872829fb14e991c519255b2f814b4ed01fb2f293623ad256c2983b48134f7"
       },
       "to_revision": 127
     },
@@ -14222,7 +14222,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.83",
         "resulting_revision": 128,
-        "resulting_state_digest": "5cbc9a4aad32a63aecd1ab8c01a782734e00494c64dc85762e2605795b320406"
+        "resulting_state_digest": "8b33e194454ff642ad8db2c036c6b240f6718a6b333dbb0b8be56fd7e82f0e71"
       },
       "encountered_definition_ids": [
         13
@@ -14239,7 +14239,7 @@
         "choices": [],
         "confirm_label": "Attack with Earth King's Lieutenant",
         "focus": [
-          157
+          160
         ],
         "help": null,
         "id": 0,
@@ -14248,12 +14248,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 157,
+              "display_id": 160,
               "entity_id": 47,
               "label": "Earth King's Lieutenant",
               "subject": {
                 "id": {
-                  "entity": 157,
+                  "entity": 160,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14276,8 +14276,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5cbc9a4aad32a63aecd1ab8c01a782734e00494c64dc85762e2605795b320406",
-        "before": "ebbdf2d586338071e9a3ec7980dc0a4dab69618642a3c9297b57843f901787c9"
+        "after": "8b33e194454ff642ad8db2c036c6b240f6718a6b333dbb0b8be56fd7e82f0e71",
+        "before": "ba31146c63f73c7834d7ef2c89c74ce2c311a1198adef54b19cb7862f3500a02"
       },
       "to_revision": 128
     },
@@ -14296,7 +14296,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.84",
         "resulting_revision": 129,
-        "resulting_state_digest": "be6e1d571cbd2da74a004694ab330d3e506b38ef71d4f90b0b987bfeb1d45339"
+        "resulting_state_digest": "9660bbe2c1c77036a046a0917b9681e506ce26980b9df37b8858b4d349e06413"
       },
       "encountered_definition_ids": [
         23
@@ -14312,7 +14312,7 @@
         "choices": [],
         "confirm_label": "Attack with South Pole Voyager",
         "focus": [
-          153
+          156
         ],
         "help": null,
         "id": 0,
@@ -14321,12 +14321,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 153,
+              "display_id": 156,
               "entity_id": 74,
               "label": "South Pole Voyager",
               "subject": {
                 "id": {
-                  "entity": 153,
+                  "entity": 156,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14349,8 +14349,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "be6e1d571cbd2da74a004694ab330d3e506b38ef71d4f90b0b987bfeb1d45339",
-        "before": "5cbc9a4aad32a63aecd1ab8c01a782734e00494c64dc85762e2605795b320406"
+        "after": "9660bbe2c1c77036a046a0917b9681e506ce26980b9df37b8858b4d349e06413",
+        "before": "8b33e194454ff642ad8db2c036c6b240f6718a6b333dbb0b8be56fd7e82f0e71"
       },
       "to_revision": 129
     },
@@ -14369,7 +14369,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.85",
         "resulting_revision": 130,
-        "resulting_state_digest": "f70906f48208576436c6190a634e334324d903d3cde06848f1b5d1af56b653e1"
+        "resulting_state_digest": "40794d012a798aafc2956116e82848200c82064c2108c9621ad8942199145c52"
       },
       "encountered_definition_ids": [
         9
@@ -14386,7 +14386,7 @@
         "choices": [],
         "confirm_label": "Attack with Badgermole Cub",
         "focus": [
-          145
+          147
         ],
         "help": null,
         "id": 0,
@@ -14395,12 +14395,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 145,
+              "display_id": 147,
               "entity_id": 44,
               "label": "Badgermole Cub",
               "subject": {
                 "id": {
-                  "entity": 145,
+                  "entity": 147,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14423,8 +14423,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "f70906f48208576436c6190a634e334324d903d3cde06848f1b5d1af56b653e1",
-        "before": "be6e1d571cbd2da74a004694ab330d3e506b38ef71d4f90b0b987bfeb1d45339"
+        "after": "40794d012a798aafc2956116e82848200c82064c2108c9621ad8942199145c52",
+        "before": "9660bbe2c1c77036a046a0917b9681e506ce26980b9df37b8858b4d349e06413"
       },
       "to_revision": 130
     },
@@ -14443,7 +14443,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.86",
         "resulting_revision": 131,
-        "resulting_state_digest": "eb4ef53fa88ad7f19074438d3525ea9db183deb57456b793770bc404dfa5264b"
+        "resulting_state_digest": "fb8e1fc96dd55224a4f4b2d30ee3f9dbe04bbe7128e16948de52eb2631bf79a0"
       },
       "encountered_definition_ids": [
         9
@@ -14460,7 +14460,7 @@
         "choices": [],
         "confirm_label": "Attack with Badgermole Cub",
         "focus": [
-          127
+          128
         ],
         "help": null,
         "id": 0,
@@ -14469,12 +14469,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 127,
+              "display_id": 128,
               "entity_id": 43,
               "label": "Badgermole Cub",
               "subject": {
                 "id": {
-                  "entity": 127,
+                  "entity": 128,
                   "incarnation": 6
                 },
                 "kind": "object"
@@ -14497,8 +14497,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "eb4ef53fa88ad7f19074438d3525ea9db183deb57456b793770bc404dfa5264b",
-        "before": "f70906f48208576436c6190a634e334324d903d3cde06848f1b5d1af56b653e1"
+        "after": "fb8e1fc96dd55224a4f4b2d30ee3f9dbe04bbe7128e16948de52eb2631bf79a0",
+        "before": "40794d012a798aafc2956116e82848200c82064c2108c9621ad8942199145c52"
       },
       "to_revision": 131
     },
@@ -14517,7 +14517,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.87",
         "resulting_revision": 132,
-        "resulting_state_digest": "c68a75e01a9051cae081799989e11705786467fccd17a5a43e6ecc68cf6dfc2d"
+        "resulting_state_digest": "ad6995af036abee4ca20812ad8a581d1a0f9fad57490b98cd030fdd74bac3640"
       },
       "encountered_definition_ids": [
         0
@@ -14533,7 +14533,7 @@
         "choices": [],
         "confirm_label": "Do not attack with Forest",
         "focus": [
-          114
+          115
         ],
         "help": null,
         "id": 1,
@@ -14542,12 +14542,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 114,
+              "display_id": 115,
               "entity_id": 56,
               "label": "Forest",
               "subject": {
                 "id": {
-                  "entity": 114,
+                  "entity": 115,
                   "incarnation": 1
                 },
                 "kind": "object"
@@ -14570,8 +14570,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "c68a75e01a9051cae081799989e11705786467fccd17a5a43e6ecc68cf6dfc2d",
-        "before": "eb4ef53fa88ad7f19074438d3525ea9db183deb57456b793770bc404dfa5264b"
+        "after": "ad6995af036abee4ca20812ad8a581d1a0f9fad57490b98cd030fdd74bac3640",
+        "before": "fb8e1fc96dd55224a4f4b2d30ee3f9dbe04bbe7128e16948de52eb2631bf79a0"
       },
       "to_revision": 132
     },
@@ -14590,7 +14590,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.88",
         "resulting_revision": 133,
-        "resulting_state_digest": "5f4b99460e5b54ac1c562ead8f89966c90dc5317a4292e2ece6f821db8246220"
+        "resulting_state_digest": "25ef7b3a63fcb3014de8a2962950194cab7cfdc7f393ec436efa2e1adfb92e6b"
       },
       "encountered_definition_ids": [
         9,
@@ -14615,7 +14615,7 @@
         "choices": [],
         "confirm_label": "Do not attack with White Lotus Reinforcements",
         "focus": [
-          111
+          112
         ],
         "help": null,
         "id": 1,
@@ -14624,12 +14624,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 111,
+              "display_id": 112,
               "entity_id": 78,
               "label": "White Lotus Reinforcements",
               "subject": {
                 "id": {
-                  "entity": 111,
+                  "entity": 112,
                   "incarnation": 2
                 },
                 "kind": "object"
@@ -14655,23 +14655,23 @@
           "kind": {
             "attackers": [
               {
-                "entity": 161,
+                "entity": 164,
                 "incarnation": 3
               },
               {
-                "entity": 157,
+                "entity": 160,
                 "incarnation": 3
               },
               {
-                "entity": 153,
+                "entity": 156,
                 "incarnation": 3
               },
               {
-                "entity": 145,
+                "entity": 147,
                 "incarnation": 3
               },
               {
-                "entity": 127,
+                "entity": 128,
                 "incarnation": 6
               }
             ],
@@ -14699,7 +14699,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 161,
+          "source_id": 164,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -14716,7 +14716,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 1,
-          "source_id": 157,
+          "source_id": 160,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -14733,7 +14733,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 2,
-          "source_id": 153,
+          "source_id": 156,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -14750,7 +14750,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 3,
-          "source_id": 145,
+          "source_id": 147,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -14767,7 +14767,7 @@
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 4,
-          "source_id": 127,
+          "source_id": 128,
           "source_incarnation": 6,
           "source_kind": 4,
           "target_id": 0,
@@ -14778,8 +14778,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "5f4b99460e5b54ac1c562ead8f89966c90dc5317a4292e2ece6f821db8246220",
-        "before": "c68a75e01a9051cae081799989e11705786467fccd17a5a43e6ecc68cf6dfc2d"
+        "after": "25ef7b3a63fcb3014de8a2962950194cab7cfdc7f393ec436efa2e1adfb92e6b",
+        "before": "ad6995af036abee4ca20812ad8a581d1a0f9fad57490b98cd030fdd74bac3640"
       },
       "to_revision": 133
     },
@@ -14798,7 +14798,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.45",
         "resulting_revision": 134,
-        "resulting_state_digest": "fe238ead5dd6b742f1f38027a9c71c742d1b3b2653e0a294b4cd882ee89c864f"
+        "resulting_state_digest": "372ac5ec625c32eefe5b5f276e52cb064d90e8bb80bf5a6e7898b85f75df1330"
       },
       "encountered_definition_ids": [
         17
@@ -14812,7 +14812,7 @@
         "choices": [],
         "confirm_label": "First-Time Flyer: do not block",
         "focus": [
-          166
+          169
         ],
         "help": null,
         "id": 5,
@@ -14821,12 +14821,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 166,
+              "display_id": 169,
               "entity_id": 12,
               "label": "First-Time Flyer",
               "subject": {
                 "id": {
-                  "entity": 166,
+                  "entity": 169,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14849,8 +14849,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "fe238ead5dd6b742f1f38027a9c71c742d1b3b2653e0a294b4cd882ee89c864f",
-        "before": "5f4b99460e5b54ac1c562ead8f89966c90dc5317a4292e2ece6f821db8246220"
+        "after": "372ac5ec625c32eefe5b5f276e52cb064d90e8bb80bf5a6e7898b85f75df1330",
+        "before": "25ef7b3a63fcb3014de8a2962950194cab7cfdc7f393ec436efa2e1adfb92e6b"
       },
       "to_revision": 134
     },
@@ -14869,7 +14869,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.46",
         "resulting_revision": 135,
-        "resulting_state_digest": "ec94da240de4634d2db1bb0308a59cb121f3bd3b52cd80bd95e6100203258cd6"
+        "resulting_state_digest": "2f0b42b90499755422eade127a9398450905cec21f7d6d82c683d4c8c3d40343"
       },
       "encountered_definition_ids": [
         5,
@@ -14897,8 +14897,8 @@
         "choices": [],
         "confirm_label": "Block Earth Kingdom Jailer with Forecasting Fortune Teller",
         "focus": [
-          130,
-          161
+          132,
+          164
         ],
         "help": null,
         "id": 0,
@@ -14907,12 +14907,12 @@
         "subjects": [
           {
             "object": {
-              "display_id": 130,
+              "display_id": 132,
               "entity_id": 13,
               "label": "Forecasting Fortune Teller",
               "subject": {
                 "id": {
-                  "entity": 130,
+                  "entity": 132,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14922,12 +14922,12 @@
           },
           {
             "object": {
-              "display_id": 161,
+              "display_id": 164,
               "entity_id": 50,
               "label": "Earth Kingdom Jailer",
               "subject": {
                 "id": {
-                  "entity": 161,
+                  "entity": 164,
                   "incarnation": 3
                 },
                 "kind": "object"
@@ -14952,12 +14952,12 @@
           "importance": "normal",
           "kind": {
             "attacker": {
-              "entity": 161,
+              "entity": 164,
               "incarnation": 3
             },
             "blockers": [
               {
-                "entity": 130,
+                "entity": 132,
                 "incarnation": 3
               }
             ],
@@ -14978,14 +14978,14 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 130,
+                "entity": 132,
                 "incarnation": 3
               },
               "kind": "object"
             },
             "target": {
               "id": {
-                "entity": 161,
+                "entity": 164,
                 "incarnation": 3
               },
               "kind": "object"
@@ -15006,14 +15006,14 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 161,
+                "entity": 164,
                 "incarnation": 3
               },
               "kind": "object"
             },
             "target": {
               "id": {
-                "entity": 130,
+                "entity": 132,
                 "incarnation": 3
               },
               "kind": "object"
@@ -15034,7 +15034,7 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 157,
+                "entity": 160,
                 "incarnation": 3
               },
               "kind": "object"
@@ -15059,7 +15059,7 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 153,
+                "entity": 156,
                 "incarnation": 3
               },
               "kind": "object"
@@ -15084,7 +15084,7 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 145,
+                "entity": 147,
                 "incarnation": 3
               },
               "kind": "object"
@@ -15109,7 +15109,7 @@
             "kind": "damage",
             "source": {
               "id": {
-                "entity": 127,
+                "entity": 128,
                 "incarnation": 6
               },
               "kind": "object"
@@ -15138,10 +15138,10 @@
           "event_type": "BLOCKERS_DECLARED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 161,
+          "source_id": 164,
           "source_incarnation": 3,
           "source_kind": 4,
-          "target_id": 130,
+          "target_id": 132,
           "target_incarnation": 3,
           "target_kind": 4,
           "to_zone": -1
@@ -15171,10 +15171,10 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 2,
-          "source_id": 130,
+          "source_id": 132,
           "source_incarnation": 3,
           "source_kind": 4,
-          "target_id": 161,
+          "target_id": 164,
           "target_incarnation": 3,
           "target_kind": 4,
           "to_zone": -1
@@ -15206,10 +15206,10 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 4,
-          "source_id": 161,
+          "source_id": 164,
           "source_incarnation": 3,
           "source_kind": 4,
-          "target_id": 130,
+          "target_id": 132,
           "target_incarnation": 3,
           "target_kind": 4,
           "to_zone": -1
@@ -15238,7 +15238,7 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 6,
-          "source_id": 157,
+          "source_id": 160,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -15285,7 +15285,7 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 9,
-          "source_id": 153,
+          "source_id": 156,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -15332,7 +15332,7 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 12,
-          "source_id": 145,
+          "source_id": 147,
           "source_incarnation": 3,
           "source_kind": 4,
           "target_id": 0,
@@ -15379,7 +15379,7 @@
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
           "ordinal": 15,
-          "source_id": 127,
+          "source_id": 128,
           "source_incarnation": 6,
           "source_kind": 4,
           "target_id": 0,
@@ -15405,8 +15405,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "ec94da240de4634d2db1bb0308a59cb121f3bd3b52cd80bd95e6100203258cd6",
-        "before": "fe238ead5dd6b742f1f38027a9c71c742d1b3b2653e0a294b4cd882ee89c864f"
+        "after": "2f0b42b90499755422eade127a9398450905cec21f7d6d82c683d4c8c3d40343",
+        "before": "372ac5ec625c32eefe5b5f276e52cb064d90e8bb80bf5a6e7898b85f75df1330"
       },
       "to_revision": 135
     }
@@ -15877,7 +15877,7 @@
     },
     "content_hash": "legacy-content-unversioned",
     "content_pack_manifest": {
-      "content_digest": "3e0b599a7e4add8e485248dee623c196b7407e9f888eff18f8f1d9c4a9c17d2a",
+      "content_digest": "96fdce0e4569678795f3759affab96a133cc183c60343d0161c63fce949b4e45",
       "definitions": [
         {
           "card_def_id": 0,
@@ -16082,7 +16082,7 @@
     }
   },
   "terminal_witness": {
-    "frame_hash": "d9094af4f46e5832955946f26ca252f34e561931733c451adf49c588bf52ba5c",
+    "frame_hash": "f39bbcc219f10c17a575abd3b5bbd0d7e28b2db34103c9f517e9f3178432c0bd",
     "players": [
       {
         "battlefield": [
@@ -16109,7 +16109,7 @@
           {
             "controller_id": 0,
             "damage": 0,
-            "id": 101,
+            "id": 102,
             "name": "Mountain",
             "plus1_counters": 0,
             "power": 0,
@@ -16119,7 +16119,7 @@
           {
             "controller_id": 0,
             "damage": 0,
-            "id": 109,
+            "id": 110,
             "name": "Mountain",
             "plus1_counters": 0,
             "power": 0,
@@ -16129,7 +16129,7 @@
           {
             "controller_id": 0,
             "damage": 0,
-            "id": 122,
+            "id": 123,
             "name": "Mountain",
             "plus1_counters": 0,
             "power": 0,
@@ -16139,7 +16139,7 @@
           {
             "controller_id": 0,
             "damage": 3,
-            "id": 130,
+            "id": 132,
             "name": "Forecasting Fortune Teller",
             "plus1_counters": 0,
             "power": 1,
@@ -16149,7 +16149,7 @@
           {
             "controller_id": 0,
             "damage": 0,
-            "id": 139,
+            "id": 141,
             "name": "Mountain",
             "plus1_counters": 0,
             "power": 0,
@@ -16159,7 +16159,7 @@
           {
             "controller_id": 0,
             "damage": 0,
-            "id": 166,
+            "id": 169,
             "name": "First-Time Flyer",
             "plus1_counters": 0,
             "power": 2,
@@ -16205,7 +16205,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 99,
+            "id": 100,
             "name": "Forest",
             "plus1_counters": 0,
             "power": 0,
@@ -16215,7 +16215,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 111,
+            "id": 112,
             "name": "White Lotus Reinforcements",
             "plus1_counters": 1,
             "power": 4,
@@ -16225,7 +16225,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 112,
+            "id": 113,
             "name": "Plains",
             "plus1_counters": 0,
             "power": 0,
@@ -16235,7 +16235,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 114,
+            "id": 115,
             "name": "Forest",
             "plus1_counters": 1,
             "power": 1,
@@ -16245,7 +16245,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 125,
+            "id": 126,
             "name": "Plains",
             "plus1_counters": 0,
             "power": 0,
@@ -16255,7 +16255,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 127,
+            "id": 128,
             "name": "Badgermole Cub",
             "plus1_counters": 0,
             "power": 2,
@@ -16265,18 +16265,8 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 137,
+            "id": 139,
             "name": "Forest",
-            "plus1_counters": 0,
-            "power": 0,
-            "tapped": false,
-            "toughness": 0
-          },
-          {
-            "controller_id": 1,
-            "damage": 0,
-            "id": 143,
-            "name": "Plains",
             "plus1_counters": 0,
             "power": 0,
             "tapped": false,
@@ -16286,6 +16276,16 @@
             "controller_id": 1,
             "damage": 0,
             "id": 145,
+            "name": "Plains",
+            "plus1_counters": 0,
+            "power": 0,
+            "tapped": false,
+            "toughness": 0
+          },
+          {
+            "controller_id": 1,
+            "damage": 0,
+            "id": 147,
             "name": "Badgermole Cub",
             "plus1_counters": 0,
             "power": 2,
@@ -16295,7 +16295,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 151,
+            "id": 154,
             "name": "Forest",
             "plus1_counters": 0,
             "power": 0,
@@ -16305,7 +16305,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 153,
+            "id": 156,
             "name": "South Pole Voyager",
             "plus1_counters": 1,
             "power": 5,
@@ -16315,7 +16315,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 157,
+            "id": 160,
             "name": "Earth King's Lieutenant",
             "plus1_counters": 2,
             "power": 5,
@@ -16325,7 +16325,7 @@
           {
             "controller_id": 1,
             "damage": 1,
-            "id": 161,
+            "id": 164,
             "name": "Earth Kingdom Jailer",
             "plus1_counters": 0,
             "power": 5,
@@ -16335,7 +16335,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 168,
+            "id": 171,
             "name": "White Lotus Reinforcements",
             "plus1_counters": 0,
             "power": 3,
@@ -16345,7 +16345,7 @@
           {
             "controller_id": 1,
             "damage": 0,
-            "id": 171,
+            "id": 174,
             "name": "Plains",
             "plus1_counters": 0,
             "power": 0,
@@ -16368,7 +16368,7 @@
       }
     ],
     "revision": 135,
-    "state_digest": "ec94da240de4634d2db1bb0308a59cb121f3bd3b52cd80bd95e6100203258cd6",
+    "state_digest": "2f0b42b90499755422eade127a9398450905cec21f7d6d82c683d4c8c3d40343",
     "terminal": true,
     "turn": {
       "active_player_id": 1,

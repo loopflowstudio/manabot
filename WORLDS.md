@@ -73,8 +73,36 @@ prefix is gone). Content digests, state digests and learning tokens changed, so
 w17 conformance, authored-match, parity and Academy fixtures were re-recorded
 with the same Commands and decision revisions; the learning schema stays 9.
 
+Task MTG-238 (2026-11-02, same world) gave the engine catalog-scale types
+without changing rules: counters are stored sparsely by kind (`Counters`
+serializes exactly as before), keywords are `Keyword` variants in a `Keywords`
+bitset serialized as the list of keywords present (so a definition's tokens
+carry only its keywords and a new keyword changes no other card's encoding),
+and card sets live in the `managym-cards` crate on the `managym-state` rules
+types, reached by the engine only through `catalog()`. Earthbend's animation
+is no longer a `Permanent` field: it is three continuous-effect records of one
+timestamp (`BecomeCreature`, `SetBasePt 0/0`, `AddKeywords(haste)`) that end
+when the object leaves, read by the same `is_animated` column and effect fact
+rows; crew's "becomes an artifact creature" is the same `BecomeCreature`
+record on a printed artifact. Counts written into card-shaped types became
+conditions: War Balloon is a `TypeGrant` on itself "as long as" it has three
+fire counters (`StaticTypeGrant.condition`), Zhao's land-type overwrite holds
+"as long as" he has a conqueror counter, and Phoenix Fleet Airship uses
+`Condition::ControlsAtLeast { count: 8, predicate: namesake }` on its own
+Creature grant. Namesakes compare the source and candidate names after layers
+1–3 without recursing through the static index. Removing the permanent
+field changed the canonical encoding, so the match-state hash contract is
+**12**; the conditions and keyword lists moved the content digest and the
+learning tokens (schema still 10: tokens derive from the definitions), so
+`semantic-kernel-w17-v1`, the authored-match receipt, both parity receipts,
+the Academy fixtures and the belief v3 receipt pins were re-recorded for the
+batch and its integration with T5, retaining Commands and decision revisions.
+Earthbend's effect records allocate object ids, so the combined authored tape
+retains its game outcome while ids differ from main's pre-integration receipt.
+
 Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
-definition with a `serde` serializer: learning schema **9**, token values are
+definition with a `serde` serializer: initially learning schema **9**, now
+**10** with delayed-trigger object roles. Token values are
 stable hashes of Rust and printed names, and IR opcodes, roles and enums are
 gone. `BoundSemanticPack` binds by content digest and registry name. Manifests
 carry `pack_key` (replacing `compiled_semantics` with its IR and source hashes);
@@ -212,7 +240,7 @@ by player width. Learning schema 10 adds the `delayed_trigger` object role (the
 trigger's source definition programs); tokens derive from the definitions, so
 new `Effect` variants and card fields appear in them without a schema change. Viewers see an opponent's
 foretold card only as an exile count, in JSON, text and tensor alike.
-`managym/tests/cards/observability.rs` names each field's columns and tokens.
+`managym/cards/tests/cards/observability.rs` names each field's columns and tokens.
 Action shapes are unchanged.
 
 `conformance/semantic-kernel-w17-v1` trace evidence, the authored-match receipt and

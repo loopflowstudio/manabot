@@ -8,7 +8,7 @@ use crate::{
         ability::{
             Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
         },
-        card::Keywords,
+        card::{Keyword, Keywords},
         effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
         player::PlayerConfig,
@@ -24,10 +24,7 @@ fn grant_hexproof(game: &mut Game, id: PermanentId) {
         None,
         PlayerId(0),
         [affected],
-        Modification::AddKeywords(Keywords {
-            hexproof: true,
-            ..Default::default()
-        }),
+        Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
         EffectDuration::EndOfTurn,
     );
 }

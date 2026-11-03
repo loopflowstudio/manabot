@@ -41,7 +41,7 @@ RECEIPT_PATH = (
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "d47f9ba28cecb38ed05a3bd69a598a7048f15858bcf4c2df4d2c1b181bae67e5"
+    "413515d02683d8feb22bc47426ac1bff5d4c83f78cc067fc66171d083f0f87ec"
 )
 COMMAND_COUNT = 135
 COMMITMENT_COUNT = 66
@@ -506,7 +506,7 @@ def _source_manifest() -> dict[str, Any]:
         "managym/src/decision.rs",
         "managym/src/possible_worlds.rs",
         "managym/src/python/bindings.rs",
-        "managym/tests/cards/stx.rs",
+        "managym/cards/tests/cards/stx.rs",
         "scripts/verify-public-commitment-parity",
         "tests/belief/test_player.py",
         "tests/belief/test_tracker.py",

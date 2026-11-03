@@ -1,6 +1,7 @@
 // damage.rs
 // Damage application, life changes, and cleanup.
 
+use crate::state::card::Keyword;
 use crate::{
     flow::{
         event::{DamageTarget, EventSubject, GameEvent},
@@ -72,7 +73,7 @@ impl Game {
         let remaining = (self.characteristics(permanent_id).toughness - before).max(0);
         let deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.deathtouch)
+                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
         });
         let lethal = if deathtouch {
             remaining.min(1)
@@ -129,11 +130,11 @@ impl Game {
         let source_card = source.map(|object_ref| CardId::from(object_ref.entity));
         let source_has_deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.deathtouch)
+                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
         });
         let lifelink_controller = source.and_then(|object_ref| {
             self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.lifelink)
+                .is_some_and(|keywords| keywords.has(Keyword::Lifelink))
                 .then(|| self.source_controller(object_ref))
                 .flatten()
         });

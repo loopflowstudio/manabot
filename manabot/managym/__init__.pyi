@@ -604,7 +604,7 @@ class ContinuousEffect:
     """One continuous-effect record on a player or permanent (CR 611, 613)."""
 
     # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
-    # BecomeArtifactCreature, Nonlegendary, LoseAllAbilities, Firebending,
+    # BecomeCreature, Nonlegendary, LoseAllAbilities, Firebending,
     # CantBeBlocked, CantBlock, ExileIfWouldDie, KeepUnspentMana or
     # NoMaximumHandSize.
     modification: str

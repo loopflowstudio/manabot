@@ -5,6 +5,7 @@
 //! mutation requests: validate exact identity, collect declarative
 //! replacements, transform deterministically, then commit.
 
+use crate::state::card::Keyword;
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::card::StaticAbility,
@@ -17,7 +18,7 @@ use crate::{
 };
 
 /// How a card enters its new zone.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ZoneEntry {
     /// Battlefield: enters tapped.
     pub tapped: bool,
@@ -37,11 +38,11 @@ pub(crate) struct ZoneEntry {
 impl ZoneEntry {
     /// The terms `zone` takes: battlefield terms only for the battlefield,
     /// face down only for exile.
-    fn for_zone(self, zone: ZoneType) -> Self {
+    fn for_zone(&self, zone: ZoneType) -> Self {
         match zone {
             ZoneType::Battlefield => Self {
                 face_down: false,
-                ..self
+                ..self.clone()
             },
             ZoneType::Exile => Self {
                 face_down: self.face_down,
@@ -419,7 +420,11 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {
                     return false;
                 };
-                if self.characteristics(permanent_id).keywords.indestructible {
+                if self
+                    .characteristics(permanent_id)
+                    .keywords
+                    .has(Keyword::Indestructible)
+                {
                     return false;
                 }
                 let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {

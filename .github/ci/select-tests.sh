@@ -20,7 +20,7 @@ else
   while IFS= read -r -d '' file; do
     seen=true
     case "$file" in
-      .github/ci/*|.github/workflows/ci.yml|pyproject.toml|uv.lock|managym/Cargo.toml|managym/Cargo.lock|managym/pyproject.toml)
+      .github/ci/*|.github/workflows/ci.yml|pyproject.toml|uv.lock|managym/Cargo.toml|managym/Cargo.lock|managym/*/Cargo.toml|managym/pyproject.toml)
         all ;;
       .github/workflows/manabot-integration.yml) select_jobs integration ;;
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
@@ -33,11 +33,11 @@ else
       scripts/audit_rules.py|docs/rules/audit-2026-10/*)
         select_jobs python_unit ;;
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
-      content/*|conformance/*|manabot/managym/*|managym/src/*|managym/*.py|managym/*.pyi)
+      content/*|conformance/*|manabot/managym/*|managym/src/*|managym/state/src/*|managym/cards/src/*|managym/*.py|managym/*.pyi)
         all ;;
       docs/rules/elemental/decks.json|docs/rules/elemental/cube-snapshot.csv) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;
-      managym/tests/*) select_jobs rust semantic_conformance ;;
+      managym/tests/*|managym/cards/tests/*) select_jobs rust semantic_conformance ;;
       academy/ui/src/lib/packs/*|academy/ui/src/lib/fixtures/*)
         select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
       academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*|academy/ui/src/lib/card-art/*)
