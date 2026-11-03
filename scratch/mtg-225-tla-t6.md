@@ -85,9 +85,14 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 - Re-record w17 evidence (list below), rebuild the extension from the integrated
   source and run the full debug Rust, pytest and Academy UI checks. Academy UI
   has not run on this branch.
-- Other open PRs against main that overlap and may land first: MTG-235 #412
-  (effect vocabulary, 66 files) and MTG-237 #413 (engine budget in CI). No
-  order between them and T6 is recorded.
+- Engine Budget (MTG-237 #413, merged and integrated at `a591093ee`; examples
+  build in release). T6's rules and catalog changes probably move the
+  search/step digests in `managym/perf/baseline.json`, which would fail the
+  check. If so, adopt the PR's own run with `scripts/engine_budget.py record
+  --reason` after #414 is integrated. Not measured locally, because the
+  benchmarks are left to CI.
+- MTG-235 #412 (effect vocabulary, 66 files) is still open and overlaps T6. No
+  order between it and T6 is recorded.
 
 ## Decisions for Jack Heart's review
 
@@ -105,7 +110,7 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 
 ## Check
 
-2026-11-02, `GameState.content` removed: debug `cargo test --lib --tests
+2026-11-02, after merging main `a1a02a76f`: `cargo build --release --examples` passes; `grep 'pub content' managym/src/flow/game.rs` is empty. Earlier, `GameState.content` removed: debug `cargo test --lib --tests
 --no-fail-fast` fails only `checked_semantic_conformance_evidence_reproduces`
 (re-record), `--test cards` 526 passed, clippy clean; catalog digest
 `02ac498d…2634`, length 355 and manifest hash `b8945b35…7a3c` match the
