@@ -105,6 +105,55 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Runtime evidence
 
+- Jack Heart's MTG-237 brief (2026-11-02) requires a 10% engine budget,
+  deliberate baseline moves, search-score preservation and a separate headless
+  throughput workload. The implementation compares candidate and committed
+  reference on one CI runner: identical T4 code measured 6.8k–10.3k steps/s
+  across runner CPU models, so recorded wall times cannot budget another run.
+  Same-runner comparison and native random-legal `Env::step` throughput remain
+  interpretations awaiting Jack Heart's PR review; this throughput is not
+  comparable with the retired rul-9 Python Command runner's 588.5 steps/s.
+- Search correctness needs every ordered action score and decision boundary.
+  A digest of only simulation count and winning action misses changed losing
+  scores. MTG-237 now hashes full scores; its historical T4/T5/T6 measurements
+  retain the old limitation and establish no full-score equality. The new
+  first full-score baseline came from CI run 41540798745, not reinterpreted
+  historical output. Delegated demo judgment on 2026-11-02 subsequently
+  accepted run 41552162812 at `88dc8c1ad` as the initial reference for merged
+  main `a8abf01b1`, explicitly retaining its measured 10.98% greater per-step
+  cost against the older engine. This is not a human statement or shipping
+  approval. The tolerance stays 10%; the source comparison does not isolate
+  which upstream change caused the cost.
+  Detailed measurements and the adoption procedure live in
+  `docs/development.md#engine-performance-budget`.
+- A green CI job does not prove budget enforcement: PR run 41548559113
+  (2026-11-02) reported success despite a throughput FAIL because implicit
+  `bash -e` let `tee` mask exit 1. Explicit `defaults.run.shell: bash` enables
+  pipefail. Regression coverage must execute the workflow's pipelines, not
+  just the comparator CLI, and cover failed benchmarks as well as over-budget
+  or changed-digest comparisons. Repaired hosted run 41552162812 failed the
+  throughput comparison correctly and retained a downloadable, adoptable
+  artifact. Its search timings and all digests/counts passed; 65 focused
+  tests cover the controlled pipeline and recovery paths.
+- Record the candidate before building the reference so an incompatible
+  reference still leaves an adoptable measurement; upload follows in the final
+  always-run step. A controlled reference-build failure proves local adoption
+  with the real recording CLI. Hosted transport and adoption after comparison
+  failure are proven by run 41552162812; hosted reference-build failure
+  remains unexercised. Moving digests, accepting a cost or
+  retaining a speedup requires a reason and the candidate's own CI artifact.
+  Measure the durable PR head, not the ephemeral merge commit.
+- Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
+  indexed records and cache-carrying clones. Run 41555845634 (2026-11-03 UTC)
+  measured that engine at `4b5e9c0e4` against `88dc8c1ad` on one runner:
+  worst reply took 30.26% less time, total search 28.36% less and each step
+  36.65% less, with identical full-score/step digests and counts. Delegated
+  demo judgment on 2026-11-02 applied the retained-speedup rule; the production
+  reference now adopts that candidate's artifact with a reason and unchanged
+  10% tolerance. Retaining the older, slower reference would allow loss of
+  the optimization within the budget. This is curated native-workload evidence,
+  not an end-to-end training result or shipping approval; the earlier accepted
+  cost remains historical evidence.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.

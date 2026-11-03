@@ -94,25 +94,18 @@ impl Game {
     }
 
     pub fn object_lki(&self, object_ref: ObjectRef) -> Option<&ObjectLki> {
-        self.state.object_lki.get(&object_ref)
+        self.state.object_lki.get(object_ref)
     }
 
     /// Last known information of the object that occupied a battlefield
     /// slot, once it has left.
     pub(crate) fn departed_permanent_lki(&self, permanent_id: PermanentId) -> Option<&ObjectLki> {
-        self.state
-            .object_lki
-            .values()
-            .find(|lki| lki.permanent == permanent_id)
+        self.state.object_lki.for_permanent(permanent_id)
     }
 
     /// Last known information of `card`'s most recent battlefield object.
     pub(crate) fn latest_card_lki(&self, card: CardId) -> Option<&ObjectLki> {
-        self.state
-            .object_lki
-            .values()
-            .filter(|lki| lki.card == card)
-            .max_by_key(|lki| lki.object_ref)
+        self.state.object_lki.latest_for_card(card)
     }
 
     /// Capture the stable viewer identity for a current or departed object.
@@ -143,18 +136,7 @@ impl Game {
     }
 
     pub(crate) fn record_object_lki(&mut self, lki: ObjectLki) {
-        self.state.object_lki.insert(lki.object_ref, lki);
-    }
-
-    pub(crate) fn advance_object_incarnation(&mut self, card: CardId) {
-        let incarnation = self
-            .state
-            .object_incarnations
-            .get_mut(card.0)
-            .expect("card entity must have an incarnation");
-        *incarnation = incarnation
-            .checked_next()
-            .expect("rules object incarnation overflow");
+        self.state.object_lki_mut().insert(lki);
     }
 
     pub fn action_space(&self) -> Option<&ActionSpace> {

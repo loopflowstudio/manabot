@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::card::CardDefId;
 use super::zone::ZoneType;
 
@@ -92,6 +94,70 @@ pub struct ObjectLki {
     pub controller: PlayerId,
     pub definition_id: CardDefId,
     pub presentation_id: ObjectId,
+}
+
+/// Last-known battlefield facts of departed exact objects, keyed by object,
+/// with each entity's latest departed object and each battlefield slot's
+/// object at hand: a card leaves and re-enters the battlefield as new
+/// objects, and zone-change matching looks back to its most recent one.
+/// Iterates in object order; the canonical state hash serializes that.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ObjectLkiLog {
+    by_object: BTreeMap<ObjectRef, ObjectLki>,
+    /// The latest departed object of each entity, by entity index.
+    latest_by_entity: Vec<Option<ObjectRef>>,
+    /// The departed object that occupied each battlefield slot, by
+    /// `PermanentId`; a slot is never reused.
+    by_permanent: Vec<Option<ObjectRef>>,
+}
+
+impl ObjectLkiLog {
+    pub fn insert(&mut self, lki: ObjectLki) {
+        let object = lki.object_ref;
+        let entity = object.entity.0;
+        if self.latest_by_entity.len() <= entity {
+            self.latest_by_entity.resize(entity + 1, None);
+        }
+        if self.latest_by_entity[entity].is_none_or(|latest| latest < object) {
+            self.latest_by_entity[entity] = Some(object);
+        }
+        let slot = lki.permanent.0;
+        if self.by_permanent.len() <= slot {
+            self.by_permanent.resize(slot + 1, None);
+        }
+        self.by_permanent[slot].get_or_insert(object);
+        self.by_object.insert(object, lki);
+    }
+
+    pub fn get(&self, object: ObjectRef) -> Option<&ObjectLki> {
+        self.by_object.get(&object)
+    }
+
+    pub fn contains(&self, object: ObjectRef) -> bool {
+        self.by_object.contains_key(&object)
+    }
+
+    /// The card's most recent departed battlefield object.
+    pub fn latest_for_card(&self, card: CardId) -> Option<&ObjectLki> {
+        self.latest_by_entity
+            .get(card.0)
+            .copied()
+            .flatten()
+            .and_then(|object| self.by_object.get(&object))
+    }
+
+    /// The departed object that occupied a battlefield slot.
+    pub fn for_permanent(&self, permanent: PermanentId) -> Option<&ObjectLki> {
+        self.by_permanent
+            .get(permanent.0)
+            .copied()
+            .flatten()
+            .and_then(|object| self.by_object.get(&object))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&ObjectRef, &ObjectLki)> {
+        self.by_object.iter()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]

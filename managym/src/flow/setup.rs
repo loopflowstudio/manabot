@@ -132,7 +132,7 @@ impl Game {
         }
 
         let mut game = Self {
-            statics_cache: Default::default(),
+            derived: Default::default(),
             state: TrackedState::new(GameState {
                 cards,
                 permanents: PermanentVec::default(),
@@ -153,7 +153,7 @@ impl Game {
                 trigger_placement: None,
                 delayed_triggers: Vec::new(),
                 exile_links: Vec::new(),
-                effects: Vec::new(),
+                effects: crate::state::effect::EffectRecords::default(),
                 cast_permissions: Default::default(),
                 suspended_decision: None,
                 trigger_enqueue_counter: 0,

@@ -196,6 +196,17 @@ checks required by the affected package and workflow.
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
   `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
+- Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
+  `bench_steps` in release for the change and for the reference commit of
+  `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
+  slower than the reference or with a changed search/decision digest. A moved
+  digest (a rules change reaching the curated decks, or a change to the
+  benchmarks or curated lists), an accepted cost or a kept speedup moves the
+  reference by adopting the PR's own run (`gh run download`, then
+  `scripts/engine_budget.py record --reason`); a reference that no longer
+  builds with the change's benchmarks is recorded the same way
+  ([engine performance budget](docs/development.md#engine-performance-budget));
+  wall time is never compared across runners.
 - **CI runs `cargo test` in debug, so validate in debug before landing.**
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
@@ -271,10 +282,18 @@ continuous-effect records and an Aura's `SetCharacteristics`. Code that the
 layer computation itself calls (static scopes, ability outputs) reads the
 private layer stages in `flow/statics.rs`, never the view.
 The view and its static-source index are computed once per state revision and
-shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` whose
-every mutable access advances the revision; only fields no characteristic
-reads (priority, the RNG) have non-advancing accessors. Debug builds recompute
-every cached view and index on read and assert they match.
+shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` with
+`Revisions` (`characteristics`, `mana_pools`, `triggers`): `DerefMut`
+advances every counter, and its typed accessors (`tap`, `mark_damage`,
+`events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
+their field feeds. Route a hot write through a typed accessor only when no
+layer, static condition or trigger source reads the field; debug builds
+recompute every cached view and index on read and assert they match, so a
+misclassified accessor fails `cargo test` in debug. Continuous-effect records
+live in `EffectRecords` (indexed by affected object and player); trigger
+sources are looked up per event kind through `TriggerIndex`
+(`flow/triggers.rs`), rebuilt on the `triggers` revision; departed-object
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

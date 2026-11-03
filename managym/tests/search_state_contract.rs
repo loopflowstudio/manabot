@@ -122,8 +122,22 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
     let old_ref = root.current_object_ref(card).expect("current object ref");
     assert_eq!(root.lookup_current_permanent(old_ref), Ok(permanent));
 
+    let root_view = root.characteristics(permanent);
     let mut branch = root.clone();
+    assert!(
+        Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
+        "a search fork inherits the parent's computed view"
+    );
+    branch.drain_events();
+    assert!(
+        Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
+        "draining events does not change any layered characteristic"
+    );
     branch.move_card(card, ZoneType::Graveyard);
+    assert!(
+        !Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
+        "a departed object cannot keep its cached battlefield view"
+    );
     assert_eq!(
         branch.lookup_current_permanent(old_ref),
         Err(ObjectLookupError::StaleIncarnation)
@@ -150,6 +164,10 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
     assert_ne!(witness(&branch), root_witness);
 
     assert_eq!(witness(&root), root_witness);
+    assert!(
+        Arc::ptr_eq(&root_view, &root.characteristics(permanent)),
+        "invalidating the fork must not discard the parent's view"
+    );
     assert_eq!(root.lookup_current_permanent(old_ref), Ok(permanent));
     assert_eq!(
         root.lookup_current_permanent(new_ref),

@@ -1069,9 +1069,8 @@ impl Game {
         if !ability.exhaust && !ability.once_each_turn {
             return;
         }
-        if let Some(permanent) = self.state.permanents[permanent].as_mut() {
-            permanent.record_activation(ability_index, ability);
-        }
+        self.state
+            .record_activation(permanent, ability_index, ability);
     }
 
     /// The definition an activation of `source` uses; `None` once the
@@ -1595,7 +1594,7 @@ impl Game {
                 target_req_indices,
             } => {
                 self.cast_spell(player, card, targets, target_req_indices, cast)?;
-                if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
+                if let Some(StackObject::Spell(spell)) = self.state.stack_objects_mut().last_mut() {
                     spell.mode = mode;
                 }
                 self.restart_priority_round();
@@ -1913,7 +1912,7 @@ impl Game {
             self.sacrifice_permanent(permanent_id);
         }
 
-        let id = self.state.id_gen.next_id();
+        let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
@@ -1952,7 +1951,7 @@ impl Game {
         let source_ref = self
             .current_object_ref(card)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
-        let id = self.state.id_gen.next_id();
+        let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,

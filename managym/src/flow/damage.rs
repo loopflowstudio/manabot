@@ -143,12 +143,12 @@ impl Game {
 
         match target {
             ProposedDamageTarget::Player(player) => {
-                let Some(player_state) = self.state.players.get_mut(player.0) else {
+                let Some(life) = self.state.life_mut(player) else {
                     return false;
                 };
-                let old_life = player_state.life;
-                player_state.life = player_state.life.saturating_sub(amount);
-                let new_life = player_state.life;
+                let old_life = *life;
+                *life = life.saturating_sub(amount);
+                let new_life = *life;
 
                 self.emit(GameEvent::DamageDealt {
                     source: source_card,
@@ -173,13 +173,11 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
                     return false;
                 };
-                let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
+                if self.state.permanents[permanent_id].is_none() {
                     return false;
-                };
-                permanent.take_damage(amount);
-                if source_has_deathtouch {
-                    permanent.deathtouch_damage = true;
                 }
+                self.state
+                    .mark_damage(permanent_id, amount, source_has_deathtouch);
                 self.emit(GameEvent::DamageDealt {
                     source: source_card,
                     target: DamageTarget::Permanent(permanent_id),
@@ -217,12 +215,12 @@ impl Game {
         {
             return false;
         }
-        let Some(player_state) = self.state.players.get_mut(player.0) else {
+        let Some(life) = self.state.life_mut(player) else {
             return false;
         };
-        let old_life = player_state.life;
-        player_state.life = player_state.life.saturating_add(delta);
-        let new_life = player_state.life;
+        let old_life = *life;
+        *life = life.saturating_add(delta);
+        let new_life = *life;
         if old_life == new_life {
             return false;
         }
@@ -236,12 +234,7 @@ impl Game {
     pub(crate) fn clear_damage(&mut self) {
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
-            if self.state.permanents[permanent_id].is_some() {
-                self.state.permanents[permanent_id]
-                    .as_mut()
-                    .expect("checked permanent")
-                    .clear_damage();
-            }
+            self.state.clear_damage(permanent_id);
         }
     }
 
@@ -292,7 +285,7 @@ impl Game {
             .any(|trigger| trigger.this_turn)
         {
             self.state
-                .delayed_triggers
+                .delayed_triggers_mut()
                 .retain(|trigger| !trigger.this_turn);
         }
         for index in 0..self.state.permanents.len() {
@@ -303,10 +296,7 @@ impl Game {
                     !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
                 })
             {
-                self.state.permanents[permanent_id]
-                    .as_mut()
-                    .expect("checked permanent")
-                    .clear_turn_history();
+                self.state.clear_permanent_turn_history(permanent_id);
             }
         }
     }

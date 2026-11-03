@@ -150,6 +150,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v1` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
+| Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
 
 Semantic-kernel conformance is recorded as manifest seeds plus a per-case
 `trace_sha256` in `evidence.json` ([conformance](../conformance/README.md)). A
@@ -160,7 +161,8 @@ job does.
 
 **Selection.** Detect Changes pipes the NUL-delimited diff (`--no-renames`, so
 both sides of a rename) into `.github/ci/select-tests.sh`. Manual dispatch, an
-unknown base, an empty diff or an unknown path selects everything. Tests Result
+unknown base, an empty diff or an unknown path selects everything; a dispatch
+with `measure` selects only Engine Budget. Tests Result
 fails if detection failed, a selected job did not succeed, or an unselected job
 neither skipped nor succeeded.
 
@@ -178,6 +180,7 @@ neither skipped nor succeeded.
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/` | Python unit, integration |
+| `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 
@@ -191,6 +194,119 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 `card-evaluation.yml` (manual) verifies 1024 native games with
 `manabot.eval.cards verify` (see [evaluation](evaluation.md)).
 `release.yml` is described next.
+
+## Engine performance budget
+
+`Engine Budget` builds two release benchmarks on a GitHub-hosted runner of
+their own and compares a change with the reference commit named in
+`managym/perf/baseline.json`:
+
+- `managym/examples/bench_search.rs`: Search-64 replies (16 worlds x 4
+  rollouts) on the curated UR Lessons versus GW Allies matchup, seeds 1-3,
+  40 decisions each. Budget lines: worst reply, summed total, and the search
+  digest of each seed. The search digest covers every action score in legal
+  order, with each decision framed by its action count, simulation count and
+  chosen index. Scores use exact IEEE-754 bits in little-endian order; the
+  integer digest is the first 64 bits of BLAKE3. A changed losing score fails
+  even when the winner and simulation count stay the same.
+- `managym/examples/bench_steps.rs`: headless steps per second, 512 seeded
+  games of the same matchup with both seats uniformly random over the legal
+  actions and native trivial-decision skipping. Budget lines: steps per
+  second, step count and the digest over every decision.
+
+GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
+the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
+Intel Xeon 6973P-C (2026-11-02), so wall time is never compared across runs.
+The job builds and runs the candidate, then builds the reference commit
+with the change's benchmarks and runs it on the one machine, and
+fails the PR when the candidate is more than 10% slower than the reference on
+any timing or either run's digests differ from the committed ones (two runs
+of one engine on separate EPYC 7763 machines agreed within 2.5%). So a
+speedup that changes search results fails until the reference moves, and so
+does a baseline file whose digests no longer describe its reference commit.
+The figures in the file are the reference's own recording, for orientation
+only.
+
+**Moving the reference.** Every run is a recording of its candidate: the
+`engine-budget` artifact holds the candidate's output and a `measurement.json`
+naming the candidate commit, date, run and runner CPU, written before the
+reference is built. A PR adopts its own run as the reference, saying why in
+the commit, for one of three reasons: a digest moved (a rules change reaching
+these decks, or a change to the benchmarks or the curated lists); a measured
+cost is accepted; or a speedup is kept, so later slowdowns are budgeted
+against the faster engine rather than allowed back up to the old reference.
+The PR body cites the delta from the run it adopts; the recording commit's
+own run then compares the same engine with that reference and passes. When
+both digests match and the engine did not change, investigate the failure and
+re-run the job before attributing it to runner noise; do not widen the tolerance.
+
+```bash
+gh run download <run-id> --name engine-budget --dir .cache/engine-budget
+uv run scripts/engine_budget.py record --reason "<why the reference moves>"
+```
+
+The reference commit must stay reachable from origin: on a pull request the
+job checks out and records the PR head, never GitHub's ephemeral merge
+commit, and a PR head stays fetchable after a squash merge. The benchmarks
+use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
+`is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
+that the reference commit no longer compiles with still records the
+candidate (the reference is built afterwards) and moves the reference in the
+same PR like any other move. For a commit that has no PR, the `measure`
+dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
+with the dispatched ref's benchmarks and uploads the same artifact without
+comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
+
+**Current reference.** Commit `4b5e9c0e4` was adopted from
+[CI run 41555845634](https://github.com/loopflowstudio/manabot/actions/runs/41555845634)
+(2026-11-03 UTC, Intel Xeon 6973P-C), retaining merged main `51fbacbbf`'s
+derived-state revisions, indexed effect/trigger records and cache-carrying
+clones. Its native source matches that main commit. On the same runner:
+
+| Metric | Previous reference `88dc8c1ad` | Adopted candidate | Improvement |
+|---|---:|---:|---:|
+| Worst search reply | 10.226 s | 7.132 s | 30.26% less time |
+| Total search | 290.711 s | 208.251 s | 28.36% less time |
+| Step throughput | 8,833.0/s | 13,943.8/s | 36.65% less time per step |
+
+All full-score/step digests and counts match. Delegated demo judgment applied
+the retained-speedup rule so future regressions are budgeted against this
+faster engine. Adoption preserves the **10% tolerance**; it is not shipping
+approval. These figures compare engines on one runner, not against the older
+reference's recorded absolute timings below.
+
+**Previous reference and accepted cost.** Commit `88dc8c1ad` was adopted from
+[CI run 41552162812](https://github.com/loopflowstudio/manabot/actions/runs/41552162812)
+(2026-11-03 UTC, AMD EPYC 7763): 6,104.0 steps/s, 14.857 s worst search
+reply and 433.796 s total. It establishes the initial budget at merged main
+`a8abf01b1`, including decklist disclosure (`230b2f563`) and T5 token copies
+and effective battlefield characteristics (`a8abf01b1`). On that same runner,
+the older `e5615edcc` reference measured 6,774.5 steps/s: the candidate used
+**10.98% more time per step** (9.90% fewer steps/s), correctly failing the
+10% budget. Search timings and all full-score/step digests and counts passed.
+Delegated demo judgment accepted this measured cost of the already-merged
+engine; the source comparison does not isolate its cause. The measured head
+`88dc8c1ad` has no native source diff from that main commit. Adoption preserves
+the **10% tolerance** and the failed run as evidence; it is not shipping approval.
+
+Measured once on 2026-11-02 with the original search digest (steps/s; worst Search-64
+reply; total over 3 seeds x 40 decisions), each on its own runner:
+
+| Commit | CPU | steps/s | worst reply | total |
+|---|---|---:|---:|---:|
+| T4 main `4c8324a59` (original reference) | AMD EPYC 7763 | 6819.5 | 13.807 s | 408.9 s |
+| T5 head `836042c07` | Intel Xeon 6973P-C | 10285.9 | 9.976 s | 273.9 s |
+| T6 head `2c1ba169f` | AMD EPYC 9V74 | 8883.1 | 10.651 s | 310.9 s |
+
+The three rows are on three CPU models, so they rank the runners, not the
+commits. All three reproduced the original digests, but that search digest
+covered only simulation counts and winning actions, not every action score.
+These historical timings do not prove full-score equality. The committed
+baseline is recorded separately with the strengthened digest. Run the benchmarks
+locally only as a smoke check:
+`cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
+(and `bench_steps`). Never add load to make a measurement move
+([TESTING.md](../TESTING.md)).
 
 ## Releases
 

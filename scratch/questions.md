@@ -60,3 +60,16 @@ Complete inherited T5/decklist notes, earlier holds, sync evidence and prior
 validation are retained at `3ed5b5baa:scratch/questions.md`. Earlier source
 references remain there (`bbb5101eb`, `1e9fd2d7c`, `4c8324a59`); the removed
 T5 design link is historical, not a current checkout dependency.
+
+## Post-publication sync — 2026-11-02
+
+Resolve the owned sync onto main `a1a02a76f` by retaining MTG-238's
+three-record earthbend animation and main's cache-preserving ID accessor.
+Empty effect sets return before mutating tracked state. Nonempty effect sets
+still invalidate characteristics, triggers and mana through the shared writer.
+Main's MTG-237 assumptions remain at `a1a02a76f:scratch/questions.md`;
+its performance CI and baseline are retained without selecting new work here.
+The two mutable w17 parity receipts retain this branch's vocabulary and hashes;
+both were regenerated against the atomically installed combined extension.
+Only source fingerprints changed; all non-source evidence matches the branch.
+The waiting caller owns the audit-reference repair, broader checks and push.

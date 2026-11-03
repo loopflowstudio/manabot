@@ -241,7 +241,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
-            effects,
+            effects: effects.as_slice(),
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter: *trigger_enqueue_counter,

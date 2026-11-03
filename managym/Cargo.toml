@@ -35,6 +35,10 @@ benchmark = []
 name = "bench_observation"
 required-features = ["benchmark"]
 
+[[example]]
+name = "bench_search"
+test = true
+
 [dependencies]
 managym-cards = { path = "cards" }
 managym-state = { path = "state" }

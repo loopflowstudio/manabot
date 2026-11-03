@@ -51,7 +51,7 @@ impl Game {
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
-        let timestamp = self.state.id_gen.next_id();
+        let timestamp = self.state.id_gen_mut().next_id();
         self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
             timestamp,
             source,
@@ -75,7 +75,7 @@ impl Game {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
-        let timestamp = self.state.id_gen.next_id();
+        let timestamp = self.state.id_gen_mut().next_id();
         let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
         let modifications = [
             Modification::BecomeCreature,
@@ -97,11 +97,11 @@ impl Game {
     }
 
     fn push_effects(&mut self, records: impl IntoIterator<Item = ContinuousEffect>) {
-        let before = self.state.effects.len();
-        self.state.effects.extend(records);
-        if self.state.effects.len() == before {
+        let records: Vec<ContinuousEffect> = records.into_iter().collect();
+        if records.is_empty() {
             return;
         }
+        self.state.effects.extend(records);
         // Characteristics can change which mana abilities exist.
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));
@@ -116,19 +116,14 @@ impl Game {
     /// Records affecting the permanent's current incarnation, in timestamp
     /// order.
     pub fn effects_on(&self, permanent_id: PermanentId) -> impl Iterator<Item = &ContinuousEffect> {
-        let object = self.permanent_object_ref(permanent_id);
-        self.state
-            .effects
-            .iter()
-            .filter(move |effect| object.is_some_and(|object| effect.affects_object(object)))
+        self.permanent_object_ref(permanent_id)
+            .into_iter()
+            .flat_map(|object| self.state.effects.on(object))
     }
 
     /// Records affecting a player, in timestamp order.
     pub fn player_effects(&self, player: PlayerId) -> impl Iterator<Item = &ContinuousEffect> {
-        self.state
-            .effects
-            .iter()
-            .filter(move |effect| effect.affects_player(player))
+        self.state.effects.on_player(player)
     }
 
     pub(super) fn permanent_has_modification(
