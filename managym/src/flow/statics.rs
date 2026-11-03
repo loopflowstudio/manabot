@@ -205,6 +205,9 @@ struct StaticIndex {
 pub(crate) struct DerivedCache {
     revisions: Revisions,
     index: Option<Arc<StaticIndex>>,
+    /// Structural candidates only: conditions and ability loss are read live.
+    /// Separate from `index`, whose construction can ask for land overwrites.
+    land_type_setters: Option<Arc<Vec<PermanentId>>>,
     /// Indexed by `PermanentId`.
     characteristics: Vec<Option<Arc<Characteristics>>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
@@ -221,6 +224,7 @@ impl DerivedCache {
     pub(super) fn at(&mut self, revisions: Revisions) -> &mut Self {
         if self.revisions.characteristics != revisions.characteristics {
             self.index = None;
+            self.land_type_setters = None;
             self.characteristics.clear();
         } else if self.revisions.mana_pools != revisions.mana_pools
             && self
@@ -600,15 +604,13 @@ impl Game {
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
-                .battlefield_permanents(controller)
-                .into_iter()
+                .iter_battlefield_permanents(controller)
                 .filter(|&id| self.permanent_is_land(id))
                 .filter_map(|id| self.state.permanents[id].as_ref())
                 .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
                 .sum(),
             PowerCda::CreaturesYouControl => self
-                .battlefield_permanents(controller)
-                .into_iter()
+                .iter_battlefield_permanents(controller)
                 .filter(|id| self.permanent_is_creature(*id))
                 .count() as i32,
             PowerCda::GraveyardMatching(predicate) => {
@@ -802,13 +804,11 @@ impl Game {
         if !card.types.is_land() {
             return None;
         }
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
-            .filter_map(|&setter_card| {
-                let setter_id = self.state.card_to_permanent[setter_card]?;
+        self.land_type_setters()
+            .iter()
+            .filter_map(|&setter_id| {
                 let setter = self.state.permanents[setter_id].as_ref()?;
-                self.state.cards[setter_card]
+                self.state.cards[setter.card]
                     .statics
                     .iter()
                     .find_map(|ability| match ability {
@@ -828,6 +828,39 @@ impl Game {
                     })
             })
             .max_by_key(|(timestamp, _)| *timestamp)
+    }
+
+    fn land_type_setters(&self) -> Arc<Vec<PermanentId>> {
+        let revisions = self.state.revisions();
+        if let Some(setters) = self
+            .derived
+            .borrow_mut()
+            .at(revisions)
+            .land_type_setters
+            .clone()
+        {
+            debug_assert_eq!(*setters, self.collect_land_type_setters());
+            return setters;
+        }
+        let setters = Arc::new(self.collect_land_type_setters());
+        self.derived.borrow_mut().at(revisions).land_type_setters = Some(setters.clone());
+        setters
+    }
+
+    fn collect_land_type_setters(&self) -> Vec<PermanentId> {
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(|&setter_card| {
+                let setter_id = self.state.card_to_permanent[setter_card]?;
+                self.state.permanents[setter_id].as_ref()?;
+                self.state.cards[setter_card]
+                    .statics
+                    .iter()
+                    .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
+                    .then_some(setter_id)
+            })
+            .collect()
     }
 
     /// Card types static type grants add to `target_id` (layer 4).
@@ -922,8 +955,7 @@ impl Game {
     /// Distinct colors among `controller`'s permanents matching `predicate`
     /// (CR 105.2; Earthen Ally's "each color among Allies you control").
     fn colors_among(&self, controller: PlayerId, predicate: &CardPredicate) -> i32 {
-        self.battlefield_permanents(controller)
-            .into_iter()
+        self.iter_battlefield_permanents(controller)
             .filter(|&id| self.permanent_matches_with(id, predicate, ScopeView::Keywords))
             .filter_map(|id| self.state.permanents[id].as_ref())
             .flat_map(|permanent| self.state.cards[permanent.card].colors())
@@ -1054,7 +1086,7 @@ impl Game {
     /// creature type (White Lotus Tile); zero when none has a creature type.
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<&str, usize> = Default::default();
-        for id in self.battlefield_permanents(controller) {
+        for id in self.iter_battlefield_permanents(controller) {
             if self.permanent_is_creature(id) {
                 for creature_type in self.creature_types(id) {
                     *counts.entry(creature_type).or_default() += 1;
@@ -1155,8 +1187,7 @@ impl Game {
             }
             Condition::ControlsAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
-                self.battlefield_permanents(controller)
-                    .into_iter()
+                self.iter_battlefield_permanents(controller)
                     .filter(|&id| {
                         self.permanent_matches_with_source(id, predicate, ScopeView::Rules, source)
                     })
@@ -1313,7 +1344,7 @@ impl Game {
         let target = self.permanent_object_ref(permanent_id);
         let attachments = [PlayerId(0), PlayerId(1)]
             .into_iter()
-            .flat_map(|player| self.battlefield_permanents(player))
+            .flat_map(|player| self.iter_battlefield_permanents(player))
             .filter_map(|id| {
                 let aura = self.state.permanents[id].as_ref()?;
                 (target.is_some() && aura.attached_to == target && self.recorded_loss(id).is_none())

@@ -13080,6 +13080,39 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     );
 }
 
+/// Cached land-type candidates follow entry/departure and clone isolation;
+/// the candidate's counter condition and ability loss remain live reads.
+#[test]
+fn zhao_land_type_candidates_follow_state_and_fork_changes() {
+    let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Abandoned Air Temple"]);
+    let temple = s.force_permanent_on_battlefield(0, "Abandoned Air Temple");
+    assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
+    let zhao = s.force_permanent_on_battlefield(0, "Zhao, the Moon Slayer");
+    assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
+    set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
+    assert!(s.game().characteristics(temple).has_subtype("Mountain"));
+
+    let mut fork = s.game().clone();
+    let affected = fork.affected_permanent(zhao).unwrap();
+    fork.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::LoseAllAbilities,
+        EffectDuration::EndOfTurn,
+    );
+    assert!(!fork.characteristics(temple).has_subtype("Mountain"));
+    assert!(s.game().characteristics(temple).has_subtype("Mountain"));
+
+    set_counters(&mut s, zhao, CounterKind::Conqueror, 0);
+    assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
+    set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
+    assert!(s.game().characteristics(temple).has_subtype("Mountain"));
+    let zhao_card = card_of(&s, zhao);
+    s.game_mut().move_card(zhao_card, ZoneType::Exile);
+    assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
+}
+
 /// Tapping an Ally exiles a card from a graveyard with the Rioter; when it
 /// attacks, an Ally spell you own exiled with it may be cast, paying its
 /// costs.

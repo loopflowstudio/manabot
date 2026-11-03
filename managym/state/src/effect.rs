@@ -18,7 +18,7 @@
 // the copy's `Card`, and its exceptions are the same `Modification`
 // vocabulary, applied once into the copy's definition (its copiable values).
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::{
     card::{CardDefId, CardDefinition, CardType, Keywords},
@@ -236,7 +236,7 @@ impl ContinuousEffect {
 pub struct EffectRecords {
     records: Vec<ContinuousEffect>,
     /// Indices into `records` by affected object, ascending.
-    by_object: HashMap<ObjectRef, Vec<usize>>,
+    by_object: BTreeMap<ObjectRef, Vec<usize>>,
     /// Indices into `records` by affected player, ascending.
     by_player: [Vec<usize>; 2],
 }
