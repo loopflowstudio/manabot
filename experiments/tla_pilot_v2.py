@@ -91,8 +91,8 @@ def frozen() -> tuple[TrainingRegime, Protocol]:
         raise ValueError("pilot runtime world differs from the prospective protocol")
     if regime.world != protocol.runtime_world.world_version:
         raise ValueError("pilot regime world differs from its protocol")
-    if regime.observation != ObservationConfig(policy_input_version=6, max_facts=512):
-        raise ValueError("pilot requires its declared v6/512 input contract")
+    if regime.observation != ObservationConfig(policy_input_version=6, max_facts=256):
+        raise ValueError("pilot requires its declared v6/256 input contract")
     if regime.deck_source is None or regime.deck_source.entry_ids is None:
         raise ValueError("pilot requires a frozen population with event IDs")
     if regime.deck_source.sampling != "uniform-independent-v1":

@@ -28,9 +28,9 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   post-PR-414 source plus the v6 repair, with the current card digest pinned in
   its protocol. All 134 entries admit unchanged. The digest difference is
   isolated to PR-414 keyword serialization and 13 rules-vocabulary locations;
-  version/admission alone does not establish runtime parity. Prospective correction
-  `2adbd0758e40518947daf91569e1938b060d4346` changes only the timing test from
-  that exact parent, retaining native/learner/corpus/recipe/evaluator bytes.
+  version/admission alone does not establish runtime parity. Historical v1 correction
+  `2adbd0758e40518947daf91569e1938b060d4346` changed only the timing test from
+  b8835f63b, retaining native/learner/corpus/recipe/evaluator bytes.
   Ordinary repair checkpoint: c29bf3a3. Keep original failed requests unchanged.
 - Allocation: prepare source once through existing `source.freeze`, retain the
   typed Run, then quote/submit via `client.launch_cohort`; quotes reserve nothing.
@@ -51,9 +51,13 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   decision. The 2026-11-03 implementation audit established 140 distinct tuples
   with seven distinct timestamps, zero exact duplicates, matching capture and
   70 rendered text records. Lossless compaction cannot preserve unchanged v5
-  row meanings here. Operator comment 5d6cf81e selected prospective v6/max_facts=512 and Jack
-  Heart confirmed it in 0c17ad58. The numeric capacity is the operator’s
-  engineering choice. Preserve timestamp rank / 128, all columns and v5.
+  row meanings here. Operator comment 5d6cf81e selected prospective v6/max_facts=512;
+  0c17ad58 was an operator-issued run reason, not separate human confirmation.
+  New operator comment 78f4c226 selects **256 for the pilot**, following Jack
+  Heart's question about 256. The 23:20 UTC authoritative launcher/local/R2
+  reads found no v2 execution/scoring; the prepared v2 bindings were amended
+  in place. Receipt: `.runs/mtg213/v2-pre-amendment-state.json`. The numeric capacity is the operator's engineering choice.
+  Preserve timestamp rank / 128, all columns and v5.
   Fresh v6 configuration defaults to 512; legacy configuration omits the new
   field to preserve architecture hashes. Native buffers infer capacity from
   their fact axis; 128-row v6 and v5 have identical encoding semantics. Existing v5 evidence remains unchanged.
@@ -65,3 +69,9 @@ Inherited unrelated notes remain at
 `22e4aab716f2b582d704b88dc5d22cb1547ce623:scratch/questions.md`; main's MTG-238
 assumptions and engine-speed notes at
 `44388ad4211b4292cc161a3087eb1230b2005737:scratch/questions.md`.
+
+Comment be5b1394 relays Jack Heart's explicit confirmation of the immediate
+larger-capacity hotfix; broader representation/history/memory design belongs
+to a separate Task. The primary conversation owns
+`docs/observation-architecture.html` and README diagrams; preserve those
+contributions for delivery. They do not change model behavior.

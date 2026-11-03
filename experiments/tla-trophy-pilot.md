@@ -3,7 +3,14 @@
 The paid pilot reached CUDA collection but **completed no learner update**.
 A legal state needs 140 fact rows; frozen policy input v5 has 128. Initialization
 is admitted and evaluated, but there is no trained endpoint or learning-pace claim.
-Both GPU rentals are torn down, with no provider pods or unsettled sessions.
+The retained 2026-11-03 20:48 UTC settlement confirms both GPU rentals torn
+down, with no provider pods or unsettled sessions at that read.
+
+The subsequently accepted [prospective v2 repair](protocols/tla-trophy-213-v2.md)
+selects policy input v6 and an explicit 256 fact rows for the pilot; generic
+fresh v6 configuration defaults to 512. It preserves v5 and all
+results below. Full gate, source freeze and a new capped training/evaluation
+attempt remain outstanding; no GPU learner update has yet been observed.
 
 ## Paid attempts (2026-11-03)
 
@@ -18,7 +25,8 @@ conservatively retain both reservations ($1.475) against Jack Heart's $10 total
 cap. The second operational cohort is `mtg213-pilot-v1-correction1`, capped at
 $1, because Etude cannot append to an existing cohort. This did not create a new
 scientific population or change the schedule. [Settlement](data/mtg213/gpu-corrected-20261103/settlement.json)
-confirms teardown at 20:48:27 UTC. No further paid retry is selected.
+confirms teardown at 20:48:27 UTC. V1 ended without another retry; a prospective
+v2 allocation requires fresh billing reconciliation within the same total cap.
 
 The original prepared source `b8835f63b4e7132ae6fd3f86cc73cefa6716e57f` was
 verified against all 1,327 bundled files and rebuilt in an isolated archive.
@@ -57,8 +65,9 @@ Replay used the same source/world on macOS; native binary bytes differ from Linu
 Encoding errors are deliberately fatal in `step_isolated_into`; they are not
 quarantined gameplay errors. This invalidates the pilot's capacity assumption.
 No facts were truncated, frozen shapes widened, decks removed, actions hidden,
-or failing games replaced. A shared representation decision is needed before
-more paid training. The launcher listed `etude-result.json` as an output whose
+or failing games replaced. This failure required a shared representation decision;
+the accepted prospective v6 contract is described above. The launcher listed
+`etude-result.json` as an output whose
 object was absent; [the missing-output receipt](data/mtg213/gpu-corrected-20261103/missing-outputs.json)
 retains that gap. Other outputs were downloaded and hash-verified.
 
@@ -149,10 +158,20 @@ are reported above.
 
 ## Remaining acceptance
 
-Resolve the shared fact representation/capacity issue before launching another
-capped attempt. Preserve the frozen evidence, corpus, legal decisions and
-training/evaluation runtime parity; any new input contract needs an explicit
-prospective protocol decision. Actual learner updates, periodic/endpoint
-checkpoints and learning/Elemental-pace evidence remain unmet. No paid-training
-milestone was sent. Gate/CI and publication of the verified enabling fixes remain
-separate obligations; the Task is not complete.
+Operator comment 78f4c226 selects 256 rows for the pilot, following Jack Heart's
+question about 256, under the existing authorization. The earlier 512 was also
+an operator engineering choice; comment 0c17ad58 was an operator-issued run
+reason, not separate human confirmation. The retained failure replay now encodes
+all 140 distinct facts in parity at 256 through native scalar/vector and Python
+paths, while both v5 encoders retain the original overflow. A controlled fixture
+rejects 258 facts at the 256 bound. The new local receipt is
+`.runs/mtg213/v6-256-capacity-replay.json`; the earlier 512 receipt is unchanged.
+This allocation does not establish capacity for every legal state or a measured
+end-to-end speedup.
+
+Full affected gate/CI, publication and an exact source freeze remain before the
+next capped attempt. That attempt requires fresh reconciliation of both $0.7375
+reservations and provider billing, new v2 initialization and the unchanged
+evaluation schedule. Actual GPU learner updates, periodic/endpoint checkpoints
+and learning/Elemental-pace evidence remain unmet. No paid-training milestone
+was sent; the Task is not complete.

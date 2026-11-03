@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-213 · Pilot capacity review</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+  body { max-width: 47rem; margin: 3rem auto; padding: 0 1.3rem 3rem; }
+  header, small { color: light-dark(#555, #bcbcbc); }
+  h1 { line-height: 1.15; font-size: 2.1rem; margin-top: 2.5rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.5rem; }
+  p, li { max-width: 43rem; }
+  code { overflow-wrap: anywhere; font-size: .9em; }
+  .decision { border-left: .25rem solid light-dark(#815900, #e8bd65); padding-left: 1rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1.5rem 0; }
+  th, td { text-align: left; vertical-align: top; padding: .7rem .5rem; border-bottom: 1px solid light-dark(#ddd, #444); }
+  th { font-weight: 600; }
+  @media (max-width: 32rem) { body { margin-top: 1.5rem; } th, td { padding: .5rem .25rem; font-size: .87rem; } }
+</style>
+<header>
+  MTG-213 · concept-review · 2026-11-03<br>
+  Built from <code>scratch/mtg-213.md</code>, <code>scratch/questions.md</code>,
+  <code>experiments/protocols/tla-trophy-213-v2.md</code>,
+  <code>experiments/tla_pilot_v2.py</code>, <code>experiments/tla_pilot_analysis.py</code>,
+  <code>manabot/infra/config.py</code>, the native/Python encoders and operator comment 78f4c226.
+</header>
+<main>
+<h1>Use 256 facts for the prospective pilot.</h1>
+<p class="decision"><strong>Implemented; full gate and paid training remain.</strong>
+The operator selected 256 following Jack Heart's question. The 23:20 UTC
+launcher/local/R2 check found no v2 execution or scoring, so the prepared v2
+bindings were amended in place. The retained replay passes at 256.</p>
+
+<h2>One concrete failure, fully represented</h2>
+<p><strong>7 activations × 10 permanents × 2 keyword removals = 140 facts.</strong>
+Each row retains a distinct effect's timestamp and source. These are records the
+policy observes, not 140 different game mechanics.</p>
+<table>
+  <thead><tr><th>Contract</th><th>Retained case</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>v5 · 128 rows</td><td>140 exceeds 128; fatal error</td><td>Frozen historical evidence</td></tr>
+    <tr><td>v6 · 512 rows</td><td>All 140 rows preserved</td><td>Implemented; retained replay checked</td></tr>
+    <tr><td>v6 · 256 rows</td><td>116 rows beyond this case</td><td>Selected pilot; replay and boundary checks pass</td></tr>
+  </tbody>
+</table>
+<p>The recipe, runner and protocol now agree on the selected pilot capacity of
+256. Configuration already owns the
+capacity. No new encoder concept is needed. The generic fresh-v6 default stays
+512; the pilot selects 256 explicitly.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+  <thead><tr><th>Operator action</th><th>Durable concept</th><th>Existing API</th></tr></thead>
+  <tbody>
+    <tr><td>Select the frozen pilot</td><td>Corpus + protocol/regime + input contract</td><td><code>frozen()</code>, <code>ObservationConfig</code></td></tr>
+    <tr><td>Freeze source; allocate within the cap</td><td>Source identity + paid attempt</td><td><code>source.freeze</code>, <code>runs(revision)</code>, <code>client.launch_cohort</code></td></tr>
+    <tr><td>Observe training</td><td>Learner updates + checkpoints</td><td><code>TrainingJob</code> → <code>execute_regime</code></td></tr>
+    <tr><td>Compare checkpoints</td><td>Expected paired schedule + outcomes</td><td><code>comparison_schedule()</code> → <code>eval()</code> → shared <code>evaluate()</code></td></tr>
+    <tr><td>Assess improvement</td><td>Complete comparisons + uncertainty</td><td><code>experiments.tla_pilot_analysis</code></td></tr>
+  </tbody>
+</table>
+<p><strong>Proposed usage:</strong> select the explicit v6/256 pilot, freeze its
+verified source, initialize fresh, then train and evaluate. Each seat draws
+independently from the same 134 entries, including mirrors. Report the launch
+milestone only after GPU learner updates are observed.</p>
+
+<h2>Failure and recovery stay honest</h2>
+<p>Keep the original v1 failure, checkpoints, evaluation and costs. This repair
+starts a new input/runtime identity; it cannot resume or relabel v1 evidence.
+The pre-amendment execution/scoring check is retained in
+<code>.runs/mtg213/v2-pre-amendment-state.json</code>. Within an unchanged contract, ordinary recovery
+retains run identity; missing checkpoints and failed games stay in the schedule.</p>
+<p>256 halves fact-buffer storage relative to 512. It establishes neither an
+end-to-end speedup nor complete legal-state coverage. A state above 256 must
+still fail and retain evidence. Dropping facts or excluding the deck would
+change the accepted experiment.</p>
+<p>The $10 cumulative cap includes prior attempts and paid evaluation. Reconcile
+the previous reservations before another allocation. Neither this review nor a
+new operational cohort replenishes the budget.</p>
+
+<h2>Review questions, resolved or assigned</h2>
+<ol>
+  <li><strong>Which capacity is selected?</strong> Explicit 256 for the pilot,
+  chosen by the operator following Jack Heart's question. 512 was also an
+  operator choice; comment 0c17ad58 was not separate human confirmation.</li>
+  <li><strong>May prepared v2 bindings change?</strong> The completed launcher/local/R2 check
+  found no v2 execution/scoring; the prepared bindings were amended in place.
+  The earlier 512 preparation remains in git at <code>1af50386f</code>.</li>
+  <li><strong>What proves readiness?</strong> The retained 140-row replay
+  agrees across native scalar/vector/Python at 256; a fixture rejects 258 facts.
+  V5 overflow and rank/128 normalization remain unchanged. Gate and the
+  caller-owned paid pilot can supply the still-missing training/evaluation proof.</li>
+</ol>
+</main>
+</html>

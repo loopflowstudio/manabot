@@ -5861,7 +5861,7 @@
     "max_actions": 64,
     "max_cards_per_player": 60,
     "max_events": 32,
-    "max_facts": 512,
+    "max_facts": 256,
     "max_focus_objects": 2,
     "max_permanents_per_player": 40,
     "policy_input_version": 6

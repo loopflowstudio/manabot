@@ -522,7 +522,9 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     assert v4["agent_cards"].shape[-1] == 41
 
 
-@pytest.mark.parametrize(("version", "capacity"), [(5, 128), (6, 512), (6, 140)])
+@pytest.mark.parametrize(
+    ("version", "capacity"), [(5, 128), (6, 512), (6, 256), (6, 140)]
+)
 def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
     version: int, capacity: int
 ) -> None:
@@ -549,15 +551,14 @@ def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
         effects.append(effect)
     mine.effects = effects[:-1]
     obs.agent_permanents = [mine]
-    encoder = ObservationEncoder(
-        ObservationConfig.model_validate(
-            {
-                "policy_input_version": version,
-                **({"max_facts": capacity} if version == 6 else {}),
-            }
-        )
+    config = ObservationConfig.model_validate(
+        {
+            "policy_input_version": version,
+            "max_facts": capacity if version == 6 else None,
+        }
     )
-    native = env.encode_observation(obs, version, capacity if version == 6 else None)
+    encoder = ObservationEncoder(config)
+    native = env.encode_observation(obs, version, config.max_facts)
     reference = encoder.encode(obs)
     for key, value in reference.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
@@ -575,7 +576,7 @@ def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
             == [0 if source is None else source + 1] * 2
         )
 
-    buffers = {key: value[0] for key, value in encoder.allocate(1).items()}
+    buffers = encoder.allocate()
     env.encode_observation_into(obs, buffers)
     for key, value in reference.items():
         np.testing.assert_array_equal(buffers[key], value, err_msg=key)
@@ -586,8 +587,8 @@ def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
     with pytest.raises(ValueError, match=message):
         encoder.encode(obs)
     with pytest.raises(ValueError, match=message):
-        env.encode_observation(obs, version, capacity if version == 6 else None)
-    buffers = {key: value[0] for key, value in encoder.allocate(1).items()}
+        env.encode_observation(obs, version, config.max_facts)
+    buffers = encoder.allocate()
     with pytest.raises(ValueError, match=message):
         env.encode_observation_into(obs, buffers)
 
@@ -633,7 +634,7 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         assert watched[24] > 0
 
 
-@pytest.mark.parametrize("capacity", [128, 140, 512])
+@pytest.mark.parametrize("capacity", [128, 140, 256, 512])
 def test_v6_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     config = ObservationConfig(max_facts=capacity)
     encoder = ObservationEncoder(config)

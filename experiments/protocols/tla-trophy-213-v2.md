@@ -1,18 +1,31 @@
 # MTG-213 prospective fact-capacity pilot
 
-Status: prepared on 2026-11-03, before v2 training or scoring. Operator comment
-5d6cf81e selected the versioned capacity repair under Jack Heart's existing
-bug-fix and $10 authorization; Jack Heart confirmed it in comment 0c17ad58.
-The operator chose 512 rows as an engineering allocation. It is not a proof
-that every legal state fits, a new allowance, or evidence of learning.
+Status: prospective preparation on 2026-11-03. Operator comment 78f4c226
+selects **256 rows for the pilot**, following Jack Heart's question about 256,
+under the existing bug-fix and $10 authorization. It supersedes the operator's
+earlier 512-row choice in comment 5d6cf81e. Comment 0c17ad58 was an
+operator-issued run reason, not a separate human confirmation. This allocation
+is not proof that every legal state fits, a new allowance, or evidence of learning.
+Comment be5b1394 subsequently relays Jack Heart's explicit confirmation of
+the immediate larger-capacity hotfix, with broader representation design
+assigned to a separate Task.
+
+At 2026-11-03 23:20 UTC, the authoritative launcher contained only the two v1
+pilot attempts. Local tracking and six retained pilot run receipts contained no
+v2 execution or scoring. The configured `r2://manabot/jobs` store had 26,219
+objects, none modified since 22:33 UTC (before v2 was introduced), and no v2
+identity in its 23 run metadata files. The read receipt is
+`.runs/mtg213/v2-pre-amendment-state.json`. Therefore the unexecuted prepared
+v2 bindings were amended in place; the earlier 512 preparation remains in git
+at `1af50386fdc4d96b936e81a8c32fae3054dc2c5c`.
 
 ## Prospective binding
 
 The JSON protocol and regime named `tla-trophy-213-v2` own this execution.
-Policy input **v6**, with serialized **max_facts=512**, replaces v5 for this
-new experiment only. All twelve fact columns, row order, timestamp ranks and
-model timestamp normalization (rank / 128) stay unchanged. Native scalar and
-vector encoding, Python encoding, allocation, model shape checks, input-schema
+Policy input **v6**, with serialized **max_facts=256**, replaces v5 for this
+new experiment only. Generic fresh v6 configuration still defaults to 512.
+All twelve fact columns, row order, timestamp ranks and model timestamp
+normalization (rank / 128) stay unchanged. Native scalar and vector encoding, Python encoding, allocation, model shape checks, input-schema
 bindings and checkpoint architecture receipts use the selected capacity.
 Overflow remains fatal; no fact truncation, deck exclusion or quarantine bypass
 is introduced. V5 retains exactly 128 rows and its prior serialization.
@@ -25,7 +38,7 @@ actual build. The protocol rejects a different installed native identity:
 
 - Open rules world: `w17`.
 - Card digest: `fef123cfe085dd252067ee318f0b31790b2ee4a5cd0a1f7d0404a8580aec61b2`.
-- Input identity: v6, 512 × 12 facts, other v5 shapes unchanged.
+- Input identity: v6, 256 × 12 facts, other v5 shapes unchanged.
 
 This explicitly selects a new runtime/input binding, not the historical
 `2adbd0758` runtime whose card digest was
@@ -43,7 +56,11 @@ The retained stream 181 / seed 31482 replays all 87 actions under the selected
 runtime and matches the retained pre-command frame. Its 140 distinct facts
 encode identically through v6 native scalar, native vector and Python paths.
 Both v5 encoders still raise `facts 140 > 128`. Local receipt:
-`.runs/mtg213/v6-capacity-replay.json`. This is prospective advancement after
+`.runs/mtg213/v6-256-capacity-replay.json` explicitly binds the 256-row check.
+The earlier `v6-capacity-replay.json` remains the 512-row repair receipt.
+A controlled boundary fixture retains all 256 rows and rejects 258 in native
+and Python encoding. These checks establish neither universal legal-state
+coverage nor an end-to-end speedup. This is prospective advancement after
 repair, not a changed outcome or credit for the failed GPU attempt.
 
 ## Population, learning and evaluation

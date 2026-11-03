@@ -37,7 +37,11 @@ observed blocker.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
-card digests; all 134 eligible decks still admit. Version-name and whole-deck
+card digests; all 134 eligible decks still admit. Comparing all 331 definitions
+isolated 365 keyword-object-to-list conversions with identical present keywords
+and 13 rules-vocabulary changes from PR #414. V2 explicitly selects that newer
+runtime through its protocol's card digest; it does not claim runtime equality.
+Version-name and whole-deck
 admission checks therefore do not establish unchanged learning inputs or
 checkpoint/evaluation compatibility. The prepared b8835f63b source was verified
 against all 1,327 bundled files and its rebuilt native world matched the corpus.
@@ -64,15 +68,29 @@ of fact embeddings. This rules out compaction under those unchanged semantics,
 not compression under every possible new contract. Dropping facts, excluding the
 deck or retrying for a lucky sample would change the accepted experiment.
 
-The concrete prospective proposal is a new input version/world with 512 fact
-rows, preserving frozen v5 at 128 and explicitly binding allocation, encoders,
-model shapes and checkpoint receipts. It remains unaccepted and unimplemented;
-512 covers this counterexample, not all reachable states. Capacity also feeds
-the model's timestamp normalization, so a larger buffer is not merely an
-allocation change. Any accepted replacement requires new initialization and
-evaluation with explicit runtime/admission binding to the same corpus entries
-and weights; retained v5 evidence cannot be relabeled. The local audit and exact
-stream identity are recorded in scratch/mtg-213.md.
+On 2026-11-03 the primary operator selected prospective input v6 with
+`max_facts=512` under Jack Heart's bug-fix authorization (comment 5d6cf81e);
+Jack Heart confirmed the repair direction in 0c17ad58. The operator chose 512
+as an engineering allocation, not proof that every reachable state fits.
+The implemented contract derives allocation, scalar/vector/Python encoding,
+model shapes and checkpoint receipts from the versioned configuration. Frozen
+v5 stays at 128 and legacy serialization omits the new field. Timestamp
+normalization remains rank / 128 independently of capacity; coupling its scale
+to the new allocation would unnecessarily change the model's numeric inputs.
+All twelve columns, ordering and provenance remain unchanged, and overflow
+stays fatal. A 128-row v6 buffer encodes exactly like v5 while saved configuration
+still binds the version separately.
+
+Prospective protocol/regime `tla-trophy-213-v2` and experiment `tla_pilot_v2`
+bind the selected runtime and the same 134 entries, weights, recipe and paired
+evaluation schedule. Fresh initialization/evaluation are required; the evaluator
+rejects v1 runs. The retained 87-action prefix matches the pre-command frame on
+the selected runtime, with all 140 facts equal across v6 scalar/vector/Python
+paths; both v5 encoders retain the original overflow. This establishes repair
+of the counterexample, not a successful training run or universal capacity.
+Historical v1 execution uses pinned source; its inputs and results remain
+unchanged. The prospective contract is in experiments/protocols/tla-trophy-213-v2.md;
+local replay/audit receipts and remaining validation are in scratch/mtg-213.md.
 Thirteen games completed before the batch failed but supplied no learner update;
 settled learner counters do not measure all attempted simulation work.
 
@@ -80,7 +98,7 @@ Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
 while native used 3. The bounded Python repair preserves native's contract and
 the parity fixture covers all three durations. It does not repair capacity or
-refresh the pinned pilot's runtime evidence. A capacity proposal must preserve
+refresh the pinned pilot's runtime evidence. Capacity changes must preserve
 duration, timestamp and source distinctions, not merely fit this one frame.
 
 Initialization evaluation completed all eight pairs/four legs: 3 wins, 29 losses,

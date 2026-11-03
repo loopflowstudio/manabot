@@ -28,6 +28,7 @@ import pytest
 from experiments.tla_pilot_analysis import analyze
 from experiments.tla_pilot_v2 import ROOT, eval, frozen
 from manabot.eval.results import RateInterval
+from manabot.infra.config import ObservationConfig
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 
 
@@ -62,7 +63,8 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert (stage.streams, stage.transitions, stage.learning_seats) == (256, 64, "both")
     assert stage.execution.device == "cuda" and stage.behavior == "current-self"
     assert regime.observation.policy_input_version == 6
-    assert regime.observation.max_facts == 512
+    assert regime.observation.max_facts == 256
+    assert ObservationConfig().max_facts == 512
     assert protocol.allocation_usd == Decimal(1) < protocol.max_paid_usd == Decimal(10)
     rng = random.Random(protocol.deck_seed)
     assert [(p.first, p.second) for p in protocol.pairs] == [

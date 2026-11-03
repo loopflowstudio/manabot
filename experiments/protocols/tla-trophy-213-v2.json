@@ -55,7 +55,7 @@
     }
   ],
   "predecessor_protocol_sha256": "149977391ab30b7d2ddfe21c1773f19fa22d95cf0e571a17a78a019fcdbf80e8",
-  "regime_sha256": "15b28ca6e5f25b1e6050e09a48829b23287ddbbe6582efff7b9b206f83ed5633",
+  "regime_sha256": "88e6b04eee174af90ee4b66a342485441900b4e1584f3a8aeb2b25c53d9bcd7d",
   "runtime_world": {
     "card_digest": "fef123cfe085dd252067ee318f0b31790b2ee4a5cd0a1f7d0404a8580aec61b2",
     "world_version": "w17"

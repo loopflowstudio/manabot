@@ -154,14 +154,18 @@ def test_world_selector_reads_and_hashes_its_frozen_key() -> None:
     )
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6])
-def test_fact_capacity_checkpoint_contract(tmp_path: Path, version: int) -> None:
+@pytest.mark.parametrize(
+    ("version", "rows"), [(1, 0), (2, 0), (3, 0), (4, 0), (5, 128), (6, 512)]
+)
+def test_fact_capacity_checkpoint_contract(
+    tmp_path: Path, version: int, rows: int
+) -> None:
     payload = {"policy_input_version": version} if version != 1 else {}
     config = ObservationConfig.from_checkpoint(payload)
     serialized = config.model_dump(mode="json")
     assert ("max_facts" in serialized) == (version == 6)
     assert ("policy_input_version" in serialized) == (version != 1)
-    assert config.fact_rows == (0 if version < 5 else 128 if version == 5 else 512)
+    assert config.fact_rows == rows
     space = ObservationSpace(config)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
     path = tmp_path / "policy.pt"
@@ -183,15 +187,16 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path, version: int) -> None
         )
 
 
-def test_fact_capacity_preserves_timestamp_scale_and_gradients() -> None:
+@pytest.mark.parametrize("capacity", [256, 512])
+def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) -> None:
     torch.manual_seed(213)
-    old, larger = FactEncoder(4, 128), FactEncoder(4, 512)
+    old, larger = FactEncoder(4, 128), FactEncoder(4, capacity)
     # Nonzero learned weights make numerical drift and dropped facts observable.
     with torch.no_grad():
         old.output.weight.fill_(0.25)
         old.output.bias.fill_(0.1)
     larger.load_state_dict(old.state_dict())
-    facts = torch.zeros(1, 512, 12)
+    facts = torch.zeros(1, capacity, 12)
     facts[0, :140, 0] = 1  # first object
     facts[0, :140, 1] = 6  # effect
     facts[0, :140, 9] = torch.arange(1, 141)
