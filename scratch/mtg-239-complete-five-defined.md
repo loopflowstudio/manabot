@@ -163,6 +163,48 @@ test paths, interpreter-path retry and same-run budget measurements.
 `lf sync --manual` found no upstream changes beyond main `44388ad42`.
 Publication changes only review notes; runtime code remains the tested head.
 
-Demo owns the final real-path walkthrough and interaction judgment. Automated
-validation does not establish demo acceptance, post-merge verification or new
-shipping approval. Publication neither arms auto-merge nor completes the Task.
+The November 3 headless [five-card demo](five-card-demo.md) now records delegated
+advance judgment: the Academy WebSocket walkthrough preserves the pending
+order on reconnect, commits once, automatically places the last card, and
+rejects stale submissions. Fourteen focused Python and ten native debug cases
+passed, covering all five rules fixes and admission/rejection consumers. No
+human visual approval or new design change is inferred. The note-only head
+`5844fc16c` has unchanged runtime source; its fresh CI/package runs remain a
+delivery check. Post-merge verification and Task completion remain separate.
+
+## Gate — 2026-11-03
+
+Reviewed the complete branch against PR #415's base, main `44388ad42`, plus
+the uncommitted demo notes. No further code or documentation correction was
+needed. Shared targeting/damage, contextual power, private ordering and
+admission follow the accepted design; the explicit battle-combat and retained-
+session limits above remain. The seven obsolete rejection fixtures are already
+repaired and published, and the benchmark reference retains its source artifact
+and unchanged tolerance. No delivery, merge or Task-completion operation ran
+in this gate.
+
+Validation plan and result reuse (before any additional suite execution):
+
+| Changed paths | Required checks and reason | Evidence retained |
+| --- | --- | --- |
+| `managym/{src,state,cards}/**` | Debug Cargo tests, observability/tokens, conformance, fmt/clippy; shared rules and decision authority | CI `41734880466` passed; local static checks in CI recovery; current-head Rust and both conformance jobs also passed |
+| `manabot/{semantic,sim}/**`, `tests/{semantic,training,belief}/**` | Python consumers, training admission/replacement, model and arena/monitoring checks; content and observation meaning changed | Complete main/long integration and Academy integration passed in `41734880466`; 70 supplemental checks and demo's 14 Python cases passed |
+| `academy/fixtures/**`, parity modules, `academy/ui/src/lib/decision-labels.ts` | UI unit/check/build/release interactions and live navigation/parity; new ordering stage and rebound fixtures | Prior complete CI passed; current-head Academy UI, Academy integration and clean-machine play passed; demo exercised reconnect, duplicate and stale Commands |
+| `managym/perf/baseline.json` | Same-run Engine Budget; explained gameplay digest change | `41734880466` passed with all digests/counts matching; exact timing deltas in CI recovery |
+| Documentation, `.lf/`, `scratch/` | Diff/whitespace and source-equivalence inspection | No build or runtime inputs changed since passing runtime head `e5627dd98` |
+
+- `git diff --name-only -z --no-renames main...HEAD | bash .github/ci/select-tests.sh` — all nine job categories selected, covered by the passing CI run above.
+- `git diff --name-only -z --no-renames e5627dd98 HEAD | bash .github/ci/select-tests.sh` — all categories false; the later committed changes are notes only.
+- `git diff --name-only e5627dd98` and `git ls-files --others --exclude-standard` — tracked changes only in Wave/review notes; untracked files only the four demo notes/logs. Identical runtime/test/config inputs justify retaining prior results without a second suite pass.
+- `gh run view 41734880466 --json headSha,status,conclusion,jobs` — confirmed success for `e5627dd98`, all 11 jobs plus Tests Result.
+- `gh run view 41736834476 --json status,conclusion` — current published head's Linux/macOS package workflow passed.
+- `git diff --check` and `git diff main...HEAD --check` — passed.
+
+The selector is invoked with `bash` because its file is not executable; the
+initial direct invocation failed before running any checks. No tool or host
+configuration was changed. Current-head CI `41736834519` still has main/long
+integration and Engine Budget in progress at gate inspection; retain their
+final status as a delivery check, not an inferred pass. No new local build,
+test runner or server was started. Existing validation and the completed
+headless demo support advancing this Graph; post-merge verification remains
+separate.

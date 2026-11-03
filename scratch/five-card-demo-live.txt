@@ -1,0 +1,9 @@
+Ordinary matchup Commands to ordering: 16
+Prompt: {"actor": 0, "id": 34, "instruction": "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically.", "kind": "look_and_select", "title": "Order library bottom"}
+Legal choices: ["Put Firebending Lesson next on the bottom", "Put Mountain next on the bottom"]
+Reconnect: same pending choices and state digest
+Selected: Put Mountain next on the bottom
+After commitment: {"actor": 0, "id": 35, "instruction": "Choose an explicit legal offer to commit one decision.", "kind": "priority", "title": "Priority"}
+Duplicate: ignored; state unchanged
+Stale new command: rejected; state unchanged
+PASS: Academy /ws/play ordering, reconnect and commitment
