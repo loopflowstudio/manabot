@@ -9,7 +9,8 @@ Card vocabulary previously grew dense counter storage and boolean keyword fields
 
 ## Checks
 
-The full-suite results below predate the capacity extension. After its final
+The capacity extension is published at `bd4f909a9`; current-head CI and release
+packaging are running. The full-suite results below predate it. After its final
 simplification, 37 focused debug tests and the release extension build passed;
 all definition bytes and learning-catalog values match the pre-extension build.
 The retained 142-Command replay has identical state and viewer evidence. State-crate

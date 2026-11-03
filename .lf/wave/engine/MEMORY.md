@@ -212,10 +212,17 @@ preserves accepted decisions, dated proof limits and source history.
   Learning schema 10 already existed on main; definition-derived token values
   change without changing its kinds, roles or dtypes. Observation `KeywordData`
   remains a boolean surface distinct from sparse definition serialization.
-  The current keyword bitset is one `u64` (64 parameterless variants; 14
-  defined). Sparse serialization does not remove that internal capacity limit.
-  The 2026-11-02 interactive proposal to grow storage with the vocabulary is
-  unapproved and is not part of the accepted batch.
+  Jack Heart subsequently selected option 1a on 2026-11-02: remove the
+  64-variant capacity limit within MTG-238. Inline word storage now grows
+  with the declared parameterless vocabulary, preserving the set API and
+  Copy semantics. Serde emits present enum variants in declaration order;
+  append variants to preserve indices and learning-token identity. Controlled
+  ordinal fixtures exercise word boundaries without inventing mechanics.
+  Exact pre/post definition and learning-catalog bytes, content identity and
+  authored replay evidence matched; source fingerprints changed. This
+  storage-only extension adds no mechanic, observation column, Python API
+  migration or world bump. Full-suite and performance acceptance remain
+  separate from that focused compatibility evidence.
 - Jack Heart selected MTG-238 first on 2026-11-02, superseding the T6 hold
   and stacking prerequisite: publish against main for review, no auto-merge;
   T6 integrates the crate move afterward. Main's T5 sync supplied Airship's

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-238 — How far should the vocabulary grow?</title>
+<title>MTG-238 — Vocabulary grows with the catalog</title>
 <style>
 :root{color-scheme:light dark;--bg:#faf8f3;--ink:#29271f;--muted:#69665b;--line:#d8d2c4;--accent:#775126;--wash:#eee8dc}
 @media(prefers-color-scheme:dark){:root{--bg:#1c1c18;--ink:#eeece2;--muted:#b8b4a7;--line:#49473d;--accent:#dfb981;--wash:#2a2922}}
@@ -12,17 +12,17 @@
 </head>
 <body><main>
 <header>
-MTG-238 · concept-review with Jack Heart · November 2, 2026<br>
-Inspected code: <code>0a9509a9b</code>. Review proposal only; recovery work continues separately.
+MTG-238 · concept-review · November 2, 2026<br>
+Inspected code: <code>bd4f909a9</code>. Headless review against Jack Heart's accepted direction.
 <details><summary>Files behind this screen</summary><p><code>scratch/mtg-238-catalog-scale-types.md</code>; <code>managym/state/src/{card,permanent,predicate}.rs</code>; <code>managym/cards/src/tla.rs</code>; <code>managym/cards/tests/cards/{tla,observability}.rs</code>; <code>managym/src/flow/{statics,effects}.rs</code>; <code>managym/src/cards/tokens.rs</code>; <code>managym/src/agent/observation.rs</code>; <code>managym/src/python/bindings.rs</code>; <code>managym/README.md</code>; <code>AGENTS.md</code>.</p></details>
 </header>
-<h1>Should keyword storage grow with the catalog?</h1>
-<p class="decision"><strong>Proposed: close the capacity boundary in this PR.</strong> The shared authoring model works. Its keyword set still fits into one <code>u64</code>: 64 parameterless variants maximum. All 14 current variants fit. This is a future limit, not a reported gameplay defect; parameterized abilities use separate types.</p>
+<h1>Vocabulary grows with the catalog.</h1>
+<p class="decision"><strong>Decision settled: 1a is accepted and implemented.</strong> Jack Heart selected removal of the single-word limit on November 2. This review finds no further design change or open product choice. Full validation and review acceptance remain outstanding.</p>
 <h2>Author once → play the same rules everywhere</h2>
 <table>
 <thead><tr><th>Your action</th><th>Before → implemented concept</th><th>API / owner now</th></tr></thead>
 <tbody>
-<tr><td>Add flying or counters</td><td>Boolean fields / dense array → keyword set / present counter kinds</td><td><code>Keywords::of</code><br><code>Counters::change</code></td></tr>
+<tr><td>Declare a keyword; add counters</td><td>Boolean fields / dense array → vocabulary-sized keyword set / present counter kinds</td><td><code>keywords!</code>, <code>Keywords::of</code><br><code>Counters::change</code></td></tr>
 <tr><td>Control eight Airships</td><td>A card-specific predicate → a conditional creature grant</td><td><code>StaticTypeGrant</code><br><code>ControlsAtLeast</code></td></tr>
 <tr><td>Crew; earthbend</td><td>A special variant / stored flag → effects with duration and object identity</td><td><code>ApplyContinuous</code><br><code>Game::characteristics</code></td></tr>
 <tr><td>Edit a set card</td><td>Engine source → definitions in a separate crate using shared rules types</td><td><code>managym-cards → managym-state</code><br><code>catalog()</code></td></tr>
@@ -37,24 +37,26 @@ Inspected code: <code>0a9509a9b</code>. Review proposal only; recovery work cont
 </div>
 <output id="play" aria-live="polite">Seven namesakes, no crew effect: Airship is an artifact Vehicle, not a creature.</output>
 <p class="note">Contract illustration, not a live engine demo. Replay in the bound world must recover the same result. An earthbent land that leaves and returns is a new object: its old animation must not return with it. A search fork’s changed effects must not change its parent.</p>
-<h2>The proposed difference is inside the set</h2>
-<pre>Existing: Keywords(u64) → only indices 0…63 fit
-Proposed: capacity follows declared variants → no single-word ceiling
+<h2>The capacity mismatch is resolved</h2>
+<pre>Before 1a: Keywords(u64) → only indices 0…63 fit
+Implemented: KeywordBits&lt;ceil(Keyword::ALL.len() / 64)&gt;
+             → inline words grow from one declaration
 Unchanged authoring: Keywords::of(&amp;[Keyword::Flying])
 Unchanged serialization for this card: ["flying"]</pre>
-<p><strong>No new mechanics or observation columns.</strong> Keep existing keyword order, tokens and digests identical. The first real non-evergreen mechanic still must reach fact rows, policy encoders, text and learning tokens together. Existing evergreen Python fields remain compatible.</p>
-<details><summary>Draft authoring instruction and next proof</summary>
-<p><em>Proposed guidance:</em> “Declare a parameterless keyword in the rules enum. Adding vocabulary must not alias or drop existing keywords; preserve present-keyword serialization order. A new mechanic includes every shared observation path.”</p>
-<p><em>Proposed agent instruction:</em> preserve wire bytes and test membership, union and removal across a machine-word boundary. Use controlled storage fixtures, without inventing supported cards. Any change to existing digests refutes a storage-only claim. Do not widen frozen observation versions or regenerate evidence to conceal it.</p>
+<p>The set keeps its public API and value-copy ownership. Serde visits present enum variants in declaration order; storage words never enter the wire representation. Today's 14 variants use one word. Parameterized abilities keep their separate rules types.</p>
+<details><summary>Authoring contract and evidence limits</summary>
+<p><strong>Existing guidance:</strong> declare a parameterless keyword once in <code>keywords!</code>; append variants to preserve serialized order and values. A new mechanic includes behavior, learning tokens and every shared observation path. Non-evergreen kinds use fact rows; frozen columns and existing Python fields stay compatible. This storage extension adds no mechanic or world bump.</p>
+<p><strong>Counterexamples:</strong> aliasing ordinal 64, mutating a parent through a copied set, changing an existing token/digest, or restoring an expired effect on recovery would invalidate the implementation. Controlled fixtures exercise ordinals 0–191 without declaring fictional mechanics.</p>
+<p><strong>Retained proof:</strong> definition JSON, the serialized learning catalog and world identity matched byte-for-byte before and after capacity growth. Authored replay retained 142 Commands and 858 viewer checks. The original catalog-scale batch changed content/state identity; this later capacity extension did not. Source fingerprints changed.</p>
 <p>An isolated <code>cargo check -p managym-cards</code> checks definitions; behavioral tests and the linked Python extension still use the engine. No “card edits never rebuild the engine” claim is made.</p>
-<p>This review inspected code and existing scenarios. It changed no runtime code and ran no gameplay tests. Previous accepted requirements and review-before-merge remain intact.</p>
+<p>This review inspected source, the latest patch and retained logs in <code>.runs/mtg-238-keyword-capacity/</code> and <code>.runs/mtg-238-compress/</code>. It ran no new gameplay tests. Gate still owns full affected suites; publication owns current-head CI, packaging and Engine Budget assessment. No passing performance budget is claimed.</p>
 </details>
-<h2>Question</h2>
-<ol><li><strong>How complete should the keyword foundation be in MTG-238?</strong>
-<p><strong>1a — Recommended:</strong> remove the single-word limit now, preserving the API and serialized bytes.</p>
-<p><strong>1b:</strong> ship the current 64-variant capacity explicitly; defer growth until needed.</p>
-</li></ol>
-<p class="note">Neither option is recorded as approved. The working design keeps this proposal separate from the existing PR repair.</p>
+<p class="note">The <a href="mtg-238-catalog-scale-types.md">working design</a> owns the decision and next proof. PR #414 remains for review against main; no auto-merge or landing is authorized. This page is separate from the primary conversation's PR walkthrough.</p>
+<h2>Recorded questions</h2>
+<ol>
+<li><strong>How complete should keyword capacity be?</strong> Resolved by Jack Heart: <strong>1a</strong>, remove the single-word limit now while preserving the API, serialization, tokens and digests.</li>
+<li><strong>Does this review require another design change?</strong> No. No product choice remains open for the accepted batch; remaining work is validation and review handoff.</li>
+</ol>
 </main>
 <script>
 const states={seven:'Seven namesakes, no crew effect: Airship is an artifact Vehicle, not a creature.',eight:'Eight namesakes: the conditional TypeGrant makes Airship a creature. There is no extra action to choose.',crew:'Back to seven after crewing: the static grant no longer holds, but the separate crew effect keeps Airship a creature until end of turn.',end:'Seven at end of turn: crew expires. With no qualifying static grant, Airship is again a noncreature artifact Vehicle.'};

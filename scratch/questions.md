@@ -32,5 +32,5 @@ Historical inherited notes are retained at `3ed5b5baa:scratch/questions.md`
 (including `bbb5101eb`, `1e9fd2d7c`, `4c8324a59` references). Recovery history is at
 `cfa3aa182:scratch/questions.md`; MTG-237's assumptions remain at
 `a1a02a76f:scratch/questions.md`. Uncommitted pre-compression notes are preserved
-in `.runs/mtg-238-compress/questions-before.md`. Wave memory's old unapproved-1a
-wording awaits authorized maintenance; the accepted direction above supersedes it.
+in `.runs/mtg-238-compress/questions-before.md`. Engine memory now records the
+accepted 1a direction and its focused compatibility evidence.

@@ -16,8 +16,9 @@ the recorded scope blocker. Storage must grow with the declared parameterless
 vocabulary while preserving the set API, Copy semantics, exact present-keyword
 serialization, tokens, content identity and state digests. No new mechanics,
 observation columns, Python migration or world bump accompany this extension.
-The primary conversation owns `scratch/pr-review.html`; preserve its walkthrough
-and distinguish published code from the pending extension until republished.
+The primary conversation owns the local `scratch/pr-review.html` walkthrough.
+The extension is included in PR #414 at `bd4f909a9`; publication does not imply
+completed validation or review acceptance.
 
 The accepted experience is one card definition shared by engine, learning and
 viewer-safe observations. Airship offers ordinary crew; eight namesakes grant
@@ -147,13 +148,48 @@ interruptions are not validation failures, but neither filename proves a pass.
 CI `41566136106` on `0a9509a9b` passed Python Unit, Rust, Academy UI, clean-machine
 Play, protocol/semantic conformance and Academy Integration; general integration
 and Engine Budget were cancelled when superseded, and aggregate Tests Result
-failed. Its candidate artifact lacks a completed reference comparison. At the
-last inspection `41567370391` and release-packages `41567370387` were running.
+failed. Its candidate artifact lacks a completed reference comparison.
 No passing performance budget is claimed.
+
+Reconciliation on 2026-11-02 confirmed main remains `a1a02a76f` and PR #414 is
+open and mergeable at `bd4f909a9`, which includes the capacity extension and
+compression changes. CI `41571072018` and release-packages `41571071905` are
+running on that head; Detect Changes and package preflight passed. They supersede
+`41567370391` and release-packages `41567370387` for current-head assessment,
+not as completed proof.
+
+## Concept review — 2026-11-02, `bd4f909a9`
+
+Outcome: no design change and no open product choice for this Task. Jack Heart's
+accepted 1a is implemented: declaring vocabulary determines storage capacity;
+authors and consumers retain the same set operations and ordered enum values.
+The earlier review page's unanswered 1a/1b choice is stale and is replaced by
+the accepted result. Existing authoring guidance in AGENTS.md and the crate
+ownership guidance in managym/README.md already express this contract.
+
+The normal path, loss and recovery still have one authority: namesake conditions
+derive creature status, crew records carry their own duration, and departing
+objects cannot bring their former earthbend records back. A copied keyword set
+must remain independent of its source across every word. Silent aliasing at
+ordinal 64, a changed existing serialized value/token/digest, or recovery that
+restores an expired effect would invalidate the design's implementation; the
+retained boundary, serialization and directed gameplay evidence addresses these
+contracts. The interactive Airship sequence on the page illustrates the accepted
+contract; it is not a new combined gameplay proof.
+
+No further implement direction follows from this review. The next proof remains
+the gate's full affected suites and current-head CI/performance assessment below.
+This step inspected source, the latest patch and retained evidence; it did not
+rerun runtime tests, change code, publish, or select Graph navigation.
 
 ## Remaining owners
 
-Compression check (2026-11-02): `cargo fmt --manifest-path managym/Cargo.toml --check` and `git diff --check` — passed; 37 focused debug tests (state, continuous effects, selected cards/observability and canonical hashes), release wheel build/atomic install and exact definition/catalog/world comparisons passed. The retained authored match reproduced all 142 Commands and 858 viewer checks; only three source-file fingerprints and their aggregate changed. Full suites and CI remain with gate/publication below.
+Compression evidence: 37 focused debug tests (state, continuous effects,
+selected cards/observability and canonical hashes), release wheel build/atomic
+install and exact definition/catalog/world comparisons passed. The retained
+authored match reproduced all 142 Commands and 858 viewer checks; only three
+source-file fingerprints and their aggregate changed. Full suites and CI remain
+with gate/publication below.
 
 Gate owns affected full debug/release Rust, workspace clippy, isolated
 `cargo check -p managym-cards`, and completion of the broad consumer suite:
@@ -162,7 +198,8 @@ Gate owns affected full debug/release Rust, workspace clippy, isolated
 uv run --extra dev --extra play --extra notebook --extra artifacts --extra reports pytest tests/env tests/academy tests/belief tests/semantic tests/verify tests/model tests/test_package_boundaries.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q
 ```
 
-Use `tests/verify`; the earlier `tests/verification` command collected nothing.
+The correct suite is `tests/verify`; the earlier `tests/verification` command
+collected nothing.
 Publication owns current-head CI/packaging/Engine Budget assessment and the same
 PR's review handoff. Any required baseline adoption uses that candidate's artifact
 and a recorded reason under the existing policy. Jack Heart reviews before merge;
@@ -175,6 +212,8 @@ Prior full plan/history: `cfa3aa182:scratch/mtg-238-catalog-scale-types.md`;
 original design/hold: `3ed5b5baa:scratch/mtg-238-catalog-scale-types.md`.
 Uncommitted pre-compression notes are preserved in
 `.runs/mtg-238-compress/{plan,questions}-before.md`; pre-capacity concept notes in
-`.runs/mtg-238-keyword-capacity/plan-before.md`. Wave memory is within budget and
-read-only here; its unapproved-capacity wording is superseded by the 1a direction
-above and awaits authorized Wave maintenance.
+`.runs/mtg-238-keyword-capacity/plan-before.md`. Engine memory now records the
+accepted capacity extension and compatibility evidence; no child Wave directories
+were present. Memory and scratch remain within their configured budgets.
+
+Check (2026-11-02): `git diff --check` and `lf context` — passed; memory and scratch within budget. Retained runtime proof reused; full suites owned by gate.
