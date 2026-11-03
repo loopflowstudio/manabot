@@ -221,9 +221,20 @@ preserves accepted decisions, dated proof limits and source history.
 - Concurrent engine vocabulary changes cross structural crate moves. Source
   identity for parity evidence must include the new rules and card crates.
   An unchanged Command tape/game outcome does not imply unchanged object ids:
-  earthbend's continuous-effect records allocate ids. The combined T5/catalog
-  tree has focused proof and regenerated open w17 evidence; broad pre-sync
-  green results do not establish post-sync correctness.
+  earthbend's continuous-effect records allocate ids. Broad proof belongs to
+  its tested tree; it does not establish correctness after another engine sync.
+- Crate moves also relocate live rules-audit authorities and behavioral-test
+  anchors in `reviews.json` and its generated `index.jsonl`. Move both together
+  while preserving rule dispositions, source spans/digests and frozen receipts;
+  keep validation strict. PR #414's first Python Unit Tests run exposed this
+  omitted consumer despite its earlier broad engine/Academy checks. The exact
+  CI command, including infrastructure and deployment tests, covers a different
+  boundary than the engine suite.
+- Cache-preserving writes and generic continuous effects must compose: allocate
+  timestamps through the typed ID accessor, return before a tracked mutation
+  for an empty batch, and retain full invalidation for nonempty effect records.
+  This is the MTG-238/derived-state-cache merge's ownership invariant, not a
+  new performance claim.
 
 ## Architecture convergence (accepted 2026-07-17)
 

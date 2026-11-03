@@ -63,13 +63,18 @@ T5 design link is historical, not a current checkout dependency.
 
 ## Post-publication sync — 2026-11-02
 
-Resolve the owned sync onto main `a1a02a76f` by retaining MTG-238's
+Merge `bb9853218` completed the sync onto main `a1a02a76f`, retaining MTG-238's
 three-record earthbend animation and main's cache-preserving ID accessor.
-Empty effect sets return before mutating tracked state. Nonempty effect sets
+Empty effect sets preserve derived-cache revisions, though `record_continuous`
+still allocates a timestamp; they are not complete state/hash no-ops. Nonempty effect sets
 still invalidate characteristics, triggers and mana through the shared writer.
 Main's MTG-237 assumptions remain at `a1a02a76f:scratch/questions.md`;
 its performance CI and baseline are retained without selecting new work here.
 The two mutable w17 parity receipts retain this branch's vocabulary and hashes;
 both were regenerated against the atomically installed combined extension.
 Only source fingerprints changed; all non-source evidence matches the branch.
-The waiting caller owns the audit-reference repair, broader checks and push.
+Realign repaired the live audit references and reconciled the index's existing
+CR 400.7j anchor drift with its authored review. Offline inventory validation
+and the exact Python Unit Tests command passed; the pinned raw TXT was not
+available for source-based regeneration. Frozen audit evidence is unchanged.
+The plan records the remaining merged-engine checks, republication and review.

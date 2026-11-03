@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-238 · Concept review after T5 integration</title>
+<title>MTG-238 · Concept review after cache integration</title>
 <style>
 :root { color-scheme: light dark; --bg:#fbf8f2; --fg:#242019; --muted:#665f54; --rule:#d7cdbc; --code:#eee7db; --accent:#805318; }
 @media(prefers-color-scheme:dark) { :root { --bg:#191711; --fg:#ece5d8; --muted:#bbb09d; --rule:#514737; --code:#2d281f; --accent:#e4b568; } }
@@ -22,13 +22,17 @@ dt { font-weight:bold; margin-top:1.4rem; } dd { margin:.4rem 0; }
 <p>Built from <code>scratch/mtg-238-catalog-scale-types.md</code>, <code>scratch/questions.md</code>,
 <code>managym/state/src/card.rs</code>, <code>managym/state/src/permanent.rs</code>,
 <code>managym/src/flow/statics.rs</code>, <code>managym/src/flow/effects.rs</code>,
+<code>managym/src/flow/game.rs</code>, <code>managym/tests/search_state_contract.rs</code>,
+<code>managym/tests/rules/cr_613_continuous_effects.rs</code>,
 <code>managym/cards/src/tla.rs</code>, <code>managym/cards/tests/cards/tla.rs</code>
-and Jack Heart’s November 2 steering.</p>
+and the live rules-audit diff and Jack Heart’s November 2 steering. Reviewed tree:
+<code>bb9853218</code> with the pending audit-reference repair.</p>
 </header>
 <h1>No design change or open choice for MTG-238.</h1>
-<p class="finding">The approved batch is implemented after the T5 sync. Airship’s namesake
-conversion is here. The earlier T6 hold is superseded: publication is against main for review,
-with no auto-merge. Full validation of the combined tree remains outstanding.</p>
+<p class="finding">The approved batch still fits after the derived-state cache merge.
+PR #414 already exists; recovery validation and republication remain under Jack Heart’s
+review boundary, with no auto-merge. T6 remains downstream. No new implementation is
+proposed by this review.</p>
 <h2>Actions → concepts → APIs</h2>
 <dl>
 <dt>Author “a creature as long as…”</dt>
@@ -61,6 +65,12 @@ records do not affect the returned land. This object boundary, crew expiry and c
 ability loss are counterexamples to a permanent animation flag. Existing scenarios exercise
 threshold loss, ability loss, crew expiry and land return; this pass inspected them without
 rerunning tests.</p>
+<p>A search fork inherits its parent’s computed characteristics. Adding an effect or moving
+an object invalidates the fork’s derived view; the parent retains its state and view.
+Restoring a snapshot restores its effect records and identity. The cache is execution
+machinery behind <code>Game::characteristics</code>, not a second rules authority or a new
+player action. Stale creature status, leaked haste after a return, or a changed parent
+would invalidate this implementation of the accepted model.</p>
 <h2>The consequential distinction: same play, changed identity</h2>
 <p class="finding">Counter storage alone preserves serialization. The whole batch does not
 preserve state digests: removing the animation field and allocating effect records changes
@@ -71,11 +81,21 @@ historical receipts stay retained.</p>
 not its kinds, roles or dtypes. The prior “9 → 10” wording does not require another schema
 bump. The boolean Python observation surface remains the accepted boundary for current
 evergreen keywords.</p>
+<p>Empty effect batches preserve derived-cache revisions. They are not complete state
+no-ops: <code>record_continuous</code> still allocates a timestamp with
+<code>id_gen_mut</code> before the empty batch returns, as on main. Nonempty batches
+invalidate derived state through the shared writer.</p>
 <h2>Next proof</h2>
-<p>The working design lists full combined-tree Rust debug/release, clippy, rebuilt-extension
-Python, arena-admission and focused Academy checks. Prior focused results and regenerated
-evidence are retained; pre-sync broad green results do not establish combined-tree correctness.
-This review changes no implementation and makes no publication or merge decision.</p>
+<p>First-publication checks passed before the cache merge. The recovery record reports
+103 passing tests for the exact Python unit-test command after the live audit-reference
+repair. Those checks do not certify the merged engine. The working design retains Rust
+debug/release, format/clippy, rebuilt-extension Python and arena-admission checks, plus
+the hosted Engine Budget comparison. Debug cache recomputation assertions are part of
+that proof. This concept review inspected code and scenarios; it ran no tests and makes
+no performance claim.</p>
+<p>Moved live audit anchors preserve their dispositions and frozen evidence. No new
+usage or skill instructions are needed: the existing native authority, crate ownership
+and effect-lifetime guidance still expresses the accepted experience.</p>
 <h2>Questions</h2>
 <ol><li>No open product question within MTG-238. The separate printed-P/T protocol choice
 and future non-evergreen Python API remain outside this batch.</li></ol>

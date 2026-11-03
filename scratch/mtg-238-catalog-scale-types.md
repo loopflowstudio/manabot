@@ -14,9 +14,16 @@ MTG-238 publishes against main first, as one PR for review, without auto-merge.
 T6 integrates the crate move afterward. Main includes T5, so Airship's namesake
 conversion belongs here. No product decision remains for this batch.
 
-The sync onto main `a8abf01b1` is complete at merge `469b7eeba`, followed by
-observation-test fixes in `3ed5b5baa`. T5's copy effects, Nonlegendary and
-layered battlefield characteristics are preserved. The original plan and
+PR [#414](https://github.com/loopflowstudio/manabot/pull/414) was published
+at `3235684b8`. Jack Heart's recovery direction (`d19b72d6`, 2026-11-02)
+retains that PR and review boundary after main advanced. The subsequent sync
+onto `a1a02a76f` is complete at `bb9853218`, incorporating `51fbacbbf`'s
+derived-state caches and engine performance CI. Recovery validation and
+republication remain; no auto-merge or landing is authorized.
+
+The earlier T5 sync at `469b7eeba` and observation-test fixes in `3ed5b5baa`
+preserve copy effects, Nonlegendary and layered battlefield characteristics.
+The original plan and
 superseded publication hold are retained at
 `3ed5b5baa:scratch/mtg-238-catalog-scale-types.md`.
 
@@ -100,10 +107,11 @@ rerun passed. No runtime code changed after the extension/evidence rebuild.
 Earlier full debug/clippy and Python results (864 passed, 1 skipped) predate the
 T5 integration and do not establish broad correctness of the combined tree.
 
-## Concept review — combined T5/catalog tree, 2026-11-02
+## Concept review — combined T5/catalog/cache tree, 2026-11-02
 
 Outcome: nothing to change and no open product choice within MTG-238. Jack
-Heart's accepted batch still fits the implementation after the main sync;
+Heart's accepted batch still fits the implementation after the cache sync at
+`bb9853218` and the live audit-reference repair;
 there is no new implement direction. The earlier review page's T6 hold is
 superseded, not a remaining design dependency.
 
@@ -126,10 +134,28 @@ identity. Recovery must bind current evidence to the new content/hash contract
 while retaining frozen evidence; an unchanged Command tape is not an unchanged
 digest. Usage guidance already describes the card/rules crate ownership and
 native authority correctly. No further usage or skill changes are needed.
-The next proof remains the combined-tree gate below, including T5 behavior and
-the rebuilt-extension consumers; publication remains separate from merge.
+That combined T5/catalog tree subsequently passed the publication checks below;
+the newer cache merge has a separate recovery boundary.
 
-## Publication validation — 2026-11-02
+The cache merge adds no player-facing concept or second authority. Search
+forks inherit derived views, but changing an effect or an object's incarnation
+must invalidate the fork's affected views without changing its parent. A
+stale creature type after threshold loss or a returned land retaining haste
+would violate the same accepted contract, regardless of cache reuse. The
+effect writer, tracked accessors, fork-isolation scenarios and effect-lifecycle
+scenarios were inspected in this pass; tests were not rerun. Recovery's next
+proof remains the merged-engine debug checks (including cache recomputation
+assertions), release checks and rebuilt-extension consumers listed below.
+
+One wording clarification: an empty affected set preserves derived-cache
+revisions, not all state. `record_continuous` still allocates its timestamp
+through `id_gen_mut` before `push_effects` returns. This matches main; treating
+an empty call as a complete state/hash no-op would be a different contract.
+The audit's relocated live anchors likewise do not change a rule disposition
+or turn historical evidence into proof of the merged tree. No design change,
+new implement direction or open product choice results from this review.
+
+## First-publication validation — 2026-11-02, `3235684b8`
 
 `lf sync --manual` confirmed the branch merges cleanly with current main.
 The combined-tree publication checks are complete:
@@ -159,8 +185,35 @@ authored parity, native/Python observation parity and static-token checks all
 passed (28 tests).
 Logs are local under `.runs/mtg-238-publication/`. Frozen evidence is unchanged.
 
-Publication against main and Jack Heart's review remain outstanding. Publication
-and merge are separate; no auto-merge is authorized. T6 is not a blocker.
+These results predate the cache merge and do not certify `bb9853218`.
+
+## Recovery agreement and remaining work — 2026-11-02
+
+The merged effect writer preserves the three earthbend records and uses
+`TrackedState::id_gen_mut()` for timestamps. Empty effect batches return before
+advancing derived-cache revisions; nonempty batches still invalidate characteristics,
+triggers and mana. The sync record reports an atomic extension installation and
+regenerated mutable parity receipts; the committed authored-parity diff changes
+source fingerprints only. No runtime correction was needed during realign.
+
+CI run `41551942865`, job `125641513310`, was read before repair: 77 tests
+passed and the inventory test failed on the removed `src/state/mana.rs` path.
+The live audit reviews and index now name the moved rules and card-test files;
+engine-owned player references stay in place. A pre-existing trailing comma in
+the index's CR 400.7j anchor was reconciled with its authored review. Validation
+remains strict, all 3,322 rule dispositions and source spans/digests are retained,
+and frozen audit receipts and source metadata are unchanged. The pinned raw TXT
+is unavailable locally, so source-based regeneration was not claimed; offline
+validation and exact agreement with authored overrides cover this repair.
+
+Remaining work is recovery validation of the cache/catalog combination (debug
+and release Rust, clippy/format, rebuilt-extension consumers and required
+Python/arena checks), followed by republication of the same PR and Jack Heart's
+review. The earlier broad proof cannot substitute for these merged-engine
+checks. Engine Budget now applies: its hosted comparison and any required
+baseline adoption must retain the candidate artifact and reason under the
+existing policy; no new performance result or baseline change is claimed here.
+T6 remains downstream, not a blocker. No product decision is needed.
 
 Outside this Task: `PyKeywords` remains a 14-boolean observation surface;
 the first non-evergreen keyword needs its fact representation and a Python API
@@ -168,4 +221,4 @@ migration. All current keywords are evergreen, and the exhaustive observability
 guard requires an explicit decision for a new one. General layer dependency
 ordering and the Oracle-text generator remain outside this Task.
 
-Check result (realign, 2026-11-02): `git diff --check` — passed; existing post-sync focused proof retained, full combined-tree checks deferred to gate/CI.
+Check result (realign, 2026-11-02): `uv run --python 3.12 --extra dev pytest tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/` — 103 passed; merged-engine recovery checks remain with gate/publication.
