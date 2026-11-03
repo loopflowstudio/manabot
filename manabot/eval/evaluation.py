@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
-from manabot.eval.results import EvaluationRow, RateInterval
+from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_interval
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
@@ -174,14 +174,10 @@ class EvaluationResult(BaseModel):
             ("draw", blocks == 0.5),
             ("score", blocks),
         ):
-            means = values.mean(axis=1)
-            lower, upper = np.quantile(means[indices].mean(axis=1), [0.025, 0.975])
             setattr(
                 self,
                 name,
-                RateInterval(
-                    mean=float(means.mean()), lower=float(lower), upper=float(upper)
-                ),
+                bootstrap_mean_interval(values.mean(axis=1), indices),
             )
 
 

@@ -20,7 +20,8 @@ from etude.train.run import track
 import pytest
 
 from experiments.tla_pilot import ROOT, eval, frozen
-from experiments.tla_pilot_analysis import Interval, analyze
+from experiments.tla_pilot_analysis import analyze
+from manabot.eval.results import RateInterval
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 
 
@@ -181,7 +182,7 @@ def test_pilot_analysis_pairs_gain_and_checks_joint_criterion(
     )
     # Independent resampling of before/after, or of individual legs, widens
     # this interval. Shared four-leg pair blocks give exactly .25 throughout.
-    assert final.heuristic_gain == Interval(mean=0.25, lower=0.25, upper=0.25)
+    assert final.heuristic_gain == RateInterval(mean=0.25, lower=0.25, upper=0.25)
     assert [p.pair for p in final.pairs] == list(frozen()[1].pairs)
     assert all(p.sources == ("a" * 64, "a" * 64) for p in final.pairs)
     assert final.counts.wins == 20 and final.counts.losses == 12
@@ -411,5 +412,6 @@ def test_pilot_analysis_counts_draws_without_fabricating_wins(
     assert report.counts.draws == 288
     assert report.counts.wins == report.counts.losses == 0
     assert all(
-        c.score == Interval(mean=0.5, lower=0.5, upper=0.5) for c in report.comparisons
+        c.score == RateInterval(mean=0.5, lower=0.5, upper=0.5)
+        for c in report.comparisons
     )

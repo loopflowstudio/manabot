@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Literal
 
 from etude.experiment import ExperimentState, observe
 import numpy as np
-import numpy.typing as npt
 from pydantic import Field
 
 from experiments.tla_pilot import (
@@ -27,6 +26,7 @@ from experiments.tla_pilot import (
     environment,
     frozen,
 )
+from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
 
@@ -58,12 +58,6 @@ class Counts(StrictModel):
     missing_matches: int = 0
 
 
-class Interval(StrictModel):
-    mean: float
-    lower: float
-    upper: float
-
-
 class PairResult(StrictModel):
     pair: Pair
     match: str | None
@@ -81,8 +75,8 @@ class Comparison(StrictModel):
     clocks: dict[str, float]
     counts: Counts
     pairs: list[PairResult]
-    score: Interval | None = None
-    heuristic_gain: Interval | None = None
+    score: RateInterval | None = None
+    heuristic_gain: RateInterval | None = None
 
 
 class PilotAnalysis(StrictModel):
@@ -122,12 +116,6 @@ def _total(counts: list[Counts]) -> Counts:
             for field in Counts.model_fields
         }
     )
-
-
-def _interval(values: list[float], indices: npt.NDArray[np.int64]) -> Interval:
-    blocks = np.asarray(values, dtype=np.float64)
-    lower, upper = np.quantile(blocks[indices].mean(axis=1), [0.025, 0.975])
-    return Interval(mean=float(blocks.mean()), lower=float(lower), upper=float(upper))
 
 
 def _pair_result(
@@ -270,7 +258,7 @@ def analyze(
             if planned.anchor == "heuristic" and len(scores) == len(
                 initial_scores
             ) == len(protocol.pairs):
-                gain = _interval(
+                gain = bootstrap_mean_interval(
                     [
                         later - earlier
                         for later, earlier in zip(scores, initial_scores, strict=True)
@@ -287,7 +275,7 @@ def analyze(
                     counts=_total([pair.counts for pair in pairs]),
                     pairs=pairs,
                     heuristic_gain=gain,
-                    score=_interval(scores, indices)
+                    score=bootstrap_mean_interval(scores, indices)
                     if len(scores) == len(protocol.pairs)
                     else None,
                 )

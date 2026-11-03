@@ -30,9 +30,16 @@ assignments within each sampled pair, and comparing checkpoint gains across the
 same complete pair schedule. Retained per-game failure rows and score curves do
 not establish the latter. Missing matches/checkpoints remain in the expected
 schedule, and incomplete comparisons cannot support a qualified learning claim.
-The pilot's paired-gain analysis remains unfinished; its live plan is in scratch,
-with retained empirical limits in experiments/tla-trophy-pilot.md. Training has
-no child memory directories at this reconciliation.
+The pilot now derives execution and analysis from one expected schedule and
+resamples whole pairs together across checkpoints. Its seeded 2,000-resample
+analysis implements the frozen joint criterion; controlled incomplete-cohort
+and sealed-block CLI fixtures establish accounting, not empirical improvement.
+A failed callback without per-game receipts counts as a failed match while its
+unknown games remain missing: attempted games is a lower bound, not zero-cost
+or successful evidence. Descriptive Etude curves do not qualify a learning claim;
+the companion analysis does, only with a complete cohort and consistent sources.
+Retained empirical limits live in experiments/tla-trophy-pilot.md. Training has
+no child memory directories at this reconciliation (2026-11-03).
 
 ## Training consolidation and credit (MTG-179, 2026-10-22)
 
