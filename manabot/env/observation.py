@@ -120,7 +120,9 @@ FACT_USED_ABILITY = 5
 FACT_EFFECT = 6
 FACT_COPY = 7
 FACT_COPY_EXCEPTION = 8
-FACT_KINDS = 8
+FACT_TRANSFORMS = 9
+FACT_COMBAT_RESTRICTION = 10
+FACT_KINDS = 10
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # v5 decklist rows: definition id + 1, then main, unseen, sideboard and
@@ -501,8 +503,37 @@ class ObservationEncoder:
                 push(perm.id, FACT_SET_NAME, token(perm.name), (1.0, 0.0))
             for creature_type in perm.creature_types or ():
                 push(perm.id, FACT_SET_CREATURE_TYPE, token(creature_type), (1.0, 0.0))
+            if perm.transforms:
+                push(perm.id, FACT_TRANSFORMS, 0, (float(perm.transforms), 0.0))
             for index in perm.used_abilities:
                 push(perm.id, FACT_USED_ABILITY, index, (1.0, 0.0))
+
+        for index, frame in enumerate(obs.continuation):
+            if frame.source_transforms:
+                push(
+                    frame.source.object
+                    if frame.source.object is not None
+                    else (
+                        obs.agent.id
+                        if frame.controller == obs.agent.player_index
+                        else obs.opponent.id
+                    ),
+                    FACT_TRANSFORMS,
+                    index + 1,
+                    (float(frame.source_transforms), 0.0),
+                )
+
+        for index, frame in enumerate(obs.continuation):
+            if frame.attackers is not None:
+                push(
+                    obs.agent.id
+                    if frame.controller == obs.agent.player_index
+                    else obs.opponent.id,
+                    FACT_COMBAT_RESTRICTION,
+                    index + 1,
+                    (0.0, 0.0),
+                    detail=token(frame.attackers),
+                )
 
         def push_modification(
             obj: int, kind: int, effect: managym.ContinuousEffect
@@ -561,8 +592,8 @@ class ObservationEncoder:
         """Reference implementation of native current-continuation relation rows."""
         rows: list[np.ndarray] = []
         if not self.shows_everything:
-            # Waiting delayed triggers (kind 10, always last) are v5 facts.
-            frames = [frame for frame in frames if frame.kind != 10]
+            # Delayed triggers and scheduled turns/combats (kinds 10+) are v5 facts.
+            frames = [frame for frame in frames if frame.kind < 10]
 
         def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
             row[23] = 0 if value.definition is None else value.definition + 1
@@ -621,6 +652,11 @@ class ObservationEncoder:
                     context_row[0], context_row[22], context_row[29] = kind, 1, 1
                     _reference(context_row, reference)
                     rows.append(context_row)
+            if self.shows_everything and frame.inherited_from is not None:
+                inherited = row.copy()
+                inherited[0], inherited[22], inherited[29] = 7, 1, 1
+                _reference(inherited, frame.inherited_from)
+                rows.append(inherited)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1
@@ -692,7 +728,9 @@ class ObservationEncoder:
             arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
             arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
             for index in range(4):
-                arr[PLAYER_BENT_INDEX + index] = float(bool(history.bent & (1 << index)))
+                arr[PLAYER_BENT_INDEX + index] = float(
+                    bool(history.bent & (1 << index))
+                )
             arr[PLAYER_EXTRA_TURNS_INDEX] = float(player.extra_turns)
             arr[PLAYER_ADDITIONAL_COMBATS_INDEX] = float(player.additional_combats)
 

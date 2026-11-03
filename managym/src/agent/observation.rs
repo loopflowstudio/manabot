@@ -610,6 +610,9 @@ impl ContinuousEffectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermanentData {
+    /// Transformations of this exact permanent; repeated flips still count.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub transforms: u32,
     pub id: i32,
     /// Definition of the backing card, in the match's bound content pack.
     pub registry_key: i32,
@@ -1074,6 +1077,15 @@ impl Observation {
         if let Some(suspended) = &game.state.suspended_decision {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
+                    decision @ crate::flow::decision::Decision::SearchNamed { .. } => game
+                        .named_search_cards(decision)
+                        .into_iter()
+                        .filter(|card| {
+                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
+                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
+                                    && game.state.cards[*card].owner != agent_player)
+                        })
+                        .collect(),
                     crate::flow::decision::Decision::SearchBasicLand {
                         player,
                         subtype,
@@ -1179,6 +1191,7 @@ impl Observation {
     ) {
         let characteristics = game.characteristics(perm_id);
         let pdat = PermanentData {
+            transforms: permanent.transforms,
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,

@@ -290,9 +290,7 @@ class LegacyCastPermissionView(ProtocolModel):
     player_id: UInt32
     cost: str | None = Field(default=None, exclude_if=lambda value: value is None)
     this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
-    through_next_turn: bool = Field(
-        default=False, exclude_if=lambda value: not value
-    )
+    through_next_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     own_turn_only: bool = Field(default=False, exclude_if=lambda value: not value)
     after_turn: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -381,6 +379,7 @@ class LegacyPermanentView(ProtocolModel):
     exile_if_dies_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
+    transforms: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)

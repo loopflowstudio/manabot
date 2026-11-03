@@ -74,6 +74,7 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
+                    Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))
                     }
@@ -92,6 +93,7 @@ impl Game {
                                 "On the bottom".into()
                             })
                         }
+                        [Effect::ExileNamed { name, .. }] => Some(format!("Name {name}")),
                         [Effect::SearchBasicLand { .. }] => {
                             Some("Search your library for a basic land".into())
                         }
@@ -153,6 +155,14 @@ impl Game {
                             "Put {} into your graveyard",
                             self.state.cards[*card].name
                         )),
+                        Decision::SearchNamed { .. } => Some(format!(
+                            "Exile {} from {}",
+                            self.state.cards[*card].name,
+                            self.state
+                                .zones
+                                .zone_of(*card)
+                                .map_or("unknown zone".to_string(), |zone| format!("{zone:?}"))
+                        )),
                         Decision::SearchLibraryToHand { .. } => Some(format!(
                             "Put {} into your hand",
                             self.state.cards[*card].name
@@ -169,6 +179,7 @@ impl Game {
                 }
             }
             Action::Decline { .. } => match &self.state.suspended_decision.as_ref()?.decision {
+                Decision::SearchNamed { .. } => Some("Stop searching and shuffle".into()),
                 Decision::Surveil { .. } => Some("Keep on top".into()),
                 _ => None,
             },

@@ -84,6 +84,7 @@ export interface PermanentState {
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */
+  transforms?: number;
   exhausted_abilities?: number;
   /** "Once each turn" abilities this object has used this turn. */
   once_each_turn_used?: number;

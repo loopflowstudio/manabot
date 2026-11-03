@@ -46,14 +46,14 @@ class ObservationConfig(BaseConfig):
     @classmethod
     def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
         """Missing version means the frozen input-v1 contract, never today's default."""
-        return cls(**{"policy_input_version": 1, **payload})
+        return cls(**{"policy_input_version": 1, "max_actions": 64, **payload})
 
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Fits all Learn choices in the selected setup. Larger action sets fail
-    # encoding explicitly; this is not a universal priority/combat bound.
-    max_actions: int = 64
+    # Includes every name in the current catalog (The Rise of Sozin).
+    # Larger action sets still fail explicitly, never truncate choices.
+    max_actions: int = 512
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(

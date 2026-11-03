@@ -194,6 +194,8 @@ _OBLIGATIONS = (
     "retarget",
     "surveil",
     "choose a permanent to exile",
+    "choose optional payment X",
+    "search named cards",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -211,6 +213,7 @@ _DELAYED_EVENTS = (
     "the next end step",
     "its controller's next matching spell",
     "the next upkeep",
+    "its controller's next end step",
 )
 
 
@@ -514,13 +517,26 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
         if relation.parent is not None:
             details.append(f"parent R{relation.parent + 1}")
-        details += _selectors(relation.mode, relation.ability)
+        if relation.kind == 6 and relation.decision == 25:
+            details.append(f"may exile up to {relation.mode} more cards")
+        elif relation.kind == 11:
+            details.append(f"scheduled turn {(relation.mode or 0) + 1}")
+        elif relation.kind == 12:
+            details.append(
+                "current combat"
+                if relation.mode == 0
+                else f"queued combat {relation.mode}"
+            )
+        else:
+            details += _selectors(relation.mode, relation.ability)
+        if relation.x:
+            details.append(f"X = {relation.x}")
         if relation.kicked:
             details.append("kicker included")
         if relation.active_clause is not None:
@@ -557,6 +573,16 @@ class _Renderer:
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)
+            )
+        if relation.inherited_from is not None:
+            details.append(
+                f"source inherits abilities from {self.fact_reference(relation.inherited_from)}"
+            )
+        if relation.attackers is not None:
+            details.append(f"only {relation.attackers} may attack")
+        if relation.source_transforms:
+            details.append(
+                f"source transform count at activation/trigger {relation.source_transforms}"
             )
         if relation.resolutions_this_turn:
             details.append(
@@ -785,6 +811,8 @@ class _Renderer:
             parts.append(f"blocking {self.name(permanent.blocking)}")
         if permanent.abilities_lost:
             parts.append("has lost all abilities")
+        if permanent.transforms:
+            parts.append(f"transformed {permanent.transforms} times")
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
@@ -872,7 +900,17 @@ class _Renderer:
             raise TextEncodingError("incomplete action/offer binding")
         if len({offer["id"] for offer in frame.offers}) != len(frame.offers):
             raise TextEncodingError("duplicate offer identity")
-        if any(card.zone == 1 for card in state.opponent_cards):
+        searching_opponent = any(
+            relation.kind == 6
+            and relation.decision == 25
+            and relation.controller == state.agent.player_index
+            and relation.context is not None
+            and relation.context.player == state.opponent.player_index
+            for relation in capture.frames
+        )
+        if not searching_opponent and any(
+            card.zone == 1 for card in state.opponent_cards
+        ):
             raise TextEncodingError("opponent hand identity in capture")
         lines = [
             "You are choosing one legal action in the current game.",

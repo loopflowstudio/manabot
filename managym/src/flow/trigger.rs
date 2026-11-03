@@ -110,7 +110,11 @@ pub enum DelayedTriggerEvent {
     CreatureDies,
     /// "At the beginning of the next end step"; `context` is the trigger's
     /// context ("sacrifice that token").
-    NextEndStep { context: Option<Target> },
+    NextEndStep {
+        context: Option<Target>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        your_turn: bool,
+    },
     /// "When you next cast a [predicate] spell"; that spell is the context.
     YouCastSpell(CardPredicate),
     /// "At the beginning of the next upkeep".

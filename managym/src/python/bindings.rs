@@ -1855,6 +1855,8 @@ impl From<PyKeywords> for KeywordData {
 #[derive(Clone)]
 pub struct PyPermanent {
     #[pyo3(get, set)]
+    pub transforms: u32,
+    #[pyo3(get, set)]
     pub id: i32,
     #[pyo3(get, set)]
     pub registry_key: i32,
@@ -1947,6 +1949,7 @@ impl From<PermanentData> for PyPermanent {
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             attacking: value.attacking,
+            transforms: value.transforms,
             exhausted_abilities: value.exhausted_abilities,
             once_each_turn_used: value.once_each_turn_used,
             granted_firebending: value.granted_firebending,
@@ -1986,6 +1989,7 @@ impl From<PyPermanent> for PermanentData {
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             attacking: value.attacking,
+            transforms: value.transforms,
             exhausted_abilities: value.exhausted_abilities,
             once_each_turn_used: value.once_each_turn_used,
             granted_firebending: value.granted_firebending,
@@ -4251,8 +4255,11 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=10).contains(&frame.kind)
-            || (frame.kind == 10 && (!(1..=5).contains(&frame.decision) || frame.parent.is_some()))
+        !(1..=12).contains(&frame.kind)
+            || (frame.kind == 10
+                && (!(1..=crate::agent::continuation::MAX_DELAYED_EVENT_CODE)
+                    .contains(&frame.decision)
+                    || frame.parent.is_some()))
             || (frame.kind != 10 && frame.this_turn)
             || (frame.kind != 5
                 && frame

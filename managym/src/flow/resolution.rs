@@ -171,7 +171,8 @@ impl Game {
         let frame = EffectFrame {
             source: Some(card),
             source_ref: self.current_object_ref(card),
-            source_face: None,
+            inherited_from: None,
+            source_transforms: 0,
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
@@ -227,7 +228,7 @@ impl Game {
     /// The face an ability on the stack came from: the card as it stands
     /// while that face is up, else that face's row (the card has turned over
     /// or left since; the ability exists independently, CR 113.7a).
-    fn source_face(&self, card: CardId, face: CardDefId) -> Option<&CardDefinition> {
+    pub(crate) fn source_face(&self, card: CardId, face: CardDefId) -> Option<&CardDefinition> {
         let current = self.state.cards.get(card.0)?;
         if current.definition_id == face {
             Some(current)
@@ -237,9 +238,9 @@ impl Game {
     }
 
     /// The ability's definition on its source's face. An index past the
-    /// printed abilities is inherited (Koh): it reads the definition the
-    /// source still has the abilities of.
-    fn own_activated_ability(
+    /// printed abilities is inherited: its lending definition was fixed at
+    /// activation, so removal or a later choice cannot change its meaning.
+    pub(crate) fn own_activated_ability(
         &self,
         ability: &ActivatedAbilityOnStack,
     ) -> Option<&ActivatedAbilityDefinition> {
@@ -247,8 +248,8 @@ impl Game {
             .source_face(ability.source_card, ability.source_definition_id)?
             .activated_abilities;
         printed.get(ability.ability_index).or_else(|| {
-            let permanent = self.lookup_current_permanent(ability.source_ref).ok()?;
-            self.inherited_definition(permanent)?
+            default_content_pack()
+                .definition(ability.inherited_from?)?
                 .activated_abilities
                 .get(ability.ability_index - printed.len())
         })
@@ -288,7 +289,8 @@ impl Game {
         let frame = EffectFrame {
             source: Some(ability.source_card),
             source_ref,
-            source_face: Some(ability.source_definition_id),
+            inherited_from: ability.inherited_from,
+            source_transforms: ability.source_transforms,
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
@@ -379,7 +381,11 @@ impl Game {
         let frame = EffectFrame {
             source: Some(source_card),
             source_ref: triggered.source_ref,
-            source_face: Some(triggered.source_definition_id),
+            inherited_from: triggered
+                .source_lki
+                .as_ref()
+                .and_then(|lki| lki.inherited_from),
+            source_transforms: triggered.source_transforms,
             controller: source_controller,
             resolutions_this_turn,
             kicked: false,
@@ -978,11 +984,7 @@ impl Game {
                 let id = self.source_permanent_id(frame)?;
                 // CR 701.27f: only if it hasn't turned over since this ability
                 // went on the stack.
-                let card = self.state.permanents[id].as_ref()?.card;
-                if frame
-                    .source_face
-                    .is_none_or(|face| face == self.state.cards[card].definition_id)
-                {
+                if frame.source_transforms == self.state.permanents[id].as_ref()?.transforms {
                     self.transform_permanent(id);
                 }
                 None
@@ -1368,8 +1370,15 @@ impl Game {
                     frame.source_ref,
                     frame.controller,
                     effects.clone(),
-                    None,
+                    frame.context_target,
                 );
+                let trigger = self
+                    .state
+                    .pending_triggers_mut()
+                    .last_mut()
+                    .expect("enqueued trigger");
+                trigger.x = frame.x;
+                trigger.player = frame.triggering_player;
                 None
             }
             Effect::MayOnceEachTurn { effects } => {
@@ -1532,8 +1541,8 @@ impl Game {
                     .definition_entries()
                     .filter(|(id, definition)| {
                         !definition.is_token
-                            && !definition.key.is_empty()
-                            && default_content_pack().front_face(*id).is_none()
+                            && (!definition.key.is_empty()
+                                || default_content_pack().front_face(*id).is_some())
                     })
                     .map(|(_, definition)| definition.name.clone())
                     .collect();
@@ -1554,36 +1563,19 @@ impl Game {
                 let Some(Target::Player(player)) = self.present_primary_target(frame) else {
                     return None;
                 };
-                let found: Vec<CardId> = [ZoneType::Graveyard, ZoneType::Hand, ZoneType::Library]
-                    .into_iter()
-                    .flat_map(|zone| self.state.zones.zone_cards(zone, player).clone())
-                    .filter(|card| self.state.cards[*card].name == *name)
-                    .take(*count)
-                    .collect();
-                for card in found {
-                    self.move_card(card, ZoneType::Exile);
-                }
-                self.shuffle_library(player);
-                None
+                self.remember_hand(player);
+                self.emit(GameEvent::LibrarySearched { player });
+                Some(Decision::SearchNamed {
+                    player: frame.controller,
+                    owner: player,
+                    name: name.clone(),
+                    remaining: *count,
+                })
             }
-            Effect::PayTargetsManaValue { if_paid } => {
-                let total: u32 = frame
-                    .active_targets()
-                    .filter_map(|target| match target.target {
-                        Target::GraveyardCard(object) => Some(CardId::from(object.entity)),
-                        _ => None,
-                    })
-                    .map(|card| u32::from(self.card_mana_value(card)))
-                    .sum();
-                Some(Decision::Payment(PaymentProgress::new(
-                    frame.controller,
-                    PaymentCost::Mana(
-                        crate::state::mana::ManaCost::default().with_generic(total.min(255) as u8),
-                    ),
-                    if_paid.clone(),
-                    Vec::new(),
-                )))
-            }
+            Effect::OptionalManaPaymentX { if_paid } => Some(Decision::ChoosePaymentX {
+                player: frame.controller,
+                if_paid: if_paid.clone(),
+            }),
             Effect::EachPlayerChoosesToExile { predicate } => self.choose_to_exile(
                 frame.controller,
                 frame.controller,
@@ -1609,9 +1601,10 @@ impl Game {
                         )
                     }
                     DelayedEvent::CreatureDiesThisTurn => (DelayedTriggerEvent::CreatureDies, true),
-                    DelayedEvent::NextEndStepForCreatedToken => (
+                    DelayedEvent::NextEndStepForCreatedToken { your_turn } => (
                         DelayedTriggerEvent::NextEndStep {
                             context: frame.created.map(Target::Permanent),
+                            your_turn: *your_turn,
                         },
                         false,
                     ),
@@ -1828,7 +1821,8 @@ impl Game {
                     let mut sub = EffectFrame {
                         source: frame.source,
                         source_ref: frame.source_ref,
-                        source_face: frame.source_face,
+                        inherited_from: frame.inherited_from,
+                        source_transforms: frame.source_transforms,
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,

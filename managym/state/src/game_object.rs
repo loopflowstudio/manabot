@@ -65,6 +65,10 @@ pub enum ObjectLookupError {
 /// `ContentPack` and does not clone card semantics into mutable state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub transforms: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherited_from: Option<crate::card::CardDefId>,
     pub keywords: crate::card::Keywords,
     /// Its creature types as it last existed (CR 608.2h), sorted; read when
     /// a departed target's partners must share one (Secret Tunnel).

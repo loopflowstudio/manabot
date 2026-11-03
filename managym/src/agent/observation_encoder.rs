@@ -108,10 +108,14 @@ pub enum FactKind {
     /// An exception that is part of a copy's copiable values (CR 707.9b),
     /// encoded like an `Effect` row of the same `Modification`.
     CopyException = 8,
+    /// Transform count: id 0 for a permanent, frame index + 1 for a continuation.
+    Transforms = 9,
+    /// Attacker predicate token for a combat continuation (id: frame index).
+    CombatRestriction = 10,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 8] = [
+    pub const ALL: [FactKind; 10] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -120,6 +124,8 @@ impl FactKind {
         FactKind::Effect,
         FactKind::Copy,
         FactKind::CopyException,
+        FactKind::Transforms,
+        FactKind::CombatRestriction,
     ];
 }
 
@@ -157,7 +163,7 @@ impl Default for ObservationEncoderConfig {
         Self {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
-            max_actions: 64,
+            max_actions: 512,
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
@@ -1101,8 +1107,43 @@ fn facts(obs: &Observation) -> Vec<Fact> {
                 1.0,
             );
         }
+        if permanent.transforms > 0 {
+            push(object, FactKind::Transforms, 0, permanent.transforms as f32);
+        }
         for index in &permanent.used_abilities {
             push(object, FactKind::UsedAbility, *index as i32, 1.0);
+        }
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        if frame.source_transforms > 0 {
+            push(
+                frame.source.object.unwrap_or(
+                    if frame.controller == obs.agent.player_index as usize {
+                        obs.agent.id
+                    } else {
+                        obs.opponent.id
+                    },
+                ),
+                FactKind::Transforms,
+                (index + 1) as i32,
+                frame.source_transforms as f32,
+            );
+        }
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        if let Some(attackers) = &frame.attackers {
+            out.push(Fact {
+                object: if frame.controller == obs.agent.player_index as usize {
+                    obs.agent.id
+                } else {
+                    obs.opponent.id
+                },
+                kind: FactKind::CombatRestriction,
+                id: (index + 1) as i32,
+                detail: name_value(attackers),
+                values: [0.0, 0.0],
+                effect: None,
+            });
         }
     }
     for permanent in permanents() {

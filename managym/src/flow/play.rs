@@ -568,9 +568,13 @@ impl Game {
                     player,
                     card,
                     requirement,
-                    requirement_index,
-                    &chosen,
-                    &chosen_req_indices,
+                    &chosen
+                        .iter()
+                        .zip(&chosen_req_indices)
+                        .filter(|(_, index)| **index == requirement_index)
+                        .map(|(target, _)| *target)
+                        .collect::<Vec<_>>(),
+                    cast.x,
                 )
                 .into_iter()
                 .filter(|target| {
@@ -620,19 +624,16 @@ impl Game {
         player: PlayerId,
         card: CardId,
         requirement: &TargetRequirement,
-        requirement_index: usize,
         chosen: &[Target],
-        chosen_req_indices: &[usize],
+        x: u8,
     ) -> Vec<Target> {
         self.legal_targets_for_requirement(player, card, requirement)
             .into_iter()
-            // Distinctness is local to the clause; other clauses may reuse a target.
             .filter(|target| {
-                !chosen
-                    .iter()
-                    .zip(chosen_req_indices)
-                    .any(|(chosen, index)| *index == requirement_index && chosen == target)
+                self.within_target_mana_budget(requirement, x, chosen.iter().copied(), *target)
             })
+            // Distinctness and the budget are local to this clause.
+            .filter(|target| !chosen.contains(target))
             .collect()
     }
 
@@ -713,9 +714,13 @@ impl Game {
             player,
             card,
             requirement,
-            requirement_index,
-            &chosen,
-            &chosen_req_indices,
+            &chosen
+                .iter()
+                .zip(&chosen_req_indices)
+                .filter(|(_, index)| **index == requirement_index)
+                .map(|(target, _)| *target)
+                .collect::<Vec<_>>(),
+            cast.x,
         );
         if legal.is_empty() {
             return self.advance_target_selection(
@@ -1902,7 +1907,9 @@ impl Game {
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let source_card = permanent.card;
         let attached = permanent.attached_to;
+        let source_transforms = permanent.transforms;
         let source_definition_id = self.state.cards[source_card].definition_id;
+        let inherited_from = self.inherited_definition_id(permanent_id);
         let Some(ability) = self
             .characteristics(permanent_id)
             .activated_abilities
@@ -1928,6 +1935,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            source_transforms,
+            inherited_from,
             id,
             controller: player,
             source_definition_id,
@@ -1967,6 +1976,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            source_transforms: 0,
+            inherited_from: None,
             id,
             controller: player,
             source_definition_id: self.state.cards[card].definition_id,

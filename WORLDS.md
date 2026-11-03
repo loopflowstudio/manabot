@@ -242,7 +242,16 @@ All 16 T6 cards are supported (330 supported definitions in `world`). The
 policy input adds player columns for the four bending kinds, extra turns and
 additional combats (67 → 73) and a card column for "until the end of your next
 turn" play permissions (55 → 56); decision code 23 is the each-player
-exile choice.
+exile choice. Resolution decisions 24 and 25 choose optional payment X and
+privately search named cards. Sozin pays before a separate reflexive trigger
+chooses graveyard targets within that X; search allows zero through four
+individually selected cards. Transform histories (including round trips),
+inherited ability definitions, ordered extra turns and combat restrictions
+reach v5 facts/continuations, Python and text without widening frozen rows.
+Fresh action tables hold 512 alternatives for unrestricted catalog names;
+checkpoint readers retain an omitted historical action capacity of 64.
+Match-state hash contract 13 includes pending scheduling and retained ability
+meaning. Only mutable current-w17 evidence is refreshed; earlier worlds stay fixed.
 
 Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.

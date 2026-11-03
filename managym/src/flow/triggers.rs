@@ -162,9 +162,15 @@ impl Game {
         let effects = match &trigger.inline_effects {
             Some(effects) => effects.as_slice(),
             None => self
-                .state
-                .cards
-                .get(trigger.source_card.0)?
+                .source_face(
+                    trigger.source_card,
+                    trigger
+                        .source_lki
+                        .as_ref()
+                        .map_or(self.state.cards[trigger.source_card].definition_id, |lki| {
+                            lki.definition_id
+                        }),
+                )?
                 .abilities
                 .get(trigger.ability_index)?
                 .effects(),
@@ -183,6 +189,55 @@ impl Game {
         }
         let source = trigger.source_ref?;
         self.lookup_current_permanent(source).ok()
+    }
+
+    /// Clause-wide mana-value budget; paid X belongs to this occurrence,
+    /// independent of its source's current state or later mana production.
+    fn within_trigger_mana_budget(
+        &self,
+        trigger: &PendingTrigger,
+        requirement: &crate::state::ability::TargetRequirement,
+        target: Target,
+    ) -> bool {
+        self.within_target_mana_budget(
+            requirement,
+            trigger.x,
+            trigger
+                .targets
+                .iter()
+                .zip(&trigger.target_req_indices)
+                .filter(|(_, index)| **index == trigger.requirement_index)
+                .map(|(target, _)| *target),
+            target,
+        )
+    }
+
+    pub(crate) fn within_target_mana_budget(
+        &self,
+        requirement: &crate::state::ability::TargetRequirement,
+        x: u8,
+        chosen: impl Iterator<Item = Target>,
+        target: Target,
+    ) -> bool {
+        !requirement.total_mana_value_x
+            || self.target_mana_value(target)
+                + chosen
+                    .map(|target| self.target_mana_value(target))
+                    .sum::<u32>()
+                <= u32::from(x)
+    }
+
+    pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
+        match target {
+            Target::GraveyardCard(object) => {
+                u32::from(self.card_mana_value(CardId::from(object.entity)))
+            }
+            Target::Permanent(id) => self.state.permanents[id]
+                .as_ref()
+                .map_or(0, |p| u32::from(self.card_mana_value(p.card))),
+            Target::StackSpell(card) => u32::from(self.card_mana_value(card)),
+            _ => 0,
+        }
     }
 
     pub(crate) fn choose_trigger_target(
@@ -209,6 +264,7 @@ impl Game {
             .any(|(chosen, index)| *index == trigger.requirement_index && *chosen == target);
         if trigger.controller != player
             || duplicate
+            || !self.within_trigger_mana_budget(trigger, requirement, target)
             || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
             || !self.within_source_bound(
@@ -338,6 +394,9 @@ impl Game {
                 let legal: Vec<_> = self
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
+                    .filter(|target| {
+                        self.within_trigger_mana_budget(&trigger, requirement, *target)
+                    })
                     .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
                     .filter(|target| {
                         self.within_source_bound(
@@ -640,6 +699,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
             id,
             controller: trigger.controller,
             source_card: trigger.source_card,
@@ -791,8 +851,12 @@ impl Game {
         self.delayed_triggers_for_event(event);
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
-            for (ability_index, ability) in
-                self.state.cards[source.card].abilities.iter().enumerate()
+            for (ability_index, ability) in self
+                .source_face(source.card, source.lki.definition_id)
+                .expect("source face")
+                .abilities
+                .iter()
+                .enumerate()
             {
                 let Ability::Triggered {
                     condition,
@@ -867,7 +931,10 @@ impl Game {
             } = source;
             if granted.is_none()
                 && matches!(
-                    &self.state.cards[source_card].abilities[ability_index],
+                    &self
+                        .source_face(source_card, source_lki.definition_id)
+                        .expect("source face")
+                        .abilities[ability_index],
                     Ability::Triggered {
                         condition: TriggerCondition::OnceEachTurn { .. },
                         ..
@@ -878,7 +945,11 @@ impl Game {
             }
             let effects = match &granted {
                 Some(effects) => effects.as_slice(),
-                None => self.state.cards[source_card].abilities[ability_index].effects(),
+                None => self
+                    .source_face(source_card, source_lki.definition_id)
+                    .expect("source face")
+                    .abilities[ability_index]
+                    .effects(),
             };
             let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
             let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
@@ -989,11 +1060,16 @@ impl Game {
     /// Triggered abilities static grants give the battlefield source
     /// (CR 613.1f), in battlefield order of the granting permanents.
     fn granted_triggered_abilities(&self, source: &TriggerSourceSnapshot) -> Vec<Ability> {
+        // Departure triggers read the inherited abilities from the captured
+        // battlefield object, before its effect records are removed.
+        let inherited = source
+            .lki
+            .inherited_from
+            .and_then(|id| crate::cards::content_pack::default_content_pack().definition(id));
         let Ok(target) = self.lookup_current_permanent(source.lki.object_ref) else {
-            return Vec::new();
+            return inherited.map_or_else(Vec::new, |definition| definition.abilities.clone());
         };
-        // Triggered abilities a record lets it have (Koh's chosen card).
-        self.inherited_definition(target)
+        inherited
             .into_iter()
             .flat_map(|definition| definition.abilities.iter().cloned())
             .chain(
@@ -1099,11 +1175,11 @@ impl Game {
             let context = match (&trigger.event, event) {
                 (DelayedTriggerEvent::CreatureDies, _) if creature_died => None,
                 (
-                    DelayedTriggerEvent::NextEndStep { context },
+                    DelayedTriggerEvent::NextEndStep { context, your_turn },
                     GameEvent::StepStarted {
                         step: StepKind::End,
                     },
-                ) => {
+                ) if !your_turn || self.active_player() == trigger.controller => {
                     spent.push(index);
                     *context
                 }
@@ -1359,7 +1435,7 @@ impl Game {
         } = event
         {
             let on_battlefield = self.state.zones.zone_of(*card) == Some(ZoneType::Battlefield);
-            if !on_battlefield && !self.state.cards[*card].abilities.is_empty() {
+            if !on_battlefield {
                 let source_lki = self.state.object_lki.latest_for_card(*card).cloned();
                 if let Some(lki) = source_lki {
                     sources.push(TriggerSourceSnapshot {

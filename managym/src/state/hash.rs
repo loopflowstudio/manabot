@@ -21,7 +21,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 12;
+pub const MATCH_STATE_HASH_VERSION: u32 = 13;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -71,6 +71,14 @@ struct CanonicalTurn {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    extra_turns: Vec<PlayerId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resume_with: Option<PlayerId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    additional_combats: Vec<crate::flow::turn::AdditionalCombat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    combat_attackers: Option<crate::state::predicate::CardPredicate>,
     current_phase: usize,
     current_step: usize,
     step_initialized: bool,
@@ -96,6 +104,10 @@ impl From<&TurnState> for CanonicalTurn {
                 .iter()
                 .map(|(&(card, ability), &count)| (card, ability, count))
                 .collect(),
+            extra_turns: turn.extra_turns.clone(),
+            resume_with: turn.resume_with,
+            additional_combats: turn.additional_combats.clone(),
+            combat_attackers: turn.combat_attackers.clone(),
             current_phase: turn.current_phase,
             current_step: turn.current_step,
             step_initialized: turn.step_initialized,

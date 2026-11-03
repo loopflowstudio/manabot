@@ -163,14 +163,23 @@ impl Game {
     /// `player` reveals their hand: every card in it becomes public
     /// definition knowledge, as with a card revealed into hand.
     pub(crate) fn reveal_hand(&mut self, player: PlayerId) {
-        let mut counts = std::collections::BTreeMap::new();
         for card in self.state.zones.zone_cards(ZoneType::Hand, player).to_vec() {
-            let definition = self.state.cards[card].definition_id;
             self.emit(GameEvent::CardRevealed {
                 owner: player,
-                definition,
+                definition: self.state.cards[card].definition_id,
             });
-            *counts.entry(definition).or_insert(0_u32) += 1;
+        }
+        self.remember_hand(player);
+    }
+
+    /// In a two-player game, inspecting the opponent's hand establishes the
+    /// same definition minima as revealing it, without a reveal event.
+    pub(crate) fn remember_hand(&mut self, player: PlayerId) {
+        let mut counts = std::collections::BTreeMap::new();
+        for card in self.state.zones.zone_cards(ZoneType::Hand, player) {
+            *counts
+                .entry(self.state.cards[*card].definition_id)
+                .or_insert(0_u32) += 1;
         }
         for (definition, count) in counts {
             self.set_known_hand_count(player, definition, count);
@@ -686,7 +695,7 @@ impl Game {
     /// stays the same object, keeping its counters, damage, attachments and
     /// combat status (CR 701.27a). Anything else can't transform and stays as
     /// it is (CR 701.27c).
-    pub(crate) fn transform_permanent(&mut self, permanent: PermanentId) {
+    pub fn transform_permanent(&mut self, permanent: PermanentId) {
         let Some(card) = self.state.permanents[permanent].as_ref().map(|p| p.card) else {
             return;
         };
@@ -695,6 +704,10 @@ impl Game {
         } else if !self.show_back_face(card) {
             return;
         }
+        self.state.permanents[permanent]
+            .as_mut()
+            .unwrap()
+            .transforms += 1;
         // Its mana abilities and static grants may change for either player.
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));

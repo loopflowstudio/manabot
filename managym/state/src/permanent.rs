@@ -109,6 +109,9 @@ impl serde::Serialize for Counters {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
+    /// Number of transformations of this incarnation (CR 701.27f).
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub transforms: u32,
     pub id: ObjectId,
     pub card: CardId,
     pub controller: PlayerId,
@@ -170,6 +173,7 @@ impl Permanent {
 
     pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
         Self {
+            transforms: 0,
             id,
             card: card_id,
             controller: card.owner,

@@ -191,6 +191,7 @@ fn lightning_bolt() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()

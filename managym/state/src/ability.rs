@@ -773,12 +773,12 @@ pub enum Effect {
     /// that player shuffles." The name is a resolution choice among the
     /// world's card names (one mode each, `ExileNamed`).
     NameAndExileFromTargetPlayer { count: usize },
-    /// The named choice of `NameAndExileFromTargetPlayer`: exile up to
-    /// `count` cards named `name`, from graveyard, then hand, then library.
+    /// Privately search the target player's graveyard, hand and library,
+    /// choosing zero through `count` cards named `name` to exile; then shuffle.
     ExileNamed { name: String, count: usize },
-    /// "You may pay {X}. When you do, [if_paid]" with X the total mana value
-    /// of the frame's chosen targets: paying it runs `if_paid` on them.
-    PayTargetsManaValue { if_paid: Vec<Effect> },
+    /// Choose X and optionally pay that much generic mana during resolution.
+    /// The paid branch reads X from the frame; `WhenYouDo` retains it.
+    OptionalManaPaymentX { if_paid: Vec<Effect> },
     /// "You may exile it": the card the triggering creature became in its
     /// graveyard, exiled with this ability's source (CR 607.2a).
     MayExileTriggeringWithSource,
@@ -1066,7 +1066,7 @@ pub enum DelayedEvent {
     CreatureDiesThisTurn,
     /// "At the beginning of the next end step", about the token the
     /// resolution created last ("sacrifice that token").
-    NextEndStepForCreatedToken,
+    NextEndStepForCreatedToken { your_turn: bool },
     /// "When you next cast a [predicate] spell this turn"; that spell is
     /// the delayed ability's context.
     YouNextCastThisTurn(CardPredicate),
@@ -1175,6 +1175,9 @@ pub struct TargetRequirement {
     /// `min` 0, or "X targets", exactly X, with any other `min`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub max_x: bool,
+    /// The targets in this clause have total mana value at most X.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub total_mana_value_x: bool,
 }
 
 impl TargetRequirement {
@@ -1190,6 +1193,7 @@ impl TargetRequirement {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }
     }
 
@@ -1445,7 +1449,7 @@ impl Effect {
             | Effect::HaveAbilitiesOf { .. }
             | Effect::NameAndExileFromTargetPlayer { .. }
             | Effect::ExileNamed { .. }
-            | Effect::PayTargetsManaValue { .. }
+            | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
             | Effect::ReturnMilledThisWay { .. }

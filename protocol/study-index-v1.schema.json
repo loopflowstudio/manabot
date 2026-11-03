@@ -1428,6 +1428,11 @@
         "toughness": {
           "$ref": "#/$defs/RequiredNullable5"
         },
+        "transforms": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "types": {
           "anyOf": [
             {

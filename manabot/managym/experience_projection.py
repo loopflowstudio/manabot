@@ -134,6 +134,7 @@ def _serialize_permanent(
         **{
             field: int(getattr(permanent, field))
             for field in (
+                "transforms",
                 "exhausted_abilities",
                 "once_each_turn_used",
                 "granted_firebending",
@@ -353,6 +354,16 @@ def serialize_observation(
         ),
     }
 
+    # Native visibility already authorizes these cards. Carry them through the
+    # existing chooser-inspection surface; opponent.hand remains redacted in
+    # portable replay/Study projections. Ownership and original zone stay intact.
+    inspected = [
+        _serialize_card(card)
+        for card in obs.opponent_cards
+        if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
+    ]
+    if inspected:
+        data["agent"].setdefault("inspected", []).extend(inspected)
     data["agent"]["sideboard"] = [
         {
             "candidate_id": int(card.candidate_id),

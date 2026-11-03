@@ -643,6 +643,7 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    transforms: int
     id: int
     registry_key: int
     controller_id: int
@@ -775,6 +776,9 @@ class ClauseTarget:
     clause: int
 
 class ContinuationFrame:
+    inherited_from: VisibleReference | None
+    attackers: str | None
+    source_transforms: int
     kind: int
     decision: int
     parent: int | None

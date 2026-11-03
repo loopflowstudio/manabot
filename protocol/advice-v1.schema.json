@@ -2750,6 +2750,13 @@
           ],
           "title": "Toughness"
         },
+        "transforms": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Transforms",
+          "type": "integer"
+        },
         "types": {
           "anyOf": [
             {

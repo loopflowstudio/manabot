@@ -13903,7 +13903,7 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     let ogre_mode = default_content_pack()
         .definition_entries()
         .filter(|(id, d)| {
-            !d.is_token && !d.key.is_empty() && default_content_pack().front_face(*id).is_none()
+            !d.is_token && (!d.key.is_empty() || default_content_pack().front_face(*id).is_some())
         })
         .map(|(_, d)| d.name.clone())
         .collect::<std::collections::BTreeSet<_>>()
@@ -13911,6 +13911,9 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
         .position(|name| name == "Gray Ogre")
         .unwrap();
     choose_mode(&mut s, ogre_mode);
+    for _ in 0..4 {
+        choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    }
     settle(&mut s);
     let exiled = |s: &Scenario| {
         s.game()
@@ -13928,12 +13931,18 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     let sozin = s.game().state.card_to_permanent[card].unwrap();
     assert_eq!(s.game().state.cards[card].name, "Fire Lord Sozin");
     clear_summoning_sickness(&mut s, sozin);
+    force_lands(&mut s, 0, "Forest", 4);
+    force_lands(&mut s, 0, "Island", 4);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     attack_with(&mut s, sozin);
     s.advance_until(
-        |sc| sc.action_space().kind == ActionSpaceKind::ChooseTarget,
-        "the combat damage trigger asks for targets".into(),
+        |sc| sc.action_space().kind == ActionSpaceKind::Modal,
+        "the combat damage trigger offers X before any targets".into(),
     );
+    s.set_player_mana_pool(0, "6");
+    choose_mode(&mut s, 6);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let object = s.game().current_object_ref(theirs_card).unwrap();
     assert!(
         !offered_targets(&s).contains(&Target::GraveyardCard(
@@ -13945,12 +13954,12 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     if s.action_space().kind == ActionSpaceKind::ChooseTarget {
         choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     }
-    s.set_player_mana_pool(0, "6");
-    s.pass_priority();
-    s.pass_priority();
-    if s.action_space().kind == ActionSpaceKind::PayOrNot {
-        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    }
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::Priority,
+        "reflexive trigger has its own response window"
+    );
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Graveyard));
     settle(&mut s);
     assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Battlefield));
     let wurm = s.game().state.card_to_permanent[theirs_card].unwrap();
@@ -14249,4 +14258,315 @@ fn foggy_swamp_visions_targets_exactly_x() {
         !has_action(&s, |a| matches!(a, Action::Decline { .. })),
         "one target is not X = 2"
     );
+}
+
+/// Reach Sozin's untargeted combat-hit trigger's resolution, with eight
+/// untapped lands available for X. Graveyard fixtures are planted afterward.
+fn sozin_payment_setup() -> Scenario {
+    let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Craw Wurm"]);
+    let sozin = transformed_saga(&mut s, "The Rise of Sozin");
+    clear_summoning_sickness(&mut s, sozin);
+    force_lands(&mut s, 0, "Forest", 4);
+    force_lands(&mut s, 0, "Island", 4);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, sozin);
+    s.advance_until(
+        |sc| sc.action_space().kind == ActionSpaceKind::Modal,
+        "Sozin offers optional X".into(),
+    );
+    assert!(
+        s.game().state.stack_objects.is_empty(),
+        "original trigger is resolving"
+    );
+    assert!(s
+        .game()
+        .state
+        .suspended_decision
+        .as_ref()
+        .unwrap()
+        .frame
+        .targets
+        .is_empty());
+    s
+}
+
+#[test]
+fn fire_lord_sozin_payment_precedes_targets_and_caps_their_total() {
+    for reverse in [false, true] {
+        let mut s = sozin_payment_setup();
+        let a = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+        let b = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+        let expensive = plant_in_graveyard(&mut s, 1, "Craw Wurm");
+        let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+        let land = plant_in_graveyard(&mut s, 1, "Forest");
+        let target =
+            |s: &Scenario, card| Target::GraveyardCard(s.game().current_object_ref(card).unwrap());
+        choose_mode(&mut s, 6);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+        assert!(offered_targets(&s).contains(&target(&s, expensive)));
+        assert!(!offered_targets(&s).contains(&target(&s, mine)));
+        assert!(!offered_targets(&s).contains(&target(&s, land)));
+        let (first, second) = if reverse { (b, a) } else { (a, b) };
+        assert!(s.choose_target(target(&s, first)));
+        assert!(
+            !offered_targets(&s).contains(&target(&s, expensive)),
+            "3+6 exceeds paid 6"
+        );
+        assert!(
+            !offered_targets(&s).contains(&target(&s, first)),
+            "distinct targets"
+        );
+        assert!(s.choose_target(target(&s, second)));
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+        assert_eq!(
+            s.game().state.stack_objects.len(),
+            1,
+            "separate reflexive trigger"
+        );
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        assert_eq!(observation.continuation[0].x, 6, "paid X stays observable");
+        // A target leaves during the response window. Only the remaining
+        // legal target returns; payment is not refunded or recomputed.
+        s.game_mut().move_card(first, ZoneType::Exile);
+        settle(&mut s);
+        assert_eq!(zone_of(&s, first), Some(ZoneType::Exile));
+        assert_eq!(zone_of(&s, second), Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, expensive), Some(ZoneType::Graveyard));
+    }
+}
+
+#[test]
+fn fire_lord_sozin_declining_and_zero_payment_are_distinct() {
+    let mut s = sozin_payment_setup();
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert!(
+        s.game().state.stack_objects.is_empty(),
+        "declining creates no reflexive trigger"
+    );
+    let mut s = sozin_payment_setup();
+    let nonzero = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    choose_mode(&mut s, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(
+        s.game().state.stack_objects.len(),
+        1,
+        "paying zero still triggers, with zero targets"
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, nonzero), Some(ZoneType::Graveyard));
+}
+
+fn sozin_name(s: &mut Scenario, name: &str) {
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    managym::agent::observation_encoder::encode(&observation, &Default::default())
+        .expect("all names fit the fresh policy input");
+    let index = observation
+        .action_space
+        .actions
+        .iter()
+        .position(|a| a.description.as_deref() == Some(&format!("Name {name}")))
+        .expect("unrestricted card name");
+    s.step_action(index);
+}
+
+#[test]
+fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
+    for count in 0..=4 {
+        let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Craw Wurm"]);
+        enter_saga(&mut s, "The Rise of Sozin");
+        next_main_phase(&mut s);
+        target_opponent(&mut s);
+        pass_until(&mut s, ActionSpaceKind::Modal);
+        let grave = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+        let hand = move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+        let other = move_from_library(&mut s, 1, "Craw Wurm", ZoneType::Hand);
+        let remaining: Vec<_> = library(&s, 1)
+            .iter()
+            .copied()
+            .filter(|c| s.game().state.cards[*c].name == "Gray Ogre")
+            .collect();
+        let choices = [remaining[0], grave, hand, remaining[1]];
+        sozin_name(&mut s, "Gray Ogre");
+        s.game()
+            .semantic_observation(PlayerId(0))
+            .expect("search permission admits a viewer-safe semantic observation");
+        let nonacting = Observation::for_player(s.game(), PlayerId(1));
+        assert!(
+            !nonacting
+                .agent_cards
+                .iter()
+                .any(|c| c.zone == ZoneType::Library),
+            "search does not reveal the owner's library to its owner"
+        );
+        let seen = Observation::for_player(s.game(), PlayerId(0));
+        assert!(
+            seen.opponent_cards
+                .iter()
+                .any(|c| c.id == s.game().state.cards[other].id.0 as i32),
+            "searcher sees searched hand, even nonmatches"
+        );
+        assert!(!offered_cards(&s).contains(&other));
+        assert_eq!(offered_cards(&s).len(), 4);
+        let mut fork = s.game().clone();
+        fork.determinize(PlayerId(0), 19);
+        assert_eq!(
+            fork.state.zones.zone_of(hand),
+            Some(ZoneType::Hand),
+            "visible searched hand stays fixed in search"
+        );
+        let constraints =
+            managym::possible_worlds::HiddenHandConstraints::for_viewer(s.game(), PlayerId(0));
+        let materialized = constraints
+            .materialize_hand(s.game(), &constraints.known_hand, 21)
+            .expect("visible searched cards remain exact in possible worlds");
+        assert_eq!(
+            materialized
+                .state
+                .zones
+                .zone_cards(ZoneType::Library, PlayerId(1)),
+            &library(&s, 1)
+        );
+        for &card in choices.iter().take(count) {
+            select_card(&mut s, card);
+        }
+        if count < 4 {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut s);
+        for (index, &card) in choices.iter().enumerate() {
+            assert_eq!(zone_of(&s, card) == Some(ZoneType::Exile), index < count);
+        }
+        let after = Observation::for_player(s.game(), PlayerId(0));
+        assert_eq!(
+            after
+                .opponent
+                .known_hand
+                .get(&s.game().state.cards[other].definition_id.0),
+            Some(&1),
+            "inspected hand knowledge survives the search"
+        );
+        assert!(
+            !after
+                .opponent_cards
+                .iter()
+                .any(|c| c.id == s.game().state.cards[other].id.0 as i32),
+            "search visibility ends with resolution"
+        );
+    }
+}
+
+#[test]
+fn the_rise_of_sozin_may_name_a_back_face_with_no_matches() {
+    let mut s = five_color_setup(&["The Rise of Sozin"]);
+    enter_saga(&mut s, "The Rise of Sozin");
+    next_main_phase(&mut s);
+    target_opponent(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    sozin_name(&mut s, "Fire Lord Sozin");
+    assert!(offered_cards(&s).is_empty());
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert!(s.game().state.suspended_decision.is_none());
+}
+
+#[test]
+fn aang_swift_savior_does_not_transform_again_after_an_intervening_round_trip() {
+    let mut s = five_color_setup(&["Aang, Swift Savior"]);
+    let aang = s.force_permanent_on_battlefield(0, "Aang, Swift Savior");
+    let card = card_of(&s, aang);
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, aang, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    s.game_mut().transform_permanent(aang);
+    s.game_mut().transform_permanent(aang);
+    assert_eq!(s.game().state.cards[card].name, "Aang, Swift Savior");
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.cards[card].name,
+        "Aang, Swift Savior",
+        "same face does not mean unchanged since activation"
+    );
+    assert_eq!(
+        Observation::for_player(s.game(), PlayerId(0))
+            .agent_permanents
+            .iter()
+            .find(|p| p.id == permanent(&s, aang).id.0 as i32)
+            .unwrap()
+            .transforms,
+        2
+    );
+}
+
+fn koh_inherits(s: &mut Scenario, name: &str) -> PermanentId {
+    let victim = s.force_permanent_on_battlefield(1, name);
+    let card = cast(s, "Koh, the Face Stealer");
+    resolve_top(s);
+    assert!(s.choose_target(Target::Permanent(victim)));
+    settle(s);
+    let koh = s.game().state.card_to_permanent[card].unwrap();
+    activate(s, koh, 0);
+    settle_until_modal(s);
+    choose_mode(s, 0);
+    settle(s);
+    koh
+}
+
+#[test]
+fn koh_inherited_activation_survives_departure() {
+    let mut s = five_color_setup(&["Koh, the Face Stealer", "Spectral Sailor"]);
+    let koh = koh_inherits(&mut s, "Spectral Sailor");
+    s.set_player_mana_pool(0, "3U");
+    activate(&mut s, koh, 1);
+    let card = card_of(&s, koh);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.game_mut().move_card(card, ZoneType::Exile);
+    settle(&mut s);
+    assert_eq!(
+        s.zone_size(0, ZoneType::Hand),
+        hand + 1,
+        "the inherited ability exists independently of Koh"
+    );
+}
+
+#[test]
+fn koh_inherited_death_trigger_uses_last_known_abilities() {
+    let mut s = five_color_setup(&["Koh, the Face Stealer", "Eyetwitch"]);
+    let koh = koh_inherits(&mut s, "Eyetwitch");
+    let card = card_of(&s, koh);
+    s.game_mut().move_card(card, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Learn);
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::Learn,
+        "Koh had Eyetwitch's death trigger immediately before dying"
+    );
+}
+
+#[test]
+fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
+    let mut s = five_color_setup(&["Foggy Swamp Visions", "Gray Ogre"]);
+    let grave = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    cast(&mut s, "Foggy Swamp Visions");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::GraveyardCard(
+        s.game().current_object_ref(grave).unwrap()
+    )));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    let token = s.battlefield_permanents_named(0, "Gray Ogre")[0];
+    // Controlled turn clock: the next end step belongs to the opponent.
+    // The created delayed instruction must retain the caster's own-turn condition.
+    s.game_mut().state.turn.active_player = PlayerId(1);
+    s.advance_to_active_step(1, StepKind::End);
+    settle(&mut s);
+    assert!(s.game().state.permanents[token].is_some());
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert!(s.game().state.permanents[token].is_none());
 }

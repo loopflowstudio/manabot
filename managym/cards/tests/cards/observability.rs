@@ -132,8 +132,9 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
     let Permanent {
+        transforms: _,
         id: _,
         card: _,
         controller: _,
@@ -155,6 +156,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
         ("id", Seen::Identity),
         ("card", Seen::Permanent(24)),
         ("controller", Seen::Permanent(0)),
+        ("transforms", Seen::Via("Transforms fact rows")),
         ("tapped", Seen::Permanent(1)),
         ("summoning_sick", Seen::Permanent(3)),
         ("damage", Seen::Permanent(2)),
@@ -528,7 +530,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
         Effect::NameAndExileFromTargetPlayer { .. } => "Effect::NameAndExileFromTargetPlayer",
         Effect::ExileNamed { .. } => "Effect::ExileNamed",
-        Effect::PayTargetsManaValue { .. } => "Effect::PayTargetsManaValue",
+        Effect::OptionalManaPaymentX { .. } => "Effect::OptionalManaPaymentX",
         Effect::MayExileTriggeringWithSource => "Effect::MayExileTriggeringWithSource",
         Effect::ChooseExiledWithSource { .. } => "Effect::ChooseExiledWithSource",
         Effect::HaveAbilitiesOf { .. } => "Effect::HaveAbilitiesOf",
@@ -843,7 +845,7 @@ fn effect_witnesses() -> Vec<Effect> {
             name: "Gray Ogre".into(),
             count: 4,
         },
-        Effect::PayTargetsManaValue {
+        Effect::OptionalManaPaymentX {
             if_paid: vec![Effect::discard()],
         },
         Effect::MayExileTriggeringWithSource,
@@ -2370,6 +2372,8 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::Effect => "ContinuousEffectData.modification",
         FactKind::Copy => "PermanentData.copy",
         FactKind::CopyException => "CopyData.exceptions",
+        FactKind::Transforms => "PermanentData.transforms",
+        FactKind::CombatRestriction => "ContinuationFrame.attackers",
     }
 }
 
@@ -2516,6 +2520,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        transforms => [Fact(FactKind::Transforms)],
         id => [Identity],
         registry_key => [Join(Permanent, 24)],
         controller_id => [column(Permanent, 0), Side],
@@ -2595,6 +2600,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
+        attackers => [Fact(FactKind::CombatRestriction)],
+        source_transforms => [Rows("Transforms fact rows, id = frame index + 1")],
         kind => [column(Relation, 3)],
         decision => [column(Relation, 28)],
         parent => [column(Relation, 2)],
@@ -3384,7 +3392,9 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
             or_exiled: true, ..
         } => (2, true),
         DelayedTriggerEvent::CreatureDies => (3, false),
-        DelayedTriggerEvent::NextEndStep { context } => (4, context.is_some()),
+        DelayedTriggerEvent::NextEndStep { context, your_turn } => {
+            (if *your_turn { 7 } else { 4 }, context.is_some())
+        }
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
         DelayedTriggerEvent::NextUpkeep => (6, false),
     }
@@ -3406,7 +3416,14 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
             or_exiled: true,
         },
         DelayedTriggerEvent::CreatureDies,
-        DelayedTriggerEvent::NextEndStep { context: None },
+        DelayedTriggerEvent::NextEndStep {
+            context: None,
+            your_turn: false,
+        },
+        DelayedTriggerEvent::NextEndStep {
+            context: None,
+            your_turn: true,
+        },
         DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
         DelayedTriggerEvent::NextUpkeep,
     ];
@@ -4016,4 +4033,38 @@ fn a_later_record_has_a_later_order_than_an_earlier_one() {
             .keywords
             .flying
     );
+}
+
+#[test]
+fn transforms_and_scheduled_combat_restrictions_reach_policy_facts() {
+    let mut s = five_color_setup(&["Aang, Swift Savior"]);
+    let aang = s.force_permanent_on_battlefield(0, "Aang, Swift Savior");
+    let baseline = encoded(&s, 0, 5);
+    s.game_mut().transform_permanent(aang);
+    s.game_mut().transform_permanent(aang);
+    let flipped = encoded(&s, 0, 5);
+    assert_ne!(baseline.facts, flipped.facts, "a round trip is visible");
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat {
+            attackers: Some(CardPredicate::creature()),
+        });
+    let scheduled = encoded(&s, 0, 5);
+    assert_ne!(flipped.facts, scheduled.facts);
+    assert_ne!(flipped.relations, scheduled.relations);
+    let before = Observation::for_player(s.game(), PlayerId(0));
+    s.game_mut().state.turn.extra_turns = vec![PlayerId(0), PlayerId(1)];
+    let order = encoded(&s, 0, 5).relations;
+    s.game_mut().state.turn.extra_turns.reverse();
+    assert_ne!(
+        order,
+        encoded(&s, 0, 5).relations,
+        "same turn counts, different order"
+    );
+    assert!(before
+        .continuation
+        .iter()
+        .any(|f| f.kind == 12 && f.attackers.is_some()));
 }

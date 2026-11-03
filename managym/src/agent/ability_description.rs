@@ -284,7 +284,7 @@ fn card_type(t: CardType) -> &'static str {
     }
 }
 
-fn predicate_description(p: &CardPredicate, noun: &str) -> String {
+pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
         flying,
@@ -761,7 +761,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         HaveAbilitiesOf { .. } => "This has all activated and triggered abilities of the chosen card".into(),
         NameAndExileFromTargetPlayer { count } => format!("Choose a card name. Search target opponent's graveyard, hand, and library for up to {count} cards with that name and exile them. Then that player shuffles"),
         ExileNamed { name, count } => format!("Exile up to {count} cards named {name} from that player's graveyard, hand, and library, then they shuffle"),
-        PayTargetsManaValue { if_paid } => format!("You may pay X, the total mana value of the targets. If you do, {}", effects_description(if_paid)),
+        OptionalManaPaymentX { if_paid } => format!("Choose X. You may pay {{X}}. If you do, {}", effects_description(if_paid)),
         EachPlayerChoosesToExile { predicate } => format!(
             "Starting with you, each player chooses up to one {} from among permanents your opponents control. Exile those permanents",
             predicate_description(predicate, "permanent")
@@ -776,8 +776,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
             match event {
                 DelayedEvent::TargetDiesThisTurn => "When that creature dies this turn".into(),
                 DelayedEvent::CreatureDiesThisTurn => "Whenever a creature dies this turn".into(),
-                DelayedEvent::NextEndStepForCreatedToken =>
+                DelayedEvent::NextEndStepForCreatedToken { your_turn: false } =>
                     "At the beginning of the next end step".into(),
+                DelayedEvent::NextEndStepForCreatedToken { your_turn: true } => "At the beginning of your next end step".into(),
                 DelayedEvent::NextUpkeep => "At the beginning of the next upkeep".into(),
                 DelayedEvent::YouNextCastThisTurn(predicate) => format!(
                     "When you next cast a {} this turn",

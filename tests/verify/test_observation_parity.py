@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -562,3 +564,111 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         watched = relations[waiting & (relations[:, 0] == 3)][0]
         assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
         assert watched[24] > 0
+
+
+@pytest.mark.parametrize("version", [4, 5])
+def test_t6_transform_parity_and_schedule_relation_versions(
+    version: int,
+) -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    obs = env.scenario_refresh()
+    mine = obs.agent_permanents[-1]
+    mine.transforms = 2
+    obs.agent_permanents = [*obs.agent_permanents[:-1], mine]
+    reference = {"object": mine.id, "definition": mine.registry_key, "player": None}
+    empty = {"object": None, "definition": None, "player": None}
+    frame: dict[str, object] = {
+        "kind": 2,
+        "decision": 0,
+        "parent": None,
+        "controller": obs.agent.player_index,
+        "source": reference,
+        "mode": None,
+        "ability": 1,
+        "kicked": False,
+        "active_clause": None,
+        "targets": [],
+        "context": None,
+        "sacrifice": None,
+        "cost": None,
+        "hybrid": [],
+        "lesson": False,
+        "waterbend": False,
+        "can_decline": False,
+        "mana_outputs": [],
+        "resolutions_this_turn": 0,
+    }
+    frames = [
+        frame | {"source_transforms": 1, "inherited_from": reference},
+        frame | {"kind": 3, "x": 6},
+        frame | {"kind": 6, "decision": 24, "can_decline": True},
+        frame | {"kind": 6, "decision": 25, "mode": 3, "can_decline": True},
+        frame | {"kind": 10, "decision": 7},
+        frame | {"kind": 11, "source": empty, "mode": 0},
+        frame | {"kind": 12, "source": empty, "mode": 1, "attackers": "land creatures"},
+    ]
+    frames = managym.parse_continuation_frames_json(json.dumps(frames))
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+    expected = encoder.encode(obs)
+    actual = env.encode_observation(obs, version)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    # Retained frames are read-only: the native environment remains the
+    # execution authority, and offline relation encoding consumes the capture.
+    relations = encoder._encode_relations(frames, obs.agent.player_index)
+    if version == 5:
+        assert (relations[:, 0] == 7).any(), (
+            "inherited definition joins learning tokens"
+        )
+        assert (relations[:, 3] == 12).any(), "pending combat is visible"
+        assert (relations[:, RELATION_X_INDEX] == 6).any(), "paid X is retained"
+        for kind in (9,):
+            rows = actual["facts"][actual["facts"][:, FACT_KIND_INDEX] == kind]
+            assert len(rows) and (rows[:, FACT_OBJECT_INDEX] > 0).all()
+    else:
+        assert not (relations[:, 0] == 7).any()
+        assert not (relations[:, 3] >= 10).any(), "frozen v4 omits v5 scheduling"
+
+
+def test_saved_action_capacity_retains_its_historical_default() -> None:
+    assert ObservationConfig().max_actions >= managym.CARD_DEFINITION_COUNT
+    assert ObservationConfig.from_checkpoint({}).max_actions == 64
+    assert ObservationConfig.from_checkpoint({"max_actions": 128}).max_actions == 128
+
+
+def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> None:
+    env = priority_root((), ("Bumi, Unleashed", "Swamp"), opponent=("Swamp",))
+    obs = env.scenario_refresh()
+    for _ in range(100):
+        if any(frame.kind == 12 for frame in obs.continuation):
+            break
+        actions = obs.action_space.actions
+        attack = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == ActionEnum.DECLARE_ATTACKER and action.declared
+            ),
+            None,
+        )
+        quiet = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == ActionEnum.PRIORITY_PASS_PRIORITY
+            ),
+            0,
+        )
+        obs, *_ = env.step(attack if attack is not None else quiet)
+    else:
+        raise AssertionError("Bumi's additional combat was not scheduled")
+    expected = ObservationEncoder(ObservationConfig()).encode(obs)
+    actual = env.encode_observation(obs)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    facts = actual["facts"]
+    restriction = facts[facts[:, FACT_KIND_INDEX] == 10]
+    assert len(restriction) == 1 and restriction[0, FACT_OBJECT_INDEX] > 0
+    assert "land" in next(
+        frame.attackers for frame in obs.continuation if frame.kind == 12
+    )

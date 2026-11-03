@@ -91,6 +91,8 @@ fn stack(
                 ..Default::default()
             }];
             StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+                source_transforms: 0,
+                inherited_from: None,
                 id,
                 controller,
                 source_definition_id,
@@ -104,6 +106,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            source_transforms: 0,
             id,
             controller,
             source_card,
@@ -660,6 +663,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_card = game.state.permanents[source].as_ref().unwrap().card;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        source_transforms: 0,
         id,
         controller: PlayerId(0),
         source_card,

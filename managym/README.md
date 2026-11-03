@@ -137,7 +137,7 @@ Prefer explicit types and focused modules. Keep game behavior in enums +
 Bounded observation encoders reserve card rows after the owner's visible cards
 for outside candidates. Their seven zone bits stay zero and the explicit outside
 bit is set; action focus uses the same padded object table as the model. The
-current default has 64 action rows. Card, permanent, action and focus capacity
+current default has 512 action rows. Card, permanent, action and focus capacity
 excesses raise encoding errors; they must not be treated as a random-policy
 fallback. Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
@@ -178,6 +178,11 @@ legendary status in observations; canonical hashing includes their copied data.
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/rules/optional-payments.md)
 covers both ordinary mana and waterbend without a card-specific decision.
+`OptionalManaPaymentX` first chooses an affordable X, then uses the same payment
+progress. Its `WhenYouDo` branch creates a distinct occurrence retaining X;
+`TargetRequirement.total_mana_value_x` bounds the whole chosen clause, including
+retargeting. Named searches retain native permission to inspect the searched
+zones only during the instruction; semantic capture uses that permission too.
 
 Mana offers, waterbend affordability and automatic production use executable
 witnesses from `flow/mana.rs`. A mana source is reserved while its printed

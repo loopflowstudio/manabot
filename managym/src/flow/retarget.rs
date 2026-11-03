@@ -44,9 +44,7 @@ impl Game {
                     Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
                         .attached_grants()
                         .nth(grant.index)?,
-                    None => self.state.cards[ability.source_card]
-                        .activated_abilities
-                        .get(ability.ability_index)?,
+                    None => self.own_activated_ability(ability)?,
                 };
                 definition.target_requirement()
             }
@@ -93,6 +91,11 @@ impl Game {
             StackObject::TriggeredAbility(triggered) => triggered.target_req_indices.clone(),
             StackObject::ActivatedAbility(_) => vec![0; targets.len()],
         };
+        let x = match stacked {
+            StackObject::Spell(s) => s.x,
+            StackObject::ActivatedAbility(a) => a.x,
+            StackObject::TriggeredAbility(t) => t.x,
+        };
         let current = targets.get(*slot).copied();
         let source = stacked.source_ref();
         let source_card = stacked.source_card();
@@ -100,6 +103,19 @@ impl Game {
         self.legal_targets_for_spec(&requirement.spec, controller)
             .into_iter()
             .filter(|target| Some(*target) != current && *target != self_target)
+            .filter(|target| {
+                self.within_target_mana_budget(
+                    &requirement,
+                    x,
+                    targets
+                        .iter()
+                        .zip(&indices)
+                        .enumerate()
+                        .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
+                        .map(|(_, (target, _))| *target),
+                    *target,
+                )
+            })
             .filter(|target| {
                 !targets
                     .iter()

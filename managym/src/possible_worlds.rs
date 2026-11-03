@@ -415,8 +415,19 @@ impl HiddenHandConstraints {
             .semantic_observation(viewer)
             .expect("valid viewer has a semantic observation")
             .identity;
-        let (known, _) = game.hidden_hand_partition(opponent);
-        let known_hand = name_counts(game, known);
+        let known_hand = if game.searches_private_zones(viewer, opponent) {
+            name_counts(
+                game,
+                game.state
+                    .zones
+                    .zone_cards(ZoneType::Hand, opponent)
+                    .iter()
+                    .copied(),
+            )
+        } else {
+            let (known, _) = game.hidden_hand_partition(opponent);
+            name_counts(game, known)
+        };
         Self {
             viewer,
             opponent,
@@ -507,45 +518,49 @@ impl HiddenHandConstraints {
         let mut branch = source.clone();
         let opponent = self.opponent;
 
-        // Group the opponent's unseen CardIds by name, sorted ascending so
-        // the lowest CardIds of each name go to the hand deterministically.
-        let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
-        for card in branch.unseen_cards(opponent, self.viewer) {
-            by_name
-                .entry(branch.state.cards[card].name.clone())
-                .or_default()
-                .push(card);
-        }
-        for cards in by_name.values_mut() {
-            cards.sort_unstable_by_key(|c| c.0);
-        }
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        // An active search exposes exact cards and their zones. Preserve
+        // those physical witnesses, not merely the hand's name multiset.
+        if !source.searches_private_zones(self.viewer, opponent) {
+            // Group the opponent's unseen CardIds by name, sorted ascending so
+            // the lowest CardIds of each name go to the hand deterministically.
+            let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
+            for card in branch.unseen_cards(opponent, self.viewer) {
+                by_name
+                    .entry(branch.state.cards[card].name.clone())
+                    .or_default()
+                    .push(card);
+            }
+            for cards in by_name.values_mut() {
+                cards.sort_unstable_by_key(|c| c.0);
+            }
 
-        let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
-        let mut new_library: Vec<CardId> = Vec::new();
-        for (name, cards) in &by_name {
-            let k = world.hand.get(name).copied().unwrap_or(0) as usize;
-            if k > cards.len() {
+            let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
+            let mut new_library: Vec<CardId> = Vec::new();
+            for (name, cards) in &by_name {
+                let k = world.hand.get(name).copied().unwrap_or(0) as usize;
+                if k > cards.len() {
+                    return Err(MaterializeError::InconsistentWorld);
+                }
+                new_hand.extend_from_slice(&cards[..k]);
+                new_library.extend_from_slice(&cards[k..]);
+            }
+            if new_hand.len() as u32 != self.hand_size {
                 return Err(MaterializeError::InconsistentWorld);
             }
-            new_hand.extend_from_slice(&cards[..k]);
-            new_library.extend_from_slice(&cards[k..]);
-        }
-        if new_hand.len() as u32 != self.hand_size {
-            return Err(MaterializeError::InconsistentWorld);
-        }
 
-        new_hand.sort_unstable_by_key(|c| c.0);
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        new_library.shuffle(&mut rng);
+            new_hand.sort_unstable_by_key(|c| c.0);
+            new_library.shuffle(&mut rng);
 
-        if !branch.fill_foretold_slots(opponent, &mut new_library) {
-            return Err(MaterializeError::InconsistentWorld);
+            if !branch.fill_foretold_slots(opponent, &mut new_library) {
+                return Err(MaterializeError::InconsistentWorld);
+            }
+
+            branch
+                .state
+                .zones
+                .reassign_hidden(opponent, new_hand, new_library);
         }
-
-        branch
-            .state
-            .zones
-            .reassign_hidden(opponent, new_hand, new_library);
         branch
             .state
             .zones

@@ -261,3 +261,36 @@ fn canonical_hash_source_has_no_compatibility_or_formatting_dispatch() {
     assert!(source.contains("let GameState {"));
     assert!(!source.contains(".. } = state"));
 }
+
+#[test]
+fn pending_turn_and_combat_schedules_are_part_of_match_identity() {
+    let baseline = make_game(17);
+    let hash = baseline.state.deterministic_hash();
+    let mut first = baseline.clone();
+    first.state.turn.extra_turns = vec![PlayerId(0), PlayerId(1)];
+    assert_ne!(first.state.deterministic_hash(), hash);
+    let mut reordered = first.clone();
+    reordered.state.turn.extra_turns.reverse();
+    assert_ne!(
+        first.state.deterministic_hash(),
+        reordered.state.deterministic_hash()
+    );
+    let mut resumed = first.clone();
+    resumed.state.turn.resume_with = Some(PlayerId(1));
+    assert_ne!(
+        resumed.state.deterministic_hash(),
+        first.state.deterministic_hash()
+    );
+    let mut combat = baseline.clone();
+    combat
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat { attackers: None });
+    assert_ne!(combat.state.deterministic_hash(), hash);
+    combat.state.turn.additional_combats[0].attackers =
+        Some(managym::state::predicate::CardPredicate::creature());
+    let restricted = combat.state.deterministic_hash();
+    combat.state.turn.combat_attackers = Some(managym::state::predicate::CardPredicate::creature());
+    assert_ne!(combat.state.deterministic_hash(), restricted);
+}

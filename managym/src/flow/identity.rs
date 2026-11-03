@@ -76,6 +76,8 @@ impl Game {
         let definition = &self.state.cards[card];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            transforms: permanent.transforms,
+            inherited_from: self.inherited_definition_id(permanent_id),
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,

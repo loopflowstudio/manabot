@@ -435,6 +435,7 @@ fn aang_s_iceberg() -> CardDefinition {
                     max: 1,
                     another: true,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::exile_linked(
                     ObjectSelector::Target(TargetSpec::Permanent {
@@ -610,6 +611,7 @@ fn aang_the_last_airbender() -> CardDefinition {
                         max: 1,
                         another: true,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::Airbend {
                         what: ObjectSelector::Target(TargetSpec::Permanent {
@@ -961,6 +963,7 @@ fn allies_at_last() -> CardDefinition {
                 max: 2,
                 another: false,
                 max_x: false,
+                total_mana_value_x: false,
             },
             TargetRequirement {
                 shares_creature_type: false,
@@ -969,6 +972,7 @@ fn allies_at_last() -> CardDefinition {
                 max: 1,
                 another: false,
                 max_x: false,
+                total_mana_value_x: false,
             },
         ],
         statics: vec![StaticAbility::CostsLessPerPermanent(CardPredicate {
@@ -1078,6 +1082,7 @@ fn appa_steadfast_guardian() -> CardDefinition {
                         max: TargetRequirement::ANY_NUMBER,
                         another: true,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::Airbend {
@@ -1290,6 +1295,7 @@ fn avatar_s_wrath() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::Airbend {
                     what: ObjectSelector::Each {
@@ -1313,6 +1319,7 @@ fn avatar_s_wrath() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1339,6 +1346,7 @@ fn azula_always_lies() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::until_end_of_turn(
                         ObjectSelector::Target(TargetSpec::Creature),
@@ -1353,6 +1361,7 @@ fn azula_always_lies() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::put_counters(
                         ObjectSelector::Target(TargetSpec::Creature),
@@ -1369,6 +1378,7 @@ fn azula_always_lies() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            total_mana_value_x: false,
                         },
                         effects: vec![Effect::until_end_of_turn(
                             ObjectSelector::Target(TargetSpec::Creature),
@@ -1383,6 +1393,7 @@ fn azula_always_lies() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            total_mana_value_x: false,
                         },
                         effects: vec![Effect::put_counters(
                             ObjectSelector::Target(TargetSpec::Creature),
@@ -2336,6 +2347,7 @@ fn combustion_technique() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2391,6 +2403,7 @@ fn crashing_wave() -> CardDefinition {
             max: 0,
             another: false,
             max_x: true,
+            total_mana_value_x: false,
         }],
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
         text_box: text_box.into(),
@@ -2492,6 +2505,7 @@ fn cunning_maneuver() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2533,6 +2547,7 @@ fn curious_farm_animals() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::destroy(ObjectSelector::Target(
                     TargetSpec::Permanent {
@@ -2606,6 +2621,7 @@ fn dai_li_agents() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            total_mana_value_x: false,
                         },
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
@@ -2620,6 +2636,7 @@ fn dai_li_agents() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            total_mana_value_x: false,
                         },
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
@@ -2976,6 +2993,7 @@ fn earth_kingdom_soldier() -> CardDefinition {
                     max: 2,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::put_counters(
@@ -3385,6 +3403,7 @@ fn enter_the_avatar_state() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3417,6 +3436,7 @@ fn fancy_footwork() -> CardDefinition {
             max: 2,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3661,6 +3681,7 @@ fn fire_nation_engineer() -> CardDefinition {
                     max: 1,
                     another: true,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::put_counters(
                     ObjectSelector::Target(TargetSpec::PermanentYouControl {
@@ -3793,7 +3814,7 @@ fn fire_navy_trebuchet() -> CardDefinition {
                     attach_source: false,
                 },
                 Effect::CreateDelayedTrigger {
-                    event: DelayedEvent::NextEndStepForCreatedToken,
+                    event: DelayedEvent::NextEndStepForCreatedToken { your_turn: false },
                     effects: vec![Effect::Sacrifice {
                         what: ObjectSelector::Triggering,
                         optional: false,
@@ -3913,6 +3934,7 @@ fn firebending_lesson() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
@@ -4192,6 +4214,7 @@ fn foggy_swamp_visions() -> CardDefinition {
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
         targeting: vec![TargetRequirement {
             max_x: true,
+            total_mana_value_x: false,
             ..TargetRequirement::one(creature_card())
         }],
         spell_effects: vec![Effect::ForEachTarget {
@@ -4202,7 +4225,7 @@ fn foggy_swamp_visions() -> CardDefinition {
                     exceptions: vec![],
                 },
                 Effect::CreateDelayedTrigger {
-                    event: DelayedEvent::NextEndStepForCreatedToken,
+                    event: DelayedEvent::NextEndStepForCreatedToken { your_turn: true },
                     effects: vec![Effect::Sacrifice {
                         what: ObjectSelector::Triggering,
                         optional: false,
@@ -4384,6 +4407,7 @@ fn glider_staff() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::Airbend {
                     what: ObjectSelector::Target(TargetSpec::Creature),
@@ -4689,6 +4713,7 @@ fn heartless_act() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::destroy(ObjectSelector::Target(
                         TargetSpec::Permanent {
@@ -4708,6 +4733,7 @@ fn heartless_act() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::RemoveCounters {
                         from: ObjectSelector::Target(TargetSpec::Creature),
@@ -4897,6 +4923,7 @@ fn honest_work() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5020,6 +5047,7 @@ fn invasion_submersible() -> CardDefinition {
                     max: 1,
                     another: true,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::return_to_hand(ObjectSelector::Target(
                     TargetSpec::Permanent {
@@ -5226,6 +5254,7 @@ fn itll_quench_ya() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5375,6 +5404,7 @@ fn jet_freedom_fighter() -> CardDefinition {
                         max: 2,
                         another: false,
                         max_x: false,
+                        total_mana_value_x: false,
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::put_counters(
@@ -6032,6 +6062,7 @@ fn lost_days() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6903,6 +6934,7 @@ fn path_to_redemption() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::Attached,
@@ -6987,6 +7019,7 @@ fn pillar_launch() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -7434,6 +7467,7 @@ fn razor_rings() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -7836,6 +7870,7 @@ fn secret_tunnel() -> CardDefinition {
                     max: 2,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::until_end_of_turn(
@@ -8137,6 +8172,7 @@ fn sokka_s_haiku() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::CounterSpell {
                     what: ObjectSelector::Target(TargetSpec::Spell),
@@ -8162,6 +8198,7 @@ fn sokka_s_haiku() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::untap(ObjectSelector::Target(
                     TargetSpec::Permanent {
@@ -8528,6 +8565,7 @@ fn swampsnare_trap() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         statics: vec![
             StaticAbility::CostsLessIfTargets(TargetCostReduction {
@@ -8877,6 +8915,7 @@ fn the_last_agni_kai() -> CardDefinition {
                 max: 1,
                 another: false,
                 max_x: false,
+                total_mana_value_x: false,
             },
             TargetRequirement {
                 shares_creature_type: false,
@@ -8885,6 +8924,7 @@ fn the_last_agni_kai() -> CardDefinition {
                 max: 1,
                 another: false,
                 max_x: false,
+                total_mana_value_x: false,
             },
         ],
         text_box: text_box.into(),
@@ -9333,18 +9373,21 @@ fn the_rise_of_sozin() -> CardDefinition {
                     condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
                         subject: TriggerSubject::This,
                     },
-                    effects: vec![Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            min: 0,
-                            max: TargetRequirement::ANY_NUMBER,
-                            ..TargetRequirement::one(their_creature_card())
-                        },
-                        effects: vec![Effect::PayTargetsManaValue {
-                            if_paid: vec![Effect::ForEachTarget {
-                                effects: vec![Effect::move_to(
-                                    ObjectSelector::Target(their_creature_card()),
-                                    ZoneType::Battlefield,
-                                )],
+                    effects: vec![Effect::OptionalManaPaymentX {
+                        if_paid: vec![Effect::WhenYouDo {
+                            effects: vec![Effect::TargetClause {
+                                requirement: TargetRequirement {
+                                    min: 0,
+                                    max: TargetRequirement::ANY_NUMBER,
+                                    total_mana_value_x: true,
+                                    ..TargetRequirement::one(their_creature_card())
+                                },
+                                effects: vec![Effect::ForEachTarget {
+                                    effects: vec![Effect::move_to(
+                                        ObjectSelector::Target(their_creature_card()),
+                                        ZoneType::Battlefield,
+                                    )],
+                                }],
                             }],
                         }],
                     }],
@@ -9729,6 +9772,7 @@ fn true_ancestry() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    total_mana_value_x: false,
                 },
                 effects: vec![Effect::return_to_hand(ObjectSelector::Target(
                     TargetSpec::GraveyardCardYouOwn {
@@ -10573,6 +10617,7 @@ fn watery_grasp() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::Attached,
@@ -10738,6 +10783,7 @@ fn yip_yip() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -11023,6 +11069,7 @@ fn zuko_s_conviction() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
         }],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),

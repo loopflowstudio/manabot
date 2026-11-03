@@ -131,12 +131,14 @@ impl Game {
         &self,
         permanent_id: PermanentId,
     ) -> Option<&'static CardDefinition> {
-        let inherited = self
-            .effects_on(permanent_id)
+        default_content_pack().definition(self.inherited_definition_id(permanent_id)?)
+    }
+
+    pub(crate) fn inherited_definition_id(&self, permanent_id: PermanentId) -> Option<CardDefId> {
+        self.effects_on(permanent_id)
             .filter(|effect| effect.modification == Modification::HasAbilitiesOfSource)
             .last()?
-            .source?;
-        default_content_pack().definition(inherited)
+            .source
     }
 
     /// Records affecting a player, in timestamp order.

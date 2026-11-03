@@ -394,6 +394,8 @@ pub struct ContinuousEffectView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub types: Option<LegacyCardTypesView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

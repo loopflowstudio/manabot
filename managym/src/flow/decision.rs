@@ -55,15 +55,15 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherited_from: Option<crate::state::card::CardDefId>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub source_transforms: u32,
     /// The card whose spell or ability is resolving.
     pub source: Option<CardId>,
     /// Exact battlefield source when the effect belongs to an ability of a
     /// permanent. This intentionally does not follow `source` across zones.
     pub source_ref: Option<ObjectRef>,
-    /// The face an ability on the stack came from (CR 701.27f); `None` for
-    /// spells.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_face: Option<crate::state::card::CardDefId>,
     /// The player the effects resolve for ("you").
     pub controller: PlayerId,
     /// For triggered abilities: how many times this ability has resolved
@@ -209,6 +209,20 @@ pub enum ResolutionCastOffer {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    /// Select the generic X of an optional resolution payment, or decline.
+    ChoosePaymentX {
+        player: PlayerId,
+        if_paid: Vec<Effect>,
+    },
+    /// Privately search the owner's graveyard, hand and library for up to
+    /// `remaining` cards of a named identity. Every pick is an exact card;
+    /// stopping or reaching the bound shuffles the searched library.
+    SearchNamed {
+        player: PlayerId,
+        owner: PlayerId,
+        name: String,
+        remaining: usize,
+    },
     Payment(PaymentProgress),
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
@@ -437,7 +451,9 @@ impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::ManaUpfront { player, .. }
+            Decision::ChoosePaymentX { player, .. }
+            | Decision::SearchNamed { player, .. }
+            | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
             | Decision::ChooseObject { player, .. }
             | Decision::KeepCreatures { player, .. }
@@ -468,7 +484,9 @@ impl Decision {
     /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
-            Decision::ManaUpfront { .. }
+            Decision::ChoosePaymentX { .. }
+            | Decision::SearchNamed { .. }
+            | Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
             | Decision::ChooseObject { .. }
@@ -687,6 +705,24 @@ impl Game {
             .collect()
     }
 
+    /// Temporary native permission to inspect another player's hidden zones.
+    /// It ends with the search instruction and never depends on deck disclosure.
+    pub(crate) fn searches_private_zones(&self, viewer: PlayerId, owner: PlayerId) -> bool {
+        self.state.suspended_decision.as_ref().is_some_and(|suspended| matches!(suspended.decision, Decision::SearchNamed { player, owner: searched, .. } if player == viewer && searched == owner))
+    }
+
+    /// Search permission reveals all cards in the searched zones only to
+    /// the chooser; eligibility by name restricts actions, not information.
+    pub(crate) fn named_search_cards(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::SearchNamed { owner, .. } = decision else {
+            return Vec::new();
+        };
+        [ZoneType::Graveyard, ZoneType::Hand, ZoneType::Library]
+            .into_iter()
+            .flat_map(|zone| self.state.zones.zone_cards(zone, *owner).iter().copied())
+            .collect()
+    }
+
     fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
         cards
             .iter()
@@ -699,7 +735,8 @@ impl Game {
             frame: EffectFrame {
                 source: None,
                 source_ref: None,
-                source_face: None,
+                inherited_from: None,
+                source_transforms: 0,
                 controller: decision.player(),
                 resolutions_this_turn: 0,
                 kicked: false,
@@ -797,6 +834,23 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::ChoosePaymentX { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: (0..=u8::MAX)
+                    .take_while(|x| self.can_pay_mana_cost(*player, &crate::state::mana::ManaCost::default().with_generic(*x)))
+                    .map(|x| Action::ChooseMode { player: *player, mode: usize::from(x) })
+                    .chain([Action::Decline { player: *player }]).collect(),
+                focus: source_focus,
+            },
+            decision @ Decision::SearchNamed { player, remaining, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(*player, self.named_search_cards(decision).into_iter().filter(|card| {
+                    matches!(decision, Decision::SearchNamed { name, .. } if self.state.cards[*card].name == *name) && *remaining > 0
+                }), true),
+                focus: source_focus,
+            },
             Decision::ManaUpfront { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
@@ -1157,6 +1211,66 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::ChoosePaymentX { player, if_paid }, Action::ChooseMode { mode, .. }) => {
+                let x = u8::try_from(*mode).ok();
+                let Some(x) = x.filter(|x| {
+                    self.can_pay_mana_cost(
+                        *player,
+                        &crate::state::mana::ManaCost::default().with_generic(*x),
+                    )
+                }) else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("unpayable X".into()));
+                };
+                suspended.frame.x = x;
+                let payment = PaymentProgress::new(
+                    *player,
+                    PaymentCost::Mana(crate::state::mana::ManaCost::default().with_generic(x)),
+                    std::mem::take(if_paid),
+                    Vec::new(),
+                );
+                self.continue_resolution(suspended, Some(Decision::Payment(payment)));
+                Ok(())
+            }
+            (Decision::ChoosePaymentX { .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchNamed {
+                    owner,
+                    name,
+                    remaining,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                if *remaining == 0
+                    || self.state.cards[*card].owner != *owner
+                    || self.state.cards[*card].name != *name
+                    || !matches!(
+                        self.state.zones.zone_of(*card),
+                        Some(ZoneType::Hand | ZoneType::Library | ZoneType::Graveyard)
+                    )
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("illegal named-search card".into()));
+                }
+                self.move_card(*card, ZoneType::Exile);
+                *remaining -= 1;
+                if *remaining == 0 {
+                    self.shuffle_library(*owner);
+                    self.run_frame(suspended.frame);
+                } else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                }
+                Ok(())
+            }
+            (Decision::SearchNamed { owner, .. }, Action::Decline { .. }) => {
+                self.shuffle_library(*owner);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (
                 Decision::Payment(PaymentProgress {
                     player,
@@ -2179,7 +2293,8 @@ mod learn_tests {
         game.run_frame(EffectFrame {
             source: None,
             source_ref: None,
-            source_face: None,
+            inherited_from: None,
+            source_transforms: 0,
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
@@ -2898,7 +3013,8 @@ mod payment_tests {
         game.run_frame(EffectFrame {
             source: None,
             source_ref: None,
-            source_face: None,
+            inherited_from: None,
+            source_transforms: 0,
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
