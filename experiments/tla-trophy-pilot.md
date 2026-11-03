@@ -1,76 +1,111 @@
-# TLA trophy pilot: implementation proof, GPU launch pending
+# TLA trophy pilot: collection capacity failure before learning
 
-As of 2026-11-03, the corpus, independent per-seat sampler, GPU job and paired
-evaluation runner are implemented. **The requested GPU pilot has not started.**
-The earlier missing-credential claim was based on the wrong Doppler project.
-Jack Heart corrected it on 2026-11-03: `manabot/prd` supplies R2 artifact
-credentials and `etude/prd` supplies the RunPod key. No secret was copied or
-changed. Provider access uses both existing configurations:
+The paid pilot reached CUDA collection but **completed no learner update**.
+A legal state needs 140 fact rows; frozen policy input v5 has 128. Initialization
+is admitted and evaluated, but there is no trained endpoint or learning-pace claim.
+Both GPU rentals are torn down, with no provider pods or unsettled sessions.
 
-```sh
-doppler run --project manabot --config prd -- doppler run --project etude --config prd -- uv run etude availability l4 --timeout 20
-```
+## Paid attempts (2026-11-03)
 
-The latest continuation, prompted by Jack Heart's 20:03 UTC capacity update,
-also failed admission. L4 launch `949ad568707d` / requested run `9453ce06ef46`
-quoted $0.59/hour (maximum $0.7375), then lost capacity during source
-preparation. The source is `b8835f63b4e7132ae6fd3f86cc73cefa6716e57f`.
-Etude's existing `source.freeze` then prepared request `d8ff03724b8a` once,
-removing that preparation delay from the next quote-to-admission interval.
-At 20:15 UTC an A4000 alternative quoted $0.25/hour (maximum $0.3125 under
-the unchanged $1 job cap). Its selection was recorded before submission,
-within Jack Heart's alternative-GPU authorization. RunPod refused the actual
-create: no A4000 was available in any data center. Launch `95efe5e43df8`
-recorded no acquired machine. No hardware deviation actually ran.
+| Run | Hardware | Result | Estimated cost |
+|---|---|---|---:|
+| `d8ff03724b8a` | RTX A6000 | 31 CUDA tests passed; timing fixture failed before training | $0.03275634 |
+| `40709cd93f90` | L4 | 32 CUDA tests and optimizer probe passed; first collection failed | $0.03233182 |
 
-At **20:16 UTC**, reconciliation again confirmed zero provider pods, no
-unsettled GPU sessions, no pilot cohort and **$0 cumulative pilot spend**.
-No retry or queued work remains. The [continuation audit and prepared request](
-data/mtg213/launch-audit-20261103-resume/receipt.json) retain the exact source,
-quotes, refusal and cleanup evidence; `prepared-run.json` beside it retains
-the typed Etude request for a future authorized continuation after fresh
-capacity and cost checks. A positive catalog quote did not establish rentable
-capacity even with source preparation completed. No learner milestone was sent.
+Both quoted $0.59/hour with a $0.7375 maximum reservation and $1 allocation cap.
+**Total estimated paid compute: $0.06508817.** Provider billing is not settled;
+conservatively retain both reservations ($1.475) against Jack Heart's $10 total
+cap. The second operational cohort is `mtg213-pilot-v1-correction1`, capped at
+$1, because Etude cannot append to an existing cohort. This did not create a new
+scientific population or change the schedule. [Settlement](data/mtg213/gpu-corrected-20261103/settlement.json)
+confirms teardown at 20:48:27 UTC. No further paid retry is selected.
 
-At 19:35 UTC, all six configured GPU launch quotes rejected capacity: `l4`,
-`l4-etude`, `a4000`, `a4500`, `mtg188-a6000` and `mtg188-policy-l4`.
-Earlier at 19:28 UTC, L4 and A6000 briefly admitted quotes at $0.59/hour,
-with a $0.7375 maximum including 900 seconds of setup. The actual L4 submission
-(launch `f17df4be888e`, requested run `74e6147280ac`, exact source
-`d6ad09e42412aca7c6a235f5acfd7db1cd20051c`) then failed capacity admission
-at 19:33:20 UTC, after source preparation. No run or machine session was created.
+The original prepared source `b8835f63b4e7132ae6fd3f86cc73cefa6716e57f` was
+verified against all 1,327 bundled files and rebuilt in an isolated archive.
+Its w17 card digest `17735e21aa9d59ebf17319f7ee43e16921189fde2f8886e38bfefc6dcca51e68`
+matches the frozen corpus, and all 134 entries admit. Current HEAD's different
+native digest was not substituted. The [first attempt](data/mtg213/gpu-attempt-20261103/settlement.json)
+retains the failed gate: learning took 8.9029 seconds and diagnostics 8.6478,
+violating an invalid hardware-dependent ordering assertion.
 
-The discrepancy is not a stricter job hardware requirement: Etude 0.2.12's
-availability and launch quote both call the same `RunPodMachines.offer` /
-`RunPodAPI.quote` with the same template. All configured GPU templates have no
-data-center restriction. Provider catalog replies changed between sequential
-reads; their upstream cause remains unknown, and a quote reserves no capacity.
-The final read confirmed zero provider pods, no unsettled GPU sessions and no
-pilot cohort. **Paid compute remains $0; no teardown is outstanding.**
-The [launch audit](data/mtg213/launch-audit-20261103/receipt.json) retains quotes,
-timestamps, failed-admission diagnostics and allocation reconciliation.
+Prospective repair source `2adbd0758e40518947daf91569e1938b060d4346` derives from
+that exact parent with only the timing test changed. All native, learner, corpus,
+recipe and evaluator bytes remain identical. The fixture now charges controlled
+executor durations and checks exactly 10.25 seconds of successful-plus-failed
+learning independently of persistence overhead. It passed all three CPU variants
+in both the Task and historical archive, then the full CUDA gate on the L4.
+The [source correction](data/mtg213/gpu-corrected-20261103/source-correction.json)
+was selected before retry or scoring; original requests and evidence are unchanged.
 
-The [frozen protocol](protocols/tla-trophy-213-v1.md) reserves at most $1 for
-its first L4 attempt within Jack Heart's $10 total cap. His later direction
-authorizes an available configured GPU alternative within that cap, with any
-hardware/allocation deviation recorded before scoring. No alternative allocation
-ran; the frozen corpus, recipe and analysis criteria remain unchanged.
-Current configured options are exhausted at the recorded observation time,
-not permanently unavailable. No queued work or retry loop was left running.
+## Retained capacity counterexample
 
-The snapshot and local proof are published in the artifact store:
+L4 collection failed after 6.343 seconds, before an optimizer update. The attempt
+ledger records 13 completed games before the batch failure; none of their samples
+were incorporated into a learner update. Settled learner/decision counters remain
+zero, so those counters are not a measure of all attempted simulation work.
+
+Stream 181, seed 31482, action 87 reproduces the same error at the retained
+pre-command frame. Seven legal activations of **The Fire Nation Drill** remove
+hexproof and indestructible from ten opposing permanents, retaining
+7 × 2 × 10 = **140 fact rows**. Native and Python encoders both reject them.
+The [single-stream input](data/mtg213/gpu-corrected-20261103/capacity-stream.jsonl),
+[replay result](data/mtg213/gpu-corrected-20261103/capacity-replay.json) and
+[effect counts](data/mtg213/gpu-corrected-20261103/capacity-observation-summary.json)
+retain the exact decks, sideboards, seed, actions, buffer shapes and runtime IDs.
+Replay used the same source/world on macOS; native binary bytes differ from Linux.
+
+Encoding errors are deliberately fatal in `step_isolated_into`; they are not
+quarantined gameplay errors. This invalidates the pilot's capacity assumption.
+No facts were truncated, frozen shapes widened, decks removed, actions hidden,
+or failing games replaced. A shared representation decision is needed before
+more paid training. The launcher listed `etude-result.json` as an output whose
+object was absent; [the missing-output receipt](data/mtg213/gpu-corrected-20261103/missing-outputs.json)
+retains that gap. Other outputs were downloaded and hash-verified.
+
+## Scheduled initialization evaluation
+
+The retained initialization is [self-play-initial-raw.pt](data/mtg213/gpu-corrected-20261103/training/self-play-initial-raw.pt),
+SHA256 `456a9a225fceb72034b5d5a244378244f18592b42f77b88f655ae7d281f72f7b`.
+The same pinned source/native world played all eight frozen pairs and four legs
+against the fixed heuristic: **3 wins / 0 draws / 29 losses**, 32 valid games,
+32 replay passes, no failed or truncated games. The whole-pair bootstrap score
+is .09375, 95% interval [0, .1875]. This is initialization strength, not learning.
+
+The [analysis](data/mtg213/gpu-corrected-20261103/analysis.json) retains the complete
+288-game schedule: 32 attempted/valid, 256 missing, no trained endpoint,
+`complete=false`, `success=null`. All milestones and both unknown-endpoint
+comparisons remain expected. Raw Etude blocks, traces, replays and checkpoint
+records are retained under the [evaluation directory](data/mtg213/gpu-corrected-20261103/evaluation/).
+No failed match was retried and no game was replaced.
+
+Two execution defects were repaired without rewriting these observations:
+Etude's runpy discovery needs a canonically imported callback, and its table
+projection can omit nullable columns when all values are null. The frozen run
+used its unchanged callback through canonical SDK invocation; the corrected
+offline reader consumed its sealed blocks with the same frozen criterion.
+[Reader provenance](data/mtg213/gpu-corrected-20261103/analysis-source.json) binds
+that reader's exact bytes. The discovery regression and clean/all-failed nullable
+column cases pass through focused tests. Local CLI use also names
+`ETUDE_OUTPUT_DIR` explicitly, as documented in `manabot/README.md`.
+
+## Corpus and earlier attempts
+
+The [frozen protocol](protocols/tla-trophy-213-v1.md) and
+[corpus](data/mtg213/corpus-v1/corpus.json) preserve 1,000 historical seven-win
+17Lands events: 134 eligible whole lists, 866 rejected, with source-event/build
+IDs, main/sideboards and native rejection reasons. No unsupported card was
+substituted or removed. Training and evaluation use the same eligible population.
+
+Earlier capacity refusals cost $0 and acquired no machine. The
+[original audit](data/mtg213/launch-audit-20261103/receipt.json) and
+[continuation audit](data/mtg213/launch-audit-20261103-resume/receipt.json)
+retain every quote, failed submission and cleanup observation. Provider access
+uses nested Doppler `manabot/prd` (artifacts) then `etude/prd` (RunPod), without
+copying or printing credentials. All experiment bytes are manifest-published:
 
 ```sh
 uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg213
 ```
-
-The corpus contains 1,000 recorded 17Lands trophy events, with 134 eligible
-whole decks and 866 rejected lists. Source bytes, source-event/build identities,
-seventh-win main/sideboard lists and native rejection reasons are retained.
-See [corpus.json](data/mtg213/corpus-v1/corpus.json) and
-[source.json](data/mtg213/corpus-v1/source.json). Training and evaluation both
-use the frozen 134-entry population. No unsupported card was substituted or
-removed, and no additional event replaced a rejected deck.
 
 ## Local implementation proof
 
@@ -113,35 +148,10 @@ predeclared 32-game/checkpoint GPU comparisons remain entirely unplayed.
 
 ## Remaining acceptance
 
-Once a bounded launch quote admits available capacity and existing allocations
-are checked, the committed, capped GPU job remains to be run. The paid-training
-milestone requires observed learner updates. Retain initialization, periodic and endpoint
-comparisons, attempted/failed/missing denominators, uncertainty, decisions,
-compute and wall time. GPU training and Elemental-relative learning pace remain
-unresolved. The implementation's focused native/debug, corpus, recovery and
-paired-evaluation checks passed; broader gate/CI checks and shipping remain
-separate from this implementation proof.
-
-The Etude score curves are descriptive. The companion analysis reads retained
-Etude blocks and training checkpoints to evaluate the frozen criterion:
-
-```sh
-uv run --extra artifacts --extra evaluation python -m experiments.tla_pilot_analysis --source r2://manabot/jobs --out .runs/mtg213-analysis.json
-```
-
-It reports each checkpoint/anchor and all eight pair identities, valid W/D/L,
-expected/attempted/failed/missing games and matches, and checkpoint clocks.
-Attempted games is a lower bound when a failed callback left no per-game
-receipt: its failed match is counted and its unknown games remain missing.
-Every frozen milestone remains expected even for an early endpoint; an absent
-successful endpoint retains two slots with unknown update coordinates.
-
-The 2,000 seeded bootstrap resamples move entire four-leg pairs together and
-reuse the same pair draws across checkpoints. The JSON includes heuristic gains
-relative to initialization, their 95% intervals, and endpoint vs initialization
-intervals. `success` is true only when the complete schedule meets all three
-frozen criteria; false is a complete negative result, and null with `issues`
-means no qualified learning claim. Different evaluation source versions also
-withhold qualification. Each training run is analyzed separately. Controlled
-fixtures establish this analysis behavior, not a scientific result for the
-unstarted GPU pilot; no frozen protocol criteria or historical evidence changed.
+Resolve the shared fact representation/capacity issue before launching another
+capped attempt. Preserve the frozen evidence, corpus, legal decisions and
+training/evaluation runtime parity; any new input contract needs an explicit
+prospective protocol decision. Actual learner updates, periodic/endpoint
+checkpoints and learning/Elemental-pace evidence remain unmet. No paid-training
+milestone was sent. Gate/CI and publication of the verified enabling fixes remain
+separate obligations; the Task is not complete.
