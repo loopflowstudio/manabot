@@ -71,3 +71,84 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 - 2026-11-02 (after T5 merge, extension rebuilt): debug lib/cards/conformance/
   rules targets green; pytest tests/semantic tests/env + parity 276 passed;
   experience protocol 14 passed. Academy UI checks not run (no node_modules).
+
+## One catalog (steer b222da8f)
+
+Branch `jack/mtg-225-t6-one-catalog` (from `2c1ba169f`). Every match runs on
+`default_content_pack()`, built once from `cardsets::catalog()` plus Crossroads
+of Destiny, name order, back faces right after their fronts. Removed:
+`ContentPack::from_definitions`/`pack_key`, the `CardRegistry` alias,
+`ContentPackManifest.pack_key`, `content_pack_for_match`/`admits`/`select`/`exact`,
+the same-pack error, `pool_content` and the `pools()` map, `Game::new_with_content`,
+`created_tokens` and pack token closure. `PlayerConfig.world: Option<String>`
+became `submitted: bool` (serialized `"world": "world"`); Python keeps
+`PlayerConfig.world` accepting only `None`/`WORLD_SETUP` and rejects pack keys.
+Authored setups are `AuthoredSetup` decklists named by preset or `pack_key`.
+`WorldIdentity` reads the catalog directly; world queries are infallible. Ward
+lowering stays in `register_card`, documented as the catalog's one normalization.
+
+Proof: catalog digest `6741f471…9827`, length 345 and the id→name manifest
+hash `f67e67ee…b603` are identical on `2c1ba169f` and on the branch;
+`content_pool("world")` and `world_identity()` give the same digest;
+`CARD_DEFINITION_COUNT` = 345 = catalog length.
+
+Measured cost, for Jack Heart to decide: authored vocabulary names now bind the
+345-row world catalog. `SemanticCardEncoder("ur-lessons-vs-gw-allies", 64)`
+goes from 31 definitions / 3,598 expanded tokens / 4.9 ms per `definitions()` to
+345 / 51,909 / 45.3 ms (`elemental-world-v2` was 100 / 14,097 / 20.5 ms). The
+Etude worker fixture regime (`ataraxos_move_scalar`, hidden 8, 2 updates) takes
+5.07 s at `2c1ba169f` and 31.29 s on this branch, 26 s of it in `backward`.
+`test_etude_job.py::test_worker_runs_real_learner_and_reports_admitted_policy`
+therefore exceeds its 30 s budget and fails; left failing, not retuned.
+
+Re-record needed (not done; frozen evidence). Failure sets compared by running
+the same tests at `2c1ba169f`:
+- `conformance/semantic-kernel-w17-v1/evidence.json` and `manifest.json`
+  (`checked_semantic_conformance_evidence_reproduces`): already failing at
+  `2c1ba169f` with 12 cases drifted (evidence digest `92b2f506…`). The branch
+  adds `temur-163` and `temur-164`, and changes the content digest of the
+  elemental, sacrifice, temur and elemental-world cases, which ran on authored
+  packs.
+- `academy/fixtures/choice-navigation-w17.json`: position `CHOOSE_TARGET` is the
+  one new Academy failure (state digest); `DECLARE_BLOCKER`, `DISCARD`, `LEARN`,
+  `PAY_OR_NOT` already failed.
+- Already failing at `2c1ba169f`, re-record at the gate; authored matches among
+  them also move here: `conformance/authored-match-w17-v1`,
+  `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`,
+  `academy/fixtures/{learn-demo,precision-demo,precision-mana-demo,trigger-order}-w17.json`.
+- Not evidence, same failure at `2c1ba169f`: `test_ur_lessons_increment` (stale
+  `permanent_dim` 37 vs 38), `tests/sim/test_rollout.py` selects-valid-actions
+  (`fact validity must be binary`), `test_search_runtime` seed-197 ABIs,
+  `test_conditional_search` frozen fixture, `tests/belief/test_state.py` receipt.
+
+Fixed because the refactor exposed it (pre-existing for the world catalog at
+`2c1ba169f`): `BoundSemanticPack.pad_catalog` raised "definition reference is
+outside program spans" on T6's `back_face` reference, which sits in the front's
+characteristics span; 7 projection tests that used authored packs hit it. It has
+no production caller. It now also returns
+`characteristics_ref_{source_positions,target_rows,mask}`.
+
+Checks weakened because their subject no longer exists (review these):
+- A setup binding no longer has authored admission behind it, so a checkpoint
+  whose recorded `setups` were edited still loads; execution still compares the
+  actual decks to the binding. Removed the `sideboard` case of
+  `test_ordinary_loader_rejects_incompatible_binding_before_weights`.
+- Removed "explicit pack" and partial-binding assertions from
+  `test_mirror_admission.py`, `test_matchups.py`, `test_elemental_world.py`; a
+  mirror of authored decks now runs without any selection.
+- `checkpoint_world` recognises the Elemental roster by deck membership (any
+  pair of its decks binds all ten), where it used to read the explicit pack; a
+  hand-built pair of those decks now gets the roster binding too.
+
+Compatibility for Jack Heart: setup-bound checkpoints of authored packs no
+longer load (`checkpoint world/setup/input binding differs`, pinned by
+`test_retained_manifests_load_only_when_they_name_no_authored_pack`); their
+pack-sized encoder weights could not fit a world-sized encoder either, though no
+retained checkpoint file was tried. Manifests recording `pack_key: None` load
+through `current_binding_form`. `CURRENT_PACK_KEYS` stays as the names a recipe
+may give its vocabulary, all binding the world catalog; collapsing them to
+`world` would mean rewriting regimes and `execution.py`'s Elemental check.
+`MatchConfig.world` keeps a frozen regime's authored label and runs it like
+`None`. Curated manifests keep `semantic_pack_key`, resolved as a setup name.
+Kept, allowed by the steer: `Arc<ContentPack>` on game state and public
+`register_card`, which content-sensitivity tests use to extend a copy.

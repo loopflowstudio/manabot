@@ -26,15 +26,15 @@ from manabot.semantic.learning import (
 )
 import managym
 
-PACK_KEY = "ur-lessons-vs-gw-allies"
+POOL = "world"
 
 
 def _json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _manifest(*, reverse_ids: bool = False, pack_key: str = PACK_KEY) -> dict:
-    pool = managym.content_pool(pack_key)
+def _manifest(*, reverse_ids: bool = False) -> dict:
+    pool = managym.content_pool(POOL)
     rows = sorted(pool["definitions"], key=lambda row: row["card_def_id"])
     ids = [row["card_def_id"] for row in rows]
     if reverse_ids:
@@ -42,7 +42,6 @@ def _manifest(*, reverse_ids: bool = False, pack_key: str = PACK_KEY) -> dict:
     return {
         "schema_version": 1,
         "content_digest": pool["content_digest"],
-        "pack_key": pack_key,
         "definitions": [
             {"card_def_id": card_def_id, "registry_name": row["registry_name"]}
             for card_def_id, row in zip(ids, rows, strict=True)
@@ -50,8 +49,8 @@ def _manifest(*, reverse_ids: bool = False, pack_key: str = PACK_KEY) -> dict:
     }
 
 
-def _row(pack: BoundSemanticPack, name: str, pack_key: str = PACK_KEY) -> int:
-    pool = managym.content_pool(pack_key)
+def _row(pack: BoundSemanticPack, name: str) -> int:
+    pool = managym.content_pool(POOL)
     card_def_id = next(
         row["card_def_id"]
         for row in pool["definitions"]
@@ -127,7 +126,7 @@ def test_catalog_is_deterministic_and_spans_every_definition() -> None:
 def test_tokens_are_the_engine_definition_without_identity_or_printed_text() -> None:
     pack = BoundSemanticPack.bind(_manifest())
     values = set(pack.catalog.token_value.tolist())
-    for row in managym.content_pool(PACK_KEY)["definitions"]:
+    for row in managym.content_pool(POOL)["definitions"]:
         # Single-word names such as "Ally" are also printed subtypes.
         if " " in row["registry_name"]:
             assert token_value(row["registry_name"]) not in values
@@ -157,15 +156,6 @@ def test_same_effect_encodes_identically_across_cards() -> None:
     assert len(drawing) >= 2
 
 
-def test_definition_tokens_do_not_depend_on_the_pack() -> None:
-    small = BoundSemanticPack.bind(_manifest())
-    world = BoundSemanticPack.bind(_manifest(pack_key="world"))
-    for name in ("Forest", "Igneous Inspiration", "Invasion Reinforcements"):
-        assert _card_tokens(small, _row(small, name)) == _card_tokens(
-            world, _row(world, name, "world")
-        )
-
-
 def test_created_tokens_are_definition_references() -> None:
     pack = BoundSemanticPack.bind(_manifest())
     (program,) = pack.program_rows(_row(pack, "Invasion Reinforcements"))
@@ -173,6 +163,20 @@ def test_created_tokens_are_definition_references() -> None:
     targets = padded["definition_ref_target_rows"][program]
     mask = padded["definition_ref_mask"][program]
     assert targets[mask].tolist() == [_row(pack, "Ally")]
+
+
+def test_back_faces_are_characteristics_references() -> None:
+    pack = BoundSemanticPack.bind(_manifest())
+    padded = pack.pad_catalog()
+    front = _row(pack, "The Legend of Kuruk")
+    targets = padded["characteristics_ref_target_rows"][front]
+    mask = padded["characteristics_ref_mask"][front]
+    assert targets[mask].tolist() == [_row(pack, "Avatar Kuruk")]
+    position = int(padded["characteristics_ref_source_positions"][front][mask][0])
+    assert (
+        padded["definition_token_kind"][front][position]
+        == (TOKEN_KINDS["definition_ref"])
+    )
 
 
 def test_semantic_only_ablation_is_independent_of_card_def_id_allocation():

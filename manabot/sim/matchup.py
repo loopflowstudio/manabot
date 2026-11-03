@@ -33,12 +33,9 @@ class AuthoredMatchup(StrictModel):
         return ((a, b), (b, a), (a, a), (b, b))[leg // 2]
 
     def match(self, leg: int = 0) -> MatchConfig:
-        setup = MatchConfig.authored(
+        return MatchConfig.authored(
             self.pack_key, *self.decks(leg), hero="arena-seat-0", villain="arena-seat-1"
         )
-        # Research packs can register more than two decks, so the cross pair
-        # also needs explicit selection. Native membership checks still apply.
-        return setup.model_copy(update={"world": self.pack_key})
 
 
 SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"

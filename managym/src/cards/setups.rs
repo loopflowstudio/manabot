@@ -1,25 +1,22 @@
 //! Authored setups: the fixed decklists in `content/semantic/current/setups.json`.
 //!
-//! Each setup names its decks by card key and becomes one [`AuthoredPack`]: a
-//! [`ContentPack`] holding exactly the deck cards and the tokens they create,
-//! in key order, plus the decks as player configurations. A match whose two
-//! decklists equal an authored setup's runs on that pack
-//! ([`content_pack_for_match`]); every other match uses the default
-//! pack. Card behavior comes only from the set files; this file is decklists.
+//! Each setup names its decks by card key and becomes one [`AuthoredSetup`]:
+//! its decks as player configurations over the one catalog
+//! ([`crate::cards::content_pack::default_content_pack`]), like any other
+//! match. A setup is named by its preset (`two_deck`) or by the key frozen
+//! evidence records for it (`ur-lessons-vs-gw-allies`, `pack_key` in
+//! `setups.json`). Card behavior comes only from the set files; this file is
+//! decklists.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
 };
 
 use serde::Deserialize;
 
 use super::ContentError;
-use crate::{
-    cards::content_pack::{default_content_pack, ContentPack},
-    cardsets,
-    state::{card::CardDefinition, player::PlayerConfig},
-};
+use crate::{cardsets, state::player::PlayerConfig};
 
 const SETUPS: &str = include_str!("../../../content/semantic/current/setups.json");
 
@@ -52,24 +49,18 @@ pub struct AuthoredDeck {
     pub sideboard: BTreeMap<String, usize>,
 }
 
-impl AuthoredDeck {
-    /// Whether `config` plays exactly this deck and sideboard.
-    fn matches(&self, config: &PlayerConfig) -> bool {
-        self.cards == config.deck.main && self.sideboard == config.deck.sideboard
-    }
-}
-
-/// One setup's pack and decks.
+/// One setup's decks.
 #[derive(Clone, Debug)]
-pub struct AuthoredPack {
+pub struct AuthoredSetup {
     /// The setup's name in `setups.json` (for example `two_deck`).
     pub preset: String,
+    /// The name frozen evidence records for this setup (`pack_key` in
+    /// `setups.json` and in retained manifests, receipts and Academy packs).
     pub pack_key: String,
-    pub content: Arc<ContentPack>,
     pub decks: Vec<AuthoredDeck>,
 }
 
-impl AuthoredPack {
+impl AuthoredSetup {
     pub fn deck(&self, key: &str) -> Result<&AuthoredDeck, ContentError> {
         self.decks
             .iter()
@@ -87,10 +78,10 @@ impl AuthoredPack {
     }
 }
 
-/// Every authored setup, in `setups.json` order.
-pub fn authored_packs() -> Result<&'static [AuthoredPack], ContentError> {
-    static PACKS: OnceLock<Result<Vec<AuthoredPack>, ContentError>> = OnceLock::new();
-    PACKS
+/// Every authored setup, in preset order.
+pub fn authored_setups() -> Result<&'static [AuthoredSetup], ContentError> {
+    static SETUPS_BY_PRESET: OnceLock<Result<Vec<AuthoredSetup>, ContentError>> = OnceLock::new();
+    SETUPS_BY_PRESET
         .get_or_init(|| {
             let sources: BTreeMap<String, SetupSource> = serde_json::from_str(SETUPS)
                 .map_err(|error| ContentError(format!("setups.json: {error}")))?;
@@ -103,42 +94,28 @@ pub fn authored_packs() -> Result<&'static [AuthoredPack], ContentError> {
         .map_err(Clone::clone)
 }
 
-/// The authored setup named `preset` in `setups.json`.
-pub fn authored_pack(preset: &str) -> Result<&'static AuthoredPack, ContentError> {
-    authored_packs()?
+/// The authored setup named `name`: its preset or its evidence `pack_key`.
+pub fn authored_setup(name: &str) -> Result<&'static AuthoredSetup, ContentError> {
+    authored_setups()?
         .iter()
-        .find(|pack| pack.preset == preset)
-        .ok_or_else(|| ContentError(format!("unknown authored setup {preset:?}")))
+        .find(|setup| setup.preset == name || setup.pack_key == name)
+        .ok_or_else(|| ContentError(format!("unknown authored setup {name:?}")))
 }
 
-/// The authored setup whose pack key is `pack_key`.
-pub fn authored_pack_for_key(pack_key: &str) -> Result<&'static AuthoredPack, ContentError> {
-    authored_packs()?
-        .iter()
-        .find(|pack| pack.pack_key == pack_key)
-        .ok_or_else(|| ContentError(format!("unknown content pack {pack_key:?}")))
-}
-
-fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentError> {
-    let catalog = cardsets::catalog();
-    let by_key = catalog
+fn build(preset: String, source: SetupSource) -> Result<AuthoredSetup, ContentError> {
+    let by_key = cardsets::catalog()
         .iter()
         .map(|definition| (definition.key, definition))
         .collect::<BTreeMap<_, _>>();
-    let by_name = catalog
-        .iter()
-        .map(|definition| (definition.name.as_str(), definition))
-        .collect::<BTreeMap<_, _>>();
     let context = |message: String| ContentError(format!("setup {preset}: {message}"));
 
-    let mut members = BTreeSet::new();
     let mut decks = Vec::new();
     let mut keys = BTreeSet::new();
     for deck in source.decks {
         if !keys.insert(deck.key.clone()) {
             return Err(context(format!("duplicate deck {}", deck.key)));
         }
-        let mut resolve = |entries: &[EntrySource], sideboard: bool| {
+        let resolve = |entries: &[EntrySource], sideboard: bool| {
             let mut out = BTreeMap::new();
             for entry in entries {
                 let definition = by_key
@@ -150,7 +127,6 @@ fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentErr
                 if out.insert(definition.name.clone(), entry.count).is_some() {
                     return Err(context(format!("repeated entry {:?}", entry.definition)));
                 }
-                members.insert(definition.key);
             }
             Ok(out)
         };
@@ -168,248 +144,46 @@ fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentErr
             sideboard,
         });
     }
-
-    // Close over the tokens the deck cards create.
-    let mut pending = members.iter().copied().collect::<Vec<_>>();
-    while let Some(key) = pending.pop() {
-        for name in created_tokens(by_key[key]) {
-            let token = by_name
-                .get(name.as_str())
-                .ok_or_else(|| context(format!("{key} creates unknown token {name:?}")))?;
-            if members.insert(token.key) {
-                pending.push(token.key);
-            }
-        }
-    }
-    let definitions = members.into_iter().map(|key| by_key[key].clone()).collect();
-    Ok(AuthoredPack {
+    Ok(AuthoredSetup {
         preset,
-        pack_key: source.pack_key.clone(),
-        content: Arc::new(ContentPack::from_definitions(
-            Some(source.pack_key),
-            definitions,
-        )),
+        pack_key: source.pack_key,
         decks,
     })
-}
-
-/// Names of the token definitions `definition`'s effects create: every
-/// `token_name` at any depth of its serialized effects, so an effect that nests
-/// others (modes, branches, granted abilities) needs no visitor entry. A
-/// double-faced card's back face creates tokens of its own.
-pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
-    fn visit(value: &serde_json::Value, out: &mut BTreeSet<String>) {
-        match value {
-            serde_json::Value::Object(fields) => {
-                for (name, field) in fields {
-                    match (name.as_str(), field) {
-                        ("token_name", serde_json::Value::String(token)) => {
-                            out.insert(token.clone());
-                        }
-                        _ => visit(field, out),
-                    }
-                }
-            }
-            serde_json::Value::Array(items) => items.iter().for_each(|item| visit(item, out)),
-            _ => {}
-        }
-    }
-    let mut out = BTreeSet::new();
-    visit(
-        &serde_json::to_value(definition).expect("card definitions serialize"),
-        &mut out,
-    );
-    if let Some(back_face) = &definition.back_face {
-        out.extend(created_tokens(back_face));
-    }
-    out
-}
-
-/// The pack a match runs on, or `None` for the default pack.
-///
-/// An explicit `world` selection must be shared by both configs. The world
-/// ([`crate::world::WORLD_POOL`]) runs any decks that pass development
-/// admission, on the default pack. An authored pack key runs only that pack's
-/// own setups: authored packs are fixed setups, never deck-admission targets,
-/// and an explicit selection never falls back. Without one, configs whose
-/// decklists equal one authored setup's run on it, and ambiguity fails closed.
-pub(crate) fn content_pack_for_match(
-    player_configs: &[PlayerConfig],
-) -> Result<Option<Arc<ContentPack>>, ContentError> {
-    let packs = authored_packs()?;
-    if let Some(key) = player_configs.iter().find_map(|p| p.world.as_ref()) {
-        if player_configs.len() != 2 || player_configs.iter().any(|p| p.world.as_ref() != Some(key))
-        {
-            return Err(ContentError(
-                "explicit pack requires two players with the same pack key".into(),
-            ));
-        }
-        if key == crate::world::WORLD_POOL {
-            for player in player_configs {
-                if let Some(message) = super::deck_admission::development_rejection(player)? {
-                    return Err(ContentError(message));
-                }
-            }
-            return Ok(Some(default_content_pack()));
-        }
-        let pack = packs
-            .iter()
-            .find(|pack| &pack.pack_key == key)
-            .ok_or_else(|| ContentError(format!("unknown explicit content pack {key}")))?;
-        if !player_configs.iter().all(|p| admits(pack, p)) {
-            return Err(ContentError(
-                "explicit pack requires two admitted authored setups".into(),
-            ));
-        }
-        return Ok(Some(Arc::clone(&pack.content)));
-    }
-    Ok(select(player_configs, packs)?.map(|pack| Arc::clone(&pack.content)))
-}
-
-fn admits(pack: &AuthoredPack, config: &PlayerConfig) -> bool {
-    pack.decks.iter().any(|deck| deck.matches(config))
-}
-
-fn select<'a>(
-    player_configs: &[PlayerConfig],
-    packs: &'a [AuthoredPack],
-) -> Result<Option<&'a AuthoredPack>, ContentError> {
-    let matches = packs
-        .iter()
-        .filter(|pack| exact(pack, player_configs))
-        .collect::<Vec<_>>();
-    match matches.as_slice() {
-        [] => Ok(None),
-        [pack] => Ok(Some(pack)),
-        _ => Err(ContentError(format!(
-            "authored content catalog is ambiguous for packs {:?}",
-            matches
-                .iter()
-                .map(|pack| pack.pack_key.as_str())
-                .collect::<Vec<_>>()
-        ))),
-    }
-}
-
-/// The configs are exactly the pack's setups, each used once.
-fn exact(pack: &AuthoredPack, player_configs: &[PlayerConfig]) -> bool {
-    if player_configs.len() != pack.decks.len() {
-        return false;
-    }
-    let mut unmatched = pack.decks.iter().collect::<Vec<_>>();
-    for config in player_configs {
-        let Some(index) = unmatched.iter().position(|deck| deck.matches(config)) else {
-            return false;
-        };
-        unmatched.remove(index);
-    }
-    true
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn configs(pack: &AuthoredPack, left: &str, right: &str) -> Vec<PlayerConfig> {
-        vec![
-            pack.player_config("left", left).unwrap(),
-            pack.player_config("right", right).unwrap(),
-        ]
-    }
-
-    fn pack_key(player_configs: &[PlayerConfig]) -> String {
-        content_pack_for_match(player_configs)
-            .unwrap()
-            .unwrap()
-            .pack_key()
-            .unwrap()
-            .to_owned()
-    }
-
     #[test]
-    fn world_selection_admits_novel_decks_and_never_falls_back() {
-        let mut first = PlayerConfig::new(
-            "first",
-            BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]),
+    fn setups_resolve_by_preset_or_evidence_key() {
+        let setups = authored_setups().unwrap();
+        let names = setups
+            .iter()
+            .flat_map(|setup| [setup.preset.as_str(), setup.pack_key.as_str()])
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names.len(),
+            names.iter().collect::<BTreeSet<_>>().len(),
+            "setup names must be unique"
         );
-        first.world = Some(crate::world::WORLD_POOL.into());
-        let mut second = PlayerConfig::new("second", BTreeMap::from([("Island".into(), 20)]));
-        second.world = first.world.clone();
-        let content = content_pack_for_match(&[first.clone(), second.clone()])
-            .unwrap()
-            .unwrap();
-        assert!(Arc::ptr_eq(&content, &default_content_pack()));
-        first.deck.sideboard.insert("Water Tribe Rallier".into(), 1);
-        assert!(content_pack_for_match(&[first, second.clone()]).is_err());
-        // An authored pack key never admits decks outside its own setups.
-        let mut novel = PlayerConfig::new("novel", BTreeMap::from([("Forest".into(), 20)]));
-        novel.world = Some("ur-lessons-vs-gw-allies".into());
-        second.world = novel.world.clone();
-        assert!(content_pack_for_match(&[novel, second]).is_err());
-    }
-
-    #[test]
-    fn explicit_mirrors_preserve_pack_and_reject_unadmitted_setups() {
-        let pack = authored_pack_for_key("ur-lessons-vs-gw-allies").unwrap();
-        for deck in &pack.decks {
-            let mut config = pack.player_config(&deck.key, &deck.key).unwrap();
-            config.world = Some(pack.pack_key.clone());
-            let pair = vec![config.clone(), config.clone()];
-            assert_eq!(pack_key(&pair), pack.pack_key);
-            let mut wrong = pair.clone();
-            wrong[0].world = None;
-            assert!(content_pack_for_match(&wrong).is_err());
-            wrong = pair.clone();
-            wrong[0].deck.main.clear();
-            assert!(content_pack_for_match(&wrong).is_err());
-            wrong = pair.clone();
-            wrong[0].world = Some("missing-pack".into());
-            assert!(content_pack_for_match(&wrong).is_err());
-        }
+        let by_preset = authored_setup("two_deck").unwrap();
+        let by_key = authored_setup("ur-lessons-vs-gw-allies").unwrap();
+        assert!(std::ptr::eq(by_preset, by_key));
+        assert!(authored_setup("missing-setup").is_err());
+        assert!(by_preset.deck("missing-deck").is_err());
     }
 
     #[test]
     fn complexity_roster_is_explicit_and_vanilla() {
-        let packs = authored_packs().unwrap();
-        let pack = authored_pack("complexity").unwrap();
-        assert_eq!(pack.pack_key, "mtg122-complexity-v1");
-        assert_eq!(pack.decks.len(), 6);
+        let setup = authored_setup("complexity").unwrap();
+        assert_eq!(setup.pack_key, "mtg122-complexity-v1");
+        assert_eq!(setup.decks.len(), 6);
+        let catalog = crate::cards::content_pack::default_content_pack();
         for name in ["Savannah Lions", "Glory Seeker", "Hill Giant"] {
-            let id = pack.content.definition_id(name).unwrap();
-            let definition = pack.content.definition(id).unwrap();
+            let id = catalog.definition_id(name).unwrap();
+            let definition = catalog.definition(id).unwrap();
             assert!(definition.abilities.is_empty() && definition.activated_abilities.is_empty());
-        }
-        for deck in &pack.decks {
-            let mut config = pack.player_config(&deck.key, &deck.key).unwrap();
-            config.world = Some(pack.pack_key.clone());
-            assert_eq!(pack_key(&[config.clone(), config]), "mtg122-complexity-v1");
-        }
-        // An ordinary product pair still chooses the original product pack.
-        let product = authored_pack("two_deck").unwrap();
-        let pair = configs(product, "ur_lessons", "gw_allies");
-        assert_eq!(
-            select(&pair, packs).unwrap().unwrap().pack_key,
-            "ur-lessons-vs-gw-allies"
-        );
-    }
-
-    #[test]
-    fn duplicate_exact_catalog_entries_fail_closed() {
-        let pack = authored_pack("jeong_increment").unwrap();
-        let player_configs = configs(pack, "ur_lessons", "gw_allies_jeong");
-        let error = select(&player_configs, &[pack.clone(), pack.clone()])
-            .expect_err("ambiguous catalog must fail closed");
-        assert!(error.to_string().contains("catalog is ambiguous"));
-    }
-
-    #[test]
-    fn packs_close_over_created_tokens() {
-        let pack = authored_pack("two_deck").unwrap();
-        assert!(pack.content.definition_id("Ally").is_some());
-        for (_, definition) in pack.content.definition_entries() {
-            for token in created_tokens(definition) {
-                assert!(pack.content.definition_id(&token).is_some(), "{token}");
-            }
         }
     }
 }

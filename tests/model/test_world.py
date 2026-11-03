@@ -62,7 +62,6 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
         "input_version",
         "action_width",
         "pack",
-        "sideboard",
     ],
 )
 def test_ordinary_loader_rejects_incompatible_binding_before_weights(
@@ -83,15 +82,24 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
             binding["policy_input_version"] = 1
         elif change == "action_width":
             binding["input_schema"]["actions"]["shape"][1] = 17
-        elif change == "pack":
-            binding["content_manifest"]["content_digest"] = "old"
         else:
-            binding["setups"][0]["sideboard"] = {}
+            binding["content_manifest"]["content_digest"] = "old"
     payload["model_state_dict"] = {}  # Admission must precede weight loading.
     path = tmp_path / "bad.pt"
     torch.save(payload, path)
     with pytest.raises(ValueError, match="binding"):
         load_checkpoint(str(path))
+
+
+def test_retained_manifests_load_only_when_they_name_no_authored_pack() -> None:
+    payload = checkpoint()
+    manifest = payload["world_binding"]["content_manifest"]
+    assert "pack_key" not in manifest
+    manifest["pack_key"] = None
+    validate_checkpoint_world(payload, ObservationSpace())
+    manifest["pack_key"] = "ur-lessons-vs-gw-allies"
+    with pytest.raises(ValueError, match="binding differs"):
+        validate_checkpoint_world(payload, ObservationSpace())
 
 
 def test_same_shapes_do_not_admit_another_matchup():

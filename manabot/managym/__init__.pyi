@@ -15,12 +15,12 @@ class PoolDefinition(TypedDict):
     reason: str | None
 
 class ContentPool(TypedDict):
-    pack_key: str
     world_version: str
     content_digest: str
     definitions: list[PoolDefinition]
 
-def content_pool(pack_key: str) -> ContentPool: ...
+def content_pool(name: str) -> ContentPool:
+    """The world pool (``"world"``, the only pool): every catalog card and its support."""
 
 class WorldIdentity(TypedDict):
     world_version: str
@@ -36,7 +36,6 @@ def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""
 
 class LearningCatalog(TypedDict):
-    pack_key: str | None
     content_digest: str
     registry_names: list[str]
     token_kind: list[int]
@@ -48,11 +47,11 @@ class LearningCatalog(TypedDict):
     definition_ref_source_tokens: list[int]
     definition_ref_target_rows: list[int]
 
-def learning_catalog(pack_key: str | None = None) -> LearningCatalog:
-    """Learning tokens for every definition of a pack, rows by CardDefId."""
+def learning_catalog() -> LearningCatalog:
+    """Learning tokens for every catalog definition, rows by CardDefId."""
 
-def card_definitions_json(pack_key: str | None = None) -> str:
-    """Every pack definition as the JSON its learning tokens serialize."""
+def card_definitions_json() -> str:
+    """Every catalog definition as the JSON its learning tokens serialize."""
 
 def learning_token_value(name: str) -> int:
     """The learning catalog's stable token value for a Rust or printed name."""
@@ -268,6 +267,8 @@ class PlayerConfig:
     ) -> None: ...
     name: str
     world: str | None
+    """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
+    runs it as given. Any other value raises: content packs are retired."""
     @property
     def deck(self) -> Deck: ...
     @property
@@ -364,7 +365,7 @@ class DeckImportError(ValueError):
 
 MAX_DECKLIST_BYTES: int
 DEVELOPMENT_RULESET: str
-# `PlayerConfig.world` selection of decks submitted to the installed world.
+# `PlayerConfig.world` value that submits a deck to the installed world.
 WORLD_SETUP: str
 
 def admit_decklists(decklists: list[tuple[str, Decklist]]) -> list[DeckImport]:
@@ -375,7 +376,11 @@ def check_decks(decks: list[Deck]) -> list[list[DeckIssue]]:
     """Each deck's construction and eligibility issues in the installed world, in
     order; an empty list admits. Allocates no game; game creation admits again."""
 
-def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
+def authored_deck_setup(setup: str, deck_key: str) -> PlayerConfig:
+    """One authored deck as a fixed setup; ``setup`` is a preset or its ``pack_key``."""
+
+def authored_deck_keys(setup: str) -> list[str]:
+    """The deck keys of an authored setup, named by preset or ``pack_key``."""
 
 class ZoneEnum(IntEnum):
     LIBRARY = 0

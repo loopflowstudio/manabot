@@ -54,9 +54,10 @@ it met the competence thresholds on both seeds within 7 minutes on an RTX 5090, 
 full run takes about 13 minutes versus about 110 at four streams; larger models showed no advantage at this
 horizon. The regime is that study's exact tested recipe; it requires CUDA.
 
-Build named curated matches with `MatchConfig.authored(pack_key, hero_deck,
-villain_deck)` so both main decks and sideboards come from managym's compiled
-setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
+Build named curated matches with `MatchConfig.authored(setup, hero_deck,
+villain_deck)` (a preset or its `pack_key`) so both main decks and sideboards
+come from managym's authored setup; like every match, it runs on the world's one
+catalog. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `Match.swapped()` moves both lists together;
 `Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
 
@@ -260,7 +261,7 @@ artifacts. CPU correctness does not imply CUDA validation or improved play.
 
 For exploratory same-deck checkpoint play, the [head-to-head runner](../experiments/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
 accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
-roster decks/sideboards and carries their compiled content pack through replay;
+roster decks/sideboards and carries them through replay;
 it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
@@ -319,7 +320,7 @@ seat assignments. The training match must equal `matrix.match()`; arbitrary
 renaming or substituting a different setup fails admission. Simple roles retain
 their own names, never Allies/Lessons labels.
 
-The simulator records the actual decks, explicit content pack and Commands;
+The simulator records the actual decks and Commands;
 its ordinary replay checks still apply. The matrix identity is separate from
 the historical selected-world suite. Omitting it preserves existing selected
 protocol serialization. A native authored roster does not itself admit a neural
