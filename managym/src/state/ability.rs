@@ -1232,12 +1232,10 @@ pub struct TargetRequirement {
     /// "other target": the ability's own source object is not a candidate.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub another: bool,
-    /// "Up to X targets": the announced X replaces `max` (CR 601.2c).
+    /// The announced X replaces `max` (CR 601.2c): "up to X targets" with
+    /// `min` 0, or "X targets", exactly X, with any other `min`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub max_x: bool,
-    /// "X targets": exactly the announced X (CR 601.2c), with `max_x`.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub exact_x: bool,
 }
 
 impl TargetRequirement {
@@ -1253,13 +1251,17 @@ impl TargetRequirement {
             max: 1,
             another: false,
             max_x: false,
-            exact_x: false,
         }
+    }
+
+    /// Whether X must equal the number of targets ("X targets").
+    pub fn exact_x(&self) -> bool {
+        self.max_x && self.min > 0
     }
 
     /// The fewest targets this requirement allows with X announced as `x`.
     pub fn min_for(&self, x: u8) -> usize {
-        if self.exact_x {
+        if self.exact_x() {
             usize::from(x)
         } else {
             self.min

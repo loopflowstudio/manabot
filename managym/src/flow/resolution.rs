@@ -20,7 +20,7 @@ use crate::{
             Ability, AffectedSpec, DelayedEvent, Effect, EffectValue, GraveyardReturn,
             LinkedChooser, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
         },
-        card::{CardDefId, CardDefinition},
+        card::{ActivatedAbilityDefinition, CardDefId, CardDefinition},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
@@ -231,33 +231,36 @@ impl Game {
         }
     }
 
-    fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        // A granted ability keeps its grantor's text after the grantor leaves.
-        let definition = match ability.granted_by {
-            Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
-                .attached_grants()
-                .nth(grant.index),
-            None => self
-                .source_face(ability.source_card, ability.source_definition_id)
-                .and_then(|face| face.activated_abilities.get(ability.ability_index)),
-        };
-        // An ability past the printed ones is inherited (Koh): it is read from
-        // the definition the source still has the abilities of.
-        let definition = definition.cloned().or_else(|| {
-            let printed = self
-                .source_face(ability.source_card, ability.source_definition_id)?
-                .activated_abilities
-                .len();
+    /// The ability's definition on its source's face. An index past the
+    /// printed abilities is inherited (Koh): it reads the definition the
+    /// source still has the abilities of.
+    fn own_activated_ability(
+        &self,
+        ability: &ActivatedAbilityOnStack,
+    ) -> Option<&ActivatedAbilityDefinition> {
+        let printed = &self
+            .source_face(ability.source_card, ability.source_definition_id)?
+            .activated_abilities;
+        printed.get(ability.ability_index).or_else(|| {
             let permanent = self.lookup_current_permanent(ability.source_ref).ok()?;
             let inherited = self.inherited_definition(permanent)?;
             self.state
                 .content
                 .definition(inherited)?
                 .activated_abilities
-                .get(ability.ability_index.checked_sub(printed)?)
-                .cloned()
-        });
-        let Some(definition) = definition else {
+                .get(ability.ability_index - printed.len())
+        })
+    }
+
+    fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
+        // A granted ability keeps its grantor's text after the grantor leaves.
+        let definition = match ability.granted_by {
+            Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
+                .attached_grants()
+                .nth(grant.index),
+            None => self.own_activated_ability(&ability),
+        };
+        let Some(definition) = definition.cloned() else {
             return;
         };
 

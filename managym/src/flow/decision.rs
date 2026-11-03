@@ -577,18 +577,14 @@ impl Game {
         self.stop_keeping_creatures(player, max_total_power, kept)
     }
 
-    /// The permanents a pending `Decision::ChooseToExile` may add: matching,
-    /// controlled by an opponent of its controller, not yet chosen.
-    pub(crate) fn exile_choice_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
-        let Decision::ChooseToExile {
-            controller,
-            predicate,
-            chosen,
-            ..
-        } = decision
-        else {
-            return Vec::new();
-        };
+    /// The permanents a `Decision::ChooseToExile` may add: matching, controlled
+    /// by an opponent of its controller, not yet chosen.
+    fn exile_choice_candidates(
+        &self,
+        controller: PlayerId,
+        predicate: &CardPredicate,
+        chosen: &[PermanentId],
+    ) -> Vec<PermanentId> {
         self.battlefield_permanents(PlayerId(1 - controller.0))
             .into_iter()
             .filter(|id| !chosen.contains(id) && self.permanent_matches_predicate(*id, predicate))
@@ -604,22 +600,18 @@ impl Game {
         predicate: CardPredicate,
         chosen: Vec<PermanentId>,
     ) -> Option<Decision> {
-        let decision = Decision::ChooseToExile {
+        if self
+            .exile_choice_candidates(controller, &predicate, &chosen)
+            .is_empty()
+        {
+            return self.next_exile_chooser(player, controller, predicate, chosen);
+        }
+        Some(Decision::ChooseToExile {
             player,
             controller,
             predicate,
             chosen,
-        };
-        if !self.exile_choice_candidates(&decision).is_empty() {
-            return Some(decision);
-        }
-        let Decision::ChooseToExile {
-            predicate, chosen, ..
-        } = decision
-        else {
-            unreachable!()
-        };
-        self.next_exile_chooser(player, controller, predicate, chosen)
+        })
     }
 
     fn next_exile_chooser(
@@ -874,12 +866,17 @@ impl Game {
                     .collect(),
                 focus: source_focus,
             },
-            Decision::ChooseToExile { player, .. } => ActionSpace {
+            Decision::ChooseToExile {
+                player,
+                controller,
+                predicate,
+                chosen,
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.exile_choice_candidates(&suspended.decision)
+                    self.exile_choice_candidates(*controller, predicate, chosen)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
                     true,
@@ -1252,34 +1249,6 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::ChooseToExile { .. }, Action::SelectCard { card, .. }) => {
-                let candidates = self.exile_choice_candidates(&suspended.decision);
-                let selected =
-                    self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
-                let Some(selected) = selected else {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("illegal permanent to choose".into()));
-                };
-                let Decision::ChooseToExile {
-                    player,
-                    controller,
-                    predicate,
-                    chosen,
-                } = &mut suspended.decision
-                else {
-                    unreachable!()
-                };
-                chosen.push(selected);
-                let (player, controller, predicate, chosen) = (
-                    *player,
-                    *controller,
-                    predicate.clone(),
-                    std::mem::take(chosen),
-                );
-                let next = self.next_exile_chooser(player, controller, predicate, chosen);
-                self.continue_resolution(suspended, next);
-                Ok(())
-            }
             (
                 Decision::ChooseToExile {
                     player,
@@ -1287,15 +1256,24 @@ impl Game {
                     predicate,
                     chosen,
                 },
-                Action::Decline { .. },
+                action @ (Action::SelectCard { .. } | Action::Decline { .. }),
             ) => {
-                let (player, controller, predicate, chosen) = (
+                if let Action::SelectCard { card, .. } = action {
+                    let candidates = self.exile_choice_candidates(*controller, predicate, chosen);
+                    let selected =
+                        self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
+                    let Some(selected) = selected else {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("illegal permanent to choose".into()));
+                    };
+                    chosen.push(selected);
+                }
+                let next = self.next_exile_chooser(
                     *player,
                     *controller,
                     predicate.clone(),
                     std::mem::take(chosen),
                 );
-                let next = self.next_exile_chooser(player, controller, predicate, chosen);
                 self.continue_resolution(suspended, next);
                 Ok(())
             }

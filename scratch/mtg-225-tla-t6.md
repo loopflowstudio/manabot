@@ -20,7 +20,8 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
   cards (pool reason, deck admission). The front's tokens carry a definition
   reference to the back row (like `token_name`).
 - **Face state on the card.** `Card` keeps its front row while the back face
-  is up (`Card::transform` swaps `definition_id`/`definition`); leaving the
+  is up (`Card::turn_back_face_up`/`turn_front_face_up` swap
+  `definition_id`/`definition`); leaving the
   battlefield turns it front face up (CR 712.8a, 400.7). Transforming keeps
   the same permanent (counters, damage, attacking; CR 712.9). "Return it
   transformed" enters with the back face up (`ZoneEntry.transformed`,
@@ -77,6 +78,9 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 
 ## Checks
 
+- 2026-11-02 (compress): debug `cargo test --lib --tests --no-fail-fast` fails only
+  `checked_semantic_conformance_evidence_reproduces` (re-record at gate); clippy
+  clean. Extension not rebuilt and pytest not rerun; gate owns both.
 - 2026-11-02: debug `cargo test --tests` green except Scryfall fixture (fixed) and
   semantic-kernel w17 evidence (content digest moved; re-record at gate).
 - 2026-11-02 (one catalog + face fixes merged, HEAD): debug `cargo test --lib
@@ -176,25 +180,3 @@ may give its vocabulary, all binding the world catalog; collapsing them to
 `None`. Curated manifests keep `semantic_pack_key`, resolved as a setup name.
 Kept, allowed by the steer: `Arc<ContentPack>` on game state and public
 `register_card`, which content-sensitivity tests use to extend a copy.
-
-## One catalog (steer b222da8f)
-
-Merged from `jack/mtg-225-t6-one-catalog` (`3493282a4`). Every match runs on one
-catalog; authored setups are decklists named by preset or `pack_key`;
-`PlayerConfig.world` is `submitted: bool` natively and Python accepts only
-`None`/`WORLD_SETUP`. World digest, length and id-to-name manifest were identical
-before and after at `2c1ba169f` (`6741f471...`, 345).
-
-Cost for Jack Heart to decide: authored vocabulary names bind the whole catalog.
-UR/GW encoder 31 to 345 definitions; `definitions()` 4.9 to 45.3 ms; Etude worker
-fixture 5.07 to 31.29 s, 26 s of it in `backward`. Options: accept it, or encode
-only the definitions a batch uses.
-
-Consequences: authored-pack checkpoints no longer load (pinned by a test);
-edited `setups` in a checkpoint binding now load, with execution still comparing
-decks; explicit-pack assertions were removed from mirror admission, matchup and
-Elemental tests; `CURRENT_PACK_KEYS` stays as names that all bind the catalog.
-
-Re-record at gate, none rewritten: semantic-kernel w17 evidence and manifest;
-authored-match and parity, public-commitment parity; Academy choice-navigation,
-learn, precision, precision-mana and trigger-order fixtures.

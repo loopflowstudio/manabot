@@ -572,9 +572,7 @@ impl Game {
             }
             // CR 712.8a: a double-faced card is front face up outside the
             // battlefield.
-            if self.state.cards[card].is_transformed() {
-                self.state.cards[card].transform(None);
-            }
+            self.state.cards[card].turn_front_face_up();
         }
 
         if let Some(lki) = departing_lki {
@@ -598,11 +596,7 @@ impl Game {
 
         if to_zone == ZoneType::Battlefield {
             if entry.transformed {
-                let back = self
-                    .state
-                    .content
-                    .back_face(self.state.cards[card].definition_id);
-                self.state.cards[card].transform(back);
+                self.show_back_face(card);
             }
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent =
@@ -612,11 +606,6 @@ impl Game {
             permanent.cast_x = cast_x;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
-            // CR 714.3a: a Saga enters with a lore counter, which triggers its
-            // first chapter (CR 714.2b).
-            if self.state.cards[card].is_saga() {
-                permanent.counters.change(CounterKind::Lore, 1);
-            }
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
             if self.state.cards[card].types.is_land() {
@@ -642,19 +631,12 @@ impl Game {
             face_down: entry.face_down,
         };
         self.emit(event);
-        if let Some(saga) = self.state.card_to_permanent[card]
-            .filter(|_| to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga())
-        {
-            let total = self.state.permanents[saga]
-                .as_ref()
-                .map_or(0, |permanent| permanent.counter_count(CounterKind::Lore));
-            self.emit(GameEvent::CountersPut {
-                permanent: saga,
-                kind: CounterKind::Lore,
-                count: 1,
-                total,
-                by: holder,
-            });
+        // CR 714.3a: a Saga enters with a lore counter, which triggers its
+        // first chapter (CR 714.2b).
+        if to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga() {
+            if let Some(saga) = self.state.card_to_permanent[card] {
+                self.put_counters(saga, CounterKind::Lore, 1, holder);
+            }
         }
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_ref, to_zone);
@@ -685,28 +667,29 @@ impl Game {
 
     /// Transform a double-faced permanent (CR 701.27a): it turns over and
     /// stays the same object, keeping its counters, damage, attachments and
-    /// combat status (CR 701.27a). Returns false for anything else, which
-    /// can't transform (CR 701.27c).
-    pub(crate) fn transform_permanent(&mut self, permanent: PermanentId) -> bool {
+    /// combat status (CR 701.27a). Anything else can't transform and stays as
+    /// it is (CR 701.27c).
+    pub(crate) fn transform_permanent(&mut self, permanent: PermanentId) {
         let Some(card) = self.state.permanents[permanent].as_ref().map(|p| p.card) else {
-            return false;
+            return;
         };
-        let back = if self.state.cards[card].is_transformed() {
-            None
-        } else {
-            match self
-                .state
-                .content
-                .back_face(self.state.cards[card].definition_id)
-            {
-                Some(back) => Some(back),
-                None => return false,
-            }
-        };
-        self.state.cards[card].transform(back);
+        if self.state.cards[card].is_transformed() {
+            self.state.cards[card].turn_front_face_up();
+        } else if !self.show_back_face(card) {
+            return;
+        }
         // Its mana abilities and static grants may change for either player.
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));
+    }
+
+    /// Show a card's back face; false when it has none.
+    fn show_back_face(&mut self, card: CardId) -> bool {
+        let definition = self.state.cards[card].definition_id;
+        let Some(back) = self.state.content.back_face(definition) else {
+            return false;
+        };
+        self.state.cards[card].turn_back_face_up(back);
         true
     }
 

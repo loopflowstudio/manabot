@@ -46,7 +46,6 @@ fn divide_by_zero() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
-            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -185,7 +184,6 @@ fn igneous_inspiration() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
-            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()

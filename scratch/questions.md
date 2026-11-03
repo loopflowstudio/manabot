@@ -1,62 +1,8 @@
 # Questions and assumptions
 
-Notes inherited from stacked parents that have since merged into main (D1
-decklist import, T2, afbd6a, 558daa, T3 and its characteristics view, T4,
-MTG-234, the 2026-10-30 Clean-machine Play and action-identity CI fixes) are
-retained at `1e9fd2d7c:scratch/questions.md` (lines 5–472). None selects work
-here; main carries their outcomes.
-
-## T5 (a7234f) — 2026-10-30 operator choices
-
-- Started from main; stacked on T3 (`3cef39b8e`, its local main merge, not
-  yet pushed) per Jack Heart's design review.
-- Surveil reuses the LookAndSelect surface (select = graveyard, decline =
-  keep) instead of a new action type, which would change `ACTION_TYPE_DIM`.
-  Kept cards stay in order: exact for surveil 1, the only printed amount.
-- Joo Dee's fixture entry was added from Scryfall's card API with the refresh
-  script's fields, not a full bulk refresh (which reorders the file).
-- `world` reports 239 eligible definitions (T3's 236 plus Joo Dee, Ran and
-  Shaw, Phoenix Fleet Airship).
-- 2026-10-30 (T5 implementation, headless):
-  - Copy exceptions reuse T3's `Modification` rather than a separate
-    `CopyException` enum, so exceptions and layered records share one
-    vocabulary and token id.
-  - The protocol field is `copy_of`, because pydantic's `BaseModel.copy`
-    shadows `copy`.
-  - The Airship's static is a self-relative `StaticAbility::CreatureWithNamesakes`,
-    not a conditional `StaticTypeGrant`, since `check_static_condition` has no
-    source.
-  - `/verify` was not run before commits: that Loopflow skill finishes the Task
-    after merge, and T5 stops at demo.
-- 2026-10-30 (demo iteration): `ContinuationFrame.decision` means different
-  things per frame kind (obligation code for kind 6, trigger ordering class for
-  7/8, placement group for 9). The LLM text renderer had read all of them
-  through one obligation table, where slot 14 said "order triggers" although
-  the engine's 14 is `SearchDistinctLands`. The renderer now labels each kind
-  separately (`_frame_decision`), so the text for trigger frames changes
-  wording. No retained fixture holds that text.
-
-## T5 sync onto main — 2026-11-02 (headless)
-
-- Merged with T3's head `a18902e0e` as the base (main's T3 is its squash) so
-  only T5's own diff met the characteristics cache and T4.
-- T5's `PlayerTurnHistory`, player column, `update_turn_history` and
-  `StaticCondition::SacrificedThisTurnAtLeast` were dropped for T4's struct,
-  column position (after attacked) and `Condition`; the Airship trigger uses
-  T4's `intervening_if`. Decision codes keep main's numbering, Surveil is 22.
-- Singular wording ("sacrificed 1 permanent", "drew 1 card") replaced main's
-  test expectation "drew 1 cards"; no retained fixture holds that text.
-
-## T5 gate at the green head — 2026-11-02 (headless)
-
-- The supported-card count in `WORLDS.md` was derived by addition (main's
-  263 plus three), but the engine counts 314 eligible definitions. Main's
-  figure was already stale: T3 recorded 236, T4 added 75 cards and T5 three,
-  which is the 314 `set_cards` reports. The gate corrected the branch's
-  statements to the measured number and did not touch main's history.
-- `/verify` was not run before the gate commit, as for earlier T5 commits:
-  that Loopflow skill checks a merged change and finishes the Task, and
-  shipping is stopped.
+Notes inherited from merged stacked parents are retained in git: D1 through
+MTG-234 at `1e9fd2d7c:scratch/questions.md`; T5 (plan, demo and operator choices,
+merged to main as `a8abf01b1`) at `1bc8b33fb:scratch/`. None selects work here.
 
 # T6 (MTG-225) operator choices — 2026-11-02, headless
 
@@ -81,8 +27,7 @@ here; main carries their outcomes.
   (Aang, Swift Savior's "creature or spell").
 - Copies of double-faced permanents follow CR 707.8a (post-2021): the token
   has both faces and is transformed if the original is, so it can transform.
-- Foggy Swamp Visions' "X target creature cards" offers up to X targets
-  (`max_x`), not exactly X; "your next end step" uses the next end step, the
+- Foggy Swamp Visions: "your next end step" uses the next end step, the
   same for a sorcery. Its heuristic polarity is pinned "harmful" (exile).
 - Additional combat phases are a stack on `TurnState` observed as a count on
   the active player's row; a pending phase's attacker limit is visible only
@@ -115,4 +60,5 @@ here; main carries their outcomes.
   only if the face it came from is still up. A permanent flipped twice while the
   ability waits would still transform. A departed back face's triggers read the
   front face; no current TLA back face has a leaves trigger on itself.
-
+- Exactly-X targets ("X target creature cards") are `max_x` with a nonzero `min`;
+  "up to X" keeps `min` 0.

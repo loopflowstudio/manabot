@@ -959,7 +959,7 @@ pub struct Card {
     pub copy: Option<crate::state::effect::CopyEffect>,
     definition: Arc<CardDefinition>,
     /// The front face's row while the back face is up (CR 712.8): set by
-    /// [`Card::transform`], cleared as the card leaves the battlefield.
+    /// [`Card::turn_back_face_up`], cleared by [`Card::turn_front_face_up`].
     front: Option<(CardDefId, Arc<CardDefinition>)>,
 }
 
@@ -995,26 +995,17 @@ impl Card {
         self.front.is_some()
     }
 
-    /// The front face's row, whichever face is up: the card's identity in
-    /// every zone but the battlefield.
-    pub fn front_definition_id(&self) -> CardDefId {
-        self.front
-            .as_ref()
-            .map_or(self.definition_id, |(id, _)| *id)
+    /// Show the back face, a row of [`ContentPack::back_face`](crate::cards::content_pack::ContentPack::back_face).
+    pub fn turn_back_face_up(&mut self, (id, definition): (CardDefId, Arc<CardDefinition>)) {
+        let front = (self.definition_id, Arc::clone(&self.definition));
+        self.show(id, definition);
+        self.front = Some(front);
     }
 
-    /// Turn it over (CR 701.27a): to the given back face, or back to its
-    /// front. A card without that face cannot transform (CR 701.27c), which
-    /// callers check with [`ContentPack::back_face`](crate::cards::content_pack::ContentPack::back_face).
-    pub fn transform(&mut self, back: Option<(CardDefId, Arc<CardDefinition>)>) {
-        match (self.front.take(), back) {
-            (Some((id, definition)), _) => self.show(id, definition),
-            (None, Some((id, definition))) => {
-                let front = (self.definition_id, Arc::clone(&self.definition));
-                self.show(id, definition);
-                self.front = Some(front);
-            }
-            (None, None) => {}
+    /// Show the front face, if the back face is up.
+    pub fn turn_front_face_up(&mut self) {
+        if let Some((id, definition)) = self.front.take() {
+            self.show(id, definition);
         }
     }
 

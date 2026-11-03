@@ -377,7 +377,7 @@ impl Game {
         }));
         // "X targets" (CR 601.2c): X can't exceed the legal candidates.
         for requirement in self.state.cards[card].target_requirements() {
-            if requirement.exact_x {
+            if requirement.exact_x() {
                 let legal = self.legal_targets_for_requirement(player, card, &requirement);
                 values.retain(|x| usize::from(*x) <= legal.len());
             }

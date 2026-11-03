@@ -231,7 +231,7 @@ impl Game {
                     return false;
                 };
                 let card = &self.state.cards[permanent.card];
-                let Some(last) = card.final_chapter().filter(|_| card.is_saga()) else {
+                let Some(last) = card.final_chapter() else {
                     return false;
                 };
                 permanent.counter_count(CounterKind::Lore) >= i32::from(last)
@@ -244,28 +244,32 @@ impl Game {
     /// the stack: waiting to be put on it, or on it.
     fn chapter_ability_pending(&self, saga: CardId) -> bool {
         let object = self.current_object_ref(saga);
-        let is_chapter = |index: usize| {
-            matches!(
-                self.state.cards[saga].abilities.get(index),
-                Some(Ability::Triggered {
-                    condition: TriggerCondition::Chapter { .. },
-                    ..
-                })
-            )
+        let is_chapter = |card, source_ref, inline: &Option<_>, index: usize| {
+            card == saga
+                && source_ref == object
+                && inline.is_none()
+                && matches!(
+                    self.state.cards[saga].abilities.get(index),
+                    Some(Ability::Triggered {
+                        condition: TriggerCondition::Chapter { .. },
+                        ..
+                    })
+                )
         };
         self.state.pending_triggers.iter().any(|trigger| {
-            trigger.source_card == saga
-                && trigger.source_ref == object
-                && trigger.inline_effects.is_none()
-                && is_chapter(trigger.ability_index)
-        }) || self.state.stack_objects.iter().any(|item| match item {
-            StackObject::TriggeredAbility(ability) => {
-                ability.source_card == saga
-                    && ability.source_ref == object
-                    && ability.inline_effects.is_none()
-                    && is_chapter(ability.ability_index)
-            }
-            _ => false,
+            is_chapter(
+                trigger.source_card,
+                trigger.source_ref,
+                &trigger.inline_effects,
+                trigger.ability_index,
+            )
+        }) || self.state.stack_objects.iter().any(|item| {
+            matches!(item, StackObject::TriggeredAbility(ability) if is_chapter(
+                ability.source_card,
+                ability.source_ref,
+                &ability.inline_effects,
+                ability.ability_index,
+            ))
         })
     }
 
