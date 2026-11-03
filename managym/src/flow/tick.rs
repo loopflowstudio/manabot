@@ -74,7 +74,7 @@ impl Game {
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
-        std::mem::take(&mut self.state.events)
+        std::mem::take(self.state.events_mut())
     }
 
     pub(crate) fn tick(&mut self) -> bool {
@@ -106,8 +106,8 @@ impl Game {
 
         if !self.state.turn.step_initialized {
             self.on_step_start(step);
-            self.state.turn.step_initialized = true;
-            self.state.turn.turn_based_actions_complete = false;
+            self.state.set_step_initialized(true);
+            self.state.set_turn_based_actions_complete(false);
         }
 
         if let Some(space) = self.suspended_decision_action_space() {
@@ -118,13 +118,15 @@ impl Game {
             if let Some(space) = self.perform_turn_based_actions(step) {
                 return Some(space);
             }
-            self.state.turn.turn_based_actions_complete = true;
+            self.state.set_turn_based_actions_complete(true);
         }
 
         if step == StepKind::Cleanup {
             if !self.state.turn.cleanup_priority {
                 let choice = self.stabilize_before_priority();
-                self.state.turn.cleanup_priority |= choice.is_some();
+                if choice.is_some() {
+                    self.state.set_cleanup_priority(true);
+                }
                 if let Some(space) = choice {
                     return Some(space);
                 }
@@ -134,8 +136,8 @@ impl Game {
                     return Some(space);
                 }
                 // CR 514.3a: repeat cleanup after this priority round finishes.
-                self.state.turn.cleanup_priority = false;
-                self.state.turn.turn_based_actions_complete = false;
+                self.state.set_cleanup_priority(false);
+                self.state.set_turn_based_actions_complete(false);
                 return None;
             }
         }
@@ -149,7 +151,7 @@ impl Game {
         // CR 106.4 — Unspent mana empties at the end of each step and phase.
         self.clear_mana_pools();
         self.on_step_end(step);
-        self.state.turn.advance_step();
+        self.state.advance_step();
 
         None
     }
@@ -169,7 +171,7 @@ impl Game {
                 player,
                 turn_number: self.state.turn.turn_number,
             };
-            self.state.events.push(event.clone());
+            self.state.events_mut().push(event.clone());
             self.emit_observation_event(event);
         }
         // Emitted (not just logged) so step-based triggers such as

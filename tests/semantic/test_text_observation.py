@@ -507,7 +507,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "toughness": "card power/toughness",
         "mana_cost": "cost",
         "card_types": "type flags",
-        "keywords": "printed keywords",
+        "keywords": "keywords",
         "is_token": "token",
         "is_legendary": "legendary",
         "is_ally": "Ally",
@@ -550,8 +550,10 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "mana": "mana pool",
         "lesson_mana": "Restricted mana",
         "known_hand": "known hand",
+        "main_counts": "Main deck, or Decklist: closed",
+        "unseen_counts": "Unseen cards",
         "sideboard_counts": "Initial sideboard",
-        "remaining_sideboard_counts": "Owned outside-game candidates",
+        "remaining_sideboard_counts": "Remaining sideboard",
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
@@ -759,6 +761,37 @@ def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
     assert "This turn: sacrificed 2 permanents." in text
     assert "copy of" not in decision.text
     assert "This turn:" not in decision.text
+
+
+def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects() -> None:
+    """Conflicting injected data proves the renderer reads the engine's flag.
+
+    Rust observability tests prove real Nonlegendary effects clear that flag;
+    text rendering must not recalculate it from the permanent's effect list.
+    """
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["effects"] = [
+        {"modification": "Nonlegendary", "duration": "EndOfTurn", "timestamp": 90}
+    ]
+    ogre_card = next(
+        card
+        for card in state["agent_cards"]
+        if card["registry_key"] == ogre["registry_key"] and card["zone"] == 2
+    )
+    assert "legendary no" in decision.text
+    ogre_card["is_legendary"] = True
+    text = render_decision(_redigest(payload)).text
+    card_line = next(
+        line
+        for line in text.splitlines()
+        if "[D" in line and "Gray Ogre" in line and "owner" in line
+    )
+    assert "legendary yes" in card_line
+    assert "; effect until end of turn: isn't legendary" in text
 
 
 def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:

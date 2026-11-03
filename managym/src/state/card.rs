@@ -1036,6 +1036,12 @@ impl Card {
         self.subtypes.iter().any(|s| s == subtype)
     }
 
+    pub fn is_legendary(&self) -> bool {
+        self.supertypes
+            .iter()
+            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
+    }
+
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
     /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
     /// [`crate::flow::game::Game::has_instant_timing`].

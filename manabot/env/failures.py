@@ -34,6 +34,9 @@ class PlayerSetup(BaseModel):
     sideboard: dict[str, int]
     # Earlier evidence names the selector `content_pack`.
     world: str | None = Field(validation_alias=AliasChoices("world", "content_pack"))
+    disclosure: Literal["open", "closed"] = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
 
     @classmethod
     def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
@@ -42,6 +45,7 @@ class PlayerSetup(BaseModel):
             decklist=player.decklist,
             sideboard=player.sideboard,
             world=player.world,
+            disclosure=player.disclosure,
         )
 
     def native(self) -> managym.PlayerConfig:

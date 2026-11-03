@@ -161,7 +161,11 @@ trigger conditioned on T4's sacrifice history, and a Vehicle that is an artifact
 creature while you control enough permanents with its name. Joo Dee, One of Many, Ran and Shaw
 and Phoenix Fleet Airship are supported (314 in `world`). Observations add a
 permanent's `copy`; the policy input adds `Copy` and `CopyException` fact
-rows.
+rows. A battlefield card's row (name, power/toughness, card types, legendary,
+Ally and Lesson, ward, keywords) states the layered characteristics the rules
+read, not the printed card; off the battlefield it states the printed card.
+Legendary is a layered supertype: the legend rule and the card row both read
+it, so a `Nonlegendary` record exempts its permanent (CR 704.5j).
 
 Task MTG-225 (TLA batch T6) extends w17 with Sagas and transforming
 double-faced cards. A back face is its own definition row, registered right
@@ -217,6 +221,15 @@ the 142-Command authored tape) and `public-commitment-parity-w17-v1` bind this
 world, re-recorded in place as it grows. Academy `*-w17.json` demo,
 choice-navigation and trigger-order fixtures reach the same decision revisions
 as their w15 predecessors. Belief encoding receipts use possible-world space v3.
+
+Task MTG-216 (2026-10-30, same world) makes decklist disclosure a match option:
+open (default; each player knows the other's main deck and sideboard) or
+closed (neither). Observations carry main, unseen, sideboard and
+remaining-sideboard counts by definition for every known decklist; v5 adds a
+`decklists` buffer `(2, 60, 5)` that is zero for a closed opponent. Search and
+possible worlds refuse a closed opponent.
+The Academy navigation fixture and the authored-match and parity receipts
+were re-recorded with the same Commands; state digests are unchanged.
 
 ## w16: one card authority (superseded by w17)
 

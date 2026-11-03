@@ -95,11 +95,16 @@ impl Game {
             ids.insert(stack.source_card_registry_key as u32);
         }
         for player in [&agent.agent, &agent.opponent] {
+            ids.extend(player.known_hand.keys());
             for counts in [
-                &player.known_hand,
+                &player.main_counts,
+                &player.unseen_counts,
                 &player.sideboard_counts,
                 &player.remaining_sideboard_counts,
-            ] {
+            ]
+            .into_iter()
+            .flatten()
+            {
                 ids.extend(counts.keys());
             }
         }

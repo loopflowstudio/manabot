@@ -197,7 +197,7 @@ impl Game {
         let Some(index) = self.find_ability_on_stack_index(id) else {
             return;
         };
-        let ability = self.state.stack_objects.remove(index);
+        let ability = self.state.stack_objects_mut().remove(index);
         let source_card = match &ability {
             StackObject::ActivatedAbility(ability) => ability.source_card,
             StackObject::TriggeredAbility(ability) => ability.source_card,
@@ -1222,7 +1222,7 @@ impl Game {
                         // Bounce a spell: its stack object ceases and the
                         // card returns to its owner's hand.
                         if let Some(index) = self.find_spell_on_stack_index(card) {
-                            self.state.stack_objects.remove(index);
+                            self.state.stack_objects_mut().remove(index);
                             let owner = self.state.cards[card].owner;
                             self.move_card(card, ZoneType::Hand);
                             self.invalidate_mana_cache(owner);
@@ -1480,7 +1480,7 @@ impl Game {
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
                     .filter(|id| {
-                        self.characteristics(*id).is_creature
+                        self.characteristics(*id).is_creature()
                             && self.state.permanents[*id].as_ref().is_some_and(|p| {
                                 let card = &self.state.cards[p.card];
                                 card.mana_cost
@@ -1517,7 +1517,7 @@ impl Game {
             Effect::MassDamage { amount } => {
                 for player in [PlayerId(0), PlayerId(1)] {
                     for permanent_id in self.battlefield_permanents(player) {
-                        if self.characteristics(permanent_id).is_creature {
+                        if self.characteristics(permanent_id).is_creature() {
                             self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
                         }
                     }
@@ -1846,10 +1846,8 @@ impl Game {
                 None
             }
             Effect::UntapSource => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.untap();
-                    let controller = permanent.controller;
-                    self.invalidate_mana_cache(controller);
+                if let Some(permanent_id) = self.source_permanent_id(frame) {
+                    self.untap_permanent(permanent_id);
                 }
                 None
             }
@@ -2118,11 +2116,10 @@ impl Game {
                 until_end_of_combat,
             } => {
                 self.invalidate_mana_cache(frame.controller);
-                let player = &mut self.state.players[frame.controller.0];
                 if *until_end_of_combat {
-                    player.combat_mana_pool.add(mana);
+                    self.state.combat_mana_pool_mut(frame.controller).add(mana);
                 } else {
-                    player.mana_pool.add(mana);
+                    self.state.mana_pool_mut(frame.controller).add(mana);
                 }
                 // Mana until end of combat is firebending's (CR 702.189a).
                 if *until_end_of_combat {
@@ -2133,11 +2130,7 @@ impl Game {
             Effect::UntapTarget { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.untap();
-                        let controller = permanent.controller;
-                        self.invalidate_mana_cache(controller);
-                    }
+                    self.untap_permanent(permanent_id);
                 }
                 None
             }
@@ -2288,7 +2281,7 @@ impl Game {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
-        let timestamp = self.state.id_gen.next_id();
+        let timestamp = self.state.id_gen_mut().next_id();
         if let Some(equipment) = self.source_permanent_mut(frame) {
             equipment.attached_to = Some(object);
             // CR 613.7e: an attachment receives a new timestamp.
@@ -2436,17 +2429,17 @@ impl Game {
                     && self.permanent_matches_predicate(id, predicate)
             }
             TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
-                self.characteristics(id).is_creature
+                self.characteristics(id).is_creature()
             }
             TargetSpec::CreatureYouControl => {
-                permanent.controller == controller && self.characteristics(id).is_creature
+                permanent.controller == controller && self.characteristics(id).is_creature()
             }
-            TargetSpec::CreatureOrSpell => self.characteristics(id).is_creature,
+            TargetSpec::CreatureOrSpell => self.characteristics(id).is_creature(),
             TargetSpec::CreatureOpponentControls => {
-                permanent.controller != controller && self.characteristics(id).is_creature
+                permanent.controller != controller && self.characteristics(id).is_creature()
             }
             TargetSpec::LandYouControl => {
-                permanent.controller == controller && self.characteristics(id).is_land
+                permanent.controller == controller && self.characteristics(id).is_land()
             }
             TargetSpec::SpellOrPermanent { min_mana_value } => {
                 self.card_mana_value(permanent.card) >= *min_mana_value

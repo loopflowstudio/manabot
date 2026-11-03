@@ -639,11 +639,19 @@ class _Renderer:
                 )
             for effect in player.effects:
                 lines.append(f"Effect: {self._effect(effect)}.")
-            for label, quantities in (
-                ("Publicly known hand minima", player.known_hand),
-                ("Initial sideboard", player.sideboard_counts),
-                ("Remaining sideboard", player.remaining_sideboard_counts),
-            ):
+            counts: list[tuple[str, dict[int, int]]] = [
+                ("Publicly known hand minima", player.known_hand)
+            ]
+            if player.main_counts is None:
+                lines.append("Decklist: closed.")
+            else:
+                counts += [
+                    ("Main deck", player.main_counts),
+                    ("Unseen cards", player.unseen_counts or {}),
+                    ("Initial sideboard", player.sideboard_counts or {}),
+                    ("Remaining sideboard", player.remaining_sideboard_counts or {}),
+                ]
+            for label, quantities in counts:
                 lines.append(
                     label
                     + ": "
@@ -684,7 +692,7 @@ class _Renderer:
             )
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
-                optional += f"; printed keywords {keywords}"
+                optional += f"; keywords {keywords}"
             if card.face_down:
                 optional += "; foretold, face down (hidden from other players)"
             if card.x is not None:

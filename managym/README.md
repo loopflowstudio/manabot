@@ -156,7 +156,11 @@ casting context, while resolving costs and activations remain unrestricted
 contexts. Chosen-color mana abilities pay their activation costs before their
 immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
-taps are cost payment, not tapping for mana.
+taps are cost payment, not tapping for mana. The view is the one reader of a
+battlefield permanent's characteristics, legendary and ward included: the
+legend rule reads its `is_legendary`, and every `CardData` field that states a
+characteristic reads it there (`tests/cards/observability.rs` classifies each
+field as layered or printed by definition).
 
 A resolving spell remains on the stack until the zone-move authority commits
 its departure. That authority applies flashback exile replacement and captures

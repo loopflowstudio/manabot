@@ -128,6 +128,14 @@ checkpoints or experiment evidence.
   that adds it; a frozen policy-input version never silently falls behind.
   `managym/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
+- Decklist disclosure (open by default, or closed) lives on native
+  `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
+  `GameConfig.decklists`. Observations, search and possible worlds read it
+  through `Game::decklist_known`/`require_open_decklist`; never filter decklist
+  information in an encoder or the browser. V5 encodes the lists in the
+  `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
+  Academy's server keeps a closed opponent's deck name, the matchup's asset pack
+  and unseen definition names out of its frames and viewer trace exports.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -259,10 +267,18 @@ continuous-effect records and an Aura's `SetCharacteristics`. Code that the
 layer computation itself calls (static scopes, ability outputs) reads the
 private layer stages in `flow/statics.rs`, never the view.
 The view and its static-source index are computed once per state revision and
-shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` whose
-every mutable access advances the revision; only fields no characteristic
-reads (priority, the RNG) have non-advancing accessors. Debug builds recompute
-every cached view and index on read and assert they match.
+shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` with
+`Revisions` (`characteristics`, `mana_pools`, `triggers`): `DerefMut`
+advances every counter, and its typed accessors (`tap`, `mark_damage`,
+`events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
+their field feeds. Route a hot write through a typed accessor only when no
+layer, static condition or trigger source reads the field; debug builds
+recompute every cached view and index on read and assert they match, so a
+misclassified accessor fails `cargo test` in debug. Continuous-effect records
+live in `EffectRecords` (indexed by affected object and player); trigger
+sources are looked up per event kind through `TriggerIndex`
+(`flow/triggers.rs`), rebuilt on the `triggers` revision; departed-object
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

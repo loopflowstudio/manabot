@@ -273,6 +273,16 @@ impl Condition {
         }
     }
 
+    /// Whether answering reads a player's mana pools, so a static ability
+    /// with this condition follows the `mana_pools` revision.
+    pub fn reads_mana_pools(&self) -> bool {
+        match self {
+            Condition::UnspentManaAtLeast { .. } => true,
+            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_mana_pools),
+            _ => false,
+        }
+    }
+
     /// Whether answering needs a resolving spell or ability, so the
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {

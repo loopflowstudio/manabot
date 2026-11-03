@@ -34,11 +34,15 @@
 // (static scopes, ability mana outputs) never reads the view. A view computes
 // the shared layer inputs (`LayerBasis`) once and hands them to each stage.
 //
-// Derived data is cached per state revision (`TrackedState`, `StaticsCache`):
+// Derived data is cached per state revision (`TrackedState`, `DerivedCache`):
 // the static-source index (`StaticIndex`: attached permanents and the
-// permanents whose statics can apply) is built once per revision, and each
-// permanent's view is computed once per revision and shared as an `Arc`.
-// Any mutable access to state starts a new revision, so neither can go stale.
+// permanents whose statics can apply) is built once per `characteristics`
+// revision, and each permanent's view is computed once per revision and
+// shared as an `Arc`. Every write a layer may read advances that revision
+// (`Revisions`), so neither can go stale; a mana-pool write advances only
+// `mana_pools`, which the views follow while a static condition reads a pool.
+// The same cache holds the trigger-source index (`flow/triggers.rs`) at the
+// `triggers` revision.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -46,12 +50,16 @@ use std::{
 };
 
 use crate::{
-    flow::{decision::EffectFrame, game::Game},
+    flow::{
+        decision::EffectFrame,
+        game::{Game, Revisions},
+        triggers::TriggerIndex,
+    },
     state::{
-        ability::{Condition, Effect},
+        ability::{Condition, Effect, PaymentCost},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keywords, PowerCda,
-            Restriction, SetCharacteristics, StaticAbility, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, CardTypes, Keywords,
+            PowerCda, Restriction, SetCharacteristics, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
@@ -117,9 +125,14 @@ pub struct Characteristics {
     pub added_subtypes: Vec<String>,
     /// Distinct creature types (CR 205.3m), sorted.
     pub creature_types: Vec<String>,
-    pub is_creature: bool,
-    /// Printed or granted land.
-    pub is_land: bool,
+    /// Layer 4 card types: printed, added by static type grants, and
+    /// Creature (with Artifact for an artifact-creature record) when
+    /// animated.
+    pub types: CardTypes,
+    /// Layer 4 supertype: its copiable values' legendary supertype, unless a
+    /// `Modification::Nonlegendary` record removes it. The legend rule and
+    /// the card row read this.
+    pub is_legendary: bool,
     /// A creature by something other than its printed type: earthbend, its
     /// own counter threshold, or an effect.
     pub is_animated: bool,
@@ -130,6 +143,8 @@ pub struct Characteristics {
     /// Whether it has lost all abilities (a record, or a characteristic-
     /// setting Aura); grants with later timestamps still apply.
     pub abilities_lost: bool,
+    /// Its printed ward cost (layer 6), unless it has lost its abilities.
+    pub ward: Option<PaymentCost>,
     pub power: i32,
     pub toughness: i32,
     /// Printed abilities, then currently granted abilities in source order,
@@ -146,6 +161,15 @@ pub struct Characteristics {
 impl Characteristics {
     pub fn pt(&self) -> (i32, i32) {
         (self.power, self.toughness)
+    }
+
+    pub fn is_creature(&self) -> bool {
+        self.types.is_creature()
+    }
+
+    /// Printed or granted land.
+    pub fn is_land(&self) -> bool {
+        self.types.is_land()
     }
 
     pub fn has_subtype(&self, subtype: &str) -> bool {
@@ -168,32 +192,49 @@ struct StaticIndex {
     attachments: Vec<Attachment>,
     /// Static sources that have not lost their abilities.
     sources: Vec<StaticSource>,
+    /// A source's buff or keyword-grant condition reads a mana pool, so the
+    /// views depend on the `mana_pools` revision as well.
+    reads_mana_pools: bool,
 }
 
-/// State-derived statics data, valid for the state revision it was computed
-/// at; reading it at a later revision discards it first.
-#[derive(Default)]
-pub(crate) struct StaticsCache {
-    revision: u64,
+/// Data derived from state, valid for the `Revisions` it was computed at.
+/// Reading it at a later `characteristics` revision discards the static
+/// index and the views; a later `mana_pools` revision discards the views
+/// while the index reads the pools; a later `triggers` revision discards the
+/// trigger index. Cloned with the game: every entry is an immutable `Arc`.
+#[derive(Clone, Default)]
+pub(crate) struct DerivedCache {
+    revisions: Revisions,
     index: Option<Arc<StaticIndex>>,
     /// Indexed by `PermanentId`.
     characteristics: Vec<Option<Arc<Characteristics>>>,
+    pub(super) trigger_index: Option<Arc<TriggerIndex>>,
 }
 
 /// Opaque, so a game's `Debug` text does not depend on what was read.
-impl std::fmt::Debug for StaticsCache {
+impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("StaticsCache")
+        f.write_str("DerivedCache")
     }
 }
 
-impl StaticsCache {
-    fn at(&mut self, revision: u64) -> &mut Self {
-        if self.revision != revision {
-            self.revision = revision;
+impl DerivedCache {
+    pub(super) fn at(&mut self, revisions: Revisions) -> &mut Self {
+        if self.revisions.characteristics != revisions.characteristics {
             self.index = None;
             self.characteristics.clear();
+        } else if self.revisions.mana_pools != revisions.mana_pools
+            && self
+                .index
+                .as_ref()
+                .is_none_or(|index| index.reads_mana_pools)
+        {
+            self.characteristics.clear();
         }
+        if self.revisions.triggers != revisions.triggers {
+            self.trigger_index = None;
+        }
+        self.revisions = revisions;
         self
     }
 }
@@ -263,11 +304,11 @@ impl Game {
     /// applied by layer and then timestamp (see the header). Computed once
     /// per state revision.
     pub fn characteristics(&self, permanent_id: PermanentId) -> Arc<Characteristics> {
-        let revision = self.state.revision();
+        let revisions = self.state.revisions();
         let cached = self
-            .statics_cache
+            .derived
             .borrow_mut()
-            .at(revision)
+            .at(revisions)
             .characteristics
             .get(permanent_id.0)
             .and_then(Option::clone);
@@ -280,8 +321,8 @@ impl Game {
             return characteristics;
         }
         let characteristics = Arc::new(self.compute_characteristics(permanent_id));
-        let mut cache = self.statics_cache.borrow_mut();
-        let entries = &mut cache.at(revision).characteristics;
+        let mut cache = self.derived.borrow_mut();
+        let entries = &mut cache.at(revisions).characteristics;
         if entries.len() <= permanent_id.0 {
             entries.resize(permanent_id.0 + 1, None);
         }
@@ -303,7 +344,8 @@ impl Game {
         let sources = &index.sources;
         let basis = self.layer_basis(permanent_id, sources);
         let (power, toughness) = self.pt_with(permanent_id, &basis, sources);
-        let is_land = self.is_land_with(permanent_id, sources);
+        let types = self.types_with(permanent_id, sources);
+        let is_land = types.is_land();
         Characteristics {
             name: basis
                 .set
@@ -312,12 +354,13 @@ impl Game {
             characteristics_set: basis.set.is_some(),
             subtypes: owned(subtypes_with(card, &basis)),
             creature_types: owned(creature_types_with(card, &basis)),
-            is_creature: self.permanent_is_creature(permanent_id),
-            is_land,
+            is_legendary: self.is_legendary(permanent_id),
+            types,
             is_animated: self.permanent_is_animated(permanent_id),
             keywords: self.keywords_with(permanent_id, basis.lost, sources),
             firebending: self.firebending_with(permanent_id, basis.lost),
             abilities_lost: basis.lost.is_some(),
+            ward: basis.lost.is_none().then(|| card.ward().cloned()).flatten(),
             power,
             toughness,
             activated_abilities: self.activated_abilities_with(
@@ -333,14 +376,14 @@ impl Game {
     /// The static-source index at the current state revision, built once per
     /// revision.
     fn static_index(&self) -> Arc<StaticIndex> {
-        let revision = self.state.revision();
-        let cached = self.statics_cache.borrow_mut().at(revision).index.clone();
+        let revisions = self.state.revisions();
+        let cached = self.derived.borrow_mut().at(revisions).index.clone();
         if let Some(index) = cached {
             debug_assert_eq!(*index, self.build_static_index(), "stale static index");
             return index;
         }
         let index = Arc::new(self.build_static_index());
-        self.statics_cache.borrow_mut().at(revision).index = Some(index.clone());
+        self.derived.borrow_mut().at(revisions).index = Some(index.clone());
         index
     }
 
@@ -376,7 +419,7 @@ impl Game {
                 .iter()
                 .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
         });
-        let sources = battlefield
+        let sources: Vec<StaticSource> = battlefield
             .iter()
             .filter(|&&(card_id, permanent_id, _)| {
                 let projects = self.state.cards[card_id].statics.iter().any(|ability| {
@@ -403,9 +446,20 @@ impl Game {
                 (permanent_id, permanent.controller, card_id)
             })
             .collect();
+        let reads_mana_pools = sources.iter().any(|&(_, _, card_id): &StaticSource| {
+            let card = &self.state.cards[card_id];
+            card.pt_buffs()
+                .filter_map(|buff| buff.condition.as_ref())
+                .chain(
+                    card.keyword_grants()
+                        .filter_map(|grant| grant.condition.as_ref()),
+                )
+                .any(Condition::reads_mana_pools)
+        });
         StaticIndex {
             attachments,
             sources,
+            reads_mana_pools,
         }
     }
 
@@ -814,16 +868,39 @@ impl Game {
 
     /// Whether a battlefield permanent is a land, printed or granted.
     fn permanent_is_land(&self, permanent_id: PermanentId) -> bool {
-        self.is_land_with(permanent_id, &self.static_index().sources)
+        self.types_with(permanent_id, &self.static_index().sources)
+            .is_land()
     }
 
-    fn is_land_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> bool {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .is_some_and(|p| self.state.cards[p.card].types.is_land())
-            || self
-                .granted_card_types(permanent_id, sources)
-                .contains(&CardType::Land)
+    /// Layer 4 card types: printed, plus static type grants, plus Creature
+    /// when animated (an artifact-creature record also adds Artifact).
+    fn types_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> CardTypes {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return CardTypes::default();
+        };
+        let mut types = self.state.cards[permanent.card].types.clone();
+        types
+            .types
+            .extend(self.granted_card_types(permanent_id, sources));
+        if self.permanent_is_animated(permanent_id) {
+            types.types.insert(CardType::Creature);
+        }
+        if self.becomes_artifact_creature(permanent_id) {
+            types.types.insert(CardType::Artifact);
+        }
+        types
+    }
+
+    /// Layer 4 supertype: the copiable legendary supertype (a copy exception
+    /// is already in the card) unless a `Nonlegendary` record removes it.
+    fn is_legendary(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        self.state.cards[permanent.card].is_legendary()
+            && !self
+                .effects_on(permanent_id)
+                .any(|effect| effect.modification == Modification::Nonlegendary)
     }
 
     /// Distinct colors among `controller`'s permanents matching `predicate`
@@ -1243,7 +1320,7 @@ impl Game {
             return true;
         }
         let characteristics = self.characteristics(permanent_id);
-        !characteristics.is_creature || characteristics.keywords.haste
+        !characteristics.is_creature() || characteristics.keywords.haste
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's
@@ -1256,7 +1333,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        if !characteristics.is_creature {
+        if !characteristics.is_creature() {
             return false;
         }
         if permanent.deathtouch_damage && permanent.damage > 0 {

@@ -58,6 +58,7 @@ impl Game {
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
+            players[player_index].disclosure = config.disclosure;
             for (name, qty) in &config.deck.main {
                 for _ in 0..*qty {
                     let card = content
@@ -117,7 +118,7 @@ impl Game {
         }
 
         let mut game = Self {
-            statics_cache: Default::default(),
+            derived: Default::default(),
             state: TrackedState::new(GameState {
                 cards,
                 permanents: PermanentVec::default(),
@@ -138,7 +139,7 @@ impl Game {
                 trigger_placement: None,
                 delayed_triggers: Vec::new(),
                 exile_links: Vec::new(),
-                effects: Vec::new(),
+                effects: crate::state::effect::EffectRecords::default(),
                 cast_permissions: Default::default(),
                 suspended_decision: None,
                 trigger_enqueue_counter: 0,

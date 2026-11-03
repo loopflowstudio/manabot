@@ -896,7 +896,7 @@ impl Game {
         }
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         self.record_activation(permanent, ability_index, &ability);
-        let old = self.state.suspended_decision.take();
+        let old = self.state.suspended_decision_mut().take();
         self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {
             player,
             permanent,
@@ -904,7 +904,7 @@ impl Game {
             resume: old.as_ref().map(|s| Box::new(s.decision.clone())),
         });
         if let Some(old) = old {
-            self.state.suspended_decision.as_mut().unwrap().frame = old.frame;
+            self.state.suspended_decision_mut().as_mut().unwrap().frame = old.frame;
         }
         self.advance_mana_upfront()
     }
@@ -963,7 +963,7 @@ impl Game {
         if ability.sacrifice_source {
             self.sacrifice_permanent(permanent);
         }
-        let suspended = self.state.suspended_decision.as_mut().unwrap();
+        let suspended = self.state.suspended_decision_mut().as_mut().unwrap();
         let Decision::ManaUpfront { resume, .. } = &mut suspended.decision else {
             unreachable!()
         };
@@ -984,7 +984,7 @@ impl Game {
             .collect::<Vec<_>>();
         self.tap_permanent(permanent, true);
         for mana in produced {
-            self.state.players[player.0].mana_pool.add(&mana);
+            self.state.mana_pool_mut(player).add(&mana);
         }
     }
 
@@ -1008,12 +1008,12 @@ impl Game {
             return cached.clone();
         }
         let mana = self.producible_mana(player);
-        self.state.mana_cache[player.0] = Some(mana.clone());
+        self.state.mana_cache_mut()[player.0] = Some(mana.clone());
         mana
     }
 
     pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.state.mana_cache[player.0] = None;
+        self.state.mana_cache_mut()[player.0] = None;
     }
 
     /// The same witness used by automatic production determines PayCost offers.
@@ -1085,19 +1085,18 @@ impl Game {
     fn spend_mana_to_remainder(&mut self, player: PlayerId, remaining: Mana) {
         // Rebuild the pools by restriction class and color, consuming the
         // expiring combat pool before the regular pool within each class.
-        let player_state = &mut self.state.players[player.0];
-        let mut classes = player_state
-            .mana_pool
+        let (mana_pool, combat_mana_pool) = self.state.mana_pools_mut(player);
+        let mut classes = mana_pool
             .restricted()
             .iter()
-            .chain(player_state.combat_mana_pool.restricted())
+            .chain(combat_mana_pool.restricted())
             .map(|(class, _)| *class)
             .collect::<Vec<_>>();
         classes.sort();
         classes.dedup();
         for class in classes {
-            let mut regular = player_state.mana_pool.restricted_of(class);
-            let mut combat = player_state.combat_mana_pool.restricted_of(class);
+            let mut regular = mana_pool.restricted_of(class);
+            let mut combat = combat_mana_pool.restricted_of(class);
             let left = remaining.restricted_of(class);
             for slot in 0..left.len() {
                 let spent = regular[slot] + combat[slot] - left[slot];
@@ -1105,16 +1104,14 @@ impl Game {
                 combat[slot] -= from_combat;
                 regular[slot] -= spent - from_combat;
             }
-            player_state.mana_pool.set_restricted(class, regular);
-            player_state.combat_mana_pool.set_restricted(class, combat);
+            mana_pool.set_restricted(class, regular);
+            combat_mana_pool.set_restricted(class, combat);
         }
         for slot in 0..remaining.mana.len() {
-            let spent = player_state.mana_pool.mana[slot]
-                + player_state.combat_mana_pool.mana[slot]
-                - remaining.mana[slot];
-            let combat = spent.min(player_state.combat_mana_pool.mana[slot]);
-            player_state.combat_mana_pool.mana[slot] -= combat;
-            player_state.mana_pool.mana[slot] -= spent - combat;
+            let spent = mana_pool.mana[slot] + combat_mana_pool.mana[slot] - remaining.mana[slot];
+            let combat = spent.min(combat_mana_pool.mana[slot]);
+            combat_mana_pool.mana[slot] -= combat;
+            mana_pool.mana[slot] -= spent - combat;
         }
     }
 
@@ -1138,8 +1135,11 @@ impl Game {
     /// `clear_combat_mana_pools`.
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
-            let pool = std::mem::take(&mut self.state.players[player.0].mana_pool);
-            self.state.players[player.0].mana_pool = self.unspent_mana_retained(player, pool);
+            if self.state.players[player.0].mana_pool.total() == 0 {
+                continue;
+            }
+            let pool = std::mem::take(self.state.mana_pool_mut(player));
+            *self.state.mana_pool_mut(player) = self.unspent_mana_retained(player, pool);
         }
     }
 
@@ -1147,9 +1147,12 @@ impl Game {
     /// `unspent_mana_retained` keeps joins the ordinary pool.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
-            let combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
+            if self.state.players[player.0].combat_mana_pool.total() == 0 {
+                continue;
+            }
+            let combat = std::mem::take(self.state.combat_mana_pool_mut(player));
             let kept = self.unspent_mana_retained(player, combat);
-            self.state.players[player.0].mana_pool.add(&kept);
+            self.state.mana_pool_mut(player).add(&kept);
         }
     }
 

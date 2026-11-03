@@ -6,7 +6,8 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        card::CardDefId,
+        ability::PaymentCost,
+        card::{CardDefId, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
@@ -61,8 +62,26 @@ pub struct PlayerData {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
     pub known_hand: BTreeMap<u32, u32>,
-    pub sideboard_counts: BTreeMap<u32, u32>,
-    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    /// Decklist counts by definition id, present when the viewer knows this
+    /// player's decklist: always its own, and an opponent's open decklist
+    /// (`DecklistDisclosure`). `None` means hidden; `Some` of an empty map
+    /// means known and empty.
+    ///
+    /// The initial main deck.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_counts: Option<BTreeMap<u32, u32>>,
+    /// Owned cards whose identity the viewer does not know: the library,
+    /// plus for an opponent its hand less revealed `known_hand` copies and
+    /// face-down foretold exile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unseen_counts: Option<BTreeMap<u32, u32>>,
+    /// The initial sideboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sideboard_counts: Option<BTreeMap<u32, u32>>,
+    /// Sideboard copies still outside the game, in no zone. Learn retrieval
+    /// lowers it; it counts copies Learn cannot fetch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
     /// Unspent red mana stays until end of turn (The Last Agni Kai).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keeps_red_mana: bool,
@@ -180,6 +199,31 @@ pub struct CardTypeData {
     pub is_battle: bool,
 }
 
+impl CardTypeData {
+    pub fn from_types(types: &CardTypes) -> Self {
+        Self {
+            is_castable: types.is_castable(),
+            is_permanent: types.is_permanent(),
+            is_non_land_permanent: types.is_non_land_permanent(),
+            is_non_creature_permanent: types.is_non_creature_permanent(),
+            is_spell: types.is_spell(),
+            is_creature: types.is_creature(),
+            is_land: types.is_land(),
+            is_planeswalker: types.is_planeswalker(),
+            is_enchantment: types.is_enchantment(),
+            is_artifact: types.is_artifact(),
+            is_kindred: types.is_kindred(),
+            is_battle: types.is_battle(),
+        }
+    }
+}
+
+/// A card in any zone. Every field that states a characteristic (name,
+/// power/toughness, types, supertypes, subtypes, keywords, ward) reads
+/// `Game::characteristics` while the card is on the battlefield and the
+/// printed card elsewhere; identity, token status and the costs paid when
+/// casting are printed by definition. `tests/cards/observability.rs`
+/// classifies each field as layered or printed.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardData {
@@ -581,8 +625,8 @@ pub struct PermanentData {
     pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
-    /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
-    /// printed keywords; this is what the permanent can actually do now.
+    /// (Yip Yip! flying, Enter the Avatar State, ...): what the permanent can
+    /// actually do now. The battlefield card entry reads the same layered view.
     pub keywords: KeywordData,
     /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
     /// snake case), only the kinds present.
@@ -831,8 +875,8 @@ impl Observation {
                 focus: Vec::new(),
             });
 
-        let agent = Self::player_data(game, agent_player, true);
-        let opponent = Self::player_data(game, opponent_player, false);
+        let agent = Self::player_data(game, agent_player, agent_player);
+        let opponent = Self::player_data(game, opponent_player, agent_player);
 
         let mut obs = Self {
             continuation: game.continuation_frames(agent_player),
@@ -861,8 +905,41 @@ impl Observation {
         obs
     }
 
-    fn player_data(game: &Game, player: PlayerId, is_agent: bool) -> PlayerData {
+    /// Copies of each definition id among `cards`.
+    fn definition_counts(
+        game: &Game,
+        cards: impl IntoIterator<Item = CardId>,
+    ) -> BTreeMap<u32, u32> {
+        let mut counts = BTreeMap::new();
+        for card in cards {
+            *counts
+                .entry(game.state.cards[card].definition_id.0)
+                .or_default() += 1;
+        }
+        counts
+    }
+
+    /// `Game::unseen_cards` less the copies the viewer has seen revealed in
+    /// an opponent's hand. The possible-world pool keeps those copies, since
+    /// a sampled world must still place them in the hand.
+    fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
+        let mut counts = Self::definition_counts(game, game.unseen_cards(player, viewer));
+        if player != viewer {
+            for (definition, known) in &game.state.players[player.0].known_hand {
+                if let Some(count) = counts.get_mut(&definition.0) {
+                    *count = count.saturating_sub(*known);
+                    if *count == 0 {
+                        counts.remove(&definition.0);
+                    }
+                }
+            }
+        }
+        counts
+    }
+
+    fn player_data(game: &Game, player: PlayerId, viewer: PlayerId) -> PlayerData {
         let p = &game.state.players[player.0];
+        let is_agent = player == viewer;
         let mut zone_counts = [0_i32; 7];
         for (zone_index, count) in zone_counts.iter_mut().enumerate() {
             *count = game
@@ -871,20 +948,29 @@ impl Observation {
                 .size(Self::zone_from_index(zone_index), player) as i32;
         }
 
-        let mut sideboard_counts = BTreeMap::new();
-        let mut remaining_sideboard_counts = BTreeMap::new();
-        for card in &p.sideboard {
-            let definition = game.state.cards[*card].definition_id.0;
-            *sideboard_counts.entry(definition).or_default() += 1;
-            if game.state.zones.zone_of(*card).is_none() {
-                *remaining_sideboard_counts.entry(definition).or_default() += 1;
-            }
-        }
+        let (main_counts, unseen_counts, sideboard_counts, remaining_sideboard_counts) =
+            if game.decklist_known(player, viewer) {
+                let outside = p
+                    .sideboard
+                    .iter()
+                    .copied()
+                    .filter(|card| game.state.zones.zone_of(*card).is_none());
+                (
+                    Some(Self::definition_counts(game, p.deck.iter().copied())),
+                    Some(Self::unseen_counts(game, player, viewer)),
+                    Some(Self::definition_counts(game, p.sideboard.iter().copied())),
+                    Some(Self::definition_counts(game, outside)),
+                )
+            } else {
+                (None, None, None, None)
+            };
 
         // Regular and combat mana together, as the player may spend it.
         let mut pool = p.mana_pool.clone();
         pool.add(&p.combat_mana_pool);
         PlayerData {
+            main_counts,
+            unseen_counts,
             sideboard_counts,
             remaining_sideboard_counts,
             player_index: p.index as i32,
@@ -1128,7 +1214,7 @@ impl Observation {
                     .map(|creature_type| creature_type.to_string())
                     .collect()
             }),
-            is_granted_land: characteristics.is_land
+            is_granted_land: characteristics.is_land()
                 && !game.state.cards[permanent.card].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
@@ -1168,7 +1254,31 @@ impl Observation {
         );
     }
 
+    /// A card's row. On the battlefield every characteristic reads the
+    /// layered view (`Game::characteristics`); elsewhere the printed card.
     fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
+        let printed = Self::printed_card_data(game, card_id, zone);
+        match game.state.card_to_permanent[card_id] {
+            Some(permanent) if zone == ZoneType::Battlefield => {
+                let view = game.characteristics(permanent);
+                CardData {
+                    name: view.name.clone(),
+                    power: view.power,
+                    toughness: view.toughness,
+                    is_legendary: view.is_legendary,
+                    is_ally: view.has_subtype("Ally"),
+                    is_lesson: view.has_subtype("Lesson"),
+                    ward_cost: ward_value(view.ward.as_ref()),
+                    card_types: CardTypeData::from_types(&view.types),
+                    keywords: KeywordData::from_keywords(&view.keywords),
+                    ..printed
+                }
+            }
+            _ => printed,
+        }
+    }
+
+    fn printed_card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
         let card = &game.state.cards[card_id];
         CardData {
             zone,
@@ -1180,40 +1290,15 @@ impl Observation {
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
             is_token: card.is_token,
-            is_legendary: card
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("legendary")),
-            // A characteristic-setting effect replaces a permanent's types.
-            is_ally: match game.state.card_to_permanent[card_id] {
-                Some(permanent) if zone == ZoneType::Battlefield => {
-                    game.characteristics(permanent).has_subtype("Ally")
-                }
-                _ => card.has_subtype("Ally"),
-            },
+            is_legendary: card.is_legendary(),
+            is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),
-            ward_cost: card
-                .ward()
-                .map(|cost| i32::from(cost.mana_cost().mana_value))
-                .unwrap_or(0),
+            ward_cost: ward_value(card.ward()),
             kicker_cost: card
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
-            card_types: CardTypeData {
-                is_castable: card.types.is_castable(),
-                is_permanent: card.types.is_permanent(),
-                is_non_land_permanent: card.types.is_non_land_permanent(),
-                is_non_creature_permanent: card.types.is_non_creature_permanent(),
-                is_spell: card.types.is_spell(),
-                is_creature: card.types.is_creature(),
-                is_land: card.types.is_land(),
-                is_planeswalker: card.types.is_planeswalker(),
-                is_enchantment: card.types.is_enchantment(),
-                is_artifact: card.types.is_artifact(),
-                is_kindred: card.types.is_kindred(),
-                is_battle: card.types.is_battle(),
-            },
+            card_types: CardTypeData::from_types(&card.types),
             keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
             face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
@@ -1949,4 +2034,9 @@ impl Observation {
         })
         .to_string()
     }
+}
+
+/// A ward cost's mana value; 0 without ward.
+fn ward_value(cost: Option<&PaymentCost>) -> i32 {
+    cost.map_or(0, |cost| i32::from(cost.mana_cost().mana_value))
 }

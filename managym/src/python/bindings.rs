@@ -45,7 +45,12 @@ use crate::{
     flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     search_state::SearchStateWitness,
-    state::{deck::Deck, mana::ManaCost, player::PlayerConfig, zone::ZoneType},
+    state::{
+        deck::Deck,
+        mana::ManaCost,
+        player::{DecklistDisclosure, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 
 #[cfg(feature = "python")]
@@ -263,6 +268,21 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player, 2],
         )?,
     )?;
+    if config.policy_input_version >= 5 {
+        dict.set_item(
+            "decklists",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decklists,
+                &[
+                    2,
+                    config.max_cards_per_player,
+                    crate::agent::observation_encoder::DECKLIST_DIM,
+                ],
+            )?,
+        )?;
+    }
 
     Ok(dict)
 }
@@ -965,6 +985,9 @@ pub struct PyPlayerConfig {
     #[pyo3(get)]
     pub deck: Deck,
     pub submitted: bool,
+    /// `"open"` (default) or `"closed"`: whether the opponent knows this
+    /// player's main deck and sideboard.
+    pub disclosure: DecklistDisclosure,
 }
 
 /// `PlayerConfig.world` names only the world; authored content packs are retired.
@@ -982,20 +1005,33 @@ fn submission(world: Option<&str>) -> PyResult<bool> {
 }
 
 #[cfg(feature = "python")]
+fn parse_disclosure(value: &str) -> PyResult<DecklistDisclosure> {
+    match value {
+        "open" => Ok(DecklistDisclosure::Open),
+        "closed" => Ok(DecklistDisclosure::Closed),
+        other => Err(PyValueError::new_err(format!(
+            "decklist disclosure must be 'open' or 'closed', got {other:?}"
+        ))),
+    }
+}
+
+#[cfg(feature = "python")]
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None, world=None))]
+    #[pyo3(signature = (name, decklist, sideboard=None, world=None, disclosure="open"))]
     fn new(
         name: String,
         decklist: BTreeMap<String, usize>,
         sideboard: Option<BTreeMap<String, usize>>,
         world: Option<&str>,
+        disclosure: &str,
     ) -> PyResult<Self> {
         Ok(Self {
             name,
             deck: Deck::new(decklist, sideboard.unwrap_or_default()),
             submitted: submission(world)?,
+            disclosure: parse_disclosure(disclosure)?,
         })
     }
 
@@ -1019,6 +1055,20 @@ impl PyPlayerConfig {
     fn sideboard(&self) -> BTreeMap<String, usize> {
         self.deck.sideboard.clone()
     }
+
+    #[getter]
+    fn disclosure(&self) -> &'static str {
+        match self.disclosure {
+            DecklistDisclosure::Open => "open",
+            DecklistDisclosure::Closed => "closed",
+        }
+    }
+
+    #[setter]
+    fn set_disclosure(&mut self, value: &str) -> PyResult<()> {
+        self.disclosure = parse_disclosure(value)?;
+        Ok(())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1028,6 +1078,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
             name: value.name,
             deck: value.deck,
             submitted: value.submitted,
+            disclosure: value.disclosure,
         }
     }
 }
@@ -1039,6 +1090,7 @@ impl From<PlayerConfig> for PyPlayerConfig {
             name: value.name,
             deck: value.deck,
             submitted: value.submitted,
+            disclosure: value.disclosure,
         }
     }
 }
@@ -1063,10 +1115,16 @@ pub struct PyPlayer {
     pub graveyard_lessons: i32,
     #[pyo3(get)]
     pub known_hand: BTreeMap<u32, u32>,
+    /// Decklist counts by definition; `None` when the opponent's decklist is
+    /// closed to this observation's viewer.
     #[pyo3(get)]
-    pub sideboard_counts: BTreeMap<u32, u32>,
+    pub main_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get)]
-    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    pub unseen_counts: Option<BTreeMap<u32, u32>>,
+    #[pyo3(get)]
+    pub sideboard_counts: Option<BTreeMap<u32, u32>>,
+    #[pyo3(get)]
+    pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get, set)]
     pub keeps_red_mana: bool,
     /// What this player has done this turn.
@@ -1315,6 +1373,8 @@ impl From<PlayerData> for PyPlayer {
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            main_counts: value.main_counts,
+            unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
@@ -1349,6 +1409,8 @@ impl From<PyPlayer> for PlayerData {
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            main_counts: value.main_counts,
+            unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,

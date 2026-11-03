@@ -264,11 +264,14 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
+        disclosure: Literal["open", "closed"] = "open",
     ) -> None: ...
     name: str
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
+    # Whether the opponent knows this player's main deck and sideboard.
+    disclosure: Literal["open", "closed"]
     @property
     def deck(self) -> Deck: ...
     @property
@@ -526,8 +529,13 @@ class Player:
     zone_counts: List[int]
     graveyard_lessons: int
     known_hand: Dict[int, int]
-    sideboard_counts: Dict[int, int]
-    remaining_sideboard_counts: Dict[int, int]
+    # Decklist counts by definition id; None when the viewer's opponent has a
+    # closed decklist. Unseen counts the library, plus an opponent's hand and
+    # face-down foretold cards; remaining counts sideboard copies outside the game.
+    main_counts: Optional[Dict[int, int]]
+    unseen_counts: Optional[Dict[int, int]]
+    sideboard_counts: Optional[Dict[int, int]]
+    remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
     no_maximum_hand_size: bool
     # What this player has done this turn.
@@ -573,6 +581,11 @@ class CastPermission:
     foretold: bool
 
 class Card:
+    """A card in any zone. On the battlefield every characteristic field
+    (name, power/toughness, card types, legendary, Ally, Lesson, ward,
+    keywords) reads the engine's layered characteristics; elsewhere the
+    printed card. Identity, token status and casting costs are printed."""
+
     zone: ZoneEnum
     owner_id: int
     id: int

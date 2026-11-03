@@ -164,7 +164,7 @@ impl Game {
         controller: PlayerId,
     ) -> Option<Target> {
         let index = self.stack_index_of(object)?;
-        let id = self.state.id_gen.next_id();
+        let id = self.state.id_gen_mut().next_id();
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
                 let mut card = self.state.cards[spell.card].clone();
