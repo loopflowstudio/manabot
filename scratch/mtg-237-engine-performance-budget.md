@@ -1,191 +1,106 @@
 # MTG-237: Engine performance budget in CI
 
-Design from Jack Heart's concept review of 2026-11-02 (Performance section,
-`scratch/engine-foundations.html` in the T6 checkout) and the Task brief.
+Design from Jack Heart's Task brief and 2026-11-02 concept review
+(Performance section, `scratch/engine-foundations.html` in the T6 checkout).
+PR: https://github.com/loopflowstudio/manabot/pull/413.
 
-## Outcome
+## Outcome and ownership
 
-- `Engine Budget` CI job (`.github/workflows/engine-budget.yml`, called from
-  `ci.yml`, selected by the engine, the benchmarks, the baseline and the
-  comparator) builds `bench_search` and `bench_steps` in release on a runner
-  of its own, rebuilds the reference commit of `managym/perf/baseline.json`
-  with the same benchmarks on that runner, and fails the PR when the
-  candidate is more than 10% slower than the reference or a digest differs
-  (runner CPU models vary too much for absolute numbers; see questions.md).
-- `bench_search`: unchanged workload (seeds 1-3, 40 decisions, 16x4 flat
-  search), summary now sums totals. `bench_steps`: 512 seeded random-legal
-  games of the curated matchup through `Env::reset`/`step` with skip_trivial,
-  ~100k steps, one digest over every decision. Decks shared in
-  `examples/curated/mod.rs`.
-- `scripts/engine_budget.py compare|record` (stdlib only) read run
-  directories (`bench_search.jsonl` + `bench_steps.jsonl`): the candidate's
-  at `.cache/engine-budget`, the reference's under it at `reference/`, both
-  the defaults, so CI's compare step takes no flags. Every job run uploads
-  that directory as the `engine-budget` artifact with `measurement.json`
-  (candidate commit, ISO date, run URL, runner CPU); `record --reason`
-  rewrites the baseline from a downloaded one. Tests in
-  `tests/infra/test_engine_budget.py` include the 20% slowdown fixture and
-  recording from an artifact.
-- Manual dispatch with `measure=<commit>` benchmarks a commit that has no PR
-  with this ref's benchmarks and uploads the same artifact without
-  comparing: the one-time T4/T5/T6 measurement.
+`Engine Budget` builds release `bench_search` and `bench_steps` on one CI
+runner, then builds the committed reference with the same benchmarks there.
+The candidate fails above 10% greater duration or if either run differs from
+the committed digests. Recorded absolute timings are orientation only.
+
+- Search: seeds 1–3, 40 decisions each, 16 worlds × 4 rollouts, 2,000-step
+  playouts. Budget worst reply and summed total. Hash every ordered score,
+  framed by action count, simulation count and chosen index: little-endian
+  IEEE-754 bits into BLAKE3, first 64 bits as the existing integer output.
+- Throughput: 512 seeded random-legal games through native `Env::reset`/`step`
+  with trivial-decision skipping; roughly 100k steps, a per-game 2,000-step
+  cap, and one decision digest. Both benchmarks share `examples/curated/mod.rs`.
+- `scripts/engine_budget.py compare|record` owns comparison and adoption.
+  `Run` is measured evidence; `Baseline` owns reference, tolerance and reason.
+  CI owns execution and transport, with no additional lifecycle state.
+- `.github/workflows/engine-budget.yml`, called by `ci.yml`, measures the
+  durable PR head. Candidate output and `measurement.json` are recorded
+  before building the reference; the final always-run upload retains them
+  even if the reference cannot build. Explicit Bash propagates pipeline
+  failures through `tee`; Tests Result carries the failed job to the PR.
+- `.cache/engine-budget` is the candidate directory, with `reference/` below.
+  `compare` defaults to those paths. `record --reason` adopts a downloaded
+  candidate artifact and preserves the file's tolerance. Reference digest
+  drift gets a distinct baseline-file failure row.
+- `measure=<commit>` dispatch selects only this job, measuring that commit
+  with the dispatched ref's benchmarks and uploading without comparison.
+
+The development guide owns the maintainer procedure and historical T4/T5/T6
+measurements. The [demo record](engine-budget-demo.md) owns hosted results,
+artifact paths, failure evidence and proof limits.
 
 ## Delete — do not maintain
 
-Completed in e5615edcc: the winner/simulation-only `scores_digest` fold in
-`bench_search` is gone. One ordered full-score digest preserves the workload,
-choice, timings, integer output shape and simulation/choice evidence. No
-legacy path or remaining deletion target. The Clean-machine Play 120 s wait
-stays a launch proof, not a latency budget.
+No remaining code deletion targets. Removed the winner/simulation-only digest
+in `e5615edcc` and implicit Bash execution in `79c623428`; keep the full-score
+and pipefail paths with their regression coverage. The Clean-machine Play
+120 s wait remains a launch proof, not an engine latency budget.
 
-Completed in `79c623428`: removed implicit `bash -e` execution of benchmark
-and comparison pipelines. Explicit job-level Bash owns failure propagation; the
-same commands, summaries, artifacts and 10% baseline remain on that path.
+Working notes retain current decisions and evidence summaries rather than
+completed iteration instructions. Historical plans live at
+`4b5e9c0e4:scratch/mtg-237-engine-performance-budget.md` and earlier conceptual
+counterexamples at `311218a02:scratch/mtg-237-engine-performance-budget.md`.
+Pre-curation uncommitted notes are preserved under
+`.cache/engine-budget-demo/pre-compress-4b5e9c0e4/`.
 
-## Decisions
+## Decisions and review boundary
 
-- Accepted (Task brief, Jack Heart, 2026-11-02): both workloads budgeted at
-  10% against a committed file; digests asserted identical; a 20% slowdown
-  fixture; one-time T4/T5/T6 measurement; `uv` only; no induced load.
-- Implied by the accepted outcome (concept review 2026-11-02); not yet
-  confirmed by Jack Heart, whose PR review decides it:
-  "committed baseline" is read as a
-  committed *reference commit* rebuilt and measured A/B on the same runner,
-  not committed absolute numbers. Evidence: one engine spread 6.8k-10.3k
-  steps/s across three runner CPU models (far outside 10%); two runs on one
-  model agreed within 2.5%. The file's figures are orientation only.
-- Implied by the accepted purpose (same review), pending the same PR review:
-  the headless workload is native `Env::step`
-  random-legal play (512 games, skip_trivial), not the rul-9 Python
-  semantic-Command runner (deleted in #343). Its steps/s is its own
-  baseline, not comparable with rul-9's 588.5.
-- Any rules change reaching the curated decks moves the random-play digest
-  and costs one recording per such PR; accepted as the price of (3). A kept
-  speedup is the third reason to move the reference (concept review).
+Jack Heart's brief accepts a 10% budget for both workloads, deliberate reference
+moves, identical digests, a controlled 20% slowdown fixture, one-time T4/T5/T6
+measurements, Python through uv, and no induced load.
 
-## Review constraints
+Headless interpretations still subject to Jack Heart's PR review:
 
-- CI measures the durable PR head, never GitHub's ephemeral merge commit.
-  Candidate and reference are `Run` values; `compare` produces checks;
-  `record` adopts the candidate measurement and reason as the next `Baseline`.
-  CI owns execution and artifact identity; the file owns reference and tolerance.
-- Build, run and record the candidate before building the reference. Upload
-  in the final always-run step. An incompatible reference leaves an adoptable
-  candidate; a failed candidate leaves diagnostics, not a complete measurement.
-- Explicit Bash propagates benchmark and comparison failures through `tee`;
-  Tests Result carries the failed job to the PR. A timing or digest failure
-  stays visible until fixed or deliberately adopted, preserving tolerance and
-  the source run. Reference digest drift gets a separate baseline-file row.
-- Search hashes every ordered action score and decision boundary, simulation
-  count and chosen action. Length-framed little-endian IEEE-754 bits feed
-  BLAKE3; its first 64 bits preserve the integer output. Fixtures cover changed
-  losing scores, action order, decision boundaries, simulations and choice.
-- Historical T4/T5/T6 timings retain the winner-only digest limitation. Keep
-  them in the development guide and PR body; new full-score recordings do
-  not reinterpret them. Re-run unexplained timing failures when digests and
-  engine match; changing tolerance or buying a dedicated runner needs later
-  evidence, outside this Task.
+- A committed reference commit is rebuilt A/B on the same runner. The same
+  engine measured 6.8k–10.3k steps/s across runner CPU models; recorded wall
+  times cannot govern another runner. Two EPYC 7763 runs agreed within 2.5%.
+- Native random-legal throughput measures the training environment's engine
+  step. It is not comparable with rul-9's retired Python Command runner at
+  588.5 steps/s. Candidate-first ordering is retained for artifact recovery;
+  change it only with evidence of bias beyond the tolerance.
 
-Concept review at `9452c2115` (2026-11-02, after baseline adoption and sync):
-**nothing to change and no open product choice under the retained headless
-interpretations.** The maintainer reads `compare` checks, downloads the run,
-then uses `record --reason` to adopt its candidate. A `Run` is measured evidence;
-the `Baseline` is the chosen reference plus tolerance and reason, not another
-execution lifecycle. CI owns execution and transport; the CLI owns comparison
-and adoption. No additional state or API is needed.
+A moved digest, accepted cost or retained speedup moves the reference using
+that candidate's own artifact and a reason. Historical winner-only digests
+cannot establish full-score equality. Unexplained failures with matching
+engine/digests warrant a rerun, not a tolerance change. No dedicated runner
+or engine optimization is selected by this Task.
 
-The normal path, rejected slowdown/changed-score path and reference-build
-recovery preserve that interaction. The retained counterexamples still matter:
-cross-run absolute timings cannot provide this budget, a winner-only digest
-cannot preserve scores, and a comparator failure hidden by `tee` cannot fail
-the PR. Their repairs remain in place. Adopting a candidate changes the reference,
-not the tolerance or its historical failed-run evidence. Syncing the engine
-does not itself adopt a reference or establish a speedup; the next proof is
-the synced candidate's same-runner comparison at publication/demo.
+Concept review at `9452c2115` found no open product choice under these
+interpretations. The original cross-run timings, incomplete digest and
+false-green `tee` pipeline remain counterexamples; their repairs stand.
 
-The same-runner and native-workload interpretations above remain subject to
-Jack Heart's PR review. Existing usage guidance expresses this model; no code
-rewrite or new implementation direction follows. No shipping approval follows
-from headless review.
+## Current implementation and remaining work
 
-## Retained evidence
+The production baseline now adopts run **41555845634**, candidate
+`4b5e9c0e4555627664721e7a4e6c909120cd98ac`, whose native source equals merged
+main `51fbacbbf`. Delegated demo judgment keeps the measured speedup and
+applies the existing reference-moving rule. On one runner: 30.26% less worst
+reply time, 28.36% less total search time and 36.65% less time per step; all
+full-score/step digests and counts match. Tolerance remains 0.1.
+`record --reason` used `.cache/engine-budget-demo/pass-3/pr-head/`; exact
+artifact identity and every measurement were reconciled. Current-reference
+docs reflect this adoption and retain the earlier accepted-cost evidence.
+No runtime, benchmark or workflow change is needed for this iteration.
 
-Implementation through `078d37ef4`, the full-score repair `e5615edcc` and sync
-onto main `a8abf01b1` are preserved at `24cfc0a8b`. Explicit Bash and eight
-workflow regression cases are at `79c623428`: passing/slow/changed-score
-comparisons, four benchmark pipeline failures, and reference-build recovery.
-An implicit-shell copy reproduces the original slowdown and benchmark failures.
-The complete preceding plan is at
-`88dc8c1ad:scratch/mtg-237-engine-performance-budget.md`; earlier concept-review
-counterexamples are at `311218a02:scratch/mtg-237-engine-performance-budget.md`.
-The [demo record](engine-budget-demo.md) owns run details and transcripts,
-including the original false-green run 41548559113 and the repaired hosted proof.
+Publication next updates PR #413's current-reference paragraph to the retained
+speedup, preserves older evidence, and publishes. Demo verifies the resulting
+same-engine comparison. Gate owns affected suites; main-push verification is
+post-merge. Hosted reference-build failure has only a controlled local proof;
+failed-job transport is proven after hosted comparison failure.
 
-The prior full-score reference `e5615edcc` came from dispatch 41540798745
-(`.cache/engine-budget-score-digest`): 120 decisions, 409.358 s total,
-14.258 s worst and 99,923 steps in 512 games at 6,829.1/s on EPYC 7763.
-These are historical orientation figures, superseded by the adoption below.
-Prior gate evidence (before the workflow repair): 855 debug Rust tests,
-90 affected Python tests, actionlint, Rust formatting/Clippy and focused Ruff
-passed. Gate owns broader affected suites; unchanged engine code needs no new
-local performance measurement.
+Jack Heart's steer authorizes publication and the interactive demo boundary,
+not shipping. Delegated headless judgments are not new human feedback. Do not
+merge or close the Task. Later Graph steps own publication/demo; compress
+returns this diff without replaying them.
 
-## Demo pass 2 — baseline reconciliation
-
-The [pass-2 demo evidence](engine-budget-demo.md#decision-pass-2--2026-11-02)
-establishes repaired hosted enforcement. Published head
-`88dc8c1ad` ran in CI 41552162812: the comparison correctly failed with exit 1
-under explicit Bash, and its always-run artifact uploaded and downloaded
-successfully. Candidate throughput was 6,104.0/s against reference 6,774.5/s
-(10.98% more time per step, exceeding 10%); both search timings and every
-digest/count passed. Temporary adoption through the real CLI preserved the
-measurement identity and tolerance. All 65 focused tests passed again,
-including controlled reference-build recovery. Hosted reference-build failure
-itself was not induced.
-
-**Current demo decision: iterate only to reconcile the initial baseline with
-already-merged main.** The reference predates `230b2f563` and `a8abf01b1`;
-the measured head `88dc8c1ad` has no native source diff from `a8abf01b1`.
-Under delegated headless
-review authority, accept that synchronized engine as the initial budget's
-reference while explicitly recording the measured cost; this is not new
-human feedback or shipping approval. The detailed judgment and proof limits
-are in the demo note.
-
-Implemented: the real `record --reason` command adopted
-`.cache/engine-budget-demo/pass-2/pr-head/` (run 41552162812, head
-`88dc8c1ad25cd99cca6026581a569f5c2f63ee1b`) into the production baseline.
-Its reason names the merged upstream changes, accepted 10.98% per-step cost,
-run link and delegated judgment. The current-reference section in
-`docs/development.md` records the same evidence without rewriting historical
-T4/T5/T6 or full-score receipts. Tolerance remains 0.1; no engine, benchmark,
-workflow or digest changed.
-
-## Reconciliation after upstream sync — 2026-11-02
-
-Sync `9452c2115` includes merged main `51fbacbbf` (MTG-236: derived-state
-revisions, indexed effect/trigger records and cache-carrying clones). This
-candidate has no native source diff from that newer main; it does differ from
-the adopted reference's engine. The baseline adoption remains complete and
-valid, but the next comparison is no longer two recordings of the same engine.
-No new timing or full-score equality result follows from the sync. MTG-236's
-earlier CPU-time reduction and its outstanding quiet-machine absolute targets
-are separate evidence, not acceptance of this candidate's 10% relative budget.
-
-Engine memory now records the accepted cost, repaired hosted enforcement and
-the distinction between hosted comparison-failure recovery and locally simulated
-reference-build recovery. There are no immediate child memory directories under
-the selected Engine scope. Historical demo transcripts and the baseline's
-recorded reason remain unchanged. Existing 65-test evidence applies to unchanged
-comparator/workflow code; the synced engine's checks belong to gate/CI.
-
-Check: `uv run --no-project --python 3.12 python` artifact/source reconciliation and `git diff --check` passed; `lf context` reports scratch and memory within both limits.
-
-Remaining: publication updates the PR's current-baseline paragraph to run
-41552162812 and its measured accepted cost, and replaces the stale claim that
-hosted enforcement is unverified with the pass-2 failure/upload/download proof.
-Republish and inspect the synced candidate's same-runner check at demo. A
-measured speedup, if retained, needs adoption from that new candidate artifact
-with a reason; no such result is available yet. Hosted reference-build
-failure remains locally simulated only, and main-push verification stays
-post-merge. No separate measurement dispatch or shipping approval.
+Check: `git diff --check` and `lf context` pass after curation; reuse the
+unchanged implementation's 65 focused tests from demo. No behavior changed;
+gate/publication/demo own subsequent checks.

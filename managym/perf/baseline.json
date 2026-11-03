@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "88dc8c1ad25cd99cca6026581a569f5c2f63ee1b",
+    "commit": "4b5e9c0e4555627664721e7a4e6c909120cd98ac",
     "date": "2026-11-03",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41552162812",
-    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Establish the initial budget at merged main a8abf01b1, including decklist disclosure (230b2f563) and T5 token copies and effective battlefield characteristics (a8abf01b1). Delegated demo judgment accepts the measured 10.98% greater time per step (6104.0 vs 6774.5 steps/s) against the older e5615edcc reference in https://github.com/loopflowstudio/manabot/actions/runs/41552162812. Search timings and all digests/counts passed; this PR has no native source diff from that merged main. Preserve the 10% tolerance; this adoption grants no shipping approval."
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41555845634",
+    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6973P-C (4 vCPU), release",
+    "reason": "Retain the derived-state optimization from merged main 51fbacbbf, measured at candidate 4b5e9c0e4555627664721e7a4e6c909120cd98ac in https://github.com/loopflowstudio/manabot/actions/runs/41555845634. On one Intel Xeon 6973P-C runner, worst reply improved 30.26% (7.132 vs 10.226 s), total search 28.36% (208.251 vs 290.711 s), and time per step 36.65% (13943.8 vs 8833.0 steps/s), with identical full-score and step digests and counts. Delegated demo judgment applies the retained-speedup rule; preserve the 10% tolerance. This adoption grants no shipping approval."
   },
   "bench_search": {
-    "worst_s": 14.857,
-    "total_s": 433.796,
+    "worst_s": 7.132,
+    "total_s": 208.251,
     "seeds": {
       "1": {
-        "worst_s": 14.857,
-        "total_s": 190.413,
+        "worst_s": 7.132,
+        "total_s": 90.679,
         "digest": 5192957023818819312
       },
       "2": {
-        "worst_s": 9.052,
-        "total_s": 114.066,
+        "worst_s": 4.343,
+        "total_s": 56.12,
         "digest": 14020561159006433540
       },
       "3": {
-        "worst_s": 13.251,
-        "total_s": 129.317,
+        "worst_s": 6.052,
+        "total_s": 61.452,
         "digest": 12455483057923843581
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 6104.0,
+    "steps_per_s": 13943.8,
     "steps": 99923,
     "games": 512,
     "digest": 12247096877573042301

@@ -256,7 +256,25 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `88dc8c1ad` was adopted from
+**Current reference.** Commit `4b5e9c0e4` was adopted from
+[CI run 41555845634](https://github.com/loopflowstudio/manabot/actions/runs/41555845634)
+(2026-11-03 UTC, Intel Xeon 6973P-C), retaining merged main `51fbacbbf`'s
+derived-state revisions, indexed effect/trigger records and cache-carrying
+clones. Its native source matches that main commit. On the same runner:
+
+| Metric | Previous reference `88dc8c1ad` | Adopted candidate | Improvement |
+|---|---:|---:|---:|
+| Worst search reply | 10.226 s | 7.132 s | 30.26% less time |
+| Total search | 290.711 s | 208.251 s | 28.36% less time |
+| Step throughput | 8,833.0/s | 13,943.8/s | 36.65% less time per step |
+
+All full-score/step digests and counts match. Delegated demo judgment applied
+the retained-speedup rule so future regressions are budgeted against this
+faster engine. Adoption preserves the **10% tolerance**; it is not shipping
+approval. These figures compare engines on one runner, not against the older
+reference's recorded absolute timings below.
+
+**Previous reference and accepted cost.** Commit `88dc8c1ad` was adopted from
 [CI run 41552162812](https://github.com/loopflowstudio/manabot/actions/runs/41552162812)
 (2026-11-03 UTC, AMD EPYC 7763): 6,104.0 steps/s, 14.857 s worst search
 reply and 433.796 s total. It establishes the initial budget at merged main
@@ -269,12 +287,6 @@ Delegated demo judgment accepted this measured cost of the already-merged
 engine; the source comparison does not isolate its cause. The measured head
 `88dc8c1ad` has no native source diff from that main commit. Adoption preserves
 the **10% tolerance** and the failed run as evidence; it is not shipping approval.
-
-The budget PR subsequently synchronized with main `51fbacbbf`, which adds
-derived-state revisions and cache-carrying clones. The reference above predates
-that optimization; its figures do not measure the synchronized candidate.
-The next CI comparison measures both engines on one runner. Any retained
-speedup moves the reference using that candidate's own artifact and a reason.
 
 Measured once on 2026-11-02 with the original search digest (steps/s; worst Search-64
 reply; total over 3 seeds x 40 decisions), each on its own runner:
