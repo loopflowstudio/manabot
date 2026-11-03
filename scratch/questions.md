@@ -48,3 +48,6 @@ The earlier local-only/no-merge assumptions are superseded.
 
 Inherited unrelated notes remain at
 22e4aab716f2b582d704b88dc5d22cb1547ce623:scratch/questions.md.
+
+Main’s MTG-238 assumptions and engine-speed integration notes remain at
+`44388ad4211b4292cc161a3087eb1230b2005737:scratch/questions.md`.

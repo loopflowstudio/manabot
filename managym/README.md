@@ -15,13 +15,17 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
-3. **`src/state/`**: Core game state (cards, players, zones, mana)
-4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
+3. **`state/`**: the `managym-state` crate — rules vocabulary and game-state
+   types (cards, zones, mana, effects), re-exported here as `managym::state`;
+   **`src/state/`** adds players, decks and the canonical match-state hash
+4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
+   and their tests, reached by the engine only through `managym_cards::catalog()`;
+   **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
-`src/cardsets/`, returning the engine's own `CardDefinition` in its rules types
+`cards/src/`, returning the engine's own `CardDefinition` in its rules types
 (`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
@@ -29,7 +33,9 @@ support check (defined and not marked incomplete) and the set filter. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).
 
-Dependencies flow: python → agent → flow → state/infra.
+Dependencies flow: python → agent → flow → state/infra, and across crates
+`managym` → `managym-cards` → `managym-state`. `cargo test` in this directory
+runs all three (the workspace's default members).
 
 [docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md) is the
 dated 2026-07-15 research record on typed card programs, exact object identity,

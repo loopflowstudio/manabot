@@ -88,8 +88,10 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
     use managym::state::mana::{Mana, ManaCost};
 
     for bits in 0_u8..64 {
-        let mut pool = Mana::default();
-        pool.mana = std::array::from_fn(|slot| (bits >> slot) & 1);
+        let pool = Mana {
+            mana: std::array::from_fn(|slot| (bits >> slot) & 1),
+            ..Default::default()
+        };
         for (slot, symbol) in ["W", "U", "B", "R", "G", "C"].iter().enumerate() {
             for generic in 0..=2 {
                 let cost = ManaCost::parse(&format!("{generic}{symbol}"));

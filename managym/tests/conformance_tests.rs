@@ -28,7 +28,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::CardRegistry;
 use managym::cards::setups::authored_pack;
-use managym::state::card::{AdditionalCost, CardDefinition, CardType};
+use managym::state::card::{AdditionalCost, CardDefinition, CardType, Keyword};
 use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
@@ -283,19 +283,19 @@ fn every_registered_real_card_matches_scryfall() {
         // Engine-supported keyword flags.
         let kw = |k: &str| fx.keywords.iter().any(|f| f == k);
         let checks = [
-            ("Flying", def.keywords.flying),
-            ("Reach", def.keywords.reach),
-            ("Haste", def.keywords.haste),
-            ("Flash", def.keywords.flash),
-            ("Vigilance", def.keywords.vigilance),
-            ("Trample", def.keywords.trample),
-            ("First strike", def.keywords.first_strike),
-            ("Double strike", def.keywords.double_strike),
-            ("Deathtouch", def.keywords.deathtouch),
-            ("Lifelink", def.keywords.lifelink),
-            ("Defender", def.keywords.defender),
-            ("Menace", def.keywords.menace),
-            ("Hexproof", def.keywords.hexproof),
+            ("Flying", def.keywords.has(Keyword::Flying)),
+            ("Reach", def.keywords.has(Keyword::Reach)),
+            ("Haste", def.keywords.has(Keyword::Haste)),
+            ("Flash", def.keywords.has(Keyword::Flash)),
+            ("Vigilance", def.keywords.has(Keyword::Vigilance)),
+            ("Trample", def.keywords.has(Keyword::Trample)),
+            ("First strike", def.keywords.has(Keyword::FirstStrike)),
+            ("Double strike", def.keywords.has(Keyword::DoubleStrike)),
+            ("Deathtouch", def.keywords.has(Keyword::Deathtouch)),
+            ("Lifelink", def.keywords.has(Keyword::Lifelink)),
+            ("Defender", def.keywords.has(Keyword::Defender)),
+            ("Menace", def.keywords.has(Keyword::Menace)),
+            ("Hexproof", def.keywords.has(Keyword::Hexproof)),
             ("Ward", def.ward().is_some()),
             (
                 "Kicker",

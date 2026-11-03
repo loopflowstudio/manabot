@@ -731,11 +731,14 @@ impl Game {
                 if let PaymentCost::Waterbend { generic } = payment.remaining {
                     if generic > 0 {
                         for permanent in self.waterbend_candidates(player) {
-                            let mut probe = self.clone();
-                            probe.tap_permanent(permanent, false);
                             let rest =
                                 crate::state::mana::ManaCost::default().with_generic(generic - 1);
-                            if probe.waterbend_payment_possible(player, &rest, generic - 1) {
+                            if self.waterbend_payment_after_taps(
+                                player,
+                                &rest,
+                                generic - 1,
+                                std::iter::once(permanent),
+                            ) {
                                 actions.push(Action::WaterbendTap { player, permanent });
                             }
                         }
