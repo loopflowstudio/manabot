@@ -100,7 +100,8 @@ def freeze(corpus_path: Path) -> None:
             "pilot already frozen; create a new version for changed decisions"
         )
     corpus = Corpus.model_validate_json(corpus_path.read_bytes())
-    if corpus.world != managym.world_identity() or not corpus.eligible:
+    eligible = corpus.eligible
+    if corpus.world != managym.world_identity() or not eligible:
         raise ValueError("corpus must be nonempty and admitted by this world")
     old = json.loads(
         (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_bytes()
@@ -108,8 +109,8 @@ def freeze(corpus_path: Path) -> None:
     old.update(id="tla-trophy-213-v1", world=managym.WORLD_VERSION, wall_seconds=2700)
     old.pop("match")
     old["deck_source"] = UniformDecks(
-        decks=tuple(t.deck for t in corpus.eligible if t.deck is not None),
-        entry_ids=tuple(t.source_id for t in corpus.eligible),
+        decks=tuple(t.deck for t in eligible if t.deck is not None),
+        entry_ids=tuple(t.source_id for t in eligible),
         sampling="uniform-independent-v1",
     ).model_dump(mode="json")
     old["agent"].pop("semantic_pack")
@@ -129,8 +130,8 @@ def freeze(corpus_path: Path) -> None:
         deck_seed=21390001,
         pairs=tuple(
             Pair(
-                first=rng.randrange(len(corpus.eligible)),
-                second=rng.randrange(len(corpus.eligible)),
+                first=rng.randrange(len(eligible)),
+                second=rng.randrange(len(eligible)),
                 deal=21391000 + n,
             )
             for n in range(8)
@@ -192,17 +193,20 @@ def eval(state: ExperimentState) -> list[Job]:
     Etude owns already-delivered matches, so polling never replays scored games.
     """
     _, protocol = frozen()
-    inference = Inference(source=_source())
-    heuristic = Code(name="heuristic", source=_source(), config={"kind": "heuristic"})
+    source = _source()
+    inference = Inference(source=source)
+    heuristic = Code(name="heuristic", source=source, config={"kind": "heuristic"})
     matchups: list[Matchup] = []
     conditions = tuple(pair.model_dump(mode="json") for pair in protocol.pairs)
     for run in state.runs:
         checkpoints = {int(c.clocks["updates"]): c for c in run.checkpoints}
-        if run.final is not None:
-            checkpoints[int(run.final.clocks["updates"])] = run.final
+        wanted = {0, *protocol.milestones}
+        final = run.final
+        if final is not None:
+            endpoint = int(final.clocks["updates"])
+            checkpoints[endpoint] = final
+            wanted.add(endpoint)
         initial = checkpoints.get(0)
-        endpoint = None if run.final is None else int(run.final.clocks["updates"])
-        wanted = {0, *protocol.milestones, endpoint}
         for update, checkpoint in sorted(checkpoints.items()):
             if update not in wanted:
                 continue
@@ -237,9 +241,13 @@ def eval(state: ExperimentState) -> list[Job]:
 
 
 def _registration(
-    player: Model | Code, name: str, matchup: DeckMatchup
+    player: Model | Code,
+    name: str,
+    matchup: DeckMatchup,
+    observation: ObservationConfig,
 ) -> tuple[PlayerRegistration, Path | None]:
-    fingerprints = runtime_fingerprints(match_config=matchup.match())
+    setup = matchup.match()
+    fingerprints = runtime_fingerprints(match_config=setup)
     common = dict(
         player_id=name,
         display_name=player.name,
@@ -249,7 +257,7 @@ def _registration(
         information_boundary="acting-viewer",
         observation_abi_sha256=fingerprints["observation_abi_sha256"],
         action_abi_sha256=fingerprints["action_abi_sha256"],
-        matchup_sha256=canonical_sha256(matchup.match().model_dump(mode="json")),
+        matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
         player_seed_derivation_id="arena-pair-deal-player-v1",
         compute_class_id="policy-cpu-one-thread-one-pass",
     )
@@ -264,9 +272,9 @@ def _registration(
         ), None
     path = local_checkpoint_file(player)
     agent, space = load_checkpoint(str(path))
-    expected, _ = frozen()
-    if space.encoder.config != expected.observation:
+    if space.encoder.config != observation:
         raise ValueError("checkpoint observation differs from pilot")
+    digest = file_sha256(path)
     return PlayerRegistration(
         **common,
         runner_kind="checkpoint",
@@ -277,10 +285,10 @@ def _registration(
             "deterministic": False,
             "allow_deck_repetition": True,
         },
-        checkpoint_sha256=file_sha256(path),
+        checkpoint_sha256=digest,
         checkpoint_bytes=path.stat().st_size,
         parameter_count=sum(p.numel() for p in agent.parameters()),
-        artifact_id=f"mtg213/{file_sha256(path)}",
+        artifact_id=f"mtg213/{digest}",
     ), path
 
 
@@ -298,8 +306,12 @@ def play(match: Match) -> Tables:
         entries=(source.entry_ids[pair.first], source.entry_ids[pair.second]),
         lists=(source.decks[pair.first], source.decks[pair.second]),
     )
-    candidate, candidate_path = _registration(match.players[0], "candidate", matchup)
-    opponent, opponent_path = _registration(match.players[1], "opponent", matchup)
+    candidate, candidate_path = _registration(
+        match.players[0], "candidate", matchup, regime.observation
+    )
+    opponent, opponent_path = _registration(
+        match.players[1], "opponent", matchup, regime.observation
+    )
     paths = {
         name: str(path)
         for name, path in (("candidate", candidate_path), ("opponent", opponent_path))

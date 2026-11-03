@@ -28,7 +28,6 @@ SOURCE_URL = (
     "https://17lands-public.s3.amazonaws.com/analysis_data/game_data/"
     "game_data_public.TLA.PremierDraft.csv.gz"
 )
-SOURCE_PAGE = "https://www.17lands.com/public_datasets"
 
 
 class Source(StrictModel):

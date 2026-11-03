@@ -1,4 +1,4 @@
-"""Explicit authored deck-role matrices for world-bound experiment evaluation."""
+"""Deck/seat matrices for authored and imported world-bound evaluation pairs."""
 
 from __future__ import annotations
 
@@ -7,6 +7,14 @@ from pydantic import Field, model_validator
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_sha256
 from managym import WORLD_SETUP, WORLD_VERSION, Deck
+
+
+def _deck_pair[T](pair: tuple[T, T], leg: int) -> tuple[T, T]:
+    """Adjacent legs swap policies; successive pairs cross decks, then mirror."""
+    if not 0 <= leg < 8:
+        raise ValueError("deck matrix leg must be between 0 and 7")
+    a, b = pair
+    return ((a, b), (b, a), (a, a), (b, b))[leg // 2]
 
 
 class AuthoredMatchup(StrictModel):
@@ -27,10 +35,7 @@ class AuthoredMatchup(StrictModel):
         return f"{WORLD_VERSION}-authored-matrix-{canonical_sha256(self.model_dump())}"
 
     def decks(self, leg: int) -> tuple[str, str]:
-        if not 0 <= leg < 8:
-            raise ValueError("authored matrix leg must be between 0 and 7")
-        a, b = self.role_a, self.role_b
-        return ((a, b), (b, a), (a, a), (b, b))[leg // 2]
+        return _deck_pair((self.role_a, self.role_b), leg)
 
     def match(self, leg: int = 0) -> MatchConfig:
         setup = MatchConfig.authored(
@@ -57,22 +62,16 @@ class DeckMatchup(StrictModel):
     def content_suite(self) -> str:
         return f"{WORLD_VERSION}-deck-matrix-{canonical_sha256(self.model_dump(mode='json'))}"
 
-    def _indices(self, leg: int) -> tuple[int, int]:
-        if not 0 <= leg < 8:
-            raise ValueError("deck matrix leg must be between 0 and 7")
-        return ((0, 1), (1, 0), (0, 0), (1, 1))[leg // 2]
-
     def decks(self, leg: int) -> tuple[str, str]:
-        a, b = self._indices(leg)
-        return self.entries[a], self.entries[b]
+        return _deck_pair(self.entries, leg)
 
     def match(self, leg: int = 0) -> MatchConfig:
-        a, b = self._indices(leg)
-        first, second = self.lists[a], self.lists[b]
+        hero, villain = self.decks(leg)
+        first, second = _deck_pair(self.lists, leg)
         return MatchConfig(
             world=WORLD_SETUP,
-            hero=self.entries[a],
-            villain=self.entries[b],
+            hero=hero,
+            villain=villain,
             hero_deck=first.main,
             villain_deck=second.main,
             hero_sideboard=first.sideboard,
@@ -90,15 +89,7 @@ def selected_decks(leg: int) -> tuple[str, str]:
     cross the decks; 4–7 are mirrors. Execution and report admission share
     this layout so a leg cannot silently acquire a different deck meaning.
     """
-    deck_pairs = (
-        ("ur_lessons", "gw_allies"),
-        ("gw_allies", "ur_lessons"),
-        ("ur_lessons", "ur_lessons"),
-        ("gw_allies", "gw_allies"),
-    )
-    if not 0 <= leg < 8:
-        raise ValueError("selected arena leg must be between 0 and 7")
-    return deck_pairs[leg // 2]
+    return _deck_pair(("ur_lessons", "gw_allies"), leg)
 
 
 def selected_match() -> MatchConfig:

@@ -8,8 +8,9 @@ every deck natively, so a source is never a permission.
 
 `UniformDecks` samples two population entries in a native draw seeded by the
 game's reset seed. `uniform-independent-v1` draws each seat independently,
-including mirrors; historical `uniform-distinct-v1` excludes mirrors. Exact resume therefore reproduces the same decks for
-the same games, and the run also records each game's actual decks.
+including mirrors; historical `uniform-distinct-v1` excludes mirrors. Exact
+resume reproduces the same decks for the same games, and the run also records
+each game's actual decks.
 Checkpoints never know the source; they bind only the world.
 """
 
@@ -45,7 +46,7 @@ class UniformDecks(StrictModel):
     )
 
     @model_validator(mode="after")
-    def distinct(self) -> UniformDecks:
+    def valid_population(self) -> UniformDecks:
         if self.sampling == "uniform-distinct-v1" and (
             len(self.decks) < 2
             or len({deck.identity for deck in self.decks}) != len(self.decks)
@@ -80,7 +81,7 @@ class UniformDecks(StrictModel):
     def match_config(self) -> MatchConfig:
         """A representative root; sampled roots come from the native draw."""
         players = self.players()
-        return pair_match(players[0], players[1 % len(players)])
+        return pair_match(players[0], players[1] if len(players) > 1 else players[0])
 
 
 def pair_match(
