@@ -342,6 +342,12 @@ choice by paying a real cost and checking the remaining mana.
 
 ### Etude card evaluation
 
+Etude discovers experiment files with `runpy`; pass evaluation callbacks from
+their canonical importable module, not the discovery file's `<run_path>`
+namespace. Exercise discovery with `read_experiment` in runner tests. Local
+evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
+only launched jobs receive that directory automatically.
+
 Etude hashes tracked source paths (`git add -N` admits new files for local
 implementation checks). Eval runs are sealed blocks: each game's card evidence
 is a blob of its match, named in `card_plays` by SHA256 and read back through
