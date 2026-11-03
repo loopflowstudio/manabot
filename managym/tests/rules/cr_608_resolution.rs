@@ -9,7 +9,7 @@ use managym::{
     },
     state::{
         ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
-        card::Keywords,
+        card::{Keyword, Keywords},
         effect::Modification,
         game_object::{CardId, PlayerId},
         predicate::CardPredicate,
@@ -309,7 +309,7 @@ fn each_selector_earthbends_every_selected_land() {
         assert!(view.is_creature());
         assert_eq!(view.power, 2);
         assert_eq!(view.toughness, 2);
-        assert!(view.keywords.haste);
+        assert!(view.keywords.has(Keyword::Haste));
     }
     assert!(s.game().state.stack_objects.is_empty());
 }
@@ -365,10 +365,7 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
     let card = permanent.card;
     permanent.damage = 1;
     permanent.deathtouch_damage = true;
-    let indestructible = Modification::AddKeywords(Keywords {
-        indestructible: true,
-        ..Default::default()
-    });
+    let indestructible = Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible]));
     until_end_of_turn(&mut s, ogre, indestructible.clone());
     s.pass_priority();
     assert_eq!(
@@ -405,10 +402,7 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
         vec![
             Effect::until_end_of_turn(
                 ObjectSelector::Target(TargetSpec::Creature),
-                Modification::AddKeywords(Keywords {
-                    hexproof: true,
-                    ..Default::default()
-                }),
+                Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
             ),
             Effect::DealDamage {
                 amount: EffectValue::Fixed(1),
@@ -420,7 +414,11 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(victim)));
     s.pass_priority();
     s.pass_priority();
-    assert!(s.game().characteristics(victim).keywords.hexproof);
+    assert!(s
+        .game()
+        .characteristics(victim)
+        .keywords
+        .has(Keyword::Hexproof));
     assert_eq!(
         s.game().state.permanents[victim].as_ref().unwrap().damage,
         1

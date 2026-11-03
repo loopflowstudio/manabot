@@ -383,6 +383,9 @@ impl Game {
     }
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {
+        // An automatic pass changes only the priority holder. Reuse this
+        // invocation's fixed-point proof until a stack object resolves.
+        let mut stabilized = false;
         loop {
             // A suspended resolution owns the game until its decision is
             // made — no SBAs, triggers, or priority in between (CR 608.2).
@@ -394,8 +397,11 @@ impl Game {
                 return Some(choice_space);
             }
 
-            if let Some(space) = self.stabilize_before_priority() {
-                return Some(space);
+            if !stabilized {
+                if let Some(space) = self.stabilize_before_priority() {
+                    return Some(space);
+                }
+                stabilized = true;
             }
             if self.is_game_over() {
                 return None;
@@ -407,20 +413,20 @@ impl Game {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
                     self.restart_priority_round();
+                    stabilized = false;
                     continue;
                 }
                 return None;
             }
 
             let player = self.state.priority.holder;
-
-            if self.skip_trivial && !self.can_player_act(player) {
+            let actions = self.compute_player_actions(player);
+            if self.skip_trivial && actions.len() == 1 {
                 let next = self.next_player(player);
                 self.state.priority_mut().on_pass(next);
                 continue;
             }
 
-            let actions = self.compute_player_actions(player);
             return Some(ActionSpace {
                 player: Some(player),
                 kind: ActionSpaceKind::Priority,

@@ -136,20 +136,15 @@ impl PaymentModel {
         policy: SourcePolicy,
         visited: &mut std::collections::HashSet<PaymentSearchState>,
     ) -> Option<Vec<PaymentStep>> {
-        if !visited.insert(state.clone()) {
-            return None;
+        if state.obligations.is_empty() {
+            return Some(Vec::new());
         }
         let PaymentSearchState {
             available,
             pool,
-            life,
             obligations,
-            prefix,
-        } = state;
-        let Some(first) = obligations.first() else {
-            return Some(Vec::new());
-        };
-        let rest = &obligations[1..];
+            ..
+        } = &state;
         // An admissible total-resource bound, not a payment answer: filters
         // cannot increase total mana by recycling their own upfront cost.
         // Ignore colors, restrictions, sequencing and life here; relaxing each
@@ -186,7 +181,7 @@ impl PaymentModel {
             }
             total += net;
         }
-        for obligation in &obligations {
+        for obligation in obligations {
             match obligation {
                 Obligation::Pay { cost, .. } => {
                     total = total.checked_sub(u32::from(cost.mana_value))?;
@@ -200,6 +195,20 @@ impl PaymentModel {
                 }
             }
         }
+        // Only states that need exploration need an owned visited key. Terminal
+        // success and the resource bound above require neither cloning nor hashing.
+        if !visited.insert(state.clone()) {
+            return None;
+        }
+        let PaymentSearchState {
+            available,
+            pool,
+            life,
+            obligations,
+            prefix,
+        } = state;
+        let first = &obligations[0];
+        let rest = &obligations[1..];
         match first {
             Obligation::Output {
                 choices,
@@ -565,8 +574,7 @@ impl Game {
             reserve(&suspended.decision, self, &mut reserved);
         }
         let sources = self
-            .battlefield_permanents(player)
-            .into_iter()
+            .iter_battlefield_permanents(player)
             .map(|permanent| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 let card = &self.state.cards[source.card];
@@ -874,6 +882,41 @@ impl Game {
             .is_some()
     }
 
+    /// Test a waterbend payment after reserving taps, without copying the game.
+    /// Non-mana taps reserve resources but produce no mana. The debug oracle
+    /// retains the full fork calculation if future rules add a tap dependency.
+    pub(crate) fn waterbend_payment_after_taps(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        waterbend: u8,
+        taps: impl Iterator<Item = PermanentId> + Clone,
+    ) -> bool {
+        let mut model = self.payment_model(player, None);
+        for permanent in taps.clone() {
+            model.reserve(SourceReservation {
+                permanent,
+                tap: true,
+                sacrifice: false,
+            });
+        }
+        let possible = model
+            .plan(
+                self.pooled_mana(player),
+                waterbend_obligations(cost, waterbend),
+                SourcePolicy::All,
+            )
+            .is_some();
+        debug_assert_eq!(possible, {
+            let mut probe = self.clone();
+            for permanent in taps {
+                probe.tap_permanent(permanent, false);
+            }
+            probe.waterbend_payment_possible(player, cost, waterbend)
+        });
+        possible
+    }
+
     pub(crate) fn mana_choice_completes_payment(&self, player: PlayerId, mana: &Mana) -> bool {
         let mut pool = self.pooled_mana(player);
         pool.add(mana);
@@ -1114,7 +1157,7 @@ impl Game {
 
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
-        for permanent_id in self.battlefield_permanents(player) {
+        for permanent_id in self.iter_battlefield_permanents(player) {
             let source = self.state.permanents[permanent_id].as_ref().unwrap();
             if self.state.cards[source.card].mana_abilities.is_empty()
                 || !self.permanent_can_tap(permanent_id)
@@ -1169,7 +1212,7 @@ impl Game {
 
     /// Whether `player` controls a permanent replacing mana loss (CR 614.1a).
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
-        self.battlefield_permanents(player).into_iter().any(|id| {
+        self.iter_battlefield_permanents(player).any(|id| {
             self.state.permanents[id].as_ref().is_some_and(|permanent| {
                 self.state.cards[permanent.card]
                     .replacement_effects

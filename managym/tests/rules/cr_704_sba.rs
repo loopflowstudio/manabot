@@ -11,7 +11,7 @@ use managym::{
         ability::{
             Ability, Effect, ObjectSelector, PlayerSelector, TriggerCondition, TriggerSubject,
         },
-        card::Keywords,
+        card::{Keyword, Keywords},
         effect::Modification,
         game_object::{CardId, ObjectRef, PlayerId},
         predicate::CardPredicate,
@@ -187,10 +187,7 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
     let land = s.force_permanent_on_battlefield(0, "Mountain");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
 
-    s.game_mut().state.permanents[land]
-        .as_mut()
-        .expect("animated land")
-        .animated = true;
+    animate(&mut s, land);
     s.game_mut().state.permanents[ogre]
         .as_mut()
         .expect("damaged ogre")
@@ -418,10 +415,7 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                             until_end_of_turn(
                                 &mut s,
                                 id,
-                                Modification::AddKeywords(Keywords {
-                                    indestructible: true,
-                                    ..Default::default()
-                                }),
+                                Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
                             );
                         }
                         s.pass_priority();

@@ -34,7 +34,8 @@ Polish and validate only the current branch scope. **NEVER intentionally induce
 load for testing**; follow [TESTING.md](../TESTING.md) for resources and
 subprocesses, including benchmarks, debugging and demos.
 
-**Rust managym** (`managym/Cargo.toml`, `managym/src/**`):
+**Rust managym workspace** (`managym/Cargo.toml`, `managym/src/**`,
+`managym/state/**`, `managym/cards/**`):
 
 ```bash
 cd managym
@@ -256,7 +257,26 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `4b5e9c0e4` was adopted from
+**Current reference.** Commit `1616b210f` is adopted from
+[CI run 41699683808](https://github.com/loopflowstudio/manabot/actions/runs/41699683808)
+(2026-11-03 UTC, AMD EPYC 7763), retaining MTG-238's shared-engine improvements.
+On the same runner, with identical full-score/step digests and counts:
+
+| Metric | Previous reference `4b5e9c0e4` | Adopted candidate | Improvement |
+|---|---:|---:|---:|
+| Worst search reply | 10.526 s | 5.272 s | 49.91% less time |
+| Total search | 317.027 s | 177.771 s | 43.93% less time |
+| Step throughput | 8,948.6/s | 12,862.7/s | 30.43% less time per step |
+
+The step result is 43.74% greater throughput; the total-search result is 78.33%
+greater throughput. Jack Heart accepted ordinary `Env::step` as the training
+proxy and authorized shipping after validation. The retained-speedup rule moves
+the reference while preserving the **10% tolerance**. These are native workload
+results, not end-to-end training measurements. The [investigation record](research/engine-speed-2026-11.md)
+preserves the changes, rejected experiments, correctness proof and remaining
+architectural opportunities.
+
+**Previous reference: derived-state caching.** Commit `4b5e9c0e4` was adopted from
 [CI run 41555845634](https://github.com/loopflowstudio/manabot/actions/runs/41555845634)
 (2026-11-03 UTC, Intel Xeon 6973P-C), retaining merged main `51fbacbbf`'s
 derived-state revisions, indexed effect/trigger records and cache-carrying

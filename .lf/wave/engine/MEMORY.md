@@ -231,6 +231,55 @@ preserves accepted decisions, dated proof limits and source history.
 - A new diagnostic must name the play, search, or Study behavior it explains
   and the runtime decision it can change.
 
+- Catalog-scale types (MTG-238, 2026-11-02): counters are sparse by kind,
+  keywords are a `Keyword` enum in a bitset, card sets are the `managym-cards`
+  crate on `managym-state`, and every duration-bound change is a continuous
+  effect record, never a `Permanent` field. A type change that preserves
+  serialization moves no digest; removing a serialized field moves the
+  state-hash contract and re-records every corpus that embeds state digests
+  (semantic-kernel, authored-match, both parity receipts, Academy fixtures).
+  Jack Heart approved batching the `BecomeArtifactCreature` fold,
+  keyword-list serialization and count-to-condition rewrites on 2026-11-02.
+  Learning schema 10 already existed on main; definition-derived token values
+  change without changing its kinds, roles or dtypes. Observation `KeywordData`
+  remains a boolean surface distinct from sparse definition serialization.
+  Jack Heart subsequently selected option 1a on 2026-11-02: remove the
+  64-variant capacity limit within MTG-238. Inline word storage now grows
+  with the declared parameterless vocabulary, preserving the set API and
+  Copy semantics. Serde emits present enum variants in declaration order;
+  append variants to preserve indices and learning-token identity. Controlled
+  ordinal fixtures exercise word boundaries without inventing mechanics.
+  Exact pre/post definition and learning-catalog bytes, content identity and
+  authored replay evidence matched; source fingerprints changed. This
+  storage-only extension adds no mechanic, observation column, Python API
+  migration or world bump. Full-suite and performance acceptance remain
+  separate from that focused compatibility evidence.
+- Jack Heart selected MTG-238 first on 2026-11-02, superseding the T6 hold
+  and stacking prerequisite: publish against main for review, no auto-merge;
+  T6 integrates the crate move afterward. Main's T5 sync supplied Airship's
+  namesake conversion. Source-relative names read layers 1–3 without asking
+  the static index; a conditional type grant can be evaluated during index
+  construction, so recursive characteristic reads are unsafe there.
+- Concurrent engine vocabulary changes cross structural crate moves. Source
+  identity for parity evidence must include the new rules and card crates.
+  An unchanged Command tape/game outcome does not imply unchanged object ids:
+  earthbend's continuous-effect records allocate ids. Broad proof belongs to
+  its tested tree; it does not establish correctness after another engine sync.
+- Crate moves also relocate live rules-audit authorities and behavioral-test
+  anchors in `reviews.json` and its generated `index.jsonl`. Move both together
+  while preserving rule dispositions, source spans/digests and frozen receipts;
+  keep validation strict. PR #414's first Python Unit Tests run exposed this
+  omitted consumer despite its earlier broad engine/Academy checks. The exact
+  CI command, including infrastructure and deployment tests, covers a different
+  boundary than the engine suite.
+- Cache-preserving writes and generic continuous effects must compose: allocate
+  timestamps through the typed ID accessor, return before a tracked mutation
+  for an empty batch, and retain full invalidation for nonempty effect records.
+  Empty batches preserve derived-cache revisions, but `record_continuous`
+  still allocates a timestamp: they are not complete state/hash no-ops.
+  This is the MTG-238/derived-state-cache merge's ownership invariant, not a
+  new performance claim.
+
 ## Architecture convergence (accepted 2026-07-17)
 
 - managym is the rules engine Manabot specifically needs, including

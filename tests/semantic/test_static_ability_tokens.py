@@ -2,7 +2,7 @@
 
 Each card's `statics` and `additional_costs` serialize into its characteristics
 span of `managym.learning_catalog`; the native guard in
-`managym/tests/cards/observability.rs` covers every variant exhaustively. This
+`managym/cards/tests/cards/observability.rs` covers every variant exhaustively. This
 checks the same tokens through the Python boundary, one real card per variant.
 """
 

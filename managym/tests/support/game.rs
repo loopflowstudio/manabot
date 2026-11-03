@@ -382,6 +382,13 @@ pub fn ready(s: &mut Scenario, name: &str) {
     s.game_mut().scenario_refresh_priority().unwrap();
 }
 
+/// Earthbend's animation alone (no counters, no delayed return): the
+/// permanent becomes a 0/0 creature with haste in addition to its types.
+pub fn animate(s: &mut Scenario, id: PermanentId) {
+    let controller = s.game().state.permanents[id].as_ref().unwrap().controller;
+    s.game_mut().animate_permanent(id, None, controller);
+}
+
 /// Record an until-end-of-turn continuous effect on a permanent, as a
 /// resolving spell of player 0 would.
 pub fn until_end_of_turn(s: &mut Scenario, id: PermanentId, modification: Modification) {
