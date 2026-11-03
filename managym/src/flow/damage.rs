@@ -65,7 +65,7 @@ impl Game {
         let Some(before) = marked(self) else {
             return 0;
         };
-        if !self.characteristics(permanent_id).is_creature {
+        if !self.characteristics(permanent_id).is_creature() {
             self.apply_permanent_damage(source, permanent_id, amount);
             return 0;
         }

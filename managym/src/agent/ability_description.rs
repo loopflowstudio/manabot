@@ -262,6 +262,7 @@ fn card_type(t: CardType) -> &'static str {
 
 fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
+        namesake,
         flying,
         no_counters,
         in_combat,
@@ -328,6 +329,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if kind.is_none() || noun != "permanent" {
         terms.push(noun.into());
+    }
+    if *namesake {
+        terms.push("with the same name as this permanent".into());
     }
     if *token == Some(true) {
         terms.push("token".into());
@@ -524,7 +528,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
-        CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
+        CreateTokenCopy { exceptions } => copy_description(exceptions),
         ApplyContinuous { affected, modification, duration } => continuous_description(affected, modification, *duration),
         PutCountersOnTriggeringPermanent { count } => format!("Put {count} +1/+1 counters on the permanent that caused this trigger"),
         OptionalPayment { cost, if_paid, if_declined } => {
@@ -667,6 +671,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         SearchLibraryToHand { predicate } => format!("Search your library for {}, reveal it, put it into your hand, then shuffle", predicate_description(predicate, "card")),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
+        Surveil { count } => format!("Surveil {count}"),
         LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards")),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
@@ -692,6 +697,23 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
         PutCountersOnEachMatching { count, predicate, other } => format!("Put {} +1/+1 counters on each {}{} you control",value_description(count),if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
     })
+}
+
+/// "Create a token that's a copy of this[, except …]" (CR 707.9).
+fn copy_description(exceptions: &[Modification<EffectValue>]) -> String {
+    let mut text = "Create a token that's a copy of this".to_string();
+    for (index, exception) in exceptions.iter().enumerate() {
+        // "It …", lowercased after "except".
+        let phrase = continuous_description(
+            &AffectedSpec::TriggeringPermanent,
+            exception,
+            EffectDuration::Indefinite,
+        );
+        text.push_str(if index == 0 { ", except " } else { " and " });
+        text.push_str(&phrase[..1].to_lowercase());
+        text.push_str(&phrase[1..]);
+    }
+    text
 }
 
 /// One sentence for a continuous effect: whom, what, how long.
@@ -745,6 +767,7 @@ fn continuous_description(
         Modification::BecomeCreature => {
             format!("{subject} becomes a creature in addition to its other types{until}")
         }
+        Modification::Nonlegendary => format!("{subject} isn't legendary{until}"),
         Modification::AddKeywords(keywords) => {
             format!("{subject} gains {}{until}", keywords_description(keywords))
         }

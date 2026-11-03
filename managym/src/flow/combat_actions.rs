@@ -266,7 +266,7 @@ impl Game {
             && card.attacks_despite_defender().is_none_or(|condition| {
                 !self.check_static_condition(condition, permanent.controller)
             });
-        self.characteristics(permanent_id).is_creature
+        self.characteristics(permanent_id).is_creature()
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
             && self.combat_condition_met(permanent_id)
@@ -279,7 +279,7 @@ impl Game {
                 continue;
             };
             if !permanent.tapped
-                && self.characteristics(permanent_id).is_creature
+                && self.characteristics(permanent_id).is_creature()
                 && self.combat_condition_met(permanent_id)
             {
                 out.push(permanent_id);
@@ -303,7 +303,7 @@ impl Game {
         let attacker_card = &self.state.cards[attacker.card];
 
         if blocker.tapped
-            || !self.characteristics(blocker_id).is_creature
+            || !self.characteristics(blocker_id).is_creature()
             || !self.combat_condition_met(blocker_id)
             || self.cant_block(blocker_id)
         {

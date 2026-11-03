@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history | `world` (the default pack): every defined card (263 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil | `world` (the default pack): every defined card (314 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -165,6 +165,24 @@ at cleanup and kept in last known information) apart from its marked damage.
 An entering counter replacement may be conditional. Observations add each
 player's `turn_history` and a permanent's `dealt_damage_this_turn`.
 
+Task a7234f (TLA batch T5) extends w17 with token copies: a token that's a
+copy of a permanent takes its copiable values (its definition, including any
+copy effect already applied, CR 707.2), never its status, counters or non-copy
+effects, and a departed source is copied as it last existed. A copy carries
+its copy effect (`CopyEffect`: the printed definition at the chain's root and
+its exceptions, CR 707.9b), whose exceptions are `Modification` values such as
+`Nonlegendary`, the same vocabulary as continuous-effect records. It adds
+surveil (CR 701.25) as a select-into-graveyard choice, an end-step self-copy
+trigger conditioned on T4's sacrifice history, and a Vehicle that is an artifact
+creature while you control enough permanents with its name. Joo Dee, One of Many, Ran and Shaw
+and Phoenix Fleet Airship are supported (314 in `world`). Observations add a
+permanent's `copy`; the policy input adds `Copy` and `CopyException` fact
+rows. A battlefield card's row (name, power/toughness, card types, legendary,
+Ally and Lesson, ward, keywords) states the layered characteristics the rules
+read, not the printed card; off the battlefield it states the printed card.
+Legendary is a layered supertype: the legend rule and the card row both read
+it, so a `Nonlegendary` record exempts its permanent (CR 704.5j).
+
 Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the
@@ -178,7 +196,8 @@ a timestamp rank and dealt damage this turn (29 → 38). Open-ended vocabularies
 128 rows × 12 (object join, `FactKind`, vocabulary id and effect detail as
 learning-token values in 16-bit halves, two amounts, duration, timestamp rank,
 source definition, validity): counter kinds, effect-added subtypes, a set name
-and creature types, spent abilities and continuous-effect records. Relation
+and creature types, spent abilities, continuous-effect records, and a copy effect with its
+exceptions. Relation
 rows add a frame's X, a spell's granted keywords and a waiting delayed
 trigger's "this turn" (33 → 49), so the relation width alone tells v5. Waiting
 delayed triggers (CR 603.7) are public v5 relation frames of kind 10 after
@@ -197,6 +216,15 @@ the 142-Command authored tape) and `public-commitment-parity-w17-v1` bind this
 world, re-recorded in place as it grows. Academy `*-w17.json` demo,
 choice-navigation and trigger-order fixtures reach the same decision revisions
 as their w15 predecessors. Belief encoding receipts use possible-world space v3.
+
+Task MTG-216 (2026-10-30, same world) makes decklist disclosure a match option:
+open (default; each player knows the other's main deck and sideboard) or
+closed (neither). Observations carry main, unseen, sideboard and
+remaining-sideboard counts by definition for every known decklist; v5 adds a
+`decklists` buffer `(2, 60, 5)` that is zero for a closed opponent. Search and
+possible worlds refuse a closed opponent.
+The Academy navigation fixture and the authored-match and parity receipts
+were re-recorded with the same Commands; state digests are unchanged.
 
 ## w16: one card authority (superseded by w17)
 

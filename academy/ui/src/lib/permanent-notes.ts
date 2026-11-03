@@ -1,52 +1,61 @@
 import { copyLabel } from './decision-labels';
-import type { ContinuousEffect, PermanentState } from './types';
+import type { ContinuousEffect, CopyEffect, PermanentState } from './types';
 
 // One continuous-effect record, in the words the LLM text uses
 // (`manabot/semantic/text_observation.py`, `effect_phrase`).
 export function effectNote(effect: ContinuousEffect): string {
-  const signed = (value: number | undefined): string =>
-    `${(value ?? 0) >= 0 ? '+' : ''}${value ?? 0}`;
-  const phrase = (() => {
-    switch (effect.modification) {
-      case 'ModifyPt':
-        return `${signed(effect.power)}/${signed(effect.toughness)}`;
-      case 'SetBasePt':
-        return `base power/toughness ${effect.power ?? 'unchanged'}/${effect.toughness ?? 'unchanged'}`;
-      case 'AddKeywords':
-        return (effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ');
-      case 'AddSubtypes':
-        return `is also ${(effect.subtypes ?? []).join(', ')}`;
-      case 'BecomeArtifactCreature':
-        return 'is an artifact creature';
-      case 'LoseAllAbilities':
-        return 'loses all abilities';
-      case 'Firebending':
-        return `firebending ${effect.amount}`;
-      case 'CantBeBlocked':
-        return "can't be blocked";
-      case 'CantBlock':
-        return "can't block";
-      case 'DoesntUntap':
-        return "doesn't untap during its controller's untap step";
-      case 'LoseKeywords':
-        return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
-      case 'ExileIfWouldDie':
-        return 'exiled instead if it would die';
-      case 'KeepUnspentMana':
-        return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
-      case 'NoMaximumHandSize':
-        return 'no maximum hand size';
-      case 'ControlChanged':
-        return `control changed from seat ${(effect.amount ?? 0) + 1}`;
-      case 'ModeChosen':
-        return `mode ${(effect.amount ?? 0) + 1} already chosen`;
-      default:
-        return effect.modification;
-    }
-  })();
   const until = effect.duration === 'EndOfTurn' ? 'until end of turn: '
     : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: " : '';
-  return `${until}${phrase}${effect.source ? ` (${effect.source})` : ''}`;
+  return `${until}${modificationPhrase(effect)}${effect.source ? ` (${effect.source})` : ''}`;
+}
+
+// A copy effect, in the words the LLM text uses (`_copy`).
+export function copyNote(copy: CopyEffect): string {
+  const exceptions = (copy.exceptions ?? []).map(modificationPhrase).join(' and ');
+  return `copy of ${copy.name}${exceptions ? `, except ${exceptions}` : ''}`;
+}
+
+function modificationPhrase(effect: ContinuousEffect): string {
+  const signed = (value: number | undefined): string =>
+    `${(value ?? 0) >= 0 ? '+' : ''}${value ?? 0}`;
+  switch (effect.modification) {
+    case 'ModifyPt':
+      return `${signed(effect.power)}/${signed(effect.toughness)}`;
+    case 'SetBasePt':
+      return `base power/toughness ${effect.power ?? 'unchanged'}/${effect.toughness ?? 'unchanged'}`;
+    case 'AddKeywords':
+      return (effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ');
+    case 'AddSubtypes':
+      return `is also ${(effect.subtypes ?? []).join(', ')}`;
+    case 'BecomeCreature':
+      return 'is also a creature';
+    case 'Nonlegendary':
+      return "isn't legendary";
+    case 'LoseAllAbilities':
+      return 'loses all abilities';
+    case 'Firebending':
+      return `firebending ${effect.amount}`;
+    case 'CantBeBlocked':
+      return "can't be blocked";
+    case 'CantBlock':
+      return "can't block";
+    case 'DoesntUntap':
+      return "doesn't untap during its controller's untap step";
+    case 'LoseKeywords':
+      return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
+    case 'ExileIfWouldDie':
+      return 'exiled instead if it would die';
+    case 'KeepUnspentMana':
+      return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
+    case 'NoMaximumHandSize':
+      return 'no maximum hand size';
+    case 'ControlChanged':
+      return `control changed from seat ${(effect.amount ?? 0) + 1}`;
+    case 'ModeChosen':
+      return `mode ${(effect.amount ?? 0) + 1} already chosen`;
+    default:
+      return effect.modification;
+  }
 }
 
 // Effect-derived state the observation carries for a permanent, as labels
@@ -84,6 +93,7 @@ export function permanentNotes(permanent: PermanentState, table: PermanentState[
     permanent.used_abilities?.length
       ? `used-up abilities ${permanent.used_abilities.map(index => index + 1).join(', ')}`
       : null,
+    permanent.copy_of ? copyNote(permanent.copy_of) : null,
     ...(permanent.effects ?? []).map(effectNote),
   ].filter((note): note is string => note !== null);
 }

@@ -285,6 +285,13 @@ pub enum Decision {
         top: Vec<CardId>,
         bottom: Vec<CardId>,
     },
+    /// Surveil (CR 701.25): each selected card goes to the graveyard;
+    /// declining keeps the rest on top in order.
+    Surveil {
+        player: PlayerId,
+        /// Inspected cards still on top of the library, top first.
+        looked: Vec<CardId>,
+    },
     /// Look at top N, select up to K matching cards to hand, rest to the
     /// bottom of the library in random order.
     LookAndSelect {
@@ -423,6 +430,7 @@ impl Decision {
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
+            | Decision::Surveil { player, .. }
             | Decision::LookAndSelect { player, .. }
             | Decision::Modal { player, .. }
             | Decision::Learn { player }
@@ -444,7 +452,7 @@ impl Decision {
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
-            Decision::LookAndSelect { looked, .. } => looked,
+            Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
@@ -521,7 +529,7 @@ impl Game {
         self.battlefield_permanents(*player)
             .into_iter()
             .filter(|id| {
-                self.characteristics(*id).is_creature
+                self.characteristics(*id).is_creature()
                     && !kept.contains(id)
                     && total + self.characteristics(*id).power <= *max_total_power
             })
@@ -570,7 +578,7 @@ impl Game {
         let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
             .flat_map(|player| self.battlefield_permanents(player))
-            .filter(|id| self.characteristics(*id).is_creature && !kept.contains(id))
+            .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .collect();
         for id in doomed {
             self.sacrifice_permanent(id);
@@ -922,6 +930,12 @@ impl Game {
                     .iter()
                     .map(|card| self.state.cards[card].id)
                     .collect(),
+            },
+            Decision::Surveil { player, looked } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(*player, looked.iter().copied(), true),
+                focus: self.card_focus(looked),
             },
             Decision::LookAndSelect {
                 player,
@@ -1637,6 +1651,22 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::Surveil { looked, .. }, Action::SelectCard { card, .. })
+                if looked.contains(card) =>
+            {
+                looked.retain(|candidate| candidate != card);
+                self.move_card(*card, ZoneType::Graveyard);
+                if looked.is_empty() {
+                    self.run_frame(suspended.frame);
+                } else {
+                    self.state.suspended_decision = Some(suspended);
+                }
+                Ok(())
+            }
+            (Decision::Surveil { .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (
                 Decision::SelectMilled {
                     player,
@@ -2213,7 +2243,16 @@ mod learn_tests {
         let mut game = game(&[("Firebending Lesson", 40), ("Island", 1)]);
         let initial = Observation::for_player(&game, PlayerId(0));
         assert_eq!(initial.agent_sideboard.len(), 41);
-        assert_eq!(initial.agent.sideboard_counts.values().sum::<u32>(), 41);
+        assert_eq!(
+            initial
+                .agent
+                .sideboard_counts
+                .as_ref()
+                .unwrap()
+                .values()
+                .sum::<u32>(),
+            41
+        );
         assert_eq!(
             initial.agent.sideboard_counts,
             initial.agent.remaining_sideboard_counts
@@ -2287,7 +2326,13 @@ mod learn_tests {
             .any(|card| card.id == last && card.zone == ZoneType::Hand));
         assert_eq!(after.agent.sideboard_counts, initial.agent.sideboard_counts);
         assert_eq!(
-            after.agent.remaining_sideboard_counts.values().sum::<u32>(),
+            after
+                .agent
+                .remaining_sideboard_counts
+                .as_ref()
+                .unwrap()
+                .values()
+                .sum::<u32>(),
             40
         );
         let other_after = Observation::for_player(&branch, PlayerId(1));

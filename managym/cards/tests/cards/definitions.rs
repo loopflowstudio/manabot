@@ -57,7 +57,7 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                 let child = format!("{path}/{key}");
                 let misplaced = match key.as_str() {
                     "TargetMatches" => place != Place::IfCondition,
-                    "SourceCountersAtLeast" => !source_allowed,
+                    "SourceCountersAtLeast" | "namesake" => !source_allowed,
                     _ => false,
                 };
                 if misplaced {

@@ -30,9 +30,9 @@ use crate::{
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, EventData, EventEntityKind, EventType, KeywordData, Observation,
-            PermanentData, PlayerData, RestrictedManaData, SideboardCardData, StackObjectData,
-            StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
+            Observation, PermanentData, PlayerData, RestrictedManaData, SideboardCardData,
+            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
@@ -45,7 +45,12 @@ use crate::{
     flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     search_state::SearchStateWitness,
-    state::{deck::Deck, mana::ManaCost, player::PlayerConfig, zone::ZoneType},
+    state::{
+        deck::Deck,
+        mana::ManaCost,
+        player::{DecklistDisclosure, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 
 #[cfg(feature = "python")]
@@ -263,6 +268,21 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player, 2],
         )?,
     )?;
+    if config.policy_input_version >= 5 {
+        dict.set_item(
+            "decklists",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decklists,
+                &[
+                    2,
+                    config.max_cards_per_player,
+                    crate::agent::observation_encoder::DECKLIST_DIM,
+                ],
+            )?,
+        )?;
+    }
 
     Ok(dict)
 }
@@ -965,24 +985,40 @@ pub struct PyPlayerConfig {
     pub deck: Deck,
     #[pyo3(get, set)]
     pub world: Option<String>,
+    /// `"open"` (default) or `"closed"`: whether the opponent knows this
+    /// player's main deck and sideboard.
+    pub disclosure: DecklistDisclosure,
+}
+
+#[cfg(feature = "python")]
+fn parse_disclosure(value: &str) -> PyResult<DecklistDisclosure> {
+    match value {
+        "open" => Ok(DecklistDisclosure::Open),
+        "closed" => Ok(DecklistDisclosure::Closed),
+        other => Err(PyValueError::new_err(format!(
+            "decklist disclosure must be 'open' or 'closed', got {other:?}"
+        ))),
+    }
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None, world=None))]
+    #[pyo3(signature = (name, decklist, sideboard=None, world=None, disclosure="open"))]
     fn new(
         name: String,
         decklist: BTreeMap<String, usize>,
         sideboard: Option<BTreeMap<String, usize>>,
         world: Option<String>,
-    ) -> Self {
-        Self {
+        disclosure: &str,
+    ) -> PyResult<Self> {
+        Ok(Self {
             name,
             deck: Deck::new(decklist, sideboard.unwrap_or_default()),
             world,
-        }
+            disclosure: parse_disclosure(disclosure)?,
+        })
     }
 
     #[getter]
@@ -994,6 +1030,20 @@ impl PyPlayerConfig {
     fn sideboard(&self) -> BTreeMap<String, usize> {
         self.deck.sideboard.clone()
     }
+
+    #[getter]
+    fn disclosure(&self) -> &'static str {
+        match self.disclosure {
+            DecklistDisclosure::Open => "open",
+            DecklistDisclosure::Closed => "closed",
+        }
+    }
+
+    #[setter]
+    fn set_disclosure(&mut self, value: &str) -> PyResult<()> {
+        self.disclosure = parse_disclosure(value)?;
+        Ok(())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1003,6 +1053,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
             name: value.name,
             deck: value.deck,
             world: value.world,
+            disclosure: value.disclosure,
         }
     }
 }
@@ -1014,6 +1065,7 @@ impl From<PlayerConfig> for PyPlayerConfig {
             name: value.name,
             deck: value.deck,
             world: value.world,
+            disclosure: value.disclosure,
         }
     }
 }
@@ -1038,16 +1090,23 @@ pub struct PyPlayer {
     pub graveyard_lessons: i32,
     #[pyo3(get)]
     pub known_hand: BTreeMap<u32, u32>,
+    /// Decklist counts by definition; `None` when the opponent's decklist is
+    /// closed to this observation's viewer.
     #[pyo3(get)]
-    pub sideboard_counts: BTreeMap<u32, u32>,
+    pub main_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get)]
-    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    pub unseen_counts: Option<BTreeMap<u32, u32>>,
+    #[pyo3(get)]
+    pub sideboard_counts: Option<BTreeMap<u32, u32>>,
+    #[pyo3(get)]
+    pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get, set)]
     pub keeps_red_mana: bool,
-    #[pyo3(get, set)]
-    pub no_maximum_hand_size: bool,
+    /// What this player has done this turn.
     #[pyo3(get, set)]
     pub turn_history: PyPlayerTurnHistory,
+    #[pyo3(get, set)]
+    pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
@@ -1143,7 +1202,7 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
 /// What a player has done this turn.
 #[cfg(feature = "python")]
 #[pyclass(name = "PlayerTurnHistory")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PyPlayerTurnHistory {
     #[pyo3(get, set)]
     pub attacked: bool,
@@ -1153,6 +1212,15 @@ pub struct PyPlayerTurnHistory {
     pub land_entered: bool,
     #[pyo3(get, set)]
     pub cards_drawn: u32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPlayerTurnHistory {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1175,6 +1243,51 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             permanents_sacrificed: value.permanents_sacrificed,
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
+        }
+    }
+}
+
+/// The copy effect that made a permanent a copy: the printed definition at
+/// the root of the copy chain and the exceptions in its copiable values.
+#[cfg(feature = "python")]
+#[pyclass(name = "CopyEffect")]
+#[derive(Clone, Default)]
+pub struct PyCopyEffect {
+    #[pyo3(get, set)]
+    pub registry_key: i32,
+    #[pyo3(get, set)]
+    pub name: String,
+    #[pyo3(get, set)]
+    pub exceptions: Vec<PyContinuousEffect>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyCopyEffect {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<CopyData> for PyCopyEffect {
+    fn from(value: CopyData) -> Self {
+        Self {
+            registry_key: value.registry_key,
+            name: value.name,
+            exceptions: value.exceptions.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyCopyEffect> for CopyData {
+    fn from(value: PyCopyEffect) -> Self {
+        Self {
+            registry_key: value.registry_key,
+            name: value.name,
+            exceptions: value.exceptions.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -1226,6 +1339,8 @@ impl From<PlayerData> for PyPlayer {
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            main_counts: value.main_counts,
+            unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
@@ -1258,6 +1373,8 @@ impl From<PyPlayer> for PlayerData {
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            main_counts: value.main_counts,
+            unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
@@ -1765,6 +1882,9 @@ pub struct PyPermanent {
     /// it is `id`.
     #[pyo3(get, set)]
     pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy (CR 707.2); None for an original.
+    #[pyo3(get, set)]
+    pub copy: Option<PyCopyEffect>,
 }
 
 #[cfg(feature = "python")]
@@ -1801,6 +1921,7 @@ impl From<PermanentData> for PyPermanent {
             dealt_damage_this_turn: value.dealt_damage_this_turn,
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
+            copy: value.copy.map(Into::into),
         }
     }
 }
@@ -1839,6 +1960,7 @@ impl From<PyPermanent> for PermanentData {
             dealt_damage_this_turn: value.dealt_damage_this_turn,
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
+            copy: value.copy.map(Into::into),
         }
     }
 }
@@ -4110,7 +4232,7 @@ fn parse_continuation_frames_json(
                     .targets
                     .iter()
                     .any(|t| t.legal_at_resolution_start.is_some()))
-            || frame.decision > 13
+            || frame.decision > crate::agent::continuation::MAX_DECISION_CODE
             || frame.parent.is_some_and(|parent| parent >= index)
     }) {
         return Err(PyValueError::new_err(
@@ -4171,6 +4293,10 @@ fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add(
+        "MAX_DECISION_CODE",
+        crate::agent::continuation::MAX_DECISION_CODE,
+    )?;
+    m.add(
         "CARD_DEFINITION_COUNT",
         crate::cards::content_pack::CardRegistry::default().len(),
     )?;
@@ -4216,6 +4342,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManaCost>()?;
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
+    m.add_class::<PyCopyEffect>()?;
     m.add_class::<PyAction>()?;
     m.add_class::<PyActionSpace>()?;
     m.add_class::<PyStackTarget>()?;

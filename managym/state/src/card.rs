@@ -944,6 +944,9 @@ pub struct Card {
     /// the numeric representation of `definition_id`.
     pub registry_key: ObjectId,
     pub owner: PlayerId,
+    /// The copy effect that made this object a copy (CR 707.2); its
+    /// definition is then the copiable values that effect produced.
+    pub copy: Option<crate::effect::CopyEffect>,
     definition: Arc<CardDefinition>,
 }
 
@@ -959,6 +962,7 @@ impl Card {
             definition_id,
             registry_key: ObjectId(definition_id.0),
             owner,
+            copy: None,
             definition,
         }
     }
@@ -969,6 +973,12 @@ impl Card {
 
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|s| s == subtype)
+    }
+
+    pub fn is_legendary(&self) -> bool {
+        self.supertypes
+            .iter()
+            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
     }
 
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.

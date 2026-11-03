@@ -7,6 +7,10 @@ use super::card::{Card, CardType, Keyword};
 /// A structural predicate over cards. Every populated field must match.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardPredicate {
+    /// Shares the asking source permanent's layered name. Requires a source
+    /// (currently ControlsAtLeast); card-only matching cannot answer it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub namesake: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
     /// "with no counters on it". Only battlefield permanents carry counters,
@@ -72,6 +76,11 @@ impl CardPredicate {
         }
     }
 
+    /// Whether matching needs the asking ability's source permanent.
+    pub fn reads_source(&self) -> bool {
+        self.namesake || self.any_of.iter().any(CardPredicate::reads_source)
+    }
+
     /// Whether matching compares power, here or in an alternative.
     pub fn reads_power(&self) -> bool {
         self.min_power.is_some()
@@ -94,7 +103,8 @@ impl CardPredicate {
     /// `added_types` are card types the object has in addition to its printed
     /// types (an animated land's creature type, a granted land type).
     pub fn matches(&self, card: &Card, power: i32, added_types: &[CardType]) -> bool {
-        if self.with_counter
+        if self.namesake
+            || self.with_counter
             || self.attacking
             || (self.flying && !card.keywords.has(Keyword::Flying))
         {

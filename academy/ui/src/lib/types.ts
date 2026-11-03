@@ -119,6 +119,14 @@ export interface PermanentState {
   dealt_damage_this_turn?: boolean;
   /** Continuous effects on it, in timestamp order. */
   effects?: ContinuousEffect[];
+  /** The copy effect that made it a copy (CR 707.2). */
+  copy_of?: CopyEffect;
+}
+
+/** A copy effect: the printed card it copies and the exceptions in its copiable values (CR 707.9b). */
+export interface CopyEffect {
+  name: string;
+  exceptions?: ContinuousEffect[];
 }
 
 export interface SideboardCard {
@@ -148,6 +156,10 @@ export interface PlayerState {
   inspected?: CardState[];
   sideboard?: SideboardCard[];
   known_hand?: Record<string, number>;
+  /** Decklist counts, present only when the viewer knows this player's
+   *  decklist (its own, or an open opponent's). Absent means closed. */
+  main_counts?: Record<string, number>;
+  unseen_counts?: Record<string, number>;
   sideboard_counts?: Record<string, number>;
   remaining_sideboard_counts?: Record<string, number>;
   player_index: number;
@@ -605,7 +617,11 @@ export interface TraceConfig {
   villain_checkpoint?: string | null;
   villain_deterministic?: boolean;
   asset_pack?: AssetPackReference | null;
+  decklists?: Decklists;
 }
+
+/** Open: both players know each other's main deck and sideboard. Closed: neither. */
+export type Decklists = 'open' | 'closed';
 
 export interface AssetPackReference {
   id: string;

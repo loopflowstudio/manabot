@@ -18,6 +18,16 @@ required debug/release, extension, Python and arena-admission checks. Prior
 green results below predate this integration. Stop for review after publication;
 this direction does not authorize auto-merge.
 
+Sync resolution (2026-11-02): main's T5 copy effects, Nonlegendary and layered
+observations are reconciled across the crate move. Airship now uses the
+conditional namesake TypeGrant; incoming keyword literals and animation
+records use the catalog APIs. The rebuilt extension regenerated all current
+w17 corpora, Academy fixtures and belief pins. Both parents retain the same
+142-Command tape and game outcome; main's object ids move because earthbend
+now allocates continuous-effect records. Parity source identity also covers
+the moved state and card crates. Full publication checks remain for Gate;
+the owned sync finishes with focused reconciliation tests and no direct push.
+
 Task: sparse counters, keyword enum, card-set crate, animation as a record,
 `CreatureWithNamesakes` as a counted predicate.
 Base: main `29660d00c` (T4 plus the ARCHITECTURE owners rename, merged in
@@ -78,7 +88,7 @@ the Academy fixtures and the belief v3 receipt pins were re-recorded with the
 same Commands and decision revisions; the learning schema stays 10 (tokens
 derive from the definitions).
 
-## Status (realign 2026-11-02, after compress)
+## Historical status (realign 2026-11-02, after compress)
 
 On the branch: items 1–5, WORLDS.md / managym README / AGENTS.md /
 conformance README records, the re-recorded corpora,

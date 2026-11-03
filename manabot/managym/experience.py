@@ -357,6 +357,15 @@ class ContinuousEffectView(ProtocolModel):
     timestamp: UInt32
 
 
+class CopyView(ProtocolModel):
+    """A copy effect: the printed card it copies and its exceptions (CR 707.9b)."""
+
+    name: str
+    exceptions: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+
+
 class LegacyPermanentView(ProtocolModel):
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -407,6 +416,9 @@ class LegacyPermanentView(ProtocolModel):
     effects: list[ContinuousEffectView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    copy_of: CopyView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class SideboardCardView(ProtocolModel):
@@ -449,11 +461,19 @@ class LegacyPlayerView(ProtocolModel):
     known_hand: dict[str, UInt32] = Field(
         default_factory=dict, exclude_if=lambda value: not value
     )
-    sideboard_counts: dict[str, UInt32] = Field(
-        default_factory=dict, exclude_if=lambda value: not value
+    # Decklist counts, present only when the frame's viewer knows this
+    # player's decklist. Absent means hidden; {} means known and empty.
+    main_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
-    remaining_sideboard_counts: dict[str, UInt32] = Field(
-        default_factory=dict, exclude_if=lambda value: not value
+    unseen_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    sideboard_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    remaining_sideboard_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
     sideboard: list[SideboardCardView] = Field(
         default_factory=list, exclude_if=lambda value: not value

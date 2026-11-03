@@ -112,6 +112,7 @@ _STAGES = frozenset(
         "keep_creatures",
         "retarget",
         "resolution_cast",
+        "surveil",
     )
 )
 
@@ -165,6 +166,64 @@ def _enum(values: tuple[str, ...], index: int) -> str:
     return values[index]
 
 
+# `ContinuationFrame.decision` by frame kind: an obligation's
+# `continuation::decision_code` (kind 6), a waiting or placing trigger's
+# ordering class (kinds 7 and 8), or the placement cursor's group (kind 9).
+_OBLIGATIONS = (
+    "none",
+    "resolving payment",
+    "mana activation cost",
+    "mana output",
+    "sacrifice",
+    "select milled",
+    "search",
+    "optional discard and draw",
+    "scry",
+    "inspect and select",
+    "mode",
+    "Learn",
+    "discard",
+    "legend rule",
+    "search lands with different names",
+    "split revealed cards",
+    "discard from revealed hand",
+    "cast during resolution",
+    "exile linked card",
+    "distribute counters",
+    "keep creatures",
+    "retarget",
+    "surveil",
+)
+_TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
+_PLACEMENT_GROUPS = (
+    "none",
+    "placing active player's ordinary triggers",
+    "placing nonactive player's ordinary triggers",
+    "placing active player's ability-triggered triggers",
+    "placing nonactive player's ability-triggered triggers",
+)
+_DELAYED_EVENTS = (
+    "none",
+    "the watched object to die",
+    "the watched object to die or be exiled",
+    "a creature to die",
+    "the next end step",
+    "its controller's next matching spell",
+)
+
+
+def _frame_decision(kind: int, decision: int) -> str:
+    if kind == 6:
+        return _enum(_OBLIGATIONS, decision)
+    if kind in (7, 8):
+        return _enum(_TRIGGER_CLASSES, decision)
+    if kind == 9:
+        return _enum(_PLACEMENT_GROUPS, decision)
+    if kind == 10:
+        return "waits for " + _enum(_DELAYED_EVENTS, decision)
+    raise TextEncodingError(f"frame kind {kind} carries no decision")
+
+
 def _keywords(value: Keywords | managym.Keywords) -> str:
     return ", ".join(
         key.replace("_", " ") for key in Keywords.model_fields if getattr(value, key)
@@ -188,12 +247,12 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
     parts = []
     if history.attacked:
         parts.append("attacked")
-    if history.permanents_sacrificed:
-        parts.append(f"sacrificed {history.permanents_sacrificed} permanents")
+    if count := history.permanents_sacrificed:
+        parts.append(f"sacrificed {count} permanent{'' if count == 1 else 's'}")
     if history.land_entered:
         parts.append("had a land enter under their control")
-    if history.cards_drawn:
-        parts.append(f"drew {history.cards_drawn} cards")
+    if count := history.cards_drawn:
+        parts.append(f"drew {count} card{'' if count == 1 else 's'}")
     return "; ".join(parts)
 
 
@@ -268,6 +327,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
         "BecomeCreature": "is also a creature",
+        "Nonlegendary": "isn't legendary",
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
@@ -454,46 +514,10 @@ class _Renderer:
             details.append("kicker included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.kind == 10:
-            details.append(
-                "waits for "
-                + _enum(
-                    (
-                        "none",
-                        "the watched object to die",
-                        "the watched object to die or be exiled",
-                        "a creature to die",
-                        "the next end step",
-                        "its controller's next matching spell",
-                    ),
-                    relation.decision,
-                )
-            )
-            if relation.this_turn:
-                details.append("ends at this turn's cleanup if it has not triggered")
-        elif relation.decision:
-            details.append(
-                _enum(
-                    (
-                        "none",
-                        "resolving payment",
-                        "mana activation cost",
-                        "mana output",
-                        "sacrifice",
-                        "select milled",
-                        "search",
-                        "optional discard and draw",
-                        "scry",
-                        "inspect and select",
-                        "mode",
-                        "Learn",
-                        "discard",
-                        "legend rule",
-                        "order triggers",
-                    ),
-                    relation.decision,
-                )
-            )
+        if relation.decision:
+            details.append(_frame_decision(relation.kind, relation.decision))
+        if relation.kind == 10 and relation.this_turn:
+            details.append("ends at this turn's cleanup if it has not triggered")
         if relation.cost is not None:
             details.append(
                 "remaining cost "
@@ -595,11 +619,19 @@ class _Renderer:
                 lines.append(f"This turn: {history}.")
             for effect in player.effects:
                 lines.append(f"Effect: {self._effect(effect)}.")
-            for label, quantities in (
-                ("Publicly known hand minima", player.known_hand),
-                ("Initial sideboard", player.sideboard_counts),
-                ("Remaining sideboard", player.remaining_sideboard_counts),
-            ):
+            counts: list[tuple[str, dict[int, int]]] = [
+                ("Publicly known hand minima", player.known_hand)
+            ]
+            if player.main_counts is None:
+                lines.append("Decklist: closed.")
+            else:
+                counts += [
+                    ("Main deck", player.main_counts),
+                    ("Unseen cards", player.unseen_counts or {}),
+                    ("Initial sideboard", player.sideboard_counts or {}),
+                    ("Remaining sideboard", player.remaining_sideboard_counts or {}),
+                ]
+            for label, quantities in counts:
                 lines.append(
                     label
                     + ": "
@@ -640,7 +672,7 @@ class _Renderer:
             )
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
-                optional += f"; printed keywords {keywords}"
+                optional += f"; keywords {keywords}"
             if card.face_down:
                 optional += "; foretold, face down (hidden from other players)"
             if card.x is not None:
@@ -736,8 +768,17 @@ class _Renderer:
             parts.append(f"used-up abilities {used}")
         if permanent.dealt_damage_this_turn:
             parts.append("dealt damage this turn")
+        if permanent.copy is not None:
+            parts.append(self._copy(permanent.copy))
         parts.extend(f"effect {self._effect(effect)}" for effect in permanent.effects)
         return "".join(f"; {part}" for part in parts)
+
+    def _copy(self, copy: managym.CopyEffect) -> str:
+        """A copy effect: what it copies, and the exceptions in its copiable values."""
+        exceptions = " and ".join(effect_phrase(effect) for effect in copy.exceptions)
+        return f"copy of {self.definition(copy.registry_key)}" + (
+            f", except {exceptions}" if exceptions else ""
+        )
 
     def _effect(self, effect: managym.ContinuousEffect) -> str:
         """One continuous-effect record: how long, what, and its source."""

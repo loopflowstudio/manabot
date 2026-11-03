@@ -672,6 +672,25 @@
         "timestamp"
       ]
     },
+    "CopyView": {
+      "description": "A copy effect: the printed card it copies and the exceptions that are\npart of its copiable values (CR 707.9b), in application order.",
+      "type": "object",
+      "properties": {
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
     "DecisionContextView": {
       "description": "Read-only explanation of the current native continuation. This adds no\nchoices, forecasts, or local transaction state to the experience contract.",
       "type": "object",
@@ -1225,6 +1244,17 @@
           "format": "uint32",
           "minimum": 0
         },
+        "copy_of": {
+          "description": "The copy effect that made it a copy (CR 707.2).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "counters": {
           "description": "Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).",
           "type": "object",
@@ -1467,6 +1497,18 @@
           "type": "integer",
           "format": "int32"
         },
+        "main_counts": {
+          "description": "Decklist counts by definition, present only when this frame's viewer\nknows the player's decklist (its own, or an open opponent's). Absent\nmeans hidden; an empty map means known and empty.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "mana": {
           "type": [
             "array",
@@ -1489,7 +1531,10 @@
           "minimum": 0
         },
         "remaining_sideboard_counts": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "integer",
             "format": "uint32",
@@ -1510,7 +1555,10 @@
           }
         },
         "sideboard_counts": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "integer",
             "format": "uint32",
@@ -1526,6 +1574,17 @@
         "turn_history": {
           "description": "What this player has done this turn.",
           "$ref": "#/$defs/PlayerTurnHistory"
+        },
+        "unseen_counts": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
         },
         "zone_counts": {
           "type": "object",
