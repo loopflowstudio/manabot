@@ -123,6 +123,21 @@ rules, observations or frozen evidence.
    `elemental-world-v2` label for the `elemental-uniform` curriculum (a frozen
    regime check, left as it is).
 
+## Headless concept review at `eb127ca9a` (2026-11-02) — no change
+
+Checked the remaining two-kind deck concept: `PlayerConfig.submitted` (admitted
+against the world) versus authored setups run as given. Collapsing it so every
+deck is admitted fails on a counterexample: every preset in `setups.json` has
+decks with cards the world marks incomplete (Accumulate Wisdom, Lightning
+Strike, Water Tribe Rallier, Cat-Gator, Suki, Kyoshi Warrior; 19 decks over all
+9 presets fail `check_decks`). So `submitted` stays. Before T6, authored
+packs admitted these cards by pack membership. Now they run with no admission
+at all, which is already listed under "Checks weakened" below. The rules model
+(faces on `Card`, Sagas, the turn-scheduling stacks), the learner-cost repair
+and the frozen names (`pack_key`, `PlayerConfig.world`) match accepted
+decisions. No open product choice. What's left is integrating #414 (still open
+on 2026-11-02) and the gate.
+
 ## Decisions for Jack Heart's review
 
 - **Retained authored-pack checkpoints.** Setup-bound checkpoints of authored
@@ -242,3 +257,13 @@ Wave memory stays read-only in this pass. Candidates once T6 lands:
   definitions took the worker fixture from 5 s to 31 s, mostly in `backward`);
   encoding only the rows a batch references restores it. Keep inference on the
   full cached table: the subset GRU is not bitwise equal to the full one.
+
+## Publish attempt (headless, 2026-11-02) — blocked
+
+`pr-publish` ran at `eb127ca9a` and stopped without publishing. Jack Heart's
+delivery order (steer c371253c) has MTG-238 #414 merging first and T6
+integrating it afterward. #414 is still open: no review, mergeable, Engine Budget
+failing. Until then T6 cannot be verified. Debug `cargo test` still fails
+`checked_semantic_conformance_evidence_reproduces`, and the w17 re-record waits
+on #414. HEAD already contains origin/main `a1a02a76f`, so `lf sync` has nothing
+to bring in. Next: once #414 lands, integrate it, re-record, gate, then publish.
