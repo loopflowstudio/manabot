@@ -1,5 +1,5 @@
 """
-Policy-input v5 fact rows, joined to the player or permanent each describes.
+Policy-input v5/v6 fact rows, joined to the player or permanent each describes.
 
 A fact row states one open-vocabulary fact (a counter kind, an added subtype, a
 set name or creature type, a spent ability, a continuous-effect record) about
@@ -24,17 +24,18 @@ from manabot.env.observation import (
     FACT_KINDS,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
-    FACT_ROWS,
     FACT_SOURCE_INDEX,
+    FACT_TIMESTAMP_SCALE,
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
 )
 
 
 class FactEncoder(nn.Module):
-    def __init__(self, width: int, buckets: int = 4096) -> None:
+    def __init__(self, width: int, max_facts: int, buckets: int = 4096) -> None:
         super().__init__()
         self.buckets = buckets
+        self.max_facts = max_facts
         self.kind = nn.Embedding(FACT_KINDS + 1, width)
         self.ident = nn.Embedding(buckets, width)
         self.detail = nn.Embedding(buckets, width)
@@ -53,8 +54,8 @@ class FactEncoder(nn.Module):
 
     def forward(self, facts: torch.Tensor, objects: torch.Tensor) -> torch.Tensor:
         """Add each valid fact's embedding to its object; `objects` is [B,N,D]."""
-        if facts.shape[1:] != (FACT_ROWS, FACT_DIM):
-            raise ValueError(f"expected [batch, {FACT_ROWS}, {FACT_DIM}] facts")
+        if facts.shape[1:] != (self.max_facts, FACT_DIM):
+            raise ValueError(f"expected [batch, {self.max_facts}, {FACT_DIM}] facts")
         valid = facts[..., FACT_VALID_INDEX]
         if not ((valid == 0) | (valid == 1)).all():
             raise ValueError("fact validity must be binary")
@@ -74,7 +75,7 @@ class FactEncoder(nn.Module):
                 facts[..., FACT_VALUE_INDEX + 1],
                 (duration == 1).float(),
                 (duration == 2).float(),
-                facts[..., FACT_ORDER_INDEX] / FACT_ROWS,
+                facts[..., FACT_ORDER_INDEX] / FACT_TIMESTAMP_SCALE,
             ),
             dim=-1,
         )

@@ -191,7 +191,7 @@ class Env:
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
     def encode_observation(
-        self, obs: Observation, policy_input_version: int = 5
+        self, obs: Observation, policy_input_version: int = 6, max_facts: int | None = None
     ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
         self, obs: Observation, out: Dict[str, np.ndarray]

@@ -109,7 +109,7 @@ fn encoded_to_dict<'py>(
                 &np,
                 &encoded.facts,
                 &[
-                    crate::agent::observation_encoder::FACT_ROWS,
+                    config.fact_rows(),
                     crate::agent::observation_encoder::FACT_DIM,
                 ],
             )?,
@@ -4017,19 +4017,26 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=5))]
+    #[pyo3(signature = (obs, policy_input_version=6, max_facts=None))]
     fn encode_observation(
         &self,
         py: Python<'_>,
         obs: PyObservation,
         policy_input_version: u8,
+        max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=5) {
+        if !matches!(policy_input_version, 1..=6) {
             return Err(PyValueError::new_err("unsupported policy input version"));
+        }
+        if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
+            return Err(PyValueError::new_err(
+                "max_facts requires v6 and a positive capacity",
+            ));
         }
         let config = ObservationEncoderConfig {
             policy_input_version,
+            max_facts: max_facts.unwrap_or(ObservationEncoderConfig::default().max_facts),
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
@@ -4045,10 +4052,10 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
     ) -> PyResult<()> {
         let rust_obs = Observation::from(obs);
-        let config = ObservationEncoderConfig {
-            policy_input_version: crate::python::vector_env_bindings::buffer_input_version(&out)?,
-            ..ObservationEncoderConfig::default()
-        };
+        let config = crate::python::vector_env_bindings::input_buffer_config(
+            &out,
+            ObservationEncoderConfig::default(),
+        )?;
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
 

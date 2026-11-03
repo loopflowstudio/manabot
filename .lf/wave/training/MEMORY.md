@@ -54,9 +54,25 @@ rows, exceeding frozen v5's 128. Native and Python agree on that failure; replay
 the retained frame and error at stream 181, seed 31482, action 87. Cross-platform
 replay shares source/world, not Linux/macOS binary bytes. Whole-deck admission
 and CUDA admission therefore do not establish reachable-state input capacity.
-Encoding errors remain fatal, outside gameplay quarantine. The representation
-repair is unresolved; dropping facts, excluding the deck or retrying for a lucky
-sample would change the accepted experiment. No new input contract is accepted.
+Encoding errors remain fatal, outside gameplay quarantine. The implementation
+audit found all 140 `(object, modification, detail, duration, timestamp, source)`
+tuples distinct: seven timestamps per object, two keyword details per timestamp,
+and no exact duplicates. Atomic capture retains the same records; text renders
+all 70 effects. Under v5's one-object/one-detail row contract, deduplicating
+effective keywords would erase observable provenance and alter the model's sum
+of fact embeddings. This rules out compaction under those unchanged semantics,
+not compression under every possible new contract. Dropping facts, excluding the
+deck or retrying for a lucky sample would change the accepted experiment.
+
+The concrete prospective proposal is a new input version/world with 512 fact
+rows, preserving frozen v5 at 128 and explicitly binding allocation, encoders,
+model shapes and checkpoint receipts. It remains unaccepted and unimplemented;
+512 covers this counterexample, not all reachable states. Capacity also feeds
+the model's timestamp normalization, so a larger buffer is not merely an
+allocation change. Any accepted replacement requires new initialization and
+evaluation with explicit runtime/admission binding to the same corpus entries
+and weights; retained v5 evidence cannot be relabeled. The local audit and exact
+stream identity are recorded in scratch/mtg-213.md.
 Thirteen games completed before the batch failed but supplied no learner update;
 settled learner counters do not measure all attempted simulation work.
 

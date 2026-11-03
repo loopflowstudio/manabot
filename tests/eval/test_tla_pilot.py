@@ -25,8 +25,8 @@ from etude.run.records import ArtifactRef, Clock
 from etude.train.run import track
 import pytest
 
-from experiments.tla_pilot import ROOT, eval, frozen
 from experiments.tla_pilot_analysis import analyze
+from experiments.tla_pilot_v2 import ROOT, eval, frozen
 from manabot.eval.results import RateInterval
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 
@@ -34,7 +34,7 @@ from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 def _checkpoint(update: int) -> Checkpoint:
     return Checkpoint(
         run="fixture-training",
-        experiment="tla_pilot",
+        experiment="tla_pilot_v2",
         ordinal=update + 1,
         artifact=ArtifactRef(
             uri=f"file:///fixture/u{update}.pt", sha256="a" * 64, size_bytes=1
@@ -61,7 +61,8 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     )
     assert (stage.streams, stage.transitions, stage.learning_seats) == (256, 64, "both")
     assert stage.execution.device == "cuda" and stage.behavior == "current-self"
-    assert regime.observation.policy_input_version == 5
+    assert regime.observation.policy_input_version == 6
+    assert regime.observation.max_facts == 512
     assert protocol.allocation_usd == Decimal(1) < protocol.max_paid_usd == Decimal(10)
     rng = random.Random(protocol.deck_seed)
     assert [(p.first, p.second) for p in protocol.pairs] == [
@@ -93,14 +94,14 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
         assert matchup.games == 4 and len(matchup.conditions) == 8
         if "initial" in matchup.tags:
             assert matchup.players[1].checkpoint.key.name == "u0.pt"
-    assert eval(ExperimentState(experiment="tla_pilot")) == []
+    assert eval(ExperimentState(experiment="tla_pilot_v2")) == []
 
 
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
-    experiment = read_experiment(ROOT / "experiments/tla_pilot.py")
+    experiment = read_experiment(ROOT / "experiments/tla_pilot_v2.py")
     job = experiment.eval(_state((0,)))[0]
     callback = evaluation_spec(job).play
-    assert callback.module == "experiments.tla_pilot"
+    assert callback.module == "experiments.tla_pilot_v2"
     assert callable(callback.load(job.repo))
 
 
@@ -128,11 +129,11 @@ def _state(
     status: Literal["running", "finished", "failed"] = "finished",
 ) -> ExperimentState:
     return ExperimentState(
-        experiment="tla_pilot",
+        experiment="tla_pilot_v2",
         runs=(
             TrainingRun(
                 name="fixture-training",
-                experiment="tla_pilot",
+                experiment="tla_pilot_v2",
                 state=status,
                 checkpoints=Checkpoints(_checkpoint(update) for update in updates),
             ),
@@ -365,7 +366,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     state = _state()
     store = tmp_path / "store"
     with track(
-        experiment="tla_pilot",
+        experiment="tla_pilot_v2",
         run="fixture-training",
         directory=store,
         clocks=(Clock(name="updates", kind="step", meaning="Learner updates"),),
@@ -378,7 +379,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
         pilot_db.execute("ALTER TABLE games DROP COLUMN failure")
     tournament = evaluation_spec(eval(state)[0]).tournament
     declared = declare(
-        experiment="tla_pilot",
+        experiment="tla_pilot_v2",
         run="fixture-eval",
         kind="evaluation",
         clocks=(),
@@ -444,3 +445,22 @@ def test_pilot_analysis_counts_draws_without_fabricating_wins(
         c.score == RateInterval(mean=0.5, lower=0.5, upper=0.5)
         for c in report.comparisons
     )
+
+
+def test_prospective_pilot_preserves_population_and_rejects_old_initialization() -> (
+    None
+):
+    regime, protocol = frozen()
+    predecessor = json.loads(
+        (ROOT / "experiments/regimes/tla-trophy-213-v1.json").read_bytes()
+    )
+    assert regime.deck_source is not None
+    assert regime.deck_source.model_dump(mode="json") == predecessor["deck_source"]
+    old_protocol = json.loads(
+        (ROOT / "experiments/protocols/tla-trophy-213-v1.json").read_bytes()
+    )
+    assert [pair.model_dump() for pair in protocol.pairs] == old_protocol["pairs"]
+    assert protocol.corpus_sha256 == old_protocol["corpus_sha256"]
+    assert protocol.milestones == tuple(old_protocol["milestones"])
+    with pytest.raises(ValueError, match="fresh v2"):
+        eval(ExperimentState(experiment="tla_pilot"))

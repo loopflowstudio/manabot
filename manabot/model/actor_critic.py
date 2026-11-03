@@ -251,7 +251,11 @@ class ActorCritic(nn.Module):
         # Policy input v5 fact rows (counter kinds, added subtypes, set
         # characteristics, spent abilities, continuous-effect records) join
         # their objects. Built last so earlier parameters keep their draws.
-        self.facts = FactEncoder(embed_dim) if enc.shows_everything else None
+        self.facts = (
+            FactEncoder(embed_dim, enc.config.fact_rows)
+            if enc.shows_everything
+            else None
+        )
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the

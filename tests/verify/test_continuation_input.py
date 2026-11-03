@@ -101,7 +101,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
     )
 
 
-@pytest.mark.parametrize("version", (1, 2, 3, 4, 5))
+@pytest.mark.parametrize("version", (1, 2, 3, 4, 5, 6))
 def test_checkpoint_retains_its_policy_input_version(
     tmp_path: Path, version: int
 ) -> None:

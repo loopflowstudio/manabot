@@ -1,4 +1,4 @@
-"""MTG-213 fixed-corpus TLA self-play and paired checkpoint evaluation.
+"""MTG-213 prospective v6 fixed-corpus TLA self-play and paired checkpoint evaluation.
 
 17Lands supplies the CC BY 4.0 trophy source; see the frozen protocol and corpus
 receipt. `runs` uses TrainingJob/execute_regime, while `eval` uses Etude and the
@@ -7,13 +7,10 @@ shared replay-checked evaluator. Neither path fetches or changes deck eligibilit
 
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
 from decimal import Decimal
-import json
 import os
 from pathlib import Path
-import random
 from typing import Literal
 
 from etude.eval.match import Row, Tables
@@ -33,26 +30,23 @@ from etude.report import Curve, Matches, Report, Score
 from pydantic import Field
 import torch
 
-from experiments import tla_pilot
-from experiments.tla_corpus import Corpus
+from experiments import tla_pilot_v2
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import ObservationConfig
-from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.decks import UniformDecks
 from manabot.training.regime import TrainingRegime
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENT = "tla_pilot"
-REGIME = ROOT / "experiments/regimes/tla-trophy-213-v1.json"
-PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v1.json"
+EXPERIMENT = "tla_pilot_v2"
+REGIME = ROOT / "experiments/regimes/tla-trophy-213-v2.json"
+PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v2.json"
 GAMES_PER_PAIR = 4
 
 type Anchor = Literal["heuristic", "initial"]
@@ -64,8 +58,16 @@ class Pair(StrictModel):
     deal: int = Field(ge=0)
 
 
+class RuntimeWorld(StrictModel):
+    world_version: str
+    card_digest: str
+
+
 class Protocol(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
+    runtime_world: RuntimeWorld
+    source_base: str
+    predecessor_protocol_sha256: str
     corpus_sha256: str
     regime_sha256: str
     training_seed: int
@@ -85,8 +87,12 @@ def frozen() -> tuple[TrainingRegime, Protocol]:
     if file_sha256(REGIME) != protocol.regime_sha256:
         raise ValueError("pilot regime differs from frozen protocol")
     regime = TrainingRegime.model_validate_json(REGIME.read_bytes())
-    if regime.world != managym.WORLD_VERSION:
-        raise ValueError("pilot world differs; a new corpus version is required")
+    if protocol.runtime_world.model_dump() != managym.world_identity():
+        raise ValueError("pilot runtime world differs from the prospective protocol")
+    if regime.world != protocol.runtime_world.world_version:
+        raise ValueError("pilot regime world differs from its protocol")
+    if regime.observation != ObservationConfig(policy_input_version=6, max_facts=512):
+        raise ValueError("pilot requires its declared v6/512 input contract")
     if regime.deck_source is None or regime.deck_source.entry_ids is None:
         raise ValueError("pilot requires a frozen population with event IDs")
     if regime.deck_source.sampling != "uniform-independent-v1":
@@ -96,54 +102,6 @@ def frozen() -> tuple[TrainingRegime, Protocol]:
     ):
         raise ValueError("evaluation pair outside frozen eligible population")
     return regime, protocol
-
-
-def freeze(corpus_path: Path) -> None:
-    """Write the first pilot's immutable regime and independent evaluation schedule."""
-    if REGIME.exists() or PROTOCOL.exists():
-        raise ValueError(
-            "pilot already frozen; create a new version for changed decisions"
-        )
-    corpus = Corpus.model_validate_json(corpus_path.read_bytes())
-    eligible = corpus.eligible
-    if corpus.world != managym.world_identity() or not eligible:
-        raise ValueError("corpus must be nonempty and admitted by this world")
-    old = json.loads(
-        (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_bytes()
-    )
-    old.update(id="tla-trophy-213-v1", world=managym.WORLD_VERSION, wall_seconds=2700)
-    old.pop("match")
-    old["deck_source"] = UniformDecks(
-        decks=tuple(t.deck for t in eligible if t.deck is not None),
-        entry_ids=tuple(t.source_id for t in eligible),
-        sampling="uniform-independent-v1",
-    ).model_dump(mode="json")
-    old["agent"].pop("semantic_pack")
-    old["agent"]["world"] = managym.WORLD_SETUP
-    old["observation"] = ObservationConfig().model_dump(mode="json")
-    stage = old["stages"][0]
-    stage.update(updates=100, matchup_curriculum="fixed")
-    stage["execution"]["wall_seconds"] = 2700
-    regime = TrainingRegime.model_validate(old)
-    regime.deck_source.check()
-    atomic_json(REGIME, regime.model_dump(mode="json"))
-    rng = random.Random(21390001)
-    protocol = Protocol(
-        corpus_sha256=corpus.digest,
-        regime_sha256=file_sha256(REGIME),
-        training_seed=21301,
-        deck_seed=21390001,
-        pairs=tuple(
-            Pair(
-                first=rng.randrange(len(eligible)),
-                second=rng.randrange(len(eligible)),
-                deal=21391000 + n,
-            )
-            for n in range(8)
-        ),
-        milestones=(25, 50, 75),
-    )
-    atomic_json(PROTOCOL, protocol.model_dump(mode="json"))
 
 
 def runs(revision: str) -> list[Run]:
@@ -179,7 +137,7 @@ def _source() -> list[Path]:
 
 def environment(protocol: Protocol) -> Environment:
     return Environment(
-        name="tla-trophy-213-v1",
+        name="tla-trophy-213-v2",
         files=canonical_sha256(
             {
                 "world": managym.world_identity(),
@@ -211,6 +169,8 @@ def comparison_schedule(
     finishes, its endpoint has unknown coordinates. Only comparisons with both
     required checkpoints can be played, but all slots count in the analysis.
     """
+    if run.experiment != EXPERIMENT:
+        raise ValueError("v2 comparisons cannot reuse a v1 initialization")
     source = _source()
     inference = Inference(source=source)
     heuristic = Code(name="heuristic", source=source, config={"kind": "heuristic"})
@@ -257,6 +217,8 @@ def comparison_schedule(
 
 def eval(state: ExperimentState) -> list[Job]:
     """Play available comparisons; Etude owns already-delivered matches."""
+    if state.experiment != EXPERIMENT:
+        raise ValueError("v2 evaluation requires fresh v2 training runs")
     _, protocol = frozen()
     matchups = tuple(
         comparison.matchup
@@ -269,13 +231,13 @@ def eval(state: ExperimentState) -> list[Job]:
     return [
         evaluation(
             Benchmark(
-                name="tla-trophy-paired-v1",
+                name="tla-trophy-paired-v2",
                 environment=environment(protocol),
                 matchups=matchups,
             ),
             # Etude discovers this file with runpy; callbacks need an importable
             # module identity even when eval itself came from <run_path>.
-            play=tla_pilot.play,
+            play=tla_pilot_v2.play,
             workers=1,
             max_hours=4,
         )
@@ -363,7 +325,7 @@ def play(match: Match) -> Tables:
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="tla-trophy-213-v1",
+        arena_version="tla-trophy-213-v2",
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
@@ -429,11 +391,3 @@ def report() -> Report:
             ),
         ),
     )
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "corpus", type=Path, help="freeze the first pilot from this corpus.json"
-    )
-    freeze(parser.parse_args().corpus)

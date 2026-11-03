@@ -325,21 +325,48 @@ impl PyVectorEnv {
     }
 }
 
-/// Buffer width binds 32-column v2/v3 versus 33-column v4 semantics in scalar/vector collectors.
+/// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
+/// capacity from the fact axis. At 128 rows their encoding is identical; the
+/// Python configuration/checkpoint still owns the declared version identity.
 #[cfg(feature = "python")]
-pub(super) fn buffer_input_version(buffers: &Bound<'_, PyDict>) -> PyResult<u8> {
+pub(super) fn input_buffer_config(
+    buffers: &Bound<'_, PyDict>,
+    mut config: ObservationEncoderConfig,
+) -> PyResult<ObservationEncoderConfig> {
     let Some(relations) = buffers.get_item("relations")? else {
-        return Ok(1);
+        config.policy_input_version = 1;
+        return Ok(config);
     };
     let shape: Vec<usize> = relations.getattr("shape")?.extract()?;
-    match shape.last() {
-        Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => Ok(3),
-        Some(&crate::agent::continuation::RELATION_DIM) => Ok(4),
-        Some(&crate::agent::continuation::RELATION_DIM_V5) => Ok(5),
-        _ => Err(PyValueError::new_err(
-            "unsupported continuation relation width",
-        )),
-    }
+    config.policy_input_version = match shape.last() {
+        Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => 3,
+        Some(&crate::agent::continuation::RELATION_DIM) => 4,
+        Some(&crate::agent::continuation::RELATION_DIM_V5) => {
+            let facts = buffers
+                .get_item("facts")?
+                .ok_or_else(|| PyValueError::new_err("missing facts"))?;
+            let fact_shape: Vec<usize> = facts.getattr("shape")?.extract()?;
+            if fact_shape.len() != shape.len()
+                || !matches!(fact_shape.len(), 2 | 3)
+                || fact_shape.last() != Some(&crate::agent::observation_encoder::FACT_DIM)
+                || fact_shape[fact_shape.len() - 2] == 0
+            {
+                return Err(PyValueError::new_err("invalid fact buffer shape"));
+            }
+            config.max_facts = fact_shape[fact_shape.len() - 2];
+            if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
+                5
+            } else {
+                6
+            }
+        }
+        _ => {
+            return Err(PyValueError::new_err(
+                "unsupported continuation relation width",
+            ))
+        }
+    };
+    Ok(config)
 }
 
 #[cfg(feature = "python")]
@@ -352,7 +379,7 @@ fn event_buffer_config(
         .ok_or_else(|| PyValueError::new_err("missing events"))?
         .getattr("shape")?
         .extract()?;
-    config.policy_input_version = buffer_input_version(buffers)?;
+    config = input_buffer_config(buffers, config)?;
     config.policy_history = shape.last() == Some(&crate::agent::policy_history::HISTORY_DIM);
     if config.policy_history {
         if shape.len() != 3
@@ -400,7 +427,7 @@ fn read_observation_buffers(
                     "facts",
                     &[
                         n,
-                        crate::agent::observation_encoder::FACT_ROWS,
+                        c.fact_rows(),
                         crate::agent::observation_encoder::FACT_DIM,
                     ],
                     "float32",

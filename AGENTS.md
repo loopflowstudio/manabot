@@ -122,7 +122,11 @@ checkpoints or experiment evidence.
   permanent). Open-ended vocabularies (counter kinds, added subtypes, set
   names, used abilities, continuous-effect records, copy effects and their
   exceptions) are fact kinds, never columns. Preserve the frozen widths and
-  derive buffers from `ObservationSpace`.
+  derive buffers from `ObservationSpace`. V6 retains those columns and serializes
+  `max_facts` (fresh default 512); v5 stays fixed at 128. Scalar/vector native
+  buffers read capacity from the fact axis; a 128-row v6 buffer encodes exactly
+  like v5. Model timestamp normalization remains rank / 128 in both versions,
+  independent of capacity. Legacy configurations omit `max_facts`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.

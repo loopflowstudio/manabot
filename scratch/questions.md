@@ -14,7 +14,7 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   Missing losses stay unknown. Native whole-list admission yields 134 eligible,
   866 rejected, without resampling. This is historical trophy data, not today's
   feed or a uniform sample of drafts. Live fetching and deck holdout are deferred.
-- Recipe: preserve MTG-181/183's 64x2/four-head damped policy; current world/full
+- Recipe: preserve MTG-181/183's 64x2/four-head damped policy; original world/full
   vocabulary/v5 and trophy population are declared deviations. No historical
   checkpoint or budget is inherited. The $1 first allocation, 100-update target,
   2,700-second watchdog and eight-pair/four-leg evaluation are engineering choices
@@ -24,9 +24,11 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   copying secrets. Configured GPU alternatives are authorized within $10;
   record hardware/allocation deviations before scoring. Earlier credential and
   zero-spend capacity reports are historical, not current launch instructions.
-- Runtime: prepared b8835f63b matched the corpus; post-PR-414 local w17 admits
-  every deck but has a different card digest. Version/admission alone does not
-  establish runtime parity. Prospective correction
+- Runtime: prepared b8835f63b matched the corpus. V2 explicitly selects
+  post-PR-414 source plus the v6 repair, with the current card digest pinned in
+  its protocol. All 134 entries admit unchanged. The digest difference is
+  isolated to PR-414 keyword serialization and 13 rules-vocabulary locations;
+  version/admission alone does not establish runtime parity. Prospective correction
   `2adbd0758e40518947daf91569e1938b060d4346` changes only the timing test from
   that exact parent, retaining native/learner/corpus/recipe/evaluator bytes.
   Ordinary repair checkpoint: c29bf3a3. Keep original failed requests unchanged.
@@ -49,9 +51,12 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   decision. The 2026-11-03 implementation audit established 140 distinct tuples
   with seven distinct timestamps, zero exact duplicates, matching capture and
   70 rendered text records. Lossless compaction cannot preserve unchanged v5
-  row meanings here. A prospective version/world decision is required before
-  paid work; the concrete proposal and its limits are in `scratch/mtg-213.md`.
-  It is not selected or implemented. Existing v5 evidence remains unchanged.
+  row meanings here. Operator comment 5d6cf81e selected prospective v6/max_facts=512 and Jack
+  Heart confirmed it in 0c17ad58. The numeric capacity is the operator’s
+  engineering choice. Preserve timestamp rank / 128, all columns and v5.
+  Fresh v6 configuration defaults to 512; legacy configuration omits the new
+  field to preserve architecture hashes. Native buffers infer capacity from
+  their fact axis; 128-row v6 and v5 have identical encoding semantics. Existing v5 evidence remains unchanged.
 
 Current results, reservations and remaining work: `scratch/mtg-213.md`;
 retained receipts: `experiments/tla-trophy-pilot.md`. Detailed decision chronology

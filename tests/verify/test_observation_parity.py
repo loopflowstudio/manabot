@@ -522,10 +522,11 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     assert v4["agent_cards"].shape[-1] == 41
 
 
-def test_v5_keeps_effect_provenance_at_capacity_and_rejects_overflow() -> None:
-    """Repeated modifications retain their provenance, even at the v5 limit."""
-    # Pin the frozen contract, independently of the encoder's current constants.
-    capacity = 128
+@pytest.mark.parametrize(("version", "capacity"), [(5, 128), (6, 512), (6, 140)])
+def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
+    version: int, capacity: int
+) -> None:
+    """Both contracts retain every timestamp and reject excess facts."""
     env = managym.Env(seed=11, skip_trivial=False)
     env.reset(make_player_configs())
     env.scenario_force_battlefield(0, "Mountain")
@@ -548,8 +549,15 @@ def test_v5_keeps_effect_provenance_at_capacity_and_rejects_overflow() -> None:
         effects.append(effect)
     mine.effects = effects[:-1]
     obs.agent_permanents = [mine]
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
-    native = env.encode_observation(obs, 5)
+    encoder = ObservationEncoder(
+        ObservationConfig.model_validate(
+            {
+                "policy_input_version": version,
+                **({"max_facts": capacity} if version == 6 else {}),
+            }
+        )
+    )
+    native = env.encode_observation(obs, version, capacity if version == 6 else None)
     reference = encoder.encode(obs)
     for key, value in reference.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
@@ -567,13 +575,18 @@ def test_v5_keeps_effect_provenance_at_capacity_and_rejects_overflow() -> None:
             == [0 if source is None else source + 1] * 2
         )
 
+    buffers = {key: value[0] for key, value in encoder.allocate(1).items()}
+    env.encode_observation_into(obs, buffers)
+    for key, value in reference.items():
+        np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+
     mine.effects = effects
     obs.agent_permanents = [mine]
-    message = "observation capacity exceeded: facts 130 > 128"
+    message = f"observation capacity exceeded: facts {capacity + 2} > {capacity}"
     with pytest.raises(ValueError, match=message):
         encoder.encode(obs)
     with pytest.raises(ValueError, match=message):
-        env.encode_observation(obs, 5)
+        env.encode_observation(obs, version, capacity if version == 6 else None)
     buffers = {key: value[0] for key, value in encoder.allocate(1).items()}
     with pytest.raises(ValueError, match=message):
         env.encode_observation_into(obs, buffers)
@@ -618,3 +631,21 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         watched = relations[waiting & (relations[:, 0] == 3)][0]
         assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
         assert watched[24] > 0
+
+
+@pytest.mark.parametrize("capacity", [128, 140, 512])
+def test_v6_vector_buffers_derive_fact_capacity(capacity: int) -> None:
+    config = ObservationConfig(max_facts=capacity)
+    encoder = ObservationEncoder(config)
+    env = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
+    buffers = allocate_vector_buffers(1, config)
+    env.set_buffers(buffers)
+    obs, _ = env.reset_all(make_player_configs())[0]
+    env.reset_seeds_into_buffers([213])
+    assert buffers["facts"].shape == (1, capacity, 12)
+    assert_buffer_observation_equal(buffers, 0, encoder.encode(obs))
+    scalar = managym.Env(seed=213, skip_trivial=True)
+    scalar.reset(make_player_configs())
+    obs, *_ = scalar.step(0)
+    env.step_into_buffers([0])
+    assert_buffer_observation_equal(buffers, 0, encoder.encode(obs))
