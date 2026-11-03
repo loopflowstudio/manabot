@@ -240,6 +240,42 @@ fn chosen_selector_without_candidates_does_not_reuse_a_previous_move() {
     assert!(s.game().state.stack_objects.is_empty());
 }
 
+/// Sacrifice consumes the preceding move's objects before replacing its result.
+#[test]
+fn moved_selector_sacrifices_the_returned_permanent() {
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_124,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let life = s.game().state.players[0].life;
+    queue_effects(
+        &mut s,
+        card,
+        vec![
+            Effect::exile(ObjectSelector::This),
+            Effect::return_to_battlefield(ObjectSelector::Moved, false),
+            Effect::Sacrifice {
+                what: ObjectSelector::Moved,
+                optional: false,
+            },
+            Effect::if_you_do(vec![Effect::gain_life(5)]),
+        ],
+    );
+    s.pass_priority();
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(
+        s.game().state.zones.zone_of(card),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(s.game().state.players[0].life, life + 5);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
 /// Every land selected by one earthbend instruction becomes a creature;
 /// the selector's cardinality must not silently turn the instruction off.
 #[test]

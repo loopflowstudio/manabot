@@ -28,15 +28,20 @@
   pointers remain.
 # Questions and assumptions
 
-## MTG-235 — accepted scope and remaining dependency
+## MTG-235 — accepted scope and corrected delivery order
 
 Jack Heart's 2026-11-02 concept-review decisions amend PR #412 in place:
 object verbs use selectors, AffectedSpec folds into ObjectSelector, value twins
 merge, and Chosen applies to any object verb. “After that, ship it” remains the
 delivery direction. The current plan is `scratch/mtg-235-effect-vocabulary-verbs.md`.
 
-- MTG-225 (T6) has no PR on this base. Chapter → CountersReach and T6's new
-  effects remain an explicit integration dependency, not a completed acceptance.
+- Jack Heart corrected delivery order in comment
+  `2e1c66f1-d00a-4319-b5f4-c631bcf608c9`: land MTG-235 before T6. T6 adapts
+  Chapter → CountersReach and its new effects in its own work. Earlier
+  dependency statements in these historical notes are superseded.
+- Headless demo uses bounded native scenarios and the actual Academy parity
+  CLIs, with prior browser evidence retained. This is delegated judgment,
+  not new human observation; no new UI design is under review.
 - `Target` holds `TargetSpec`, rather than a clause index, because implicit
   target clauses are derived from it; the existing clause cursor picks the slot.
 - `Grantor` names the exact granting Equipment; `linked` names exile links.

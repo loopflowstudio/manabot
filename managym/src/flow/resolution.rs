@@ -583,9 +583,6 @@ impl Game {
                 None
             }
             Effect::Sacrifice { what, optional } => {
-                // What this instruction sacrifices answers a following "if
-                // you do".
-                frame.moved.clear();
                 debug_assert!(
                     !optional || what.is_chosen(),
                     "\"you may sacrifice\" chooses among permanents"
@@ -600,6 +597,9 @@ impl Game {
                             .is_some_and(|permanent| permanent.controller == frame.controller)
                     })
                     .collect();
+                // Select before replacing the result: `Moved` may name a
+                // permanent the preceding instruction put on the battlefield.
+                // What this sacrifice moves answers a following "if you do".
                 frame.moved = controlled
                     .into_iter()
                     .filter_map(|id| self.sacrifice_permanent(id))

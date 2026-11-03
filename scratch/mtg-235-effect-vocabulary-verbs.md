@@ -7,10 +7,17 @@ amendment to PR #412. The original pass and review rationale are preserved at
 The historical review page is retained at that commit; `scratch/concept-review.html`
 shows the current headless review.
 
-Status: the combined cache/engine-budget source at `d22b55757` is verified for
-republication against main `a1a02a76f`. The latest results are in “Cache
-integration publication verification” below; earlier counts describe earlier heads.
-Subsequent delivery and MTG-225 integration remain pending.
+Status: published head `1dffa1ec1` passed hosted CI and the headless demo
+([demo evidence](effect-vocabulary-demo.md)). Gate found and repaired a
+`Sacrifice(Moved)` composition bug locally; final-source checks pass below.
+Publish the fix and obtain fresh CI before landing.
+
+Delivery correction — Jack Heart, 2026-11-02, comment
+`2e1c66f1-d00a-4319-b5f4-c631bcf608c9`: land MTG-235 / PR #412 before
+MTG-225 (T6). This PR is based on main. T6 adapts to the landed vocabulary in
+its own work; it does not block landing or completion of MTG-235. This
+supersedes every earlier dependency statement below. Historical results and
+then-current dependency assessments remain as dated evidence, not direction.
 
 ## Outcome and authority
 
@@ -115,10 +122,9 @@ shrinks by more than half; these remaining rules are outside the accepted cut.
   The installed cp312 extension matches the rebuilt wheel byte for byte.
   Publication logs remain local under `.runs/publish-mtg-235/`. Delivery remains
   separate from publication; old-head CI is not used as amendment proof.
-- Explicit integration dependency: MTG-225 (T6) has no published PR on this
-  base. `TriggerCondition::Chapter` does not exist here; integration must replace
-  it with `CountersReach { kind, at_least }` when T6 publishes, and migrate any
-  new T6 effects. This amendment alone does not complete that dependency.
+- T6 follow-through belongs to MTG-225 after this PR lands. Its Chapter →
+  CountersReach migration and new effects are outside this amendment. The
+  former integration dependency is superseded by the delivery correction above.
 
 ## Reconciliation and retained evidence — 2026-11-02
 
@@ -269,3 +275,46 @@ MTG-225 still has no PR and is running implementation. Its integration remains
 pending; this publication does not complete MTG-235. Hosted CI, including the
 same-runner engine budget, was still running when these local checks finished;
 no performance-budget acceptance is claimed from the local checks.
+
+## Gate — 2026-11-02
+
+Compared the branch with its supplied main base `a1a02a76f`, including the
+uncommitted demo/delivery notes. Current PR #412 is open and conflict-free;
+hosted run 41564801622 passed on published head `1dffa1ec1`. T6 remains a
+follow-on, never a prerequisite to landing this Task.
+
+Review found that `Sacrifice { what: Moved }` cleared `frame.moved` before
+selecting its input. A directed regression exiles a permanent, returns it,
+sacrifices `Moved`, then gains life only if the sacrifice happened. Before the
+fix it failed with the card on the battlefield rather than in the graveyard.
+Sacrifice now selects the controlled permanents before replacing its move
+result, matching Move's existing selection order. This repairs the accepted
+composable selector API without changing card definitions or learning tokens.
+
+Validation plan and logs: `.runs/gate-mtg-235/`. CI's changed-path selector
+selects all nine job groups for the complete branch; it has no local result
+cache. The local plan reruns the debug Rust suite required for authored rules,
+then clippy/fmt and the extension rebuild sequentially; native consumers,
+parity, admission/models and focused Academy browser interactions follow.
+Unchanged frontend type-check/build/Vitest results remain valid. Full hosted
+integration, clean-machine and same-runner Engine Budget require fresh CI
+after publication; old-head green does not validate this repair.
+
+Final-source results (logs under `.runs/gate-mtg-235/`):
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml`: 886 passed, 2 ignored, including all 502 directed card tests, the new regression, cache assertions and semantic conformance. The regression failed before the fix (`moved-selector-before.log`); no required check timed out.
+- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy -j 2 --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings`: passed. Rustfmt requested one assertion wrap in the new test; `cargo fmt --manifest-path managym/Cargo.toml` applied it and `cargo fmt --manifest-path managym/Cargo.toml --check` passed. Only that regression and clippy were repeated after formatting; unchanged suites retain their results.
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`: passed; installed cp312 extension atomically and byte-compared it with the wheel (SHA256 `dbd72460cbd865c651d41e2a0c773b099e0725e1268b325e3618a99579dd9964`).
+- `uv run --extra play python -m academy.authored_match_parity write`: passed, 142 commands / 143 checkpoints / 858 viewer checks, no divergence; stale-object and stale-revision rejection retained. Receipt diff contains only the `resolution.rs` source hash and its aggregate hash; all behavior fields are identical.
+- `uv run --extra play python -m academy.public_commitment_parity verify`: passed, 142 commands / 69 commitments / zero gaps; no public receipt rewrite was needed.
+- `uv run --extra dev --extra play --extra notebook --extra artifacts --extra reports pytest tests/sim/test_heuristic.py tests/semantic/test_text_observation.py tests/verify/test_observation_parity.py tests/env/test_observation.py tests/env/test_decklist_disclosure.py tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/ tests/academy/test_choice_navigation.py tests/academy/test_learn_setup.py tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py tests/belief/test_state.py -q`: 399 passed, 1 skipped in 133.99 s.
+- `uv run --extra dev ruff check academy/authored_match_parity.py academy/public_commitment_parity.py manabot/semantic/text_observation.py manabot/sim/heuristic.py tests/belief/test_state.py tests/sim/test_heuristic.py`: passed.
+- `ACADEMY_RELEASE_API_PORT=8139 ACADEMY_RELEASE_FRONTEND_PORT=5199 npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts choice-navigation.spec.ts learn.spec.ts trigger-order.spec.ts`: 10 passed in 18.8 s against the unchanged production build; no frontend generation ran during browser checks. The prior type check, build and 9 Vitest results remain applicable to unchanged frontend inputs.
+
+Gate advances with the repaired source and refreshed source-bound receipt.
+Publication and fresh hosted CI (including Engine Budget) remain delivery's
+next steps. No new card behavior, content identity, learning token or policy
+input shape changed in this gate repair; no additional design decision is
+needed. Existing demo notes and delivery-order correction are preserved.
+`git diff --check` passed. Browser servers exited, both isolated ports have no
+listeners, and no command started by this gate remains running.
