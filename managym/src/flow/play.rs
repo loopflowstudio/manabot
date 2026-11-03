@@ -1807,9 +1807,7 @@ impl Game {
         if !ability.tap_source {
             return self.can_pay_with_waterbend(player, &cost);
         }
-        let mut probe = self.clone();
-        probe.tap_permanent(source, false);
-        probe.can_pay_with_waterbend(player, &cost)
+        self.waterbend_payment_after_taps(player, &cost, cost.generic(), std::iter::once(source))
     }
 
     /// Can `player` cover `cost` with untapped waterbend candidates

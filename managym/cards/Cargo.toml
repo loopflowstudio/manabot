@@ -1,0 +1,12 @@
+[package]
+name = "managym-cards"
+version = "0.2.0"
+edition = "2021"
+description = "Card set definitions for the managym engine, one module per printed set"
+
+[dependencies]
+managym-state = { path = "../state" }
+
+[dev-dependencies]
+managym = { path = ".." }
+serde_json = "1"

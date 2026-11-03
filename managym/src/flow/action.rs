@@ -190,12 +190,6 @@ impl Game {
             .chain(self.library_top_castable(player))
     }
 
-    pub(crate) fn can_player_act(&self, player: PlayerId) -> bool {
-        self.priority_candidate_cards(player)
-            .any(|card| self.priority_action_for_card(player, card).is_some())
-            || !self.priority_activate_ability_actions(player).is_empty()
-    }
-
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
         let mut actions: Vec<Action> = self
             .priority_candidate_cards(player)
@@ -208,7 +202,7 @@ impl Game {
 
     fn priority_activate_ability_actions(&self, player: PlayerId) -> Vec<Action> {
         let mut actions = Vec::new();
-        for permanent_id in self.battlefield_permanents(player) {
+        for permanent_id in self.iter_battlefield_permanents(player) {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
@@ -660,13 +654,13 @@ impl Game {
                 if waterbend > 0 {
                     for candidate in self.waterbend_payment_candidates(*player, payment) {
                         // Only offer taps that keep the rest of the cost payable.
-                        let mut probe = self.clone();
-                        probe.tap_permanent(candidate, false);
-                        if let Some(source) = tapped_source {
-                            probe.tap_permanent(source, false);
-                        }
                         let rest = owed.reduced_generic(1);
-                        if probe.waterbend_payment_possible(*player, &rest, waterbend - 1) {
+                        if self.waterbend_payment_after_taps(
+                            *player,
+                            &rest,
+                            waterbend - 1,
+                            std::iter::once(candidate).chain(tapped_source),
+                        ) {
                             actions.push(Action::WaterbendTap {
                                 player: *player,
                                 permanent: candidate,

@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "4b5e9c0e4555627664721e7a4e6c909120cd98ac",
+    "commit": "1616b210f7f4765aa8032debad50b7f18450e8b1",
     "date": "2026-11-03",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41555845634",
-    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6973P-C (4 vCPU), release",
-    "reason": "Retain the derived-state optimization from merged main 51fbacbbf, measured at candidate 4b5e9c0e4555627664721e7a4e6c909120cd98ac in https://github.com/loopflowstudio/manabot/actions/runs/41555845634. On one Intel Xeon 6973P-C runner, worst reply improved 30.26% (7.132 vs 10.226 s), total search 28.36% (208.251 vs 290.711 s), and time per step 36.65% (13943.8 vs 8833.0 steps/s), with identical full-score and step digests and counts. Delegated demo judgment applies the retained-speedup rule; preserve the 10% tolerance. This adoption grants no shipping approval."
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41699683808",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
+    "reason": "Retain MTG-238 shared-engine speedup from CI 41699683808: 30.43% less step time, 43.93% less total search time and 49.91% less worst-reply time, with identical decisions and ordered scores; preserve the 10% tolerance."
   },
   "bench_search": {
-    "worst_s": 7.132,
-    "total_s": 208.251,
+    "worst_s": 5.272,
+    "total_s": 177.771,
     "seeds": {
       "1": {
-        "worst_s": 7.132,
-        "total_s": 90.679,
+        "worst_s": 5.272,
+        "total_s": 73.926,
         "digest": 5192957023818819312
       },
       "2": {
-        "worst_s": 4.343,
-        "total_s": 56.12,
+        "worst_s": 3.835,
+        "total_s": 51.385,
         "digest": 14020561159006433540
       },
       "3": {
-        "worst_s": 6.052,
-        "total_s": 61.452,
+        "worst_s": 5.165,
+        "total_s": 52.46,
         "digest": 12455483057923843581
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 13943.8,
+    "steps_per_s": 12862.7,
     "steps": 99923,
     "games": 512,
     "digest": 12247096877573042301

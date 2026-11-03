@@ -9,6 +9,7 @@
 //! or policy decoding. `compound_offers` covers the full legal surface and
 //! `compound_commands` lowers its atomic selections to canonical Commands.
 
+use crate::state::card::Keyword;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -754,7 +755,9 @@ impl Game {
             .as_ref()
             .ok_or(StructuredOfferError::WrongDecision)?;
         if combat.attackers.iter().any(|attacker| {
-            self.characteristics(*attacker).keywords.menace
+            self.characteristics(*attacker)
+                .keywords
+                .has(Keyword::Menace)
                 || self.has_restriction(*attacker, Restriction::CantBeBlockedByMoreThanOne)
         }) {
             return Ok(None);

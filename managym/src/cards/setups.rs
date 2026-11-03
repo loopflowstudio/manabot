@@ -16,7 +16,7 @@ use std::{
 use serde::Deserialize;
 
 use super::ContentError;
-use crate::{cardsets, state::player::PlayerConfig};
+use crate::state::player::PlayerConfig;
 
 const SETUPS: &str = include_str!("../../../content/semantic/current/setups.json");
 
@@ -103,7 +103,7 @@ pub fn authored_setup(name: &str) -> Result<&'static AuthoredSetup, ContentError
 }
 
 fn build(preset: String, source: SetupSource) -> Result<AuthoredSetup, ContentError> {
-    let by_key = cardsets::catalog()
+    let by_key = managym_cards::catalog()
         .iter()
         .map(|definition| (definition.key, definition))
         .collect::<BTreeMap<_, _>>();

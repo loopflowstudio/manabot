@@ -3,14 +3,14 @@
 //! The pool ([`world_pool`], named [`crate::world::WORLD_POOL`]) describes the
 //! catalog ([`default_content_pack`]), so it shares the catalog's `CardDefId`s
 //! and digest; deck import and admission read only it. A defined card is
-//! eligible unless its set file marks it incomplete ([`cardsets::incomplete`]);
+//! eligible unless its set file marks it incomplete ([`managym_cards::incomplete`]);
 //! tokens, back faces and rules fixtures are never deck entries. Setup
 //! construction policy belongs to the admission caller, not this catalog.
 
 use std::{collections::BTreeMap, sync::OnceLock};
 
 use super::ContentError;
-use crate::{cards::content_pack::default_content_pack, cardsets, state::card::CardDefId};
+use crate::{cards::content_pack::default_content_pack, state::card::CardDefId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Eligibility {
@@ -40,7 +40,7 @@ pub struct ContentPool {
 
 fn describe() -> ContentPool {
     let content = default_content_pack();
-    let incomplete = cardsets::incomplete()
+    let incomplete = managym_cards::incomplete()
         .iter()
         .copied()
         .collect::<BTreeMap<_, _>>();

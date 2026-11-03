@@ -8,7 +8,7 @@ use crate::state::{
         LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector, Scope, TargetSpec,
         TriggerCondition, TriggerSubject,
     },
-    card::{Card, CardType, Keywords},
+    card::{Card, CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
     mana::{Mana, ManaCost},
     permanent::CounterKind,
@@ -212,8 +212,15 @@ fn condition_text(condition: &Condition) -> String {
             "your graveyard has at least {count} {} cards",
             predicate_description(predicate, "matching")
         ),
-        Condition::ControlsMatching { predicate } => format!(
+        Condition::ControlsAtLeast {
+            count: 1,
+            predicate,
+        } => format!(
             "you control a {}",
+            predicate_description(predicate, "permanent")
+        ),
+        Condition::ControlsAtLeast { count, predicate } => format!(
+            "you control {count} or more {}s",
             predicate_description(predicate, "permanent")
         ),
         Condition::UnspentManaAtLeast { count } => {
@@ -279,6 +286,7 @@ fn card_type(t: CardType) -> &'static str {
 
 fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
+        namesake,
         flying,
         no_counters,
         in_combat,
@@ -350,6 +358,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if kind.is_none() || noun != "permanent" {
         terms.push(noun.into());
+    }
+    if *namesake {
+        terms.push("with the same name as this permanent".into());
     }
     if *token == Some(true) {
         terms.push("token".into());
@@ -652,42 +663,10 @@ fn cost_description(cost: &ManaCost) -> String {
 }
 
 fn keywords_description(k: &Keywords) -> String {
-    let Keywords {
-        flying,
-        reach,
-        haste,
-        flash,
-        vigilance,
-        trample,
-        first_strike,
-        double_strike,
-        deathtouch,
-        lifelink,
-        defender,
-        menace,
-        hexproof,
-        indestructible,
-    } = k;
-    [
-        (flying, "flying"),
-        (reach, "reach"),
-        (haste, "haste"),
-        (flash, "flash"),
-        (vigilance, "vigilance"),
-        (trample, "trample"),
-        (first_strike, "first strike"),
-        (double_strike, "double strike"),
-        (deathtouch, "deathtouch"),
-        (lifelink, "lifelink"),
-        (defender, "defender"),
-        (menace, "menace"),
-        (hexproof, "hexproof"),
-        (indestructible, "indestructible"),
-    ]
-    .into_iter()
-    .filter_map(|(on, name)| on.then_some(name))
-    .collect::<Vec<_>>()
-    .join(", ")
+    k.iter()
+        .map(Keyword::printed)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub(crate) fn effects_description(effects: &[Effect]) -> String {
@@ -914,8 +893,8 @@ fn continuous_description(
             "{subject} becomes {} in addition to its other types{until}",
             subtypes.join(" ")
         ),
-        Modification::BecomeArtifactCreature => {
-            format!("{subject} becomes an artifact creature{until}")
+        Modification::BecomeCreature => {
+            format!("{subject} becomes a creature in addition to its other types{until}")
         }
         Modification::Nonlegendary => format!("{subject} isn't legendary{until}"),
         Modification::AddKeywords(keywords) => {

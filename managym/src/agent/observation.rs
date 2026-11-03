@@ -1,3 +1,4 @@
+use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     cards::content_pack::default_content_pack,
@@ -8,7 +9,7 @@ use crate::{
     },
     state::{
         ability::PaymentCost,
-        card::{CardDefId, CardTypes},
+        card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
@@ -202,20 +203,43 @@ pub struct CardTypeData {
 
 impl CardTypeData {
     pub fn from_types(types: &CardTypes) -> Self {
-        Self {
-            is_castable: types.is_castable(),
-            is_permanent: types.is_permanent(),
-            is_non_land_permanent: types.is_non_land_permanent(),
-            is_non_creature_permanent: types.is_non_creature_permanent(),
-            is_spell: types.is_spell(),
-            is_creature: types.is_creature(),
-            is_land: types.is_land(),
-            is_planeswalker: types.is_planeswalker(),
-            is_enchantment: types.is_enchantment(),
-            is_artifact: types.is_artifact(),
-            is_kindred: types.is_kindred(),
-            is_battle: types.is_battle(),
+        // Read the set once; the derived flags combine these same memberships.
+        let mut data = Self {
+            is_castable: false,
+            is_permanent: false,
+            is_non_land_permanent: false,
+            is_non_creature_permanent: false,
+            is_spell: false,
+            is_creature: false,
+            is_land: false,
+            is_planeswalker: false,
+            is_enchantment: false,
+            is_artifact: false,
+            is_kindred: false,
+            is_battle: false,
+        };
+        for kind in &types.types {
+            match kind {
+                CardType::Creature => data.is_creature = true,
+                CardType::Instant | CardType::Sorcery => data.is_spell = true,
+                CardType::Planeswalker => data.is_planeswalker = true,
+                CardType::Land => data.is_land = true,
+                CardType::Enchantment => data.is_enchantment = true,
+                CardType::Artifact => data.is_artifact = true,
+                CardType::Kindred => data.is_kindred = true,
+                CardType::Battle => data.is_battle = true,
+            }
         }
+        data.is_castable = !data.is_land && !types.types.is_empty();
+        data.is_permanent = data.is_creature
+            || data.is_land
+            || data.is_planeswalker
+            || data.is_enchantment
+            || data.is_artifact
+            || data.is_battle;
+        data.is_non_land_permanent = data.is_permanent && !data.is_land;
+        data.is_non_creature_permanent = data.is_permanent && !data.is_creature;
+        data
     }
 }
 
@@ -333,22 +357,24 @@ impl KeywordData {
         ]
     }
 
-    pub fn from_keywords(keywords: &crate::state::card::Keywords) -> Self {
+    /// The evergreen keywords' columns. Every `Keyword` is evergreen today;
+    /// a non-evergreen keyword gets a fact row instead of a column.
+    pub fn from_keywords(keywords: &Keywords) -> Self {
         Self {
-            flying: keywords.flying,
-            reach: keywords.reach,
-            haste: keywords.haste,
-            flash: keywords.flash,
-            vigilance: keywords.vigilance,
-            trample: keywords.trample,
-            first_strike: keywords.first_strike,
-            double_strike: keywords.double_strike,
-            deathtouch: keywords.deathtouch,
-            lifelink: keywords.lifelink,
-            defender: keywords.defender,
-            menace: keywords.menace,
-            hexproof: keywords.hexproof,
-            indestructible: keywords.indestructible,
+            flying: keywords.has(Keyword::Flying),
+            reach: keywords.has(Keyword::Reach),
+            haste: keywords.has(Keyword::Haste),
+            flash: keywords.has(Keyword::Flash),
+            vigilance: keywords.has(Keyword::Vigilance),
+            trample: keywords.has(Keyword::Trample),
+            first_strike: keywords.has(Keyword::FirstStrike),
+            double_strike: keywords.has(Keyword::DoubleStrike),
+            deathtouch: keywords.has(Keyword::Deathtouch),
+            lifelink: keywords.has(Keyword::Lifelink),
+            defender: keywords.has(Keyword::Defender),
+            menace: keywords.has(Keyword::Menace),
+            hexproof: keywords.has(Keyword::Hexproof),
+            indestructible: keywords.has(Keyword::Indestructible),
         }
     }
 }
@@ -524,7 +550,7 @@ impl ContinuousEffectData {
                 data.subtypes = subtypes.clone();
                 "AddSubtypes"
             }
-            Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
+            Modification::BecomeCreature => "BecomeCreature",
             Modification::Nonlegendary => "Nonlegendary",
             Modification::AddKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
@@ -2035,4 +2061,51 @@ impl Observation {
 /// A ward cost's mana value; 0 without ward.
 fn ward_value(cost: Option<&PaymentCost>) -> i32 {
     cost.map_or(0, |cost| i32::from(cost.mana_cost().mana_value))
+}
+
+#[cfg(test)]
+mod card_type_tests {
+    use super::*;
+
+    #[test]
+    fn observation_type_flags_match_rules_for_every_type_combination() {
+        let vocabulary = [
+            CardType::Creature,
+            CardType::Instant,
+            CardType::Sorcery,
+            CardType::Planeswalker,
+            CardType::Land,
+            CardType::Enchantment,
+            CardType::Artifact,
+            CardType::Kindred,
+            CardType::Battle,
+        ];
+        for mask in 0..(1 << vocabulary.len()) {
+            let types = CardTypes::new(
+                vocabulary
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| mask & (1 << index) != 0)
+                    .map(|(_, kind)| *kind),
+            );
+            assert_eq!(
+                CardTypeData::from_types(&types),
+                CardTypeData {
+                    is_castable: types.is_castable(),
+                    is_permanent: types.is_permanent(),
+                    is_non_land_permanent: types.is_non_land_permanent(),
+                    is_non_creature_permanent: types.is_non_creature_permanent(),
+                    is_spell: types.is_spell(),
+                    is_creature: types.is_creature(),
+                    is_land: types.is_land(),
+                    is_planeswalker: types.is_planeswalker(),
+                    is_enchantment: types.is_enchantment(),
+                    is_artifact: types.is_artifact(),
+                    is_kindred: types.is_kindred(),
+                    is_battle: types.is_battle(),
+                },
+                "type subset {mask}"
+            );
+        }
+    }
 }

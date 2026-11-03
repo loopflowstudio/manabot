@@ -27,8 +27,8 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return (effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ');
     case 'AddSubtypes':
       return `is also ${(effect.subtypes ?? []).join(', ')}`;
-    case 'BecomeArtifactCreature':
-      return 'is an artifact creature';
+    case 'BecomeCreature':
+      return 'is also a creature';
     case 'Nonlegendary':
       return "isn't legendary";
     case 'LoseAllAbilities':

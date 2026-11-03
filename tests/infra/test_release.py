@@ -36,6 +36,9 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     )
     assert config["tool"]["maturin"]["module-name"] == "manabot.managym._managym"
     assert (bot / "managym/src/lib.rs").is_file()
+    for crate in ("state", "cards"):
+        assert (bot / "managym" / crate / "Cargo.toml").is_file()
+        assert (bot / "managym" / crate / "src/lib.rs").is_file()
     assert (bot / "manabot/managym/decision.py").is_file()
     assert (bot / "manabot/sim/match.py").is_file()
     assert (bot / "manabot/eval/cards.py").is_file()

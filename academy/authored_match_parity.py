@@ -33,8 +33,8 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "26f7a1057aa7c4b8f6cc7772ae7aa86d889de59d3490558f5c364a921be7ed1c"
-TERMINAL_STATE = "6c052c3272b702ded0b13c0a7ed5e2ef5b8e2947fd54ff7fb5e0bd5325a65629"
+AUTHORITY_SHA256 = "39e71426948587f50d682a17a52d4ffd068ff13fe1f805c83ca608fbb66715d3"
+TERMINAL_STATE = "7d831861bd0629f5ae91e918351f6763868ffef4944fbb9daa281e77ef204681"
 
 COMMAND_COUNT = 142
 
@@ -630,6 +630,8 @@ def _source_manifest() -> dict[str, Any]:
         "manabot/semantic/decision_contract.py",
         "managym/Cargo.lock",
         "managym/Cargo.toml",
+        "managym/state/Cargo.toml",
+        "managym/cards/Cargo.toml",
         "manabot/managym/decision.py",
         "managym/tests/rules/structured_offers.rs",
         "scripts/verify-authored-match-parity",
@@ -637,7 +639,8 @@ def _source_manifest() -> dict[str, Any]:
     }
     paths.update(
         path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "managym/src").rglob("*.rs")
+        for directory in ("managym/src", "managym/state/src", "managym/cards/src")
+        for path in (ROOT / directory).rglob("*.rs")
     )
     files = [
         {"path": path, "sha256": _sha256((ROOT / path).read_bytes())}

@@ -1,9 +1,9 @@
 # Semantic content
 
 Every current card is one Rust function in the file of the set that first
-printed it, under [`managym/src/cardsets/`](../../managym/src/cardsets/)
+printed it, under [`managym/cards/src/`](../../managym/cards/src/)
 (`tla.rs`, `stx.rs`, `lea.rs`, …), returning the engine's own
-[`CardDefinition`](../../managym/src/state/card.rs) written with its rules types
+[`CardDefinition`](../../managym/state/src/card.rs) written with its rules types
 (`Ability`, `Effect`, `TargetSpec`, `TriggerCondition`, …). That value is the
 card: the engine runs it, the pool describes it and the policy reads it. There
 is no second card vocabulary, compiler or IR for current content. Each
@@ -12,7 +12,7 @@ id of that printing; Oracle text, rulings and images are reachable from the id,
 while the printed `text_box` stays in the definition so play works offline.
 
 New behavior is a new rules-type variant (for example an `Effect`) with a
-directed card test in `managym/tests/cards/<set>.rs`, never card-specific logic.
+directed card test in `managym/cards/tests/cards/<set>.rs`, never card-specific logic.
 Edit a card's function, list it in its set's `cards()`, and rebuild the
 extension. `current/setups.json` is ordinary deck/sideboard data naming cards by
 key.

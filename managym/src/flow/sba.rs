@@ -1,6 +1,7 @@
 // sba.rs
 // State-based actions.
 
+use crate::state::card::Keyword;
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
@@ -19,7 +20,7 @@ impl Game {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
-            for id in self.battlefield_permanents(player) {
+            for id in self.iter_battlefield_permanents(player) {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                 let characteristics = self.characteristics(id);
                 if characteristics.is_legendary {
@@ -59,6 +60,9 @@ impl Game {
                 });
                 return false;
             }
+            // No legend choice was needed, so this same simultaneous batch
+            // has no legend losers. Do not discover the groups a second time.
+            return self.perform_state_based_batch(&[]);
         }
         self.perform_state_based_actions_with_legends(&[])
     }
@@ -70,6 +74,10 @@ impl Game {
             .flatten()
             .filter(|card| !keep.contains(card))
             .collect();
+        self.perform_state_based_batch(&legend_losers)
+    }
+
+    fn perform_state_based_batch(&mut self, legend_losers: &[CardId]) -> bool {
         let mut performed = false;
         for player in [PlayerId(0), PlayerId(1)] {
             // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
@@ -103,7 +111,7 @@ impl Game {
             // CR 704.5g — Creatures with lethal damage are destroyed.
             let destroy = !zero_toughness
                 && self.has_lethal_damage(permanent_id, &characteristics)
-                && !characteristics.keywords.indestructible;
+                && !characteristics.keywords.has(Keyword::Indestructible);
             let legend_loser = legend_losers.contains(&permanent.card);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.

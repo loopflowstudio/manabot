@@ -3,7 +3,7 @@
 //! policy reads a card.
 //!
 //! Card rules are the engine's own [`CardDefinition`](crate::state::card::CardDefinition)
-//! values written in `cardsets/`, one file per printed set; nothing here
+//! values written in `managym-cards`, one file per printed set; nothing here
 //! interprets them beyond the catalog's one normalization (ward's trigger).
 //! - [`content_pack`]: the immutable catalog every match runs against.
 //! - [`setups`]: the authored decklists over that catalog.

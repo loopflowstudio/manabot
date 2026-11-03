@@ -2,7 +2,7 @@
 //!
 //! A [`ContentPack`] maps registry names to stable [`CardDefId`]s and shared
 //! [`CardDefinition`]s. A process holds one ([`default_content_pack`]): every
-//! definition in `cardsets/` plus the rules fixtures, in name order, with each
+//! definition in `managym-cards` plus the rules fixtures, in name order, with each
 //! double-faced card's back face registered right after its front. Every
 //! match, authored setup and search fork runs on it. Its digest and manifest
 //! name the world's cards for derived consumers (the world identity, learning
@@ -14,6 +14,7 @@ use std::{
 };
 
 use super::fixtures;
+use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, Effect, PaymentCost, TriggerCondition, TriggerSubject},
     card::{Card, CardDefId, CardDefinition},
@@ -90,12 +91,12 @@ impl ContentPack {
     }
 }
 
-/// A freshly allocated catalog: every current card from `cardsets/` and the
+/// A freshly allocated catalog: every current card from `managym-cards` and the
 /// rules fixtures, in name order. Matches share [`default_content_pack`]; a
 /// separate allocation exists to show that match state identity ignores it.
 impl Default for ContentPack {
     fn default() -> Self {
-        let by_name = crate::cardsets::catalog()
+        let by_name = managym_cards::catalog()
             .iter()
             .cloned()
             .chain([fixtures::crossroads_of_destiny()])
@@ -203,6 +204,9 @@ impl ContentPack {
 
     /// Immutable public characteristics reused by every capture of this content
     /// identity. Rules programs stay native and are not reconstructed from text.
+    /// Keywords take the observation's object shape (as card and permanent
+    /// rows do), not the definition's own list, so the capture contract
+    /// (`DECISION_CAPTURE_VERSION`) does not follow the content encoding.
     pub fn public_definition(&self, id: CardDefId) -> Option<&serde_json::Value> {
         self.public_definitions
             .get_or_init(|| {
@@ -212,7 +216,8 @@ impl ContentPack {
                             "name": card.name, "text_box": card.text_box,
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
-                            "keywords": card.keywords, "power": card.power,
+                            "keywords": KeywordData::from_keywords(&card.keywords),
+                            "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
                             "ward": card.ward().map(PaymentCost::mana_cost),
                             "is_token": card.is_token,

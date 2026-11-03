@@ -2,6 +2,7 @@
 // Resolving stack objects. Effects execute through an EffectFrame so a
 // resolution can suspend on a mid-resolution decision (see decision.rs).
 
+use crate::state::card::Keyword;
 use std::collections::VecDeque;
 
 use crate::{
@@ -713,7 +714,7 @@ impl Game {
                             ZoneEntry {
                                 tapped: *tapped,
                                 transformed: *transformed,
-                                counters,
+                                counters: counters.clone(),
                                 controller,
                                 ..ZoneEntry::default()
                             },
@@ -1762,16 +1763,11 @@ impl Game {
                     let Some(watched) = self.permanent_object_ref(permanent_id) else {
                         continue;
                     };
-                    let controller = {
-                        let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
-                            continue;
-                        };
-                        // The land becomes a 0/0 creature with haste that's
-                        // still a land (base 0/0 by construction — lands print
-                        // no P/T).
-                        permanent.animated = true;
-                        permanent.controller
+                    let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+                        continue;
                     };
+                    let controller = permanent.controller;
+                    self.animate_permanent(permanent_id, frame.source, controller);
                     // Earthbend 0 still animates the land and creates its return trigger.
                     self.put_counters(
                         permanent_id,
@@ -2003,11 +1999,11 @@ impl Game {
     /// The counters on what a selector names, as it is or (for the source
     /// and the triggering permanent) as it last existed on the battlefield.
     fn selected_counters(&self, what: &ObjectSelector, frame: &EffectFrame) -> Counters {
-        let departed = |source: ObjectRef| self.object_lki(source).map(|lki| lki.counters);
+        let departed = |source: ObjectRef| self.object_lki(source).map(|lki| lki.counters.clone());
         let present = |id: PermanentId| {
             self.state.permanents[id]
                 .as_ref()
-                .map(|permanent| permanent.counters)
+                .map(|permanent| permanent.counters.clone())
         };
         match what {
             ObjectSelector::This => {
@@ -2019,9 +2015,10 @@ impl Game {
                     })
             }
             ObjectSelector::Triggering => match frame.context_target {
-                Some(Target::Permanent(id)) => {
-                    present(id).or_else(|| self.departed_permanent_lki(id).map(|lki| lki.counters))
-                }
+                Some(Target::Permanent(id)) => present(id).or_else(|| {
+                    self.departed_permanent_lki(id)
+                        .map(|lki| lki.counters.clone())
+                }),
                 _ => None,
             },
             other => self
@@ -2116,7 +2113,7 @@ impl Game {
                 // presence and hexproof at selection and resolution (608.2b).
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
                     && (permanent.controller == controller
-                        || !self.characteristics(id).keywords.hexproof)
+                        || !self.characteristics(id).keywords.has(Keyword::Hexproof))
                     && self.permanent_matches_spec(id, spec, controller)
             }
             Target::Player(player) => match spec {

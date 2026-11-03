@@ -1,20 +1,34 @@
-# MTG-214 Wave rename assumptions — 2026-10-29
+# MTG-238 assumptions and unresolved boundaries — 2026-11-02
 
-- `.lf/wave/rules` → `.lf/wave/engine`: lf's `engine` Wave owns the Rules
-  chapter Projects and the same Linear initiative. Added the engine Wave id
-  (`74d9efbc…`) to its GOAL frontmatter, matching training's explicit id.
-- Academy and eval have empty lf goals and no checked-in files; none created.
-  Only training gets `config.yaml` (`workflow: iterate`), as directed.
-- The top-level `wave/` tree (old `pm:` charters, numbered plans) is historical
-  and cited by frozen experiments and code comments; left unrenamed, as are
-  `.lf/chapters/` records and wave body prose.
-- Live doc pointers moved to `.lf/wave/{engine,training}`. ARCHITECTURE now
-  assigns evaluation to Eval (previously Intelligence); reversible.
-- Eval split (Jack Heart's steer, 2026-10-29): MTG-212 and MTG-188 memory sections
-  moved verbatim to `.lf/wave/eval/MEMORY.md` with cross-pointers; MTG-175 moved
-  to eval in lf. No eval GOAL.md until Jack sets an objective.
+[The plan](mtg-238-catalog-scale-types.md) owns accepted scope, implementation,
+evidence and remaining validation. Jack Heart approved keyword capacity option
+1a and MTG-238-first delivery; no product choice blocks this batch. PR #414 stays
+against main; T6 integrates afterward. On 2026-11-03 Jack Heart authorized
+shipping once the engine-speed batch finishes validation, superseding the
+earlier review-only/no-auto-merge boundary.
 
-## Concept review (2026-10-29)
+- KeywordBits is private ordinal storage so controlled word-boundary fixtures
+  exercise production operations without declaring fictional mechanics. Storage
+  grows at compile time and preserves Copy; serde still emits enum variants.
+- KeywordData/PyKeywords remain boolean observation contracts. Future non-evergreen
+  keywords require fact rows and a coordinated Python API migration, not frozen
+  column expansion. No such mechanic is included now.
+- Source-relative names read layers 1–3 without the static index. Conditional type
+  grants may be evaluated while that index is built; recursive animation reads
+  are unsafe. Empty continuous-effect batches preserve derived-cache revisions
+  but still allocate a timestamp, so they are not state/hash no-ops.
+- T5 copy exceptions share Modification; Python uses `copy_of` because Pydantic
+  defines `copy`. Battlefield `base_power`/`base_toughness` hold layered P/T.
+  Printed-P/T access or removal remains an unresolved protocol choice for Jack
+  Heart, outside this Task. Surveil 1 uses LookAndSelect; larger amounts need
+  explicit ordering choices.
+- Decklist disclosure remains native: closed opponents have zero decklist rows,
+  search refuses them, and disclosure is not deck/world identity. No observation
+  width or checkpoint-default change is included.
+- Fixture refreshes preserve recorded offer ids when labels repeat; selecting by
+  label alone can change the physical copy, digest and permanent order. Preserve
+  frozen receipts; only mutable w17 evidence is rebound. Logs without completion
+  summaries establish no broad-suite pass; current-head CI still needs assessment.
 
 - Resolved in `4dc25ad61`: `wave/README.md` opens with a note marking `wave/`
   as the historical tree and naming the current Waves (academy, engine, eval,
@@ -297,3 +311,37 @@ amendment and MTG-238 integration remain the owning T6 workflow's work.
 Focused proof covers the existing T6 card scenarios and effect/trigger
 observability. Broader gate checks, native Python rebuild, and current-world
 receipt refresh remain with the caller; no retained evidence is rewritten here.
+
+Historical inherited notes are retained at `3ed5b5baa:scratch/questions.md`
+(including `bbb5101eb`, `1e9fd2d7c`, `4c8324a59` references). Recovery history is at
+`cfa3aa182:scratch/questions.md`; MTG-237's assumptions remain at
+`a1a02a76f:scratch/questions.md`. Uncommitted pre-compression notes are preserved
+in `.runs/mtg-238-compress/questions-before.md`. Engine memory now records the
+accepted 1a direction and its focused compatibility evidence.
+
+
+Speed investigation and MTG-235 integration (2026-11-03): see the current plan's
+engine-speed section and `.runs/mtg-238-speed/`. Main's accepted effect vocabulary
+landed at 22e4aab71; its prior notes remain at that commit's scratch/questions.md.
+The local inlining repair is measured separately from the required integration.
+No measured speedup or passing budget is yet claimed for their combined source.
+
+## T6 sync onto main 44388ad42 — 2026-11-03
+
+Preserve T6’s one catalog, faces, Sagas and turn scheduling while adopting
+MTG-238’s managym-state/managym-cards split, Keywords API, sparse counters
+and conditional TypeGrant. Earthbend zero still animates and schedules its
+return trigger through main’s continuous-effect implementation. Migrate T6
+additions missed by the textual merge across the new crate/API boundary.
+The waiting sync caller owns the push; broader gate, Python extension rebuild
+and current-world evidence refresh remain with the owning T6 workflow.
+
+Focused proof: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path
+managym/Cargo.toml -p managym-cards --test cards -j 2 -- --test-threads=2`
+with filters for all 25 T6 scenarios, `observability::`, War Balloon and Phoenix
+Fleet Airship: **79 passed**, 449 filtered out. Initial compilation exposed
+T6’s old keyword-field assertions; migrated them to `Keywords::has` without
+changing their expectations. The merged source also required T6 keyword
+constructors and the `HaveAbilitiesOf` definition reference to use the new
+crate APIs. No broader suite, Python rebuild or evidence regeneration run in
+this conflict-recovery pass. No push.

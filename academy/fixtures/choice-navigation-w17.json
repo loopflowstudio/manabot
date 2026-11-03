@@ -111,12 +111,12 @@
           "label": "Decline"
         }
       ],
-      "digest": "d0a45000eaa395d05bc6d8ad6194ce2f7bcd657ab05e8a1c8cfeefddc9843f63",
+      "digest": "97d0494af92c5b11e7c79ba71af4492acf271ab3df4483969deeb411fcd10e50",
       "frame": {
         "protocol": 1,
-        "match_id": "rIUnzBD4yaFqPXvtVfGxyQ",
+        "match_id": "Ut6p-QPQkXgT1jCMKOMobQ",
         "revision": 75,
-        "frame_hash": "888f4484e43ab05bef69861f3a998abe7fcc6881ad00ba47d48df9362c12db15",
+        "frame_hash": "0a3c6bd42497f2716234d0d09cebdd8b5bc6582f8e137c1609931801c80b39cb",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -1771,12 +1771,12 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "18adbb4d841045a03f54395782aea880fefa207bdecbe332dbc074747812025b",
+      "digest": "95b5f494e6775f1aa3a82b9298534c07339a8dfbe32280049f9f2d9f6a3212d4",
       "frame": {
         "protocol": 1,
-        "match_id": "IE0XGi4wr6pvVUmrmdRAlA",
+        "match_id": "HQstGNTSIjtCd_Cxms5j7Q",
         "revision": 64,
-        "frame_hash": "9eb390ae3ff8d2ad436713bb699cd9b81e26d9aca459351261f7e911faeeadbd",
+        "frame_hash": "55b65d7cfd15135359589ac2961d070fb48259abc88e84681e26c5d1aaac3c25",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3052,12 +3052,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "0fc8db23084956824c7b076c4b6b922a2ab47cca4304d2dd2403becd6bbfc4a1",
+      "digest": "c6fe8af3074fe36ee51669662d9e93c9b9911fa3ae180d4b72b5fcce11606522",
       "frame": {
         "protocol": 1,
-        "match_id": "rkapqzIxK4P6lzudTYPFMQ",
+        "match_id": "DdL6etiR2Zipro-Dld2pMw",
         "revision": 90,
-        "frame_hash": "d9297082fc4f8029b3570d88711dd6e8cb39cc582e456bfcc42af566ac244d8c",
+        "frame_hash": "0d0d36ed15530f83267aff8af5063b8f2de5b75de859e6802c7c3db28bdb7697",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3555,7 +3555,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 101,
+                "id": 102,
                 "name": "Mountain",
                 "controller_id": 0,
                 "tapped": false,
@@ -3579,7 +3579,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 109,
+                "id": 110,
                 "name": "Mountain",
                 "controller_id": 0,
                 "tapped": false,
@@ -3742,7 +3742,55 @@
                 "toughness": 2,
                 "base_power": 2,
                 "base_toughness": 2,
-                "plus1_counters": 2
+                "plus1_counters": 2,
+                "effects": [
+                  {
+                    "modification": "BecomeCreature",
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 98
+                  },
+                  {
+                    "modification": "SetBasePt",
+                    "power": 0,
+                    "toughness": 0,
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 98
+                  },
+                  {
+                    "modification": "AddKeywords",
+                    "keywords": [
+                      "haste"
+                    ],
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 98
+                  },
+                  {
+                    "modification": "BecomeCreature",
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 141
+                  },
+                  {
+                    "modification": "SetBasePt",
+                    "power": 0,
+                    "toughness": 0,
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 141
+                  },
+                  {
+                    "modification": "AddKeywords",
+                    "keywords": [
+                      "haste"
+                    ],
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 141
+                  }
+                ]
               },
               {
                 "types": {
@@ -3756,7 +3804,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 99,
+                "id": 100,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": true,
@@ -3780,7 +3828,7 @@
                 },
                 "is_token": false,
                 "text_box": "Vigilance\nOther Allies you control get +1/+1.",
-                "id": 111,
+                "id": 112,
                 "name": "White Lotus Reinforcements",
                 "controller_id": 1,
                 "tapped": false,
@@ -3804,7 +3852,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 112,
+                "id": 113,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -3828,7 +3876,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 114,
+                "id": 115,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": true,
@@ -3838,7 +3886,32 @@
                 "toughness": 1,
                 "base_power": 1,
                 "base_toughness": 1,
-                "plus1_counters": 1
+                "plus1_counters": 1,
+                "effects": [
+                  {
+                    "modification": "BecomeCreature",
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 127
+                  },
+                  {
+                    "modification": "SetBasePt",
+                    "power": 0,
+                    "toughness": 0,
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 127
+                  },
+                  {
+                    "modification": "AddKeywords",
+                    "keywords": [
+                      "haste"
+                    ],
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 127
+                  }
+                ]
               },
               {
                 "types": {
@@ -3852,7 +3925,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
-                "id": 116,
+                "id": 117,
                 "name": "Compassionate Healer",
                 "controller_id": 1,
                 "tapped": true,
@@ -3876,7 +3949,7 @@
                 },
                 "is_token": false,
                 "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
-                "id": 118,
+                "id": 119,
                 "name": "Water Tribe Rallier",
                 "controller_id": 1,
                 "tapped": true,
@@ -3900,7 +3973,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 122,
+                "id": 123,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -3924,7 +3997,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
-                "id": 124,
+                "id": 125,
                 "name": "Badgermole Cub",
                 "controller_id": 1,
                 "tapped": true,
@@ -3948,7 +4021,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 129,
+                "id": 131,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": true,
@@ -3972,7 +4045,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 135,
+                "id": 137,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -3996,7 +4069,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
-                "id": 137,
+                "id": 139,
                 "name": "Badgermole Cub",
                 "controller_id": 1,
                 "tapped": false,
@@ -4347,12 +4420,12 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "9c8d19c561a2b96ea1b79a7c75b301c88c6d42e3168eab40b17f6217a625cbf3",
+      "digest": "48f4ec82b34ffb44e4bbf9703330b672f154ec1c2fa2b20a2cd1091359e12b73",
       "frame": {
         "protocol": 1,
-        "match_id": "QPEp4KpxWQR4tDYVer7XIA",
+        "match_id": "h6CVAwT8zvKGPLwacA_-wg",
         "revision": 36,
-        "frame_hash": "ba77886746fb1ee5adafc8709954c1ec4d84e02a83ab1f4b95e68091f1085f40",
+        "frame_hash": "ddefc6b6a72c6fc10dca9d32dbfa3867c612be8e02621f7cb773cc9b9badb131",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5274,12 +5347,12 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "a9222fbe04fef42087229042d8145a61cf79886e6432e6a4dcdd50062d1fd9fe",
+      "digest": "872e1f9746992b02251fe4dc0753ec4f7395d889e7cee1184967f5bb3236dd5c",
       "frame": {
         "protocol": 1,
-        "match_id": "5ALhUXX863ZgmiIdCCZU8A",
+        "match_id": "B9QslL4cieSuts9I7Om73A",
         "revision": 56,
-        "frame_hash": "08e1700ec1f034d21c8c3041b64761f24b184e11fee01094c6fc16bd0462b975",
+        "frame_hash": "ad37d2b2879520945cec8d648d0a1f5963e978a11ddd67c7b74a7e15d71f779e",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",

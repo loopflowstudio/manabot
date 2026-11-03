@@ -58,8 +58,7 @@ impl Game {
 
     /// Tapped creatures the opponent of `player` controls.
     pub(crate) fn tapped_opponent_creatures(&self, player: PlayerId) -> Vec<PermanentId> {
-        self.battlefield_permanents(PlayerId(1 - player.0))
-            .into_iter()
+        self.iter_battlefield_permanents(PlayerId(1 - player.0))
             .filter(|id| {
                 self.permanent_is_battlefield_creature(*id)
                     && self.state.permanents[*id]
@@ -91,8 +90,7 @@ impl Game {
         player: PlayerId,
         predicate: &CardPredicate,
     ) -> Vec<PermanentId> {
-        self.battlefield_permanents(player)
-            .into_iter()
+        self.iter_battlefield_permanents(player)
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
             .collect()
     }
@@ -192,12 +190,19 @@ impl Game {
 
     /// The permanents `player` controls, in battlefield order.
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
+        self.iter_battlefield_permanents(player).collect()
+    }
+
+    /// Borrowed traversal for readers; mutation paths use the owned snapshot.
+    pub(crate) fn iter_battlefield_permanents(
+        &self,
+        player: PlayerId,
+    ) -> impl Iterator<Item = PermanentId> + '_ {
         self.state
             .zones
             .zone_cards(ZoneType::Battlefield, player)
             .iter()
             .filter_map(|card| self.state.card_to_permanent[card])
-            .collect()
     }
 
     /// The untap step (CR 502.3), less permanents a static effect keeps
@@ -294,7 +299,7 @@ impl Game {
         controller: PlayerId,
     ) -> crate::state::mana::Mana {
         let mut produced = crate::state::mana::Mana::default();
-        for permanent_id in self.battlefield_permanents(controller) {
+        for permanent_id in self.iter_battlefield_permanents(controller) {
             let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
             for ability in &self.state.cards[permanent.card].triggered_mana_abilities {
                 if self.permanent_matches_predicate(tapped, &ability.predicate) {
@@ -422,8 +427,7 @@ impl Game {
         player: PlayerId,
         predicate: &CardPredicate,
     ) -> usize {
-        self.battlefield_permanents(player)
-            .into_iter()
+        self.iter_battlefield_permanents(player)
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
             .count()
     }

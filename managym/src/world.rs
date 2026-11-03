@@ -2,7 +2,7 @@
 //!
 //! A world names rules meaning plus observation/action shape (see `WORLDS.md`).
 //! Any running engine knows its world: [`WORLD_VERSION`]. The world's cards are
-//! the one catalog ([`default_content_pack`]): every definition in `cardsets/`,
+//! the one catalog ([`default_content_pack`]): every definition in `managym-cards`,
 //! whatever its set. A card is *supported* when its set file defines it and
 //! does not mark it incomplete. Incomplete definitions still run in the fixed
 //! setups that name them but are not supported for arbitrary decks.

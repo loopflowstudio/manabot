@@ -78,9 +78,9 @@ The 65 predecessor-owned cards retain their directed rule mappings:
 
 | Selected cards | Directed rule evidence |
 | --- | --- |
-| All 42 combat/Learn cards | [Elemental combat contracts](../elemental-combat.md), card tests under `managym/tests/cards/` |
-| All 17 sacrifice/landfall cards | [Sacrifice contracts](../elemental-sacrifice.md), card tests under `managym/tests/cards/` |
-| All six Temur cards | [Temur contracts](../elemental-temur.md), card tests under `managym/tests/cards/` |
+| All 42 combat/Learn cards | [Elemental combat contracts](../elemental-combat.md), card tests under `managym/cards/tests/cards/` |
+| All 17 sacrifice/landfall cards | [Sacrifice contracts](../elemental-sacrifice.md), card tests under `managym/cards/tests/cards/` |
+| All six Temur cards | [Temur contracts](../elemental-temur.md), card tests under `managym/cards/tests/cards/` |
 
 The other 24 selected nonbasic cards are audited on the same surviving rules
 path, rather than assuming that registration proves complete support:

@@ -658,7 +658,7 @@ def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
             "timestamp": 92,
         },
         {
-            "modification": "BecomeArtifactCreature",
+            "modification": "BecomeCreature",
             "duration": "Indefinite",
             "timestamp": 93,
         },
@@ -676,7 +676,7 @@ def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
         "; effect until end of turn: loses all abilities"
         "; effect until end of turn: +2/+0"
         "; effect until end of turn: flying, first strike"
-        "; effect is an artifact creature;" in text
+        "; effect is also a creature;" in text
     )
     assert "Effect: until end of turn: keeps unspent red mana." in text
     for absent in (
