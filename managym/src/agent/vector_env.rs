@@ -20,11 +20,12 @@ pub struct StepResult {
     pub info: InfoDict,
 }
 
-/// One root sampler: the frozen Elemental roster, or replaceable distinct training decks.
+/// One root sampler with explicit pair semantics and roster ownership.
 #[derive(Debug, Default)]
 struct RootRoster {
     players: Vec<PlayerConfig>,
     distinct: bool,
+    elemental: bool,
 }
 
 impl RootRoster {
@@ -123,24 +124,30 @@ impl VectorEnv {
         self.uniform_roster = RootRoster {
             players: roster,
             distinct: false,
+            elemental: true,
         };
         Ok(())
     }
 
     /// Replace the training decks sampled at subsequent roots.
+    /// Independent draws include mirrors and preserve repeated population entries.
     ///
     /// Every deck is submitted to the world ([`crate::world::WORLD_POOL`]) and
     /// passes its native admission before the replacement takes effect; on any
     /// error the previous decks remain. Games already underway keep their
     /// decks. Membership never grants permission: game creation admits each
     /// submitted deck again.
-    pub fn set_training_decks(&mut self, decks: Vec<PlayerConfig>) -> Result<(), AgentError> {
-        if !self.uniform_roster.is_empty() && !self.uniform_roster.distinct {
+    pub fn set_training_decks(
+        &mut self,
+        decks: Vec<PlayerConfig>,
+        distinct_pairs: bool,
+    ) -> Result<(), AgentError> {
+        if self.uniform_roster.elemental {
             return Err(AgentError(
                 "the Elemental roster cannot be replaced by training decks".into(),
             ));
         }
-        if decks.len() < 2 {
+        if decks.is_empty() || (distinct_pairs && decks.len() < 2) {
             return Err(AgentError(
                 "uniform-distinct-v1 requires at least two training decks".into(),
             ));
@@ -160,7 +167,7 @@ impl VectorEnv {
                     player.name
                 )));
             }
-            if !distinct.insert(&player.deck) {
+            if distinct_pairs && !distinct.insert(&player.deck) {
                 return Err(AgentError(
                     "training decks must be distinct normalized lists".into(),
                 ));
@@ -168,7 +175,8 @@ impl VectorEnv {
         }
         self.uniform_roster = RootRoster {
             players: decks,
-            distinct: true,
+            distinct: distinct_pairs,
+            elemental: false,
         };
         Ok(())
     }
@@ -184,7 +192,7 @@ impl VectorEnv {
     /// Current ordered indices into the fixed Elemental roster; empty otherwise.
     /// Replaceable training decks report actual setups via `current_player_configs`.
     pub fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
-        if self.uniform_roster.is_empty() || self.uniform_roster.distinct {
+        if !self.uniform_roster.elemental {
             return Vec::new();
         }
         self.envs
@@ -776,12 +784,12 @@ mod tests {
         let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
         let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
         assert!(vector
-            .set_training_decks(vec![decks[0].clone(); 2])
+            .set_training_decks(vec![decks[0].clone(); 2], true)
             .is_err());
         let mut bad = decks.clone();
         bad[0].deck.main = BTreeMap::from([("Black Lotus".into(), 12)]);
-        assert!(vector.set_training_decks(bad).is_err());
-        vector.set_training_decks(decks.clone()).unwrap();
+        assert!(vector.set_training_decks(bad, true).is_err());
+        vector.set_training_decks(decks.clone(), true).unwrap();
         vector.reset_all(decks[..2].to_vec()).unwrap();
         let seeds = vector.current_game_seeds();
         let actual = vector.current_player_configs();
@@ -806,14 +814,16 @@ mod tests {
         let mut generated = deck("Island");
         generated.deck.main.insert("Cat-Gator".into(), 1);
         assert!(vector
-            .set_training_decks(vec![decks[0].clone(), generated])
+            .set_training_decks(vec![decks[0].clone(), generated], true)
             .is_err());
         vector
             .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
             .unwrap();
         assert_eq!(actual, vector.current_player_configs());
         let replacement = vec![deck("Island"), deck("Swamp")];
-        vector.set_training_decks(replacement.clone()).unwrap();
+        vector
+            .set_training_decks(replacement.clone(), true)
+            .unwrap();
         assert_eq!(actual, vector.current_player_configs());
         vector
             .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
@@ -822,6 +832,40 @@ mod tests {
             assert!(players.iter().all(|player| replacement.contains(player)));
         }
         assert!(vector.current_matchup_indices().is_empty());
+    }
+
+    #[test]
+    fn independent_training_decks_preserve_mirrors_entries_and_seed_recovery() {
+        let mut first = PlayerConfig::new("event-a", BTreeMap::from([("Plains".into(), 12)]));
+        first.world = Some("world".into());
+        let mut second = first.clone();
+        second.name = "event-b".into();
+        let decks = vec![first.clone(), second];
+        let mut vector = VectorEnv::new(2, 21301, true, OpponentPolicy::None);
+        vector.set_training_decks(decks.clone(), false).unwrap();
+        vector.reset_all(vec![first.clone(); 2]).unwrap();
+        let seeds = vector.current_game_seeds();
+        let actual = vector.current_player_configs();
+        for (index, players) in actual.iter().enumerate() {
+            let (a, b) = super::uniform_pair(seeds[index], decks.len());
+            assert_eq!(players, &vec![decks[a].clone(), decks[b].clone()]);
+            // Identical content in different events remains in the population.
+            assert_eq!(players[0].deck, players[1].deck);
+        }
+        vector.reset_all(vec![first.clone(); 2]).unwrap();
+        vector
+            .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+        assert!(vector.current_matchup_indices().is_empty());
+        vector
+            .set_training_decks(vec![first.clone()], false)
+            .unwrap();
+        vector.reset_all(vec![first.clone(); 2]).unwrap();
+        assert!(vector
+            .current_player_configs()
+            .iter()
+            .all(|pair| pair == &vec![first.clone(); 2]));
     }
 
     fn sample_player_configs() -> Vec<PlayerConfig> {

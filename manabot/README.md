@@ -86,6 +86,14 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
+The fixed TLA trophy pilot uses `experiments/tla_corpus.py` to prefetch and
+admit whole 17Lands trophy lists, and `experiments/tla_pilot.py` for Etude
+training/evaluation. Its [frozen protocol](../experiments/protocols/tla-trophy-213-v1.md)
+names the corpus, budget and comparison limits. `UniformDecks.sampling` selects
+independent per-seat draws (including mirrors) or the retained distinct-pair
+contract. Stable population entry IDs distinguish events even when lists match;
+checkpoints still bind the world, never the population.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from

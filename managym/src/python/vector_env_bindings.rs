@@ -248,9 +248,13 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn set_training_decks(&mut self, decks: Vec<PyPlayerConfig>) -> PyResult<()> {
+    #[pyo3(signature = (decks, distinct=true))]
+    fn set_training_decks(&mut self, decks: Vec<PyPlayerConfig>, distinct: bool) -> PyResult<()> {
         self.inner
-            .set_training_decks(decks.into_iter().map(PlayerConfig::from).collect())
+            .set_training_decks(
+                decks.into_iter().map(PlayerConfig::from).collect(),
+                distinct,
+            )
             .map_err(map_agent_err)
     }
 

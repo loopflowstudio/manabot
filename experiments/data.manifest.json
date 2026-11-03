@@ -35050,6 +35050,246 @@
    "sha256": "0c21f7a8cea227700c43503be6a1a78f1e3c361a7ff20cdb64c702d1c824a15f",
    "bytes": 3151
   },
+  "experiments/data/mtg213/corpus-v1/corpus.json": {
+   "sha256": "22f9b2b9411a69a85ff1270605dd68fba5941601859b752d2a4a0ecf5e4a6043",
+   "bytes": 11034908
+  },
+  "experiments/data/mtg213/corpus-v1/games.csv.gz": {
+   "sha256": "6bb12e5cf17e57a2624ca8ac83f15fd4415ea347aa58eac0ed82feb1b17d536b",
+   "bytes": 47153098
+  },
+  "experiments/data/mtg213/corpus-v1/source.json": {
+   "sha256": "a662c802fb6ccf485ceb79ffe59869177e27981be32fae0b2359b5931f05bde3",
+   "bytes": 510
+  },
+  "experiments/data/mtg213/local-proof-v1/_managym.cpython-312-darwin.so": {
+   "sha256": "073fdbcb8058bec374fb981f3de1c0bea7bb344a68674455a4b6725ad854bd0e",
+   "bytes": 7593280
+  },
+  "experiments/data/mtg213/local-proof-v1/eval-track/mtg213-local-proof-eval-v1/blocks/01793731498651540000.3c477f62adb7/block.json": {
+   "sha256": "c84d4e0e186639bc7db7525d1ba6e894d3a7a6af6337ff5422cbbc7441e66cd9",
+   "bytes": 4448
+  },
+  "experiments/data/mtg213/local-proof-v1/eval-track/mtg213-local-proof-eval-v1/blocks/01793731498651540000.3c477f62adb7/games.parquet": {
+   "sha256": "509e536ac1a1e859d07745be7ad9d92f0b6baf897322fe6001808f37e2f126ba",
+   "bytes": 4199
+  },
+  "experiments/data/mtg213/local-proof-v1/eval-track/mtg213-local-proof-eval-v1/environment.json": {
+   "sha256": "70843b6429c6f52b8d59b82dfc3caf0b9291bf6c885f1b9e3b05da81c3ac0e58",
+   "bytes": 173
+  },
+  "experiments/data/mtg213/local-proof-v1/eval-track/mtg213-local-proof-eval-v1/run.json": {
+   "sha256": "0702d696c5de66ebf62dc7fa895fb990e04587310df3334b2a1a17886dca13c2",
+   "bytes": 343
+  },
+  "experiments/data/mtg213/local-proof-v1/eval-track/mtg213-local-proof-eval-v1/state.json": {
+   "sha256": "9a6a57fef5286b3fb2f84f7a8f5d8571d9d110b2052ce039f8f8a8450b6de143",
+   "bytes": 84
+  },
+  "experiments/data/mtg213/local-proof-v1/eval-track/mtg213-local-proof-eval-v1/tournament.json": {
+   "sha256": "79fc9ca7eb45e56f3d50c3d8a2ec897df2bf3b9efad348a5ae783f066cc4b44f",
+   "bytes": 3584
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/.evaluation.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/blocks/21391000.json": {
+   "sha256": "80354db890f5a97e5b47debaebb4c5ea1823d14352a2cad37c495320750d6151",
+   "bytes": 88
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/evaluation.json": {
+   "sha256": "da81b54f39fa81d0d68d4bbf63327677ef2950a2e91caea6e5a8bd01ded796db",
+   "bytes": 18051
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/performance.json": {
+   "sha256": "ea4e39cb90ecf503be2d8dfd716fe5f12ae2af3b0c9d67a959a4319721e2d89a",
+   "bytes": 2729
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/replay.json": {
+   "sha256": "1957f1a6230b63a4d49acb2311d7aa893e1647548025b63bc391d1a9db8a4aea",
+   "bytes": 319
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/rows.json": {
+   "sha256": "c59129fe69b1322f664498ef47eed18bea475316014f568bcde6492aa0cfa277",
+   "bytes": 10373
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/trace.json": {
+   "sha256": "a137f76250a25dcb65b98e976da199f32c2ad84d494fc7f14493d9a839ba6158",
+   "bytes": 380
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/traces/candidate__opponent.21391000.commands.jsonl.gz": {
+   "sha256": "85e10693abcc5b928315af7b97a9526d8958705edf29cd80fe61a244908da5fe",
+   "bytes": 170897
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/traces/candidate__opponent.commands.jsonl.gz": {
+   "sha256": "85e10693abcc5b928315af7b97a9526d8958705edf29cd80fe61a244908da5fe",
+   "bytes": 170897
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/0072b820a38b176a0460b8b1c108bcd098c2a9421986de520c62337bd7d2ef44/unattempted.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/.evaluation.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/blocks/21391000.json": {
+   "sha256": "77bff93196a599995339defd1a1f628a84a1fd4c7298997ad31792790689c5b0",
+   "bytes": 88
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/evaluation.json": {
+   "sha256": "a3ab162c3fde237dc4c4f64e5e1e9bc5e70388c8620321cebbf450df258c20bc",
+   "bytes": 17747
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/performance.json": {
+   "sha256": "fa991cbf7c457917731d5f86d44bf5b58341ddaf7789a7f20505c7e17bd243e6",
+   "bytes": 2731
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/replay.json": {
+   "sha256": "7093990daa493291c4b0ee561506acb4b56095201e07739351681bde38fa79ac",
+   "bytes": 319
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/rows.json": {
+   "sha256": "8d4369069254aa53946a84ac3dbd85f426f0f8bd99e919feca6c0cb000b7709f",
+   "bytes": 10399
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/trace.json": {
+   "sha256": "0d3085119bf02c8b367e03cb20ec1b423619cb9bcbb0db3d958d38f0dcf4902f",
+   "bytes": 380
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/traces/candidate__opponent.21391000.commands.jsonl.gz": {
+   "sha256": "6f71d06f4b2582a3c70ce4460c767513e57d2e11f97e5db01ed07dbf669e21ff",
+   "bytes": 234117
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/traces/candidate__opponent.commands.jsonl.gz": {
+   "sha256": "6f71d06f4b2582a3c70ce4460c767513e57d2e11f97e5db01ed07dbf669e21ff",
+   "bytes": 234117
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/714c06dc73b4a20f6b20f1d4237f862542017467cc12f926fb545c81783b5f1a/unattempted.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/.evaluation.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/blocks/21391000.json": {
+   "sha256": "cd7988a14153df01082b170ab6742f83d389320e73584f510a87b3839a0154e6",
+   "bytes": 88
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/evaluation.json": {
+   "sha256": "cb127872052a6c21fe19225e06e155a6340f1e9d9dc84f098e81b23904c668a5",
+   "bytes": 17735
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/performance.json": {
+   "sha256": "3a7a9c838e24ef724d2dbfff8c5bd871219f78ee8682a4ceadac5da9c03a1cd2",
+   "bytes": 2720
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/replay.json": {
+   "sha256": "e0977414fede8bd8a057206a909c888b0c0c0a1d77038714548a52eacb59f38d",
+   "bytes": 319
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/rows.json": {
+   "sha256": "d1670cc02441c09beaae89d9f2ff0ef2b9ba12fb5a11a11c82b577f681a770e9",
+   "bytes": 10402
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/trace.json": {
+   "sha256": "dd521436fe6ec46fb11b685a9fc1f599651302e2fe9d55213f416c0a997b978b",
+   "bytes": 380
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/traces/candidate__opponent.21391000.commands.jsonl.gz": {
+   "sha256": "47265588a3ce3100d4d25507343f8e6709590a89ea5eb8f38557a324814ba7a9",
+   "bytes": 234146
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/traces/candidate__opponent.commands.jsonl.gz": {
+   "sha256": "47265588a3ce3100d4d25507343f8e6709590a89ea5eb8f38557a324814ba7a9",
+   "bytes": 234146
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/arena/cab3bcda83ac9abaaf9c94d2b47a7dac733640019fdcc7c4d72e375fd6a0bf46/unattempted.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/mtg213/local-proof-v1/evaluation/result.json": {
+   "sha256": "fd5fa4bae37fe9e14f885c04494c1af2004390dd90e2791f21c378684cbb24c6",
+   "bytes": 341
+  },
+  "experiments/data/mtg213/local-proof-v1/game-attempts.jsonl": {
+   "sha256": "3b6dac7ed2b7fa783e0f87609701c3a36b878ce5f0fdd3d38a8133c0fa259474",
+   "bytes": 8513
+  },
+  "experiments/data/mtg213/local-proof-v1/run.json": {
+   "sha256": "ef1be0ef1e93e8e0add47ed89f965279f7dab2b0162c82aee75a3e2d9df14233",
+   "bytes": 203607
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play-ema.pt": {
+   "sha256": "6faecddda3983015818f61530eacf70d5a75bf7fbf0db5a32a1860ef649e77d1",
+   "bytes": 6321737
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play-initial-raw.pt": {
+   "sha256": "b9bf07b411285216efecf343f8ad521ad53b06342762d11838a344482949a489",
+   "bytes": 6322473
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play-optimizer.pt": {
+   "sha256": "348659d9b61dcfce1a083760dc9f85d9216f81443c462f38d02fd4de2246234e",
+   "bytes": 8708515
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play-raw.pt": {
+   "sha256": "576efea65a2f8b1d61d6ca34585af2093afe601f1818110675c9a2fa09a553cf",
+   "bytes": 6321673
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/checkpoints/learner_transitions-0.json": {
+   "sha256": "8915c50fbd5eaec365ec6cfd93ba4cfa153ca60ac52291a077717771b14e27b7",
+   "bytes": 476
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/checkpoints/learner_transitions-0.pt": {
+   "sha256": "b9bf07b411285216efecf343f8ad521ad53b06342762d11838a344482949a489",
+   "bytes": 6322473
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/checkpoints/learner_transitions-199.json": {
+   "sha256": "511b6af8b0ddb70d829ac1804cc3a18e923cca8c29faf246963d127a825f1ce1",
+   "bytes": 480
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/checkpoints/learner_transitions-199.pt": {
+   "sha256": "576efea65a2f8b1d61d6ca34585af2093afe601f1818110675c9a2fa09a553cf",
+   "bytes": 6321673
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/metrics/2-00000000-00000001-e350c362d6a4.blk": {
+   "sha256": "03bd3f870ffd25753d22c3dad52835dd6f2bc6015ef74b052aa842322bbcc7d3",
+   "bytes": 144648
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/metrics/e350c362d6a4.index.json": {
+   "sha256": "bdbb0fee37cfa200d89b11d454c4abf6d37287a46796701ff14745d687a03d7b",
+   "bytes": 25797
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/metrics/e350c362d6a4.json": {
+   "sha256": "51f4d2f503d8df6cf4fe9c785df1e1b2b17f9b2ca2a44427b3fdd9df9c5c56d7",
+   "bytes": 148
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/metrics/e350c362d6a4.permanent.json": {
+   "sha256": "8e4d53b0e237a8b2d116083600b5c432853f4aa4e32e8c5ec3b0240f844b38ac",
+   "bytes": 175254
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/metrics/e350c362d6a4.removed": {
+   "sha256": "910a3a2075f5b98b3d61c10281b6ff9b71c5b21331eb31d3eb0e4a73d5b1b3b4",
+   "bytes": 45
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/run.json": {
+   "sha256": "70b04eb4313565ceafa68e7cca99561efbf1141b1c1b7611968d16be032b1cd4",
+   "bytes": 140224
+  },
+  "experiments/data/mtg213/local-proof-v1/self-play/etude/a13f84673d164b06acccc5c9923ccb4f/state.json": {
+   "sha256": "0f6d94788d1913f7737a53ca4485a0cc7c50cda2ad4ddf601f5019149b2c2308",
+   "bytes": 84
+  },
+  "experiments/data/mtg213/local-proof-v1/source.json": {
+   "sha256": "52c5066018706069f1b04390bca563f4251a39de49aa6e5e067f950ac0ddc428",
+   "bytes": 514
+  },
+  "experiments/data/mtg213/local-proof-v1/source.patch": {
+   "sha256": "ff42e6037a532a6cce470219d4956f199541a3c07d7f7a09bcb54f1d6f09f207",
+   "bytes": 255982
+  },
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310
