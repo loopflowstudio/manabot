@@ -45,10 +45,12 @@ impl CardTypes {
         }
     }
 
+    #[inline]
     pub fn is_castable(&self) -> bool {
         !self.is_land() && !self.types.is_empty()
     }
 
+    #[inline]
     pub fn is_permanent(&self) -> bool {
         self.is_creature()
             || self.is_land()
@@ -58,46 +60,57 @@ impl CardTypes {
             || self.is_battle()
     }
 
+    #[inline]
     pub fn is_non_land_permanent(&self) -> bool {
         self.is_permanent() && !self.is_land()
     }
 
+    #[inline]
     pub fn is_non_creature_permanent(&self) -> bool {
         self.is_permanent() && !self.is_creature()
     }
 
+    #[inline]
     pub fn is_spell(&self) -> bool {
         self.types.contains(&CardType::Instant) || self.types.contains(&CardType::Sorcery)
     }
 
+    #[inline]
     pub fn is_instant(&self) -> bool {
         self.types.contains(&CardType::Instant)
     }
 
+    #[inline]
     pub fn is_creature(&self) -> bool {
         self.types.contains(&CardType::Creature)
     }
 
+    #[inline]
     pub fn is_land(&self) -> bool {
         self.types.contains(&CardType::Land)
     }
 
+    #[inline]
     pub fn is_planeswalker(&self) -> bool {
         self.types.contains(&CardType::Planeswalker)
     }
 
+    #[inline]
     pub fn is_enchantment(&self) -> bool {
         self.types.contains(&CardType::Enchantment)
     }
 
+    #[inline]
     pub fn is_artifact(&self) -> bool {
         self.types.contains(&CardType::Artifact)
     }
 
+    #[inline]
     pub fn is_kindred(&self) -> bool {
         self.types.contains(&CardType::Kindred)
     }
 
+    #[inline]
     pub fn is_battle(&self) -> bool {
         self.types.contains(&CardType::Battle)
     }

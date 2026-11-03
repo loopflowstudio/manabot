@@ -258,6 +258,7 @@ impl EffectRecords {
     }
 
     /// Records affecting `object`, in timestamp order.
+    #[inline]
     pub fn on(&self, object: ObjectRef) -> impl Iterator<Item = &ContinuousEffect> {
         self.by_object
             .get(&object)
@@ -266,6 +267,7 @@ impl EffectRecords {
     }
 
     /// Records affecting `player`, in timestamp order.
+    #[inline]
     pub fn on_player(&self, player: PlayerId) -> impl Iterator<Item = &ContinuousEffect> {
         self.by_player[player.0]
             .iter()
