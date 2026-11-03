@@ -1,17 +1,90 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling — plan
 
-Status (2026-11-02): all 16 cards (25 allocated faces), the one-catalog
-refactor and the learner-cost repair (concept review below) are implemented on
-HEAD; no PR yet. Brief: Task MTG-225, allocation
-`planned_pr: T6`; direction in [t6-direction.md](t6-direction.md). One cohesive
-PR, then stop for Jack Heart's review.
+Status (2026-11-03 publication gate): MTG-238 is integrated at `373bb08ca`
+against main `44388ad42`. The permitted w17 evidence refresh, native rebuild,
+model/learner/admission checks and Academy verification are complete. Publication
+is **blocked by unimplemented accepted Sozin behavior**, described below. No PR,
+merge or auto-merge; one cohesive PR remains the review boundary.
 
-Delivery order (Jack Heart, 2026-11-02): MTG-238 #414 merges first, and T6
-integrates it afterward. #414 is open and unreviewed, so integration is not yet
-possible. This does not approve merging either PR.
+The 2026-11-03 publication steer supersedes the earlier wait for #414. `lf sync`
+confirmed the current base without additional changes. Historical implementation
+and earlier blocked-publication notes below remain dated evidence.
 
-Base: HEAD contains main `51fbacbbf`, which carries T5 as a squash; the T5 stack
-is over. T5 head `2df025c20` was the merge base for that sync.
+## Publication gate — 2026-11-03
+
+The accepted brief requires Fire Lord Sozin's optional X payment followed by a
+reflexive multi-graveyard-target trigger. The definition at
+`managym/cards/src/tla.rs:9331` instead collects targets on the initial trigger
+and resolves `PayTargetsManaValue` afterward. This exposes targets before payment,
+fixes X to their total, and omits the separate priority window after payment.
+The existing test at `managym/cards/tests/cards/tla.rs:13933` explicitly expects
+the incorrect ordering; a temporary assertion that the first choice must not be
+`ChooseTarget` fails in debug. The original test bytes were restored. Reproduction:
+`.runs/t6-publication/sozin-payment-order.log` (1 test, failed as expected).
+The earlier “same outcomes” assumption in questions.md is not accepted behavior.
+
+The Rise of Sozin's chapter II has a separate missing strategic choice:
+`Effect::ExileNamed` (`managym/src/flow/resolution.rs:1553`) uses `.take(count)`
+and moves all matches immediately, rather than allowing zero through four chosen
+cards from the searched zones. Its existing test only witnesses automatic exile
+of four copies. This contradicts the printed text and shared complete-action
+contract. Neither behavior is an integration conflict or a fixture discrepancy;
+completing their shared payment/trigger/search decision paths is implementation
+work required before the publication boundary holds. Do not hide the gaps with
+UI behavior or weaken the accepted obligations.
+
+Completed publication preparation:
+
+- Fixed Academy's Koh label to read the projected `ContinuousEffect.source`,
+  rather than the native-only `source_name`; the original UI check failed here.
+- Built the release cp312 wheel and atomically replaced the root native extension.
+- Refreshed only mutable w17 semantic conformance, authored-match, both parity
+  receipts, Academy demo/navigation/trigger fixtures and the four current belief
+  v3 pins. Historical receipts and pins are unchanged. Retrieved the required
+  RUL-9 artifact by its manifest digest (cache hit); no regeneration of it.
+- Retained 142 authored Commands, actor/revision/offer counts, presentation events
+  and terminal player state. Semantic event definition references move from the
+  authored vocabulary to the one catalog (including definition-kind source IDs
+  on CARD_REVEALED). Academy recorded Commands/choice prefixes are unchanged.
+- No engine source changed in this gate. The catalog content digest is
+  `144f167a79bbf89a1a9eec758d8c5006416fb6150b540802ee52ddb9a7ab74ec`.
+
+Verification (logs in `.runs/t6-publication/`; successful unchanged checks reused):
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2
+  -- --test-threads=2`: initial run passed all binaries before stale conformance;
+  after refreshing conformance, ran that binary, remaining study binaries,
+  managym-cards/managym-state suites, engine doctests and bench_search tests.
+  **913 existing tests passed, 2 ignored**, including all 528 card tests and
+  observability. This does not establish the two missing Sozin obligations.
+- `cargo fmt --check`; all-target/all-feature clippy with pinned PyO3 Python:
+  passed. Ruff on all 39 changed Python files, plus refreshed belief pins: passed.
+- Python model suite, elemental-world, evaluation models, mirror admission,
+  monitor evaluation, active training, Etude learner job and observation parity:
+  passed within an invocation reporting 264 passed, 1 skipped and 10 stale
+  Academy-fixture failures. The latter were repaired by the producer refresh.
+- Focused Academy navigation/Learn/trigger tests plus changed current-content,
+  learning projection, text observation, matchups and authored-matchup checks:
+  **102 passed** after refresh.
+- Authored parity CLI: 142 Commands, 143 checkpoints, 858 viewer checks, no
+  divergence; stale-object and stale-revision rejection retained. Public parity
+  CLI: 142 Commands, 69 commitments, zero gaps. Parity/belief tests initially
+  17 passed / 3 stale pins or receipts; after refresh the five relevant tests
+  passed. Authored presentation assertions stayed unchanged.
+- Academy `npm ci --ignore-scripts`, `npm run check`, `npm test`, `npm run build`:
+  passed, **119 unit tests**. Isolated Playwright release navigation/Learn/trigger
+  cases on API 18125 / frontend 15185: **10 passed**. Test-owned servers exited.
+- Engine Budget remains CI-owned and unmeasured here; no PR exists to supply a
+  candidate run. Its potential digest/reference update remains publication work.
+
+Compatibility caveat remains: old authored-pack checkpoint weights/bindings are
+not migrated by the one-catalog change. No retained checkpoint file was loaded;
+manifest rejection and current checkpoint paths are covered by the model suite.
+
+Next: finish the required Sozin semantics and directed negative/choice tests,
+revisit the other documented implementation approximations against acceptance,
+refresh only receipts affected by those edits, then publish for Jack Heart's
+review. Do not replay the completed merge or unrelated successful checks.
 
 ## Model
 

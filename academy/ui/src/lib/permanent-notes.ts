@@ -54,7 +54,7 @@ function modificationPhrase(effect: ContinuousEffect): string {
     case 'ModeChosen':
       return `mode ${(effect.amount ?? 0) + 1} already chosen`;
     case 'HasAbilitiesOfSource':
-      return `has the activated and triggered abilities of ${effect.source_name ?? 'the chosen card'}`;
+      return `has the activated and triggered abilities of ${effect.source ?? 'the chosen card'}`;
     default:
       return effect.modification;
   }

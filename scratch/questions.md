@@ -345,3 +345,14 @@ changing their expectations. The merged source also required T6 keyword
 constructors and the `HaveAbilitiesOf` definition reference to use the new
 crate APIs. No broader suite, Python rebuild or evidence regeneration run in
 this conflict-recovery pass. No push.
+
+## T6 publication gate — 2026-11-03
+
+The prior Sozin assumption (“targets then their total payment” has the same
+outcomes) is disproved by the accepted reflexive-trigger requirement. A bounded
+debug assertion observed ChooseTarget before any payment; the original test
+was restored. Chapter II also automatically exiles the maximum number rather
+than offering up-to-four selection. These are implementation blockers, not
+approved approximations or questions to resolve by changing tests. Publication
+stopped with no PR/merge/auto-merge. Current w17 refresh and verification are
+recorded in scratch/mtg-225-tla-t6.md; historical evidence remains unchanged.
