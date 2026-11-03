@@ -1,6 +1,6 @@
 //! Visions.
 use crate::state::{
-    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -26,9 +26,9 @@ fn man_o_war() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::ReturnToHand {
-                target: TargetSpec::Creature,
-            }],
+            effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                TargetSpec::Creature,
+            ))],
         }],
         text_box: text_box.into(),
         ..Default::default()

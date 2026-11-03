@@ -1,8 +1,7 @@
 //! Limited Edition Alpha.
-use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
-    ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
+    ability::{Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, ManaAbility,
     },
@@ -59,7 +58,7 @@ fn counterspell() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{U}{U}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![Effect::CounterSpell {
-            target: TargetSpec::Spell,
+            what: ObjectSelector::Target(TargetSpec::Spell),
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -183,10 +182,10 @@ fn lightning_bolt() -> CardDefinition {
         name: "Lightning Bolt".into(),
         mana_cost: Some(ManaCost::parse("{R}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::DealDamage {
-            amount: 3,
-            target: TargetSpec::CreatureOrPlayer,
-        }],
+        spell_effects: vec![Effect::deal_damage(
+            3,
+            ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+        )],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
             spec: TargetSpec::CreatureOrPlayer,
@@ -314,7 +313,7 @@ fn shivan_dragon() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{R}"),
             effects: vec![Effect::until_end_of_turn(
-                AffectedSpec::Source,
+                ObjectSelector::This,
                 Modification::pump(1, 0),
             )],
             ..Default::default()

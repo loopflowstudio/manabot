@@ -30,30 +30,9 @@ fn lotus_cobra() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::Modal {
-                modes: vec![
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("W"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("U"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("B"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("R"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("G"),
-                        until_end_of_combat: false,
-                    }],
-                ],
-            }],
+            effects: vec![Effect::mana_choice(
+                ["W", "U", "B", "R", "G"].map(Mana::parse),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()

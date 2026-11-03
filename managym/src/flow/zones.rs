@@ -42,17 +42,18 @@ impl Game {
     /// prevent it; the departing object's controller pays this cost.
     /// Match its triggers against the pre-departure battlefield, including the
     /// sacrificed source, before replacement effects can change its destination.
-    pub(crate) fn sacrifice_permanent(&mut self, permanent: PermanentId) {
-        let Some(source) = self.state.permanents[permanent].as_ref() else {
-            return;
-        };
+    /// Returns the object the card became, if it left ("if you do").
+    pub(crate) fn sacrifice_permanent(&mut self, permanent: PermanentId) -> Option<ObjectRef> {
+        let source = self.state.permanents[permanent].as_ref()?;
         let card = source.card;
         let controller = source.controller;
+        let before = self.permanent_object_ref(permanent);
         let sources = self.snapshot_trigger_sources();
         self.state.turn.history[controller.0].permanents_sacrificed += 1;
         self.emit(GameEvent::PermanentSacrificed { card, controller });
         self.process_game_events_with_sources(&sources);
         self.move_card(card, ZoneType::Graveyard);
+        self.moved_object(card, before)
     }
 
     /// Tapped creatures the opponent of `player` controls.

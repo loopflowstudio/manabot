@@ -4,7 +4,10 @@ use managym::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::turn::StepKind,
     state::{
-        ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+            TriggerSubject,
+        },
         game_object::{PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
@@ -705,8 +708,8 @@ fn cr_702_ward_counters_an_opponents_triggered_ability() {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::DealDamage {
-                amount: 2,
-                target: TargetSpec::Creature,
+                amount: EffectValue::Fixed(2),
+                what: ObjectSelector::Target(TargetSpec::Creature),
             }],
         },
     );

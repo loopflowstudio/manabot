@@ -16,7 +16,7 @@ use crate::{
         turn::StepKind,
     },
     state::{
-        ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+        ability::{Ability, Effect, EffectValue, TargetSpec, TriggerCondition, TriggerSubject},
         card::CardType,
         effect::{EffectDuration, Modification},
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
@@ -1060,6 +1060,7 @@ impl Game {
             mana.mana[Color::Red as usize] = amount;
             let effect = Effect::AddMana {
                 mana,
+                amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             };
             self.enqueue_inline_trigger(card, Some(source), controller, vec![effect], None);

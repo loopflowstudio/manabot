@@ -1,8 +1,9 @@
 //! Ice Age.
 use crate::state::{
-    ability::Effect,
+    ability::{Effect, ObjectSelector, Scope},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -18,7 +19,10 @@ fn pyroclasm() -> CardDefinition {
         name: "Pyroclasm".into(),
         mana_cost: Some(ManaCost::parse("{1}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::MassDamage { amount: 2 }],
+        spell_effects: vec![Effect::deal_damage(
+            2,
+            ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }

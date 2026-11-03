@@ -1,10 +1,12 @@
 //! Murders at Karlov Manor.
 use crate::state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::ManaCost,
+    permanent::CounterKind,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -35,10 +37,11 @@ fn proft_s_eidetic_memory() -> CardDefinition {
             Ability::Triggered {
                 condition: TriggerCondition::BeginningOfYourCombat,
                 intervening_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
-                effects: vec![Effect::PutCountersValue {
-                    count: EffectValue::CardsDrawnMinus { subtract: 1 },
-                    target: TargetSpec::CreatureYouControl,
-                }],
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    EffectValue::CardsDrawnMinus { subtract: 1 },
+                )],
             },
         ],
         text_box: text_box.into(),

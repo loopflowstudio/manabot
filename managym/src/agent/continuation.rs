@@ -610,8 +610,8 @@ impl Game {
                         .collect();
                     resume.as_deref()
                 }
-                Decision::Sacrifice { optional, .. } => {
-                    frame.can_decline = optional.is_some();
+                Decision::ChooseObject { optional, .. } => {
+                    frame.can_decline = *optional;
                     None
                 }
                 _ => None,
@@ -671,7 +671,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::Payment(_) => 1,
         Decision::ManaUpfront { .. } => 2,
         Decision::ManaChoice { .. } => 3,
-        Decision::Sacrifice { .. } => 4,
+        Decision::ChooseObject { .. } => 4,
         Decision::SelectMilled { .. } => 5,
         Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => 6,
         Decision::OptionalDiscardDraw { .. } => 7,
@@ -946,10 +946,14 @@ mod tests {
                 choices: vec![],
                 resume: None,
             },
-            Decision::Sacrifice {
+            Decision::ChooseObject {
                 player,
                 predicate: predicate.clone(),
-                optional: None,
+                excluded: None,
+                optional: false,
+                effect: Box::new(crate::state::ability::Effect::tap(
+                    crate::state::ability::ObjectSelector::chosen(predicate.clone()),
+                )),
             },
             Decision::DistributeCounters {
                 player,

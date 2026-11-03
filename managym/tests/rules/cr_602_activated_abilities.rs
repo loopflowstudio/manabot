@@ -176,7 +176,7 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
             },
         },
         state::{
-            ability::{AffectedSpec, Effect},
+            ability::{Effect, ObjectSelector},
             effect::Modification,
         },
     };
@@ -187,7 +187,7 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         // Detach this scenario's printed definition; no production card is added.
         let mut second = s.game().state.cards[card].activated_abilities[0].clone();
         second.effects = vec![Effect::until_end_of_turn(
-            AffectedSpec::Source,
+            ObjectSelector::This,
             Modification::pump(0, 1),
         )];
         s.game_mut().state.cards[card]

@@ -8,23 +8,24 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         decision::{
-            Decision, EffectFrame, FrameFinalize, OptionalSacrifice, PaymentProgress,
-            ResolutionCastOffer, ResolutionTarget,
+            Decision, EffectFrame, FrameFinalize, PaymentProgress, ResolutionCastOffer,
+            ResolutionTarget,
         },
         event::GameEvent,
         game::Game,
+        proposed_event::ZoneEntry,
         trigger::{DelayedTrigger, DelayedTriggerEvent, ExileLink},
         turn::OnceEachTurnKey,
     },
     state::{
         ability::{
-            Ability, AffectedSpec, DelayedEvent, Effect, EffectValue, GraveyardReturn,
-            LinkedChooser, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
+            Ability, DelayedEvent, Effect, EffectValue, Except, LinkedChooser, LinkedExile,
+            ObjectSelector, PaymentCost, PlayerSelector, Scope, TargetRequirement, TargetSpec,
         },
         card::{ActivatedAbilityDefinition, CardDefId, CardDefinition},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
-        permanent::{CounterKind, Permanent},
+        permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
@@ -177,6 +178,8 @@ impl Game {
             excess_damage: 0,
             created: None,
             this_way: Vec::new(),
+            moved: Vec::new(),
+            chosen: None,
             targets,
             active_requirement: 0,
             context_target: None,
@@ -292,6 +295,8 @@ impl Game {
             excess_damage: 0,
             created: None,
             this_way: Vec::new(),
+            moved: Vec::new(),
+            chosen: None,
             targets,
             active_requirement: 0,
             context_target: attached,
@@ -381,6 +386,8 @@ impl Game {
             excess_damage: 0,
             created: None,
             this_way: Vec::new(),
+            moved: Vec::new(),
+            chosen: None,
             targets,
             active_requirement: 0,
             context_target: triggered.context,
@@ -504,6 +511,7 @@ impl Game {
                 Some(Target::Player(player)) => vec![player],
                 _ => Vec::new(),
             },
+            PlayerSelector::Owner => Vec::new(),
             PlayerSelector::TargetController => match frame.primary_target() {
                 Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
                     Some(permanent) => vec![permanent.controller],
@@ -524,65 +532,52 @@ impl Game {
             .filter(|target| self.target_is_present(*target))
     }
 
-    /// Whom an `ApplyContinuous` affects, fixed now (CR 611.2c).
-    fn resolve_affected(&self, affected: &AffectedSpec, frame: &EffectFrame) -> Vec<Affected> {
-        let permanent = |id: Option<PermanentId>| {
-            id.and_then(|id| self.affected_permanent(id))
-                .into_iter()
-                .collect()
-        };
-        match affected {
-            AffectedSpec::You => vec![Affected::Player(frame.controller)],
-            AffectedSpec::Source => permanent(self.source_permanent_id(frame)),
-            AffectedSpec::Target(_) => permanent(match self.present_primary_target(frame) {
-                Some(Target::Permanent(id)) => Some(id),
-                _ => None,
-            }),
-            AffectedSpec::TriggeringPermanent => permanent(match frame.context_target {
-                Some(Target::Permanent(id)) => Some(id),
-                _ => None,
-            }),
-            AffectedSpec::EachYouControl(predicate) => {
-                self.each_controlled_matching(frame.controller, predicate)
-            }
-            AffectedSpec::EachOpponentControls(predicate) => {
-                self.each_controlled_matching(PlayerId(1 - frame.controller.0), predicate)
-            }
-            AffectedSpec::EachMatching(predicate) => [PlayerId(0), PlayerId(1)]
-                .into_iter()
-                .flat_map(|player| self.each_controlled_matching(player, predicate))
-                .collect(),
-            AffectedSpec::EachTargetPlayerControls(predicate) => {
-                match self.present_primary_target(frame) {
-                    Some(Target::Player(player)) => {
-                        self.each_controlled_matching(player, predicate)
-                    }
-                    _ => Vec::new(),
-                }
+    /// The players and battlefield permanents a selector names, fixed now
+    /// (CR 611.2c): `You` the resolving player, a `Target` selector the
+    /// chosen player when the clause targets one, else the objects
+    /// [`Game::select`] names that are on the battlefield.
+    fn resolve_affected(&self, what: &ObjectSelector, frame: &EffectFrame) -> Vec<Affected> {
+        if *what == ObjectSelector::You {
+            return vec![Affected::Player(frame.controller)];
+        }
+        if matches!(what, ObjectSelector::Target(_)) {
+            if let Some(Target::Player(player)) = self.present_primary_target(frame) {
+                return vec![Affected::Player(player)];
             }
         }
-    }
-
-    fn each_controlled_matching(
-        &self,
-        controller: PlayerId,
-        predicate: &CardPredicate,
-    ) -> Vec<Affected> {
-        self.battlefield_permanents(controller)
+        self.selected_permanents(what, frame)
             .into_iter()
-            .filter(|&id| self.permanent_matches_predicate(id, predicate))
             .filter_map(|id| self.affected_permanent(id))
             .collect()
     }
 
     /// Execute one effect. Returns a decision to suspend on, or None if the
     /// effect completed. Branching effects push their branch onto the front
-    /// of the frame's queue.
+    /// of the frame's queue. A verb over a `Chosen` selector first suspends
+    /// on the choice (`Decision::ChooseObject`); the chosen object is bound
+    /// to the frame and the verb runs over it.
     pub(crate) fn execute_frame_effect(
         &mut self,
         effect: &Effect,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
+        if frame.chosen.is_none() {
+            if let Some((predicate, except, optional)) = effect.chosen() {
+                // What a sacrifice moves answers a following "if you do"; a
+                // declined or impossible choice moves nothing.
+                if matches!(effect, Effect::Sacrifice { .. } | Effect::Move { .. }) {
+                    frame.moved.clear();
+                }
+                let decision = Decision::ChooseObject {
+                    player: frame.controller,
+                    predicate: predicate.clone(),
+                    excluded: self.excepted_permanent(except, frame),
+                    optional,
+                    effect: Box::new(effect.clone()),
+                };
+                return (!self.choice_candidates(&decision).is_empty()).then_some(decision);
+            }
+        }
         match effect {
             Effect::ApplyContinuous {
                 affected,
@@ -612,42 +607,216 @@ impl Game {
                 );
                 None
             }
-            Effect::PutCountersOnTriggeringPermanent { count } => {
-                if let Some(Target::Permanent(id)) = frame.context_target {
-                    if self.permanent_object_ref(id).is_some() {
-                        self.put_counters(
-                            id,
-                            CounterKind::PlusOnePlusOne,
-                            *count,
-                            frame.controller,
-                        );
+            Effect::PutCounters { on, kind, amount } => {
+                let amount = self.effect_value(amount, frame);
+                for id in self.selected_permanents(on, frame) {
+                    self.put_counters(id, *kind, amount, frame.controller);
+                }
+                None
+            }
+            Effect::PutCountersFrom { from, on } => {
+                let counters = self.selected_counters(from, frame);
+                for id in self.selected_permanents(on, frame) {
+                    for (kind, count) in counters.iter() {
+                        self.put_counters(id, kind, count, frame.controller);
                     }
                 }
                 None
             }
-            Effect::Sacrifice { predicate } => {
-                let candidates = self.sacrifice_candidates(frame.controller, predicate);
-                (!candidates.is_empty()).then_some(Decision::Sacrifice {
+            Effect::Sacrifice { what, optional } => {
+                debug_assert!(
+                    !optional || what.is_chosen(),
+                    "\"you may sacrifice\" chooses among permanents"
+                );
+                // A player sacrifices only what they control (CR 701.17a).
+                let controlled: Vec<_> = self
+                    .selected_permanents(what, frame)
+                    .into_iter()
+                    .filter(|id| {
+                        self.state.permanents[*id]
+                            .as_ref()
+                            .is_some_and(|permanent| permanent.controller == frame.controller)
+                    })
+                    .collect();
+                // Select before replacing the result: `Moved` may name a
+                // permanent the preceding instruction put on the battlefield.
+                // What this sacrifice moves answers a following "if you do".
+                frame.moved = controlled
+                    .into_iter()
+                    .filter_map(|id| self.sacrifice_permanent(id))
+                    .collect();
+                None
+            }
+            Effect::Move {
+                what,
+                to,
+                tapped,
+                transformed,
+                under,
+                with_counter,
+                linked,
+            } => {
+                // Select before clearing: a `Moved` selector reads the objects
+                // the previous instruction moved (flicker's return).
+                let selected = self.select(what, frame);
+                frame.moved.clear();
+                let source = frame
+                    .source_ref
+                    .filter(|source| self.lookup_current_permanent(*source).is_ok());
+                // "Until this leaves the battlefield" (CR 603.6e pragmatics,
+                // Banisher Priest ruling): the exact source must still be on
+                // the battlefield; a later incarnation of the same card does
+                // not keep the old link alive.
+                if *linked == Some(LinkedExile::UntilSourceLeaves) && source.is_none() {
+                    return None;
+                }
+                let controller = match under {
+                    None => Some(frame.controller),
+                    Some(PlayerSelector::Owner) => None,
+                    Some(selector) => match self.selected_players(selector, frame)[..] {
+                        [player] => Some(player),
+                        _ => return None,
+                    },
+                };
+                let mut counters = Counters::default();
+                if let Some(kind) = with_counter {
+                    counters.change(*kind, 1);
+                }
+                let mut shuffled = Vec::new();
+                for object in selected {
+                    let card = CardId::from(object.entity);
+                    let owner = self.state.cards[card].owner;
+                    let from = self.state.zones.zone_of(card);
+                    // A token cannot return after leaving the battlefield (CR 111.7).
+                    // Returning transformed requires a back face (CR 712.14a).
+                    if *to == ZoneType::Battlefield
+                        && ((self.state.cards[card].is_token
+                            && from != Some(ZoneType::Battlefield))
+                            || (*transformed
+                                && default_content_pack()
+                                    .back_face(self.state.cards[card].definition_id)
+                                    .is_none()))
+                    {
+                        continue;
+                    }
+                    match to {
+                        ZoneType::Hand if from == Some(ZoneType::Graveyard) => {
+                            self.reveal_card_to_hand(card, owner);
+                        }
+                        ZoneType::Hand => {
+                            self.move_card(card, ZoneType::Hand);
+                            self.invalidate_mana_cache(owner);
+                        }
+                        ZoneType::Battlefield => self.move_card_with_entry(
+                            card,
+                            ZoneType::Battlefield,
+                            ZoneEntry {
+                                tapped: *tapped,
+                                transformed: *transformed,
+                                counters,
+                                controller,
+                                ..ZoneEntry::default()
+                            },
+                        ),
+                        ZoneType::Library => {
+                            self.move_card(card, ZoneType::Library);
+                            shuffled.push(owner);
+                        }
+                        to => self.move_card(card, *to),
+                    }
+                    let Some(moved) = self.moved_object(card, Some(object)) else {
+                        continue;
+                    };
+                    frame.moved.push(moved);
+                    if let (Some(linked), Some(source), Some(ZoneType::Exile)) =
+                        (linked, source, self.state.zones.zone_of(card))
+                    {
+                        self.state.exile_links.push(ExileLink {
+                            source,
+                            exiled_card: card,
+                            returns: *linked == LinkedExile::UntilSourceLeaves,
+                        });
+                    }
+                }
+                shuffled.dedup();
+                for owner in shuffled {
+                    self.shuffle_library(owner);
+                }
+                None
+            }
+            Effect::Tap { what } => {
+                for id in self.selected_permanents(what, frame) {
+                    self.tap_permanent(id, false);
+                }
+                None
+            }
+            Effect::Untap { what } => {
+                for id in self.selected_permanents(what, frame) {
+                    self.untap_permanent(id);
+                }
+                None
+            }
+            Effect::RemoveAllCounters { from } => {
+                for id in self.selected_permanents(from, frame) {
+                    for kind in CounterKind::ALL {
+                        let count = self.state.permanents[id]
+                            .as_ref()
+                            .map_or(0, |permanent| permanent.counter_count(kind));
+                        if count > 0 {
+                            self.change_counters(id, kind, -count);
+                        }
+                    }
+                }
+                None
+            }
+            Effect::RemoveCounters {
+                from,
+                up_to,
+                chosen,
+            } => {
+                let permanent_id = *self.selected_permanents(from, frame).first()?;
+                let mut up_to = *up_to;
+                if let Some(kind) = chosen {
+                    self.change_counters(permanent_id, *kind, -1);
+                    up_to -= 1;
+                }
+                let permanent = self.state.permanents[permanent_id].as_ref()?;
+                let mut modes: Vec<Vec<Effect>> = CounterKind::ALL
+                    .into_iter()
+                    .filter(|kind| up_to > 0 && permanent.counter_count(*kind) > 0)
+                    .map(|kind| {
+                        vec![Effect::RemoveCounters {
+                            from: from.clone(),
+                            up_to,
+                            chosen: Some(kind),
+                        }]
+                    })
+                    .collect();
+                if modes.is_empty() {
+                    return None;
+                }
+                // "Up to": stopping is always a legal choice.
+                modes.push(Vec::new());
+                Some(Decision::Modal {
                     player: frame.controller,
-                    predicate: predicate.clone(),
-                    optional: None,
+                    modes,
                 })
             }
-            Effect::MaySacrifice {
-                predicate,
-                another,
-                then,
-            } => {
-                let excluded = another.then(|| self.source_permanent_id(frame)).flatten();
-                let decision = Decision::Sacrifice {
-                    player: frame.controller,
-                    predicate: predicate.clone(),
-                    optional: Some(OptionalSacrifice {
-                        excluded,
-                        then: then.clone(),
-                    }),
-                };
-                (!self.sacrifice_decision_candidates(&decision).is_empty()).then_some(decision)
+            Effect::Destroy { what } => {
+                // One simultaneous destruction: leave-the-battlefield
+                // abilities look back at the permanents as they all were
+                // before it (CR 603.10a).
+                let objects: Vec<_> = self
+                    .selected_permanents(what, frame)
+                    .into_iter()
+                    .filter_map(|id| self.permanent_object_ref(id))
+                    .collect();
+                let sources = self.snapshot_trigger_sources();
+                for object in objects {
+                    self.destroy_object(object);
+                }
+                self.process_game_events_with_sources(&sources);
+                None
             }
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
                 self.distribute_counters(frame.controller, *kind, *count)
@@ -663,48 +832,6 @@ impl Game {
                 let amount = self.effect_value(amount, frame).max(0);
                 self.change_life(PlayerId(1 - frame.controller.0), -amount);
                 self.gain_life(frame.controller, amount);
-                None
-            }
-            Effect::ReturnGraveyardTarget { to, .. } => {
-                let target = self.present_primary_target(frame)?;
-                if let Target::GraveyardCard(object) = target {
-                    let card = CardId::from(object.entity);
-                    match to {
-                        GraveyardReturn::Hand => self.reveal_card_to_hand(card, frame.controller),
-                        GraveyardReturn::Battlefield | GraveyardReturn::BattlefieldTapped => {
-                            self.move_card_with_entry(
-                                card,
-                                ZoneType::Battlefield,
-                                crate::flow::proposed_event::ZoneEntry {
-                                    tapped: *to == GraveyardReturn::BattlefieldTapped,
-                                    controller: Some(frame.controller),
-                                    ..crate::flow::proposed_event::ZoneEntry::default()
-                                },
-                            );
-                        }
-                    }
-                }
-                None
-            }
-            Effect::MoveSourceFromGraveyard { to, then } => {
-                let card = frame.source?;
-                let source = frame.source_ref?;
-                // The card the dying object became (CR 400.7): its next
-                // incarnation, still in the graveyard.
-                let current = self.current_object_ref(card)?;
-                if current.incarnation.0 == source.incarnation.0 + 1
-                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
-                {
-                    match to {
-                        ZoneType::Hand => {
-                            self.reveal_card_to_hand(card, self.state.cards[card].owner)
-                        }
-                        to => {
-                            self.move_card(card, *to);
-                        }
-                    }
-                    frame.prepend_effects(then.iter().cloned());
-                }
                 None
             }
             Effect::MillCards { count, target } => {
@@ -777,32 +904,7 @@ impl Game {
                 None
             }
             Effect::TargetClause { .. } => unreachable!("clauses are bound before resolution"),
-            Effect::DamageOpponentCreatures { amount } => {
-                for id in self.battlefield_permanents(PlayerId(1 - frame.controller.0)) {
-                    if self.permanent_is_battlefield_creature(id) {
-                        self.apply_permanent_damage(frame.source_ref, id, *amount);
-                    }
-                }
-                None
-            }
-            Effect::CreateTokensValue { token_name, count } => {
-                let count = self.effect_value(count, frame).max(0) as usize;
-                for _ in 0..count {
-                    self.create_token(token_name, frame.controller, false);
-                }
-                None
-            }
-            Effect::ExileWithControllerToken { token_name, .. } => {
-                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
-                    return None;
-                };
-                let permanent = self.state.permanents[id].as_ref()?;
-                let controller = permanent.controller;
-                let card = permanent.card;
-                self.move_card(card, ZoneType::Exile);
-                self.create_token(token_name, controller, false);
-                None
-            }
+
             Effect::SearchBasicLand {
                 subtype,
                 count,
@@ -833,8 +935,9 @@ impl Game {
                     discarded: 0,
                 })
             }
-            Effect::DiscardTargetPlayer { count, .. } => {
-                let Some(Target::Player(player)) = self.present_primary_target(frame) else {
+            Effect::Discard { what, count } => {
+                frame.this_way.clear();
+                let [Affected::Player(player)] = self.resolve_affected(what, frame)[..] else {
                     return None;
                 };
                 (!self
@@ -849,26 +952,6 @@ impl Game {
                         then: None,
                     })
             }
-            Effect::Destroy { .. } | Effect::Exile { .. } => {
-                let target = self.present_primary_target(frame);
-                if let (Effect::Exile { .. }, Some(Target::GraveyardCard(object))) =
-                    (effect, target)
-                {
-                    self.move_card(CardId::from(object.entity), ZoneType::Exile);
-                    return None;
-                }
-                let Some(Target::Permanent(id)) = target else {
-                    return None;
-                };
-                if matches!(effect, Effect::Destroy { .. }) {
-                    if let Some(object) = self.permanent_object_ref(id) {
-                        self.destroy_object(object);
-                    }
-                } else if let Some(permanent) = self.state.permanents[id].as_ref() {
-                    self.move_card(permanent.card, ZoneType::Exile);
-                }
-                None
-            }
             Effect::CopyTriggeringObject => {
                 let copy = self.copy_stack_object(frame.context_target?, frame.controller)?;
                 self.next_retarget(frame.controller, copy, 0, true)
@@ -877,36 +960,6 @@ impl Game {
                 let object = self.present_primary_target(frame)?;
                 self.next_retarget(frame.controller, object, 0, false)
             }
-            Effect::ExileSourceAndReturn {
-                player,
-                transformed,
-            } => {
-                let [player] = self.selected_players(player, frame)[..] else {
-                    return None;
-                };
-                let id = self.source_permanent_id(frame)?;
-                let card = self.state.permanents[id].as_ref()?.card;
-                self.move_card(card, ZoneType::Exile);
-                // A token ceases to exist once exiled (CR 111.7); a card with
-                // no back face can't return transformed (CR 712.14a).
-                let returns = !self.state.cards[card].is_token
-                    && (!*transformed
-                        || default_content_pack()
-                            .back_face(self.state.cards[card].definition_id)
-                            .is_some());
-                if returns && self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
-                    self.move_card_with_entry(
-                        card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            controller: Some(player),
-                            transformed: *transformed,
-                            ..Default::default()
-                        },
-                    );
-                }
-                None
-            }
             Effect::AdditionalCombatPhase { attackers } => {
                 self.state
                     .turn
@@ -914,17 +967,6 @@ impl Game {
                     .push(crate::flow::turn::AdditionalCombat {
                         attackers: attackers.clone(),
                     });
-                None
-            }
-            Effect::UntapAll { predicate } => {
-                for id in self.battlefield_permanents(frame.controller) {
-                    if self.permanent_matches_predicate(id, predicate) {
-                        if let Some(permanent) = self.state.permanents[id].as_mut() {
-                            permanent.untap();
-                        }
-                    }
-                }
-                self.invalidate_mana_cache(frame.controller);
                 None
             }
             Effect::TakeExtraTurn => {
@@ -945,83 +987,48 @@ impl Game {
                 None
             }
             Effect::GainControl {
-                player, duration, ..
+                player,
+                what,
+                duration,
             } => {
-                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
-                    return None;
-                };
                 let [player] = self.selected_players(player, frame)[..] else {
                     return None;
                 };
-                let previous = self.state.permanents[id].as_ref()?.controller;
-                self.change_control(id, player);
-                let affected = self.affected_permanent(id);
-                self.apply_continuous(
-                    frame.source,
-                    player,
-                    affected,
-                    Modification::ControlChanged { previous },
-                    *duration,
-                );
-                None
-            }
-            Effect::PutCountersOnCreatedToken { count } => {
-                let count = self.effect_value(count, frame);
-                if let Some(token) = frame.created {
-                    if self.permanent_object_ref(token).is_some() {
-                        self.put_counters(
-                            token,
-                            CounterKind::PlusOnePlusOne,
-                            count,
-                            frame.controller,
-                        );
-                    }
-                }
-                None
-            }
-            Effect::ExileAndReturn { .. } => {
-                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
-                    return None;
-                };
-                let card = self.state.permanents[id].as_ref()?.card;
-                self.move_card(card, ZoneType::Exile);
-                if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
-                    let owner = self.state.cards[card].owner;
-                    self.move_card_with_entry(
-                        card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            controller: Some(owner),
-                            ..Default::default()
-                        },
+                for id in self.selected_permanents(what, frame) {
+                    let Some(previous) = self.state.permanents[id].as_ref().map(|p| p.controller)
+                    else {
+                        continue;
+                    };
+                    self.change_control(id, player);
+                    let affected = self.affected_permanent(id);
+                    self.apply_continuous(
+                        frame.source,
+                        player,
+                        affected,
+                        Modification::ControlChanged { previous },
+                        *duration,
                     );
                 }
                 None
             }
-            Effect::Airbend { .. } => {
-                match self.present_primary_target(frame) {
-                    Some(Target::Permanent(id)) => self.airbend_permanent(id),
-                    Some(Target::StackSpell(card)) => self.airbend_spell(card),
-                    _ => return None,
-                }
-                self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
-                None
-            }
-            Effect::AirbendAll { predicate } => {
-                let exempt = match self.present_primary_target(frame) {
-                    Some(Target::Permanent(id)) => Some(id),
-                    _ => None,
-                };
-                let chosen: Vec<_> = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| {
-                        Some(*id) != exempt && self.permanent_matches_predicate(*id, predicate)
-                    })
-                    .collect();
-                let bent = !chosen.is_empty();
-                for id in chosen {
-                    self.airbend_permanent(id);
+            Effect::Airbend { what } => {
+                let selected = self.select(what, frame);
+                let mut bent = false;
+                for object in selected {
+                    let card = CardId::from(object.entity);
+                    match self.state.zones.zone_of(card) {
+                        Some(ZoneType::Battlefield) => {
+                            if let Ok(id) = self.lookup_current_permanent(object) {
+                                self.airbend_permanent(id);
+                                bent = true;
+                            }
+                        }
+                        Some(ZoneType::Stack) => {
+                            self.airbend_spell(card);
+                            bent = true;
+                        }
+                        _ => {}
+                    }
                 }
                 if bent {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
@@ -1160,13 +1167,6 @@ impl Game {
                 }
                 None
             }
-            Effect::SacrificeSource { then } => {
-                if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.sacrifice_permanent(permanent_id);
-                    frame.prepend_effects(then.iter().cloned());
-                }
-                None
-            }
             Effect::ExileTopCardsToPlay { count, until } => {
                 self.exile_top_cards_to_play(frame.controller, *count, *until);
                 None
@@ -1184,87 +1184,45 @@ impl Game {
                 self.shuffle_library(player);
                 None
             }
-            Effect::ExileSourceSpell => {
-                if let Some(card) = frame
-                    .source
-                    .filter(|card| self.find_spell_on_stack_index(*card).is_some())
-                {
-                    self.move_card(card, ZoneType::Exile);
-                }
-                None
-            }
-            Effect::ReturnToHandDrawIfControlled { .. } => {
-                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
-                    return None;
-                };
-                let controlled = self.state.permanents[id]
-                    .as_ref()
-                    .is_some_and(|p| p.controller == frame.controller);
-                self.return_permanent_to_owner_hand(id);
-                if controlled {
-                    frame.queue.push_front(Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
-                    });
-                }
-                None
-            }
-            Effect::ReturnToHand { .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                match chosen {
-                    Target::Permanent(permanent_id) => {
-                        self.return_permanent_to_owner_hand(permanent_id);
-                    }
-                    Target::StackSpell(card) => {
-                        // Bounce a spell: its stack object ceases and the
-                        // card returns to its owner's hand.
-                        if let Some(index) = self.find_spell_on_stack_index(card) {
-                            self.state.stack_objects_mut().remove(index);
-                            let owner = self.state.cards[card].owner;
-                            self.move_card(card, ZoneType::Hand);
-                            self.invalidate_mana_cache(owner);
+            Effect::DealDamage { amount, what } => {
+                let amount = self.effect_value(amount, frame);
+                for affected in self.resolve_affected(what, frame) {
+                    match affected {
+                        Affected::Player(player) => {
+                            self.apply_player_damage(frame.source_ref, player, amount);
+                        }
+                        Affected::Object(object) => {
+                            let Ok(id) = self.lookup_current_permanent(object) else {
+                                continue;
+                            };
+                            frame.excess_damage = self.apply_creature_damage_measuring_excess(
+                                frame.source_ref,
+                                id,
+                                amount,
+                            );
                         }
                     }
-                    Target::Player(_) | Target::StackAbility(_) | Target::GraveyardCard(_) => {}
                 }
+                // Lethal damage is cleaned up by state-based actions (CR 704.5g).
                 None
             }
-            Effect::DealDamage { amount, .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                match chosen {
-                    Target::Player(player) => {
-                        self.apply_player_damage(frame.source_ref, player, *amount);
-                    }
-                    Target::Permanent(permanent_id) => {
-                        frame.excess_damage = self.apply_creature_damage_measuring_excess(
-                            frame.source_ref,
-                            permanent_id,
-                            *amount,
-                        );
-                    }
-                    Target::StackSpell(_) | Target::StackAbility(_) | Target::GraveyardCard(_) => {}
-                }
-                None
-            }
-            Effect::GainLifeValue { amount } => {
-                let amount = self.effect_value(amount, frame);
-                self.gain_life(frame.controller, amount);
-                None
-            }
-            Effect::AddManaValue {
+            Effect::AddMana {
                 mana,
                 amount,
                 until_end_of_combat,
             } => {
                 let count = self.effect_value(amount, frame).max(0);
                 self.invalidate_mana_cache(frame.controller);
-                let player = &mut self.state.players[frame.controller.0];
                 let pool = if *until_end_of_combat {
-                    &mut player.combat_mana_pool
+                    self.state.combat_mana_pool_mut(frame.controller)
                 } else {
-                    &mut player.mana_pool
+                    self.state.mana_pool_mut(frame.controller)
                 };
                 for _ in 0..count {
                     pool.add(mana);
+                }
+                if *until_end_of_combat {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
                 }
                 None
             }
@@ -1327,14 +1285,24 @@ impl Game {
                     predicate: predicate.clone(),
                 })
             }
-            Effect::CounterSpell { .. } => {
+            Effect::CounterSpell { what } => {
                 // Spells only: countering an ability is a different effect.
-                if let Target::StackSpell(spell) = self.present_primary_target(frame)? {
+                let spells: Vec<_> = self
+                    .select(what, frame)
+                    .into_iter()
+                    .map(|object| CardId::from(object.entity))
+                    .filter(|card| self.find_spell_on_stack_index(*card).is_some())
+                    .collect();
+                for spell in spells {
                     self.counter_spell(spell, frame.source);
                 }
                 None
             }
-            Effect::CounterAbility { .. } => {
+            Effect::CounterAbility { what } => {
+                debug_assert!(
+                    matches!(what, ObjectSelector::Target(_)),
+                    "a stack ability is reached only as the clause's target"
+                );
                 if let Target::StackAbility(ability) = self.present_primary_target(frame)? {
                     self.counter_ability(ability, frame.source);
                 }
@@ -1378,7 +1346,7 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
-            Effect::Discard | Effect::MayDiscard { .. } => {
+            Effect::MayDiscard { then } => {
                 frame.this_way.clear();
                 (!self
                     .state
@@ -1388,10 +1356,7 @@ impl Game {
                 .then(|| Decision::Discard {
                     player: frame.controller,
                     remaining: 1,
-                    then: match effect {
-                        Effect::MayDiscard { then } => Some(then.clone()),
-                        _ => None,
-                    },
+                    then: Some(then.clone()),
                 })
             }
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
@@ -1442,83 +1407,11 @@ impl Game {
                 frame.prepend_effects(branch.iter().cloned());
                 None
             }
-            Effect::DealDamageValue { amount, target } => {
-                let amount = self.effect_value(amount, frame);
-                self.execute_frame_effect(
-                    &Effect::DealDamage {
-                        amount,
-                        target: target.clone(),
-                    },
-                    frame,
-                )
-            }
-            Effect::PutCountersValue { count, target } => {
-                let count = self.effect_value(count, frame);
-                self.execute_frame_effect(
-                    &Effect::PutCounters {
-                        count,
-                        kind: CounterKind::PlusOnePlusOne,
-                        target: target.clone(),
-                    },
-                    frame,
-                )
-            }
             Effect::DrawCards { count } => {
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
                 let count = self.effect_value(count, frame).max(0) as usize;
                 self.draw_cards(frame.controller, count);
-                None
-            }
-            Effect::DestroyCreaturesLosingAbilities { max_mana_value } => {
-                let max = self.effect_value(max_mana_value, frame);
-                let creatures: Vec<PermanentId> = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| {
-                        self.characteristics(*id).is_creature()
-                            && self.state.permanents[*id].as_ref().is_some_and(|p| {
-                                let card = &self.state.cards[p.card];
-                                card.mana_cost
-                                    .as_ref()
-                                    .map_or(0, |c| i32::from(c.mana_value))
-                                    <= max
-                            })
-                    })
-                    .collect();
-                let affected: Vec<_> = creatures
-                    .iter()
-                    .filter_map(|id| self.affected_permanent(*id))
-                    .collect();
-                self.apply_continuous(
-                    frame.source,
-                    frame.controller,
-                    affected,
-                    Modification::LoseAllAbilities,
-                    EffectDuration::EndOfTurn,
-                );
-                // One simultaneous destruction: leave-the-battlefield abilities
-                // look back at creatures that had already lost them (CR 603.10a).
-                let objects: Vec<_> = creatures
-                    .into_iter()
-                    .filter_map(|id| self.permanent_object_ref(id))
-                    .collect();
-                let sources = self.snapshot_trigger_sources();
-                for object in objects {
-                    self.destroy_object(object);
-                }
-                self.process_game_events_with_sources(&sources);
-                None
-            }
-            Effect::MassDamage { amount } => {
-                for player in [PlayerId(0), PlayerId(1)] {
-                    for permanent_id in self.battlefield_permanents(player) {
-                        if self.characteristics(permanent_id).is_creature() {
-                            self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
-                        }
-                    }
-                }
-                // Lethal damage is cleaned up by state-based actions (CR 704.5g).
                 None
             }
             Effect::CreateToken {
@@ -1527,7 +1420,8 @@ impl Game {
                 tapped_and_attacking,
                 attach_source,
             } => {
-                for _ in 0..*count {
+                let count = self.effect_value(count, frame).max(0);
+                for _ in 0..count {
                     let token =
                         self.create_token(token_name, frame.controller, *tapped_and_attacking);
                     frame.created = token.or(frame.created);
@@ -1544,64 +1438,6 @@ impl Game {
                     } else {
                         self.attach_source_to(frame, permanent_id);
                     }
-                }
-                None
-            }
-            Effect::ReturnGrantorToHand => {
-                if let Some(grantor) = frame
-                    .grantor
-                    .and_then(|object| self.lookup_current_permanent(object).ok())
-                {
-                    self.return_permanent_to_owner_hand(grantor);
-                }
-                None
-            }
-            Effect::TapAttached => {
-                let id = self.frame_attached(frame)?;
-                self.tap_permanent(id, false);
-                None
-            }
-            Effect::RemoveAllCountersFromAttached => {
-                let id = self.frame_attached(frame)?;
-                for kind in CounterKind::ALL {
-                    let count = self.state.permanents[id].as_ref()?.counter_count(kind);
-                    if count > 0 {
-                        self.change_counters(id, kind, -count);
-                    }
-                }
-                None
-            }
-            Effect::ExileAttached | Effect::ShuffleAttachedIntoLibrary => {
-                let id = self.frame_attached(frame)?;
-                let (card, owner) = self.state.permanents[id]
-                    .as_ref()
-                    .map(|permanent| (permanent.card, self.state.cards[permanent.card].owner))?;
-                if matches!(effect, Effect::ExileAttached) {
-                    self.move_card(card, ZoneType::Exile);
-                } else {
-                    self.move_card(card, ZoneType::Library);
-                    self.shuffle_library(owner);
-                }
-                None
-            }
-            Effect::PutCountersOnSource { count, kind } => {
-                let count = self.effect_value(count, frame);
-                if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.put_counters(permanent_id, *kind, count, frame.controller);
-                }
-                None
-            }
-            Effect::PutTriggeringCountersOnSource => {
-                let Some(Target::Permanent(triggering)) = frame.context_target else {
-                    return None;
-                };
-                let source = self.source_permanent_id(frame)?;
-                let counters = match self.state.permanents[triggering].as_ref() {
-                    Some(permanent) => permanent.counters,
-                    None => self.departed_permanent_lki(triggering)?.counters,
-                };
-                for (kind, count) in counters.iter() {
-                    self.put_counters(source, kind, count, frame.controller);
                 }
                 None
             }
@@ -1622,7 +1458,7 @@ impl Game {
             }
             Effect::MayExileTriggeringWithSource => {
                 // The card the dying creature became (CR 400.7), still in its
-                // graveyard; `ExileWithSource` exiles it as the frame's target.
+                // graveyard; `Move` exiles it as the frame's target and retains the link.
                 let Some(Target::Permanent(id)) = frame.context_target else {
                     return None;
                 };
@@ -1638,11 +1474,12 @@ impl Game {
                 Some(Decision::Modal {
                     player: frame.controller,
                     modes: vec![
-                        vec![Effect::ExileWithSource {
-                            target: TargetSpec::GraveyardCard {
+                        vec![Effect::exile_linked(
+                            ObjectSelector::Target(TargetSpec::GraveyardCard {
                                 predicate: CardPredicate::default(),
-                            },
-                        }],
+                            }),
+                            LinkedExile::WithSource,
+                        )],
                         vec![],
                     ],
                 })
@@ -1686,18 +1523,6 @@ impl Game {
                         source_object: None,
                     });
                 self.invalidate_mana_cache(frame.controller);
-                None
-            }
-            Effect::DestroyAll { predicate } => {
-                let doomed: Vec<_> = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
-                    .filter_map(|id| self.permanent_object_ref(id))
-                    .collect();
-                for object in doomed {
-                    self.destroy_object(object);
-                }
                 None
             }
             Effect::NameAndExileFromTargetPlayer { count } => {
@@ -1767,24 +1592,6 @@ impl Game {
             Effect::EachPlayerKeepsCreatures { max_total_power } => {
                 self.keep_creatures(self.active_player(), *max_total_power, Vec::new())
             }
-            Effect::PutSourceCountersOnTarget { .. } => {
-                let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame)
-                else {
-                    return None;
-                };
-                let counters = self.object_lki(frame.source_ref?)?.counters;
-                for (kind, count) in counters.iter() {
-                    self.put_counters(permanent_id, kind, count, frame.controller);
-                }
-                None
-            }
-            Effect::PutCounters { count, kind, .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                if let Target::Permanent(permanent_id) = chosen {
-                    self.put_counters(permanent_id, *kind, *count, frame.controller);
-                }
-                None
-            }
             Effect::CreateDelayedTrigger { event, effects } => {
                 let (event, this_turn) = match event {
                     DelayedEvent::TargetDiesThisTurn => {
@@ -1822,52 +1629,9 @@ impl Game {
                 });
                 None
             }
-            Effect::SacrificeTriggeringPermanent => {
-                if let Some(Target::Permanent(id)) = frame.context_target {
-                    if self.state.permanents[id]
-                        .as_ref()
-                        .is_some_and(|permanent| permanent.controller == frame.controller)
-                    {
-                        self.sacrifice_permanent(id);
-                    }
-                }
-                None
-            }
-            Effect::TapSource => {
-                if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.tap_permanent(permanent_id, false);
-                }
-                None
-            }
-            Effect::UntapSource => {
-                if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.untap_permanent(permanent_id);
-                }
-                None
-            }
-            Effect::ReturnSourceToHand => {
-                if let Some(card) = self.source_in_graveyard(frame) {
-                    self.reveal_card_to_hand(card, self.state.cards[card].owner);
-                }
-                None
-            }
-            Effect::ReturnSourceToBattlefield { counter } => {
-                if let Some(card) = self.source_in_graveyard(frame) {
-                    let mut counters = crate::state::permanent::Counters::default();
-                    counters.change(*counter, 1);
-                    self.move_card_with_entry(
-                        card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            counters,
-                            ..Default::default()
-                        },
-                    );
-                }
-                None
-            }
             Effect::GainLife { amount } => {
-                self.gain_life(frame.controller, *amount);
+                let amount = self.effect_value(amount, frame);
+                self.gain_life(frame.controller, amount);
                 None
             }
             Effect::OnNthResolutionThisTurn { n, effect } => {
@@ -1990,99 +1754,55 @@ impl Game {
                 }
                 None
             }
-            Effect::Earthbend { count, .. } => {
+            Effect::Earthbend { count, what } => {
                 let count = self.effect_value(count, frame);
-                let chosen = self.present_primary_target(frame)?;
-                let Target::Permanent(permanent_id) = chosen else {
-                    return None;
-                };
-                let watched = self.permanent_object_ref(permanent_id)?;
-                let controller = {
-                    let permanent = self.state.permanents[permanent_id].as_mut()?;
-                    // The land becomes a 0/0 creature with haste that's
-                    // still a land (base 0/0 by construction — lands print
-                    // no P/T).
-                    permanent.animated = true;
-                    permanent.controller
-                };
-                // Earthbend 0 puts nothing on it and is still an earthbend.
-                self.put_counters(
-                    permanent_id,
-                    CounterKind::PlusOnePlusOne,
-                    count,
-                    frame.controller,
-                );
-                self.record_bending(frame.controller, crate::flow::turn::Bending::Earth);
-                // Delayed trigger: when it dies or is exiled, return it to
-                // the battlefield tapped (CR 603.7 one-shot).
-                self.add_delayed_trigger(DelayedTrigger {
-                    event: DelayedTriggerEvent::Leaves {
-                        watched,
-                        or_exiled: true,
-                    },
-                    controller,
-                    source_card: CardId::from(watched.entity),
-                    source_ref: Some(watched),
-                    effects: vec![Effect::ReturnSourceToBattlefieldTapped],
-                    this_turn: false,
-                });
-                None
-            }
-            Effect::ReturnSourceToBattlefieldTapped => {
-                let card = frame.source?;
-                if matches!(
-                    self.state.zones.zone_of(card),
-                    Some(ZoneType::Graveyard) | Some(ZoneType::Exile)
-                ) {
-                    self.move_card_with_entry(
-                        card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            tapped: true,
-                            ..crate::flow::proposed_event::ZoneEntry::default()
-                        },
+                let selected = self.selected_permanents(what, frame);
+                let bent = !selected.is_empty();
+                for permanent_id in selected {
+                    let Some(watched) = self.permanent_object_ref(permanent_id) else {
+                        continue;
+                    };
+                    let controller = {
+                        let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
+                            continue;
+                        };
+                        // The land becomes a 0/0 creature with haste that's
+                        // still a land (base 0/0 by construction — lands print
+                        // no P/T).
+                        permanent.animated = true;
+                        permanent.controller
+                    };
+                    // Earthbend 0 still animates the land and creates its return trigger.
+                    self.put_counters(
+                        permanent_id,
+                        CounterKind::PlusOnePlusOne,
+                        count,
+                        frame.controller,
                     );
-                }
-                None
-            }
-            Effect::ExileUntilSourceLeaves { .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                let Target::Permanent(permanent_id) = chosen else {
-                    return None;
-                };
-                // CR 603.6e pragmatics (Banisher Priest ruling): the exact
-                // source object must still exist. A later incarnation of the
-                // same physical card does not keep the old trigger alive.
-                let source_ref = frame.source_ref?;
-                self.lookup_current_permanent(source_ref).ok()?;
-                let permanent = self.state.permanents[permanent_id].as_ref()?;
-                let exiled_card = permanent.card;
-                self.move_card(exiled_card, ZoneType::Exile);
-                self.state.exile_links.push(ExileLink {
-                    source: source_ref,
-                    exiled_card,
-                    returns: true,
-                });
-                None
-            }
-            Effect::ExileWithSource { .. } => {
-                let card = match self.present_primary_target(frame)? {
-                    Target::GraveyardCard(object) => CardId::from(object.entity),
-                    Target::Permanent(id) => self.state.permanents[id].as_ref()?.card,
-                    _ => return None,
-                };
-                self.move_card(card, ZoneType::Exile);
-                let source = frame
-                    .source_ref
-                    .filter(|source| self.lookup_current_permanent(*source).is_ok());
-                if let (Some(source), Some(ZoneType::Exile)) =
-                    (source, self.state.zones.zone_of(card))
-                {
-                    self.state.exile_links.push(ExileLink {
-                        source,
-                        exiled_card: card,
-                        returns: false,
+                    // Delayed trigger: when it dies or is exiled, return it to
+                    // the battlefield tapped (CR 603.7 one-shot).
+                    self.add_delayed_trigger(DelayedTrigger {
+                        event: DelayedTriggerEvent::Leaves {
+                            watched,
+                            or_exiled: true,
+                        },
+                        controller,
+                        source_card: CardId::from(watched.entity),
+                        source_ref: Some(watched),
+                        effects: vec![Effect::Move {
+                            what: ObjectSelector::This,
+                            to: ZoneType::Battlefield,
+                            tapped: true,
+                            transformed: false,
+                            under: Some(PlayerSelector::Owner),
+                            with_counter: None,
+                            linked: None,
+                        }],
+                        this_turn: false,
                     });
+                }
+                if bent {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Earth);
                 }
                 None
             }
@@ -2105,70 +1825,6 @@ impl Game {
                 );
                 None
             }
-            Effect::AddMana {
-                mana,
-                until_end_of_combat,
-            } => {
-                self.invalidate_mana_cache(frame.controller);
-                if *until_end_of_combat {
-                    self.state.combat_mana_pool_mut(frame.controller).add(mana);
-                } else {
-                    self.state.mana_pool_mut(frame.controller).add(mana);
-                }
-                // Mana until end of combat is firebending's (CR 702.189a).
-                if *until_end_of_combat {
-                    self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
-                }
-                None
-            }
-            Effect::UntapTarget { .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                if let Target::Permanent(permanent_id) = chosen {
-                    self.untap_permanent(permanent_id);
-                }
-                None
-            }
-            Effect::RemoveCounters {
-                up_to,
-                chosen,
-                target,
-            } => {
-                let Target::Permanent(permanent_id) = self.present_primary_target(frame)? else {
-                    return None;
-                };
-                let mut up_to = *up_to;
-                if let Some(kind) = chosen {
-                    self.change_counters(permanent_id, *kind, -1);
-                    up_to -= 1;
-                }
-                let permanent = self.state.permanents[permanent_id].as_ref()?;
-                let mut modes: Vec<Vec<Effect>> = CounterKind::ALL
-                    .into_iter()
-                    .filter(|kind| up_to > 0 && permanent.counter_count(*kind) > 0)
-                    .map(|kind| {
-                        vec![Effect::RemoveCounters {
-                            up_to,
-                            chosen: Some(kind),
-                            target: target.clone(),
-                        }]
-                    })
-                    .collect();
-                if modes.is_empty() {
-                    return None;
-                }
-                // "Up to": stopping is always a legal choice.
-                modes.push(Vec::new());
-                Some(Decision::Modal {
-                    player: frame.controller,
-                    modes,
-                })
-            }
-            Effect::TapTarget { .. } => {
-                if let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame) {
-                    self.tap_permanent(permanent_id, false);
-                }
-                None
-            }
             Effect::ForEachTarget { effects } => {
                 // Run the inner effects once per chosen target with that
                 // target as the primary. Inner effects must not suspend.
@@ -2184,6 +1840,8 @@ impl Game {
                         excess_damage: 0,
                         created: None,
                         this_way: Vec::new(),
+                        moved: Vec::new(),
+                        chosen: None,
                         targets: vec![ResolutionTarget {
                             requirement: 0,
                             ..target
@@ -2203,29 +1861,6 @@ impl Game {
                             "ForEachTarget sub-effects must not suspend"
                         );
                     }
-                }
-                None
-            }
-            Effect::PutCountersOnEachMatching {
-                count,
-                predicate,
-                other,
-            } => {
-                let source_permanent = self.source_permanent_id(frame);
-                let count = self.effect_value(count, frame);
-                for permanent_id in self.battlefield_permanents(frame.controller) {
-                    if *other && Some(permanent_id) == source_permanent {
-                        continue;
-                    }
-                    if !self.permanent_matches_predicate(permanent_id, predicate) {
-                        continue;
-                    }
-                    self.put_counters(
-                        permanent_id,
-                        CounterKind::PlusOnePlusOne,
-                        count,
-                        frame.controller,
-                    );
                 }
                 None
             }
@@ -2252,21 +1887,196 @@ impl Game {
         (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
     }
 
+    // -----------------------------------------------------------------------
+    // Object selection.
+
+    /// The objects a selector names as the instruction resolves. A `Chosen`
+    /// selector names the object the resolving player chose for this
+    /// instruction (`execute_frame_effect` suspended on the choice first).
+    pub(crate) fn select(&self, what: &ObjectSelector, frame: &EffectFrame) -> Vec<ObjectRef> {
+        let permanent = |id: Option<PermanentId>| {
+            id.and_then(|id| self.permanent_object_ref(id))
+                .into_iter()
+                .collect()
+        };
+        match what {
+            ObjectSelector::This => self.source_object(frame).into_iter().collect(),
+            ObjectSelector::Target(_) => self
+                .present_primary_target(frame)
+                .and_then(|target| self.target_object(target))
+                .into_iter()
+                .collect(),
+            ObjectSelector::Triggering => permanent(match frame.context_target {
+                Some(Target::Permanent(id)) => Some(id),
+                _ => None,
+            }),
+            ObjectSelector::Attached => permanent(self.frame_attached(frame)),
+            ObjectSelector::CreatedThisWay => permanent(frame.created),
+            ObjectSelector::Grantor => frame
+                .grantor
+                .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())
+                .into_iter()
+                .collect(),
+            ObjectSelector::Moved => frame
+                .moved
+                .iter()
+                .copied()
+                .filter(|object| {
+                    self.current_object_ref(CardId::from(object.entity)) == Some(*object)
+                })
+                .collect(),
+            ObjectSelector::You => Vec::new(),
+            ObjectSelector::Chosen { .. } => {
+                debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");
+                frame
+                    .chosen
+                    .filter(|object| self.lookup_current_permanent(*object).is_ok())
+                    .into_iter()
+                    .collect()
+            }
+            ObjectSelector::Each {
+                of,
+                predicate,
+                except,
+                max_mana_value,
+            } => {
+                let players: Vec<PlayerId> = match of {
+                    Scope::YouControl => vec![frame.controller],
+                    Scope::OpponentsControl => vec![PlayerId(1 - frame.controller.0)],
+                    Scope::Battlefield => vec![PlayerId(0), PlayerId(1)],
+                    Scope::TargetPlayerControls => match self.present_primary_target(frame) {
+                        Some(Target::Player(player)) => vec![player],
+                        _ => Vec::new(),
+                    },
+                };
+                let excepted = self.excepted_permanent(*except, frame);
+                let max_mana_value = max_mana_value
+                    .as_ref()
+                    .map(|value| self.effect_value(value, frame));
+                players
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                    .filter(|id| Some(*id) != excepted)
+                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
+                    .filter(|id| {
+                        max_mana_value.is_none_or(|max| self.permanent_mana_value(*id) <= max)
+                    })
+                    .filter_map(|id| self.permanent_object_ref(id))
+                    .collect()
+            }
+        }
+    }
+
+    /// The permanent an `Except` leaves out: the source, or the clause's
+    /// chosen target while it is a permanent.
+    pub(crate) fn excepted_permanent(
+        &self,
+        except: Option<Except>,
+        frame: &EffectFrame,
+    ) -> Option<PermanentId> {
+        match except? {
+            Except::This => self.source_permanent_id(frame),
+            Except::Target => match self.present_primary_target(frame) {
+                Some(Target::Permanent(id)) => Some(id),
+                _ => None,
+            },
+        }
+    }
+
+    /// A battlefield permanent's mana value (CR 202.3): that of its card;
+    /// 0 without a mana cost.
+    fn permanent_mana_value(&self, id: PermanentId) -> i32 {
+        self.state.permanents[id]
+            .as_ref()
+            .and_then(|permanent| self.state.cards[permanent.card].mana_cost.as_ref())
+            .map_or(0, |cost| i32::from(cost.mana_value))
+    }
+
+    /// The battlefield permanents a selector names.
+    fn selected_permanents(&self, what: &ObjectSelector, frame: &EffectFrame) -> Vec<PermanentId> {
+        self.select(what, frame)
+            .into_iter()
+            .filter_map(|object| self.lookup_current_permanent(object).ok())
+            .collect()
+    }
+
+    /// The counters on what a selector names, as it is or (for the source
+    /// and the triggering permanent) as it last existed on the battlefield.
+    fn selected_counters(&self, what: &ObjectSelector, frame: &EffectFrame) -> Counters {
+        let departed = |source: ObjectRef| self.object_lki(source).map(|lki| lki.counters);
+        let present = |id: PermanentId| {
+            self.state.permanents[id]
+                .as_ref()
+                .map(|permanent| permanent.counters)
+        };
+        match what {
+            ObjectSelector::This => {
+                frame
+                    .source_ref
+                    .and_then(|source| match self.lookup_current_permanent(source) {
+                        Ok(id) => present(id),
+                        Err(_) => departed(source),
+                    })
+            }
+            ObjectSelector::Triggering => match frame.context_target {
+                Some(Target::Permanent(id)) => {
+                    present(id).or_else(|| self.departed_permanent_lki(id).map(|lki| lki.counters))
+                }
+                _ => None,
+            },
+            other => self
+                .selected_permanents(other, frame)
+                .first()
+                .and_then(|id| present(*id)),
+        }
+        .unwrap_or_default()
+    }
+
+    /// [`ObjectSelector::This`]: the exact source object in any zone, or
+    /// once it has left the battlefield the card it became in the graveyard
+    /// or exile it went to (CR 400.7, 603.10a); a spell while on the stack.
+    fn source_object(&self, frame: &EffectFrame) -> Option<ObjectRef> {
+        let card = frame.source?;
+        let current = self.current_object_ref(card)?;
+        match frame.source_ref {
+            Some(source) if current == source => Some(current),
+            Some(source) => (Some(current.incarnation) == source.incarnation.checked_next()
+                && matches!(
+                    self.state.zones.zone_of(card),
+                    Some(ZoneType::Graveyard | ZoneType::Exile)
+                ))
+            .then_some(current),
+            None => self
+                .find_spell_on_stack_index(card)
+                .is_some()
+                .then_some(current),
+        }
+    }
+
+    /// The exact object a chosen target is, when it is a card object.
+    fn target_object(&self, target: Target) -> Option<ObjectRef> {
+        match target {
+            Target::Permanent(id) => self.permanent_object_ref(id),
+            Target::GraveyardCard(object) => Some(object),
+            Target::StackSpell(card) => self.current_object_ref(card),
+            Target::Player(_) | Target::StackAbility(_) => None,
+        }
+    }
+
+    /// The object `card` became if it is no longer `before`.
+    pub(crate) fn moved_object(
+        &self,
+        card: CardId,
+        before: Option<ObjectRef>,
+    ) -> Option<ObjectRef> {
+        self.current_object_ref(card)
+            .filter(|after| Some(*after) != before)
+    }
+
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
             .and_then(|source| self.lookup_current_permanent(source).ok())
-    }
-
-    /// The source card while it is still the exact graveyard object the
-    /// ability came from (CR 400.7), in its owner's graveyard.
-    fn source_in_graveyard(&self, frame: &EffectFrame) -> Option<CardId> {
-        let card = frame.source?;
-        let owner = self.state.cards[card].owner;
-        (frame.source_ref.is_some()
-            && self.current_object_ref(card) == frame.source_ref
-            && self.state.zones.contains(card, ZoneType::Graveyard, owner))
-        .then_some(card)
     }
 
     /// Attach the source Equipment to a battlefield creature (CR 701.3). It
@@ -2286,14 +2096,6 @@ impl Game {
     fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
         let permanent_id = self.source_permanent_id(frame)?;
         self.state.permanents[permanent_id].as_mut()
-    }
-
-    fn return_permanent_to_owner_hand(&mut self, permanent_id: PermanentId) {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return;
-        };
-        let card = permanent.card;
-        self.move_card(card, ZoneType::Hand);
     }
 
     /// Check whether a target is (still) legal for a given TargetSpec, from
