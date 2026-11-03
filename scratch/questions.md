@@ -30,3 +30,12 @@
 - Current w17 receipts must be regenerated from the combined runtime: neither
   side’s hashes represent both changes. Preserve this branch’s explicit library
   ordering Commands and fixed match behavior; historical receipts stay unchanged.
+
+Sync resolution completed locally with `lf sync --continue`. Rebuilt the native
+extension and refreshed the mutable w17 fixtures/receipts through their producers
+(14 semantic-kernel cases, 3,473 Commands; authored parity 135 Commands / 816
+viewer checks; public parity 66 commitments / zero gaps). Focused post-sync
+proof: three Lightning Strike tests passed in debug; 14 Academy parity, choice
+navigation and current belief-receipt tests passed. The public receipt writer
+finished after the merge commit, so its result is retained in a local follow-up
+commit. No push; the waiting sync caller owns publication.

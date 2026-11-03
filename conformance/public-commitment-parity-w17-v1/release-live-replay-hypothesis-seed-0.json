@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "d47f9ba28cecb38ed05a3bd69a598a7048f15858bcf4c2df4d2c1b181bae67e5",
+    "authority_receipt_sha256": "413515d02683d8feb22bc47426ac1bff5d4c83f78cc067fc66171d083f0f87ec",
     "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "d47f9ba28cecb38ed05a3bd69a598a7048f15858bcf4c2df4d2c1b181bae67e5"
+          "sha256": "413515d02683d8feb22bc47426ac1bff5d4c83f78cc067fc66171d083f0f87ec"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "609be4bf7e1e8f54e94672db1740cbb7901f4159c6c01494c637d2b9f373972c"
+          "sha256": "ffe3caaa632223b7c930b8788e7702440d7ee1c86898243bad84d98759250ff8"
         },
         {
           "path": "academy/server.py",
@@ -89,7 +89,7 @@
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "9b15bcb5315be02ceb47fa0030258eb4c76cfd08e7c6a368283f0d1ec55337ab"
+          "sha256": "48bfdb020dcf41d0105aa9c2973851848348311efca156f25441c61e13bfdce2"
         },
         {
           "path": "managym/src/decision.rs",
@@ -128,7 +128,7 @@
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "363c5385f8604e4e7fd6a1d4e6fade7ed36b7bf086282f29352d7505de53d110"
+      "sha256": "1674b6a35efe9fa7ca44a8e8915f45f1118f86eb12458c077514203757f5d037"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1423,16 +1423,16 @@
       "tracker_receipts": {
         "0": {
           "consumed_commitments": 21,
-          "history_digest": "6fa335795d522785a047b580a90b9feb452e3a1d9b4b02f49e84e33ee6db1c85",
-          "posterior_digest": "c4bf9d0a9d0fc28a63f6e5c9fcff861b55a0b8ee90e2e528078b45ac647fbd40",
-          "prior_digest": "507000b3765b14e34247af054c247bd910660fb20b3c383ca0bdaeb076f089d3",
+          "history_digest": "00a8b5a09388341479121a53f4367c9c5928050a1fb4f348058541b2322ab904",
+          "posterior_digest": "b0d1879902bd9c0e0cf612f5615127f0e07819888f85f89d7d2b1b69d86313d8",
+          "prior_digest": "1dee44de2502bb4e91dcdbf222536985f6607fa66887a6cd9dd57047fc09313c",
           "records": 68
         },
         "1": {
           "consumed_commitments": 32,
-          "history_digest": "df4b6f0746fd87ff0e7bcb45b70943e87ed20b57ea8bf8b9c0147f4868f1ebda",
-          "posterior_digest": "0270f9acaa32197838c08e82359976f4215082e5c3f371a183bd4d3ad88cbdf4",
-          "prior_digest": "3b14e062d2fa435669c46e37707c0e3db44a30cd038e42e22b78eebf4bb27055",
+          "history_digest": "c96ff7d248b813f838137489928860cd8a19a404401466fa667dc28c5554af6f",
+          "posterior_digest": "dc6aafa184d5af4acd474bc271334ec6f15d060eb99aa2fd9a20c6a55dfcff65",
+          "prior_digest": "30e4ca8b8fd63ae23e24a0443a2248a203936392bf77bca8b61ffb56bd528a03",
           "records": 135
         }
       }
@@ -1455,16 +1455,16 @@
   "trackers": {
     "0": {
       "consumed_commitments": 21,
-      "history_digest": "6fa335795d522785a047b580a90b9feb452e3a1d9b4b02f49e84e33ee6db1c85",
-      "posterior_digest": "c4bf9d0a9d0fc28a63f6e5c9fcff861b55a0b8ee90e2e528078b45ac647fbd40",
-      "prior_digest": "507000b3765b14e34247af054c247bd910660fb20b3c383ca0bdaeb076f089d3",
+      "history_digest": "00a8b5a09388341479121a53f4367c9c5928050a1fb4f348058541b2322ab904",
+      "posterior_digest": "b0d1879902bd9c0e0cf612f5615127f0e07819888f85f89d7d2b1b69d86313d8",
+      "prior_digest": "1dee44de2502bb4e91dcdbf222536985f6607fa66887a6cd9dd57047fc09313c",
       "records": 68
     },
     "1": {
       "consumed_commitments": 32,
-      "history_digest": "df4b6f0746fd87ff0e7bcb45b70943e87ed20b57ea8bf8b9c0147f4868f1ebda",
-      "posterior_digest": "0270f9acaa32197838c08e82359976f4215082e5c3f371a183bd4d3ad88cbdf4",
-      "prior_digest": "3b14e062d2fa435669c46e37707c0e3db44a30cd038e42e22b78eebf4bb27055",
+      "history_digest": "c96ff7d248b813f838137489928860cd8a19a404401466fa667dc28c5554af6f",
+      "posterior_digest": "dc6aafa184d5af4acd474bc271334ec6f15d060eb99aa2fd9a20c6a55dfcff65",
+      "prior_digest": "30e4ca8b8fd63ae23e24a0443a2248a203936392bf77bca8b61ffb56bd528a03",
       "records": 135
     }
   },

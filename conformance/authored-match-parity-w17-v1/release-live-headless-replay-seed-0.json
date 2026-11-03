@@ -568,10 +568,10 @@
         },
         {
           "path": "tests/academy/test_authored_match_parity.py",
-          "sha256": "7687b14c9d68c7605837dd33695f786db417f7bc88bd4827f36307028dda8f39"
+          "sha256": "2418277760950967fef1763dcf8cc71b4d19bfe9ac0cfb13d0848d12b4e55b06"
         }
       ],
-      "sha256": "5371168f8989c435e3de060694d493a2ddb417939e4dfc3f4c71802b56853ba2"
+      "sha256": "4dac61ba5d0fe818e55ac68a76ebbd6945a3278caa345ffe09d28134479c0c11"
     },
     "seed": 0
   },
