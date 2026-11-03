@@ -196,6 +196,17 @@ checks required by the affected package and workflow.
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
   `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
+- Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
+  `bench_steps` in release for the change and for the reference commit of
+  `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
+  slower than the reference or with a changed search/decision digest. A moved
+  digest (a rules change reaching the curated decks, or a change to the
+  benchmarks or curated lists), an accepted cost or a kept speedup moves the
+  reference by adopting the PR's own run (`gh run download`, then
+  `scripts/engine_budget.py record --reason`); a reference that no longer
+  builds with the change's benchmarks is recorded the same way
+  ([engine performance budget](docs/development.md#engine-performance-budget));
+  wall time is never compared across runners.
 - **CI runs `cargo test` in debug, so validate in debug before landing.**
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can

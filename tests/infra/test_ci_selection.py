@@ -19,12 +19,16 @@ JOBS = {
     "semantic_conformance",
     "frontend",
     "clean_machine_play",
+    "engine_budget",
 }
 
 
-def selected(paths: list[str], *, full: bool = False) -> set[str]:
+def selected(
+    paths: list[str], *, full: bool = False, only: list[str] | None = None
+) -> set[str]:
+    flags = ["--all"] if full else ["--only", *only] if only else []
     result = subprocess.run(
-        ["bash", str(SELECTOR), *(["--all"] if full else [])],
+        ["bash", str(SELECTOR), *flags],
         input="".join(path + "\0" for path in paths),
         text=True,
         capture_output=True,
@@ -67,6 +71,13 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
         (".github/workflows/ci.yml", JOBS),
         (".github/ci/select-tests.sh", JOBS),
         (".github/workflows/manabot-integration.yml", {"integration"}),
+        (".github/workflows/engine-budget.yml", {"python_unit", "engine_budget"}),
+        ("managym/examples/bench_search.rs", {"rust", "engine_budget"}),
+        ("managym/examples/bench_steps.rs", {"engine_budget"}),
+        ("managym/examples/curated/mod.rs", {"engine_budget"}),
+        ("managym/perf/baseline.json", {"engine_budget"}),
+        ("managym/examples/export_study_index.rs", JOBS),
+        ("scripts/engine_budget.py", {"python_unit", "engine_budget"}),
         ("unknown-new-package/code.py", JOBS),
     ],
 )
@@ -86,6 +97,14 @@ def test_renames_and_mixed_changes_select_both_consumers() -> None:
 def test_empty_diff_and_manual_dispatch_run_all_jobs() -> None:
     assert selected([]) == JOBS
     assert selected(["docs/notes.md"], full=True) == JOBS
+
+
+def test_measurement_dispatch_selects_only_the_engine_budget() -> None:
+    assert selected(["managym/src/flow/decision.rs"], only=["engine_budget"]) == {
+        "engine_budget"
+    }
+    with pytest.raises(subprocess.CalledProcessError):
+        selected([], only=["no_such_job"])
 
 
 @pytest.mark.parametrize(

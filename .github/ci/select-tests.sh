@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 # Select independent CI jobs from NUL-delimited changed paths. Unknown inputs
 # run everything; docs and unrelated packages do not fan out into browser tests.
+# `--all` selects every job; `--only <job>...` selects exactly the named jobs.
 set -euo pipefail
-jobs=(rust python_unit integration academy_integration protocol_v1 semantic_conformance frontend clean_machine_play)
+jobs=(rust python_unit integration academy_integration protocol_v1 semantic_conformance frontend clean_machine_play engine_budget)
 for job in "${jobs[@]}"; do declare "$job=false"; done
 select_jobs() { local job; for job in "$@"; do printf -v "$job" true; done; }
 all() { select_jobs "${jobs[@]}"; }
 seen=false
 if [[ "${1:-}" == --all ]]; then
   all
+elif [[ "${1:-}" == --only ]]; then
+  shift
+  for job in "$@"; do
+    [[ " ${jobs[*]} " == *" $job "* ]] || { echo "unknown job: $job" >&2; exit 1; }
+  done
+  select_jobs "$@"
 else
   while IFS= read -r -d '' file; do
     seen=true
@@ -17,6 +24,11 @@ else
         all ;;
       .github/workflows/manabot-integration.yml) select_jobs integration ;;
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
+      .github/workflows/engine-budget.yml) select_jobs python_unit engine_budget ;;
+      managym/examples/bench_search.rs) select_jobs rust engine_budget ;;
+      managym/examples/bench_*.rs|managym/examples/curated/*|managym/perf/*)
+        select_jobs engine_budget ;;
+      scripts/engine_budget.py) select_jobs python_unit engine_budget ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
       scripts/audit_rules.py|docs/rules/audit-2026-10/*)
         select_jobs python_unit ;;
