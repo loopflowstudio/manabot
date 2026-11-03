@@ -212,6 +212,10 @@ preserves accepted decisions, dated proof limits and source history.
   Learning schema 10 already existed on main; definition-derived token values
   change without changing its kinds, roles or dtypes. Observation `KeywordData`
   remains a boolean surface distinct from sparse definition serialization.
+  The current keyword bitset is one `u64` (64 parameterless variants; 14
+  defined). Sparse serialization does not remove that internal capacity limit.
+  The 2026-11-02 interactive proposal to grow storage with the vocabulary is
+  unapproved and is not part of the accepted batch.
 - Jack Heart selected MTG-238 first on 2026-11-02, superseding the T6 hold
   and stacking prerequisite: publish against main for review, no auto-merge;
   T6 integrates the crate move afterward. Main's T5 sync supplied Airship's

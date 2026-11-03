@@ -3,6 +3,8 @@
 //! (CR 613.7), each duration ends at its boundary (CR 514.2, CR 400.7), and
 //! the records are hashed and forked like the rest of the match state.
 
+use std::sync::Arc;
+
 use managym::{
     agent::action::ActionSpaceKind,
     flow::turn::StepKind,
@@ -42,6 +44,18 @@ fn indefinitely(s: &mut Scenario, id: PermanentId, modification: Modification) {
         modification,
         EffectDuration::Indefinite,
     );
+}
+
+#[test]
+fn empty_effect_batch_keeps_cached_characteristics_but_allocates_a_timestamp() {
+    let (mut s, ogre) = ogre_scenario();
+    let before = s.game().characteristics(ogre);
+    let hash = s.game().state.deterministic_hash();
+    s.game_mut()
+        .apply_continuous(None, PlayerId(0), [], flying(), EffectDuration::EndOfTurn);
+    assert!(s.game().state.effects.is_empty());
+    assert!(Arc::ptr_eq(&before, &s.game().characteristics(ogre)));
+    assert_ne!(hash, s.game().state.deterministic_hash());
 }
 
 /// CR 613.7: a loss of all abilities removes grants with earlier timestamps

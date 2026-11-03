@@ -112,26 +112,23 @@ enum Seen {
 /// today, so each has columns; the first non-evergreen keyword names its fact
 /// row here instead of columns. The token is the `Keyword::<name>` variant in
 /// the definition's keyword list, present only when the keyword is.
-fn keyword_columns(keywords: Keywords) -> [(&'static str, bool, usize, usize); 14] {
-    Keyword::ALL.map(|keyword| {
-        let (card, permanent) = match keyword {
-            Keyword::Flying => (17, 10),
-            Keyword::Reach => (18, 11),
-            Keyword::Haste => (19, 12),
-            Keyword::Flash => (28, 13),
-            Keyword::Vigilance => (20, 14),
-            Keyword::Trample => (21, 15),
-            Keyword::FirstStrike => (22, 16),
-            Keyword::DoubleStrike => (23, 17),
-            Keyword::Deathtouch => (24, 18),
-            Keyword::Lifelink => (25, 19),
-            Keyword::Defender => (26, 20),
-            Keyword::Menace => (27, 21),
-            Keyword::Hexproof => (36, 22),
-            Keyword::Indestructible => (38, 25),
-        };
-        (keyword.name(), keywords.has(keyword), card, permanent)
-    })
+fn keyword_columns(keyword: Keyword) -> (usize, usize) {
+    match keyword {
+        Keyword::Flying => (17, 10),
+        Keyword::Reach => (18, 11),
+        Keyword::Haste => (19, 12),
+        Keyword::Flash => (28, 13),
+        Keyword::Vigilance => (20, 14),
+        Keyword::Trample => (21, 15),
+        Keyword::FirstStrike => (22, 16),
+        Keyword::DoubleStrike => (23, 17),
+        Keyword::Deathtouch => (24, 18),
+        Keyword::Lifelink => (25, 19),
+        Keyword::Defender => (26, 20),
+        Keyword::Menace => (27, 21),
+        Keyword::Hexproof => (36, 22),
+        Keyword::Indestructible => (38, 25),
+    }
 }
 
 fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
@@ -1710,11 +1707,14 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
 fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens() {
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
-    for index in 0..14 {
-        let (name, _, card_column, permanent_column) = keyword_columns(Keywords::default())[index];
-        let mut keywords = Keywords::default();
-        set_keyword(&mut keywords, name);
-        assert!(keyword_columns(keywords)[index].1, "{name}");
+    let bare = tokens_of(&CardDefinition {
+        name: "Witness".into(),
+        ..Default::default()
+    });
+    for keyword in Keyword::ALL {
+        let name = keyword.name();
+        let (card_column, permanent_column) = keyword_columns(keyword);
+        let keywords = Keywords::of(&[keyword]);
 
         let mut granted = base_game.clone();
         let affected = granted.affected_permanent(ogre).unwrap();
@@ -1765,20 +1765,8 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
             ],
             "{name}"
         );
-        let bare = tokens_of(&CardDefinition {
-            name: "Witness".into(),
-            ..Default::default()
-        });
         assert!(!bare.contains(&keyword_token), "{name}");
     }
-}
-
-fn set_keyword(keywords: &mut Keywords, name: &str) {
-    let keyword = Keyword::ALL
-        .into_iter()
-        .find(|keyword| keyword.name() == name)
-        .unwrap_or_else(|| panic!("unknown keyword {name}"));
-    keywords.insert(keyword);
 }
 
 #[test]
@@ -2624,11 +2612,12 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
             }
         }
     }
-    for (keyword, _, card, permanent) in keyword_columns(Keywords::default()) {
+    for keyword in Keyword::ALL {
+        let (card, permanent) = keyword_columns(keyword);
         for (buffer, index) in [(Buffer::Card, card), (Buffer::Permanent, permanent)] {
             assert!(
                 index < buffer.width() && Some(index) != buffer.validity(),
-                "{keyword}: {buffer:?} {index}"
+                "{keyword:?}: {buffer:?} {index}"
             );
             claimed.insert((buffer, index));
         }

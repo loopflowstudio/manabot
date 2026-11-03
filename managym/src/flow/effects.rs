@@ -97,8 +97,10 @@ impl Game {
     }
 
     fn push_effects(&mut self, records: impl IntoIterator<Item = ContinuousEffect>) {
-        let records: Vec<ContinuousEffect> = records.into_iter().collect();
-        if records.is_empty() {
+        let mut records = records.into_iter().peekable();
+        // Test emptiness before borrowing tracked state mutably: an empty
+        // batch must preserve the derived caches.
+        if records.peek().is_none() {
             return;
         }
         self.state.effects.extend(records);

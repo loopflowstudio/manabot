@@ -229,7 +229,8 @@ types (`Effect`, `Ability`, `StaticAbility`, `AdditionalCost`, `TargetSpec`,
 (`managym/state/`) and are re-exported as `managym::state`. The engine reaches
 the sets only through `managym_cards::catalog()`. Keywords are `Keyword`
 variants held in a `Keywords` set (`Keywords::of(&[Keyword::Flying])`);
-counters are `CounterKind` entries stored sparsely on the permanent. That value is the only card representation: there is no authoring language,
+counters are `CounterKind` entries stored sparsely on the permanent.
+That value is the only card representation: there is no authoring language,
 compiler, IR or card JSON. `CardDefinition` holds identity, characteristics and
 ability/cost lists; a static ability or additional cost is a variant of
 `StaticAbility` or `AdditionalCost`, never a new field. Every token is a
@@ -240,6 +241,14 @@ card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
 id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
 checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
 online, never in CI). Rebuild the extension after card changes.
+
+Declare a parameterless keyword once in the rules enum's `keywords!` declaration
+and use `Keywords::of`. Storage grows with the vocabulary; append variants to
+preserve present-keyword serialization order and values. When changing storage,
+test membership, union, removal and copy independence across word boundaries
+without inventing mechanics, widening frozen observations or regenerating
+evidence to hide a regression. A new mechanic still needs behavior, learning
+tokens and every shared observation path; non-evergreen kinds use fact rows.
 
 Learning tokens derive from the same definitions (`cards/tokens.rs`,
 `managym.learning_catalog`), so a new variant reaches the policy without a

@@ -116,72 +116,50 @@ pub struct TriggeredManaAbility {
     pub mana: Mana,
 }
 
-/// A keyword ability without a parameter (CR 702). One variant per keyword;
-/// a card or permanent holds a set of them in [`Keywords`]. Parametrized
-/// keywords (ward, firebending) are their own rules types. The serialized
-/// name is the learning-token field name (`first_strike`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Keyword {
-    Flying,
-    Reach,
-    Haste,
+// One declaration owns the enum, iteration order and storage capacity. Append
+// variants to preserve serde variant indices and present-keyword ordering.
+macro_rules! keywords {
+    ($( $(#[$meta:meta])* $variant:ident => $name:literal ),+ $(,)?) => {
+        /// A parameterless keyword ability (CR 702), held in a [`Keywords`] set.
+        /// Parameterized keywords (ward, firebending) have their own rules types.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+        pub enum Keyword {
+            $( $(#[$meta])* #[serde(rename = $name)] $variant, )+
+        }
+
+        impl Keyword {
+            /// Every keyword, in serialization order.
+            pub const ALL: [Keyword; [$($name),+].len()] = [$(Self::$variant),+];
+
+            /// The serialized name, as learning tokens and effect facts name it.
+            pub fn name(self) -> &'static str {
+                match self { $(Self::$variant => $name),+ }
+            }
+        }
+    };
+}
+
+keywords! {
+    Flying => "flying",
+    Reach => "reach",
+    Haste => "haste",
     /// CR 702.8 — May be cast any time the controller could cast an instant.
-    Flash,
-    Vigilance,
-    Trample,
-    FirstStrike,
-    DoubleStrike,
-    Deathtouch,
-    Lifelink,
-    Defender,
-    Menace,
+    Flash => "flash",
+    Vigilance => "vigilance",
+    Trample => "trample",
+    FirstStrike => "first_strike",
+    DoubleStrike => "double_strike",
+    Deathtouch => "deathtouch",
+    Lifelink => "lifelink",
+    Defender => "defender",
+    Menace => "menace",
     /// CR 702.11 — Can't be the target of spells or abilities opponents
     /// control.
-    Hexproof,
-    Indestructible,
+    Hexproof => "hexproof",
+    Indestructible => "indestructible",
 }
 
 impl Keyword {
-    /// Every keyword, in serialization order.
-    pub const ALL: [Keyword; 14] = [
-        Keyword::Flying,
-        Keyword::Reach,
-        Keyword::Haste,
-        Keyword::Flash,
-        Keyword::Vigilance,
-        Keyword::Trample,
-        Keyword::FirstStrike,
-        Keyword::DoubleStrike,
-        Keyword::Deathtouch,
-        Keyword::Lifelink,
-        Keyword::Defender,
-        Keyword::Menace,
-        Keyword::Hexproof,
-        Keyword::Indestructible,
-    ];
-
-    /// The serialized name (`flying`, `first_strike`), as the learning tokens
-    /// and effect facts name it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Keyword::Flying => "flying",
-            Keyword::Reach => "reach",
-            Keyword::Haste => "haste",
-            Keyword::Flash => "flash",
-            Keyword::Vigilance => "vigilance",
-            Keyword::Trample => "trample",
-            Keyword::FirstStrike => "first_strike",
-            Keyword::DoubleStrike => "double_strike",
-            Keyword::Deathtouch => "deathtouch",
-            Keyword::Lifelink => "lifelink",
-            Keyword::Defender => "defender",
-            Keyword::Menace => "menace",
-            Keyword::Hexproof => "hexproof",
-            Keyword::Indestructible => "indestructible",
-        }
-    }
-
     /// The keyword as printed on a card (`first strike`).
     pub fn printed(self) -> &'static str {
         match self {
@@ -190,9 +168,34 @@ impl Keyword {
             other => other.name(),
         }
     }
+}
 
-    const fn bit(self) -> u64 {
-        1 << (self as u64)
+/// Internal ordinal storage; its array grows at compile time with the vocabulary.
+/// Keeping it inline preserves `Keywords: Copy` without allocating per permanent.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct KeywordBits<const WORDS: usize>([u64; WORDS]);
+
+impl<const WORDS: usize> Default for KeywordBits<WORDS> {
+    fn default() -> Self {
+        Self([0; WORDS])
+    }
+}
+
+impl<const WORDS: usize> KeywordBits<WORDS> {
+    fn has(self, index: usize) -> bool {
+        self.0[index / 64] & (1_u64 << (index % 64)) != 0
+    }
+
+    fn insert(&mut self, index: usize) {
+        self.0[index / 64] |= 1_u64 << (index % 64);
+    }
+
+    fn without(self, removed: Self) -> Self {
+        Self(std::array::from_fn(|i| self.0[i] & !removed.0[i]))
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self(std::array::from_fn(|i| self.0[i] | other.0[i]))
     }
 }
 
@@ -201,24 +204,24 @@ impl Keyword {
 /// definition's content digest and learning tokens carry only what the set
 /// holds and a new keyword changes no other card's encoding.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Keywords(u64);
+pub struct Keywords(KeywordBits<{ Keyword::ALL.len().div_ceil(64) }>);
 
 impl Keywords {
     /// Exactly these keywords.
     pub fn of(keywords: &[Keyword]) -> Self {
-        Keywords(
-            keywords
-                .iter()
-                .fold(0, |bits, keyword| bits | keyword.bit()),
-        )
+        let mut result = Self::default();
+        for &keyword in keywords {
+            result.insert(keyword);
+        }
+        result
     }
 
     pub fn has(self, keyword: Keyword) -> bool {
-        self.0 & keyword.bit() != 0
+        self.0.has(keyword as usize)
     }
 
     pub fn insert(&mut self, keyword: Keyword) {
-        self.0 |= keyword.bit();
+        self.0.insert(keyword as usize);
     }
 
     /// The keywords present, in [`Keyword::ALL`] order.
@@ -236,12 +239,12 @@ impl Keywords {
 
     /// These keywords less those in `removed`.
     pub fn without(self, removed: Keywords) -> Keywords {
-        Keywords(self.0 & !removed.0)
+        Keywords(self.0.without(removed.0))
     }
 
     /// Keyword-set union (printed keywords plus until-EOT grants).
     pub fn union(self, other: Keywords) -> Keywords {
-        Keywords(self.0 | other.0)
+        Keywords(self.0.union(other.0))
     }
 }
 
@@ -1071,5 +1074,66 @@ pub fn basic_land(name: &str, color: Color) -> CardDefinition {
         }],
         text_box: format!("{{T}}: Add {{{}}}.", color.symbol()),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod keyword_tests {
+    use super::{Keyword, KeywordBits, Keywords};
+
+    #[test]
+    fn keyword_storage_keeps_word_boundaries_independent() {
+        // Ordinals exercise the production storage without declaring fictional
+        // supported mechanics. Cover both sides of two word boundaries.
+        let mut original = KeywordBits::<3>::default();
+        let present = [0, 63, 64, 65, 127, 128, 191];
+        for &index in present.iter().rev() {
+            original.insert(index);
+            original.insert(index);
+        }
+        for index in 0..192 {
+            assert_eq!(original.has(index), present.contains(&index), "{index}");
+        }
+
+        // Keywords is Copy: a fork owns its words, including all later words.
+        let mut fork = original;
+        fork.insert(129);
+        let mut removed = KeywordBits::default();
+        for index in [0, 64, 128, 190] {
+            removed.insert(index);
+        }
+        fork = fork.without(removed);
+        let remaining = [63, 65, 127, 129, 191];
+        let reunited = fork.union(removed);
+        for index in 0..192 {
+            assert_eq!(fork.has(index), remaining.contains(&index), "{index}");
+            assert_eq!(original.has(index), present.contains(&index), "{index}");
+            assert_eq!(
+                reunited.has(index),
+                present.contains(&index) || [129, 190].contains(&index),
+                "{index}"
+            );
+        }
+        assert!(original.without(original) == KeywordBits::default());
+        assert!(original.union(original) == original);
+    }
+
+    #[test]
+    fn keyword_sets_preserve_membership_order_and_copy_independence() {
+        let original = Keywords::of(&[Keyword::Indestructible, Keyword::Flying, Keyword::Flying]);
+        let mut fork = original;
+        fork.insert(Keyword::Haste);
+        fork = fork.without(Keywords::of(&[Keyword::Flying, Keyword::Reach]));
+        assert_eq!(original.names(), ["flying", "indestructible"]);
+        assert_eq!(fork.names(), ["haste", "indestructible"]);
+        assert_eq!(
+            fork.union(original).names(),
+            ["flying", "haste", "indestructible"]
+        );
+        let all = Keywords::of(&Keyword::ALL);
+        for keyword in Keyword::ALL {
+            assert!(all.has(keyword));
+            assert!(!Keywords::default().has(keyword));
+        }
     }
 }

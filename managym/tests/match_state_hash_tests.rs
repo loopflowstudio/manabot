@@ -50,6 +50,26 @@ fn keyword_serialization_contains_only_present_kinds_in_enum_order() {
         r#"["flying","haste"]"#
     );
     assert_eq!(serde_json::to_string(&Keywords::default()).unwrap(), "[]");
+    let existing_keywords = Keywords::of(&[
+        Keyword::Indestructible,
+        Keyword::Hexproof,
+        Keyword::Menace,
+        Keyword::Defender,
+        Keyword::Lifelink,
+        Keyword::Deathtouch,
+        Keyword::DoubleStrike,
+        Keyword::FirstStrike,
+        Keyword::Trample,
+        Keyword::Vigilance,
+        Keyword::Flash,
+        Keyword::Haste,
+        Keyword::Reach,
+        Keyword::Flying,
+    ]);
+    assert_eq!(
+        serde_json::to_string(&existing_keywords).unwrap(),
+        r#"["flying","reach","haste","flash","vigilance","trample","first_strike","double_strike","deathtouch","lifelink","defender","menace","hexproof","indestructible"]"#
+    );
 }
 
 fn interactive_deck() -> BTreeMap<String, usize> {

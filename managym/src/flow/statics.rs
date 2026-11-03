@@ -1154,18 +1154,15 @@ impl Game {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }
             Condition::ControlsAtLeast { count, predicate } => {
+                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
                 self.battlefield_permanents(controller)
                     .into_iter()
                     .filter(|&id| {
-                        self.permanent_matches_with_source(
-                            id,
-                            predicate,
-                            ScopeView::Rules,
-                            source.and_then(|source| self.lookup_current_permanent(source).ok()),
-                        )
+                        self.permanent_matches_with_source(id, predicate, ScopeView::Rules, source)
                     })
+                    .take(*count)
                     .count()
-                    >= *count
+                    == *count
             }
             Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
