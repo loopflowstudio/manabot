@@ -124,7 +124,7 @@ def _pair_result(
     pair: Pair,
     key: str | None,
     environment_id: str,
-    has_games: bool,
+    game_columns: set[str],
 ) -> PairResult:
     receipts = (
         db.execute(
@@ -159,11 +159,19 @@ def _pair_result(
     if [seat for seat, _ in source_rows] != [0, 1]:
         sources += (None,)
     games: list[_Game] = []
-    if receipt.state == "done" and has_games:
+    if receipt.state == "done" and game_columns:
         # The validated projection owns both SQL selection and row decoding.
         columns = tuple(_Game.model_fields)
+        # Etude omits columns whose values are all null. Missing nullable result
+        # fields still mean no score/failure, while required fields must exist.
+        selection = [
+            f"NULL AS {column}"
+            if column in {"score", "failure"} and column not in game_columns
+            else column
+            for column in columns
+        ]
         rows = db.execute(
-            f"SELECT {', '.join(columns)} FROM games "
+            f"SELECT {', '.join(selection)} FROM games "
             "WHERE run = ? AND match = ? AND seat = 0 ORDER BY game",
             [receipt.run, key],
         ).fetchall()
@@ -223,12 +231,12 @@ def analyze(
     if state.experiment != EXPERIMENT:
         raise ValueError("analysis requires the TLA pilot experiment")
     environment_id = environment(protocol).identity
-    has_games = (
-        db.execute(
-            "SELECT 1 FROM information_schema.tables WHERE table_name = 'games'"
-        ).fetchone()
-        is not None
-    )
+    game_columns = {
+        row[0]
+        for row in db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
+        ).fetchall()
+    }
     indices = np.random.default_rng(protocol.bootstrap_seed).integers(
         0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
     )
@@ -245,7 +253,7 @@ def analyze(
                 else [None] * len(protocol.pairs)
             )
             pairs = [
-                _pair_result(db, pair, key, environment_id, has_games)
+                _pair_result(db, pair, key, environment_id, game_columns)
                 for pair, key in zip(protocol.pairs, keys, strict=True)
             ]
             comparisons.append(

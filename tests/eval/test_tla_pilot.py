@@ -339,8 +339,25 @@ def test_pilot_analysis_rejects_duplicate_legs(
         analyze(state, pilot_db)
 
 
+def test_pilot_analysis_counts_failures_without_a_score_column(
+    pilot_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state()
+    _outcomes(pilot_db, state)
+    pilot_db.execute("UPDATE games SET valid = false, failure = 'fixture failure'")
+    pilot_db.execute("ALTER TABLE games DROP COLUMN score")
+    report = analyze(state, pilot_db)[0]
+    assert report.counts.failed == report.counts.expected == 288
+    assert report.counts.valid == report.counts.missing == 0
+    assert report.success is None
+
+
+@pytest.mark.parametrize("with_failure_column", [True, False])
 def test_pilot_analysis_cli_reads_sealed_etude_results(
-    pilot_db: duckdb.DuckDBPyConnection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    pilot_db: duckdb.DuckDBPyConnection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    with_failure_column: bool,
 ) -> None:
     monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "home"))
     for key in ("ETUDE_EXPERIMENT", "ETUDE_RUN", "ETUDE_TRACK_DIR", "ETUDE_CONTINUES"):
@@ -357,6 +374,8 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
         for checkpoint in state.runs[0].checkpoints:
             training.checkpoint(checkpoint.artifact, checkpoint.clocks)
     _outcomes(pilot_db, state)
+    if not with_failure_column:
+        pilot_db.execute("ALTER TABLE games DROP COLUMN failure")
     tournament = evaluation_spec(eval(state)[0]).tournament
     declared = declare(
         experiment="tla_pilot",
@@ -386,7 +405,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
                     "score": "DOUBLE",
                     "terminated": "BOOLEAN",
                     "truncated": "BOOLEAN",
-                    "failure": "VARCHAR",
+                    **({"failure": "VARCHAR"} if with_failure_column else {}),
                 }
             },
         )
