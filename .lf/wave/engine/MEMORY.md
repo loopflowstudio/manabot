@@ -119,11 +119,21 @@ preserves accepted decisions, dated proof limits and source history.
   retain the old limitation and establish no full-score equality. The new
   baseline comes from CI run 41540798745, not reinterpreted historical output.
   Detailed measurements and the adoption procedure live in
-  `docs/development.md#engine-performance-budget`; PR-path proof remains open.
+  `docs/development.md#engine-performance-budget`.
+- A green CI job does not prove budget enforcement: PR run 41548559113
+  (2026-11-02) reported success despite a throughput FAIL because implicit
+  `bash -e` let `tee` mask exit 1. Explicit `defaults.run.shell: bash` enables
+  pipefail. Regression coverage must execute the workflow's pipelines, not
+  just the comparator CLI, and cover failed benchmarks as well as over-budget
+  or changed-digest comparisons. The repair has controlled local proof;
+  repaired hosted enforcement remains unverified.
 - Record the candidate before building the reference so an incompatible
-  reference still leaves an adoptable measurement. Moving digests, accepting a
-  cost or retaining a speedup requires a reason and the candidate's own CI
-  artifact. Measure the durable PR head, not the ephemeral merge commit.
+  reference still leaves an adoptable measurement; upload follows in the final
+  always-run step. A controlled reference-build failure proves local adoption
+  with the real recording CLI, but copying the artifact path locally does not
+  prove GitHub transport after failure. Moving digests, accepting a cost or
+  retaining a speedup requires a reason and the candidate's own CI artifact.
+  Measure the durable PR head, not the ephemeral merge commit.
 - Compact full clone is retained because mutable state is dense, immutable
   definitions are shared, and clone-plus-undo and page-COW did not justify a
   production split under measured workloads.

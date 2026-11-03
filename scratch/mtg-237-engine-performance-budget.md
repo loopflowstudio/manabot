@@ -99,8 +99,9 @@ re-running the job is the recovery when digests match and the engine did not
 change. Open for later evidence, not this Task: the 10% figure and whether a
 dedicated runner is worth buying.
 
-Concept-review outcome (2026-11-02, after full-score repair): nothing to
-change and no open product choice requiring another implement pass. The
+Concept-review outcome (2026-11-02, after full-score and demo enforcement
+repairs at `79c623428`): nothing to change and no open product choice
+requiring another implement pass. The
 developer's interaction is one PR check and, for a deliberate change, one
 artifact adoption with a reason. Its concepts map directly to the existing
 APIs: the candidate and reference are `Run` values, `compare` produces the
@@ -120,13 +121,34 @@ The reference/workload interpretations remain explicit for Jack Heart's PR
 review, not newly approved here. Next proof remains the existing gate and
 PR-path checks; this review requests no code rewrite or execution restart.
 
+The demo's counterexample adds one invariant to that same interaction: a
+failed benchmark or comparison must fail the PR check even when its output
+is retained through `tee`. Explicit Bash now owns that propagation for all
+run steps; the existing Tests Result aggregate carries the failed job to the
+PR. No additional status, command or approval concept is needed. A successful
+candidate remains recoverable when only the reference build fails: its
+measurement is recorded first, then the final always-run upload retains it.
+A failed candidate benchmark instead leaves diagnostic output, not a complete
+adoptable measurement. These are consequences of the accepted failure and
+recovery contract, not new decisions attributed to Jack Heart. The local
+fixtures support this model; they do not replace the pending repaired hosted
+run or prove GitHub artifact transport after failure. Usage guidance already
+describes the same adoption command; only the retained PR wording correction
+is needed at publication. No skill instruction changes follow from this review.
+
 ## Current evidence and remaining work — 2026-11-02
 
 Implementation through `078d37ef4`, full-score digest repair `e5615edcc`,
-compression and sync are preserved at HEAD `24cfc0a8b`, which includes main
-`a8abf01b1`. Earlier realign/publication details and validation commands are
-retained at `24cfc0a8b:scratch/mtg-237-engine-performance-budget.md`;
-Engine memory remains for realign to reconcile.
+compression and sync are preserved at `24cfc0a8b`, which includes main
+`a8abf01b1`. The demo repair and regression coverage are committed at
+`79c623428`. Earlier realign/publication details and validation commands are
+retained at `24cfc0a8b:scratch/mtg-237-engine-performance-budget.md`.
+Reconciliation includes the upstream T5 decisions in Engine memory and the
+decklist contract in `AGENTS.md`; neither changes this repair's workload,
+digest or budget. Engine memory
+now preserves the pipeline-failure lesson and the distinction between local
+recovery and hosted artifact transport. No immediate child Wave directories
+or child memories exist under `.lf/wave/engine/` in this checkout.
 
 The baseline names `e5615edcc7f6a7f1ef7adf83ce1a15f8302ac0b9`, adopted from
 successful dispatch [41540798745](https://github.com/loopflowstudio/manabot/actions/runs/41540798745).
@@ -151,7 +173,7 @@ failed the throughput limit. Implicit `bash -e` let `tee` hide exit 1; replay
 with pipefail exits 1. The earlier passing run and CLI tests do not rebut this
 workflow defect. This is delegated headless judgment, not new human approval.
 
-The working repair sets job-level `defaults.run.shell: bash`, giving every
+The committed repair sets job-level `defaults.run.shell: bash`, giving every
 run step Actions' pipefail behavior. Workflow edits select Python regressions
 as well as Engine Budget. Eight cases execute the actual run bodies: pass,
 20% slowdown, faster-but-changed digest, four benchmark pipeline failures,
@@ -172,4 +194,4 @@ marginal measurement to hide this bug. First main-push verification remains
 post-merge. The same-runner reference and native-throughput interpretations
 still await Jack Heart's PR review. Shipping is not authorized.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 65 passed; focused Ruff lint/format and `git diff --check` pass. Gate owns broader affected suites; publication/demo owns the hosted proof above. `lf context` remains under both token and byte limits.
+Check: retained `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` → 65 passed, with focused Ruff lint/format passing; documentation-only reconciliation: `git diff --check` passes and `lf context` is within both limits. Gate owns broader affected suites; publication/demo owns hosted proof.
