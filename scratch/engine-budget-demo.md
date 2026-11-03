@@ -11,7 +11,70 @@ runs or supplied new feedback. Jack Heart's steer permits publication and demo,
 explicitly excluding shipping. No merge, Task completion, browser observation
 or HTML review is claimed.
 
-## Current result: retained speedup
+## Current result: decision pass 4 — advance
+
+Reviewed 2026-11-02 Pacific (2026-11-03 UTC). The preceding pass intended to
+retain the measured optimization, publish the adopted reference and corrected
+PR description, then verify that the published head passes against that
+reference. Those outcomes now hold. PR #413 publishes
+`fb590b3f9f0bf377e8f65a62a44c439403845550`; its description names the adopted
+reference and preserves both historical timings and failed/cancelled runs.
+Run 41558082651 was cancelled when this head replaced `7cfd0f17e`; that
+cancellation is superseded evidence, not an engine regression.
+
+[Run 41558633938, job 125664148484](https://github.com/loopflowstudio/manabot/actions/runs/41558633938/job/125664148484)
+completed **Engine Budget successfully**. Both release builds, both workloads,
+recording, comparison and upload passed. Its log contains candidate/reference
+summaries, explicit Bash pipefail and `PASS: within the recorded budget`.
+
+| Metric | Same-runner reference `4b5e9c0e4` | Candidate `fb590b3f9` | Result |
+|---|---:|---:|---|
+| Worst search reply | 9.843 s | 9.884 s | Pass |
+| Total search | 304.058 s | 303.632 s | Pass |
+| Step throughput | 9,441.6/s | 9,501.6/s | Pass |
+
+Both ran on one AMD EPYC 9V74 (4 vCPU, release). All three full-score
+digests, step digest, 512 games and 99,923 steps match the committed baseline.
+The engine, benchmark, workflow, comparator and focused-test sources have no
+diff from the adopted reference. These numbers establish the unchanged engine
+passing against its adopted reference, not a further speedup or cross-run
+comparison with the earlier Intel measurements.
+
+`gh run download 41558633938 --name engine-budget` retrieved
+[artifact 13195808276](https://github.com/loopflowstudio/manabot/actions/runs/41558633938/artifacts/13195808276).
+Its identity matches the exact PR head, run, date and runner. Replaying the
+real `compare` CLI exited 0 and matched the hosted output after removing log
+timestamps. The real `record --reason` CLI adopted that downloaded candidate
+into a temporary baseline; exact identity, every measurement and tolerance
+0.1 survived. Production reference remains `4b5e9c0e4`. An initial verification
+assertion compared timestamped hosted lines to plain CLI output; normalizing
+the log timestamps resolved that evidence-reader mismatch without any product
+change.
+
+Evidence: `.cache/engine-budget-demo/pass-4/` contains `pr-head/`,
+`pr-head.log`, `comparison.txt`, `record.txt`, `adopted-baseline.json`,
+`verified-result.json`, `pr.json`, `prior-run.json`, `run.json` and
+`artifacts.json`. The earlier controlled slowdown, changed-score and recovery
+proofs below still apply; unchanged code does not warrant another benchmark
+dispatch or duplicate test run. No artificial load was induced.
+
+**Delegated decision: advance.** The previously requested adoption and
+publication are complete, and the new hosted result closes the concrete demo
+gap. No repairable implementation or design gap remains in this experience.
+This is the agent's judgment standing in for Jack Heart under the headless
+instruction, not new human feedback or approval. No design change is proposed.
+
+At verification, debug Rust, Python, both conformance suites, Academy, clean
+Play, long integration and package/install checks passed. Main integration
+was still running, so the overall CI run and Tests Result were not yet proven
+successful. The next delivery review must inspect those final checks. After
+an authorized merge, verify main-push selection, comparison, summaries,
+artifact identity and Tests Result propagation. No merge, Task completion or
+shipping is authorized by this demo. Hosted reference-build-failure transport
+remains unexercised; its controlled recovery proof and hosted comparison-failure
+transport remain accurately scoped below.
+
+## Retained pass 3: speedup adoption
 
 [Run 41555845634, job 125654705413](https://github.com/loopflowstudio/manabot/actions/runs/41555845634/job/125654705413)
 passed at `4b5e9c0e4555627664721e7a4e6c909120cd98ac` on 2026-11-03 UTC.
@@ -45,7 +108,7 @@ the earlier accepted-cost and T4/T5/T6 evidence remain. Direct reconciliation
 checked identity, every measurement, digests/counts, tolerance and deltas.
 No runtime, workflow, benchmark or threshold changed.
 
-**Remaining:** PR #413 publishes adoption/docs at `7cfd0f17e`, but its
+**Superseded publication snapshot:** PR #413 published adoption/docs at `7cfd0f17e`, but its
 description still names the previous reference and says this speedup is pending.
 Update that description and publish final reconciliation edits. Run
 [41558082651](https://github.com/loopflowstudio/manabot/actions/runs/41558082651)

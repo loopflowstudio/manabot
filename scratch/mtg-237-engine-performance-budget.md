@@ -88,9 +88,9 @@ measurements. If reference compilation fails, the candidate recording survives
 for that same adoption path. `Run`, `Baseline` and CI execution already express
 these responsibilities without another approval object or persistent lifecycle.
 The retained speedup changes the reference, not this interaction or model.
-No implementation direction follows from this review. The next proof remains
-the published head's hosted comparison and artifact verification at demo;
-PR description correction remains publication work. This conclusion grants
+No implementation direction follows from this review. The then-pending hosted
+comparison, artifact verification and PR description correction are now complete
+as recorded below. This conclusion grants
 neither human acceptance of the interpretations nor shipping approval.
 
 ## Current implementation and remaining work
@@ -112,13 +112,16 @@ Wave memory now reflects this measured result. Origin main remains `51fbacbbf`;
 the engine, benchmarks, comparator, workflow and focused tests are unchanged
 since measured candidate `4b5e9c0e4`.
 
-PR #413 already publishes head `7cfd0f17e` containing the adoption and docs.
-Its description still names the previous reference and says the speedup is
-pending. Remaining publication work is that description correction, preserving
-older evidence, and any final reconciliation edits. Run **41558082651** is
-already measuring this head against the adopted reference; Engine Budget and
-the broader suites were in progress at reconciliation. Demo owns the result
-and artifact verification. Main-push verification is post-merge. Hosted
+PR #413 now publishes head `fb590b3f9` with adoption, docs and the corrected
+description. Run **41558082651** was cancelled when this head replaced
+`7cfd0f17e`. Decision pass 4 verified **41558633938**: Engine Budget passed
+against adopted reference `4b5e9c0e4`, all digests/counts matched, both summaries
+and pipefail were present, and the downloaded artifact named the exact head.
+Replayed comparison and temporary adoption passed with unchanged tolerance.
+The [demo record](engine-budget-demo.md) contains measurements and exact proof
+paths. Delegated judgment is **advance**; no implementation change is needed.
+Main integration and Tests Result were still pending at verification; inspect
+their final results before delivery. Main-push verification is post-merge. Hosted
 reference-build failure has only a controlled local proof; failed-job transport
 is proven after hosted comparison failure.
 
@@ -130,4 +133,46 @@ arose from this reconciliation.
 
 Check: `uv run --no-project python` artifact reconciliation, `git diff --check`
 and `lf context` pass; unchanged implementation retains 65 focused test passes;
-hosted run 41558082651 result/artifact verification remains with demo.
+hosted run 41558633938 result/artifact verification passed at demo.
+
+## Gate — 2026-11-02, pass 4
+
+Reviewed the branch against checkout base `51fbacbbf`, including the uncommitted
+pass-4 demo notes. No implementation defect found. Clarified the development
+guide: matching digests and unchanged engine code warrant investigation and a
+rerun, not an automatic conclusion of runner noise or a wider tolerance.
+
+Validation plan by changed path:
+
+- `.github/ci/select-tests.sh`, both CI workflows, `scripts/engine_budget.py`
+  and their two infra test modules reach selection, comparison, recording and
+  pipeline failure propagation. Their bytes are unchanged from `4b5e9c0e4`;
+  retain the 65 focused passes and earlier actionlint/Ruff results.
+- `managym/Cargo.toml` and the three benchmark source files reach debug digest
+  tests, formatting/Clippy and hosted release measurements. They and all native
+  source are unchanged from that head; retain earlier debug/static checks.
+  Current-head hosted Rust Tests and Engine Budget both passed.
+- The adopted `managym/perf/baseline.json` reaches Engine Budget and the baseline
+  fixture assertion. Current-head hosted Python Unit Tests and Engine Budget
+  passed; pass-4 artifact reconciliation verifies the adopted reference. Reuse
+  that evidence rather than dispatch another measurement.
+- Agent guidance, development docs, Wave memory and scratch notes have no code
+  reach. This gate edits only the guide and local notes; check whitespace and
+  selection, with no browser build or native extension rebuild required.
+
+Checks: `git diff --name-only -z 4b5e9c0e4 | bash .github/ci/select-tests.sh`
+selected only Engine Budget (the changed baseline), already passed in hosted
+run 41558633938. `git diff --check` passed. No duplicated test/build run or
+artificial load was started.
+
+`gh pr view 413 --json headRefOid,baseRefName,state,statusCheckRollup` confirmed
+open head `fb590b3f9`, with debug Rust, Python, conformance, Academy, clean Play,
+long integration and package/install checks successful. Main integration was
+still executing its Two-seat and Etude evaluation step; Tests Result is pending,
+not passed or timed out. CI owns those remaining results.
+
+Delivery context: the current PR body still says pass-4 demo verification is
+pending. The next publication step must reconcile that wording with the completed
+demo evidence and retain the main-integration/Tests Result qualification until
+they finish. Main-push verification remains post-merge. Gate does not authorize
+merge or Task completion; Jack Heart's publication/demo boundary still applies.

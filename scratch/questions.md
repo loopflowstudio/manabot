@@ -24,8 +24,12 @@ Headless decisions below are delegated judgment, not human statements.
 - Keep merged main `51fbacbbf`'s optimization. Run 41555845634 demonstrated
   30.26% less worst-reply time, 28.36% less total search time and 36.65% less
   time per step, with matching digests/counts. Production adoption and its
-  publication at `7cfd0f17e` are complete; PR text correction and demo verification
-  remain. The [design](mtg-237-engine-performance-budget.md)
+  publication at `fb590b3f9`, PR text correction and pass-4 demo verification
+  are complete. Run 41558633938 passed Engine Budget against the adopted
+  reference; exact artifact identity, comparison replay and temporary adoption
+  passed. Delegated judgment advances demo, without shipping approval; final
+  main-integration/Tests Result and post-merge verification remain. The
+  [design](mtg-237-engine-performance-budget.md)
   and [demo evidence](engine-budget-demo.md) own details.
 
 Inherited MTG-236 decisions (including deferred interning and quiet-machine

@@ -236,8 +236,8 @@ cost is accepted; or a speedup is kept, so later slowdowns are budgeted
 against the faster engine rather than allowed back up to the old reference.
 The PR body cites the delta from the run it adopts; the recording commit's
 own run then compares the same engine with that reference and passes. When
-both digests match and the engine did not change, a failure is runner noise:
-re-run the job.
+both digests match and the engine did not change, investigate the failure and
+re-run the job before attributing it to runner noise; do not widen the tolerance.
 
 ```bash
 gh run download <run-id> --name engine-budget --dir .cache/engine-budget
