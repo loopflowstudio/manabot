@@ -33,7 +33,7 @@ impl Game {
             // again before putting waiting triggers on the stack.
             if self.perform_state_based_actions() {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.state.turn.cleanup_priority = true;
+                    self.state.set_cleanup_priority(true);
                 }
                 if self.is_game_over() {
                     return None;
@@ -53,7 +53,7 @@ impl Game {
             let had_waiting_triggers = !self.state.pending_triggers.is_empty();
             if had_waiting_triggers {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.state.turn.cleanup_priority = true;
+                    self.state.set_cleanup_priority(true);
                 }
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);

@@ -70,33 +70,39 @@ place, whereas earlier worlds remain frozen.
 
 # T5 questions and assumptions
 
-Accepted decisions and pending checks live in
-[jack-heart/a7234f-tla-t5-permanent.md](jack-heart/a7234f-tla-t5-permanent.md).
-Historical parent notes (D1, T2–T4, archive/CI work and MTG-214's Wave rename)
-are evidence, not directions for T5. Complete pre-compression notes:
-`bbb5101eb:scratch/questions.md`; older stacked notes:
-`1e9fd2d7c:scratch/questions.md` (lines 5–472).
+# Questions and assumptions
 
-## Current implementation assumptions
+## MTG-237 — headless, 2026-11-02
 
-- Surveil reuses LookAndSelect: select moves the inspected card to the
-  graveyard, decline keeps it. Kept cards retain order; exact for surveil 1,
-  the only amount authored. Supporting larger amounts needs ordering choices.
-- Copy exceptions share `Modification` with continuous records. The protocol
-  calls the field `copy_of` because Pydantic's `BaseModel.copy` occupies `copy`.
-- Airship uses self-relative `CreatureWithNamesakes` because
-  `check_static_condition` has no source. It reads private layer stages,
-  never recursively reads `characteristics()` during layer computation.
-- T4 owns `PlayerTurnHistory`, sacrifice bookkeeping and its column after
-  attacked. Text uses singular/plural correctly; no retained fixture holds
-  the old “1 permanents” / “1 cards” wording.
-- The engine measured 314 supported definitions (257 TLA eligible plus 57
-  others; four TLA and one ths unsupported). Earlier 239/266 notes were
-  pre-sync or based on stale main counts, not current measurements.
-- The permanent row's name/creature-types fields are Aura-set markers; the
-  card row states layered characteristics. Ward is printed unless abilities
-  are lost; no authored effect grants ward. Text and mana cost stay printed
-  until a modification changes them, then join `Characteristics`.
+Jack Heart's steer permits publication and demo, without shipping approval.
+Headless decisions below are delegated judgment, not human statements.
+
+- Interpret the committed baseline as a reference commit measured A/B on one
+  runner: identical code varied 6.8k–10.3k steps/s across CPU models. Retain
+  10%; two EPYC 7763 runs agreed within 2.5%. Jack Heart's PR review decides
+  this interpretation and the native-throughput interpretation below.
+- Use native `Env::step` random-legal play, 512 seeds, skip_trivial on. The
+  retired rul-9 Python semantic-Command runner was deleted in #343; its 588.5
+  steps/s is not comparable. Every ordered search score is part of correctness,
+  including losing scores. Rules/deck/benchmark changes reaching this workload
+  require a deliberate reference move when digests change.
+- A CI job owns its VM; pin `ubuntu-24.04`, report the CPU, and compare only
+  within it. Candidate-first order preserves recovery when the reference no
+  longer builds; retain it absent evidence of bias exceeding tolerance.
+- `measurement.json` identifies the candidate; `record` ignores the nested
+  reference run and preserves tolerance. Reference-build recovery is tested
+  with injected binaries/Cargo failure/metadata and a copy of the upload path;
+  only comparison-failure transport has hosted proof.
+- Keep merged main `51fbacbbf`'s optimization. Run 41555845634 demonstrated
+  30.26% less worst-reply time, 28.36% less total search time and 36.65% less
+  time per step, with matching digests/counts. Production adoption and its
+  publication at `fb590b3f9`, PR text correction and pass-4 demo verification
+  are complete. Run 41558633938 passed Engine Budget against the adopted
+  reference; exact artifact identity, comparison replay and temporary adoption
+  passed. Delegated judgment advances demo, without shipping approval; final
+  main-integration/Tests Result and post-merge verification remain. The
+  [design](mtg-237-engine-performance-budget.md)
+  and [demo evidence](engine-budget-demo.md) own details.
 
 ## Reversible choice awaiting a separate product decision
 
@@ -184,3 +190,27 @@ names to ObjectSelector; ChooseObject keeps code 4 and Surveil adds code 22.
 Current w17 evidence must be regenerated from the combined implementation,
 retaining authored commands and choice prefixes. Historical evidence stays fixed.
 The T5 shipping stop quoted above is historical context for its own delivery.
+
+Inherited MTG-236 decisions (including deferred interning and quiet-machine
+absolute targets) are at `51fbacbbf:scratch/questions.md`. T5/decklist assumptions,
+the unresolved printed-P/T decision and sync evidence are at
+`24cfc0a8b:scratch/questions.md`; older Wave/evaluation context is at
+`460732f81:scratch/questions.md`. They select no MTG-237 work. Full preceding
+MTG-237 assumptions, including the temporary T6 measurement ref (now deleted),
+are at `4b5e9c0e4:scratch/questions.md`. Pre-curation uncommitted notes are
+preserved under `.cache/engine-budget-demo/pre-compress-4b5e9c0e4/`.
+
+## Sync onto main a1a02a76f — 2026-11-02
+
+Preserve MTG-235's selector/value/Chosen model while retaining incoming typed
+state accessors and cache revisions. Transfer mana-pool writes to the unified
+AddMana arm and pending-decision writes to ChooseObject and Surveil. Removed
+fused effects stay removed; generic Move and Untap already own their behavior.
+Both branches' notes remain evidence, not new scope. Regenerate the two current
+w17 parity receipts from the combined source; historical receipts remain fixed.
+The waiting sync caller owns the push and broader gate validation.
+
+The duplicate local untap helper is removed in favor of main's shared
+cache-aware implementation. The rebuilt cp312 extension was installed
+atomically. Regenerated receipts differ from HEAD only in source manifests:
+142 authored commands, 69 public commitments, zero gaps, unchanged behavior.

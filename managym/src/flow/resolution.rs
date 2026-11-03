@@ -188,7 +188,7 @@ impl Game {
         let Some(index) = self.find_ability_on_stack_index(id) else {
             return;
         };
-        let ability = self.state.stack_objects.remove(index);
+        let ability = self.state.stack_objects_mut().remove(index);
         let source_card = match &ability {
             StackObject::ActivatedAbility(ability) => ability.source_card,
             StackObject::TriggeredAbility(ability) => ability.source_card,
@@ -1114,11 +1114,10 @@ impl Game {
             } => {
                 let count = self.effect_value(amount, frame).max(0);
                 self.invalidate_mana_cache(frame.controller);
-                let player = &mut self.state.players[frame.controller.0];
                 let pool = if *until_end_of_combat {
-                    &mut player.combat_mana_pool
+                    self.state.combat_mana_pool_mut(frame.controller)
                 } else {
-                    &mut player.mana_pool
+                    self.state.mana_pool_mut(frame.controller)
                 };
                 for _ in 0..count {
                     pool.add(mana);
@@ -1810,14 +1809,6 @@ impl Game {
             .filter(|after| Some(*after) != before)
     }
 
-    fn untap_permanent(&mut self, permanent_id: PermanentId) {
-        if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-            permanent.untap();
-            let controller = permanent.controller;
-            self.invalidate_mana_cache(controller);
-        }
-    }
-
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
@@ -1830,7 +1821,7 @@ impl Game {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
-        let timestamp = self.state.id_gen.next_id();
+        let timestamp = self.state.id_gen_mut().next_id();
         if let Some(equipment) = self.source_permanent_mut(frame) {
             equipment.attached_to = Some(object);
             // CR 613.7e: an attachment receives a new timestamp.

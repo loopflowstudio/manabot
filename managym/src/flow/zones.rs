@@ -208,18 +208,14 @@ impl Game {
             {
                 continue;
             }
-            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                permanent.untap();
-            }
+            self.state.untap(permanent_id);
         }
         self.invalidate_mana_cache(player);
     }
 
     pub(crate) fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                permanent.summoning_sick = false;
-            }
+            self.state.clear_summoning_sickness(permanent_id);
         }
     }
 
@@ -251,14 +247,12 @@ impl Game {
     /// untapped-to-tapped transition (CR 603.10-style "becomes tapped").
     /// Returns whether the permanent transitioned.
     pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
-        let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
+        let Some(controller) = self.permanent_controller(permanent_id) else {
             return false;
         };
-        if permanent.tapped {
+        if !self.state.tap(permanent_id) {
             return false;
         }
-        permanent.tap();
-        let controller = permanent.controller;
         self.invalidate_mana_cache(controller);
         self.emit(GameEvent::PermanentTapped {
             permanent: permanent_id,
@@ -289,9 +283,23 @@ impl Game {
         produced
     }
 
+    /// Untap a permanent; its controller's producible mana changes.
+    pub(crate) fn untap_permanent(&mut self, permanent_id: PermanentId) {
+        if let Some(controller) = self.permanent_controller(permanent_id) {
+            self.state.untap(permanent_id);
+            self.invalidate_mana_cache(controller);
+        }
+    }
+
+    fn permanent_controller(&self, permanent_id: PermanentId) -> Option<PlayerId> {
+        self.state.permanents[permanent_id]
+            .as_ref()
+            .map(|permanent| permanent.controller)
+    }
+
     fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
         let produced = self.tap_mana_bonus(tapped, controller);
-        self.state.players[controller.0].mana_pool.add(&produced);
+        self.state.mana_pool_mut(controller).add(&produced);
     }
 
     /// Create a token from a registered token definition under `controller`'s
@@ -304,7 +312,7 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
-        let object_id = self.state.id_gen.next_id();
+        let object_id = self.state.id_gen_mut().next_id();
         let Some(card) = self.state.content.instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
             return None;
@@ -414,9 +422,9 @@ impl Game {
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
-        self.state.pending_events.push(event.clone());
-        self.state.observation_events.push(event.clone());
-        self.state.events.push(event);
+        self.state.pending_events_mut().push(event.clone());
+        self.state.observation_events_mut().push(event.clone());
+        self.state.events_mut().push(event);
     }
 
     /// Publish an additive viewer fact in the committed observation window
@@ -424,7 +432,7 @@ impl Game {
     /// Presentation projection consumes these facts; policy encoders filter
     /// their event types.
     pub(crate) fn emit_observation_event(&mut self, event: GameEvent) {
-        self.state.observation_events.push(event);
+        self.state.observation_events_mut().push(event);
     }
 
     pub(crate) fn push_spell_to_stack(
@@ -438,10 +446,10 @@ impl Game {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
         self.move_card(card, ZoneType::Stack);
-        let id = self.state.id_gen.next_id();
+        let id = self.state.id_gen_mut().next_id();
         let source_definition_id = self.state.cards[card].definition_id;
         self.state
-            .stack_objects
+            .stack_objects_mut()
             .push(StackObject::Spell(SpellOnStack {
                 id,
                 card,
@@ -458,11 +466,11 @@ impl Game {
     }
 
     pub(crate) fn push_to_stack(&mut self, stack_object: StackObject) {
-        self.state.stack_objects.push(stack_object);
+        self.state.stack_objects_mut().push(stack_object);
     }
 
     pub(crate) fn pop_stack(&mut self) -> Option<StackObject> {
-        self.state.stack_objects.pop()
+        self.state.stack_objects_mut().pop()
     }
 
     pub(crate) fn stack_is_empty(&self) -> bool {
@@ -538,8 +546,8 @@ impl Game {
             None
         };
 
-        if old_zone.is_some() {
-            self.advance_object_incarnation(card);
+        if let Some(old_zone) = old_zone {
+            self.state.advance_incarnation(card, old_zone);
         }
 
         if old_zone == Some(ZoneType::Battlefield) {
@@ -557,7 +565,7 @@ impl Game {
         let cast_spell = (old_zone == Some(ZoneType::Stack))
             .then(|| self.find_spell_on_stack_index(card))
             .flatten()
-            .map(|index| self.state.stack_objects.remove(index));
+            .map(|index| self.state.stack_objects_mut().remove(index));
         let was_cast = cast_spell.is_some();
         let cast_x = match cast_spell {
             Some(StackObject::Spell(spell)) => spell.x,
@@ -568,12 +576,15 @@ impl Game {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
-        self.state.zones.move_card(card, holder, to_zone);
+        self.state.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
             let permanent_id = PermanentId(self.state.permanents.len());
-            let mut permanent =
-                Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
+            let mut permanent = Permanent::new(
+                self.state.id_gen_mut().next_id(),
+                card,
+                &self.state.cards[card],
+            );
             permanent.controller = holder;
             permanent.was_cast = was_cast;
             permanent.cast_x = cast_x;
@@ -668,7 +679,7 @@ impl Game {
                 std::mem::take(&mut self.state.delayed_triggers)
                     .into_iter()
                     .partition(watches);
-            self.state.delayed_triggers = kept;
+            *self.state.delayed_triggers_mut() = kept;
             let departed = departing_ref
                 .and_then(|object_ref| self.object_lki(object_ref))
                 .map(|lki| Target::Permanent(lki.permanent));
