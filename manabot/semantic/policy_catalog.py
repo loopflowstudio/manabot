@@ -1,14 +1,14 @@
 """Explicit native/semantic bindings admitted for ordinary policy encoders.
 
 A policy catalog is not inferred from card names or tensor dimensions. A
-policy names its vocabulary (``ModelConfig.world``) from the registered names;
-every name binds the world's one catalog, whose pool descriptor supplies the
+policy names its vocabulary (``ModelConfig.world``) with an accepted label;
+every label binds the world's one catalog, whose pool descriptor supplies the
 transport IDs and content digest the engine's learning catalog must match
 before any IDs reach the encoder.
 """
 
 from manabot.semantic.learning import (
-    CURRENT_PACK_KEYS,
+    FROZEN_VOCABULARY_LABELS,
     BoundSemanticPack,
     ContentPackBindingError,
 )
@@ -17,7 +17,7 @@ import managym
 
 def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
     """Admit the engine's catalog against the world pool's native descriptor."""
-    if pack_key not in CURRENT_PACK_KEYS:
+    if pack_key not in FROZEN_VOCABULARY_LABELS:
         raise ValueError(f"unsupported policy semantic pack: {pack_key}")
     pool = managym.content_pool(managym.WORLD_SETUP)
     manifest = {

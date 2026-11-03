@@ -134,15 +134,58 @@ class SemanticCardEncoder(nn.Module):
             ids, len(self.definition_rows), self.definition_rows
         )
 
-    def definitions(self) -> torch.Tensor:
-        """Encode the immutable catalog once for visible and historical references."""
-        tokens = self.token_embedding(self.tokens)
+    def definitions(self, referenced: torch.Tensor | None = None) -> torch.Tensor:
+        """Encode catalog programs into a [definitions + 1, hidden] table; row 0
+        is the zero padding row and every consumer indexes by catalog row + 1.
+
+        With `referenced` (catalog rows + 1, any shape, duplicates allowed),
+        only those programs run through the GRU and the rest of the table is
+        zero. Each program is encoded independently, so referenced rows equal
+        the full encoding and parameter gradients are identical: unreferenced
+        rows receive none. Training uses this because the catalog grows with
+        the world while a batch references a small subset; inference caches
+        the full table once per policy scope instead.
+        """
+        if referenced is None:
+            selected = None
+            tokens, lengths = self.tokens, self.lengths
+        else:
+            selected = referenced[referenced > 0].unique()
+            tokens = self.tokens[selected - 1]
+            lengths = self.lengths[selected - 1]
+        width = self.token_embedding.embedding_dim
+        if selected is not None and len(selected) == 0:
+            return self.token_embedding.weight.new_zeros((len(self.tokens) + 1, width))
         packed = nn.utils.rnn.pack_padded_sequence(
-            tokens, self.lengths.cpu(), batch_first=True, enforce_sorted=False
+            self.token_embedding(tokens),
+            lengths.cpu(),
+            batch_first=True,
+            enforce_sorted=False,
         )
         _, state = self.encoder(packed)
-        definitions = torch.cat((state.new_zeros((1, state.shape[-1])), state[0]))
-        return definitions
+        if selected is None:
+            return torch.cat((state.new_zeros((1, width)), state[0]))
+        return state.new_zeros((len(self.tokens) + 1, width)).index_copy(
+            0, selected, state[0]
+        )
+
+    def referenced_rows(self, ids: list[torch.Tensor]) -> torch.Tensor:
+        """Catalog rows + 1 named by admissible transport IDs in `ids`.
+
+        Inadmissible IDs are skipped here, not rejected: each consumer admits
+        its own references and raises its own error, and padding is ignored.
+        """
+        found = []
+        for values in ids:
+            values = values.reshape(-1)
+            admissible = (
+                (values == values.floor())
+                & (values >= 0)
+                & (values < len(self.definition_rows))
+            )
+            found.append(self.definition_rows[values[admissible].long()])
+        rows = torch.cat(found)
+        return rows[rows > 0]
 
     def embed_definitions(
         self, ids: torch.Tensor, definitions: torch.Tensor

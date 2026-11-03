@@ -99,8 +99,8 @@ weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
-For the compiled Allies/Lessons matchup, use
-`ModelConfig(world="ur-lessons-vs-gw-allies")`. The ordinary model joins
+For the semantic card model, use `ModelConfig(world="world")`. The ordinary
+model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots, and v5 `decklists` rows hold
@@ -310,8 +310,10 @@ counts describe representation cost, not observed learning difficulty.
 `manabot.semantic.policy_catalog` owns explicit native admission. Policy
 construction checks the engine's learning catalog against the world pool's
 content digest and complete native coverage before joining transport IDs. A
-policy names its vocabulary from `CURRENT_PACK_KEYS`; every name binds the
-world's one catalog.
+policy has one vocabulary, the world's catalog: fresh recipes write
+`ModelConfig(world="world")`, and the older labels in
+`FROZEN_VOCABULARY_LABELS` are accepted on read, unchanged, because frozen
+recipes and architecture receipts record them.
 
 ### Explicit research evaluation matrices
 

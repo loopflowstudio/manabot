@@ -25,10 +25,12 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
 SCHEMA_VERSION = 10
 
-# Names a policy's semantic vocabulary (``ModelConfig.world``) may carry. Every
-# name binds the world's one catalog; the authored setup names remain because
-# frozen recipes, regimes and checkpoints record them.
-CURRENT_PACK_KEYS = frozenset(
+# Labels accepted on read for a policy's semantic vocabulary
+# (``ModelConfig.world``). There is one vocabulary, the world's catalog, and
+# every label binds it; fresh recipes write ``"world"``. The authored setup
+# names are kept byte-for-byte because frozen recipes, regimes, checkpoints and
+# architecture receipts record them. The set never grows.
+FROZEN_VOCABULARY_LABELS = frozenset(
     {
         "world",
         "tla-baseline-v1",
@@ -779,7 +781,7 @@ __all__ = [
     "ArtifactCompatibilityError",
     "BoundSemanticPack",
     "ContentPackBindingError",
-    "CURRENT_PACK_KEYS",
+    "FROZEN_VOCABULARY_LABELS",
     "DEFAULT_SCHEMA_PATH",
     "LearningSchema",
     "PROGRAM_KINDS",

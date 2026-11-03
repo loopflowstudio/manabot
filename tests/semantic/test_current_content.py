@@ -11,7 +11,7 @@ from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
-from manabot.semantic.learning import CURRENT_PACK_KEYS, BoundSemanticPack
+from manabot.semantic.learning import FROZEN_VOCABULARY_LABELS, BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -33,7 +33,7 @@ def _manifest() -> dict:
 
 def test_the_catalog_binds_learning_projections() -> None:
     pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"world"}
-    assert CURRENT_PACK_KEYS <= pack_keys
+    assert FROZEN_VOCABULARY_LABELS <= pack_keys
     manifest = _manifest()
     bound = BoundSemanticPack.bind(manifest)
     assert bound.definition_count == len(manifest["definitions"])

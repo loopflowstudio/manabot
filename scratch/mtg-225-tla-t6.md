@@ -94,15 +94,45 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 - MTG-235 #412 (effect vocabulary, 66 files) is still open and overlaps T6. No
   order between it and T6 is recorded.
 
+## Concept review (headless, 2026-11-02): learner cost and vocabulary labels — done
+
+Both directions are implemented; neither changes rules, observations or frozen
+evidence.
+
+1. **Learning encodes only referenced definitions.** With autograd on,
+   `ActorCritic._referenced_definitions` collects every catalog row a batch can
+   index (visible cards, permanents, known hands, decklists, public history,
+   relations) and `SemanticCardEncoder.definitions(referenced)` runs the GRU
+   over those programs only, scattering them into the full-size table (other
+   rows zero). Without autograd, and in `PolicyInference`'s cached table, the
+   full catalog is still encoded: the subset GRU differs from the full one by
+   ~1e-8 rounding, and unprepared no-grad inference must stay bitwise equal to
+   serving (`test_scope_rejects_autograd_closed_and_changed_policy`). Proof:
+   `test_training_encodes_only_referenced_definitions_without_changing_learning`
+   (outputs and parameter gradients within 1e-6/1e-5; unreferenced rows are
+   poisoned with NaN and every source gets a definition no other source names,
+   so dropping any source fails it). The worker test runs in 5.6 s (30 s timeout
+   with the change disabled), with its regime and limit unchanged.
+2. **`CURRENT_PACK_KEYS` is now `FROZEN_VOCABULARY_LABELS`.** Same nine values,
+   byte-for-byte. Documented in `learning.py`, `ModelConfig.world` and the
+   manabot README: one vocabulary, fresh recipes write `world`, older labels
+   are accepted on read. Setup names (`AuthoredMatchup(pack_key=...)`,
+   `AuthoredSetup`) are unchanged. `execution.py` still requires the
+   `elemental-world-v2` label for the `elemental-uniform` curriculum (a frozen
+   regime check, left as it is).
+
+Still blocked on delivery order, not design: #414 (MTG-238) is open, so the
+crate move/Keywords integration and the w17 re-record wait for it. #412
+(MTG-235) is open with no recorded order against T6.
+
 ## Decisions for Jack Heart's review
 
-- **One-catalog encoder cost.** Every vocabulary name now binds the world catalog
-  (cost below), so `test_etude_job.py::test_worker_runs_real_learner_and_reports_admitted_policy`
-  exceeds its 30 s limit (rechecked on HEAD, 2026-11-02). Choice: accept the
-  world-sized encoder and change the test's regime or limit, or have an authored
-  policy encode only its decks' definitions over the catalog's rows. Left failing.
 - **Retained authored-pack checkpoints.** Setup-bound checkpoints of authored
-  packs no longer load (Compatibility, below). Accept, or add a reader.
+  packs no longer load (Compatibility, below); their token-embedding shapes
+  were sized to pack vocabularies. Losing this follows from the accepted
+  one-catalog decision and is reversible (the files remain; a reader can be
+  added later). Question for Jack Heart: accept, or add a reader that maps
+  their vocabulary onto the catalog? Not blocking implementation.
 - **Copy of a transformed permanent.** Follows CR 707.8a rather than the earlier
   "cannot transform" proposal; a house rule would need to be requested.
 - **Back-face colors** follow Scryfall face data (questions.md); check them
@@ -110,7 +140,10 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 
 ## Check
 
-2026-11-02, after merging main `a1a02a76f`: `cargo build --release --examples` passes; `grep 'pub content' managym/src/flow/game.rs` is empty. Earlier, `GameState.content` removed: debug `cargo test --lib --tests
+2026-11-02, referenced encoding and label rename: `pytest tests/model/test_inference.py
+tests/model/test_recent_events.py tests/model/test_policy_catalog.py
+tests/semantic/test_current_content.py` plus the worker test: 49 passed, 1 skipped
+(extension not rebuilt). 2026-11-02, after merging main `a1a02a76f`: `cargo build --release --examples` passes; `grep 'pub content' managym/src/flow/game.rs` is empty. Earlier, `GameState.content` removed: debug `cargo test --lib --tests
 --no-fail-fast` fails only `checked_semantic_conformance_evidence_reproduces`
 (re-record), `--test cards` 526 passed, clippy clean; catalog digest
 `02ac498d…2634`, length 355 and manifest hash `b8945b35…7a3c` match the
@@ -152,7 +185,7 @@ later card merges moved the digest as intended: on HEAD it is `02ac498d…2634`,
 and `CARD_DEFINITION_COUNT` = 355 = catalog length (330 eligible, 25 not deck
 entries, including 8 back faces).
 
-Measured cost, for Jack Heart to decide: authored vocabulary names now bind the
+Measured cost (addressed by concept-review direction 1 above): authored vocabulary names now bind the
 345-row world catalog. `SemanticCardEncoder("ur-lessons-vs-gw-allies", 64)`
 goes from 31 definitions / 3,598 expanded tokens / 4.9 ms per `definitions()` to
 345 / 51,909 / 45.3 ms (`elemental-world-v2` was 100 / 14,097 / 20.5 ms). The

@@ -190,9 +190,10 @@ class ModelConfig(BaseConfig):
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
-    # The semantic vocabulary the model reads, by a registered name
-    # (`CURRENT_PACK_KEYS`); every name binds the world's one catalog. Frozen
-    # checkpoints and recipes name it `semantic_pack`.
+    # The semantic vocabulary the model reads: the world's one catalog. Fresh
+    # recipes write "world"; older labels in `FROZEN_VOCABULARY_LABELS` are
+    # accepted on read and bind the same catalog. Frozen checkpoints and
+    # recipes name the field `semantic_pack`.
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "semantic_pack")
     )
