@@ -50,7 +50,6 @@ use std::{
 };
 
 use crate::{
-    cards::content_pack::default_content_pack,
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
@@ -1496,10 +1495,7 @@ impl Game {
         if !lost {
             abilities = card.activated_abilities.clone();
             // Inherited abilities follow the printed ones (Koh).
-            if let Some(definition) = self
-                .inherited_definition(permanent)
-                .and_then(|id| default_content_pack().definition(id))
-            {
+            if let Some(definition) = self.inherited_definition(permanent) {
                 abilities.extend(definition.activated_abilities.iter().cloned());
             }
             self.extend_own_abilities(permanent, basis, is_land, sources, &mut abilities);

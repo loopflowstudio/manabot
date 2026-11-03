@@ -45,18 +45,6 @@ pub struct ContentPack {
     public_definitions: OnceLock<Vec<serde_json::Value>>,
 }
 
-/// Every current card from `cardsets/` and the rules fixtures, in name order.
-fn default_order() -> Vec<CardDefinition> {
-    crate::cardsets::catalog()
-        .iter()
-        .cloned()
-        .chain([fixtures::crossroads_of_destiny()])
-        .map(|definition| (definition.name.clone(), definition))
-        .collect::<BTreeMap<_, _>>()
-        .into_values()
-        .collect()
-}
-
 static DEFAULT_CONTENT_PACK: OnceLock<ContentPack> = OnceLock::new();
 
 /// The process-wide catalog every match, authored setup and search fork reads.
@@ -102,19 +90,25 @@ impl ContentPack {
     }
 }
 
-/// A freshly allocated catalog. Matches share [`default_content_pack`]; a
+/// A freshly allocated catalog: every current card from `cardsets/` and the
+/// rules fixtures, in name order. Matches share [`default_content_pack`]; a
 /// separate allocation exists to show that match state identity ignores it.
 impl Default for ContentPack {
     fn default() -> Self {
-        let definitions = default_order();
+        let by_name = crate::cardsets::catalog()
+            .iter()
+            .cloned()
+            .chain([fixtures::crossroads_of_destiny()])
+            .map(|definition| (definition.name.clone(), definition))
+            .collect::<BTreeMap<_, _>>();
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             cards_by_name: BTreeMap::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
-            definitions: Vec::with_capacity(definitions.len()),
+            definitions: Vec::with_capacity(by_name.len()),
         };
-        for definition in definitions {
+        for definition in by_name.into_values() {
             out.register_card(definition);
         }
         out

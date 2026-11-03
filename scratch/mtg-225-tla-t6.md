@@ -68,6 +68,12 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 
 - `Effect::ExileTopCardPlayThisTurn`: replaced by `ExileTopCardsToPlay {
   count, until: PlayWindow }`. Done.
+- Compress pass (2026-11-02), done: admission's runtime-content argument and
+  its unreachable token/missing-definition arms (the pool marks them
+  ineligible), `learning_schema_path` and its pack-key argument, `default_order`,
+  `scratch/tools/`. `Game::inherited_definition` returns the catalog row.
+- Candidate, not taken: `BoundSemanticPack.pad_catalog` has no production
+  caller (tests only); deleting it means reworking 7 projection tests.
 
 ## Remaining
 
@@ -103,7 +109,10 @@ is over. T5 head `2df025c20` was the merge base for that sync.
 --no-fail-fast` fails only `checked_semantic_conformance_evidence_reproduces`
 (re-record), `--test cards` 526 passed, clippy clean; catalog digest
 `02ac498d…2634`, length 355 and manifest hash `b8945b35…7a3c` match the
-pre-change commit `a44219dc1`. pytest and Academy UI have not run since the sync
+pre-change commit `a44219dc1`. After the compress pass: same debug result
+(only that test fails), clippy clean, digest `02ac498d…2634` and length 355
+unchanged; `pytest tests/model/test_world.py tests/model/test_policy_catalog.py
+tests/test_package_boundaries.py` 31 passed (extension not rebuilt; gate owns it). pytest and Academy UI have not run since the sync
 onto main (last broad pytest before it: 22 Academy digest/identity failures).
 
 ## One catalog (steer b222da8f)

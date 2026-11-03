@@ -244,9 +244,7 @@ impl Game {
             .activated_abilities;
         printed.get(ability.ability_index).or_else(|| {
             let permanent = self.lookup_current_permanent(ability.source_ref).ok()?;
-            let inherited = self.inherited_definition(permanent)?;
-            default_content_pack()
-                .definition(inherited)?
+            self.inherited_definition(permanent)?
                 .activated_abilities
                 .get(ability.ability_index - printed.len())
         })

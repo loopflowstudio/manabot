@@ -3409,7 +3409,8 @@ impl PyEnv {
         Ok(py_dict.into_any().unbind())
     }
 
-    /// Read-only binding manifest of the catalog the current match runs on. This is deliberately not repeated on observations.
+    /// Read-only binding manifest of the catalog the current match runs on.
+    /// This is deliberately not repeated on observations.
     fn content_pack_manifest(&self, py: Python<'_>) -> PyResult<PyObject> {
         let env = self
             .inner
@@ -4117,7 +4118,7 @@ fn unsupported_cards(names: Vec<String>) -> Vec<String> {
 #[pyfunction]
 fn learning_catalog(py: Python<'_>) -> PyResult<PyObject> {
     let content = crate::cards::content_pack::default_content_pack();
-    let catalog = crate::cards::tokens::learning_catalog(&content)
+    let catalog = crate::cards::tokens::learning_catalog(content)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("content_digest", content.content_digest())?;

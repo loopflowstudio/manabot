@@ -19,8 +19,7 @@ from typing import Any
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
-from manabot.semantic.learning import BoundSemanticPack
-from manabot.semantic.policy_catalog import learning_schema_path
+from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
 
 WORLD = managym.WORLD_VERSION
@@ -133,8 +132,8 @@ def _input_binding(observation_space: Any) -> dict:
     }
 
 
-def _schema_file_digest(pack_key: str | None) -> str:
-    return hashlib.sha256(learning_schema_path(pack_key).read_bytes()).hexdigest()
+def _schema_file_digest() -> str:
+    return hashlib.sha256(DEFAULT_SCHEMA_PATH.read_bytes()).hexdigest()
 
 
 def deck_world(observation_space: Any) -> dict:
@@ -145,7 +144,7 @@ def deck_world(observation_space: Any) -> dict:
     return {
         **_input_binding(observation_space),
         "world_digest": managym.world_identity()["card_digest"],
-        "learning_schema_sha256": _schema_file_digest(managym.WORLD_SETUP),
+        "learning_schema_sha256": _schema_file_digest(),
     }
 
 
@@ -179,7 +178,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         "learning_schema_sha256": (
             _digest(BoundSemanticPack.bind(manifest).schema.raw)
             if in_roster
-            else _schema_file_digest(None)
+            else _schema_file_digest()
         ),
     }
 

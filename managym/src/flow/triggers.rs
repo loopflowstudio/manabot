@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    cards::content_pack::default_content_pack,
     flow::{
         event::{EventKind, GameEvent},
         game::Game,
@@ -994,13 +993,9 @@ impl Game {
             return Vec::new();
         };
         // Triggered abilities a record lets it have (Koh's chosen card).
-        let inherited = self
-            .inherited_definition(target)
-            .and_then(|id| default_content_pack().definition(id))
-            .map(|definition| definition.abilities.clone())
-            .unwrap_or_default();
-        inherited
+        self.inherited_definition(target)
             .into_iter()
+            .flat_map(|definition| definition.abilities.iter().cloned())
             .chain(
                 self.static_sources()
                     .into_iter()
@@ -1316,7 +1311,6 @@ impl Game {
                 let permanent = permanent.as_ref()?;
                 let inherited = self
                     .inherited_definition(PermanentId(slot))
-                    .and_then(|id| default_content_pack().definition(id))
                     .map_or(&[][..], |definition| definition.abilities.as_slice());
                 Some(TriggerSourceEntry {
                     permanent: PermanentId(slot),

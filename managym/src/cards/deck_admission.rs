@@ -7,10 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{world_pool, ContentError, ContentPool, Eligibility};
-use crate::{
-    cards::content_pack::{default_content_pack, ContentPack},
-    state::{deck::Deck, player::PlayerConfig},
-};
+use crate::state::{deck::Deck, player::PlayerConfig};
 
 pub const DEVELOPMENT_RULESET: &str = "development-v1";
 /// Operational allocation bound, not a tournament construction rule.
@@ -105,20 +102,16 @@ pub fn admit_deck(deck: &Deck) -> Vec<DeckIssue> {
 /// One cheap upfront check for a batch: the world is read once, no game is
 /// allocated, and game creation still admits every deck again.
 pub fn check_decks(decks: &[Deck]) -> Vec<Vec<DeckIssue>> {
-    let content = default_content_pack();
     decks
         .iter()
-        .map(|deck| admit_in_world(world_pool(), content, deck))
+        .map(|deck| admit_in_world(world_pool(), deck))
         .collect()
 }
 
-/// Admission against the world's descriptor and the runtime content it
-/// describes; tests substitute descriptors to reach ambiguous names.
-pub(crate) fn admit_in_world(
-    pool: &ContentPool,
-    content: &ContentPack,
-    deck: &Deck,
-) -> Vec<DeckIssue> {
+/// Admission against the world's descriptor, whose rows mark tokens and every
+/// other non-deck definition ineligible; tests substitute descriptors to reach
+/// ambiguous names.
+pub(crate) fn admit_in_world(pool: &ContentPool, deck: &Deck) -> Vec<DeckIssue> {
     let mut issues = construction_issues(deck);
     for (section, cards) in [
         (DeckSection::Main, &deck.main),
@@ -131,23 +124,13 @@ pub(crate) fn admit_in_world(
                 .filter(|row| &row.registry_name == name);
             let (code, reason) = match (rows.next(), rows.next()) {
                 (None, _) => ("unknown", "card is not defined in this world"),
-                (Some(row), None) if row.eligibility != Eligibility::Eligible => (
+                (Some(row), None) if row.eligibility == Eligibility::Eligible => continue,
+                (Some(row), None) => (
                     "unsupported",
                     row.reason
                         .as_deref()
                         .unwrap_or("card is not supported in this world"),
                 ),
-                (Some(row), None) => {
-                    let definition = content.definition(row.card_def_id);
-                    match definition {
-                        Some(definition) if !definition.is_token => continue,
-                        Some(_) => ("format", "tokens cannot be submitted in main or sideboard"),
-                        None => (
-                            "unsupported",
-                            "supported definition is missing from runtime content",
-                        ),
-                    }
-                }
                 _ => ("ambiguous", "card name identifies multiple definitions"),
             };
             issues.push(DeckIssue {

@@ -22,10 +22,7 @@ use super::{
     deck_admission::{admit_in_world, DeckIssue, DeckSection},
     world_pool, ContentPool, PoolDefinition,
 };
-use crate::{
-    cards::content_pack::{default_content_pack, ContentPack},
-    state::deck::Deck,
-};
+use crate::state::deck::Deck;
 
 pub const DIALECT: &str = "counted-lines-v1";
 /// Operational bound on one source document, not a construction rule.
@@ -251,11 +248,7 @@ fn name_key(name: &str) -> String {
 /// Resolve front or full double-faced names; reverse-only, ambiguous and
 /// unknown names are rejected without substitution. Then admit natively,
 /// attributing each admission issue to every source line that named the card.
-fn admit_with_world(
-    decklist: &Decklist,
-    pool: &ContentPool,
-    content: &ContentPack,
-) -> Result<DeckImport, Decklist> {
+fn admit_with_world(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
     let mut names: BTreeMap<String, Vec<&PoolDefinition>> = BTreeMap::new();
     let mut reverse_faces: BTreeMap<String, &str> = BTreeMap::new();
     for definition in &pool.definitions {
@@ -326,7 +319,7 @@ fn admit_with_world(
             ..entry.clone()
         });
     }
-    for issue in admit_in_world(pool, content, &deck) {
+    for issue in admit_in_world(pool, &deck) {
         let lines = match (issue.section, &issue.card_name) {
             (Some(section), Some(name)) => source_lines
                 .get(&(section, name.clone()))
@@ -359,11 +352,10 @@ fn admit_with_world(
 /// input when any document has an issue; nothing is silently filtered.
 pub fn admit_decklists(decklists: &[(String, Decklist)]) -> Result<Vec<DeckImport>, DecklistError> {
     let pool = world_pool();
-    let content = default_content_pack();
     let mut admitted = Vec::new();
     let mut rejected = BTreeMap::new();
     for (label, decklist) in decklists {
-        match admit_with_world(decklist, pool, content) {
+        match admit_with_world(decklist, pool) {
             Ok(imported) => admitted.push(imported),
             Err(decklist) => {
                 rejected.insert(label.clone(), decklist);
@@ -400,10 +392,6 @@ mod tests {
 
     const HERO: &str = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n";
     const VILLAIN: &str = "20 Island\n";
-
-    fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
-        admit_with_world(decklist, pool, default_content_pack())
-    }
 
     fn import_match(hero: &str, villain: &str) -> Result<Vec<DeckImport>, DecklistError> {
         admit_decklists(&[
@@ -458,8 +446,8 @@ mod tests {
             "10 mountain\n5 Forest\n5  FOREST\n2 Avatar Enthusiasts\nSideboard\n1 Island",
             "x",
         );
-        let imported = admit(&reformatted, &pool).unwrap();
-        let original = admit(&parse_decklist(HERO, "hero.txt"), &pool).unwrap();
+        let imported = admit_with_world(&reformatted, &pool).unwrap();
+        let original = admit_with_world(&parse_decklist(HERO, "hero.txt"), &pool).unwrap();
         assert_eq!(imported.deck, original.deck);
         assert_eq!(
             imported.deck.main,
@@ -480,7 +468,7 @@ mod tests {
     fn unknown_unsupported_and_ambiguous_entries_name_their_lines() {
         let mut pool = world_pool().clone();
         let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n2 Accumulate Wisdom\nMain\n1 Accumulate Wisdom\n";
-        let rejected = admit(&parse_decklist(source, "x"), &pool).unwrap_err();
+        let rejected = admit_with_world(&parse_decklist(source, "x"), &pool).unwrap_err();
         assert_eq!(rejected.source, source);
         for expected in [
             (Some(2), "unknown"),
@@ -500,7 +488,7 @@ mod tests {
             registry_name: "FOREST".into(),
             ..forest
         });
-        let ambiguous = admit(&parse_decklist("10 Forest", "x"), &pool).unwrap_err();
+        let ambiguous = admit_with_world(&parse_decklist("10 Forest", "x"), &pool).unwrap_err();
         assert!(lines(&ambiguous).contains(&(Some(1), "ambiguous")));
     }
 
@@ -519,7 +507,8 @@ mod tests {
     fn double_faced_entries_resolve_by_front_or_full_name_only() {
         let pool = double_faced_pool();
         for name in ["Front Face", "Front Face // Back Face"] {
-            let result = admit(&parse_decklist(&format!("10 Island\n1 {name}"), "x"), &pool);
+            let result =
+                admit_with_world(&parse_decklist(&format!("10 Island\n1 {name}"), "x"), &pool);
             let decklist = match result {
                 Ok(imported) => imported.decklist,
                 Err(decklist) => decklist,
@@ -531,7 +520,8 @@ mod tests {
                 .iter()
                 .any(|issue| issue.code == "ambiguous" || issue.code == "face"));
         }
-        let reverse = admit(&parse_decklist("10 Island\n1 Back Face", "x"), &pool).unwrap_err();
+        let reverse =
+            admit_with_world(&parse_decklist("10 Island\n1 Back Face", "x"), &pool).unwrap_err();
         assert!(lines(&reverse).contains(&(Some(2), "face")));
     }
 

@@ -7,11 +7,8 @@ transport IDs and content digest the engine's learning catalog must match
 before any IDs reach the encoder.
 """
 
-from pathlib import Path
-
 from manabot.semantic.learning import (
     CURRENT_PACK_KEYS,
-    DEFAULT_SCHEMA_PATH,
     BoundSemanticPack,
     ContentPackBindingError,
 )
@@ -40,10 +37,3 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
             "policy catalog does not cover native definitions"
         )
     return pack
-
-
-def learning_schema_path(pack_key: str | None) -> Path:
-    """Current catalogs share one schema; reject unregistered policy packs."""
-    if pack_key is not None and pack_key not in CURRENT_PACK_KEYS:
-        raise ValueError(f"unsupported policy semantic pack: {pack_key}")
-    return DEFAULT_SCHEMA_PATH

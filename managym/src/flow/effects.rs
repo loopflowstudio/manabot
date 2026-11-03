@@ -14,9 +14,10 @@
 //   - an affected object changing zones ends its records (CR 400.7).
 
 use crate::{
+    cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
-        card::{CardDefId, Keywords},
+        card::{CardDefId, CardDefinition, Keywords},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
@@ -88,13 +89,18 @@ impl Game {
     }
 
     /// The definition whose activated and triggered abilities the permanent
-    /// has from its latest `HasAbilitiesOfSource` record (Koh), unless it has
-    /// lost its abilities.
-    pub(crate) fn inherited_definition(&self, permanent_id: PermanentId) -> Option<CardDefId> {
-        self.effects_on(permanent_id)
+    /// has from its latest `HasAbilitiesOfSource` record (Koh). Callers that
+    /// offer or fire those abilities check ability loss themselves.
+    pub(crate) fn inherited_definition(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<&'static CardDefinition> {
+        let inherited = self
+            .effects_on(permanent_id)
             .filter(|effect| effect.modification == Modification::HasAbilitiesOfSource)
-            .last()
-            .and_then(|effect| effect.source)
+            .last()?
+            .source?;
+        default_content_pack().definition(inherited)
     }
 
     /// Records affecting a player, in timestamp order.
