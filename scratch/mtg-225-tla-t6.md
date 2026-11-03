@@ -78,6 +78,15 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 
 ## Checks
 
+- 2026-11-02 (sync onto main `51fbacbbf`: decklists, T5 squash, MTG-236 derived
+  state): resolved against T5 head `2df025c20` as the real shared base, because
+  main carries T5 as a squash (8 conflicting files instead of 101). Reconciled:
+  `PlayerConfig.submitted` with `disclosure`; `EventKind::Bent` and index kinds
+  for T6's trigger conditions; `TriggerIndex` now includes abilities inherited
+  through `HasAbilitiesOfSource` (Koh). Debug `cargo test --lib --tests` fails
+  only `checked_semantic_conformance_evidence_reproduces` (re-record at gate);
+  `--test cards` 526 passed; clippy clean. w17 evidence and fixtures are the
+  textual merge, not re-recorded.
 - 2026-11-02 (compress): debug `cargo test --lib --tests --no-fail-fast` fails only
   `checked_semantic_conformance_evidence_reproduces` (re-record at gate); clippy
   clean. Extension not rebuilt and pytest not rerun; gate owns both.
