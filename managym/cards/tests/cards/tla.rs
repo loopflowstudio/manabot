@@ -11103,6 +11103,9 @@ fn fire_nation_engineer_counters_another_creature_or_vehicle_after_you_attacked(
 
     s.advance_to_active_step(0, StepKind::Main);
     attack_and_settle(&mut s, &[ogre], None);
+    let land = s.force_permanent_on_battlefield(0, "Island");
+    animate(&mut s, land);
+    set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 2);
     s.advance_to_active_step(0, StepKind::End);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let targets = offered_targets(&s);
@@ -11111,11 +11114,16 @@ fn fire_nation_engineer_counters_another_creature_or_vehicle_after_you_attacked(
         targets.contains(&Target::Permanent(balloon)),
         "a noncreature Vehicle"
     );
+    assert!(
+        targets.contains(&Target::Permanent(land)),
+        "an earthbent land matches the creature alternative"
+    );
     assert!(!targets.contains(&Target::Permanent(engineer)), "another");
     assert!(!targets.contains(&Target::Permanent(theirs)), "you control");
-    assert!(s.choose_target(Target::Permanent(balloon)));
+    assert!(s.choose_target(Target::Permanent(land)));
     settle(&mut s);
-    assert_eq!(counters(&s, balloon), 1);
+    assert_eq!(counters(&s, land), 3);
+    assert_eq!(counters(&s, balloon), 0);
 }
 
 #[test]

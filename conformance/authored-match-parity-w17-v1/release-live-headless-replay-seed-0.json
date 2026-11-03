@@ -416,7 +416,7 @@
         },
         {
           "path": "managym/src/flow/statics.rs",
-          "sha256": "470de0daf18f5483b2e4775e7668c7c9fbf40d58539bc9775a609ba394eff03b"
+          "sha256": "bf19fc4f6348bd552a050c066a6da9c27b397635843843d8d2d6b66f0dab0664"
         },
         {
           "path": "managym/src/flow/target_authority_tests.rs",
@@ -544,7 +544,7 @@
         },
         {
           "path": "managym/state/src/predicate.rs",
-          "sha256": "841023596451818d1cae5d5dc58c3d401407f0b19174d56edc4912347b6182c3"
+          "sha256": "d1952f53ca4d7d6d520fd3590ecea12dd527aa183888149fb7898abb8280b908"
         },
         {
           "path": "managym/state/src/stack_object.rs",
@@ -571,7 +571,7 @@
           "sha256": "fec9afeeacb54a256e62630b9a6c04928ef155ab6fdff2dd39b89a41058d05c4"
         }
       ],
-      "sha256": "05cc2e76a358a58716b5ed7cf66ea3ead751771a9ed477dfc3843c563a1f6fae"
+      "sha256": "19f86847b637d3e452a369a9c53d617d4b9d1595cd5e7d625ab4f3fd4a62db33"
     },
     "seed": 0
   },

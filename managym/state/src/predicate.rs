@@ -88,6 +88,14 @@ impl CardPredicate {
             || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
+    /// Whether matching compares card types, here or in an alternative.
+    pub fn reads_types(&self) -> bool {
+        self.card_type.is_some()
+            || !self.card_types_any.is_empty()
+            || !self.not_card_types.is_empty()
+            || self.any_of.iter().any(CardPredicate::reads_types)
+    }
+
     /// Match against a card's printed characteristics.
     pub fn matches_card(&self, card: &Card) -> bool {
         self.matches_card_with_power(card, card.power.unwrap_or(0))

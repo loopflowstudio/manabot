@@ -1513,11 +1513,8 @@ impl Game {
         // Only a type-reading predicate asks what the permanent has become,
         // so a counter or name question (a type grant's own condition) never
         // recurses into animation.
-        let reads_types = structural.card_type.is_some()
-            || !structural.card_types_any.is_empty()
-            || !structural.not_card_types.is_empty();
         let mut types = Vec::new();
-        if reads_types {
+        if structural.reads_types() {
             if self.permanent_is_animated(permanent_id) {
                 types.push(CardType::Creature);
             }
