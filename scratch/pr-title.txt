@@ -1,1 +1,0 @@
-Scale card definitions with sparse counters and shared rules crates

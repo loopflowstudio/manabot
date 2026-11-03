@@ -191,19 +191,19 @@ authored match reproduced all 142 Commands and 858 viewer checks; only three
 source-file fingerprints and their aggregate changed. Full suites and CI remain
 with gate/publication below.
 
-Gate owns affected full debug/release Rust, workspace clippy, isolated
-`cargo check -p managym-cards`, and completion of the broad consumer suite:
+Publication completed the affected full debug/release Rust, workspace clippy,
+isolated `cargo check -p managym-cards`, and the broad consumer suite below.
+The final results and the targeting repair are recorded in the publication section:
 
 ```sh
 uv run --extra dev --extra play --extra notebook --extra artifacts --extra reports pytest tests/env tests/academy tests/belief tests/semantic tests/verify tests/model tests/test_package_boundaries.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q
 ```
 
 The correct suite is `tests/verify`; the earlier `tests/verification` command
-collected nothing.
-Publication owns current-head CI/packaging/Engine Budget assessment and the same
-PR's review handoff. Any required baseline adoption uses that candidate's artifact
-and a recorded reason under the existing policy. Jack Heart reviews before merge;
-T6 remains downstream. No product judgment remains for the accepted batch.
+collected nothing. CI and packaging passed on `95c7eb7ed`, including Engine Budget;
+no reference adoption is required. The final targeting repair is locally validated
+and will start new CI on publication. Jack Heart reviews before merge; T6 remains
+downstream. No product judgment remains for the accepted batch.
 
 General layer dependency ordering, the Oracle-text generator, non-evergreen
 mechanics and printed battlefield P/T protocol changes remain outside this Task.
@@ -217,3 +217,44 @@ accepted capacity extension and compatibility evidence; no child Wave directorie
 were present. Memory and scratch remain within their configured budgets.
 
 Check (2026-11-02): `git diff --check` and `lf context` — passed; memory and scratch within budget. Retained runtime proof reused; full suites owned by gate.
+
+## Publication validation — 2026-11-02
+
+`lf sync` checkpointed the inherited notes at `95c7eb7ed` and merged main
+cleanly (still `a1a02a76f`). It pushed that checkpoint, superseding CI
+`41571072018` before its reference comparison completed. CI `41571694122`
+and release-packages `41571694041` assess the checkpoint; the latter passed
+Linux/macOS package and installation checks.
+
+Publication review found a concrete regression in the new animation-read guard:
+it checked only top-level predicate types, so Fire Nation Engineer's
+"creature or Vehicle" target excluded an earthbent land. The expanded real-card
+test failed on that omission, then passed with recursive
+`CardPredicate::reads_types`, including resolution of the counter onto the land.
+This preserves name/counter-only recursion avoidance and introduces no serialized
+field or vocabulary. Full debug tests passed both before and after the repair
+(885 passed, 2 ignored); the pre-repair full release suite also passed 885/2.
+Workspace fmt/clippy and a fresh-target isolated card-crate check passed after
+the repair. The broad Python consumer suite completed on the pre-repair extension
+with 912 passed, 1 skipped.
+
+Final repair `7910f4ed3` passed full debug and release Rust (885 passed, 2 ignored
+in each), fmt, workspace clippy, isolated card checking and a release wheel build.
+The wheel's CPython 3.12 extension was atomically installed. Definitions (308,291
+bytes), serialized learning catalog (440,288 bytes) and world identity (107 bytes)
+remain byte-identical to the pre-capacity snapshots. Authored parity reproduced
+142 Commands, 143 checkpoints per surface and 858 viewer checks; its only changes
+are two source hashes and their aggregate. The complete broad consumer command
+above passed again against the repaired extension: 912 passed, 1 skipped in
+282.55 seconds. Offline inventory validation retained all 3,322 entries.
+Logs live in `.runs/mtg-238-publish-final/`.
+
+Hosted CI `41571694122` completed successfully on pre-repair `95c7eb7ed`, as did
+release packages `41571694041`. Engine Budget compared that candidate and reference
+`4b5e9c0e4` on one runner: worst reply 11.211 vs 10.300 seconds, total search
+342.434 vs 317.923 seconds, throughput 8,249.1 vs 9,037.6 steps/s. All search/step
+digests and counts matched, and all timing checks passed the unchanged 10% budget.
+No baseline adoption or speedup claim follows. This hosted result predates the
+nested-predicate repair; publication starts new CI for it, which is not yet
+completed proof. Main remains `a1a02a76f`; PR #414 remains for review, with no
+auto-merge or Task completion.
