@@ -29,7 +29,8 @@ Each card is a function in the file of its first printing's set under
 (`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
-support check (defined and not marked incomplete) and the set filter. Keep
+support check (defined non-token cards, excluding rules fixtures) and the set
+filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).
 
@@ -218,3 +219,12 @@ layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/training.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-7 viewer JSON is validated by the native observation types.
+
+`Game::card_power` reads contextual power in every zone: the layered view on
+the battlefield, and characteristic-defining abilities with the spell's
+controller or card's owner elsewhere (including outside the game). Zone
+filters use `card_matches_predicate`; printed-only matching belongs to
+structural definition checks and private layer stages. `LookAndSelect` names
+whether the remainder is random; chosen order suspends on native
+`OrderLibraryBottom`, placing cards nearest the top first through ordinary
+SelectCard Commands. Only the chooser sees the remaining inspected cards.

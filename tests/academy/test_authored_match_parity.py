@@ -6,10 +6,10 @@ from academy.authored_match_parity import ParityDivergence, verify_receipt
 def test_checked_authored_match_parity_receipt() -> None:
     receipt = verify_receipt()
     assert receipt["summary"] == {
-        "commands_per_surface": 142,
-        "checkpoints_per_surface": 143,
-        "ordered_transition_groups_per_surface": 142,
-        "viewer_projection_checks": 858,
+        "commands_per_surface": 135,
+        "checkpoints_per_surface": 136,
+        "ordered_transition_groups_per_surface": 135,
+        "viewer_projection_checks": 816,
         "canonical_player_projections": 2,
         "spectator_admitted": False,
         "first_divergence": None,
@@ -28,12 +28,12 @@ def test_checked_authored_match_parity_receipt() -> None:
     }
     assert receipt["surfaces"]["live"]["presentation"] == {
         "0": {
-            "events": 97,
-            "sha256": "ab058b95c8157d425d0454be9f190429ae9cf5152382d32c24c3d387fbf0d08a",
+            "events": 91,
+            "sha256": "64d234650fc906e69edd5c129539ff49cd5bea5321890667e59b2fb1874ba05b",
         },
         "1": {
-            "events": 97,
-            "sha256": "411a0fc6f96b74548c40909f415b7b8eaa2bcd684acb7f4777eaf9d3a3a0e898",
+            "events": 91,
+            "sha256": "018aa91343c4c810590d6d4c76d2e9532a2f85da9143e5636d682b545b29c2b9",
         },
     }
 

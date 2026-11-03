@@ -1258,7 +1258,7 @@ impl Observation {
     }
 
     /// A card's row. On the battlefield every characteristic reads the
-    /// layered view (`Game::characteristics`); elsewhere the printed card.
+    /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
     fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
         let printed = Self::printed_card_data(game, card_id, zone);
         match game.state.card_to_permanent[card_id] {
@@ -1277,7 +1277,10 @@ impl Observation {
                     ..printed
                 }
             }
-            _ => printed,
+            _ => CardData {
+                power: game.card_power(card_id),
+                ..printed
+            },
         }
     }
 

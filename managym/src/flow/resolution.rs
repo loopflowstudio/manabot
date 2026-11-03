@@ -802,7 +802,7 @@ impl Game {
                     .copied()
                     .filter(|card| {
                         self.state.zones.zone_of(*card) == Some(ZoneType::Graveyard)
-                            && predicate.matches_card(&self.state.cards[*card])
+                            && self.card_matches_predicate(*card, predicate)
                     })
                     .collect();
                 (!cards.is_empty()).then_some(Decision::SelectMilled {
@@ -825,13 +825,13 @@ impl Game {
                 if let Some(bonus) = if_milled.as_ref().filter(|bonus| {
                     cards
                         .iter()
-                        .any(|card| bonus.predicate.matches_card(&self.state.cards[*card]))
+                        .any(|card| self.card_matches_predicate(*card, &bonus.predicate))
                 }) {
                     frame.prepend_effects(bonus.effects.iter().cloned());
                 }
                 let cards: Vec<_> = cards
                     .into_iter()
-                    .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+                    .filter(|card| self.card_matches_predicate(*card, predicate))
                     .collect();
                 if cards.is_empty() {
                     frame.prepend_effects(if_declined.iter().cloned());
@@ -1411,6 +1411,7 @@ impl Game {
                 })
             }
             Effect::LookAndSelect {
+                random_order,
                 reveal,
                 look,
                 min_select,
@@ -1423,6 +1424,7 @@ impl Game {
                     return None;
                 }
                 Some(Decision::LookAndSelect {
+                    random_order: *random_order,
                     reveal: *reveal,
                     player: frame.controller,
                     looked,
@@ -1853,7 +1855,7 @@ impl Game {
                     && self.permanent_matches_spec(id, spec, controller)
             }
             Target::Player(player) => match spec {
-                TargetSpec::Player | TargetSpec::CreatureOrPlayer => true,
+                TargetSpec::Player | TargetSpec::AnyTarget => true,
                 TargetSpec::Opponent => player != controller,
                 _ => false,
             },
@@ -1895,7 +1897,7 @@ impl Game {
                 self.current_object_ref(card) == Some(object)
                     && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
                     && (!you_own || self.state.cards[card].owner == controller)
-                    && predicate.matches_card(&self.state.cards[card])
+                    && self.card_matches_predicate(card, predicate)
             }
         }
     }
@@ -1924,7 +1926,7 @@ impl Game {
                         .map(|id| self.characteristics(id).power)
                 })
             })
-            .unwrap_or_else(|| self.state.cards[source_card].power.unwrap_or(0));
+            .unwrap_or_else(|| self.card_power(source_card));
         i32::from(self.card_mana_value(CardId::from(object.entity))) <= power
     }
 
@@ -1950,9 +1952,11 @@ impl Game {
                 permanent.controller != controller
                     && self.permanent_matches_predicate(id, predicate)
             }
-            TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
-                self.characteristics(id).is_creature()
+            TargetSpec::AnyTarget => {
+                let types = &self.characteristics(id).types;
+                types.is_creature() || types.is_planeswalker() || types.is_battle()
             }
+            TargetSpec::Creature => self.characteristics(id).is_creature(),
             TargetSpec::CreatureYouControl => {
                 permanent.controller == controller && self.characteristics(id).is_creature()
             }
