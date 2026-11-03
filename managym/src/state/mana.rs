@@ -211,7 +211,7 @@ impl ManaCost {
 
     /// Reduce the generic component by `amount`, floored at zero
     /// (affinity-style cost reduction, waterbend payments).
-    /// This cost less `reduction` (CR 601.2f): each colored symbol removes
+    /// This cost less `reduction` (CR 118.7b, 118.7c): each colored symbol removes
     /// one of that color, or one generic when none of that color is left;
     /// generic in `reduction` removes generic.
     pub fn reduced_by(&self, reduction: &ManaCost) -> ManaCost {

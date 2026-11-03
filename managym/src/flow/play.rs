@@ -375,6 +375,13 @@ impl Game {
         values.extend(payable_x_values(1, |x| {
             self.can_pay_cast(player, card, CastChoices { x, ..cast })
         }));
+        // "X targets" (CR 601.2c): X can't exceed the legal candidates.
+        for requirement in self.state.cards[card].target_requirements() {
+            if requirement.exact_x {
+                let legal = self.legal_targets_for_requirement(player, card, &requirement);
+                values.retain(|x| usize::from(*x) <= legal.len());
+            }
+        }
         values
     }
 
@@ -571,7 +578,7 @@ impl Game {
                 })
                 .collect::<Vec<_>>();
             if legal.is_empty() || requirement.max_for(cast.x) == 0 {
-                if requirement.min == 0 {
+                if requirement.min_for(cast.x) == 0 {
                     requirement_index += 1;
                     continue;
                 }
@@ -772,7 +779,7 @@ impl Game {
             .iter()
             .filter(|i| **i == requirement_index)
             .count();
-        if chosen_in_req < requirement.min {
+        if chosen_in_req < requirement.min_for(cast.x) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 card,

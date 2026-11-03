@@ -448,6 +448,7 @@ fn aang_s_iceberg() -> CardDefinition {
                     max: 1,
                     another: true,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::ExileUntilSourceLeaves {
                     target: TargetSpec::Permanent {
@@ -632,6 +633,7 @@ fn aang_the_last_airbender() -> CardDefinition {
                         max: 1,
                         another: true,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::Airbend {
                         target: TargetSpec::Permanent {
@@ -992,6 +994,7 @@ fn allies_at_last() -> CardDefinition {
                 max: 2,
                 another: false,
                 max_x: false,
+                exact_x: false,
             },
             TargetRequirement {
                 shares_creature_type: false,
@@ -1000,6 +1003,7 @@ fn allies_at_last() -> CardDefinition {
                 max: 1,
                 another: false,
                 max_x: false,
+                exact_x: false,
             },
         ],
         statics: vec![StaticAbility::CostsLessPerPermanent(CardPredicate {
@@ -1119,6 +1123,7 @@ fn appa_steadfast_guardian() -> CardDefinition {
                         max: TargetRequirement::ANY_NUMBER,
                         another: true,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::Airbend {
@@ -1341,6 +1346,7 @@ fn avatar_s_wrath() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::AirbendAll {
                     predicate: CardPredicate {
@@ -1359,6 +1365,7 @@ fn avatar_s_wrath() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1385,6 +1392,7 @@ fn azula_always_lies() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::until_end_of_turn(
                         AffectedSpec::Target(TargetSpec::Creature),
@@ -1399,6 +1407,7 @@ fn azula_always_lies() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::PutCounters {
                         count: 1,
@@ -1415,6 +1424,7 @@ fn azula_always_lies() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            exact_x: false,
                         },
                         effects: vec![Effect::until_end_of_turn(
                             AffectedSpec::Target(TargetSpec::Creature),
@@ -1429,6 +1439,7 @@ fn azula_always_lies() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            exact_x: false,
                         },
                         effects: vec![Effect::PutCounters {
                             count: 1,
@@ -2415,6 +2426,7 @@ fn combustion_technique() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2472,6 +2484,7 @@ fn crashing_wave() -> CardDefinition {
             max: 0,
             another: false,
             max_x: true,
+            exact_x: false,
         }],
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
         text_box: text_box.into(),
@@ -2588,6 +2601,7 @@ fn cunning_maneuver() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2629,6 +2643,7 @@ fn curious_farm_animals() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::Destroy {
                     target: TargetSpec::Permanent {
@@ -2704,6 +2719,7 @@ fn dai_li_agents() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            exact_x: false,
                         },
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
@@ -2718,6 +2734,7 @@ fn dai_li_agents() -> CardDefinition {
                             max: 1,
                             another: false,
                             max_x: false,
+                            exact_x: false,
                         },
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
@@ -3074,6 +3091,7 @@ fn earth_kingdom_soldier() -> CardDefinition {
                     max: 2,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::PutCounters {
@@ -3497,6 +3515,7 @@ fn enter_the_avatar_state() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3531,6 +3550,7 @@ fn fancy_footwork() -> CardDefinition {
             max: 2,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3781,6 +3801,7 @@ fn fire_nation_engineer() -> CardDefinition {
                     max: 1,
                     another: true,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::PutCounters {
                     count: 1,
@@ -4053,6 +4074,7 @@ fn firebending_lesson() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
@@ -4359,9 +4381,8 @@ fn foggy_swamp_visions() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
         targeting: vec![TargetRequirement {
-            min: 0,
-            max: 0,
             max_x: true,
+            exact_x: true,
             ..TargetRequirement::one(creature_card())
         }],
         spell_effects: vec![Effect::ForEachTarget {
@@ -4564,6 +4585,7 @@ fn glider_staff() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::Airbend {
                     target: TargetSpec::Creature,
@@ -4878,6 +4900,7 @@ fn heartless_act() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::Destroy {
                         target: TargetSpec::Permanent {
@@ -4897,6 +4920,7 @@ fn heartless_act() -> CardDefinition {
                         max: 1,
                         another: false,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::RemoveCounters {
                         up_to: 3,
@@ -5082,6 +5106,7 @@ fn honest_work() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5220,6 +5245,7 @@ fn invasion_submersible() -> CardDefinition {
                     max: 1,
                     another: true,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::ReturnToHand {
                     target: TargetSpec::Permanent {
@@ -5433,6 +5459,7 @@ fn itll_quench_ya() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5589,6 +5616,7 @@ fn jet_freedom_fighter() -> CardDefinition {
                         max: 2,
                         another: false,
                         max_x: false,
+                        exact_x: false,
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::PutCounters {
@@ -6295,6 +6323,7 @@ fn lost_days() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -7267,6 +7296,7 @@ fn path_to_redemption() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::Attached,
@@ -7348,6 +7378,7 @@ fn pillar_launch() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -7828,6 +7859,7 @@ fn razor_rings() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -8250,6 +8282,7 @@ fn secret_tunnel() -> CardDefinition {
                     max: 2,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::until_end_of_turn(
@@ -8582,6 +8615,7 @@ fn sokka_s_haiku() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::CounterSpell {
                     target: TargetSpec::Spell,
@@ -8607,6 +8641,7 @@ fn sokka_s_haiku() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::UntapTarget {
                     target: TargetSpec::Permanent {
@@ -8997,6 +9032,7 @@ fn swampsnare_trap() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         statics: vec![
             StaticAbility::CostsLessIfTargets(TargetCostReduction {
@@ -9355,6 +9391,7 @@ fn the_last_agni_kai() -> CardDefinition {
                 max: 1,
                 another: false,
                 max_x: false,
+                exact_x: false,
             },
             TargetRequirement {
                 shares_creature_type: false,
@@ -9363,6 +9400,7 @@ fn the_last_agni_kai() -> CardDefinition {
                 max: 1,
                 another: false,
                 max_x: false,
+                exact_x: false,
             },
         ],
         text_box: text_box.into(),
@@ -10275,6 +10313,7 @@ fn true_ancestry() -> CardDefinition {
                     max: 1,
                     another: false,
                     max_x: false,
+                    exact_x: false,
                 },
                 effects: vec![Effect::ReturnGraveyardTarget {
                     target: TargetSpec::GraveyardCardYouOwn {
@@ -11171,6 +11210,7 @@ fn watery_grasp() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::Attached,
@@ -11339,6 +11379,7 @@ fn yip_yip() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -11627,6 +11668,7 @@ fn zuko_s_conviction() -> CardDefinition {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
         }],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),

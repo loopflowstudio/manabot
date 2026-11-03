@@ -96,7 +96,7 @@ pub struct PlayerTurnHistory {
     pub bent: u8,
 }
 
-/// A kind of bending (CR 701.65–701.68 and firebending, CR 702.187); its
+/// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its
 /// value is its bit in [`PlayerTurnHistory::bent`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(u8)]

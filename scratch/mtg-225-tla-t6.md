@@ -1,6 +1,6 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling — plan
 
-Status (2026-11-02): all 16 cards implemented; one-catalog refactor in progress on `jack/mtg-225-t6-one-catalog`. Jack Heart's steer (2026-11-02, comment
+Status (2026-11-02): all 16 cards and the one-catalog refactor are merged here; not published. Jack Heart's delivery order (2026-11-02): MTG-238 #414 goes first; T6 integrates it afterward. Jack Heart's steer (2026-11-02, comment
 b222da8f) adds the content-pack simplification to T6; see
 [t6-direction.md](t6-direction.md). Brief: Task MTG-225 (16 cards, allocation
 `planned_pr: T6`); direction in [t6-direction.md](t6-direction.md). One
@@ -64,10 +64,30 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 - `Effect::ExileTopCardPlayThisTurn`: replaced by `ExileTopCardsToPlay {
   count, until: PlayWindow }`. Done.
 
+## Remaining
+
+- After #414 lands: integrate it here (managym-state/managym-cards crate move,
+  Keywords API). #414 owns Phoenix Fleet Airship's conversion to a conditional
+  TypeGrant and already incorporates main's T5.
+- Gate: re-record w17 evidence (list below); Academy UI checks have not run.
+- Decide (Jack Heart): the one-catalog encoder cost, below. Until then
+  `test_etude_job.py::test_worker_runs_real_learner_and_reports_admitted_policy`
+  exceeds its 30 s limit.
+- Not done: a retained checkpoint bound to an authored pack no longer loads.
+
 ## Checks
 
 - 2026-11-02: debug `cargo test --tests` green except Scryfall fixture (fixed) and
   semantic-kernel w17 evidence (content digest moved; re-record at gate).
+- 2026-11-02 (one catalog + face fixes merged, HEAD): debug `cargo test --lib
+  --tests --no-fail-fast` fails only
+  `checked_semantic_conformance_evidence_reproduces`; `--test cards` 523 passed;
+  clippy clean. pytest semantic, policy catalog, academy, heuristic, parity,
+  env, authored matchup, mirror admission, training decks, package boundaries:
+  22 Academy failures, all retained-identity or digest drift awaiting re-record
+  (authored match, choice navigation, decision surface, learn evidence/setup,
+  public commitment, trigger order); 4 more were a stale `permanent_dim` pin,
+  fixed. tests/training as a whole not run here.
 - 2026-11-02 (all 16 cards, T5 gate head `2df025c20` merged): debug
   `cargo test --tests --no-fail-fast` fails only
   `checked_semantic_conformance_evidence_reproduces` (w17 content digest moved;
@@ -156,3 +176,25 @@ may give its vocabulary, all binding the world catalog; collapsing them to
 `None`. Curated manifests keep `semantic_pack_key`, resolved as a setup name.
 Kept, allowed by the steer: `Arc<ContentPack>` on game state and public
 `register_card`, which content-sensitivity tests use to extend a copy.
+
+## One catalog (steer b222da8f)
+
+Merged from `jack/mtg-225-t6-one-catalog` (`3493282a4`). Every match runs on one
+catalog; authored setups are decklists named by preset or `pack_key`;
+`PlayerConfig.world` is `submitted: bool` natively and Python accepts only
+`None`/`WORLD_SETUP`. World digest, length and id-to-name manifest were identical
+before and after at `2c1ba169f` (`6741f471...`, 345).
+
+Cost for Jack Heart to decide: authored vocabulary names bind the whole catalog.
+UR/GW encoder 31 to 345 definitions; `definitions()` 4.9 to 45.3 ms; Etude worker
+fixture 5.07 to 31.29 s, 26 s of it in `backward`. Options: accept it, or encode
+only the definitions a batch uses.
+
+Consequences: authored-pack checkpoints no longer load (pinned by a test);
+edited `setups` in a checkpoint binding now load, with execution still comparing
+decks; explicit-pack assertions were removed from mirror admission, matchup and
+Elemental tests; `CURRENT_PACK_KEYS` stays as names that all bind the catalog.
+
+Re-record at gate, none rewritten: semantic-kernel w17 evidence and manifest;
+authored-match and parity, public-commitment parity; Academy choice-navigation,
+learn, precision, precision-mana and trigger-order fixtures.

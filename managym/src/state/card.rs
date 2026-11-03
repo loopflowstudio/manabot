@@ -639,7 +639,7 @@ pub enum StaticAbility {
     /// A triggered ability this card grants while on the battlefield
     /// ("Other Allies you control have prowess").
     TriggeredGrant(StaticTriggeredGrant),
-    /// "Spells you cast cost [mana] less to cast" (CR 601.2f): each colored
+    /// "Spells you cast cost [mana] less to cast" (CR 118.7c): each colored
     /// symbol reduces that color, or generic mana when the cost has none of
     /// it ("This can reduce generic costs").
     SpellsCostLessMana(ManaCost),
@@ -1003,8 +1003,8 @@ impl Card {
             .map_or(self.definition_id, |(id, _)| *id)
     }
 
-    /// Turn it over (CR 701.28a): to the given back face, or back to its
-    /// front. A card without that face cannot transform (CR 701.28c), which
+    /// Turn it over (CR 701.27a): to the given back face, or back to its
+    /// front. A card without that face cannot transform (CR 701.27c), which
     /// callers check with [`ContentPack::back_face`](crate::cards::content_pack::ContentPack::back_face).
     pub fn transform(&mut self, back: Option<(CardDefId, Arc<CardDefinition>)>) {
         match (self.front.take(), back) {
@@ -1018,10 +1018,23 @@ impl Card {
         }
     }
 
+    /// Show one face. A token is a double-faced token on either face, and a
+    /// copy's exceptions are in the copiable values of each (CR 707.8a, 707.9b).
     fn show(&mut self, id: CardDefId, definition: Arc<CardDefinition>) {
+        let token = self.is_token;
         self.definition_id = id;
         self.registry_key = ObjectId(id.0);
         self.definition = definition;
+        if token && !self.is_token {
+            self.is_token = true;
+        }
+        if let Some(mut copy) = self.copy.take() {
+            copy.of = id;
+            for exception in &copy.exceptions {
+                exception.apply_copiable(self);
+            }
+            self.copy = Some(copy);
+        }
     }
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {

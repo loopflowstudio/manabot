@@ -107,3 +107,12 @@ here; main carries their outcomes.
   printed ones; an inherited activation resolves from the record while Koh
   remains, and inherited leaves-the-battlefield triggers do not fire as Koh
   leaves. "You may exile it" is a resolution `Modal`.
+- 2026-11-02 (CR check against docs/rules/MagicCompRules-20260227.pdf): copies
+  follow 707.8a, so a copy of a transformed permanent is a double-faced token
+  that can transform. This differs from the proposal in t6-direction.md ("cannot
+  transform"); question for Jack Heart if that was meant as a house rule.
+- 701.27f is approximated by comparing faces: an ability on the stack transforms
+  only if the face it came from is still up. A permanent flipped twice while the
+  ability waits would still transform. A departed back face's triggers read the
+  front face; no current TLA back face has a leaves trigger on itself.
+

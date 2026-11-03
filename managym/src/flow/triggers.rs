@@ -724,8 +724,20 @@ impl Game {
             }
             for ability in self.granted_triggered_abilities(source) {
                 let Ability::Triggered {
-                    condition, effects, ..
+                    condition,
+                    effects,
+                    intervening_if,
                 } = ability;
+                if intervening_if.as_ref().is_some_and(|condition| {
+                    !self.check_intervening_if(
+                        condition,
+                        source.controller,
+                        Some(source.lki.object_ref),
+                        self.triggering_permanent(event),
+                    )
+                }) {
+                    continue;
+                }
                 let times = self.trigger_occurrences(&condition, source, event);
                 fired.extend(std::iter::repeat_n(
                     FiredTrigger {
@@ -921,7 +933,7 @@ impl Game {
             .sum()
     }
 
-    /// Granted firebending (CR 702.187): each attacking creature with
+    /// Granted firebending (CR 702.189): each attacking creature with
     /// firebending until end of turn triggers "add that much {R} until end
     /// of combat".
     fn granted_firebending_triggers(&mut self, event: &GameEvent) {

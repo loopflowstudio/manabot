@@ -683,10 +683,10 @@ impl Game {
         self.emit(GameEvent::Bent { player, kind });
     }
 
-    /// Transform a double-faced permanent (CR 701.28a): it turns over and
+    /// Transform a double-faced permanent (CR 701.27a): it turns over and
     /// stays the same object, keeping its counters, damage, attachments and
-    /// combat status (CR 712.9). Returns false for anything else, which
-    /// can't transform (CR 701.28c).
+    /// combat status (CR 701.27a). Returns false for anything else, which
+    /// can't transform (CR 701.27c).
     pub(crate) fn transform_permanent(&mut self, permanent: PermanentId) -> bool {
         let Some(card) = self.state.permanents[permanent].as_ref().map(|p| p.card) else {
             return false;

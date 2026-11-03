@@ -20,6 +20,7 @@ use crate::{
             Ability, AffectedSpec, DelayedEvent, Effect, EffectValue, GraveyardReturn,
             LinkedChooser, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
         },
+        card::{CardDefId, CardDefinition},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
@@ -167,6 +168,7 @@ impl Game {
         let frame = EffectFrame {
             source: Some(card),
             source_ref: self.current_object_ref(card),
+            source_face: None,
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
@@ -217,20 +219,33 @@ impl Game {
         self.emit(GameEvent::SpellCountered { card, by });
     }
 
+    /// The face an ability on the stack came from: the card as it stands
+    /// while that face is up, else that face's row (the card has turned over
+    /// or left since; the ability exists independently, CR 113.7a).
+    fn source_face(&self, card: CardId, face: CardDefId) -> Option<&CardDefinition> {
+        let current = self.state.cards.get(card.0)?;
+        if current.definition_id == face {
+            Some(current)
+        } else {
+            self.state.content.definition(face)
+        }
+    }
+
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
         // A granted ability keeps its grantor's text after the grantor leaves.
         let definition = match ability.granted_by {
             Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
                 .attached_grants()
                 .nth(grant.index),
-            None => self.state.cards[ability.source_card]
-                .activated_abilities
-                .get(ability.ability_index),
+            None => self
+                .source_face(ability.source_card, ability.source_definition_id)
+                .and_then(|face| face.activated_abilities.get(ability.ability_index)),
         };
         // An ability past the printed ones is inherited (Koh): it is read from
         // the definition the source still has the abilities of.
         let definition = definition.cloned().or_else(|| {
-            let printed = self.state.cards[ability.source_card]
+            let printed = self
+                .source_face(ability.source_card, ability.source_definition_id)?
                 .activated_abilities
                 .len();
             let permanent = self.lookup_current_permanent(ability.source_ref).ok()?;
@@ -268,6 +283,7 @@ impl Game {
         let frame = EffectFrame {
             source: Some(ability.source_card),
             source_ref,
+            source_face: Some(ability.source_definition_id),
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
@@ -303,10 +319,8 @@ impl Game {
             (effects, None)
         } else {
             let Some(ability) = self
-                .state
-                .cards
-                .get(source_card.0)
-                .and_then(|card| card.abilities.get(triggered.ability_index))
+                .source_face(source_card, triggered.source_definition_id)
+                .and_then(|face| face.abilities.get(triggered.ability_index))
                 .cloned()
             else {
                 return;
@@ -358,6 +372,7 @@ impl Game {
         let frame = EffectFrame {
             source: Some(source_card),
             source_ref: triggered.source_ref,
+            source_face: Some(triggered.source_definition_id),
             controller: source_controller,
             resolutions_this_turn,
             kicked: false,
@@ -872,7 +887,7 @@ impl Game {
                 let card = self.state.permanents[id].as_ref()?.card;
                 self.move_card(card, ZoneType::Exile);
                 // A token ceases to exist once exiled (CR 111.7); a card with
-                // no back face can't return transformed (CR 701.28c).
+                // no back face can't return transformed (CR 712.14a).
                 let returns = !self.state.cards[card].is_token
                     && (!*transformed
                         || self
@@ -919,7 +934,15 @@ impl Game {
             }
             Effect::TransformSource => {
                 let id = self.source_permanent_id(frame)?;
-                self.transform_permanent(id);
+                // CR 701.27f: only if it hasn't turned over since this ability
+                // went on the stack.
+                let card = self.state.permanents[id].as_ref()?.card;
+                if frame
+                    .source_face
+                    .is_none_or(|face| face == self.state.cards[card].definition_id)
+                {
+                    self.transform_permanent(id);
+                }
                 None
             }
             Effect::GainControl {
@@ -1714,9 +1737,6 @@ impl Game {
                     .filter(|card| self.state.cards[*card].name == *name)
                     .take(*count)
                     .collect();
-                self.emit(GameEvent::LibrarySearched {
-                    player: frame.controller,
-                });
                 for card in found {
                     self.move_card(card, ZoneType::Exile);
                 }
@@ -1990,14 +2010,13 @@ impl Game {
                     permanent.animated = true;
                     permanent.controller
                 };
-                if !self.put_counters(
+                // Earthbend 0 puts nothing on it and is still an earthbend.
+                self.put_counters(
                     permanent_id,
                     CounterKind::PlusOnePlusOne,
                     count,
                     frame.controller,
-                ) {
-                    return None;
-                }
+                );
                 self.record_bending(frame.controller, crate::flow::turn::Bending::Earth);
                 // Delayed trigger: when it dies or is exiled, return it to
                 // the battlefield tapped (CR 603.7 one-shot).
@@ -2102,7 +2121,7 @@ impl Game {
                 } else {
                     player.mana_pool.add(mana);
                 }
-                // Mana until end of combat is firebending's (CR 702.187a).
+                // Mana until end of combat is firebending's (CR 702.189a).
                 if *until_end_of_combat {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
                 }
@@ -2167,6 +2186,7 @@ impl Game {
                     let mut sub = EffectFrame {
                         source: frame.source,
                         source_ref: frame.source_ref,
+                        source_face: frame.source_face,
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,

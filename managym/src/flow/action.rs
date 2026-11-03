@@ -633,9 +633,10 @@ impl Game {
                     .iter()
                     .filter(|i| **i == *requirement_index)
                     .count();
-                let min_met = requirements
-                    .get(*requirement_index)
-                    .is_some_and(|req| chosen_in_req >= req.min && req.max_for(cast.x) > req.min);
+                let min_met = requirements.get(*requirement_index).is_some_and(|req| {
+                    chosen_in_req >= req.min_for(cast.x)
+                        && req.max_for(cast.x) > req.min_for(cast.x)
+                });
                 if min_met {
                     actions.push(Action::Decline { player: *player });
                 }

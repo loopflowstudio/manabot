@@ -14078,3 +14078,155 @@ fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
         "Azula's firebending 2, from Koh"
     );
 }
+
+// ---------------------------------------------------------------------------
+// T6: faces against copies, the stack and repeated transforms.
+
+/// A token copy stays a token with its exceptions on either face (CR 707.8a):
+/// transforming it keeps both, and it ceases to exist when it dies.
+#[test]
+fn a_token_copy_of_a_double_faced_creature_keeps_being_a_token_on_either_face() {
+    let mut s = five_color_setup(&["Ember Island Production", "Aang, Swift Savior"]);
+    let aang = s.force_permanent_on_battlefield(0, "Aang, Swift Savior");
+    cast(&mut s, "Ember Island Production");
+    choose_mode(&mut s, 0);
+    assert!(s.choose_target(Target::Permanent(aang)));
+    settle(&mut s);
+    let copies = s.battlefield_permanents_named(0, "Aang, Swift Savior");
+    let token = *copies.iter().find(|id| **id != aang).expect("a copy");
+    let token_card = card_of(&s, token);
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, token, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    let card = &s.game().state.cards[token_card];
+    assert_eq!(card.name, "Aang and La, Ocean's Fury");
+    assert!(card.is_token, "the back face of a token is a token");
+    assert!(card.has_subtype("Hero"), "exceptions apply to each face");
+    assert!(!card.supertypes.iter().any(|t| t == "Legendary"));
+    assert_eq!(s.game().characteristics(token).power, 4);
+
+    s.game_mut().move_card(token_card, ZoneType::Graveyard);
+    s.advance_to_active_step(0, StepKind::End);
+    assert!(s.game().state.cards[token_card].is_token);
+    assert_eq!(zone_of(&s, token_card), None, "a token ceases to exist");
+}
+
+/// Two creatures leaving make two delayed triggers; only the first transforms
+/// Aang (CR 701.27f), so he doesn't flip back.
+#[test]
+fn aang_at_the_crossroads_transforms_once_for_two_delayed_triggers() {
+    let mut s = five_color_setup(&["Aang, at the Crossroads", "Gray Ogre"]);
+    let aang = s.force_permanent_on_battlefield(0, "Aang, at the Crossroads");
+    let aang_card = card_of(&s, aang);
+    for _ in 0..2 {
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let ogre_card = card_of(&s, ogre);
+        s.game_mut().move_card(ogre_card, ZoneType::Graveyard);
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    resolve_everything(&mut s);
+    assert_eq!(s.game().state.delayed_triggers.len(), 2);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    resolve_everything(&mut s);
+    assert_eq!(
+        s.game().state.cards[aang_card].name,
+        "Aang, Destined Savior"
+    );
+}
+
+/// An ability on the stack keeps the face it came from: Aang's enter trigger
+/// still airbends after he transforms in response, and a second waterbend
+/// activation already on the stack doesn't flip him back.
+#[test]
+fn abilities_on_the_stack_keep_the_face_they_came_from() {
+    let mut s = five_color_setup(&["Aang, Swift Savior", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    let aang_card = cast(&mut s, "Aang, Swift Savior");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    let aang = s.game().state.card_to_permanent[aang_card].unwrap();
+    s.set_player_mana_pool(0, "16");
+    for _ in 0..2 {
+        activate(&mut s, aang, 0);
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.cards[aang_card].name,
+        "Aang and La, Ocean's Fury"
+    );
+    assert_eq!(
+        zone_of(&s, ogre_card),
+        Some(ZoneType::Exile),
+        "the front's trigger"
+    );
+}
+
+/// A copy of a permanent spell resolves into a token (CR 707.10f).
+#[test]
+fn fire_lord_azula_copies_a_permanent_spell_into_a_token() {
+    let mut s = five_color_setup(&["Fire Lord Azula", "Invasion Reinforcements"]);
+    let azula = s.force_permanent_on_battlefield(0, "Fire Lord Azula");
+    clear_summoning_sickness(&mut s, azula);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, azula);
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    cast(&mut s, "Invasion Reinforcements");
+    resolve_everything(&mut s);
+    let reinforcements = s.battlefield_permanents_named(0, "Invasion Reinforcements");
+    assert_eq!(reinforcements.len(), 2);
+    let tokens = reinforcements
+        .iter()
+        .filter(|id| s.game().state.cards[card_of(&s, **id)].is_token)
+        .count();
+    assert_eq!(tokens, 1);
+}
+
+/// Earthbend 0 with an empty hand: the 0/0 land dies and still returns
+/// tapped (CR 701.66a).
+#[test]
+fn the_legend_of_kyoshi_earthbend_zero_still_returns_the_land() {
+    let mut s = five_color_setup(&["The Legend of Kyoshi"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let forest_card = card_of(&s, forest);
+    enter_saga(&mut s, "The Legend of Kyoshi");
+    next_main_phase(&mut s);
+    clear_hand(&mut s, 0);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    resolve_everything(&mut s);
+    let returned = s.game().state.card_to_permanent[forest_card].expect("returned");
+    assert_ne!(returned, forest);
+    assert!(tapped(&s, returned));
+}
+
+/// "X target creature cards" means exactly X: X can't exceed the cards there
+/// are, and no fewer than X may be chosen.
+#[test]
+fn foggy_swamp_visions_targets_exactly_x() {
+    let mut s = five_color_unfunded_setup(&["Foggy Swamp Visions", "Gray Ogre"]);
+    let first = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    s.set_player_mana_pool(0, "BBB9");
+    cast(&mut s, "Foggy Swamp Visions");
+    let offered: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered, vec![0, 1, 2], "at most the two cards there are");
+    choose_mode(&mut s, 2);
+    let object = s.game().current_object_ref(first).unwrap();
+    assert!(s.choose_target(Target::GraveyardCard(object)));
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::Decline { .. })),
+        "one target is not X = 2"
+    );
+}

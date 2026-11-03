@@ -166,7 +166,7 @@ rows.
 Task MTG-225 (TLA batch T6) extends w17 with Sagas and transforming
 double-faced cards. A back face is its own definition row, registered right
 after its front; a permanent shows it while transformed (CR 712.8), keeps its
-object identity when it transforms (CR 712.9), turns front face up as it
+object identity when it transforms (CR 701.27a), turns front face up as it
 leaves the battlefield, and has its front face's mana value (CR 712.8e). A
 copy of a double-faced permanent has both faces and is transformed if the
 original is (CR 707.8a). Sagas enter with a lore counter, gain one as their
@@ -176,7 +176,7 @@ crosses and are sacrificed once their final chapter has left the stack (CR
 their attackers (CR 500.8) are scheduled on the turn state. Bending events
 (waterbend payments, earthbend, firebending mana, airbend) join the turn
 history, a spell on the stack can be airbent, spell costs can be reduced by
-colored mana that also reduces generic (CR 601.2f), and a permanent can have
+colored mana that also reduces generic (CR 118.7c), and a permanent can have
 another card's activated and triggered abilities through an effect record.
 All 16 T6 cards are supported (330 supported definitions in `world`). The
 policy input adds player columns for the four bending kinds, extra turns and

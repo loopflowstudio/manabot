@@ -577,8 +577,8 @@ pub enum Effect {
     },
     /// "Exile this, then return it to the battlefield [transformed] under
     /// [player]'s control": the source returns as a new object (CR 400.7),
-    /// its back face up when `transformed` (CR 712.14). A card with no back
-    /// face stays exiled (CR 701.28c).
+    /// its back face up when `transformed` (CR 712.14a). A card with no back
+    /// face stays exiled (CR 712.14a).
     ExileSourceAndReturn {
         player: PlayerSelector,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -638,9 +638,9 @@ pub enum Effect {
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
-    /// "Transform [this]" (CR 701.28): the source permanent turns over and
-    /// stays the same object (CR 712.9). Nothing happens to a permanent that
-    /// isn't a double-faced card (CR 701.28c).
+    /// "Transform [this]" (CR 701.27): the source permanent turns over and
+    /// stays the same object (CR 701.27a). Nothing happens to a permanent that
+    /// isn't a double-faced card (CR 701.27c).
     TransformSource,
     /// "[player] gains control of [the target]" for `duration` (CR 613.1b).
     GainControl {
@@ -1235,6 +1235,9 @@ pub struct TargetRequirement {
     /// "Up to X targets": the announced X replaces `max` (CR 601.2c).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub max_x: bool,
+    /// "X targets": exactly the announced X (CR 601.2c), with `max_x`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exact_x: bool,
 }
 
 impl TargetRequirement {
@@ -1250,6 +1253,16 @@ impl TargetRequirement {
             max: 1,
             another: false,
             max_x: false,
+            exact_x: false,
+        }
+    }
+
+    /// The fewest targets this requirement allows with X announced as `x`.
+    pub fn min_for(&self, x: u8) -> usize {
+        if self.exact_x {
+            usize::from(x)
+        } else {
+            self.min
         }
     }
 

@@ -60,6 +60,10 @@ pub struct EffectFrame {
     /// Exact battlefield source when the effect belongs to an ability of a
     /// permanent. This intentionally does not follow `source` across zones.
     pub source_ref: Option<ObjectRef>,
+    /// The face an ability on the stack came from (CR 701.27f); `None` for
+    /// spells.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_face: Option<crate::state::card::CardDefId>,
     /// The player the effects resolve for ("you").
     pub controller: PlayerId,
     /// For triggered abilities: how many times this ability has resolved
@@ -695,6 +699,7 @@ impl Game {
             frame: EffectFrame {
                 source: None,
                 source_ref: None,
+                source_face: None,
                 controller: decision.player(),
                 resolutions_this_turn: 0,
                 kicked: false,
@@ -2184,6 +2189,7 @@ mod learn_tests {
         game.run_frame(EffectFrame {
             source: None,
             source_ref: None,
+            source_face: None,
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
@@ -2885,6 +2891,7 @@ mod payment_tests {
         game.run_frame(EffectFrame {
             source: None,
             source_ref: None,
+            source_face: None,
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
