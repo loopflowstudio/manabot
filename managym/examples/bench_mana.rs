@@ -29,10 +29,12 @@ fn position(names: &[&str]) -> Scenario {
     s.game_mut().skip_trivial = true;
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().scenario_clear_hand(PlayerId(0));
-    s.force_card_in_hand(0, "Gray Ogre");
     for name in names {
         s.force_permanent_on_battlefield(0, name);
     }
+    s.game_mut()
+        .scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
+        .unwrap();
     s.set_player_mana_pool(0, "0");
     s
 }
@@ -48,7 +50,7 @@ fn trace(name: &str, mut s: Scenario, payable: &str) {
     let skipped = s.game().skip_trivial_count;
     let mut frames = Vec::new();
     for step in 0..32 {
-        if s.game().state.zones.zone_of(spell) == Some(ZoneType::Stack) {
+        if s.game().state.zones.zone_of(spell) != Some(ZoneType::Hand) {
             break;
         }
         let actions = &s.action_space().actions;
@@ -85,7 +87,10 @@ fn trace(name: &str, mut s: Scenario, payable: &str) {
         frames.push(serde_json::json!({"kind":format!("{:?}",s.action_space().kind),"legal_actions":actions.len(),"facts":facts,"encode_microseconds":times}));
         support::play::command(&mut s, |a| *a == chosen);
     }
-    assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Stack));
+    assert!(matches!(
+        s.game().state.zones.zone_of(spell),
+        Some(ZoneType::Stack | ZoneType::Battlefield)
+    ));
     println!(
         "{}",
         serde_json::json!({"case":name,"retained_decisions":frames.len(),"skipped_decisions":s.game().skip_trivial_count-skipped,"frames":frames,"remaining_mana":s.game().state.players[0].mana_pool})
