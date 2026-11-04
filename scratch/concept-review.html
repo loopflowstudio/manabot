@@ -9,10 +9,10 @@
 </style></head>
 <body>
 <header>
-<small>MTG-225 · Concept review · 3 November 2026 · 7c790f78e</small>
+<small>MTG-225 · Concept review · 3 November 2026 · da8980aed</small>
 <h1>A delayed ability is a record.</h1>
-<p><strong>No further product decision is needed.</strong> The headless review found no design change or open choice. Jack Heart's accepted 1a separates event matching, firing frequency and expiry; the implementation now does so. Combined gate validation and mutable receipt refresh remain pending.</p>
-<small>Built from <a href="mtg-225-tla-t6.md">the working design</a>, <a href="t6-direction.md">accepted direction</a>, <code>managym/state/src/ability.rs</code>, <code>managym/src/flow/{resolution,trigger,triggers,damage,zones,turn}.rs</code>, <code>managym/src/flow/resolution_tests.rs</code>, <code>managym/cards/src/tla.rs</code>, <code>academy/ui/src/lib/components/Schedule.svelte</code>, the Academy recovery tests, and both package READMEs. This page illustrates inspected behavior; it is not a browser capture or final-head acceptance.</small>
+<p><strong>No further product decision is needed.</strong> Review of the combined head found no design change or open choice. Jack Heart's accepted 1a separates event matching, firing frequency and expiry; the implementation does so. The v7 integration and pilot-fixture repair preserve that contract. Combined gate validation and assessment of affected mutable receipts remain pending.</p>
+<small>Built from <a href="mtg-225-tla-t6.md">the working design</a>, <a href="t6-direction.md">accepted direction</a>, <code>managym/state/src/ability.rs</code>, <code>managym/src/flow/{resolution,trigger,triggers,damage,zones,turn}.rs</code>, <code>managym/src/flow/resolution_tests.rs</code>, <code>managym/cards/src/tla.rs</code>, <code>academy/ui/src/lib/components/Schedule.svelte</code>, the Academy recovery tests, <code>managym/src/agent/shared_effects.rs</code>, <code>tests/verify/test_observation_parity.py</code>, <code>tests/eval/test_tla_pilot.py</code>, and both package READMEs. This page illustrates inspected behavior; it is not a browser capture or final-head acceptance.</small>
 </header>
 <main>
 <h2>The distinction that matters</h2>
@@ -64,17 +64,22 @@ CreateDelayedTrigger {
 <details><summary>Normal play, failure and recovery</summary>
 <ol><li>Visions creates two tokens. Each iteration captures its own exact object in its delayed record.</li><li>One token leaves. At your next end step, both once-only watchers fire, but only the surviving original token can be sacrificed. Nothing follows a replacement incarnation.</li><li>Disconnect while a resulting decision is pending. Recovery must retain the original controller, captured subjects and actual pending choice; it must not recreate an already-consumed watcher.</li></ol>
 <p><strong>Already represented in inspected tests:</strong> separate captures, source departure/control change, reentry before and after firing, remembered versus event context, viewer redaction, hashing and suspended-choice forks.</p>
-<p><strong>Focused proofs now pass:</strong> once versus repeat across two events; expiry without a match; countered first occurrence; expiry after occurrence creation; retained-session recovery. Reuse existing native state and recovery. No process-crash persistence claim.</p>
+<p><strong>Retained passing proofs:</strong> once versus repeat across two events; expiry without a match; countered first occurrence; expiry after occurrence creation; retained-session recovery. This review inspected existing tests and logs without rerunning them. No process-crash persistence claim.</p>
 </details>
 <details><summary>Documentation and consequences</summary>
 <blockquote><strong>Authoring guidance:</strong> Choose the event independently of how often the ability fires and when it stops waiting. Capture selectors at creation. The first matching event consumes a once-only watcher even if its effects later do nothing. Expiry removes waiting watchers, not occurrences already on the stack.</blockquote>
 <p>One native record owns event, firing policy, expiry, capture, controller and effects. Event matching and cleanup consume that record; Academy and policy project it without reconstructing its lifecycle. Preserve exact-object death-watch retirement and viewer privacy. Changed identity and tokens require affected mutable-world evidence to be refreshed; frozen evidence remains fixed.</p>
 <p>Existing capture documentation, shared-authority skill instructions, accepted Academy schedule work and all T6 card obligations remain unchanged. Jack Heart selected <strong>1a on 3 November 2026: lifetime decomposition is implemented, with combined gate validation pending</strong>. The API names above match the implementation.</p>
 </details>
+<details><summary>What the combined head changes</summary>
+<p>Explicit input v7 carries shared effects through the single catalog while preserving the delayed relations and public schedule. Fresh inputs remain v6. Selected-version native/Python parity includes the newer input; this transport adds no new player action or delayed-ability lifecycle.</p>
+<p>The frozen pilot's synthetic scheduling and analysis tests now supply their declared compatible world and capacities. Separate unpatched tests reject the changed runtime. Historical evidence remains frozen; this repair does not establish compatibility with an old trained checkpoint.</p>
+<p>These are implementation and integration consequences of the accepted contract. Neither reopens the answered 1a decision. Existing usage and authoring guidance remain sufficient.</p>
+</details>
 <footer><h2>Decision recorded</h2>
 <ol><li><strong>1a — Separate lifetime and occurrence for existing delayed abilities too.</strong> Accepted by Jack Heart on 3 November 2026. Deferral (1b) was not selected.</li></ol>
 <p><strong>Review outcome: nothing to change; no open choice.</strong> Existing authoring and Academy usage guidance already express this contract. All 16 cards, one catalog, deliberate Sozin choices and prior compatibility limits remain in scope.</p>
-<p class="muted">The earlier headless open question is resolved. Next proof remains combined gate validation and mutable receipt refresh; loop-or-next selects navigation. PR #417 returns for Jack Heart's review. No merge or auto-merge is authorized.</p>
+<p class="muted">The earlier headless open question is resolved. Next proof remains combined gate validation and affected mutable-receipt assessment; loop-or-next selects navigation. PR #417 returns for Jack Heart's review. No merge or auto-merge is authorized.</p>
 </footer>
 </main>
 <script>

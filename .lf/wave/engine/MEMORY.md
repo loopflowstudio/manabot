@@ -77,9 +77,9 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Shipped substrate
 
-- Immutable versioned `ContentPack` definitions are separated from compact
-  mutable match facts. Environments and branches share definitions without
-  copying card content.
+- The process-wide `ContentPack` catalog separates immutable definitions from
+  compact mutable match facts. Environments and branches share definitions
+  without copying card content; authored presets are decklists over that catalog.
 - Stable `CardDefId` values and deterministic state witnesses reproduce seeded
   traces without allocation-address or debug-format identity.
 - Card content is the engine's own `CardDefinition` written in its rules
@@ -516,6 +516,25 @@ preserves accepted decisions, dated proof limits and source history.
   sampler reload repairs the fixture without weakening validation. Both uniform
   and learned samplers have focused save/reload/payment-replay proof; this does
   not establish full-head CI or retained-checkpoint compatibility.
+
+- Frozen experiment scheduling/analysis fixtures must isolate historical
+  identity from live-runtime admission. T6's published CI exposed 27 pilot
+  failures at the world guard despite passing focused gameplay proofs. An
+  opt-in compatible-world fixture (also explicit in the fresh-process analysis
+  CLI) exercises synthetic outcomes without games, training or allocation;
+  separate unpatched checks retain rejection through frozen loading, run
+  declaration and evaluation. Pin every declared input capacity: v3's v6/256
+  facts contract also requires 64 actions, independent of fresh 512 defaults.
+  Temporary changed-input fixtures exercise admission without rewriting frozen
+  protocol/regime bytes. The repaired 33-case module passes; this is test
+  isolation evidence, not historical-runtime compatibility or full-head CI.
+- Main's explicit v7 shared-effect projection (`fb5ad2c13`, integrated into
+  T6 at `920bbb52a`) coexists with T6 schedule/capture/lifetime projections;
+  fresh inputs remain v6. Constructors use the single catalog, and consumer
+  parity must include the selected version rather than a global default shape.
+  Focused native, Python/text and discovery checks passed after integration;
+  pre-sync green receipts still do not certify the combined source or imply
+  acceptance of unrelated experiment work.
 
 ## Open tensions
 

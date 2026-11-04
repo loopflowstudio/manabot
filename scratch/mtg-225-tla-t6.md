@@ -1,10 +1,11 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
 Status (2026-11-03): accepted T6 behavior and the frozen-pilot isolation repair
-are implemented locally. HEAD `920bbb52ae524fab1e5fd58f7958b24f9395e1f5`
+are implemented and pushed. HEAD `da8980aedc8f5536bcc65b5f7c8d5a2f81985975`
 incorporates main `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` and its v7
-shared-effect projection. Gate owns combined validation, mutable receipt
-assessment, republication and final-head CI. Existing PR #417 remains one
+shared-effect projection through merge `920bbb52a`. PR #417 is mergeable;
+combined-head CI is running. Gate owns combined validation, mutable receipt
+assessment and any required republication. Existing PR #417 remains one
 cohesive delivery; stop for Jack Heart's review. No merge or auto-merge authorized.
 
 ## Accepted direction
@@ -155,6 +156,40 @@ reach observation admission using temporary copies; frozen protocol/regime bytes
 stay intact. The production guard pins v6/256 facts/**64 actions**, not fresh
 512-action defaults. `AGENTS.md` records this isolation rule.
 
+## Concept review — 2026-11-03, combined head
+
+Reviewed `da8980aed` against Jack Heart's accepted schedule, selector-capture
+and delayed-lifetime decisions. **Nothing to change; no open product choice.**
+This records design review, not combined-head acceptance or new approval.
+
+The concrete interaction remains: read Bumi's committed combat schedule,
+choose from native attacker offers, disconnect, and resume the same decision.
+The current restriction survives an empty pending queue; stale Commands cannot
+advance the game. Equal counts with opposite turn orders and missing historical
+schedules remain counterexamples to deriving this view in Academy.
+
+For delayed abilities, creation captures exact subjects; a matching event creates
+an occurrence and consumes a once-only watcher; cleanup expires only waiting
+records. Countering the occurrence cannot rearm it, and a returned incarnation
+cannot replace a captured subject. Native matching, departure and cleanup paths,
+the directed lifetime tests and retained-session recovery tests express these
+same distinctions. Captures, event context, controller and pending choices must
+survive cloning/recovery; no process-crash durability is implied.
+
+The v7 integration changes effect transport, not this lifecycle or the public
+schedule authority. Its constructor reads the single catalog; selected-version
+parity includes delayed relations and transform/schedule state. The pilot repair
+keeps historical synthetic analysis separate from runtime admission, with an
+explicit compatible-world fixture and unpatched rejection checks. Neither change
+requires a new user concept or permission to rewrite frozen evidence.
+
+Existing Academy usage and engine authoring guidance already describe the
+accepted interaction; no usage or skill rewrite is needed. The concept page is
+refreshed after this record. Existing logs and tests were inspected, not rerun.
+Next proof remains combined-head validation and affected mutable-receipt
+assessment, followed by PR #417's review boundary. Loop-or-next owns navigation;
+this review authorizes no publication, merge or auto-merge.
+
 ## Delete — do not maintain
 
 Completed cuts; no outstanding deletion target:
@@ -222,19 +257,27 @@ browser walkthrough. No strength, retained-checkpoint binary compatibility or
 new performance result is claimed. CI owns the same-runner Engine Budget;
 the reference and 10% tolerance are unchanged.
 
-Local sync `lf sync --manual` / `--continue` completed at `920bbb52a` with no
-unresolved paths. GitHub's `CONFLICTING` response still names published
-`d21fae20d`; gate must recheck the authoritative base and mergeability before
-republication, then inspect final-head CI and stop for Jack Heart's review.
+Sync completed at `920bbb52a`; the subsequent checkpoint `da8980aed` contains
+the pilot repair and compression changes. GitHub now reports that head against
+base `fb5ad2c13` as `MERGEABLE`, with merge state `BLOCKED` while checks run.
+The demo's earlier `CONFLICTING` result at `d21fae20d` is superseded, not an
+outstanding local conflict. CI run `41792775127` and package run `41792774803`
+are in progress; their final results remain unknown. No further implementation
+gap was identified by this reconciliation. Remaining acceptance is combined-head
+validation, affected mutable receipt assessment, final PR validation reporting
+and Jack Heart's review. Any subsequent code or base change needs its affected
+checks and mergeability reassessed; no merge or auto-merge is authorized.
 
-Compression verification: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test
---manifest-path managym/Cargo.toml -j 2` (setup, Sozin, Redirect Lightning and
-Jeong copy filters) — 11 debug checks passed; `uv run` pytest pilot,
-decklist-import and current-content modules — 60 passed. Release `maturin build`
-passed and the cp312 extension was installed atomically; rustfmt, Ruff and
-`git diff --check` passed. Logs: `.runs/t6-demo/compress-*.log`. `lf context`
-confirms both scratch and memory under their token/byte limits. Gate retains
-affected suites, mutable receipt assessment and publication; no merge authorized.
+Retained compression evidence: 11 debug checks cover setups, Sozin, Redirect
+Lightning and Jeong copies; pilot, decklist-import and current-content modules
+passed 60 checks, including all 33 pilot cases. The release extension build and
+atomic installation, rustfmt and Ruff passed. Logs:
+`.runs/t6-demo/compress-*.log`. Inspection confirms the compatible-world fixture
+is opt-in, including the fresh-process analysis CLI; unpatched admission checks
+cover frozen loading, run declaration and evaluation. Protocol/regime files have
+no diff from `d21fae20d`. These results are reused, not rerun for reconciliation.
+
+Reconciliation check: `git diff --check` — passed (documentation-only edits).
 
 ## Retained history
 
@@ -243,5 +286,6 @@ is preserved at `.runs/t6-demo/pre-compress-plan.md`. Earlier accepted review,
 integration and negative reproductions are in the pinned plan at `d21fae20d`
 and its precise historical links (`a7ba7432c`, `bf7631c6a`, `7c790f78e`).
 `.runs/t6-publication/sozin-payment-order.log` preserves the original negative
-payment reproduction. Concept-review HTML remains unchanged. Engine memory is
-read-only in this step and within budget; realign owns reconciliation.
+payment reproduction. Concept-review HTML now reflects the combined-head review. Engine memory now
+records the pilot-isolation and v7 integration lessons; no immediate child Wave
+memories exist in this checkout. Both memory and scratch remain within budget.
