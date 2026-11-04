@@ -25,6 +25,7 @@ from manabot.model.facts import FactEncoder
 from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
+from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.state_records import SharedFactEncoder, TypedContinuationEncoder
 from manabot.sim.action.structured import RaggedOfferBatch
 import managym
@@ -59,8 +60,11 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
-        if config.state_encoder != "rows" and enc.config.policy_input_version != 5:
-            raise ValueError("typed state experiment requires policy input v5")
+        if config.state_encoder != "rows" and enc.config.policy_input_version not in (
+            5,
+            7,
+        ):
+            raise ValueError("typed state experiment requires policy input v5 or v7")
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -261,10 +265,23 @@ class ActorCritic(nn.Module):
         # characteristics, spent abilities, continuous-effect records) join
         # their objects. Built last so earlier parameters keep their draws.
         self.facts: FactEncoder | SharedFactEncoder | None
-        if config.state_encoder != "rows":
+        if config.state_encoder != "rows" and enc.config.policy_input_version == 5:
             self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
         else:
-            self.facts = FactEncoder(embed_dim, enc.config.fact_rows) if enc.shows_everything else None
+            self.facts = (
+                FactEncoder(embed_dim, enc.config.fact_rows)
+                if enc.shows_everything
+                else None
+            )
+
+        self.shared_effects = (
+            SharedEffectEncoder(
+                embed_dim,
+                "typed_gru" if config.state_encoder == "typed_gru" else "typed_pool",
+            )
+            if enc.config.policy_input_version >= 7
+            else None
+        )
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -600,6 +617,10 @@ class ActorCritic(nn.Module):
             objects = self._join_permanent_links(obs, objects)
         if self.facts is not None:
             objects = self.facts(obs["facts"], objects)
+        if self.shared_effects is not None:
+            objects = self.shared_effects(
+                obs["effects"], obs["effect_details"], obs["effect_members"], objects
+            )
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
         frame_context = None

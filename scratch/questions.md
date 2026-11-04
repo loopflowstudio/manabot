@@ -1,66 +1,40 @@
-# Questions and assumptions — representation experiment, 2026-11-03
+# Decisions and open questions — 5da5f4
 
-- Jack Heart authorized up to $25 total for this Task's actual replicated
-  training, using only what is needed. This supersedes the earlier kickoff-only
-  and no-paid-compute statements. The MTG-213 allocation and frozen evidence stay
-  separate; no automatic merge or production promotion is authorized.
-- Credential correction from Jack Heart (2026-11-03): RunPod is in Doppler
-  `etude/prd`, artifacts in `manabot/prd`; nested injection resolves the earlier
-  incomplete-environment blocker. Current quote at 2026-11-04 02:17 UTC is
-  $0.59/hour L4, available. No secrets were printed or copied.
-- The design now freezes an excluded one-update/three-arm canary with $0.90
-  cohort cap, separate Task-local launcher state and a new on-demand template.
-  The $23.90 aggregate reservation includes $6 ancillary/storage/rounding,
-  $12 potential training and $5 evaluation, leaving $1.10 unallocated. Quote,
-  pricing sources, retention horizon and stopping rules are in the design.
-  Scientific execution still depends on canary feasibility and a frozen final
-  evaluation/analysis protocol. No pilot state is reused.
-- Reversible implementation choice: first isolate encoding with the *same v5
-  input* in all three arms (`rows`, `typed_pool`, `typed_gru`). The latter share
-  complete fact-fragment computation and separate frame structures; the GRU
-  operates within a record, never across decisions. This does not implement the
-  proposed native variable-length transport, enlarge capacities, restore exact
-  effect-source identity, or establish semantic sufficiency.
-- Source inspection found a reference-encoder defect: native v5 already emits
-  duration 3 for WhileYouControlSource; Python emitted 2. Python now follows
-  native authority, verified from a Ty Lee cast/target through Commands for both
-  viewers. No native or frozen tensor width changed.
-- The native Drill fixture resolves six real activations against ten permanents:
-  120 fragments factor into 12 payloads, preserving six timestamp ranks. Seven
-  activations still fail v5's 128-fact limit in native and Python. This constructed
-  prefix is not a replay of the retained MTG-213 failure.
-- Scientific seeds, endpoint and analysis remain a prelaunch proposal in the
-  design. Engineering one-update training smokes and one-pass fixture timings
-  are excluded from learning evidence. Replicated results, not these proxies,
-  must drive architecture selection; four proposed seeds do not imply precision.
-- Exact source/controller and native effective-ability transport still need the
-  paired-position proof and reviewed transport design. Current active effects
-  cannot be replaced by a bounded history. Persistent recurrence remains a
-  separate lifecycle/learning choice.
-- The transferred v6 snapshot belongs to source
-  `1af50386fdc4d96b936e81a8c32fae3054dc2c5c`; this checkout's base
-  `c823c9c8f53df06c723e93d6d3e7a8676a71fa9d` has frozen v5. The MTG-213 hotfix
-  was not ported. Replaced inherited MTG-239 notes remain completely at
-  `c823c9c8f53df06c723e93d6d3e7a8676a71fa9d:scratch/questions.md`.
-- Canary launch state (2026-11-04): first preparation `b65b1912e41a` failed on
-  transient remote history fetch before any run or rental; a bounded read-only
-  reproduction succeeded. Retried preparation with the same committed protocol
-  and cap. Source `a8c1cbbff182`; cohort `representation-5da5f4-canary` owns runs
-  `532222ba6ec2` (rows), `7b9fcf7557a3` (typed_pool), `dcbd40a43d09` (typed_gru),
-  machine `representation-5da5f4-6168654d2c3f`, deadline 2026-11-04 03:19 UTC.
-  Launcher state is `.runs/representation/etude`; no global controller or pilot
-  state is touched. A bounded local supervisor is active; all Task-owned rentals
-  and supervision must be settled before ending the run.
-- First canary is complete and its supervisor ended. All three CUDA updates
-  succeeded; full rental estimate $0.07083924, deletion confirmed 02:35:17 UTC.
-  Candidate time exceeded the tentative 45-minute projection. Sparse-batch
-  routing now skips empty observations without changing equations; 20 focused
-  checks pass. A second excluded canary is predeclared in the design at $0.60,
-  keeping cumulative canary reservations below $0.90. Scientific horizon/seed
-  allocation still awaits that result; no learning scores were inspected.
-- Second-canary quote at source 7f54fca04 found no available L4 (no launch or
-  rental). Current provider quotes: L4 $0.59 unavailable, A5000 $0.27 unavailable,
-  RTX 4000 Ada $0.28 available, A4000 $0.25 unavailable. Use a new isolated
-  RTX 4000 Ada template at $0.30/hour ceiling with the same host/disk/image and
-  safeguards. Hardware differs, so between-canary timings cannot isolate the
-  optimization. The second canary retains its $0.60 cap and excluded seed.
+- Jack Heart's 2026-11-04 02:49 UTC direction prioritizes pre-encoding complete
+  effect consolidation after MTG-213 v3 reached270facts. Same-input v5 neural
+  factoring is insufficient. The plan now implements an explicit v7 cut; merged
+  PR416's v6 and every frozen protocol/input/receipt remain unchanged.
+- Lossless grouping preserves full native payload, controller, exact source,
+  membership, multiplicity and order. Semantic deletion/coalescing across
+  distinct activations is deferred unless every relevant continuation is proved;
+  audit intervening grants, expiry, source changes, entrants and additive effects.
+- Historical captures omit native provenance. The transferred270-row audit
+  proves only old-projection roundtrip; do not synthesize the absent source or
+  controller. New native fixtures supply the full-authority proof.
+- Engineering choice: explicit v7 with bounded128payloads/512detailtokens/2048
+  memberships; local fact table excludes active effects. Fresh defaults stayv6.
+  These capacities are not a guarantee over all legal games. Tensor/model/text
+  and native scalar/vector/Python paths must move together.
+- No scientific seed has run. Freeze a revised common-input comparison after
+  the transport passes; previous canaries are excluded. Persistent game memory
+  remains separate. Jack Heart’s 03:01 UTC ship approval authorizes delivery of the bounded repair
+  after gate; fresh defaults and scientific experiments remain unchanged.
+- Task budget is$25total, separate from MTG-213's$10. Only paid rental is deleted;
+  estimate$0.07083924 plus ancillary storage. Three later availability/admission
+  failures created no rental. CPU canary passed all3arms at22–27seconds/update;
+  no training process remains. Preserve all evidence under.runs/representation.
+- RunPod credentials are Doppler etude/prd, artifacts manabot/prd. Inject through
+  nested Doppler commands; never copy/print keys. Task-local Etude state contains
+  only this Task's allocations. No further rental is required for investigation.
+- Older complete decisions and chronology are retained at
+  8e6cc62df:scratch/questions.md and the design at the same commit. PR416's
+  inherited notes remain at3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md.
+
+- New native counterexample: an Indefinite LoseKeywords(Flying), later
+  Indefinite AddKeywords(Flying), and later EndOfTurn LoseKeywords still lack
+  flying after cleanup. Existing statics.rs:1407 subtracts all lost_keywords
+  after collecting grants at1478, ignoring grant/removal timestamp order.
+  This predates the projection change. No semantic coalescing is shipped;
+  records/timestamps remain intact. The new directed expiry/grant behavior
+  check uses the existing correctly ordered LoseAllAbilities mechanism.
+  A separate rules repair needs its own world/evidence assessment.

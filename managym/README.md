@@ -60,6 +60,16 @@ Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
 
+Input v7 factors resolved `EffectRecords` through `agent/shared_effects.rs`
+before admission: complete equal payloads share one header and typed detail
+slice, with one explicit membership per original record. Controller, exact
+source incarnation, timestamps, fixed affected sets and duplicate edges survive.
+Public object IDs are joins; private card storage IDs do not enter this view.
+Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
+512 × 3 and 2048 × 2; every capacity fails explicitly. V1–v6 still use their
+frozen per-holder fact projection, while v7 local facts exclude active effects.
+Projection never mutates or semantically coalesces the engine’s records.
+
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
 Repeated specs in separate clauses may choose the same object. A resolving

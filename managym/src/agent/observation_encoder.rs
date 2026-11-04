@@ -223,6 +223,30 @@ impl ObservationEncoderConfig {
         }
     }
 
+    pub fn effects_len(&self) -> usize {
+        if self.policy_input_version >= 7 {
+            super::shared_effects::EFFECT_ROWS * super::shared_effects::EFFECT_DIM
+        } else {
+            0
+        }
+    }
+
+    pub fn effect_details_len(&self) -> usize {
+        if self.policy_input_version >= 7 {
+            super::shared_effects::DETAIL_ROWS * super::shared_effects::DETAIL_DIM
+        } else {
+            0
+        }
+    }
+
+    pub fn effect_members_len(&self) -> usize {
+        if self.policy_input_version >= 7 {
+            super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
+        } else {
+            0
+        }
+    }
+
     pub fn facts_len(&self) -> usize {
         self.fact_rows() * FACT_DIM
     }
@@ -259,6 +283,9 @@ impl ObservationEncoderConfig {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncodedObservation {
     pub relations: Vec<f32>,
+    pub effects: Vec<f32>,
+    pub effect_details: Vec<f32>,
+    pub effect_members: Vec<f32>,
     pub facts: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
@@ -284,6 +311,9 @@ pub struct EncodedObservation {
 
 pub struct EncodedObservationMut<'a> {
     pub relations: &'a mut [f32],
+    pub effects: &'a mut [f32],
+    pub effect_details: &'a mut [f32],
+    pub effect_members: &'a mut [f32],
     pub facts: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
@@ -312,6 +342,9 @@ impl EncodedObservation {
     pub fn buffers_mut(&mut self) -> EncodedObservationMut<'_> {
         EncodedObservationMut {
             relations: &mut self.relations,
+            effects: &mut self.effects,
+            effect_details: &mut self.effect_details,
+            effect_members: &mut self.effect_members,
             facts: &mut self.facts,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
@@ -339,6 +372,7 @@ impl EncodedObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
+    InvalidShared(&'static str),
     Capacity {
         field: &'static str,
         capacity: usize,
@@ -354,6 +388,7 @@ pub enum ObservationEncodeError {
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
                 field,
                 capacity,
@@ -382,6 +417,9 @@ pub fn encode(
 ) -> Result<EncodedObservation, ObservationEncodeError> {
     let mut encoded = EncodedObservation {
         relations: vec![0.0; config.relations_len()],
+        effects: vec![0.0; config.effects_len()],
+        effect_details: vec![0.0; config.effect_details_len()],
+        effect_members: vec![0.0; config.effect_members_len()],
         facts: vec![0.0; config.facts_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
@@ -454,6 +492,17 @@ pub fn encode_into(
         config.action_focus_len(),
     )?;
     validate_buffer_len("events", out.events.len(), config.events_len())?;
+    validate_buffer_len("effects", out.effects.len(), config.effects_len())?;
+    validate_buffer_len(
+        "effect_details",
+        out.effect_details.len(),
+        config.effect_details_len(),
+    )?;
+    validate_buffer_len(
+        "effect_members",
+        out.effect_members.len(),
+        config.effect_members_len(),
+    )?;
     validate_buffer_len("facts", out.facts.len(), config.facts_len())?;
     validate_buffer_len("agent_player_valid", out.agent_player_valid.len(), 1)?;
     validate_buffer_len("opponent_player_valid", out.opponent_player_valid.len(), 1)?;
@@ -697,7 +746,7 @@ pub fn encode_into(
     );
     if config.policy_input_version >= 5 {
         // Hosts may be listed after their attachments, so links follow indexing.
-        let ranks = timestamp_ranks(obs);
+        let ranks = timestamp_ranks(obs, config.policy_input_version >= 7);
         let link = |object: Option<i32>| {
             object
                 .and_then(|object| object_to_index.get(&object))
@@ -721,7 +770,21 @@ pub fn encode_into(
     }
 
     if config.policy_input_version >= 5 {
-        encode_facts(obs, &object_to_index, out.facts)?;
+        encode_facts(
+            obs,
+            &object_to_index,
+            out.facts,
+            config.policy_input_version >= 7,
+        )?;
+        if config.policy_input_version >= 7 {
+            super::shared_effects::encode(
+                obs,
+                &object_to_index,
+                out.effects,
+                out.effect_details,
+                out.effect_members,
+            )?;
+        }
     }
 
     if config.policy_input_version >= 2 {
@@ -1053,7 +1116,7 @@ struct Fact {
 
 /// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
 /// object order (agent, opponent, agent permanents, opponent permanents).
-fn facts(obs: &Observation) -> Vec<Fact> {
+fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
         out.push(Fact {
@@ -1118,6 +1181,9 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             effect_facts(permanent.id, FactKind::CopyException, exception, &mut out);
         }
     }
+    if shared {
+        return out;
+    }
     let holders = [
         (obs.agent.id, &obs.agent.effects),
         (obs.opponent.id, &obs.opponent.effects),
@@ -1171,7 +1237,10 @@ fn effect_facts(object: i32, kind: FactKind, effect: &ContinuousEffectData, out:
 
 /// Rank of each timestamp among the observation's permanents and effect
 /// records (1-based), so order is visible without exposing raw ids.
-fn timestamp_ranks(obs: &Observation) -> std::collections::BTreeMap<i32, f32> {
+pub(super) fn timestamp_ranks(
+    obs: &Observation,
+    shared: bool,
+) -> std::collections::BTreeMap<i32, f32> {
     let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     let effects = [&obs.agent.effects, &obs.opponent.effects]
         .into_iter()
@@ -1182,6 +1251,20 @@ fn timestamp_ranks(obs: &Observation) -> std::collections::BTreeMap<i32, f32> {
         .map(PermanentData::timestamp)
         .chain(effects)
         .collect();
+    if shared {
+        stamps = obs
+            .agent_permanents
+            .iter()
+            .chain(&obs.opponent_permanents)
+            .map(PermanentData::timestamp)
+            .chain(
+                obs.shared_effects
+                    .iter()
+                    .flatten()
+                    .map(|record| record.effect.timestamp),
+            )
+            .collect();
+    }
     stamps.sort_unstable();
     stamps.dedup();
     stamps
@@ -1191,7 +1274,7 @@ fn timestamp_ranks(obs: &Observation) -> std::collections::BTreeMap<i32, f32> {
         .collect()
 }
 
-fn split_id(id: i32) -> [f32; 2] {
+pub(super) fn split_id(id: i32) -> [f32; 2] {
     let id = id as u32;
     [(id >> 16) as f32, (id & 0xffff) as f32]
 }
@@ -1200,8 +1283,9 @@ fn encode_facts(
     obs: &Observation,
     object_to_index: &HashMap<i32, i32>,
     out: &mut [f32],
+    shared: bool,
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs);
+    let facts = facts(obs, shared);
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
@@ -1211,7 +1295,7 @@ fn encode_facts(
         });
     }
     out.fill(0.0);
-    let ranks = timestamp_ranks(obs);
+    let ranks = timestamp_ranks(obs, shared);
     for (row, fact) in out.as_chunks_mut::<FACT_DIM>().0.iter_mut().zip(&facts) {
         row[FACT_OBJECT_INDEX] = object_to_index
             .get(&fact.object)
@@ -1429,6 +1513,7 @@ mod tests {
 
     fn sample_observation() -> Observation {
         Observation {
+            shared_effects: None,
             continuation: Vec::new(),
             game_over: false,
             won: false,
@@ -1835,6 +1920,9 @@ mod tests {
             opponent_permanents: &mut opponent_permanents,
             actions: &mut actions,
             events: &mut events,
+            effects: &mut [],
+            effect_details: &mut [],
+            effect_members: &mut [],
             facts: &mut [],
             action_focus: &mut action_focus,
             agent_player_valid: &mut agent_player_valid,

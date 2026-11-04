@@ -1,8 +1,10 @@
 """Same-input state encoder comparison; declaration does not allocate compute.
 
 All arms run the existing complete-game self-play executor and checkpoint path.
-The protocol is in scratch/5da5f4-design-effective-state.md. Scientific launch
-is blocked pending a current quote and a frozen allocation; the smoke recipe is
+The original draft protocol is retained at
+8e6cc62df:scratch/5da5f4-design-effective-state.md. No scientific seed ran. The
+subsequent v7 repair supersedes its proposed common transport; any learning
+comparison needs a newly frozen protocol/allocation before launch; the smoke recipe is
 only an engineering check and must never be scored as a training replicate.
 """
 
@@ -44,6 +46,7 @@ def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
     regime.agent.policy_film = True
     regime.agent.recent_events = False
     regime.observation.policy_input_version = 5
+    regime.observation.max_facts = None
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"

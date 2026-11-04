@@ -12596,6 +12596,15 @@ fn ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     assert!(tapped(&s, ogre));
+    let ty_lee = permanent_named(&s, "Ty Lee, Chi Blocker");
+    let exact = s.game().permanent_object_ref(ty_lee).unwrap();
+    let shared = managym::agent::shared_effects::project(s.game());
+    let lock = shared.iter().find(|record| record.effect.duration == "WhileYouControlSource").unwrap();
+    let source = lock.source.as_ref().unwrap();
+    assert_eq!(source.incarnation, Some(exact.incarnation.0));
+    assert_eq!(source.object_id, Some(s.game().state.permanents[ty_lee].as_ref().unwrap().id.0 as i32));
+    assert_eq!(lock.members.len(), 1);
+
     s.advance_to_active_step(1, StepKind::Main);
     assert!(tapped(&s, ogre), "its untap step skips it");
 
@@ -12608,6 +12617,7 @@ fn ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her() {
     settle(&mut s);
     s.advance_to_active_step(1, StepKind::Main);
     assert!(!tapped(&s, ogre), "Ty Lee is gone");
+    assert!(managym::agent::shared_effects::project(s.game()).iter().all(|record| record.source.as_ref().is_none_or(|source| source.object_id != Some(ty_lee.0 as i32))));
 }
 
 /// Tapping it on entry destroys a creature with power 4 or less; {1} strips

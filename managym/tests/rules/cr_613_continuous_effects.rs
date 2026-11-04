@@ -234,3 +234,196 @@ fn a_nonlegendary_record_exempts_its_permanent_from_the_legend_rule() {
         );
     }
 }
+
+/// Shared payloads are admitted before the old per-keyword/per-object gate.
+#[test]
+fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
+    use managym::agent::{
+        observation::Observation,
+        observation_encoder::{encode, ObservationEncoderConfig},
+    };
+    for (activations, targets, version, capacity) in [(7, 10, 5, 128), (9, 15, 6, 256)] {
+        let (mut s, _) = ogre_scenario();
+        let objects: Vec<_> = (0..targets)
+            .map(|_| s.force_permanent_on_battlefield(1, "Mountain"))
+            .collect();
+        let affected: Vec<_> = objects
+            .iter()
+            .map(|id| s.game().affected_permanent(*id).unwrap())
+            .collect();
+        for _ in 0..activations {
+            s.game_mut().apply_continuous(
+                None,
+                PlayerId(0),
+                affected.iter().copied(),
+                Modification::LoseKeywords(Keywords::of(&[
+                    Keyword::Hexproof,
+                    Keyword::Indestructible,
+                ])),
+                EffectDuration::EndOfTurn,
+            );
+        }
+        let before = s.game().state.deterministic_hash();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            let config = ObservationEncoderConfig {
+                policy_input_version: version,
+                max_facts: capacity,
+                ..Default::default()
+            };
+            assert!(encode(&obs, &config)
+                .unwrap_err()
+                .to_string()
+                .contains("facts"));
+            let shared = obs.shared_effects.as_ref().unwrap();
+            assert_eq!(shared.len(), activations);
+            assert!(
+                shared
+                    .iter()
+                    .all(|effect| effect.effect.keywords.len() == 2
+                        && effect.members.len() == targets)
+            );
+            let encoded = encode(
+                &obs,
+                &ObservationEncoderConfig {
+                    policy_input_version: 7,
+                    ..config
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                encoded
+                    .effects
+                    .chunks_exact(18)
+                    .filter(|row| row[17] == 1.0)
+                    .count(),
+                activations
+            );
+            assert_eq!(
+                encoded
+                    .effect_members
+                    .chunks_exact(2)
+                    .filter(|row| row[0] > 0.0)
+                    .count(),
+                activations * targets
+            );
+            let mut orders: Vec<_> = shared
+                .iter()
+                .flat_map(|record| record.members.iter().map(|member| member.order))
+                .collect();
+            orders.sort_unstable();
+            assert_eq!(orders, (0..activations * targets).collect::<Vec<_>>());
+        }
+        assert_eq!(s.game().state.effects.iter().count(), activations * targets);
+        assert_eq!(s.game().state.deterministic_hash(), before);
+    }
+}
+
+#[test]
+fn shared_effects_preserve_duplicate_additive_memberships_and_later_entrants() {
+    use managym::agent::shared_effects::project;
+    let (mut s, ogre) = ogre_scenario();
+    let affected = s.game().affected_permanent(ogre).unwrap();
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [affected, affected],
+        Modification::ModifyPt {
+            power: 1,
+            toughness: 1,
+        },
+        EffectDuration::EndOfTurn,
+    );
+    let later = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let shared = project(s.game());
+    assert_eq!(shared.len(), 1);
+    assert_eq!(shared[0].members.len(), 2);
+    assert_eq!(shared[0].members[0].target, shared[0].members[1].target);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
+    assert_eq!(s.game().characteristics(later).pt(), (2, 2));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(project(s.game()).is_empty());
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+}
+
+#[test]
+fn shared_effects_keep_intervening_grants_and_different_expiries() {
+    use managym::agent::shared_effects::project;
+    let (mut s, ogre) = ogre_scenario();
+    indefinitely(&mut s, ogre, Modification::LoseAllAbilities);
+    indefinitely(&mut s, ogre, flying());
+    until_end_of_turn(&mut s, ogre, Modification::LoseAllAbilities);
+    let shared = project(s.game());
+    assert_eq!(shared.len(), 3);
+    assert_eq!(shared[0].effect.modification, shared[2].effect.modification);
+    assert_ne!(shared[0].effect.duration, shared[2].effect.duration);
+    assert!(shared
+        .windows(2)
+        .all(|pair| pair[0].effect.timestamp < pair[1].effect.timestamp));
+    assert!(!s.game().characteristics(ogre).keywords.has(Keyword::Flying));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(project(s.game()).len(), 2);
+    assert!(s.game().characteristics(ogre).keywords.has(Keyword::Flying));
+}
+
+/// Equal old payloads bound to different exact sources have different futures.
+#[test]
+fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
+    use managym::agent::{
+        observation::Observation,
+        observation_encoder::{encode, ObservationEncoderConfig},
+    };
+    use managym::state::effect::ContinuousEffect;
+    let (mut s, target) = ogre_scenario();
+    let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let b = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let source_card = card_of(&s, a);
+    let affected = s.game().affected_permanent(target).unwrap();
+    let mut games = [s.game().clone(), s.game().clone()];
+    for (game, source) in games.iter_mut().zip([a, b]) {
+        let timestamp = game.state.id_gen.next_id();
+        let record = ContinuousEffect {
+            timestamp,
+            source: Some(game.state.cards[source_card].definition_id),
+            controller: PlayerId(0),
+            affected,
+            modification: flying(),
+            duration: EffectDuration::WhileYouControlSource,
+            source_object: game.permanent_object_ref(source),
+        };
+        game.state.effects.push(record);
+        assert!(game.characteristics(target).keywords.has(Keyword::Flying));
+    }
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let observations = games
+            .each_ref()
+            .map(|game| Observation::for_player(game, viewer));
+        let old = ObservationEncoderConfig {
+            policy_input_version: 6,
+            ..Default::default()
+        };
+        assert_eq!(
+            encode(&observations[0], &old).unwrap(),
+            encode(&observations[1], &old).unwrap()
+        );
+        let new = ObservationEncoderConfig {
+            policy_input_version: 7,
+            ..old
+        };
+        let encoded = observations
+            .each_ref()
+            .map(|obs| encode(obs, &new).unwrap());
+        assert_ne!(encoded[0].effects[12], encoded[1].effects[12]);
+    }
+    for game in &mut games {
+        game.move_card(source_card, ZoneType::Hand);
+    }
+    assert!(!games[0]
+        .characteristics(target)
+        .keywords
+        .has(Keyword::Flying));
+    assert!(games[1]
+        .characteristics(target)
+        .keywords
+        .has(Keyword::Flying));
+}

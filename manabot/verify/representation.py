@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, StateEncoder
+from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.infra.source import source_commit, source_dirty
@@ -135,7 +135,7 @@ def prove(out: Path) -> int:
     """Retain all attempts in a fresh directory; any failed fixture fails the proof."""
     out.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(1)
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     measurements: list[Measurement] = []
     root = Path(__file__).resolve().parents[2]
     # Bind current Python and Rust sources, including untracked prototype files.
@@ -177,7 +177,7 @@ def prove(out: Path) -> int:
         encoded: dict[str, np.ndarray] | None = None
         for viewer in (actor, 1 - actor):
             obs = env.observation_for_player(viewer)
-            native = env.encode_observation(obs)
+            native = env.encode_observation(obs, 5)
             reference = space.encode(obs)
             for key in native:
                 np.testing.assert_array_equal(

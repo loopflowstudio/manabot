@@ -41,10 +41,10 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6] = Field(
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
-    # Only v6 carries a configurable fact capacity. Omission on older inputs
+    # V6 and v7 carry a configurable local-fact capacity. Omission on older inputs
     # preserves their serialized architecture receipts, including v1 defaults.
     max_facts: int | None = Field(
         default=None, gt=0, exclude_if=lambda value: value is None
@@ -66,7 +66,7 @@ class ObservationConfig(BaseConfig):
     def validate_fact_capacity(self) -> "ObservationConfig":
         if self.policy_input_version >= 6:
             if self.max_facts is None:
-                self.max_facts = 512
+                self.max_facts = 128 if self.policy_input_version == 7 else 512
         elif self.max_facts is not None:
             raise ValueError("max_facts requires policy input v6")
         return self
@@ -207,8 +207,9 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
-    # Experimental encoders of the same frozen v5 input. This selects model
-    # equations, never a larger observation capacity or temporal memory.
+    # Within-observation reducers for frozen v5 fragments or explicit v7 shared
+    # payloads and typed continuations. Capacity belongs to ObservationConfig;
+    # none of these encoders carries temporal memory.
     state_encoder: StateEncoder = Field(
         default="rows", exclude_if=lambda value: value == "rows"
     )

@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from experiments.state_representation import recipe
-from manabot.env.observation import FACT_ROWS, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
@@ -31,7 +31,7 @@ def _batch(encoded: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
 def test_native_choices_remain_distinct_and_reload(tmp_path: Path, arm: Arm) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(73200)
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     agent = ActorCritic(
         space, ModelConfig(hidden_dim=16, state_encoder=arm, policy_film=True)
     )
@@ -75,7 +75,8 @@ def test_shared_facts_preserve_membership_multiplicity_and_padding(arm: Arm) -> 
     torch.manual_seed(73200)
     encoder = SharedFactEncoder(8, arm)
     objects = torch.randn(1, 3, 8, requires_grad=True)
-    facts = torch.zeros(1, FACT_ROWS, 12)
+    rows = ObservationConfig(policy_input_version=5).fact_rows
+    facts = torch.zeros(1, rows, 12)
     # Same payload, distinct objects; a duplicate on object one is significant.
     facts[0, :3] = torch.tensor(
         [[obj, 6, 1, 2, 3, 4, 0.1, 0.2, 3, 7, 11, 1] for obj in (1, 2, 1)]
@@ -84,7 +85,7 @@ def test_shared_facts_preserve_membership_multiplicity_and_padding(arm: Arm) -> 
     delta = expected - objects
     torch.testing.assert_close(delta[:, 0], 2 * delta[:, 1])
     assert delta[:, 2].abs().sum() == 0
-    permuted = facts[:, torch.randperm(FACT_ROWS)]
+    permuted = facts[:, torch.randperm(rows)]
     torch.testing.assert_close(expected, encoder(permuted, objects))
     poisoned = facts.clone()
     poisoned[0, 3:, :11] = float("nan")
@@ -104,13 +105,13 @@ def test_shared_facts_preserve_membership_multiplicity_and_padding(arm: Arm) -> 
 def test_native_viewer_projection_and_object_joins(arm: Arm) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(73200)
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, state_encoder=arm))
     for env in native_fixtures().values():
         actor = env.current_agent_index()
         for viewer in (actor, 1 - actor):
             obs = env.observation_for_player(viewer)
-            native = env.encode_observation(obs)
+            native = env.encode_observation(obs, 5)
             reference = space.encode(obs)
             for key in native:
                 np.testing.assert_array_equal(native[key], reference[key])
@@ -124,7 +125,7 @@ def test_native_viewer_projection_and_object_joins(arm: Arm) -> None:
 
 def test_historical_defaults_and_admission() -> None:
     assert "state_encoder" not in ModelConfig().model_dump()
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     identities = {
         architecture_identity(ModelConfig(state_encoder=arm), space)
         for arm in ("rows", "typed_pool", "typed_gru")
@@ -206,9 +207,9 @@ def test_stack_order_is_semantic_but_row_storage_order_is_not(arm: Arm) -> None:
 
 def test_native_shared_effects_keep_timestamps_and_reject_v5_overflow() -> None:
     env = shared_effect_root(6)
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     obs = env.observation_for_player(env.current_agent_index())
-    native = env.encode_observation(obs)
+    native = env.encode_observation(obs, 5)
     expected = space.encode(obs)
     for key in native:
         np.testing.assert_array_equal(native[key], expected[key])
@@ -218,6 +219,6 @@ def test_native_shared_effects_keep_timestamps_and_reject_v5_overflow() -> None:
     assert len(np.unique(facts[:, 9])) == 6
     overflowing = shared_effect_root(7)
     obs = overflowing.observation_for_player(overflowing.current_agent_index())
-    for encode in (space.encode, overflowing.encode_observation):
+    for encode in (space.encode, lambda obs: overflowing.encode_observation(obs, 5)):
         with pytest.raises((ValueError, RuntimeError), match="facts"):
             encode(obs)

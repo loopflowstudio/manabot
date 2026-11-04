@@ -301,7 +301,7 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
 ) -> None:
     torch.manual_seed(195)
     _, raw = ordering_root()
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     encoded = space.encode(raw)
     batch = {
         key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()

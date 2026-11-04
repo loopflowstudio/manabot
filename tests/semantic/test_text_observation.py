@@ -588,6 +588,20 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "source_name": "the definition line of (from D<n>)",
         "timestamp": "listed in timestamp order",
     },
+    managym.SharedEffect: {
+        "effect": "one complete effect phrase and timestamp rank",
+        "controller_id": "controller alias",
+        "source": "exact source alias with capture incarnation admission",
+        "members": "affects each named member, including duplicates",
+    },
+    managym.EffectObject: {
+        "object_id": "public player/permanent alias",
+        "incarnation": "checked against the captured current object",
+    },
+    managym.EffectMembership: {
+        "target": "affected public object alias",
+        "order": "record ordinal for exact reconstruction",
+    },
     managym.CopyEffect: {
         "registry_key": "copy of D<n>",
         "name": "the definition line of D<n>",
@@ -646,7 +660,10 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     )
 
 
-def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
+@pytest.mark.parametrize("historical", (False, True))
+def test_continuous_effect_records_are_stated_in_order_with_duration(
+    historical: bool,
+) -> None:
     env = priority_root((), ("Mountain", "Gray Ogre"))
     decision = capture_text_decision(env)
     payload = json.loads(decision.capture_json)
@@ -681,7 +698,59 @@ def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
             "timestamp": 94,
         }
     ]
+    if historical:
+        state.pop("shared_effects")
+    else:
+        incarnation = next(
+            link["incarnation"]
+            for link in payload["objects"].values()
+            if link.get("permanent_id") == ogre["id"]
+        )
+        state["shared_effects"] = [
+            {
+                "effect": effect,
+                "controller_id": state["agent"]["id"],
+                "source": None,
+                "members": [
+                    {
+                        "target": {"object_id": ogre["id"], "incarnation": incarnation},
+                        "order": order,
+                    }
+                ],
+            }
+            for order, effect in enumerate(ogre["effects"])
+        ]
+        state["shared_effects"].append(
+            {
+                "effect": state["agent"]["effects"][0],
+                "controller_id": state["agent"]["id"],
+                "source": None,
+                "members": [
+                    {
+                        "target": {
+                            "object_id": state["agent"]["id"],
+                            "incarnation": None,
+                        },
+                        "order": 4,
+                    }
+                ],
+            }
+        )
     text = render_decision(_redigest(payload)).text
+    if not historical:
+        phrases = [
+            "loses all abilities",
+            "+2/+0",
+            "flying, first strike",
+            "is also a creature",
+            "keeps unspent red mana",
+        ]
+        positions = [text.index(f"Effect {index}: ") for index in range(1, 6)]
+        assert positions == sorted(positions)
+        for position, phrase in zip(positions, phrases, strict=True):
+            assert phrase in text[position:].splitlines()[0]
+        assert "timestamp rank" in text and "controller You" in text
+        return
     assert (
         "; effect until end of turn: loses all abilities"
         "; effect until end of turn: +2/+0"

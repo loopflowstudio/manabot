@@ -18,11 +18,12 @@ from torch.nn.utils.rnn import pack_sequence
 from manabot.env.observation import (
     FACT_DIM,
     FACT_KINDS,
-    FACT_ROWS,
+    FACT_TIMESTAMP_SCALE,
     RELATION_DIM_V5,
     RELATION_ROWS,
     RELATION_VALID_INDEX,
 )
+from manabot.infra.config import ObservationConfig
 
 RecordReduction = Literal["typed_pool", "typed_gru"]
 
@@ -79,6 +80,7 @@ class RecordReducer(nn.Module):
 class SharedFactEncoder(nn.Module):
     def __init__(self, width: int, reduction: RecordReduction) -> None:
         super().__init__()
+        self.rows = ObservationConfig(policy_input_version=5).fact_rows
         self.kind = nn.Embedding(FACT_KINDS + 1, width)
         self.ident = nn.Embedding(4096, width)
         self.detail = nn.Embedding(4096, width)
@@ -88,7 +90,7 @@ class SharedFactEncoder(nn.Module):
         self.reducer = RecordReducer(width, reduction)
 
     def forward(self, facts: torch.Tensor, objects: torch.Tensor) -> torch.Tensor:
-        facts = _rows(facts, FACT_ROWS, FACT_DIM, 11)
+        facts = _rows(facts, self.rows, FACT_DIM, 11)
         if facts.shape[0] != objects.shape[0]:
             raise ValueError("fact and object batch sizes differ")
         results = list(objects.unbind(0))
@@ -114,7 +116,7 @@ class SharedFactEncoder(nn.Module):
                 (
                     payload[:, 5:7],
                     torch.stack([(duration == i).float() for i in (1, 2, 3)], -1),
-                    payload[:, 8:9] / FACT_ROWS,
+                    payload[:, 8:9] / FACT_TIMESTAMP_SCALE,
                 ),
                 -1,
             )

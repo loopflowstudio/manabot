@@ -325,6 +325,14 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
             refs = obs["facts"][..., 0]  # FACT_OBJECT_INDEX
             mask = (refs > offset) & (refs <= offset + count)
             result["facts"][..., 0][mask] = 2 * offset + count + 1 - refs[mask]
+        for block, columns in (("effects", (10, 12)), ("effect_members", (0,))):
+            if block in obs:
+                for column in columns:
+                    refs = obs[block][..., column]
+                    mask = (refs > offset) & (refs <= offset + count)
+                    result[block][..., column][mask] = (
+                        2 * offset + count + 1 - refs[mask]
+                    )
         offset += count
     return result
 
