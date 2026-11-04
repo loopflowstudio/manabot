@@ -173,6 +173,16 @@ checkpoints or experiment evidence.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
+## Decision ownership
+
+`TurnState.active_player` / `Game::active_player()` identifies whose turn it is.
+Native `Decision.player()` and `Action.player()` identify whose rules decision,
+actions and resources apply. Published `ActionSpace.player` identifies the
+chooser: `publish_action_space` resolves control once from the legal actions.
+Env dispatch, observations and Command/offer actors read that chooser directly;
+never remap it again. Player control grants in-game inspection through native
+`shares_information`, never private sideboard access or outside-game selection.
+
 ## Forced decisions
 
 Every game runner, benchmark and Academy session uses native trivial-decision
@@ -192,6 +202,10 @@ fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
+
+Use distinct Python test filenames across test directories: the configured
+pytest import mode shares their module namespace, so duplicate basenames fail
+collection even when the tests pass individually.
 
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
   exposes `PyAgentError` / `PanicException`. Replay compares these through

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { visibleCardLabel, copyLabel } from '$lib/decision-labels';
+  import { visibleCardLabel } from '$lib/decision-labels';
   import { tick } from 'svelte';
 
   import type { CardPreview, Observation } from '$lib/types';
@@ -210,7 +210,7 @@
     <section aria-label="Private inspection" class="border-t border-line py-3">
       <h3 class="type-title">Private inspection · not library order</h3>
       {#each observation.agent.inspected as card}
-        <button class="btn btn-secondary m-1" onclick={() => inspectTarget(card.id)}>{card.name}{#if copyLabel(observation.agent.inspected ?? [], card.id)} · {copyLabel(observation.agent.inspected ?? [], card.id)}{/if}</button>
+        <button class="btn btn-secondary m-1" onclick={() => inspectTarget(card.id)}>{visibleCardLabel(observation, card.id) ?? card.name}</button>
       {/each}
     </section>
   {/if}

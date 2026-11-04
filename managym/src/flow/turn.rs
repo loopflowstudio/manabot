@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
+    ability::PlayerControlDuration,
     game_object::{ObjectRef, PlayerId},
     predicate::CardPredicate,
 };
@@ -60,6 +61,16 @@ pub struct AdditionalCombat {
     pub attackers: Option<CardPredicate>,
 }
 
+/// Scheduled or active player control, in creation order. Later active
+/// effects win; neither the turn's active player nor resource ownership moves.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PlayerControl {
+    pub player: PlayerId,
+    pub controller: PlayerId,
+    pub duration: PlayerControlDuration,
+    pub active: bool,
+}
+
 /// What one player has done this turn, for conditions that read turn history
 /// ("if you attacked this turn", "your second card each turn"). The owner of
 /// every such fact: the turn reset, the state hash and the policy's player
@@ -113,6 +124,8 @@ impl Bending {
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub player_controls: Vec<PlayerControl>,
     pub active_player: PlayerId,
     pub turn_number: u32,
     pub lands_played: u32,
@@ -154,6 +167,7 @@ pub struct TurnState {
 impl TurnState {
     pub fn new(active_player: PlayerId) -> Self {
         Self {
+            player_controls: Vec::new(),
             active_player,
             turn_number: 1,
             lands_played: 0,
@@ -232,6 +246,30 @@ impl TurnState {
     }
 
     pub fn advance_step(&mut self) {
+        let ended = self.current_step_kind();
+        self.player_controls.retain(|control| {
+            !control.active
+                || ended
+                    != match control.duration {
+                        PlayerControlDuration::NextCombat => StepKind::EndOfCombat,
+                        PlayerControlDuration::NextTurn => StepKind::Cleanup,
+                    }
+        });
+        self.advance_step_position();
+        // This runs before the new interval's turn-based actions or triggers.
+        let started = self.current_step_kind();
+        for control in &mut self.player_controls {
+            if control.player == self.active_player && !control.active {
+                control.active = started
+                    == match control.duration {
+                        PlayerControlDuration::NextCombat => StepKind::BeginningOfCombat,
+                        PlayerControlDuration::NextTurn => StepKind::Untap,
+                    };
+            }
+        }
+    }
+
+    fn advance_step_position(&mut self) {
         self.cleanup_priority = false;
         self.step_initialized = false;
         self.turn_based_actions_complete = false;

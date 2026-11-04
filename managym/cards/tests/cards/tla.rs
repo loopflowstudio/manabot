@@ -14771,6 +14771,442 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     assert_eq!(s.game().card_power(card), 1);
 }
 
+fn bloodbending_setup(caster: usize, paid: bool) -> Scenario {
+    let mut s = five_color_setup(&[
+        "Secret of Bloodbending",
+        "Gray Ogre",
+        "Craw Wurm",
+        "Accumulate Wisdom",
+        "Lightning Strike",
+        "Pop Quiz",
+        "Sozin's Comet",
+    ]);
+    cast_bloodbending(&mut s, caster, paid);
+    s
+}
+
+fn cast_bloodbending(s: &mut Scenario, caster: usize, paid: bool) {
+    s.advance_to_active_step(caster, StepKind::Main);
+    s.set_player_mana_pool(caster, "10UUUU");
+    let card = force_new_card_in_hand(s, caster, "Secret of Bloodbending");
+    cast_card(s, card);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    choose(s, |a| {
+        if paid {
+            matches!(a, Action::PayCost { .. })
+        } else {
+            matches!(a, Action::Decline { .. })
+        }
+    });
+    assert!(s.choose_target(Target::Player(PlayerId(1 - caster))));
+    if paid {
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+        choose(s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    settle(s);
+    assert_eq!(zone_of(s, card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.turn.player_controls.len(), 1);
+    assert!(!s.game().state.turn.player_controls[0].active);
+}
+
+#[test]
+fn secret_of_bloodbending_controls_only_the_next_combat_in_either_seat() {
+    for caster in [0, 1] {
+        let victim = 1 - caster;
+        let mut s = bloodbending_setup(caster, false);
+        let ogre = s.force_permanent_on_battlefield(victim, "Gray Ogre");
+        clear_summoning_sickness(&mut s, ogre);
+        force_new_card_in_hand(&mut s, victim, "Lightning Strike");
+        s.advance_to_active_step(victim, StepKind::Main);
+        assert_eq!(
+            s.game().decision_controller(PlayerId(victim)),
+            PlayerId(victim)
+        );
+        s.advance_to_active_step(victim, StepKind::BeginningOfCombat);
+        assert_eq!(s.game().active_player(), PlayerId(victim));
+        assert_eq!(s.game().agent_player(), PlayerId(caster));
+        assert_eq!(
+            s.game().semantic_decision_frame().unwrap().actor,
+            caster as u8
+        );
+        let controller = Observation::for_player(s.game(), PlayerId(caster));
+        assert!(controller
+            .opponent_cards
+            .iter()
+            .any(|card| card.zone == ZoneType::Hand && card.name == "Lightning Strike"));
+        assert!(s
+            .game()
+            .semantic_observation(PlayerId(victim))
+            .unwrap()
+            .decision
+            .is_none());
+        assert!(s
+            .game()
+            .decision_context(PlayerId(caster))
+            .unwrap()
+            .instruction
+            .contains("chooses for"));
+        assert_eq!(permanent(&s, ogre).controller, PlayerId(victim));
+        s.advance_to_active_step(victim, StepKind::DeclareAttackers);
+        assert_eq!(s.action_space().player, Some(PlayerId(caster)));
+        assert_eq!(
+            s.action_space()
+                .actions
+                .first()
+                .map(|action| action.player()),
+            Some(PlayerId(victim))
+        );
+        assert_eq!(
+            s.game()
+                .structured_attacker_offers()
+                .unwrap()
+                .projection()
+                .actor,
+            caster as u8
+        );
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+        s.advance_to_active_step(victim, StepKind::PostcombatMain);
+        assert_eq!(
+            s.game().decision_controller(PlayerId(victim)),
+            PlayerId(victim)
+        );
+        assert!(s.game().state.turn.player_controls.is_empty());
+        let after = Observation::for_player(s.game(), PlayerId(caster));
+        assert!(!after
+            .opponent_cards
+            .iter()
+            .any(|card| card.zone == ZoneType::Hand));
+        assert!(
+            !after.opponent.known_hand.is_empty(),
+            "inspected hand remains known by definition"
+        );
+    }
+}
+
+#[test]
+fn secret_of_bloodbending_paid_controls_the_whole_next_turn_and_own_decisions() {
+    for caster in [0, 1] {
+        let victim = 1 - caster;
+        let mut s = bloodbending_setup(caster, true);
+        s.advance_to_active_step(victim, StepKind::Upkeep);
+        assert_eq!(
+            s.game().decision_controller(PlayerId(victim)),
+            PlayerId(caster)
+        );
+        assert_eq!(
+            s.game().semantic_decision_frame().unwrap().actor,
+            caster as u8
+        );
+        s.pass_priority();
+        assert_eq!(s.action_space().player, Some(PlayerId(caster)));
+        assert_eq!(
+            s.game().semantic_decision_frame().unwrap().actor,
+            caster as u8
+        );
+        s.advance_to_active_step(victim, StepKind::PostcombatMain);
+        assert_eq!(
+            s.game().decision_controller(PlayerId(victim)),
+            PlayerId(caster)
+        );
+        s.advance_to_active_step(victim, StepKind::End);
+        assert_eq!(
+            s.game().decision_controller(PlayerId(victim)),
+            PlayerId(caster)
+        );
+        s.advance_to_active_step(caster, StepKind::Upkeep);
+        assert!(s.game().state.turn.player_controls.is_empty());
+        assert_eq!(
+            s.game().decision_controller(PlayerId(victim)),
+            PlayerId(victim)
+        );
+    }
+}
+
+#[test]
+fn secret_of_bloodbending_delegated_spell_uses_victims_mana_and_replays_atomically() {
+    let mut s = bloodbending_setup(0, true);
+    s.advance_to_active_step(1, StepKind::Main);
+    let card = force_new_card_in_hand(&mut s, 1, "Accumulate Wisdom");
+    s.set_player_mana_pool(0, "10UUUU");
+    s.set_player_mana_pool(1, "");
+    assert!(
+        !castable(&mut s, card),
+        "controller cannot pay victim's cost"
+    );
+    s.set_player_mana_pool(1, "1U");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let action = s.action_space().actions.iter().position(|action| matches!(action, Action::CastSpell { card: selected, .. } if *selected == card)).unwrap();
+    let command = Command {
+        command_id: "delegated-cast".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[action].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    let mut replay = s.game().clone();
+    s.game_mut().execute_semantic_command(&command).unwrap();
+    replay.execute_semantic_command(&command).unwrap();
+    assert_eq!(
+        s.game().state.deterministic_hash(),
+        replay.state.deterministic_hash()
+    );
+    let hash = s.game().state.deterministic_hash();
+    assert!(s.game_mut().execute_semantic_command(&command).is_err());
+    assert_eq!(s.game().state.deterministic_hash(), hash);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 14);
+    assert_eq!(s.game().state.players[1].mana_pool.total(), 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.game().agent_player(), PlayerId(0));
+    let controller = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(
+        controller
+            .opponent_cards
+            .iter()
+            .filter(|c| c.zone == ZoneType::Library)
+            .count(),
+        3
+    );
+    let victim = Observation::for_player(s.game(), PlayerId(1));
+    assert!(victim.action_space.actions.is_empty());
+    assert!(!victim
+        .opponent_cards
+        .iter()
+        .any(|c| c.zone == ZoneType::Hand));
+    let before = s.game().semantic_observation(PlayerId(0)).unwrap().identity;
+    let mut sampled = s.game().clone();
+    sampled.determinize(PlayerId(0), 31);
+    assert_eq!(
+        sampled.semantic_observation(PlayerId(0)).unwrap().identity,
+        before
+    );
+    let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(0));
+    assert_eq!(space.worlds().len(), 1);
+    let materialized = space.materialize(s.game(), &space.worlds()[0], 37).unwrap();
+    assert_eq!(
+        materialized
+            .semantic_observation(PlayerId(0))
+            .unwrap()
+            .identity,
+        before
+    );
+}
+
+#[test]
+fn secret_of_bloodbending_waterbend_taps_only_the_casters_helpers() {
+    let mut s = five_color_setup(&["Secret of Bloodbending", "Gray Ogre", "Craw Wurm"]);
+    let helpers: Vec<_> = ["Gray Ogre", "Craw Wurm"]
+        .into_iter()
+        .flat_map(|name| [name; 4])
+        .map(|name| s.force_permanent_on_battlefield(0, name))
+        .collect();
+    let opponent = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "2UUUU");
+    let card = cast(&mut s, "Secret of Bloodbending");
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    for helper in helpers {
+        assert!(!has_action(
+            &s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == opponent)
+        ));
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == helper),
+        );
+    }
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert!(!tapped(&s, opponent));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.game().agent_player(), PlayerId(0));
+}
+
+#[test]
+fn secret_of_bloodbending_control_does_not_extend_into_an_extra_combat() {
+    let mut s = bloodbending_setup(0, false);
+    s.advance_to_active_step(1, StepKind::BeginningOfCombat);
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat { attackers: None });
+    s.advance_to_active_step(1, StepKind::EndOfCombat);
+    s.advance_to_active_step(1, StepKind::BeginningOfCombat);
+    assert!(s.game().state.turn.player_controls.is_empty());
+    assert_eq!(s.game().agent_player(), PlayerId(1));
+}
+
+#[test]
+fn secret_of_bloodbending_cannot_inspect_private_sideboards_or_take_outside_cards() {
+    let main = deck(&[
+        ("Island", 30),
+        ("Secret of Bloodbending", 4),
+        ("Pop Quiz", 4),
+    ]);
+    let mut s = Scenario::with_sideboards(
+        main.clone(),
+        main,
+        deck(&[("It'll Quench Ya!", 1)]),
+        deck(&[("Accumulate Wisdom", 1)]),
+        161,
+    );
+    for player in &mut s.game_mut().state.players {
+        player.disclosure = managym::state::player::DecklistDisclosure::Closed;
+    }
+    s.advance_to_active_step(0, StepKind::Main);
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    cast_bloodbending(&mut s, 0, true);
+    s.advance_to_active_step(1, StepKind::Main);
+    let card = force_new_card_in_hand(&mut s, 1, "Pop Quiz");
+    s.set_player_mana_pool(1, "2U");
+    cast_card(&mut s, card);
+    pass_until(&mut s, ActionSpaceKind::Learn);
+    assert_eq!(s.game().agent_player(), PlayerId(0));
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(obs.agent_sideboard.len(), 1);
+    assert_eq!(obs.agent_sideboard[0].name, "It'll Quench Ya!");
+    assert!(obs.opponent.sideboard_counts.is_none());
+    assert!(!has_action(&s, |a| matches!(
+        a,
+        Action::LearnTakeLesson { .. }
+    )));
+    assert!(has_action(&s, |a| matches!(a, Action::LearnDiscard { .. })));
+    assert!(has_action(&s, |a| matches!(a, Action::Decline { .. })));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.advance_to_active_step(1, StepKind::Main);
+    let card = force_new_card_in_hand(&mut s, 1, "Pop Quiz");
+    s.set_player_mana_pool(1, "2U");
+    cast_card(&mut s, card);
+    pass_until(&mut s, ActionSpaceKind::Learn);
+    assert!(has_action(&s, |a| matches!(
+        a,
+        Action::LearnTakeLesson { .. }
+    )));
+}
+
+#[test]
+fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
+    let mut s = bloodbending_setup(0, true);
+    s.advance_to_active_step(1, StepKind::Main);
+    let card = force_new_card_in_hand(&mut s, 1, "Sozin's Comet");
+    s.set_player_mana_pool(1, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::Foretell { card: selected, .. } if *selected == card),
+    );
+    let id = s.game().state.cards[card].id.0 as i32;
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    assert!(obs
+        .opponent_cards
+        .iter()
+        .any(|c| c.id == id && c.zone == ZoneType::Exile));
+    let mut sampled = s.game().clone();
+    sampled.determinize(PlayerId(0), 17);
+    assert_eq!(
+        sampled.semantic_observation(PlayerId(0)).unwrap().identity,
+        s.game().semantic_observation(PlayerId(0)).unwrap().identity
+    );
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    assert!(!Observation::for_player(s.game(), PlayerId(0))
+        .opponent_cards
+        .iter()
+        .any(|c| c.id == id));
+    assert!(Observation::for_player(s.game(), PlayerId(1))
+        .agent_cards
+        .iter()
+        .any(|c| c.id == id));
+}
+
+#[test]
+fn secret_of_bloodbending_overlap_resolves_the_chooser_once_and_latest_control_wins() {
+    use managym::flow::turn::PlayerControl;
+    use managym::state::ability::PlayerControlDuration;
+    for caster in 0..2 {
+        let victim = 1 - caster;
+        let mut s = bloodbending_setup(caster, true);
+        s.advance_to_active_step(victim, StepKind::Main);
+        // A second active control of the chooser must not remap this decision
+        // transitively. The authority is the latest effect on its subject.
+        s.game_mut().state.turn.player_controls.push(PlayerControl {
+            player: PlayerId(caster),
+            controller: PlayerId(victim),
+            duration: PlayerControlDuration::NextTurn,
+            active: true,
+        });
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(
+            s.action_space()
+                .actions
+                .first()
+                .map(|action| action.player()),
+            Some(PlayerId(victim))
+        );
+        assert_eq!(s.action_space().player, Some(PlayerId(caster)));
+        assert_eq!(s.game().agent_player(), PlayerId(caster));
+        assert_eq!(
+            s.game().semantic_decision_frame().unwrap().actor,
+            caster as u8
+        );
+        assert_eq!(
+            s.game()
+                .structured_search_offers()
+                .unwrap()
+                .projection()
+                .actor,
+            caster as u8
+        );
+        assert!(!Observation::for_player(s.game(), PlayerId(caster))
+            .action_space
+            .actions
+            .is_empty());
+        assert!(Observation::for_player(s.game(), PlayerId(victim))
+            .action_space
+            .actions
+            .is_empty());
+        // Taking back control does not erase the older record; its ordering
+        // and effective status remain visible until their durations expire.
+        s.game_mut().state.turn.player_controls.push(PlayerControl {
+            player: PlayerId(victim),
+            controller: PlayerId(victim),
+            duration: PlayerControlDuration::NextTurn,
+            active: true,
+        });
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(s.action_space().player, Some(PlayerId(victim)));
+        let controls = s.game().player_control_views();
+        assert!(!controls[0].effective);
+        assert!(controls[2].effective);
+        assert_eq!(
+            s.game().semantic_decision_frame().unwrap().actor,
+            victim as u8
+        );
+    }
+}
+
+#[test]
+fn secret_of_bloodbending_uses_the_next_extra_turn_without_controlling_the_following_turn() {
+    let mut s = bloodbending_setup(0, true);
+    s.game_mut().state.turn.extra_turns.push(PlayerId(1));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.game().agent_player(), PlayerId(0));
+    assert!(s.game().player_control_views()[0].effective);
+    let controlled_turn = s.game().state.turn.turn_number;
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(s.game().state.turn.turn_number > controlled_turn);
+    assert_eq!(s.game().active_player(), PlayerId(1));
+    assert_eq!(s.game().agent_player(), PlayerId(1));
+    assert!(s.game().player_control_views().is_empty());
+}
+
 #[test]
 fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step() {
     let mut s = five_color_setup(&["Fire Navy Trebuchet", "Gray Ogre"]);

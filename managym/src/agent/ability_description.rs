@@ -744,6 +744,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
             modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
         ),
         TransformSource => "Transform this".into(),
+        ControlPlayer { what, duration } => format!("You control {} during their next {}", selector_description(what), match duration {
+            crate::state::ability::PlayerControlDuration::NextCombat => "combat phase",
+            crate::state::ability::PlayerControlDuration::NextTurn => "turn",
+        }),
         TakeExtraTurn => "Take an extra turn after this one".into(),
         AdditionalCombatPhase { attackers } => match attackers {
             None => "After this phase, there is an additional combat phase".into(),

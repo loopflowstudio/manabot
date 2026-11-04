@@ -3081,6 +3081,20 @@
       "G"
     ]
   },
+  "Secret of Bloodbending": {
+    "name": "Secret of Bloodbending",
+    "mana_cost": "{U}{U}{U}{U}",
+    "type_line": "Sorcery \u2014 Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, you may waterbend {10}.\nYou control target opponent during their next combat phase. If this spell's additional cost was paid, you control that player during their next turn instead. (You see all cards that player could see and make all decisions for them.)\nExile Secret of Bloodbending.",
+    "colors": [
+      "U"
+    ]
+  },
   "Secret Tunnel": {
     "name": "Secret Tunnel",
     "mana_cost": "",

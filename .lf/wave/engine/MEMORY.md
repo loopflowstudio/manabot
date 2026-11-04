@@ -422,7 +422,7 @@ preserves accepted decisions, dated proof limits and source history.
   only), so restoring it needs an engine accessor, a decision Jack Heart
   has not made.
 
-## T6 lessons (2026-11-03; pending review)
+## T6 lessons (2026-11-03; merged 2026-11-04 at `5dd11cec4`)
 
 - Jack Heart accepted the one-catalog simplification into T6 on 2026-11-02:
   `ContentPack` owns stable name-ordered definition rows and content identity;
@@ -526,8 +526,13 @@ preserves accepted decisions, dated proof limits and source history.
   declaration and evaluation. Pin every declared input capacity: v3's v6/256
   facts contract also requires 64 actions, independent of fresh 512 defaults.
   Temporary changed-input fixtures exercise admission without rewriting frozen
-  protocol/regime bytes. The repaired 33-case module passes; this is test
-  isolation evidence, not historical-runtime compatibility or full-head CI.
+  protocol/regime bytes. The repaired 33-case module passed at that stage;
+  subsequent main integrates experiment protocol v5 with policy input v7,
+  128 facts, 64 actions and 128 cards per player. Experiment protocol numbers
+  and policy-input versions are separate contracts. Synthetic shape isolation
+  must remain off encoding and gameplay paths; unpatched identity/schema
+  rejection checks preserve strict admission. These are test-isolation proofs,
+  not historical-runtime compatibility or full-head CI.
 - Main's explicit v7 shared-effect projection (`fb5ad2c13`, integrated into
   T6 at `920bbb52a`) coexists with T6 schedule/capture/lifetime projections;
   fresh inputs remain v6. Constructors use the single catalog, and consumer
@@ -535,6 +540,48 @@ preserves accepted decisions, dated proof limits and source history.
   Focused native, Python/text and discovery checks passed after integration;
   pre-sync green receipts still do not certify the combined source or imply
   acceptance of unrelated experiment work.
+
+## Player control and shared projections (2026-11-03/04; pending review)
+
+- Jack Heart's final MTG-226 clarification makes `ActionSpace.player` the
+  authoritative chooser. Native `Decision.player()` and `Action.player()`
+  retain the rules subject and resource ownership; `TurnState.active_player`
+  / `Game::active_player()` still name whose turn it is. Publication resolves
+  control once from legal actions. Consumers must not remap that chooser,
+  including when the controller is itself controlled. An extra `acting_player`
+  identity was an assistant proposal, not an accepted requirement.
+- Native inspection permission covers the controller's own information and
+  the controlled player's permitted in-game information, including foretold
+  cards. Private sideboards and outside-game selection remain excluded.
+  Known hand definitions persist after control expires; physical private-card
+  visibility does not. Policy, text, Academy and search share that authority.
+  Pending/active controls and delegated decisions use relation kinds 13/14;
+  they add no columns. Last-created active control wins for the rules subject.
+- Main's v6 capacity change, integrated through T6, makes fresh fact capacity
+  configurable (default 512); v5 remains 128 and timestamp rank remains /128.
+  Saved observation configurations retain their version and omissions through
+  `from_checkpoint`. Tests relying on fresh defaults now exercise v6; explicit
+  v5 tests remain necessary evidence for that historical layout.
+- Shared projection additions reach every generated schema that embeds the
+  type, not only Experience. T7's replay, Study and advice schemas initially
+  omitted `player_controls` while their runtime types already included it.
+  Regeneration repairs this drift without rewriting historical fixtures;
+  absent optional projection data remains unknown, distinct from an empty list.
+- T7's focused native and submitted-60-card Academy/training proofs cover
+  delegation, durations, payment, privacy and retained cleanup recovery. They
+  do not establish all pairwise TLA interactions, process-crash durability,
+  training strength or final-head CI. Catalog completeness and behavior
+  witnesses remain separate claims in `docs/rules/tla/acceptance.md`.
+- Jack Heart selected stable viewer perspective (option 1a) on 2026-11-03.
+  “You” stays anchored to the viewer, including intervening own-player
+  decisions during control. Inspection-container placement is permission,
+  not ownership: private labels use native owner/zone, and a generic search
+  heading cannot infer whose library is searched. Native instructions name
+  whose choices and resources apply. The 2026-11-04 correction has both-seat,
+  both-duration Islandcycling projection/fork/expiry and Svelte-rendering
+  evidence; retained cleanup recovery remains separate from search recovery
+  and browser geometry. The historical concept-review illustration predates
+  implementation and is not a browser capture.
 
 ## Open tensions
 

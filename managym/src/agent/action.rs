@@ -125,6 +125,31 @@ pub enum Action {
 }
 
 impl Action {
+    /// The player performing this rules action, whose resources and objects
+    /// it uses. The published ActionSpace.player separately authorizes its chooser.
+    pub fn player(&self) -> PlayerId {
+        match self {
+            Action::ChooseTrigger { player, .. }
+            | Action::PlayLand { player, .. }
+            | Action::CastSpell { player, .. }
+            | Action::ActivateAbility { player, .. }
+            | Action::ActivateCardAbility { player, .. }
+            | Action::Foretell { player, .. }
+            | Action::PassPriority { player, .. }
+            | Action::DeclareAttacker { player, .. }
+            | Action::DeclareBlocker { player, .. }
+            | Action::ChooseTarget { player, .. }
+            | Action::ScryCard { player, .. }
+            | Action::LearnTakeLesson { player, .. }
+            | Action::LearnDiscard { player, .. }
+            | Action::SelectCard { player, .. }
+            | Action::Decline { player, .. }
+            | Action::PayCost { player, .. }
+            | Action::ChooseMode { player, .. }
+            | Action::WaterbendTap { player, .. } => *player,
+        }
+    }
+
     pub fn action_type(&self) -> ActionType {
         match self {
             Action::ChooseTrigger { .. } => ActionType::ChooseTrigger,
@@ -183,6 +208,7 @@ pub enum ActionSpaceKind {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActionSpace {
+    /// The player authorized to choose, resolved when the space is published.
     pub player: Option<PlayerId>,
     pub kind: ActionSpaceKind,
     pub actions: Vec<Action>,

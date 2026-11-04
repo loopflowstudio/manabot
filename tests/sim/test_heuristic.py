@@ -224,6 +224,8 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Redirect Lightning": None,
         # Copying exiled graveyard cards is not battlefield removal.
         "Foggy Swamp Visions": None,
+        # Player control uses the heuristic's fallback for unrated effects.
+        "Secret of Bloodbending": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)

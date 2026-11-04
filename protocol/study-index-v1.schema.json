@@ -1274,6 +1274,16 @@
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "player_controls": {
+          "description": "Absent in historical frames; present empty means no scheduled control.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/PlayerControlView"
+          }
+        },
         "schedule": {
           "anyOf": [
             {
@@ -1862,6 +1872,41 @@
         "choose",
         "pay",
         "special"
+      ]
+    },
+    "PlayerControlView": {
+      "description": "Public player-control effects in creation order. Effective distinguishes\nthe last-created active effect from another whose interval also runs now.",
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "effective": {
+          "type": "boolean"
+        },
+        "player": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "whole_turn": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "player",
+        "controller",
+        "whole_turn",
+        "active",
+        "effective"
       ]
     },
     "PlayerTurnHistory": {

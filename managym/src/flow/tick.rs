@@ -59,11 +59,17 @@ impl Game {
 
     /// Publish a newly computed external decision and invalidate commands
     /// decoded from every previously published structured offer set.
-    pub(crate) fn publish_action_space(&mut self, action_space: ActionSpace) {
+    pub(crate) fn publish_action_space(&mut self, mut action_space: ActionSpace) {
         self.decision_epoch = self
             .decision_epoch
             .checked_add(1)
             .expect("decision epoch exhausted");
+        action_space.player = action_space
+            .actions
+            .first()
+            .map(|action| action.player())
+            .map(|player| self.decision_controller(player));
+        self.remember_controlled_hands();
         self.current_action_space = Some(action_space);
     }
 
@@ -151,6 +157,7 @@ impl Game {
         // CR 106.4 — Unspent mana empties at the end of each step and phase.
         self.clear_mana_pools();
         self.on_step_end(step);
+        self.remember_controlled_hands();
         self.state.advance_step();
 
         None
