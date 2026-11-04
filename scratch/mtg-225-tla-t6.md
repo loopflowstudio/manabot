@@ -1,12 +1,12 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (2026-11-03): accepted T6 behavior and the frozen-pilot isolation repair
-are implemented and pushed. HEAD `da8980aedc8f5536bcc65b5f7c8d5a2f81985975`
-incorporates main `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` and its v7
-shared-effect projection through merge `920bbb52a`. PR #417 is mergeable;
-combined-head CI is running. Gate owns combined validation, mutable receipt
-assessment and any required republication. Existing PR #417 remains one
-cohesive delivery; stop for Jack Heart's review. No merge or auto-merge authorized.
+Status (2026-11-03, final publication pass): accepted T6 behavior, frozen-pilot
+isolation and combined-head typed-encoder integration are implemented and
+validated below. `lf sync` preserved the review edits at `2beda6071`; main
+remains `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`. The two mutable parity
+receipts now include v7 projection hashes. Existing PR #417 remains one
+cohesive delivery; publish this completion and stop for Jack Heart's review.
+No merge or auto-merge authorized.
 
 ## Accepted direction
 
@@ -217,6 +217,55 @@ Python deck checking returns diagnosed issues directly, without a never-failing
 These reductions add no mechanics, identity or observation contract changes.
 
 ## Evidence, limitations and remaining gate
+
+### Combined-head publication verification
+
+`lf sync` completed cleanly against main `fb5ad2c13`. The implementation at
+`2beda6071` passed **952 debug Rust checks, two ignored**, rustfmt and
+all-target/all-feature Clippy. Clippy used the absolute root venv interpreter
+after PyO3 rejected the relative interpreter path. No Rust changed in this
+publication pass; the atomically installed release extension from the prior
+compression step remains current.
+
+The combined Python suite passed **562 checks, one skipped**, and found two
+failures in main's newly integrated typed-state training smoke. Both rejected
+T6's delayed-frequency relation kind 9: `TypedContinuationEncoder` admitted
+only relation kinds through 6 and frame kinds through 10. It now admits the
+existing T6 edges 7–9 and schedule frames 11–12 through its existing payload
+columns, joins and reducers, with no parameter-shape change. The focused
+state-record/shared-effect/inference/study suite then passed **47 checks**,
+including both previously failing real training/export smokes and ten directed
+cases proving inheritance, remembered objects, frequency and schedule order
+affect context while storage-row permutation preserves it. Ruff and diff checks
+passed. The 562 unchanged passes cover model/semantic inputs, v7 transport,
+the full pilot module, arena admission, monitoring, active training, compound
+checkpoints, package boundaries and Academy recovery/navigation.
+
+Receipt assessment found both mutable parity receipts stale after v7's viewer
+projection addition. Re-executing their actual builders preserves the authored
+135 Commands, state witnesses, events and presentation, 816 viewer comparisons
+with no divergence, and 66 public commitments with zero provider gaps. Only
+source fingerprints, viewer hashes and derived belief tracker hashes change.
+The subsequent parity/belief regression suite passed **20 checks**. The full
+debug suite verifies the unchanged semantic-kernel evidence, so it needs no
+refresh. No frozen evidence, experiment protocol, checkpoint or performance
+reference was changed.
+
+Logs: `.runs/t6-publication/combined-{rust,clippy,python,typed-repair,receipts}.log`,
+`combined-{authored,public}-parity.log` (retained stale-receipt failures) and
+`combined-{authored,public}-refresh.log` (successful actual regeneration).
+The exact local Python selection is in `combined-collection.log`.
+
+CI at pre-repair head `2beda6071` (run `41793669758`) passed Rust, semantic
+conformance, unit, Academy integration/UI, protocol, clean-machine, long
+integration and same-runner Engine Budget. Main integration was still running
+at inspection. These results precede the small typed-encoder repair and receipt
+refresh; final published-head CI remains distinct and must be reported as such.
+Reuse the prior isolated Playwright evidence below for unchanged UI source;
+this headless pass adds no separate Bumi browser walkthrough. Publication ends
+at review, without auto-merge or Task completion.
+
+### Prior evidence and its limits
 
 The previous local publication gate at `d21fae20d` passed 948 debug Rust checks
 (two ignored), Clippy, 474 combined Python checks (one skipped) and the repaired
