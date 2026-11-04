@@ -1,17 +1,56 @@
-# TLA trophy pilot: capacity failures before learning
+# TLA trophy pilot: GPU learning reached, action capacity stopped the run
 
-V5 source is frozen as `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, prepared
-run `e8c76bc2c06f`. Its A6000 quote was refused; retained availability
-reads at 09:03:37 UTC on 2026-11-04 report A6000, L4, A4000 and A4500
-unavailable, superseding the positive A6000 read at 08:17:09 UTC.
-**V5 has not been submitted or rented**. No GPU learner update is yet established.
-The 09:03:38 UTC inventory confirms all earlier rentals ended and no provider
-pods or unsettled hardware rentals. Provider bills total **$0.213831719709560274**;
-the conservative $2.95 reservation accounting remains against the $10 cap.
-Receipts are `.runs/mtg213/v5-continuation/inventory-20261104-0903.json` and
-`capacity-check-20261104-0903.json` in the same directory. No quote or submission
-was attempted against unavailable capacity. These are dated observations,
-not reserved capacity.
+V5 Run **e8c76bc2c06f**, frozen source
+`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, ran on a Vast **RTX 5090** on
+2026-11-04. CUDA numerical admission passed. Training completed **3 rollout
+updates, 585 optimizer minibatch steps and 149,260 learner transitions** before
+the next collection failed: **256 legal actions exceeded the frozen capacity
+of 64**. Settled batches contain 771 completed games. This establishes actual
+GPU learning execution, not improvement in game strength or a completed pilot.
+
+The [training receipt](data/mtg213/gpu-v5-20261104/training/run.json) records
+212.43 seconds, including 142.77 seconds collecting and 68.86 seconds learning.
+These are stage clocks, not the whole paid window. No trained checkpoint was
+exported before failure; the first scheduled milestone was not reached. The
+initialization checkpoint and private failure capture are retained. Missing
+trained checkpoints cannot be scored or replaced by the final in-memory state.
+The [initialization evaluation](data/mtg213/gpu-v5-20261104/analysis.json)
+completed eight pairs / four legs against the fixed heuristic: **5 wins / 27
+losses**, 32 valid games, no failures or truncations. The whole-pair bootstrap
+score is .15625, 95% interval [.03125, .28125]. All 288 scheduled games remain
+accounted for: **256 missing**, `complete=false`, `success=null`. This measures
+initialization only; no trained checkpoint is available for comparison.
+
+Vast integration used the published isolated Etude 0.2.14 control client,
+leaving the frozen worker's 0.2.12 dependency, v7 input, 134-deck population and
+recipe unchanged. Allocation: 24 vCPUs, 63GB RAM, 80GB disk, free transfer,
+$0.7816148148148148/hour and $0.9639916049382715866666666667 reserved inside the
+$1 ceiling. The public image is pinned Linux amd64 / CUDA 12.8.1; runtime
+admission is separately retained in
+[numerical validation](data/mtg213/gpu-v5-20261104/numerical-validation.json).
+
+[Settlement](data/mtg213/gpu-v5-20261104/settlement.json) confirms rental deletion
+at 17:33:51 UTC, no Vast instances, no RunPod pods and no unsettled hardware.
+Prior billed costs are $0.213831719709560274. The new full-rental estimate is
+$0.113275053942958846, with provider billing still unavailable, for cumulative
+billed-plus-estimated **$0.32710677365251912**. Conservative reservations remain
+**$3.9139916049382716 against $10**. The per-run allocation estimate of $0.0905
+excludes some rental time and is not the full cost.
+
+The launch milestone was reported to the primary Task conversation. Its first
+terminal observation was at 17:33:51 UTC (the progress comment's 17:32 timestamp
+was approximate and is corrected here). The
+[retained-prefix replay](data/mtg213/gpu-v5-20261104/capacity-replay.json)
+identifies stream 103, seed 32172, after 76 actions. The pre-command frame
+matches; native scalar, vector and Python encoders all reject the same 256
+legal actions at capacity 64. A diagnostic 512 configuration retains all 256
+in Python, but the frozen native buffer path still enforces 64. This is evidence
+that a configuration-only retry is insufficient, not a new pilot selection.
+A new prospective action-capacity contract is needed before further paid
+training; executed v5 evidence remains frozen. Compared with Elemental, this
+pilot now establishes GPU execution on trophy pairs, but supplies no trained policy for a
+learning-gain or cost-to-strength comparison. Different hardware, input size and
+population also prevent interpreting raw throughput as a controlled comparison.
 
 The [v5 contract](protocols/tla-trophy-213-v5.md) retains v7, the 134 entries, learner
 and evaluation schedule, with a 128-card axis and corrected native buffer sizing.
@@ -36,8 +75,8 @@ The [v4 contract](protocols/tla-trophy-213-v4.md) consumed PR #419's delivered
 v7 shared-effect inputs and bound all tensor capacities. Retained 140/270-fact
 positions pass native scalar/vector/Python parity, compatibility and overflow
 checks. At the 05:59 UTC pre-launch settlement, the three earlier rentals had
-ended and bills totaled **$0.17054831** (v3: $0.09962018). The cumulative cost
-and four reservations above include the subsequent v4 rental.
+ended and bills totaled **$0.17054831** (v3: $0.09962018). The current accounting
+above includes the subsequent v4 and v5 rentals.
 
 ## V3 continuation (2026-11-04 UTC)
 
@@ -269,12 +308,12 @@ Jack Heart approved the shared-effect fixed-tensor repair (comment 42a12145):
 encode effects once and route them to affected object embeddings before attention.
 Task 5da5f4 delivered it in PR #419, merged as
 `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`; v4 consumed it and v5 retains it.
-Resume the prepared v5 identity only after fresh inventory, billing and quote
-reconciliation within the cumulative $10 cap. Preserve all earlier inputs and
-evidence; new games cannot fill their missing evaluation slots.
-
-GPU learner updates and trained checkpoints remain missing. No paid-training
-milestone or learning/Elemental-pace claim is supported; MTG-213 is incomplete.
+V5 subsequently reached GPU learning, as reported above. An admitted trained
+checkpoint, complete paired evaluation and Elemental-relative learning analysis
+remain outstanding. Any successor needs an explicit prospective contract and
+fresh inventory, billing and quote reconciliation within the $1 allocation and
+cumulative $10 caps. Preserve all executed versions; new games cannot fill their
+missing evaluation slots.
 
 ### Card-capacity repair publication checks (2026-11-04 UTC)
 

@@ -1,101 +1,92 @@
-# TLA pilot continuation — reconciled 2026-11-04 UTC
+# TLA pilot continuation — reconciled 2026-11-04 17:45 UTC
 
-Accepted outcome: Jack Heart's 2026-11-03 direction selects preliminary TLA
-self-play and paired evaluation on the same frozen trophy population, with
-GPUs and enabling repairs authorized under a cumulative $10 cap. The corpus,
-runners and capacity repairs are delivered. GPU learner updates, an admitted
-trained checkpoint, complete evaluation and an Elemental-relative learning/cost
-report remain outstanding. No product decision is missing; the latest retained
-capacity read is negative. Detailed accepted choices remain in `questions.md`.
+Jack Heart's accepted outcome is preliminary TLA self-play and paired evaluation
+on the frozen 134-deck trophy population. GPUs and enabling repairs are authorized
+under a cumulative $10 cap, with each allocation <=$1. The corpus, runners,
+Vast integration and GPU learning milestone are delivered. V5 completed three
+updates, then failed at 256 legal actions versus capacity 64 before exporting a
+trained checkpoint. The pilot remains incomplete.
 
-## Delivered repair and validation
+[Accepted decisions](questions.md) own scope and provenance;
+[the report](../experiments/tla-trophy-pilot.md) owns measured results, costs and
+historical validation. Its v5 analysis accounts for 32 valid initialization games
+(5 wins / 27 losses) and 256 missing games; no trained-policy or improvement claim
+is supported. All 114 v5 evidence files are manifest-published under
+`experiments/data/mtg213/gpu-v5-20261104/`.
+
+## Source and repair boundary
 
 PR #420 merged at 08:15:17 UTC as
-`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. Its capacity repair remains in
-this checkout after the T6 main sync. The active v5
-regime retains 134 independently sampled entries, explicit input v7 and
-`max_cards_per_player=128`. This is a prospective architecture with fresh
-initialization; it does not resume v4's checkpoint.
+`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. V5 Run `e8c76bc2c06f` executed
+frozen source `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, input v7 and
+`max_cards_per_player=128`, with fresh initialization. Its source, protocol,
+failed attempt and initialization evaluation remain frozen.
 
-The 09:58 UTC verification confirmed executable source, protocols and tests
-match main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`; only notes/report differ.
-SSH fetch failed with `Permission denied (publickey)`; the authenticated GitHub
-API confirmed the main SHA and PR #420 merge. That main contains T6
-rules/content changes and widened player/card
-rows (73/56 versus frozen v5's 67/55), plus fresh action capacity 512 versus
-v5's explicit 64. The unchanged runner rejects incompatible world or tensor
-shapes. Its synthetic scheduling/analysis fixtures pin historical identity and
-widths; the real replay regression uses current native semantics and action
-capacity. Neither fixture nor replay certifies the frozen v5 runtime.
+The 09:58 verification, reconfirmed at 10:09, found executable source, protocols
+and tests equal to main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`. SSH fetch
+failed (`Permission denied (publickey)`); authenticated GitHub API and local
+diffs established the merge. T6 widened player/card rows to 73/56 from v5's
+67/55 and fresh action capacity to 512 from v5's explicit 64. Runtime and shape
+guards reject substitution. Synthetic scheduling/analysis fixtures pin historical
+identity and widths; they never authorize real replay, encoding or training
+under that identity.
 
-The prepared Run remains the execution path selected by the continuation
-feedback. Running the experiment from current HEAD would require a separately
-chosen prospective binding; it is not a substitute for this Run.
+The frozen-source replay matches stream 103 / seed 32172 after 76 actions:
+scalar, vector and Python encoders all reject 256 legal actions at capacity 64.
+Diagnostic Python configuration at 512 retains all 256; frozen native buffers
+still enforce 64. A configuration-only retry is insufficient. Review current
+main's capacity handling before implementing the narrow repair: native scalar
+and vector buffers must honor the selected ObservationSpace action axis, with
+Python parity. A successor needs an explicit source/world/protocol/regime binding,
+fresh initialization/evaluation and the same 134 entries. No successor or paid
+retry has been selected by this diagnostic.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py -q` — 43 passed in 16.34s at 09:58 UTC, covering retained 61-card parity, frozen population/shapes, real runtime rejection, discovery and incomplete-result accounting. No executable changes since; reuse this result. The earlier rejection-only check passed 4 tests after rebuilding a stale extension (initially 3 failures/1 pass).
+Remaining acceptance: an admitted trained checkpoint, complete paired schedule
+and a report of learning and full cost relative to Elemental. The next execution
+step owns fresh inventory, billing and quote reconciliation within both caps.
+At the 17:33:51 settlement all pilot rentals had ended, with no Vast instances,
+RunPod pods or unsettled hardware. Cumulative billed-plus-estimated cost was
+$0.32710677365251912; conservative reservations remain $3.9139916049382716/$10.
+Vast billing is still unavailable; these are dated receipts, not a fresh balance.
 
-Retained PR #420 validation (50 focused checks) includes the retained 61-card
-prefix at capacities 61/128 and failure at 60, native scalar/vector/Python parity, shared-effect repair of the 140/270
-fact failures, frozen versions, v5 population/protocol binding, discovery,
-incomplete-result accounting and a CPU update with checkpoint export/reload.
-Full gate results remain in `experiments/tla-trophy-pilot.md`; no new full
-Rust/Python gate or CUDA admission is established by this reconciliation.
+## Operational handoff
 
-## Latest recorded inventory and capacity
+Steer c38da514 assigned GPU continuation to Graph 3529715b. The launcher
+`.runs/mtg213/v5-continuation/launch-vast.py` used Etude's existing provider/supply
+owner, published isolated `etude-sdk[s3]==0.2.14`, and frozen worker 0.2.12. It
+submitted v5 once on `mtg213-vast5090-25382cc374b5`. Milestone comment 028c09c4
+reported learning and failure; its approximate 17:32 observation time is corrected
+to 17:33:51 UTC. No retry, watcher or background service remains from the launch.
 
-Authenticated Etude 0.2.13 reads used nested Doppler `manabot/prd` then
-`etude/prd`. At 10:00:53 UTC all four pilot rentals had ended, no provider pods
-remained and no hardware rental was unsettled. The unsettled `mini` session has
-no hardware and is outside this pilot. Provider bills for all four rentals total
-**$0.213831719709560274**, superseding the earlier billed-plus-estimated amount.
-The conservative **$2.95 reservation accounting remains against the $10 cap**.
+Vast support originated in Etude EXP-35 (loopflow://etude/task/EXP-35), delivered
+by PR #79; PR #80 supplied release 0.2.14 from source
+`4c28da88cbd79b3f1e75669d7a84993a8da0f763`. The primary conversation owns release
+completion. At 17:30, workflow 41876921350 had successful PyPI upload but remained
+in progress; its release process (exec session 15617 in `/Users/jack/src/etude`)
+was waiting and the tag was absent. The installed published client was verified;
+final release/tag settlement was not. Do not start a duplicate release.
 
-A6000 was rentable at 08:17:09 UTC, but subsequent reads found all four GPUs
-unavailable, most recently L4 at 10:00:29 UTC and A6000/A4000/A4500 at
-10:00:44 UTC. The implementation continuation stopped at this external
-prerequisite without a quote, submission or paid retry. No background process
-or capacity watcher was started.
-Recorded rates were $0.59/hour for A6000/L4 and $0.25/hour for A4000/A4500.
-Availability is not a reservation. No v5 submission or rental is recorded.
+The managed lf binary recorded on the ship process is
+`/Users/jack/.lf/bin/lf-f631bbe3771ffecf9ef045006c9d63f348165220b70fb2de7e6baacd556eda2c`
+(0.15.1+ac8e088f5); the app binary lagged the shared-store wave_removal schema.
+An earlier Task comment failed with “no Loopflow registry on this machine”; no
+auth repair was performed. The later milestone comment succeeded.
 
-Receipts: `.runs/mtg213/v5-continuation/inventory-implement-20261104-1001.json` and
-`.runs/mtg213/v5-continuation/capacity-check-implement-20261104-1001.json`. The
-09:58 verification independently found the same availability, ended rentals,
-zero learner clocks and bill total; its inventory remains at
-`.runs/mtg213/v5-continuation/inventory-verify-20261104-0958.json`.
-Earlier dated receipts remain unchanged. Complete pre-consolidation notes and
-report are preserved in
-`.runs/mtg213/context-before-compress/20261104-0903/`. Earlier committed
-continuation context is at
-`8bd685ee02a9dd31588911b66a2713f4aec037f6:scratch/tla-pilot-verify.md`.
-The uncommitted verification/implementation notes before this consolidation are
-retained at `.runs/mtg213/context-before-compress/continuation-consolidation/tla-pilot-verify.md`.
+Frozen-source local evaluation initially stopped before games with
+`identity_path_without_files`. Explicit ETUDE_SOURCE_DIR/ETUDE_COMMIT identified
+the extracted archive and allowed the retained initialization evaluation.
 
-## Remaining execution and acceptance
+## Reduction and validation
 
-Decision: finish the unexecuted GPU acceptance in this Task. No further code
-defect was found. Capacity is an external prerequisite, not missing human
-authorization or a reason to change the frozen inputs.
+Delete — do not maintain: separate `scratch/vast-provider-followup.md` and
+`scratch/etude-release-status.md` handoff/status notes; their live facts are above.
+No code deletion targets. Frozen protocols and evidence remain reproducibility
+records. Wave memory predates the v5 result; its next authorized maintenance
+step should reconcile it against the report. Uncommitted pre-edit notes/report
+are preserved under
+`.runs/mtg213/context-before-compress-20261104-1745/`; the prior blocked decision
+is at `.runs/mtg213/v5-continuation/verify-before-20261104-1720.md`.
 
-Delete — do not maintain: none in this execution-only continuation. The merged
-repair remains the sole implementation; frozen earlier protocols and evidence
-remain reproducibility records.
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py -q` — 43 passed at 09:58 UTC; reused for unchanged executable code. Gate owns affected acceptance checks; design/implementation owns the prospective action-capacity repair.
 
-Prepared v5 Run `e8c76bc2c06f` remains bound to frozen source
-`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`. Execution depends on fresh inventory,
-billing, availability and quote reconciliation; the next allocation ceiling is
-$1 within the cumulative $10 cap. The existing launcher owns deadlines and
-teardown, with CUDA admission before training and hardware choice recorded
-before scoring. Publication of newer code does not retarget this Run.
-
-Jack Heart's requested launch milestone requires observed GPU learner updates,
-with run/GPU/progress/rate/deadline evidence. Acceptance also requires an admitted
-trained checkpoint, complete prospective paired evaluation, full costs and an
-honest Elemental-relative learning/cost report.
-The v4 summary has zero updates and 238 completed-but-unoptimized games before
-`agent_cards plus sideboard 61 > 60`. Its evaluation has only initialization:
-32 valid games, 256 missing, complete=false, success=null. Merge and CPU smoke
-do not satisfy the outstanding acceptance; prior identities and missing slots
-remain frozen. Any new workflow defect requires its own repair and validation;
-merged #420 remains delivered history. The separate Etude Vast.ai Task EXP-35
-does not establish available hardware or transfer a budget to this pilot.
+Check: `git diff --check` — clean; all 114 new manifest entries match retained SHA256/byte counts and existing entries are unchanged. `lf context` confirms memory and scratch are within both limits. No executable code changed.

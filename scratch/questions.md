@@ -15,10 +15,10 @@ the CPU proof satisfy it.
 
 Comment 42a12145 resolves the next repair: Jack Heart approved shared-effect
 fixed tensors, encoding each effect once and routing it to affected object
-embeddings before attention. Task 5da5f4 delivered the implementation in PR #419 and owns redundant-
-activation investigation. Preserve semantics; no competing representation
-implementation or unchanged v3 retry. V4 consumed that contract; the prepared
-v5 retains it with fresh initialization/evaluation and the same budget/population.
+embeddings before attention. Task 5da5f4 delivered the implementation in PR #419
+and owns investigation of redundant activations. Preserve semantics; no competing representation
+implementation or unchanged v3 retry. V4 consumed that contract; v5 executed it with fresh initialization/evaluation and the same budget/population;
+its action-capacity failure and remaining acceptance are in the continuation note.
 
 ## Scientific and operational choices
 
@@ -78,17 +78,29 @@ V4 failed before learning at 61 card objects including sideboard (40 original ca
 
 ## Main integration boundary — 2026-11-04 UTC
 
-The T6 merge at `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` changes the
-runtime world and input schema. Frozen v5 pins player/card widths 67/55 and
-64 actions; current source uses widths 73/56 and a fresh 512-action default.
-The existing runtime and shape guards reject substitution. Synthetic scheduling
-and analysis tests use explicit historical identity/shape fixtures; those
-fixtures never authorize actual training, encoding or replay under that identity.
-Prepared Run `e8c76bc2c06f` remains on source
-`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, as the continuation feedback selects.
-No prospective v6 pilot or re-freeze onto main has been selected.
+The [continuation note](tla-pilot-verify.md#delivered-repair-and-source-boundary)
+owns the prepared Run, T6 runtime/schema mismatch and fixture limitations.
+Continuation selects that frozen Run; no prospective v6 pilot or re-freeze onto
+main has been selected. Synthetic fixtures never authorize actual training,
+encoding or replay under a historical identity.
 
 A main sync brought T6 scratch decisions into this checkout. They remain at
 `5cd6ed3f6e54e81f9f39c5c2bb56f322dc1576c1:scratch/questions.md`; they do not
 replace MTG-213's accepted scope or shipping authorization. This file restores
 the pilot decisions from merged PR #420, with this integration boundary added.
+
+## Vast continuation selected — 2026-11-04 UTC
+
+Jack Heart requested releasing Vast support then using it for TLA. Steer
+c38da514 transferred GPU continuation to Graph 3529715b, with release 0.2.14
+owned by the primary conversation. The isolated published control client kept
+frozen v5 unchanged. The selected RTX 5090 placement required >=6 vCPUs,
+>=48GB RAM, 80GB disk, <=$0.81/hour and 840 seconds setup plus the one-hour job,
+inside the $1 allocation/$10 cumulative limits. The existing SSH public key
+was registered; VAST_API_KEY remains in Doppler etude/prd.
+
+V5 ran once and failed after three updates; the continuation note owns settlement,
+remaining acceptance and the prospective repair boundary. Release and provider
+handoff notes are consolidated there. Their complete pre-edit text, together
+with this file and the report, is preserved under
+`.runs/mtg213/context-before-compress-20261104-1745/`.
