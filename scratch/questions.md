@@ -1,10 +1,11 @@
 # T7 decisions and parent evidence — 2026-11-03
 
 Jack Heart's T7 scope, accepted chooser API and review boundaries are in
-[mtg-226-tla-t7-player.md](mtg-226-tla-t7-player.md). This compress step treats
-the inherited T6 plan as history; it does not operate the live parent Graph.
-T6's later published schedule/selector completion still needs integration before
-combined acceptance. Publication may be stacked; landing remains parent-first
+[mtg-226-tla-t7-player.md](mtg-226-tla-t7-player.md). The inherited T6 plan is
+historical context. Published schedule/selector
+completion is integrated at `20f42a09a`; the later accepted delayed-event
+frequency/expiry separation remains parent-owned and awaits a published sync.
+Publication may be stacked; landing remains parent-first
 and requires review. No merge, auto-merge or paid training is authorized.
 
 ## Parent contracts retained
@@ -43,15 +44,16 @@ artifacts remain untouched and are historical proposals, not new T7 direction.
 
 ## Published T6 sync — 2026-11-03
 
-Integrate published parent `bf7631c6a1d229c1405ea800bd57e493aa66c45c` into T7.
-Retain both public schedule and player-control projections through native,
+Merged published parent `bf7631c6a1d229c1405ea800bd57e493aa66c45c` at
+`20f42a09a`. The merge retains both public schedule and player-control
+projections through native,
 Python, TypeScript and schema boundaries, plus both branches' directed card
 checks. T7's published chooser remains authoritative; native Decision/Action
 players retain resource ownership. Parent v6 fact capacity and delayed-selector
 changes remain intact.
 
-Restore the updated parent `mtg-225-tla-t6.md` and `t6-direction.md` as historical
-evidence rather than discard their post-consolidation additions. Complete parent
+The merge restored the updated parent `mtg-225-tla-t6.md` and `t6-direction.md`
+as historical evidence, preserving their post-consolidation additions. Complete parent
 notes, including schedule presentation and main v6 integration decisions, remain
 at `bf7631c6a1d229c1405ea800bd57e493aa66c45c:scratch/questions.md`.
 This sync does not operate T6 or authorize landing, experiments or broader work.

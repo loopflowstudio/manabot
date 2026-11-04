@@ -2507,6 +2507,21 @@
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "player_controls": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PlayerControlView"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Controls"
+        },
         "schedule": {
           "anyOf": [
             {
@@ -3608,6 +3623,44 @@
         "created_at_table_revision"
       ],
       "title": "PlayerAuthoredBeliefProvenance",
+      "type": "object"
+    },
+    "PlayerControlView": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "title": "Active",
+          "type": "boolean"
+        },
+        "controller": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Controller",
+          "type": "integer"
+        },
+        "effective": {
+          "title": "Effective",
+          "type": "boolean"
+        },
+        "player": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Player",
+          "type": "integer"
+        },
+        "whole_turn": {
+          "title": "Whole Turn",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "player",
+        "controller",
+        "whole_turn",
+        "active",
+        "effective"
+      ],
+      "title": "PlayerControlView",
       "type": "object"
     },
     "PlayerSubject": {

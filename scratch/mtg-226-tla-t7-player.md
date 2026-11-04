@@ -1,8 +1,10 @@
-# MTG-226 — TLA T7 launch direction
+# MTG-226 — TLA T7 implementation plan
 
-Jack Heart requested launch and opening the Task conversation in Rex on
-2026-11-03. Continue existing MTG-226, not a duplicate Task. Publish one cohesive
-PR for review; no merge or auto-merge is authorized by this launch.
+Status, 2026-11-03: T7 implementation is merged with published T6
+`bf7631c6a1d229c1405ea800bd57e493aa66c45c` at `20f42a09a`. Focused combined
+checks pass; broad acceptance and publication remain pending. Jack Heart
+authorized one cohesive PR for review, including stacked publication; landing
+remains parent-first and requires review. No merge or auto-merge is authorized.
 
 ## Outcome and scope
 
@@ -34,25 +36,22 @@ Do not launch paid training or inherit old experiment budgets for this task.
 
 ## Dependency handoff
 
-Stack on T6 MTG-225 / PR #417's published head. T5, D1 decklist import and
-MTG-235/236/237/238/239 foundations are already integrated there. T6 supplies
-one global catalog, faces/Sagas, turn and combat scheduling, retained ability
-state, Sozin payment/search authority, and referenced-row learner encoding.
-Do not reimplement those foundations or revive authored pack multiplicity.
+T7 began on published T6 `01ed2fbcb`. The merge at `20f42a09a` incorporates
+published T6 `bf7631c6a`, including ordered schedule presentation/recovery,
+creation-time delayed-selector capture, and main `3b122de90`'s v6 fact capacity.
+Both schedule and player-control projections survive through native, Python,
+TypeScript and Experience schemas. No dirty parent tree was copied.
+T5, D1 decklist import and MTG-235/236/237/238/239 foundations are integrated.
+One catalog, face/Saga state, scheduling, Sozin payment/search authority and
+referenced-row learning remain the shared foundations.
 
-T6 is still running a final accepted schedule-presentation completion: public
-ordered extra turns/resume and current/pending extra combats with attacker
-restrictions must reach Academy and retained-session recovery. Its implementation
-Graph is a31a0147-dab4-464d-8112-3cddf160516b. Start T7 from the published parent
-only; never copy a live dirty T6 tree. Expect overlap in turn/decision state,
-observation, experience projection and Academy. Incorporate T6's later published
-completion through a supported sync before final combined validation. Landing
-T7 remains dependent on T6; starting now does not waive this ordering.
-
-Keep T7's working design in its own scratch. Inspect its selected code Graph and
-existing repository guidance. Resolve routine design choices from accepted
-requirements; ask genuine product questions in its opened conversation. Do not
-open another conversation just to ask for review.
+T6 PR #417 remains open with its code Graph running. Jack Heart's later
+2026-11-03 decision (comment `55355aab-4b5f-47e6-bcaf-2cb3326a3d08`) also accepts
+separating delayed-event matching, once/repeat frequency and expiry. That
+completion is not in `bf7631c6a`: this checkout's `DelayedEvent` still fuses
+those meanings. It remains parent-owned work whose later published result
+needs integration before final combined acceptance. This is a resolved design
+choice, not a new T7 implementation task. Parent-first landing remains required.
 
 ## Design acceptance — 2026-11-03
 
@@ -82,8 +81,7 @@ clarification reuses the existing native Decision/Action context.
 
 ## Working design — 2026-11-03
 
-Implementation is based on parent `01ed2fbcb`. The code Graph owns this
-compress step; later demo/delivery/review steps retain publication boundaries.
+Accepted design, reconciled against merged implementation `20f42a09a`.
 
 Rules sources: Wizards TLA release notes pp. 40–41
 (`https://media.wizards.com/2025/downloads/TLA_Release_Notes_06HVqa76yI/EN_MTGTLA_ReleaseNotes_20250925.pdf`),
@@ -98,23 +96,26 @@ outside-game selection or concession on the affected player's behalf is allowed.
 The existing optional additional-cost path owns payment. `ControlPlayer` over
 an `ObjectSelector` schedules `PlayerControlDuration` on TurnState, in creation
 order, and ordinary interval advancement activates/expires it. Last-created
-active control wins. `ActionSpace.player` is the chooser; the existing Decision.player and
-Action.player keep the rules subject. Publication resolves `decision_controller`
-once from the legal actions; there is no duplicate identity field. Env rewards, structured/semantic offers, capture,
-search and Academy read the published chooser directly.
+active control wins. `ActionSpace.player` is the chooser; existing native
+Decision/Action players keep the rules subject. Publication resolves
+`decision_controller` once from legal actions; there is no duplicate identity
+field. Env rewards, structured/semantic offers, capture, search and Academy
+read the published chooser directly.
 In-game observations are the union of the viewer's and controlled player's
 permissions; sideboard inspection stays with the original viewer. Learn's
 native eligibility rejects outside-game selection while controlled. Known hand
 definitions survive expiry; exact private card visibility does not.
 
-Public v5 continuation kind 13 carries control's controller, affected player,
+Public v5/v6 continuation kind 13 carries control's controller, affected player,
 duration, pending/active state and creation order; kind 14 names a delegated
 current decision. Existing native/Python relation encoders carry both without
-widening rows. V1–v4 continue excluding kinds >=10. Learning tokens derive from
-the rules enum; text and Academy retain the same native permissions. Hash
+widening rows. V6 is now the fresh default with configurable fact capacity
+(default 512); v5 stays at 128 facts and v1–v4 keep their exclusions. Saved
+configurations retain their version and capacity through `from_checkpoint`.
+Learning tokens derive from the rules enum; text and Academy retain the same native permissions. Hash
 contract 14 binds the new mutable state. No frozen evidence is regenerated.
 
-### Delete — do not maintain
+### Consolidation completed
 
 Removed downstream control remapping and the partial `action_player` helper;
 publish the chooser once on ActionSpace. Shared native information permission
@@ -128,8 +129,8 @@ rules subject, and exact legal-action equality checks it during lowering.
 maintain a second definition-count implementation. `Observation::add_card` is
 inlined into ordered collection with one local seen set, avoiding repeated scans
 of every accumulated row. Named StepKind values own duration boundaries instead
-of numeric phase/step coordinates. No remaining deletion targets are identified;
-retain structured binding, private visibility and deterministic order tests.
+of numeric phase/step coordinates. Structured binding, private visibility and
+deterministic order tests remain.
 
 ### Implementation outcome and remaining work
 
@@ -138,7 +139,7 @@ self-exile, native delegated authority and inspection, Learn/sideboard exclusion
 ordered public control schedules and Academy presentation. The published chooser
 comes from existing Action.player; no second ActionSpace identity survives.
 The former partial action_player helper is removed. State hash contract is 14;
-new public relation kinds 13/14 retain v5 widths and frozen v1–v4 exclusions.
+new public relation kinds 13/14 retain v5/v6 widths and frozen v1–v4 exclusions.
 
 Full-file reconciliation lives in `docs/rules/tla/acceptance.md`: 286 identities,
 294 faces, nine fixed tokens, Copy marker and excluded Treasure; all definitions
@@ -146,14 +147,72 @@ are present with behavior witness links and explicit uncovered interactions.
 Valid submitted 60-card TLA lists reach delegated cleanup in Academy and the
 training Env; retained recovery preserves the actual offers and inspection.
 
-Checks: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 -p managym-cards --test cards secret_of_bloodbending` — 10 passed; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 -p managym --test rules_tests structured_` — 16 passed; `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_player_control.py tests/academy/test_player_control_session.py tests/academy/test_named_search_recovery.py -q` — 5 passed. Release extension rebuilt and installed atomically; Rust formatting, changed-Python Ruff and diff checks passed. Earlier allocation, effect-token, Scryfall, protocol and Svelte checks remain applicable. Gate owns affected suites, mutable w17 receipts, arena/monitoring validation and CI Engine Budget.
+The merged default-v6 policy path agrees with Python encoding, text and Academy.
+Native observability checks retain explicit v5 evidence. This reconciliation also
+regenerates the five replay/Study/advice schemas that omitted `player_controls`
+from their shared projection type; historical fixtures and optional-field
+semantics stay unchanged. No engine behavior repair was needed here.
 
-Scratch parent notes were consolidated into `questions.md` with precise git
-references after verifying their bytes matched the published parent. Wave memory
-was read and remains unchanged; both context budgets pass `lf context`.
+Prior pre-sync evidence at `d91c5f011:scratch/mtg-226-tla-t7-player.md` includes
+16 structured-action checks, named-search recovery, allocation/token/Scryfall
+checks, protocol/Svelte checks and the atomic release-extension rebuild.
+Those results apply to their tested inputs, not broad acceptance of this merge.
+The inherited T6 notes are historical evidence; their older pending statements
+do not override this plan. Engine memory now records the accepted chooser and
+shared-visibility contracts; no child memory directories exist in this checkout.
 
-T6 is still live (`a31a0147-dab4-464d-8112-3cddf160516b`, implement loop 2 pass 2
-on the latest status read). Its later schedule presentation and delayed-selector
-completion must be incorporated from a published head before combined acceptance.
-No dirty parent state was copied. Publication remains stacked review-only with
-parent-first landing, no merge or auto-merge. No paid training ran.
+Remaining work: integrate T6's later published delayed-lifetime completion;
+validate affected combined suites and refresh only mutable w17 receipts; verify
+arena admission/monitoring and final-head CI Engine Budget; complete presentation
+review/demo and Jack Heart's PR review. Gate/CI own broad checks, including browser
+layout/interaction evidence unavailable in this headless reconciliation. No paid
+training or new experiment authorization is implied. No new product decision is
+needed; documented uncovered cross-card combinations remain coverage limits,
+not grounds to remove defined cards from play.
+
+Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 -p managym-cards --test cards secret_of_bloodbending` — 10 passed; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --test canonical_replay_tests --test study_protocol_tests --test study_index_protocol_tests checked_in` — 3 passed; `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_player_control.py tests/academy/test_player_control_session.py tests/academy/test_schedule_recovery.py tests/academy/test_experience_protocol.py -q` — 19 passed across focused invocations.
+
+## Concept review — 2026-11-03
+
+Outcome: **nothing to change and no open product choice**. Source review of
+`20f42a09a` plus the existing reconciliation edits agrees with Jack Heart's
+accepted chooser contract. This is concept-review evidence, not final combined
+acceptance or authority to publish, merge or select the next Graph step.
+
+The consequential mismatch was treating the chooser as the owner of the action's
+resources. The implementation resolves it at `publish_action_space`: the legal
+action retains its native player, the published space names its chooser, and
+turn ownership remains independent. No `acting_player` alias or browser-owned
+control lifecycle is needed. The ordered native control records retain pending,
+active and overridden effects; their effective status is derived for presentation.
+
+Usage wording, describing existing behavior: “When you control another player,
+Academy says who chooses for whom. Choose from the offered actions using that
+player's cards and resources. The control list says whether the effect is pending
+or active and whether it lasts for a combat or turn. Reconnect to continue the
+actual pending choice; retrying a committed Command does not make it happen twice.”
+Existing AGENTS.md decision-ownership guidance already states the small API;
+no skill or usage contract needs a new concept.
+
+Follow-through: native inspection permission supplies policy, text, Academy and
+search. Sideboards and outside-game choices retain their separate restrictions.
+Control state participates in deterministic identity, continuation kinds 13/14
+and the optional shared projection. Missing historical projection data stays
+unknown. Retained recovery restores the same frame, offers and inspection;
+there is no new persistence service or promise of process-crash recovery.
+
+Counterexamples retained: a delegated cast cannot spend the chooser's mana;
+controlling the chooser cannot apply authorization twice; an overridden record
+cannot be discarded while it still has a lifetime; expiry removes physical
+inspection without erasing known hand definitions. The normal cleanup path,
+disconnect before commitment, duplicate retry and stale rejection have existing
+directed witnesses. Repeated cleanup is still a declared integration coverage
+limit: `turn_tick` repeats cleanup without advancing the interval, but that code
+inspection is not an end-to-end Bloodbending proof.
+
+Next proof remains the already-planned published T6 integration and combined gate,
+including presentation and consumer validation. This review ran no new game tests
+and adds no acceptance claim for the documented uncovered combinations.
+The review surface is `scratch/concept-review.html`; its inherited T6 predecessor
+is retained at `20f42a09a:scratch/concept-review.html`. No unresolved product
+question or new implementation direction was found.

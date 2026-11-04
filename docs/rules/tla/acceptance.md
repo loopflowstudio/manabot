@@ -1,7 +1,7 @@
 # TLA full-file reconciliation — MTG-226
 
 This audit reconciles the allocation with the native catalog and directed behavior
-witnesses on the T7 implementation stacked on published T6 `01ed2fbcb`.
+witnesses on the T7 implementation, now merged with published T6 `bf7631c6a`.
 The [allocation](allocation.jsonl) remains the planning authority; this document
 is evidence navigation, never an admission allowlist. Definition is support.
 
@@ -36,8 +36,9 @@ last-active control precedence, nontransitive authorization, extra-combat expiry
 extra-turn scheduling and expiry,
 hand/library/foretell visibility, private sideboard exclusion and Learn restrictions.
 Delegated commands reject duplicate/stale commitments and preserve exact fork
-state. Native/Python v5 relation encoding, definition-derived learning tokens and
-LLM text agree; v1–v4 retain their frozen shape and exclusions.
+state. Native v5 observability and merged default-v6 native/Python encoding,
+definition-derived learning tokens and LLM text have focused checks; v1–v4
+retain their frozen shape and exclusions.
 
 `tests/academy/test_player_control_session.py` admits two legal 60-card TLA
 lists through native decklist import and plays them through both the training Env
@@ -57,9 +58,11 @@ native owners; they have no new end-to-end witness here. Extra-combat expiry is
 covered; a Bloodbending + Kuruk extra-turn combination is not separately played.
 No absent witness removes a defined card from play.
 
-T6's later schedule-presentation and delayed-selector completion is still live.
-Final combined acceptance must incorporate its published result; no dirty parent
-checkout was copied. Gate owns the affected suites, mutable w17 receipt refresh,
+T6's schedule-presentation and delayed-selector capture are integrated from
+published `bf7631c6a`. Its later accepted separation of delayed-event matching,
+firing frequency and expiry remains parent-owned and needs a later published
+sync before final combined acceptance. No dirty parent checkout was copied.
+Gate owns the affected suites, mutable w17 receipt refresh,
 arena admission/monitoring checks and CI Engine Budget. The inventory and focused
 T7 proofs do not substitute for that gate, nor do earlier receipts certify this
 unpublished combination.

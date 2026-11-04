@@ -447,8 +447,9 @@ preserves accepted decisions, dated proof limits and source history.
   their lending definition across source departure or replacement; departure
   triggers use LKI. Ordered extra turns/combats and their restrictions need
   both deterministic identity and shared policy/text observation. T6 represents
-  them in hash contract 13, v5 frames/facts and definition-derived tokens,
-  preserving v1–v4 widths and exclusions.
+  them in v5/v6 frames/facts and definition-derived tokens, preserving v1–v4
+  widths and exclusions. The initial scheduling cut used hash contract 13;
+  creation-time delayed-selector capture moved the current contract to 14.
 - Concurrent vocabulary additions need explicit ordinal reconciliation.
   Main's library ordering keeps decision code 23 and loyalty/defense keep
   counter ordinals 7/8; unpublished T6 payment/search use 24/25, choose-to-exile
@@ -474,6 +475,44 @@ preserves accepted decisions, dated proof limits and source history.
   sampler reload repairs the fixture without weakening validation. Both uniform
   and learned samplers have focused save/reload/payment-replay proof; this does
   not establish full-head CI or retained-checkpoint compatibility.
+
+## Player control and shared projections (2026-11-03; pending review)
+
+- Jack Heart's final MTG-226 clarification makes `ActionSpace.player` the
+  authoritative chooser. Native `Decision.player()` and `Action.player()`
+  retain the rules subject and resource ownership; `TurnState.active_player`
+  / `Game::active_player()` still name whose turn it is. Publication resolves
+  control once from legal actions. Consumers must not remap that chooser,
+  including when the controller is itself controlled. An extra `acting_player`
+  identity was an assistant proposal, not an accepted requirement.
+- Native inspection permission covers the controller's own information and
+  the controlled player's permitted in-game information, including foretold
+  cards. Private sideboards and outside-game selection remain excluded.
+  Known hand definitions persist after control expires; physical private-card
+  visibility does not. Policy, text, Academy and search share that authority.
+  Pending/active controls and delegated decisions use relation kinds 13/14;
+  they add no columns. Last-created active control wins for the rules subject.
+- Main's v6 capacity change, integrated through T6, makes fresh fact capacity
+  configurable (default 512); v5 remains 128 and timestamp rank remains /128.
+  Saved observation configurations retain their version and omissions through
+  `from_checkpoint`. Tests relying on fresh defaults now exercise v6; explicit
+  v5 tests remain necessary evidence for that historical layout.
+- Shared projection additions reach every generated schema that embeds the
+  type, not only Experience. T7's replay, Study and advice schemas initially
+  omitted `player_controls` while their runtime types already included it.
+  Regeneration repairs this drift without rewriting historical fixtures;
+  absent optional projection data remains unknown, distinct from an empty list.
+- T7's focused native and submitted-60-card Academy/training proofs cover
+  delegation, durations, payment, privacy and retained cleanup recovery. They
+  do not establish all pairwise TLA interactions, process-crash durability,
+  training strength or final-head CI. Catalog completeness and behavior
+  witnesses remain separate claims in `docs/rules/tla/acceptance.md`.
+- Jack Heart accepted separating delayed-event matching, once/repeat frequency
+  and expiry in T6 on 2026-11-03 (comment `55355aab`). Creation-time exact
+  selector capture and distinct event context remain required. This is a
+  resolved parent design decision; the published `bf7631c6a` integration does
+  not yet contain that later completion. Its acceptance cannot be inferred
+  from the earlier schedule/capture proofs.
 
 ## Open tensions
 
