@@ -272,3 +272,49 @@ separate future decisions. The current universe includes real back-face names
 but does not claim all legal Magic names or change deck admission.
 
 Check (realign): `git diff --check` — passed; `lf context` — memory and scratch below both configured limits; runtime validation reused from `5a57096f2`, full acceptance deferred to gate/CI.
+
+## Publication check — 2026-11-04
+
+`lf sync` completed without conflicts, checkpointing the inherited reconciliation
+at `96b055105`. The existing PR #424 already exposes that head; its copy still
+describes the earlier implementation. The actual remote main was `3de3a0ebf`,
+with local main `1546aae3f` already incorporated. No `lf pr publish`, merge,
+auto-merge or Task completion was performed in this check.
+
+The broad model check found three test compatibility failures: the inference
+recovery comparator did not admit `PackedActions`, and two independent dense
+focus references required bitwise equality across differently shaped float32
+matrix multiplies (observed error about 3.3e-11). Commit `4e7e4ea94` compares
+complete materialized observations and behavior distributions and uses a tight
+float32 tolerance for the focus references. The repaired checks pass.
+
+Validation: full debug Rust with `CARGO_PROFILE_DEV_OPT_LEVEL=1`, `-j 2`:
+970 passed, two ignored; Cargo formatting and all-target/all-feature Clippy pass.
+The first affected Python invocation stopped at the three failures after 204
+passes and one skip. The continuation/recheck invocation covered remaining
+model, packed rollout, learning, recovery, observation/buffer, Academy recovery,
+package-boundary, world-admission and monitoring checks: 384 passed, two failed.
+Those two abrupt-process recovery failures were source-identity mismatches
+caused by committing the test repairs while the parent process cached its old
+commit; both pass in a fresh, unchanged-checkout invocation. Recovery admission
+was not relaxed. CI-selection/release tests: 58 passed; Academy labels: four
+passed; Ruff and diff checks pass.
+
+Academy receipt/navigation/setup checks had 28 passes and one stale authored-match
+receipt. Rebuilding and comparing the complete open-w17 receipt proved that only
+the source fingerprints of the historical-reader changes differed. Refreshed
+those fingerprints with identical Commands, viewer projections, events and state
+witnesses; the three-test authored-match suite then passed. Frozen evidence is
+unchanged. Full browser coverage and CI on the final source are still outstanding.
+
+Publication remains blocked by the accepted combined greater-than-512 proof.
+`flow/naming_tests.rs` installs a controlled vocabulary into a Rust decision;
+`test_catalog_naming_large_support_learns_and_rejects_wrong_binding` separately
+injects corresponding observation rows. Vector and Academy execution still use
+the 344-name installed catalog. They do not prove that a policy-selected row
+beyond 511 executes through the vector and Academy Command paths against the
+same native vocabulary. Closing this needs a controlled native fixture shared
+by those consumers, without enlarging production deck admission or treating
+synthetic observations as execution authority. Refresh the PR copy through
+`lf pr publish` only after that acceptance gap is closed; the repaired tests and
+receipt are retained locally for that continuation.
