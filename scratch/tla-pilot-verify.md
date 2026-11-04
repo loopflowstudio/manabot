@@ -4,8 +4,9 @@
 `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` contains PR #419's shared-effect
 contract but lacks the card-capacity repair. PR #416 merged at
 `3b122de9078c985f846a0f3c5a3a42ebca3b1182`; this Task has no later PR.
-The existing repair and prospective v5 runner are ready for gate and a new PR
-in this Task. GPU execution and learning acceptance remain outstanding.
+The existing repair and prospective v5 runner have passed publication checks
+and are ready for a new PR in this Task. GPU execution and learning acceptance
+remain outstanding.
 
 ## Accepted outcome and constraints
 
@@ -104,10 +105,9 @@ deadline and teardown. No automatic retry or unowned inventory cleanup.
 
 ## Remaining work
 
-1. Gate and ship the existing repair in a new PR. Gate owns Rust fmt, all-feature
-   Clippy and debug `cargo test`, model and active-training suites, current-world
-   arena admission/monitoring and choice separability, discovery and experiment-
-   data tracking per `docs/development.md`. Focused checks do not discharge these.
+1. Publish the checked repair in a new PR, then deliver through the selected
+   delivery step. Publication validation below discharges the local checks;
+   publication alone neither merges the PR nor completes the Task.
 2. After delivery, obtain fresh capacity, inventory, billing and bounded quote
    checks, then resume the prepared v5 Run through ordinary CUDA admission within
    $10. Capacity is the external prerequisite; no human choice is missing.
@@ -177,3 +177,18 @@ Next proof is the existing gate plus bounded GPU execution and complete paired
 evaluation, including cost and Elemental-relative learning limits. No new paid
 run, publication, merge, tests or provider availability read was performed for
 this review. Page: `scratch/concept-review.html`. Loop-or-next owns navigation.
+
+## Publication validation — 2026-11-04 UTC
+
+`lf sync` completed cleanly against main `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`.
+Full debug Rust tests, all-target/all-feature Clippy and rustfmt passed. The
+documented relative PyO3 interpreter path initially failed to resolve from a
+Cargo build script; rerunning with the absolute pinned interpreter passed.
+The combined affected Python suite passed 391 tests with one skip, covering all
+model tests (including choice separability and the 128-card learner/export/reload
+proof), active training, current-world admission/monitoring, pilot and shared-
+effect replay, experiment discovery/regimes and artifact/CI/release checks.
+Ruff lint/format and diff checks passed. All 230 added artifact entries match
+local bytes and existing manifest entries are unchanged. Logs are
+`.runs/mtg213/publish-cargo-test.log` and `publish-python-tests.log`.
+No paid work or GPU availability read occurred in this publication step.

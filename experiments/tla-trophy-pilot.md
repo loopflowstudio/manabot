@@ -269,3 +269,20 @@ evidence; new games cannot fill their missing evaluation slots.
 
 GPU learner updates and trained checkpoints remain missing. No paid-training
 milestone or learning/Elemental-pace claim is supported; MTG-213 is incomplete.
+
+### Card-capacity repair publication checks (2026-11-04 UTC)
+
+On the synced repair branch, Rust formatting, all-target/all-feature Clippy and
+the complete debug workspace tests pass (`CARGO_PROFILE_DEV_OPT_LEVEL=1`, two
+build jobs). Python validation passes **391 tests, one skipped**: the complete
+model suite, active training, current-world arena admission and monitoring,
+pilot/discovery/regime checks, retained shared-effect and card-capacity replays,
+and artifact tracking/CI selection/release checks. Changed Python files pass
+Ruff lint and formatting; the diff has no whitespace errors. All 230 added
+artifact manifest entries match retained local bytes, with existing entries
+unchanged. The earlier release rebuild and atomic extension replacement remain
+the native runtime used for these Python checks.
+
+These checks establish the retained 61-card repair and CPU learner/export/reload
+behavior at 128 cards. They do not execute the prepared v5 GPU Run, establish a
+universal capacity bound, or supply missing trained-checkpoint evaluations.
