@@ -392,3 +392,12 @@ basics offers/payments match X=0..5, while direct X=6/255 submissions reject wit
 the complete rules-state witness unchanged. Airbend and any-type-mana casts
 also reject unavailable X. Prefix tests preserve original native Command mapping,
 scalar/vector/Python parity, masks, collection and bounded replay diagnostics.
+
+V8 is now frozen as Run `f47be2d3c0d8`, source
+`900c207502bd28757d7cf66196bd464458e39402`, but remains unsubmitted.
+At19:10–19:12 UTC, the bounded RTX5090 quote refused its USD0.81/hour ceiling;
+L4 and RTX3090 quotes refused available capacity. No paid allocation or new
+evaluation occurred. The final inventory at 19:11:43 found no live rentals or
+unsettled hardware. Historical accounted cost remains USD0.32710677365251912,
+with conservative reservations USD3.9139916049382716 of the USD10 cap.
+Preflight receipts live under `experiments/data/mtg213/gpu-v8-preflight-20261104/`.

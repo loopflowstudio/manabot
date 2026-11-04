@@ -149,3 +149,10 @@ Reversible interpretation: the fixed heuristic baseline retains its established
 full native policy. Learned candidate and initialization-anchor policies both
 use the declared 64-slot cutoff. Evaluation reports measure observation cutoff
 frequency and retain the full game trace; no baseline redesign was requested.
+
+V8 placement assumption at 19:12 UTC: after fresh RTX5090 price and L4 capacity
+refusals, try a separate RTX3090 supply with the same >=6vCPU/48GBRAM/80GB disk,
+<=USD0.81/hour and <=USD1 allocation. The existing GPU/budget authorization
+permits this hardware substitution; preserve the exact source, recipe and job
+wall cap, and record the quote/rate/deadlines before scoring. Another Task's
+live RTX3090 rental is left untouched and is not charged to this pilot.

@@ -96,3 +96,28 @@ Earlier continuation detail is retained at
 uncommitted notes immediately before v8 consolidation are preserved under
 `.runs/mtg213/pre-v8-notes/`. Wave memory is read-only in this implementation
 step; its pre-existing unstaged changes are preserved.
+
+## V8 preflight settlement — 19:12 UTC
+
+V8 Run `f47be2d3c0d8` is frozen at
+`900c207502bd28757d7cf66196bd464458e39402`. The source archive for later local
+evaluation is `.runs/mtg213/runtime-900c20750/`; no games or initial checkpoint
+were produced. All quotes refused before submission: RTX5090 exceeded the
+USD0.81/hour ceiling; L4 and a separately configured RTX3090 supply reported
+no available machines. The RTX3090 alternative retained >=6vCPU/48GBRAM/80GB
+disk and the same ceilings. No new rental, watcher, training/evaluation process
+or spending exists. Do not infer future availability from these dated reads.
+
+Inventory at 19:10 identified unrelated RTX3090 rental 59148889, session
+`0b7669dd3936`, Run `332a954fd935`, job `state_representation_gpu`; it was left
+to its owner. The final 19:11:43 read found no Vast/RunPod rentals or unsettled
+hardware. Accounted cost and conservative reservations remain unchanged.
+Receipts and the exact prepared Run are retained under
+`experiments/data/mtg213/gpu-v8-preflight-20261104/` with artifact publication.
+
+Check: 16 focused Python cutoff/replay/collector/protocol tests passed, then 9
+checks affected by typed diagnostic receipt refinement passed; current-experiment
+discovery 1 passed. The debug checks above and rebuilt extension remain applicable.
+The next dependent step needs a fresh compatible quote for this already-frozen
+Run; source must not be rebound to later documentation commits. Broader gate and
+delivery remain outstanding, alongside the empirical pilot acceptance.

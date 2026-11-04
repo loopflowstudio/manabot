@@ -36958,6 +36958,54 @@
    "sha256": "6300e204030789beed54c95e3a7952a988a58ddac45484f3f58b418f6c618f84",
    "bytes": 2184
   },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/inventory.json": {
+   "sha256": "6eff30b9b8c8b60b2fb0921f385976371c2870b57dfd525097fdc598b8201a5d",
+   "bytes": 5814
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/inventory.py": {
+   "sha256": "371cd1379642846714f859bf2f3bb44decf1b3cdbacdcf079b0f44f1fb9c5008",
+   "bytes": 4094
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/l4-refusal.json": {
+   "sha256": "82857b1e32ece9262e4be02396efbd6d0e1d6038d5544c0706c14b8a143d9a40",
+   "bytes": 225
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/launch-l4.py": {
+   "sha256": "52a9b5da2d41399d083f1face99a27a455a774cab619c62cf8f9d50acaed10ce",
+   "bytes": 2876
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/launch-vast.py": {
+   "sha256": "b8acf604f55d257528ac49add92542b0e0c2a6a63d92ea554dc7a90274172351",
+   "bytes": 2897
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/launch-vast3090.py": {
+   "sha256": "c87b9a3902d027da76d9ab25f647fb2b69e527ba3b156d29963a84f44c23ad2c",
+   "bytes": 2982
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/live-inventory.json": {
+   "sha256": "c8a6730a8c9a94b723094a2f70098aad719ba52593d4043aaf96b1127569b0de",
+   "bytes": 265
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/outcome.json": {
+   "sha256": "f7264f628ce738f42115f7108d046bbaf13653313ad54954aa61d97278e31751",
+   "bytes": 717
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/prepare.py": {
+   "sha256": "283b6018be485ad4b8e8ffd748eea845c5b5703844f64f01fd41e0f0a77b93e6",
+   "bytes": 896
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/prepared-run.json": {
+   "sha256": "44d03ad5d25e3328fea8c204bf30e271cab9cfa11c762bf8d21fdc417926b89c",
+   "bytes": 282079
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/vast-refusal.json": {
+   "sha256": "7d77d4ea1109fbb8fdd6c903079bbd11987c43b2e4cca7583c0299693a65bdc7",
+   "bytes": 308
+  },
+  "experiments/data/mtg213/gpu-v8-preflight-20261104/vast3090-refusal.json": {
+   "sha256": "a37cd6d28ad381afd47dfb8a2534d6d881b6b5d7afe5bd9f12e5145f492a776a",
+   "bytes": 320
+  },
   "experiments/data/mtg213/launch-audit-20261103-resume/prepared-run.json": {
    "sha256": "6ba7fc74eb2c061d7e428625593965d14045c731cc1e53bfe000807cf89c0a8e",
    "bytes": 276414
