@@ -128,6 +128,7 @@ def execute_game(
     are built in-process (`_InChildPlayers`); only search players import Torch.
     """
     responsible = None
+    env = None
     perf = EvalPerformance(
         str(game.get("match_id", "game")),
         game.get("instrumentation", True),
@@ -360,6 +361,10 @@ def execute_game(
             f"{type(exc).__name__}: {exc}",
             None if isinstance(exc, InferenceFailure) else responsible,
         )
+    if env is not None:
+        if env.obs_space.encoder.config.action_overflow == "first-legal":
+            game["policy_action_cutoff"] = env._capture.policy_action_report()
+        env.close()
     game["worker_performance"] = perf.snapshot()
     send(("result", game))
 

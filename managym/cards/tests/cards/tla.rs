@@ -30,11 +30,13 @@ use managym::{
         action::{Action, ActionSpaceKind, ActionType},
         observation::{EventEntityKind, KeywordData, Observation, PermanentData},
         policy_history::HistoryReference,
+        structured_offer::{AtomicCommand, OfferSubmission, StructuredOfferError},
     },
     cards::setups::authored_setup,
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
+    search_state::witness,
     state::{
         card::{Keyword, Keywords, StaticAbility},
         effect::{CopyEffect, EffectDuration, Modification},
@@ -11459,6 +11461,152 @@ fn wan_shi_tong_enters_with_x_counters_and_draws_half_x() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
 }
 
+/// Submit an unavailable X with a current binding, so rejection cannot be
+/// attributed to a stale command. The witness covers costs, zones, pending
+/// decisions, events, RNG, legal offers and both viewers' observations.
+fn assert_unavailable_wan_x_unchanged(s: &mut Scenario, values: &[usize]) {
+    let offers = s.game().structured_search_offers().unwrap();
+    let command = offers
+        .decode(&OfferSubmission {
+            offer_id: offers.projection().offers[0].id,
+            answers: vec![],
+        })
+        .unwrap();
+    let AtomicCommand::SearchAction { binding, .. } = command else {
+        panic!("expected action-aligned command");
+    };
+    let player = s.action_space().player.unwrap();
+    let before = witness(s.game());
+    for &mode in values {
+        let command = AtomicCommand::SearchAction {
+            binding,
+            action: Action::ChooseMode { player, mode },
+        };
+        assert!(
+            matches!(
+                s.game_mut().apply_atomic_command(&command),
+                Err(StructuredOfferError::StaleOrIllegal(_))
+            ),
+            "unavailable X={mode} must reject"
+        );
+        assert_eq!(witness(s.game()), before, "X={mode} changed the game");
+    }
+}
+
+/// Seven untapped basics with no floating mana pay {X}{U}{U} only for X<=5.
+/// Every offered X completes payment; direct larger values leave the decision
+/// intact and spend neither mana nor lands.
+#[test]
+fn wan_shi_tong_rejects_unpayable_x_without_changing_state() {
+    let mut s = five_color_unfunded_setup(&["Wan Shi Tong, Librarian"]);
+    force_lands(&mut s, 0, "Island", 3);
+    force_lands(&mut s, 0, "Forest", 3);
+    force_lands(&mut s, 0, "Mountain", 1);
+    let card = cast(&mut s, "Wan Shi Tong, Librarian");
+    assert_eq!(pool(&s).total(), 0);
+    let lands: Vec<_> = ["Island", "Forest", "Mountain"]
+        .into_iter()
+        .flat_map(|name| s.battlefield_permanents_named(0, name))
+        .collect();
+    assert_eq!(lands.len(), 7);
+    assert!(lands.iter().all(|land| !tapped(&s, *land)));
+    let values: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .map(|action| match action {
+            Action::ChooseMode { mode, .. } => *mode,
+            other => panic!("expected X announcement, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(values, (0..=5).collect::<Vec<_>>());
+    assert_unavailable_wan_x_unchanged(&mut s, &[6, 255, usize::MAX]);
+    let root = s.game().clone();
+    let hand = s.zone_size(0, ZoneType::Hand);
+    for x in values {
+        *s.game_mut() = root.clone();
+        choose_mode(&mut s, x);
+        settle(&mut s);
+        let wan = s.game().state.card_to_permanent[card].unwrap();
+        assert_eq!(counters(&s, wan), x as i32);
+        assert_eq!(s.zone_size(0, ZoneType::Hand), hand - 1 + x / 2);
+        assert_eq!(
+            lands.iter().filter(|land| tapped(&s, **land)).count(),
+            x + 2
+        );
+        assert_eq!(pool(&s).total(), 0);
+        assert!(!s.game().is_game_over());
+    }
+}
+
+/// CR 107.3b: airbend's {2} replaces {X}{U}{U}; X is zero, not free.
+#[test]
+fn wan_shi_tong_airbend_fixes_x_to_zero_and_pays_two() {
+    let mut s = five_color_unfunded_setup(&["Wan Shi Tong, Librarian", "Glider Staff"]);
+    let wan = s.force_permanent_on_battlefield(0, "Wan Shi Tong, Librarian");
+    let card = card_of(&s, wan);
+    s.set_player_mana_pool(0, "2W");
+    cast(&mut s, "Glider Staff");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(wan)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+
+    s.set_player_mana_pool(0, "2");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    cast_card(&mut s, card);
+    assert_ne!(
+        s.action_space().kind,
+        ActionSpaceKind::Modal,
+        "no X announcement"
+    );
+    assert_unavailable_wan_x_unchanged(&mut s, &[1, 6, 255]);
+    settle(&mut s);
+    let wan = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(counters(&s, wan), 0);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "X zero draws nothing");
+    assert_eq!(pool(&s).total(), 0, "the alternative cost was paid");
+    assert!(!s.game().is_game_over());
+}
+
+/// Paying the printed cost with any type of mana still pays for X.
+#[test]
+fn wan_shi_tong_any_type_mana_preserves_payable_x() {
+    let mut s = five_color_unfunded_setup(&["Wan Shi Tong, Librarian", "Azula, Cunning Usurper"]);
+    let wan = s.force_permanent_on_battlefield(1, "Wan Shi Tong, Librarian");
+    let card = card_of(&s, wan);
+    s.set_player_mana_pool(0, "2UBB");
+    cast(&mut s, "Azula, Cunning Usurper");
+    advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(
+        &mut s,
+        |action| matches!(action, Action::SelectCard { card: chosen, .. } if *chosen == card),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+
+    s.set_player_mana_pool(0, "7");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    cast_card(&mut s, card);
+    let values: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .map(|action| match action {
+            Action::ChooseMode { mode, .. } => *mode,
+            other => panic!("expected X announcement, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(values, (0..=5).collect::<Vec<_>>());
+    assert_unavailable_wan_x_unchanged(&mut s, &[6, 255, usize::MAX]);
+    choose_mode(&mut s, 5);
+    settle(&mut s);
+    let wan = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(counters(&s, wan), 5);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2);
+    assert_eq!(pool(&s).total(), 0);
+}
+
 /// An opponent's search, even landcycling, grows Wan Shi Tong and draws;
 /// your own search does not.
 #[test]
@@ -13689,6 +13837,32 @@ fn ember_island_production_copies_either_side_with_its_exceptions() {
     let coward = s.battlefield_permanents_named(0, "Gray Ogre")[0];
     assert!(s.game().state.cards[card_of(&s, coward)].has_subtype("Coward"));
     assert_eq!(s.game().characteristics(coward).power, 2);
+}
+
+/// Waiving the printed mana cost leaves additional waterbend X payable.
+#[test]
+fn foggy_swamp_visions_free_cast_still_announces_and_pays_additional_x() {
+    let mut s = five_color_unfunded_setup(&[
+        "Foggy Swamp Visions",
+        "Planetarium of Wan Shi Tong",
+        "Gray Ogre",
+    ]);
+    let planetarium = s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
+    let payer = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let target = library_card(&s, 1, "Gray Ogre");
+    s.game_mut().move_card(target, ZoneType::Graveyard);
+    let top = pin_top(&mut s, &["Foggy Swamp Visions"]);
+    planetarium_scry(&mut s, planetarium);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    select_card(&mut s, top[0]);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    let target = offered_targets(&s).into_iter().next().unwrap();
+    assert!(s.choose_target(target));
+    settle(&mut s);
+    assert!(tapped(&s, payer), "additional waterbend X was paid");
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 2);
+    assert_eq!(pool(&s).total(), 0, "only the printed mana cost was waived");
 }
 
 /// Waterbend X exiles X creature cards from any graveyards, copies each one

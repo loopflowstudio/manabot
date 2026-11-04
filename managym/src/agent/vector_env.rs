@@ -276,6 +276,10 @@ impl VectorEnv {
             .collect()
     }
 
+    pub fn current_action_summaries(&self) -> Vec<(usize, String)> {
+        self.envs.iter().map(Env::current_action_summary).collect()
+    }
+
     pub fn reset_all(
         &mut self,
         player_configs: Vec<PlayerConfig>,
@@ -765,6 +769,53 @@ mod tests {
         agent::{action::AgentError, env::Env, opponent::OpponentPolicy, vector_env::VectorEnv},
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn first_legal_policy_prefix_keeps_vector_execution_identity() {
+        use crate::agent::observation_encoder::{encode, ActionOverflow, ObservationEncoderConfig};
+        let players: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
+            .collect();
+        let mut vector = VectorEnv::new(1, 213, true, OpponentPolicy::None);
+        vector.reset_all(players).unwrap();
+        vector.envs[0].scenario_clear_hand(0).unwrap();
+        for _ in 0..70 {
+            vector.envs[0]
+                .scenario_force_card_in_hand(0, "Mountain")
+                .unwrap();
+        }
+        let observation = vector.envs[0].scenario_refresh().unwrap();
+        assert_eq!(observation.action_space.actions.len(), 71);
+        let config = ObservationEncoderConfig {
+            max_actions: 64,
+            max_cards_per_player: 128,
+            action_overflow: ActionOverflow::FirstLegal,
+            ..ObservationEncoderConfig::default()
+        };
+        let encoded = encode(&observation, &config).unwrap();
+        assert_eq!(encoded.actions_valid, vec![1.0; 64]);
+        assert_eq!(
+            vector.current_action_summaries(),
+            vec![(71, "Priority".into())]
+        );
+        let mut scalar = vector.envs[0].fork().unwrap();
+        let expected = scalar.step(63).unwrap().0;
+        vector
+            .step_into(&[63], None, |_, obs, _, _, _| {
+                assert_eq!(obs.to_json(), expected.to_json());
+                assert_eq!(
+                    encode(obs, &config).unwrap().actions,
+                    encode(&expected, &config).unwrap().actions
+                );
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            vector.envs[0].selected_witness().unwrap(),
+            scalar.selected_witness().unwrap()
+        );
+    }
 
     #[test]
     fn training_decks_are_admitted_distinct_replayable_and_replaceable() {

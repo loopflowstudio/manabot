@@ -31,3 +31,11 @@ design and remaining work. The unrelated parent T7 note remains at
 Implementation assumption (2026-11-04): `WORLDS.md` keeps w17 open and
 extends its exact bindings in place; this Task does not freeze a world. A new
 `semantic-kernel-w17-v2` corpus preserves the earlier v1 evidence.
+
+Sync resolution (2026-11-04): retain MTG-244's direction above. Incoming
+MTG-213 pilot decisions and evidence remain at
+`1546aae3fa7b207b2c5e8ac92a6571af036ddf83:scratch/questions.md`;
+they do not authorize a pilot launch in this Task. Keep shared input-version
+validation before the explicitly configured native action-prefix selection,
+and retain both native API declarations. The default overflow policy remains
+error, and the fresh policy-input default remains v6.

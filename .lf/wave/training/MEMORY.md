@@ -37,8 +37,10 @@ V7 `rows` and `typed_pool` select the same reducer; `typed_gru` reduces tokens
 within one observation and carries no game memory. Original v5 three-arm
 calibration remains v5 evidence. MTG-213 v4 subsequently passed v7 CUDA
 admission but failed collection before learning at a separate card-object
-capacity boundary. No scientific replicate or v7 GPU learner update is
-established. Active-byte reduction does not imply padded-memory savings: default v7
+capacity boundary. MTG-213 v5 later completed three v7 GPU learner updates
+before a separate action-capacity failure. No scientific replicate or trained
+checkpoint evaluation is established. Active-byte reduction does not imply
+padded-memory savings: default v7
 effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
 
 Native source-A/B positions equal under v6 differ under v7 and diverge after
@@ -86,25 +88,30 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The retained 2026-11-04 06:46:13 UTC inventory confirms all four
-Task rentals ended and no provider pods. The first three provider bills total
-$0.17054831; the later v4 planned-to-ended full-rental estimate adds $0.04314150
-pending billing, for $0.21368981 billed plus estimated. All four reservations ($2.95) remain
-conservatively held against $10 pending reconciliation. These are dated receipts,
-not a fresh provider balance or availability claim. Per-run allocation cost can
-omit idle cleanup time; budget against
-the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
-Exact accounting and settlement receipts are referenced in
-experiments/tla-trophy-pilot.md; the later reconciliation is retained in
-`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
+rentals, then Vast execution. Jack Heart requested the released Vast provider
+on 2026-11-04. Published Etude 0.2.14 ran as an isolated control client while
+the frozen worker retained 0.2.12; provider integration need not change the
+scientific runtime. The release workflow and exact tag settled successfully.
+
+The 2026-11-04 17:33:51 UTC settlement confirms v5's Vast rental ended, no Vast
+instances or RunPod pods and no unsettled hardware. Prior bills total
+$0.213831719709560274; v5's whole-rental estimate is $0.113275053942958846,
+with Vast billing unavailable, totaling $0.32710677365251912 billed-plus-estimated.
+Conservative reservations remain $3.9139916049382716 against $10. These are dated
+receipts, not a fresh balance or availability claim. Per-run allocation cost can
+omit setup or idle cleanup time; budget against the whole rental. Unrelated
+provider inventory is not this Task's cleanup scope. Exact costs and settlement
+receipts live in experiments/tla-trophy-pilot.md. Availability must be reconciled
+at launch even after a recent positive read; quotes reserve no capacity.
 
 Etude 0.2.13 restored launcher decoding of `input_undelivered` through an isolated
 client while the frozen worker kept 0.2.12. A newer control client need not change
 the experimental runtime. During the later network outage, launcher `setting_up`
 lagged the failed worker log; neither that status nor absent clocks established
 ongoing work or teardown. The existing rental owner settled under its supply lock
-after connectivity recovered. Inventory visibility is restored; final billing
-and fresh availability still need reconciliation before any later allocation.
+after connectivity recovered. Inventory visibility and the four provider bills
+are now available; a later allocation still needs fresh inventory, billing and
+quote reconciliation.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
@@ -198,7 +205,7 @@ fixed tensors (comment 42a12145, relaying his 2026-11-03 decision): complete
 effects are encoded once and explicitly routed into affected object embeddings
 before attention. Task 5da5f4 owns that bounded prerequisite as well as the
 broader representation investigation. This resolves the immediate repair choice;
-the delivered contract is recorded above, while successful learning remains
+the delivered contract is recorded above, while learning quality remains
 unestablished. Concrete layout and capacities are engineering choices for that
 owner. Lossless factoring preserves
 memberships, multiplicity, source, duration and ordering; semantic coalescing
@@ -217,7 +224,7 @@ learner update. Its initialization evaluation completed 32 games (2 wins, 30
 losses), leaving 256 scheduled games missing. All 110 v4 artifacts were published;
 all 120 v3 artifacts remain retained. V4's source and evidence remain frozen.
 
-The prospective v5 pilot selects the existing `max_cards_per_player=128` under
+The executed v5 pilot selected the existing `max_cards_per_player=128` under
 the operator's workflow-repair authority, retaining explicit input v7 and its
 shared-effect capacities. The native scalar/vector binding now derives the card
 axis from ObservationSpace; the exact retained prefix agrees with Python at 61
@@ -225,12 +232,105 @@ and 128 rows while 60 fails. Generated cards and sideboards cannot be dropped to
 fit an allocation. Schema-3 protocol shapes and regime hashes bind every axis;
 fresh initialization is required when model object capacity changes. This repairs
 a counterexample, not every reachable-state capacity or a learning result.
-Analysis and discovery share the active v5 identity; historical executions use
-pinned sources. The prepared v5 Run remains bound to its original source despite
-later source simplifications. Its 06:38 UTC receipt records a refused quote and
-no submission or rental, not a failed training attempt. The live plan owns the
-prepared identity, fresh budget/availability reconciliation and remaining GPU,
-checkpoint, complete evaluation and Elemental-relative learning acceptance.
+At that delivery, analysis and discovery shared the v5 identity; historical
+executions continue to use pinned sources. PR #420 delivered this repair on 2026-11-04 at 08:15:17 UTC as
+`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. The merged implementation passed
+50 focused checks, including a CPU update and checkpoint export/reload; this
+does not establish GPU learning or complete evaluation.
+V5 Run `e8c76bc2c06f` executed frozen source
+`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd` on a Vast RTX 5090. It completed
+three rollout updates, 585 optimizer minibatch steps and 149,260 learner
+transitions; settled batches contain 771 completed games. The next collection
+failed with 256 offered actions against capacity 64, before the first scheduled
+trained export. This establishes GPU learner execution, not a usable trained
+checkpoint or learning gain. Initialization evaluation completed 32 valid games
+(5 wins / 27 losses); 256 scheduled games remain missing. A missing checkpoint
+cannot be reconstructed from counters or replaced with a different run's output.
+All 114 v5 evidence files are manifest-published. The initial 06:38 refusal was
+zero-spend preparation; it is distinct from this later paid execution.
+
+The retained 76-action prefix matches stream 103 / seed 32172 and reproduces
+256 > 64 in native scalar, vector and Python paths. A diagnostic 512 Python
+buffer fits all actions, while frozen native code still enforces 64. Success
+on CUDA admission and earlier collections does not establish every reachable
+capacity. The primary operator selected the routine configured-axis repair on
+2026-11-04 under Jack Heart's existing enabling-fix authorization (bbc34e15),
+including inspection of the other configurable native axes. That operator's
+no-truncation restriction was superseded by Jack Heart's explicit first-64
+pilot decision below; deck exclusions remain unchanged. A prospective identity and fresh initialization
+and evaluation are required; executed v5 and missing evaluation slots stay
+frozen. Remaining acceptance lives in scratch/tla-pilot-verify.md.
+
+T6 main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` subsequently widened
+player/card inputs to 73/56 and fresh action capacity to 512; the executed v5
+still binds 67/55 and 64 actions. Unchanged runner code does not imply unchanged
+runtime compatibility. Its world and shape guards reject current-source
+substitution. Synthetic schedule/analysis fixtures explicitly bind the historical
+world and widths, whereas retained-position replay uses the real runtime; neither
+supplies training evidence under the frozen identity. The Vast continuation used the
+prepared source, not a re-freeze onto main. A successor must explicitly bind its
+new runtime. That main revision's 512-action default alone did not repair
+configurable buffer authority: its helper inferred only card/fact axes, leaving
+action, permanent and focus capacities at defaults and inconsistent event
+handling. The subsequent repair derives every configurable axis from supplied
+arrays and validates companion shapes before writes. Relation/shared-effect
+axes remain version-fixed; event width selects legacy events or bounded public
+history. Non-default scalar/vector/Python parity and overflow fixtures establish
+the contract independently of current defaults.
+Related Tasks' scratch brought in by a merge is historical context, not
+replacement authority for this pilot.
+
+Operator comment a85a89e8 required investigating the 256 offers before another
+launch. They were illegal X=0..255 choices for airbent Wan Shi Tong's fixed {2}
+alternative cost, not 256 payable strategies. Announcement and payment now
+share the selected base cost; any-type mana preserves X, and waiving a non-X
+printed cost preserves additional waterbend X. The repaired prefix agrees
+across scalar/vector/Python paths. The historical observation remains a
+transport-only boundary fixture, never a requirement to generate illegal
+actions. A capacity failure can expose a rules defect as well as a buffer bug;
+larger allocations alone do not establish a correct action contract.
+
+Jack Heart explicitly required direct unavailable-X rejection without committed
+costs or state advancement (f61beeb7). Directed native tests submit current-bound
+Commands and compare the full search-state witness, including costs, decisions,
+events, RNG and both viewers. Seven untapped basics with no floating mana offer
+and pay exactly X=0..5 for {X}{U}{U}; X=6/255 reject unchanged. Airbend and
+any-type-mana cases also reject unavailable X. Retained-prefix scalar/vector
+tests reject the old index 255, preserve frames/buffers and agree with Python
+after a subsequent legal step. These are separate semantic-command and buffer
+boundary witnesses, not proof that every card's legality is correct.
+
+Jack Heart's later explicit decision (3b0f8826, 2026-11-04) selects 64 slots
+and deterministic first-64 legal actions with overflow diagnostics for this
+pilot. It supersedes the operator's no-truncation recommendation and prepared
+512-action pilots v6/v7. Pilot v8 retains input-v7 shared effects, card128,
+all 134 decks, recipe and budgets. `action_overflow=first-legal` is serialized
+in the prospective regime/protocol/checkpoints; omitted policy still means
+error for frozen configurations. Native authority and Academy keep all legal
+choices. One native prefix-count helper governs scalar/vector/Python encoding
+before bounded writes; retained row i keeps native action/Command i. Padding
+is masked, and one categorical distribution covers retained support. There is
+no pagination. Later legal actions receive zero probability on overflow, so
+ordering can affect outcomes; this is an accepted pilot approximation, not
+evidence that the omitted choices are strategically redundant.
+
+Training and learned-policy evaluation share the cutoff. The fixed heuristic
+anchor retains its existing full-native policy, an explicit engineering
+interpretation. Diagnostics aggregate consumed decisions, overflow frequency
+by kind and dropped counts, with up to four replay-linked seed/deck/prefix
+samples; powers-of-two console summaries avoid floods and close flushes exact
+totals, including zero overflow. Evaluation receipts retain these reports.
+Cutoff diagnostics are distinct from fatal observation or game truncation.
+
+Prepared v6/v7 Runs remain unsubmitted and superseded. V8 Run `f47be2d3c0d8`
+binds source `900c207502bd28757d7cf66196bd464458e39402`; later collector/capture
+simplification requires a successor source freeze, never rebinding that Run.
+The 19:10–19:12 UTC v8 quotes refused RTX5090 price and L4/RTX3090 capacity;
+the final 19:11:43 inventory found no rentals or unsettled hardware. No new
+spending, checkpoint or evaluation followed. These dated refusals establish
+no future availability. The plan owns remaining source selection, fresh
+inventory/billing/quote reconciliation, bounded execution and checkpoint/
+evaluation acceptance within the unchanged $1 allocation/$10 total.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
