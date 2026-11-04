@@ -510,7 +510,7 @@ impl CopyData {
 }
 
 impl ContinuousEffectData {
-    fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+    pub(super) fn new(game: &Game, effect: &ContinuousEffect) -> Self {
         Self::of_modification(
             game,
             &effect.modification,
@@ -769,6 +769,9 @@ pub struct ActionSpaceData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Observation {
+    /// Absent only in historical captures; v7 must not invent missing provenance.
+    #[serde(default)]
+    pub shared_effects: Option<Vec<super::shared_effects::SharedEffectData>>,
     #[serde(skip)]
     pub continuation: Vec<super::continuation::ContinuationFrame>,
     pub game_over: bool,
@@ -894,6 +897,7 @@ impl Observation {
         let opponent = Self::player_data(game, opponent_player, agent_player);
 
         let mut obs = Self {
+            shared_effects: Some(super::shared_effects::project(game)),
             continuation: game.continuation_frames(agent_player),
             game_over,
             won,
@@ -1994,7 +1998,7 @@ impl Observation {
             })
             .collect::<Vec<_>>();
 
-        json!({
+        let mut value = json!({
             "game_over": self.game_over,
             "won": self.won,
             "turn": {
@@ -2035,8 +2039,11 @@ impl Observation {
                     "target_incarnation": event.target_incarnation,
                 })
             }).collect::<Vec<_>>(),
-        })
-        .to_string()
+        });
+        if let Some(effects) = &self.shared_effects {
+            value["shared_effects"] = json!(effects);
+        }
+        value.to_string()
     }
 }
 

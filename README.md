@@ -106,7 +106,9 @@ the complete legal decision before the neural network sees either.
 flowchart LR
     G[Authoritative game state] --> V[Viewer-safe observation]
     V --> O[Players, visible cards, effective permanents]
-    V --> F[Facts, object links, current continuation]
+    V --> F[Local facts, object links, current continuation]
+    V --> FX[Complete shared effects + memberships]
+    FX --> E
     V --> K[Known hand and disclosed decklists]
     V --> A[Legal actions and focus objects]
     D[Native card definitions] --> T[Typed rules tokens]
@@ -121,14 +123,18 @@ flowchart LR
 
 For the TLA pilot, each object has 64 channels. Two self-attention blocks, each
 with four heads, mix up to 202 padded object slots: two players, 120 cards and
-80 permanents. Facts are summed into their owning object embeddings; increasing
-fact capacity does not add attention tokens or learned parameters.
+80 permanents. V7 encodes each complete shared effect once and sums its vector into every
+explicitly named affected object before attention. Duplicate memberships retain
+multiplicity, and every affected object’s loss reaches the shared encoder. Local
+facts remain a separate sum. Neither path adds attention tokens.
 
 ```mermaid
 flowchart TD
     C[Card-program tokens] --> GRU[Token embedding + GRU]
     GRU --> E[Object projections + definitions + knowledge]
-    F[Facts + attachment/blocking links + continuation] --> E
+    F[Local facts + attachment/blocking links + continuation] --> E
+    FX[Complete shared payloads] --> J[Explicit memberships / shared gradients]
+    J --> E
     E --> X[202 object slots x 64 channels]
     X --> AT[2 self-attention blocks / 4 heads / masked padding]
     AT --> FO[Gather up to 2 focus objects per action]
@@ -143,12 +149,23 @@ flowchart TD
 The GRU encodes a card's rules program, not game history. This pilot has no
 recurrent game memory and does not enable the optional recent-event encoder.
 Current continuation describes the pending decision. Permanent rows already
-include effective characteristics; extra facts retain effects and provenance.
-The immediate capacity repair selects 256 fact rows for the pilot while
-preserving frozen v5's 128-row contract. Broader changes to effective-state,
-shared-effect and history/memory representations are separate design work.
-The HTML records the exact source/configuration snapshot behind its dimensions
-and parameter counts; other checkpoints can use different architectures.
+include effective characteristics; complete shared records retain duration,
+timestamp, controller and exact source bindings that can change future behavior.
+
+Select `ObservationConfig(policy_input_version=7)` for the new transport: 128
+headers × 18 columns, 512 detail tokens × 3, and 2,048 memberships × 2, plus a
+configurable local-fact table (128 rows by default). Overflow fails explicitly.
+The retained 140/270-fragment Drill positions become 7/9 complete payloads and
+70/135 memberships. All original timestamps and duplicate edges survive; no
+rules records are deleted or semantically coalesced.
+
+The three padded effect arrays use 31,744 bytes per observation; local facts add
+6,144. This exceeds v6/256's 12,288-byte fact array, although the retained
+270-fragment case needs only 1,944 active effect bytes. The HTML documents the
+layout, routing, parameters and sum/normalization tradeoff. These engineering
+proofs establish no learning-quality advantage. Persistent memory remains future
+work. Fresh defaults remain v6; frozen v1–v6 checkpoints and the TLA pilot’s
+protocols/receipts keep their original meanings.
 
 ## Versioned installs
 

@@ -35,6 +35,7 @@ use crate::{
             StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
+        shared_effects,
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
     },
     decision::Command as SemanticCommand,
@@ -101,6 +102,27 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
+    if config.policy_input_version >= 7 {
+        for (name, values, shape) in [
+            (
+                "effects",
+                &encoded.effects,
+                [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
+            ),
+            (
+                "effect_details",
+                &encoded.effect_details,
+                [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
+            ),
+            (
+                "effect_members",
+                &encoded.effect_members,
+                [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
+            ),
+        ] {
+            dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
+        }
+    }
     if config.policy_input_version >= 5 {
         dict.set_item(
             "facts",
@@ -2303,9 +2325,39 @@ impl From<PySideboardCard> for SideboardCardData {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "SharedEffect", frozen)]
+#[derive(Clone)]
+pub struct PySharedEffect {
+    inner: crate::agent::shared_effects::SharedEffectData,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PySharedEffect {
+    #[getter]
+    fn effect(&self) -> PyContinuousEffect {
+        self.inner.effect.clone().into()
+    }
+    #[getter]
+    fn controller_id(&self) -> i32 {
+        self.inner.controller_id
+    }
+    #[getter]
+    fn source(&self) -> Option<crate::agent::shared_effects::EffectObject> {
+        self.inner.source.clone()
+    }
+    #[getter]
+    fn members(&self) -> Vec<crate::agent::shared_effects::EffectMembership> {
+        self.inner.members.clone()
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Observation")]
 #[derive(Clone)]
 pub struct PyObservation {
+    #[pyo3(get)]
+    pub shared_effects: Option<Vec<PySharedEffect>>,
     #[pyo3(get)]
     pub continuation: Vec<crate::agent::continuation::ContinuationFrame>,
     #[pyo3(get, set)]
@@ -2341,6 +2393,12 @@ pub struct PyObservation {
 impl From<Observation> for PyObservation {
     fn from(value: Observation) -> Self {
         Self {
+            shared_effects: value.shared_effects.map(|records| {
+                records
+                    .into_iter()
+                    .map(|inner| PySharedEffect { inner })
+                    .collect()
+            }),
             game_over: value.game_over,
             won: value.won,
             turn: value.turn.into(),
@@ -2384,6 +2442,9 @@ impl From<Observation> for PyObservation {
 impl From<PyObservation> for Observation {
     fn from(value: PyObservation) -> Self {
         Self {
+            shared_effects: value
+                .shared_effects
+                .map(|records| records.into_iter().map(|record| record.inner).collect()),
             game_over: value.game_over,
             won: value.won,
             turn: value.turn.into(),
@@ -4026,7 +4087,7 @@ impl PyEnv {
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=6) {
+        if !matches!(policy_input_version, 1..=7) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
@@ -4036,7 +4097,11 @@ impl PyEnv {
         }
         let config = ObservationEncoderConfig {
             policy_input_version,
-            max_facts: max_facts.unwrap_or(ObservationEncoderConfig::default().max_facts),
+            max_facts: max_facts.unwrap_or(if policy_input_version == 7 {
+                crate::agent::observation_encoder::V5_FACT_ROWS
+            } else {
+                ObservationEncoderConfig::default().max_facts
+            }),
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
@@ -4349,6 +4414,9 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManaCost>()?;
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
+    m.add_class::<PySharedEffect>()?;
+    m.add_class::<crate::agent::shared_effects::EffectObject>()?;
+    m.add_class::<crate::agent::shared_effects::EffectMembership>()?;
     m.add_class::<PyCopyEffect>()?;
     m.add_class::<PyAction>()?;
     m.add_class::<PyActionSpace>()?;

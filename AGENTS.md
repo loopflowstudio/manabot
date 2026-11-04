@@ -140,6 +140,14 @@ checkpoints or experiment evidence.
   `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
   Academy's server keeps a closed opponent's deck name, the matchup's asset pack
   and unseen definition names out of its frames and viewer trace exports.
+- Explicit input v7 retains the v5 object/relation widths but moves active
+  effects out of local facts: `effects` is 128 × 18, `effect_details` 512 × 3,
+  `effect_members` 2048 × 2. Headers own bounded offset/count slices; members
+  retain one-based public object joins and original record ordinals. Native
+  projection owns complete payloads, controller and exact source incarnation;
+  the model routes shared vectors before attention, preserving duplicate edges.
+  V1–v6 remain frozen and fresh defaults remain v6. Allocate and collect every
+  key from the selected `ObservationSpace`, never a global default key list.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

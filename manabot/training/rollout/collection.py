@@ -42,7 +42,6 @@ from manabot.model.policy_distribution import (
     require,
 )
 from manabot.sim.rollout import (
-    OBS_KEYS,
     BatchedSampler,
     RandomBatchController,
     _allocate_buffers,
@@ -522,7 +521,7 @@ class SeatRoutedCollector:
         self, rows: np.ndarray, inference: PolicyInference | None = None
     ) -> dict[str, torch.Tensor]:
         obs = {}
-        for key in OBS_KEYS:
+        for key in self.observation_space.shapes:
             tensor = torch.from_numpy(self._buffers[key][rows])
             if key == "action_focus":
                 # Training convention (VectorEnv): action_focus as float32.
@@ -959,7 +958,10 @@ class SeatRoutedCollector:
             values = value_t.view(-1).cpu().numpy()
         with self.profiler.track("Rollout recording"):
             # One copied slice per key; per-row dicts view into it.
-            obs_rows = {key: self._buffers[key][rows].copy() for key in OBS_KEYS}
+            obs_rows = {
+                key: self._buffers[key][rows].copy()
+                for key in self.observation_space.shapes
+            }
             for j, row in enumerate(rows):
                 slot = (
                     2 * int(row) + int(acting[row])
@@ -967,7 +969,9 @@ class SeatRoutedCollector:
                     else int(row)
                 )
                 self._pending[slot] = _Pending(
-                    obs={key: obs_rows[key][j] for key in OBS_KEYS},
+                    obs={
+                        key: obs_rows[key][j] for key in self.observation_space.shapes
+                    },
                     action=int(acts[j]),
                     logprob=float(logprobs[j]),
                     value=float(values[j]),
@@ -1039,7 +1043,7 @@ class SeatRoutedCollector:
                     outcome_probabilities[step, env_index] = (
                         pending.outcome_probabilities
                     )
-                for key in OBS_KEYS:
+                for key in self.observation_space.shapes:
                     obs[key][step, env_index] = pending.obs[key]
                 actions[step, env_index] = pending.action
                 logprobs[step, env_index] = pending.logprob
@@ -1050,7 +1054,7 @@ class SeatRoutedCollector:
             assert not stream
             if not packed:
                 assert self._pending[env_index] is None
-            for key in OBS_KEYS:
+            for key in self.observation_space.shapes:
                 next_obs[key][env_index] = self._buffers[key][env_index]
             next_done[env_index] = dones[num_steps - 1, env_index]
 
