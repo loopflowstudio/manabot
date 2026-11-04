@@ -324,13 +324,17 @@ preserves accepted decisions, dated proof limits and source history.
   An unchanged Command tape/game outcome does not imply unchanged object ids:
   earthbend's continuous-effect records allocate ids. Broad proof belongs to
   its tested tree; it does not establish correctness after another engine sync.
-- Crate moves also relocate live rules-audit authorities and behavioral-test
+- Crate moves and constructor consolidation also relocate live rules-audit authorities and behavioral-test
   anchors in `reviews.json` and its generated `index.jsonl`. Move both together
   while preserving rule dispositions, source spans/digests and frozen receipts;
   keep validation strict. PR #414's first Python Unit Tests run exposed this
   omitted consumer despite its earlier broad engine/Academy checks. The exact
   CI command, including infrastructure and deployment tests, covers a different
-  boundary than the engine suite.
+  boundary than the engine suite. T6's catalog consolidation exposed the same
+  boundary at `Game::new_with_content`: the surviving authority is
+  `Game::construct`, and generator defaults must move with reviewed anchors.
+  Regeneration against the exact pinned source preserved all 3,322 dispositions,
+  spans and hashes; repairing live references supplies no new rules coverage.
 - Cache-preserving writes and generic continuous effects must compose: allocate
   timestamps through the typed ID accessor, return before a tracked mutation
   for an empty batch, and retain full invalidation for nonempty effect records.
@@ -457,6 +461,12 @@ preserves accepted decisions, dated proof limits and source history.
   does not prove retained-checkpoint compatibility, strength or a new runtime
   budget. Fresh action capacity is 512; omitted saved capacity remains 64,
   and overflow must fail explicitly rather than hide legal choices.
+- Frozen architecture checks must reconstruct the recorded observation
+  configuration through `ObservationConfig.from_checkpoint`, including its
+  policy-input version, rather than using fresh defaults. T6's capacity change
+  exposed this distinction: loading the original v5/64-action inputs preserves
+  the retained architecture hash. Fresh-checkpoint tests separately expect 512;
+  neither proof admits an old trained checkpoint under the changed world.
 
 ## Open tensions
 

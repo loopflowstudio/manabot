@@ -1,6 +1,6 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (2026-11-03, reconciled after sync): all 16 cards and the accepted one-catalog change are implemented. Repairs are in `854d5e282`, compression in `ecba733ca`, and the combined head is `64b79d895` on main `c823c9c8f`, including MTG-235/238/239. [Draft PR #417](https://github.com/loopflowstudio/manabot/pull/417) is open at that head. Jack Heart's 2026-11-03 repair steer (`b77a8b6d-6066-48d4-be08-3007994aeb33`) retains one cohesive PR for review. Broad acceptance is pending; no auto-merge or landing is authorized.
+Status (2026-11-03, reconciled after CI repairs): all 16 cards and the accepted one-catalog change are implemented. Rules repairs are in `854d5e282`, compression in `ecba733ca`, and sync in `64b79d895` on main `c823c9c8f`, including MTG-235/238/239. Audit and test corrections in `5d76d8314` and `454666106` are published in [PR #417](https://github.com/loopflowstudio/manabot/pull/417), open for review at `454666106` (no longer a draft). Jack Heart's 2026-11-03 repair steer (`b77a8b6d-6066-48d4-be08-3007994aeb33`) retains one cohesive PR for review. Broad acceptance is pending; no auto-merge or landing is authorized.
 
 The accepted outcome is correct play for humans and bots through the shared native rules authority, with directed debug tests for every obligation, complete viewer-safe choices and policy/text observations. `scratch/t6-direction.md` retains Jack Heart's 2026-11-02 scope decisions. Full earlier implementation, integration and publication history is retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/mtg-225-tla-t6.md` and `:scratch/questions.md`.
 
@@ -80,7 +80,7 @@ Authored presets retain their bypass of submitted-deck construction checks. Main
 
 ## Completed simplification
 
-Completed delete — do not maintain: live audit references to removed
+Live audit references to removed
 `Game::new_with_content` in `reviews.json`, `index.jsonl` and
 `scripts/audit_rules.py` now point to the surviving `Game::construct` without
 changing rule dispositions, coverage claims, source hashes or historical reports.
@@ -105,11 +105,15 @@ The sync at `64b79d895` already regenerated the mutable w17 semantic kernel (14 
 
 Reconciliation inspected the shared payment/reflexive-trigger/search paths, retained activation lookup, catalog authority and directed tests against these logs. No new bounded implementation mismatch was identified. Before repair, gate at `a7ba7432c` passed 913 Rust tests (two ignored), model/admission/training/parity checks, 102 focused Python tests, 119 Academy unit tests and ten Playwright cases. That evidence established the earlier integration, not omitted Sozin behavior or the final combined source; exact commands and limits remain at the historical git reference above.
 
-CI run `41744841447` passed 935 debug Rust tests (two ignored), protocol and semantic conformance, Academy UI, clean-machine play, 27 long integration tests and Engine Budget. Its four stale audit/test failures are repaired below. Main integration steps after its failed first invocation and the remaining Academy steps still need the repaired-head run. Successful unaffected checks remain reusable. Producer regeneration is only needed again if validation identifies a mismatch or its inputs change. Schema exports follow native/Pydantic authorities independently of receipt generation.
+CI run `41744841447` passed 935 debug Rust tests (two ignored), protocol and semantic conformance, Academy UI, clean-machine play, 27 long integration tests and Engine Budget. Its four stale audit/test failures are repaired below. Repaired-head run `41746278124` at `454666106` has passed Python Unit Tests, Semantic Kernel Conformance and Clean-machine Play (observed 2026-11-04 00:25 UTC). The remaining jobs, including main and Academy integration, were still running. Successful unaffected checks remain reusable. Producer regeneration is only needed again if validation identifies a mismatch or its inputs change. Schema exports follow native/Pydantic authorities independently of receipt generation.
 
 Only mutable w17 receipts may be rebound. Main's accepted 135 authored Commands, ordering/navigation prefixes, offer ids, presentation and intended outcomes remain the baseline. Historical receipts, retained checkpoints and frozen worlds remain untouched. PR validation copy includes the completed sync evidence and distinguishes passing checks from pending repaired-head CI. No further product decision is identified; Jack Heart's PR review remains required.
 
 Engine Budget is CI-owned. Changed benchmark digests, an accepted cost or an incompatible reference require the PR candidate's own artifact and an explicit adoption reason. No local performance or playing-strength result is claimed.
+
+Repaired-head CI run `41746278124` exposed two compound checkpoint fixture failures in Academy Integration (29 other tests passed). The compound helper explicitly constructs a 64-action agent, but the test passed a separate fresh 512-action space to `save_checkpoint`. Receipt validation correctly rejected the contradictory reload. The fixture now saves `agent.observation_space` and asserts the loaded configuration matches; no production defaults, frozen receipts or validation rules change. This removes the fixture's second observation-configuration authority.
+
+Check result (2026-11-03): `uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/sim/test_local_update_compound.py::test_supported_root_rollout_reaching_payment_replays -q` — 4 passed, covering save/reload and payment replay for scalar/compound policies with uniform/learned samplers; before repair, both compound variants failed. Ruff, formatting and diff checks passed. Logs: `.runs/t6-publication/compound-checkpoint-{before,repair}.log`. Full repaired-head CI and the retained-session search recovery proof below remain with verification; no merge or auto-merge is authorized.
 
 CI run `41744841447` found stale audit anchors to deleted `Game::new_with_content`
 and a fresh-checkpoint test expecting the historical 64-action default. Both are
@@ -120,6 +124,54 @@ changes only authorities/anchors across 331 rows, preserving all 3,322 dispositi
 source spans and hashes. Historical reports and receipts remain unchanged.
 
 Check result (2026-11-03): `uv run --python 3.12 --extra dev pytest tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/` — 103 passed; `uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py` — 17 passed; `uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_capacity.py tests/sim/test_heuristic.py -q` — 41 passed; pinned-source inventory verification, changed-file Ruff and `git diff --check` passed. Logs: `.runs/t6-publication/audit-*.log`; remaining combined-head checks stay with gate/CI.
+
+## Concept review — 2026-11-03
+
+Outcome: **nothing to change and no open product choice**. This headless review
+of `454666106` leaves Jack Heart's accepted experience and model unchanged.
+It does not establish broad acceptance, complete CI, or authorize landing.
+The current review page is `scratch/concept-review.html`; the older preserved
+page remains historical proposal evidence.
+
+The consequential mismatch was treating an equivalent final board as an
+equivalent decision. The repaired shared authority represents the actual
+interaction: choose X or decline, complete payment, choose reflexive-trigger
+targets within the retained budget, then allow responses. Paying zero and
+declining stay distinct. If a target leaves during the response window, only
+remaining legal targets resolve; committed payment is not recomputed or
+refunded. No combined browser payment/target confirmation is implied.
+
+For chapter II, choose a catalog name, inspect the searched zones privately,
+then exile individual eligible cards or stop and shuffle. Each selection
+commits through the current native decision; no draft selection or undo
+lifecycle is introduced. The chooser's permission, remaining count and
+resolution frame belong to native state. Academy projects that permission,
+and policy/text/search consume the same authority. Physical visibility ends
+with the search; learned hand-definition knowledge remains. Reconnection must
+recover that actual pending decision and its remaining choices, not reopen
+the name menu or restore already-exiled cards.
+
+The remaining concepts earn their place: one catalog owns definition identity
+and digest; decklists select cards; a card's face is distinct from its object
+identity; transform history and captured inherited abilities survive the
+changes they guard; ordered schedules retain the next turn/combat and its
+restriction. These are native facts, not parallel Academy state. Existing
+usage docs already describe the one-catalog contract, so no replacement docs
+or skill instructions are proposed. Historical vocabulary labels and saved
+observation defaults remain compatibility inputs, not additional live packs.
+
+Counterexamples to preserve are a target leaving after payment, stopping a
+search before four matches, an unchosen nonmatching hand card remaining known,
+and a face returning to its original side before an older transform resolves.
+The inspected directed tests represent these cases. The generic revision
+contract rejects stale Commands; the inspected Sozin consumer test establishes
+projection and encoder parity, **not** a Sozin-specific reconnect or
+process-crash durability proof. The next recovery proof should resume a
+retained session after one search selection, reject its stale resubmission,
+and verify the remaining offers and viewer permissions. This is verification
+of the accepted contract, not a new product decision or a new persistence
+design. Existing gate/CI work and Jack Heart's review remain the next
+acceptance boundary; this review changes no implementation direction.
 
 ## Wave memory
 

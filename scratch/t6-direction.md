@@ -52,5 +52,6 @@ Jack Heart launched MTG-235 effect vocabulary (#412), MTG-236 derived state
 on 2026-11-02, targeting main. Their code is now integrated; MTG-238
 precedence is fulfilled. MTG-239 (#415) also landed and supplies the corrected
 admission, library ordering and Rallier traces. These integrations do not
-settle the related Tasks' independent empirical acceptance. T6's draft PR #417
-is open; its remaining validation and review are tracked in the current plan.
+settle the related Tasks' independent empirical acceptance. T6's PR #417
+is open for review at `454666106`, including the later audit/test repairs;
+its remaining validation and review are tracked in the current plan.
