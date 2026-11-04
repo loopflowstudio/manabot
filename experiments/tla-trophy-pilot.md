@@ -1,11 +1,19 @@
 # TLA trophy pilot: capacity failures before learning
 
 V5 source is frozen as `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, prepared
-run `e8c76bc2c06f`. Its A6000 quote was refused; the latest retained availability
-read at 06:46:27 UTC on 2026-11-04 reports A6000, L4, A4000 and A4500 unavailable.
+run `e8c76bc2c06f`. Its A6000 quote was refused; retained availability
+reads at 09:03:37 UTC on 2026-11-04 report A6000, L4, A4000 and A4500
+unavailable, superseding the positive A6000 read at 08:17:09 UTC.
 **V5 has not been submitted or rented**. No GPU learner update is yet established.
-The 06:46:13 UTC inventory confirms all earlier rentals ended and no provider pods. The
-[v5 contract](protocols/tla-trophy-213-v5.md) retains v7, the 134 entries, learner
+The 09:03:38 UTC inventory confirms all earlier rentals ended and no provider
+pods or unsettled hardware rentals. Provider bills total **$0.213831719709560274**;
+the conservative $2.95 reservation accounting remains against the $10 cap.
+Receipts are `.runs/mtg213/v5-continuation/inventory-20261104-0903.json` and
+`capacity-check-20261104-0903.json` in the same directory. No quote or submission
+was attempted against unavailable capacity. These are dated observations,
+not reserved capacity.
+
+The [v5 contract](protocols/tla-trophy-213-v5.md) retains v7, the 134 entries, learner
 and evaluation schedule, with a 128-card axis and corrected native buffer sizing.
 It requires fresh initialization.
 
@@ -15,12 +23,10 @@ Run **baa8671d6480**, source `0b6c2bb854ba`, passed CUDA numerical admission
 on an RTX A6000 but failed before learning at **61 card and sideboard objects
 against capacity 60**. Exact replay identifies stream 22 after 300 actions:
 40 original cards, five generated tokens and 16 sideboard cards. Its 238
-completed games supplied no optimizer update. The rental ended; estimated full
-rental cost is $0.04314150, cumulative billed plus estimated cost **$0.21368981**,
-using the later planned-to-ended estimate in
-`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
-This supersedes the earlier $0.04314118 estimate; v4 billing remains unsettled.
-All four reservations total $2.95 conservatively held against the same $10 cap.
+completed games supplied no optimizer update. The rental ended; its provider
+bill is **$0.043283410370349884**, included in the 09:03 inventory and
+cumulative accounting above. This supersedes the earlier whole-rental estimates;
+the frozen v4 receipts retain those estimates.
 
 V4 initialization evaluation completed 32 valid games (**2 wins / 30 losses**),
 with 256 scheduled games still missing: complete=false, success=null. All
@@ -271,6 +277,11 @@ GPU learner updates and trained checkpoints remain missing. No paid-training
 milestone or learning/Elemental-pace claim is supported; MTG-213 is incomplete.
 
 ### Card-capacity repair publication checks (2026-11-04 UTC)
+
+PR #420 merged at 08:15:17 UTC as
+`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. The merged implementation passed
+50 focused pilot, shared-effect transport, 128-card CPU learner/export/reload
+and experiment-discovery checks. The prepared Run retains its frozen source.
 
 On the synced repair branch, Rust formatting, all-target/all-feature Clippy and
 the complete debug workspace tests pass (`CARGO_PROFILE_DEV_OPT_LEVEL=1`, two

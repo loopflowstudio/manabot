@@ -86,25 +86,30 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The retained 2026-11-04 06:46:13 UTC inventory confirms all four
-Task rentals ended and no provider pods. The first three provider bills total
-$0.17054831; the later v4 planned-to-ended full-rental estimate adds $0.04314150
-pending billing, for $0.21368981 billed plus estimated. All four reservations ($2.95) remain
-conservatively held against $10 pending reconciliation. These are dated receipts,
+rentals. The retained 2026-11-04 08:19:03 UTC inventory confirms all four
+Task rentals ended and no provider pods or unsettled hardware rentals. Fresh
+provider bills total $0.213831719709560274, including v4's $0.043283410370349884;
+they supersede the earlier billed-plus-estimated total. All four reservations
+($2.95) remain conservatively held against $10 for the next allocation.
+These are dated receipts,
 not a fresh provider balance or availability claim. Per-run allocation cost can
 omit idle cleanup time; budget against
 the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
 Exact accounting and settlement receipts are referenced in
 experiments/tla-trophy-pilot.md; the later reconciliation is retained in
-`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
+`.runs/mtg213/v5-continuation/inventory-20261104-0819.json` and
+`capacity-check-20261104-0819.json` in the same directory. A6000 availability at
+08:17 disappeared by 08:19, when all four configured GPUs were unavailable.
+Availability must be reconciled at launch, even after a recent positive read.
 
 Etude 0.2.13 restored launcher decoding of `input_undelivered` through an isolated
 client while the frozen worker kept 0.2.12. A newer control client need not change
 the experimental runtime. During the later network outage, launcher `setting_up`
 lagged the failed worker log; neither that status nor absent clocks established
 ongoing work or teardown. The existing rental owner settled under its supply lock
-after connectivity recovered. Inventory visibility is restored; final billing
-and fresh availability still need reconciliation before any later allocation.
+after connectivity recovered. Inventory visibility and the four provider bills
+are now available; a later allocation still needs fresh inventory, billing and
+quote reconciliation.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
@@ -226,7 +231,11 @@ fit an allocation. Schema-3 protocol shapes and regime hashes bind every axis;
 fresh initialization is required when model object capacity changes. This repairs
 a counterexample, not every reachable-state capacity or a learning result.
 Analysis and discovery share the active v5 identity; historical executions use
-pinned sources. The prepared v5 Run remains bound to its original source despite
+pinned sources. PR #420 delivered this repair on 2026-11-04 at 08:15:17 UTC as
+`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. The merged implementation passed
+50 focused checks, including a CPU update and checkpoint export/reload; this
+does not establish GPU learning or complete evaluation.
+The prepared v5 Run remains bound to its original source despite
 later source simplifications. Its 06:38 UTC receipt records a refused quote and
 no submission or rental, not a failed training attempt. The live plan owns the
 prepared identity, fresh budget/availability reconciliation and remaining GPU,
