@@ -234,13 +234,12 @@ impl Game {
     pub(crate) fn untap_during_other_untap_steps(&mut self, active: PlayerId) {
         let other = PlayerId(1 - active.0);
         for permanent_id in self.battlefield_permanents(other) {
-            let card = self.state.permanents[permanent_id].as_ref().map(|p| p.card);
-            let Some(card) = card else { continue };
-            let untaps = self.state.cards[card]
-                .statics
+            let untaps = self
+                .characteristics(permanent_id)
+                .static_abilities
                 .iter()
                 .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
-            if untaps && !self.characteristics(permanent_id).abilities_lost {
+            if untaps {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                     permanent.untap();
                 }
@@ -309,8 +308,7 @@ impl Game {
     ) -> crate::state::mana::Mana {
         let mut produced = crate::state::mana::Mana::default();
         for permanent_id in self.iter_battlefield_permanents(controller) {
-            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
-            for ability in &self.state.cards[permanent.card].triggered_mana_abilities {
+            for ability in &self.layer_view(permanent_id).triggered_mana_abilities {
                 if self.permanent_matches_predicate(tapped, &ability.predicate) {
                     produced.add(&ability.mana);
                 }

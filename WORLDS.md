@@ -646,3 +646,21 @@ Fresh `experiments/data/archive/conformance/semantic-kernel-w15-v1` receipts and
 the integrated source. Earlier corpora, demos, authored packs and experiment
 artifacts remain unchanged. These bounded fixtures do not establish exhaustive
 rules correctness, scientific baselines or final release certification.
+
+### Open w17 — composable characteristic layers
+
+Layer evaluation uses dependency and timestamp order across types, colors,
+abilities and P/T, including keyword-counter timestamps and surviving grants.
+Beorn the Fierce and Kellan, Planar Trailblazer are defined cards. Prior checkpoints retain their identities; their exact world bindings reject
+changed rules, content and input contracts. No world freeze is inferred.
+
+Explicit policy input v8 retains v7 object, relation, header and membership
+widths, with 4096 × 3 ordered effect-detail tokens. Detail kinds 11–19 carry
+the catalog's token kinds 1–9; signed i32 values use exact 16-bit halves.
+Kinds 12/13 of local facts state changed effective colors and keyword-counter
+timestamp ranks; copy-exception programs use kind 11. Kind 14 joins captured
+activation/trigger programs to continuation frame indices, retaining them after
+source departure and suspension. Local facts default to 512 rows and remain
+configurable. V8 program reducers preserve token order and signed numeric inputs. V1–v7 parameter shapes and meanings remain
+frozen; fresh configuration still selects v6. Both encoders reject unsupported
+layer payloads before inference, naming the selected version and required v8.

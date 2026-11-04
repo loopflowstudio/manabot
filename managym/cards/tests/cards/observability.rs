@@ -134,7 +134,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
     let Permanent {
         transforms: _,
         id: _,
@@ -153,6 +153,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
+        keyword_counter_timestamps: _,
     } = permanent;
     [
         ("id", Seen::Identity),
@@ -172,6 +173,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
         ),
         ("timestamp", Seen::Permanent(PERMANENT_TIMESTAMP_INDEX)),
         ("counters", Seen::Fact(FactKind::Counter)),
+        (
+            "keyword_counter_timestamps",
+            Seen::Fact(FactKind::KeywordCounterTimestamp),
+        ),
         ("attacking", Seen::Permanent(27)),
         (
             "was_cast",
@@ -235,6 +240,36 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
 /// here and given a witness in [`modification_witnesses`].
 fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) {
     match modification {
+        Modification::SetCreatureTypes(_) => (
+            "Modification::SetCreatureTypes",
+            Seen::Fact(FactKind::AddedSubtype),
+        ),
+        Modification::AddTypes(_) => ("Modification::AddTypes", Seen::Card(8)),
+        Modification::SetTypes { .. } => ("Modification::SetTypes", Seen::Card(8)),
+        Modification::SetColors(_) => (
+            "Modification::SetColors",
+            Seen::Fact(FactKind::EffectiveColor),
+        ),
+        Modification::AddColors(_) => (
+            "Modification::AddColors",
+            Seen::Fact(FactKind::EffectiveColor),
+        ),
+        Modification::GrantActivated(_) => (
+            "Modification::GrantActivated",
+            Seen::Fact(FactKind::EffectProgram),
+        ),
+        Modification::GrantTriggered(_) => (
+            "Modification::GrantTriggered",
+            Seen::Fact(FactKind::EffectProgram),
+        ),
+        Modification::GrantStatic(_) => (
+            "Modification::GrantStatic",
+            Seen::Fact(FactKind::EffectProgram),
+        ),
+        Modification::LoseNonManaAbilities => {
+            ("Modification::LoseNonManaAbilities", Seen::Permanent(34))
+        }
+        Modification::SwitchPt => ("Modification::SwitchPt", Seen::Permanent(6)),
         Modification::AddSubtypes(_) => (
             "Modification::AddSubtypes",
             Seen::Fact(FactKind::AddedSubtype),
@@ -308,6 +343,29 @@ fn resolved(modification: &Modification<EffectValue>) -> Modification {
 fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     let permanent = |modification| (false, modification);
     vec![
+        permanent(Modification::SetCreatureTypes(vec!["Bear".into()])),
+        permanent(Modification::AddTypes(vec![CardType::Artifact])),
+        permanent(Modification::SetTypes {
+            types: vec![CardType::Land],
+            subtypes: vec![],
+        }),
+        permanent(Modification::SetColors([Color::Red].into_iter().collect())),
+        permanent(Modification::AddColors([Color::Blue].into_iter().collect())),
+        permanent(Modification::GrantActivated(Box::new(
+            ActivatedAbilityDefinition::default(),
+        ))),
+        permanent(Modification::GrantTriggered(Box::new(Ability::Triggered {
+            condition: TriggerCondition::BeginningOfYourUpkeep,
+            intervening_if: None,
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
+        }))),
+        permanent(Modification::GrantStatic(Box::new(
+            StaticAbility::NoMaximumHandSize,
+        ))),
+        permanent(Modification::SwitchPt),
+        permanent(Modification::LoseNonManaAbilities),
         permanent(Modification::AddSubtypes(vec!["Ally".into()])),
         permanent(Modification::BecomeCreature),
         permanent(Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))),
@@ -333,7 +391,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 18;
+const MODIFICATION_VARIANTS: usize = 28;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -1056,6 +1114,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TargetMatches(_) => "Condition::TargetMatches",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
+        Condition::SourceMatches(_) => "Condition::SourceMatches",
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
@@ -1094,6 +1153,7 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 4,
         },
         Condition::SourceTapped,
+        Condition::SourceMatches(CardPredicate::subtype("Scout")),
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
         Condition::DiscardedThisWay(CardPredicate::creature()),
@@ -1133,6 +1193,13 @@ const fn witnessed(
 /// No wildcard: a new `StaticAbility` must be named here.
 fn static_seen(ability: &StaticAbility) -> Witnessed {
     match ability {
+        StaticAbility::Continuous(_) => witnessed(
+            "StaticAbility::Continuous",
+            Seen::Permanent(6),
+            "Beorn the Fierce",
+            "hob",
+            "beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types",
+        ),
         StaticAbility::GraveyardSpellsHaveFlashback => witnessed(
             "StaticAbility::GraveyardSpellsHaveFlashback",
             Seen::Actions("graveyard spells are offered as casts"),
@@ -1407,6 +1474,15 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
 fn static_witnesses() -> Vec<StaticAbility> {
     let creature = CardPredicate::creature;
     vec![
+        StaticAbility::Continuous(managym::state::card::StaticContinuous {
+            scope: StaticScope::This,
+            condition: None,
+            characteristic_defining: false,
+            modifications: vec![Modification::ModifyPt {
+                power: managym::state::card::LayerValue::Fixed(2),
+                toughness: managym::state::card::LayerValue::Fixed(2),
+            }],
+        }),
         StaticAbility::GraveyardSpellsHaveFlashback,
         StaticAbility::GrantsAnyColorManaAbility(creature()),
         StaticAbility::CantBeBlockedIf(Condition::YourTurn),
@@ -2205,7 +2281,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
         assert!(moved, "{} did not move its column", row.token);
         checked += 1;
     }
-    assert_eq!(checked, 6);
+    assert_eq!(checked, 7);
 }
 
 /// With no maximum hand size, the hand-count column keeps its size through
@@ -2370,6 +2446,10 @@ enum Encoded {
 /// The field each fact kind states; no wildcard, so a new kind must name it.
 fn fact_field(kind: FactKind) -> &'static str {
     match kind {
+        FactKind::ContinuationProgram => "ContinuationFrame.program",
+        FactKind::EffectProgram => "ContinuousEffectData.program",
+        FactKind::EffectiveColor => "PermanentData.colors",
+        FactKind::KeywordCounterTimestamp => "PermanentData.keyword_counter_timestamps",
         FactKind::Counter => "PermanentData.counters",
         FactKind::AddedSubtype => "PermanentData.temp_subtypes",
         FactKind::SetName => "PermanentData.name",
@@ -2541,6 +2621,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        colors => [Fact(FactKind::EffectiveColor)],
+        keyword_counter_timestamps => [Fact(FactKind::KeywordCounterTimestamp)],
         transforms => [Fact(FactKind::Transforms)],
         id => [Identity],
         registry_key => [Join(Permanent, 24)],
@@ -2588,6 +2670,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         exceptions => [Fact(FactKind::CopyException)],
     }));
     fields.extend(encoding!(ContinuousEffectData {
+        program => [Fact(FactKind::EffectProgram)],
+        description => [Definition],
         modification => [Fact(FactKind::Effect), Columns(Facts, FACT_ID_INDEX, 2)],
         power => [column(Facts, FACT_VALUE_INDEX)],
         toughness => [column(Facts, FACT_VALUE_INDEX + 1)],
@@ -2621,6 +2705,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        program => [Fact(FactKind::ContinuationProgram)],
+        program_description => [Definition],
         remembered => [Rows("v5 captured object reference relations, kind 8")],
         inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
         attackers => [Fact(FactKind::CombatRestriction)],
@@ -3154,10 +3240,10 @@ fn each_counter_kind_reaches_a_fact_row() {
     for kind in CounterKind::ALL {
         let (mut baseline, ogre) = ogre_state();
         let (mut changed, _) = ogre_state();
-        if kind == CounterKind::DoubleStrike {
+        if let Some(keyword) = kind.keyword() {
             // CR 122.1b: the counter grants double strike, which v4 sees; a
             // granted keyword is the state v4 cannot tell apart.
-            let grant = Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike]));
+            let grant = Modification::AddKeywords(Keywords::of(&[keyword]));
             for s in [&mut baseline, &mut changed] {
                 let affected = on_permanent(s, ogre);
                 apply(s, affected, grant.clone());
@@ -3975,6 +4061,16 @@ fn each_modification_reaches_an_effect_fact_row_with_its_duration_and_order() {
             EffectDuration::Indefinite,
         );
         let (name, _) = modification_seen(&modification);
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        if managym::agent::observation_encoder::validate_policy_input(&observation, 5).is_err() {
+            let encoded = encode(&observation, &config(8)).unwrap();
+            let token = ((encoded.effects[0] as u32) << 16) | encoded.effects[1] as u32;
+            assert_eq!(token, name_value(name) as u32);
+            assert_eq!(encoded.effects[8], 2.0);
+            assert!(encoded.effects[9] > 0.0);
+            assert_eq!(encoded.effects[17], 1.0);
+            continue;
+        }
         let row = fact_row(
             &facts_about(&s, 0, index),
             FactKind::Effect,

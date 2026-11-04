@@ -242,15 +242,11 @@ impl Game {
                 None
             }
             StepKind::Main => {
-                // CR 714.3b — As the precombat main phase begins, the active
+                // CR 714.3c — As the precombat main phase begins, the active
                 // player puts a lore counter on each Saga they control.
                 let active = self.active_player();
                 for saga in self.battlefield_permanents(active) {
-                    let card = self.state.permanents[saga]
-                        .as_ref()
-                        .expect("battlefield")
-                        .card;
-                    if self.state.cards[card].is_saga() {
+                    if self.characteristics(saga).final_chapter().is_some() {
                         self.put_counters(saga, CounterKind::Lore, 1, active);
                     }
                 }
@@ -379,9 +375,9 @@ impl Game {
                 let player = self.active_player();
                 let unlimited = self.has_no_maximum_hand_size_effect(player)
                     || self.battlefield_permanents(player).iter().any(|id| {
-                        let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
-                        self.state.cards[permanent.card]
-                            .has_static(&StaticAbility::NoMaximumHandSize)
+                        self.characteristics(*id)
+                            .static_abilities
+                            .contains(&StaticAbility::NoMaximumHandSize)
                     });
                 if !unlimited
                     && self

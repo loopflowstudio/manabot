@@ -366,7 +366,7 @@ impl TrackedState {
         }
     }
 
-    // Permanent fields no cached derivation reads: tapped state, damage,
+    // Permanent fields no cached derivation reads: damage,
     // summoning sickness and activation limits. Counters, control,
     // attachment, animation and combat status go through `DerefMut`.
 
@@ -379,6 +379,7 @@ impl TrackedState {
 
     /// Returns whether the permanent was untapped.
     pub(crate) fn tap(&mut self, permanent_id: PermanentId) -> bool {
+        self.revisions.characteristics += 1;
         match self.permanent_untracked(permanent_id) {
             Some(permanent) if !permanent.tapped => {
                 permanent.tap();
@@ -390,6 +391,7 @@ impl TrackedState {
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
     pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
+        self.revisions.characteristics += 1;
         let Some(permanent) = self.permanent_untracked(permanent_id) else {
             return;
         };

@@ -8,7 +8,6 @@ use crate::{
     flow::{
         event::{EventKind, GameEvent},
         game::Game,
-        statics::ScopeView,
         trigger::{
             DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
             TriggerPlacement,
@@ -37,6 +36,7 @@ struct FiredTrigger {
     source: TriggerSourceSnapshot,
     ability_index: usize,
     granted: Option<Vec<Effect>>,
+    program: bool,
 }
 
 /// Exact battlefield source facts used while matching one or more committed
@@ -148,7 +148,6 @@ struct TriggerSourceEntry {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct TriggerIndex {
     sources: Vec<TriggerSourceEntry>,
-    granted: EventKinds,
 }
 
 impl Game {
@@ -702,6 +701,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            program: trigger.program,
             remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
             id,
@@ -854,13 +854,14 @@ impl Game {
         self.graveyard_triggers(event);
         self.delayed_triggers_for_event(event);
         let mut fired: Vec<FiredTrigger> = Vec::new();
-        for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
+        for source in sources {
             for (ability_index, ability) in self
                 .source_face(source.card, source.lki.definition_id)
                 .expect("source face")
                 .abilities
                 .iter()
                 .enumerate()
+                .filter(|_| !source.lki.abilities_lost)
             {
                 let Ability::Triggered {
                     condition,
@@ -889,17 +890,19 @@ impl Game {
                             source: source.clone(),
                             ability_index,
                             granted: None,
+                            program: false,
                         },
                         times,
                     ));
                 }
             }
-            for ability in self.granted_triggered_abilities(source) {
+            // Departure triggers use the grants captured at the event boundary.
+            for effective in &source.lki.granted_abilities {
                 let Ability::Triggered {
                     condition,
                     effects,
                     intervening_if,
-                } = ability;
+                } = &effective.ability;
                 if intervening_if.as_ref().is_some_and(|condition| {
                     !self.check_intervening_if(
                         condition,
@@ -910,12 +913,24 @@ impl Game {
                 }) {
                     continue;
                 }
-                let times = self.trigger_occurrences(&condition, source, event);
+                // Keep CR 603.4's second check in the captured program when
+                // there is no printed ability to recover at resolution.
+                let effects = if let Some(condition) = intervening_if {
+                    vec![Effect::If {
+                        condition: condition.clone(),
+                        then: effects.clone(),
+                        otherwise: Vec::new(),
+                    }]
+                } else {
+                    effects.clone()
+                };
+                let times = self.trigger_occurrences(condition, source, event);
                 fired.extend(std::iter::repeat_n(
                     FiredTrigger {
                         source: source.clone(),
                         ability_index: 0,
                         granted: Some(effects),
+                        program: effective.program,
                     },
                     times,
                 ));
@@ -926,6 +941,7 @@ impl Game {
             source,
             ability_index,
             granted,
+            program,
         } in fired
         {
             let TriggerSourceSnapshot {
@@ -1009,6 +1025,7 @@ impl Game {
                 chosen_modes: Vec::new(),
                 attacker,
                 inline_effects: granted,
+                program,
             });
             *self.state.trigger_enqueue_counter_mut() = self
                 .state
@@ -1062,41 +1079,6 @@ impl Game {
         }
     }
 
-    /// Triggered abilities static grants give the battlefield source
-    /// (CR 613.1f), in battlefield order of the granting permanents.
-    fn granted_triggered_abilities(&self, source: &TriggerSourceSnapshot) -> Vec<Ability> {
-        // Departure triggers read the inherited abilities from the captured
-        // battlefield object, before its effect records are removed.
-        let inherited = source
-            .lki
-            .inherited_from
-            .and_then(|id| crate::cards::content_pack::default_content_pack().definition(id));
-        let Ok(target) = self.lookup_current_permanent(source.lki.object_ref) else {
-            return inherited.map_or_else(Vec::new, |definition| definition.abilities.clone());
-        };
-        inherited
-            .into_iter()
-            .flat_map(|definition| definition.abilities.iter().cloned())
-            .chain(
-                self.static_sources()
-                    .into_iter()
-                    .flat_map(|(grantor, controller, card)| {
-                        card.triggered_grants()
-                            .filter(move |grant| {
-                                self.static_scope_applies(
-                                    &grant.scope,
-                                    grantor,
-                                    controller,
-                                    target,
-                                    ScopeView::Rules,
-                                )
-                            })
-                            .map(|grant| (*grant.ability).clone())
-                    }),
-            )
-            .collect()
-    }
-
     /// Extra occurrences of one of `source`'s triggered abilities: one for
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
@@ -1108,7 +1090,14 @@ impl Game {
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
                 grantor
-                    .additional_trigger_predicates()
+                    .static_abilities
+                    .iter()
+                    .filter_map(|ability| match ability {
+                        crate::state::card::StaticAbility::TriggersAdditionalTime(predicate) => {
+                            Some(predicate)
+                        }
+                        _ => None,
+                    })
                     .filter(|predicate| match current {
                         Some(id) => self.permanent_matches_predicate(id, predicate),
                         None => predicate.matches_card_with_power(card, source.lki.power),
@@ -1254,6 +1243,7 @@ impl Game {
         });
         let id = TriggerId(self.state.trigger_enqueue_counter);
         self.state.pending_triggers_mut().push(PendingTrigger {
+            program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
             target_req_indices: Vec::new(),
@@ -1308,6 +1298,7 @@ impl Game {
             let source_ref = self.current_object_ref(card);
             let id = TriggerId(self.state.trigger_enqueue_counter);
             self.state.pending_triggers_mut().push(PendingTrigger {
+                program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -1338,16 +1329,11 @@ impl Game {
     /// the battlefield, plus — for zone changes — the moved card itself, so
     /// that leave-the-battlefield abilities look back in time (CR 603.6c).
     pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
-        let grants = self
-            .static_sources()
-            .into_iter()
-            .any(|(_, _, card)| card.triggered_grants().next().is_some());
         let mut sources: Vec<_> = self
             .state
             .permanents
             .iter()
             .flatten()
-            .filter(|permanent| grants || !self.state.cards[permanent.card].abilities.is_empty())
             .filter_map(|permanent| {
                 self.snapshot_current_permanent(permanent.card)
                     .map(|lki| TriggerSourceSnapshot {
@@ -1361,8 +1347,8 @@ impl Game {
         sources
     }
 
-    /// The trigger index at the current `triggers` revision, built once per
-    /// revision.
+    /// Trigger candidates at the current source and characteristic revisions.
+    /// Layered grants/conditions can change the event kinds without a zone move.
     fn trigger_index(&self) -> Arc<TriggerIndex> {
         let revisions = self.state.revisions();
         let cached = self
@@ -1381,13 +1367,6 @@ impl Game {
     }
 
     fn build_trigger_index(&self) -> TriggerIndex {
-        let granted = self
-            .static_sources()
-            .into_iter()
-            .flat_map(|(_, _, card)| card.triggered_grants())
-            .fold(EventKinds::NONE, |kinds, grant| {
-                kinds | ability_event_kinds(&grant.ability)
-            });
         let mut sources: Vec<TriggerSourceEntry> = self
             .state
             .permanents
@@ -1395,18 +1374,15 @@ impl Game {
             .enumerate()
             .filter_map(|(slot, permanent)| {
                 let permanent = permanent.as_ref()?;
-                let inherited = self
-                    .inherited_definition(PermanentId(slot))
-                    .map_or(&[][..], |definition| definition.abilities.as_slice());
                 Some(TriggerSourceEntry {
                     permanent: PermanentId(slot),
                     card: permanent.card,
-                    kinds: self.state.cards[permanent.card]
-                        .abilities
+                    kinds: self
+                        .layer_view(PermanentId(slot))
+                        .triggered_abilities
                         .iter()
-                        .chain(inherited)
                         .fold(EventKinds::NONE, |kinds, ability| {
-                            kinds | ability_event_kinds(ability)
+                            kinds | ability_event_kinds(&ability.ability)
                         }),
                 })
             })
@@ -1414,7 +1390,7 @@ impl Game {
         // Object order (a battlefield card has one current object, so its
         // entity orders it): the order the fired triggers are numbered in.
         sources.sort_by_key(|entry| entry.card);
-        TriggerIndex { sources, granted }
+        TriggerIndex { sources }
     }
 
     /// The sources whose abilities can see `event`: the indexed permanents
@@ -1427,7 +1403,7 @@ impl Game {
         let mut sources: Vec<TriggerSourceSnapshot> = index
             .sources
             .iter()
-            .filter(|entry| (entry.kinds | index.granted).contains(kind))
+            .filter(|entry| entry.kinds.contains(kind))
             .filter_map(|entry| {
                 let permanent = self.state.permanents[entry.permanent].as_ref()?;
                 self.snapshot_current_permanent(entry.card)

@@ -22,6 +22,13 @@ SHARED_EFFECT_SHAPES = {
 }
 
 
+def shared_effect_shapes(version: int) -> dict[str, tuple[int, int]]:
+    return {
+        **SHARED_EFFECT_SHAPES,
+        "effect_details": (4096 if version >= 8 else DETAIL_ROWS, DETAIL_DIM),
+    }
+
+
 def _token(name: str) -> tuple[float, float]:
     value = managym.learning_token_value(name) & 0xFFFFFFFF
     return float(value >> 16), float(value & 0xFFFF)
@@ -31,14 +38,17 @@ def encode_shared_effects(
     observation: managym.Observation,
     objects: Mapping[int, int],
     ranks: Mapping[int, float],
+    version: int = 7,
 ) -> dict[str, NDArray[np.float32]]:
+    shapes = shared_effect_shapes(version)
     records = observation.shared_effects
     if records is None:
         raise ValueError("v7 requires native shared-effect provenance")
     counts = {
         "effects": len(records),
         "effect_details": sum(
-            len(r.effect.keywords)
+            len(r.effect.program)
+            + len(r.effect.keywords)
             + len(r.effect.subtypes)
             + (r.effect.color is not None)
             for r in records
@@ -46,7 +56,7 @@ def encode_shared_effects(
         "effect_members": sum(len(r.members) for r in records),
     }
     for name, count in counts.items():
-        capacity = SHARED_EFFECT_SHAPES[name][0]
+        capacity = shapes[name][0]
         if count > capacity:
             raise ValueError(
                 f"observation capacity exceeded: {name} {count} > {capacity}"
@@ -57,10 +67,7 @@ def encode_shared_effects(
             raise ValueError("shared effect has an unavailable object join")
         return float(objects[ident] + 1)
 
-    out = {
-        name: np.zeros(shape, dtype=np.float32)
-        for name, shape in SHARED_EFFECT_SHAPES.items()
-    }
+    out = {name: np.zeros(shape, dtype=np.float32) for name, shape in shapes.items()}
     d = m = 0
     orders: set[int] = set()
     for index, record in enumerate(records):
@@ -94,6 +101,10 @@ def encode_shared_effects(
             tokens.append((3, f"Color::{effect.color}"))
         for kind, name in tokens:
             out["effect_details"][d] = kind, *_token(name)
+            d += 1
+        for kind, value in effect.program:
+            unsigned = value & 0xFFFFFFFF
+            out["effect_details"][d] = (10 + kind, unsigned >> 16, unsigned & 0xFFFF)
             d += 1
         row[14] = d - row[13]
         row[15] = m

@@ -15,7 +15,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::time::Instant;
 
-const GAMES: u64 = 512;
+const GAMES: u64 = 528;
 const MAX_STEPS: usize = 2000;
 
 fn main() {
@@ -26,6 +26,9 @@ fn main() {
     for seed in 0..GAMES {
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
+        if seed >= 512 {
+            curated::add_layer_board(&mut env);
+        }
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut game_steps = 0usize;
         while !env.is_game_over() && game_steps < MAX_STEPS {

@@ -15,7 +15,7 @@ const WORLDS: usize = 16;
 const ROLLOUTS: usize = 4;
 const MAX_STEPS: usize = 2000;
 const DECISIONS: usize = 40;
-const SEEDS: [u64; 3] = [1, 2, 3];
+const SEEDS: [u64; 4] = [1, 2, 3, 244];
 
 /// Frame each decision with its action count, simulation count and chosen index,
 /// then hash every score in legal-action order. Fixed-width little-endian words
@@ -41,9 +41,12 @@ fn main() {
     for seed in SEEDS {
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
+        if seed == 244 {
+            curated::add_layer_board(&mut env);
+        }
         let mut replies = Vec::new();
         let mut digest = blake3::Hasher::new();
-        for decision in 0..DECISIONS {
+        for decision in 0..if seed == 244 { 8 } else { DECISIONS } {
             let start = Instant::now();
             let result = env
                 .flat_mc_scores(
@@ -107,6 +110,17 @@ mod tests {
             digest_decision(&mut digest, result, 0);
         }
         scores_digest(&digest)
+    }
+
+    #[test]
+    fn layered_root_keeps_the_curated_decks_and_exposes_a_real_decision() {
+        let mut env = Env::new(244, true, false, false);
+        env.reset(curated::players()).unwrap();
+        curated::add_layer_board(&mut env);
+        let observation = env.observation_for_player(1).unwrap();
+        assert_eq!(observation.agent_permanents.len(), 5);
+        assert_eq!(observation.opponent_permanents.len(), 3);
+        assert!(env.action_count().unwrap() > 1);
     }
 
     #[test]

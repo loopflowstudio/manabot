@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 use super::{
     ability::{
         effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec, TriggerCondition,
+        TargetRequirement, TargetSpec,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -288,12 +288,15 @@ pub enum PowerCda {
 /// Which battlefield permanents a static P/T buff applies to.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticScope {
+    /// Every matching permanent, regardless of controller.
+    All(CardPredicate),
+    /// Every matching permanent except the source, regardless of controller.
+    Other(CardPredicate),
     /// The source permanent itself ("This creature gets +1/+1 as long as
     /// ..." — First-Time Flyer).
     This,
     /// "Other [predicate] you control" (anthem — White Lotus
-    /// Reinforcements). Matched against printed characteristics (no
-    /// power predicates, to keep P/T computation non-recursive).
+    /// Reinforcements). Predicates read the current layer context.
     OtherYouControl(CardPredicate),
     /// "[predicate] you control", including the source (Air Nomad Legacy's
     /// "creatures you control with flying", Badgermole's "with +1/+1
@@ -335,9 +338,8 @@ pub struct StaticPtBuff {
 /// addition to their other types [as long as condition]" (Toph, the First
 /// Metalbender; War Balloon's "as long as it has three or more fire counters
 /// on it, it's an artifact creature"). It grants no abilities. Scopes read
-/// printed types only, and the condition is asked of the source permanent
-/// (its counters, its controller's permanents), so type computation never
-/// recurses.
+/// the current layer context, and the condition is asked of the source
+/// permanent. Dependency ordering accounts for changes to those reads.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticTypeGrant {
     pub scope: StaticScope,
@@ -370,8 +372,8 @@ pub struct SetCharacteristics {
 
 /// A static keyword grant (CR 613.1f layer 6): "[scope] have [keywords]
 /// [as long as condition]". Applies only while the source is on the
-/// battlefield. Scopes read printed characteristics, counters and
-/// non-static keywords, so keyword computation never recurses.
+/// battlefield. Scopes read the current layer context; dependency ordering
+/// accounts for another effect changing their matches.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticKeywordGrant {
     pub scope: StaticScope,
@@ -620,10 +622,33 @@ pub struct SpellCostReduction {
     pub generic: u8,
 }
 
-/// A static ability (CR 604). The engine applies each by matching its
-/// variant; unless noted, it functions while its card is on the battlefield.
+/// A P/T amount read from the current layer context for an affected object.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LayerValue {
+    Fixed(i32),
+    /// The affected object's mana value (Opalescence, March of the Machines).
+    ManaValue,
+    /// Distinct card types among cards in all graveyards (Tarmogoyf).
+    GraveyardCardTypes {
+        offset: i32,
+    },
+}
+
+/// One static effect: once its first part applies, later layers retain its
+/// affected objects even if its generating ability disappears (CR 613.6).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticContinuous {
+    pub scope: StaticScope,
+    pub condition: Option<Condition>,
+    pub characteristic_defining: bool,
+    pub modifications: Vec<crate::effect::Modification<LayerValue>>,
+}
+
+/// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    /// One continuous effect whose parts may apply in different layers.
+    Continuous(StaticContinuous),
     /// "During your turn, spells in your graveyard have flashback": a Lesson's
     /// flashback cost is {1}, any other spell's is its mana cost (Iroh, Grand
     /// Lotus).
@@ -821,21 +846,6 @@ impl CardDefinition {
         self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
     }
 
-    /// Its final chapter number (CR 714.2d): the greatest of its chapter
-    /// abilities' numbers.
-    pub fn final_chapter(&self) -> Option<u8> {
-        self.abilities
-            .iter()
-            .filter_map(|ability| match ability {
-                Ability::Triggered {
-                    condition: TriggerCondition::Chapter { chapter },
-                    ..
-                } => Some(*chapter),
-                _ => None,
-            })
-            .max()
-    }
-
     /// The optional additional cost a cast may choose to pay: kicker or an
     /// optional waterbend, which both mark the spell kicked.
     pub fn optional_cost(&self) -> Option<&ManaCost> {
@@ -921,66 +931,9 @@ impl CardDefinition {
         })
     }
 
-    pub fn library_top_casting(&self) -> Option<&CardPredicate> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CastFromLibraryTop(predicate) => Some(predicate),
-            _ => None,
-        })
-    }
-
     pub fn cost_reduction_if_targets(&self) -> Option<&TargetCostReduction> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::CostsLessIfTargets(reduction) => Some(reduction),
-            _ => None,
-        })
-    }
-
-    pub fn attacks_despite_defender(&self) -> Option<&Condition> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::AttacksDespiteDefender(condition) => Some(condition),
-            _ => None,
-        })
-    }
-
-    pub fn pt_buffs(&self) -> impl Iterator<Item = &StaticPtBuff> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::PtBuff(buff) => Some(buff),
-            _ => None,
-        })
-    }
-
-    pub fn keyword_grants(&self) -> impl Iterator<Item = &StaticKeywordGrant> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::KeywordGrant(grant) => Some(grant),
-            _ => None,
-        })
-    }
-
-    pub fn triggered_grants(&self) -> impl Iterator<Item = &StaticTriggeredGrant> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::TriggeredGrant(grant) => Some(grant),
-            _ => None,
-        })
-    }
-
-    /// The predicate of each "triggers an additional time" ability.
-    pub fn additional_trigger_predicates(&self) -> impl Iterator<Item = &CardPredicate> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::TriggersAdditionalTime(predicate) => Some(predicate),
-            _ => None,
-        })
-    }
-
-    pub fn restrictions(&self) -> impl Iterator<Item = &StaticRestriction> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::Restriction(restriction) => Some(restriction),
-            _ => None,
-        })
-    }
-
-    pub fn type_grants(&self) -> impl Iterator<Item = &StaticTypeGrant> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::TypeGrant(grant) => Some(grant),
             _ => None,
         })
     }

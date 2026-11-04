@@ -18,7 +18,7 @@ use crate::{
     },
     state::{
         ability::TargetRequirement,
-        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, Card, StaticAbility},
+        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
         stack_object::{ActivatedAbilityOnStack, StackObject},
@@ -76,9 +76,9 @@ impl Game {
         }
         let granted = self.active_player() == player
             && self.battlefield_permanents(player).iter().any(|id| {
-                let source = self.state.permanents[*id].as_ref().unwrap();
-                self.state.cards[source.card]
-                    .has_static(&StaticAbility::GraveyardSpellsHaveFlashback)
+                self.characteristics(*id)
+                    .static_abilities
+                    .contains(&StaticAbility::GraveyardSpellsHaveFlashback)
             });
         if !granted {
             definition.flashback().cloned()
@@ -89,22 +89,16 @@ impl Game {
         }
     }
 
-    /// Whether a battlefield permanent `player` controls satisfies `has`
-    /// with its abilities active. Checks the card before its characteristics.
-    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&Card) -> bool) -> bool {
-        self.battlefield_permanents(player).into_iter().any(|id| {
-            self.state.permanents[id]
-                .as_ref()
-                .is_some_and(|permanent| has(&self.state.cards[permanent.card]))
-                && !self.characteristics(id).abilities_lost
-        })
+    /// Whether a layered static ability on the player's battlefield matches.
+    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&StaticAbility) -> bool) -> bool {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .any(|id| self.characteristics(id).static_abilities.iter().any(&has))
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
-        self.active_permanent_has(player, |card| {
-            card.has_static(&StaticAbility::LookAtLibraryTop)
-        })
+        self.active_permanent_has(player, |card| *card == StaticAbility::LookAtLibraryTop)
     }
 
     /// The top card of `player`'s library, when a permanent they control
@@ -115,9 +109,7 @@ impl Game {
         let definition = &self.state.cards[card];
         (!definition.types.is_land()
             && self.active_permanent_has(player, |source| {
-                source
-                    .library_top_casting()
-                    .is_some_and(|predicate| self.card_matches_predicate(card, predicate))
+                matches!(source, StaticAbility::CastFromLibraryTop(predicate) if self.card_matches_predicate(card, predicate))
             }))
         .then_some(card)
     }
@@ -200,8 +192,7 @@ impl Game {
             }
         }
         for permanent_id in self.battlefield_permanents(player) {
-            let permanent = self.state.permanents[permanent_id].as_ref()?;
-            for ability in &self.state.cards[permanent.card].statics {
+            for ability in &self.characteristics(permanent_id).static_abilities {
                 if let StaticAbility::SpellsCostLessMana(reduction) = ability {
                     cost = cost.reduced_by(reduction);
                     continue;
@@ -1919,6 +1910,14 @@ impl Game {
             return Err(AgentError("invalid ability index".to_string()));
         };
 
+        let program = !self.activation_catalog_program(
+            source_card,
+            source_definition_id,
+            inherited_from,
+            ability_index,
+            ability.granted_by,
+            &ability.effects,
+        );
         if ability.tap_source {
             if !self.permanent_can_tap(permanent_id) {
                 return Err(AgentError("source cannot pay tap cost".into()));
@@ -1935,6 +1934,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            effects: ability.effects,
+            program,
             source_transforms,
             inherited_from,
             id,
@@ -1976,6 +1977,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            effects: ability.effects,
+            program: false,
             source_transforms: 0,
             inherited_from: None,
             id,
