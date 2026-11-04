@@ -43986,6 +43986,170 @@
    "sha256": "8c95a8421ad1c881079539b3242cd02a8652d25da8af12e6790108600b0d62c6",
    "bytes": 117
   },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/accounting.json": {
+   "sha256": "877b2567c7e92212cb976f2db91c40ca65834b50b68b35f3ab71d685c35714ad",
+   "bytes": 3729
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/affordability.json": {
+   "sha256": "a6b864af53759828729334a6ce79fb1d08d6062ff613201a938d76d4f6f6fb26",
+   "bytes": 1109
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/budget-after-launch.json": {
+   "sha256": "60e12ba82c55969e03b6876ce119dde388ad3976be8f9df4fb8f2dd4694f052b",
+   "bytes": 329
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/cancel-after-export.log": {
+   "sha256": "f751112a8c48c18e0e41b8f583bc90d8232c49eb0d69d7713b8a4e42c9055983",
+   "bytes": 340
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/child-outcome.txt": {
+   "sha256": "45e86f1e4c1c3df4366f9fcb3d1765444b4b10e150ffda797b34fad70178634a",
+   "bytes": 810
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final-accounting.json": {
+   "sha256": "2128e4fa1672a1257bc281eea408f7e7f88bc165403f1d44830cf48d5a18e523",
+   "bytes": 2045
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final-attempt.json": {
+   "sha256": "b29e20175a8344fc686926c88d226835a15a57911bb5cad102ee996d9e1cfcab",
+   "bytes": 5456
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/finished.json": {
+   "sha256": "597927f83b3fffb455812e33d2a498a43a27f86262758caff65bd587c8a4e28e",
+   "bytes": 4285
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/log": {
+   "sha256": "e858341d494b3fb7b0e947ef30d0ace3152ef7fc941f55c51a7a4790093c9ed1",
+   "bytes": 8280
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/batch-0/child-0.log": {
+   "sha256": "5343f0c0bdcc4708600f4e8f3dc9e1bfc67209a666de649c26d0ada8591ee002",
+   "bytes": 778
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/batch-0/processes.json": {
+   "sha256": "a376ad51e12267653859fafc012d5690d09ded4021eb0066cb022b595f3aa747",
+   "bytes": 32
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/device.json": {
+   "sha256": "316528c89d17a6028d3d748d2b0f31d6c0994cabdce5b78c1350b9dc0962ef8a",
+   "bytes": 125
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training.sqlite": {
+   "sha256": "90a38eb8999dbfb76fb008a5a3e194c8e8eb4750a4254e3c3ec70d28709a120e",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/run.json": {
+   "sha256": "3be8afcba235364bc87f22bec671db2eda1ae79e00af5103133f04a5487559ae",
+   "bytes": 12003
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play-ema.pt": {
+   "sha256": "3ba7ccbfc412e6b16a08eaad457a288cdb1ce62d130a1b5eecf4186bb5791482",
+   "bytes": 9728827
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play-initial-raw.pt": {
+   "sha256": "f6464bcf794105ecde8437c0b86fc383246950f9fe3009467c89507f32b93587",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play-optimizer.pt": {
+   "sha256": "9fe98a5e17f7fba7531f6be4f3d115a700060c1786488f4dd592f9f30f5e39f4",
+   "bytes": 15323779
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play-raw.pt": {
+   "sha256": "437e59cfdfb91def666cc50d3b0b15fb5a35e58cdbb3df633b2599d726ba0a84",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/checkpoints/learner_transitions-0.json": {
+   "sha256": "6c9e7acc1caf33d017a7a101465a586d019f958430a197974bc17e4a7b79a915",
+   "bytes": 495
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/checkpoints/learner_transitions-0.pt": {
+   "sha256": "f6464bcf794105ecde8437c0b86fc383246950f9fe3009467c89507f32b93587",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/checkpoints/learner_transitions-143076.json": {
+   "sha256": "109c200f20d4ab85d1500ca51dd4efa38143c94647ea6b33c000e7655c6ecbb2",
+   "bytes": 505
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/checkpoints/learner_transitions-143076.pt": {
+   "sha256": "437e59cfdfb91def666cc50d3b0b15fb5a35e58cdbb3df633b2599d726ba0a84",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/metrics/2-00000000-00000003-7c217b52b0ae.blk": {
+   "sha256": "b308f54785b71e57e3bbe12366d9f52c91896ec8969c8a84605aed769d1392ef",
+   "bytes": 358728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/metrics/7c217b52b0ae.index.json": {
+   "sha256": "bfeb3934455685eedad848e00327e49b42b927eca9f4a487a55b9ffe3d17c02f",
+   "bytes": 59694
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/metrics/7c217b52b0ae.json": {
+   "sha256": "d04438d4dd35969b37c80b96e2d1def5381a75cb37a23469acdc3efeb04c46f7",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/metrics/7c217b52b0ae.permanent.json": {
+   "sha256": "55b30ea982d84420cb089a98531a4814f918bc20a55e5ddf31c5f9fe90d673bf",
+   "bytes": 415883
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/metrics/7c217b52b0ae.removed": {
+   "sha256": "4472c5caf47a7d40c0235318eda6ffed747f3326544c12e209d37b60de342fc3",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/run.json": {
+   "sha256": "5d863970a0fca293a8e53ea61bc2e2ecaaa7b8a60ac70b3980c8801a68ad67f8",
+   "bytes": 6531
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/admission-1/typed_pool/training/self-play/etude/82479285a3464bf7bbfe2527d8de35e7/state.json": {
+   "sha256": "775d1a4e024b6a4ecdac1262e3a2d6b3988fd5d80b960d7ac68c920be73643c8",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/numerical-validation.json": {
+   "sha256": "75800e65c5aa550f6c7f84c4e4d62ba7250819759ff400c394666a5c3fe17c07",
+   "bytes": 647
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/final/outputs/numerical-validation.log": {
+   "sha256": "86aee67034adf313862ef1061639ea9784e6183742364d6327087d025c28c5b8",
+   "bytes": 670
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/launch.log": {
+   "sha256": "a76189088997172e719073785ce3e3b37e96a72f59e67f51df5590e9a5c8ecb2",
+   "bytes": 342
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/live-instances.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/offers.json": {
+   "sha256": "59f9d446f92b542a13363aa2a48f59606cc6f120dfd17c39e1f183a582e7738d",
+   "bytes": 2074
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/provider.json": {
+   "sha256": "8b81d0e20732bc64a0eb6bfb78fe45d0fead8553d2791b4d28d1f10d9c998f46",
+   "bytes": 285
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/quote.log": {
+   "sha256": "0110a0f8e3ba1aabe80248924841e37de1ac17442eac04648772fa244e1c914b",
+   "bytes": 332
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/running.log": {
+   "sha256": "6054d655d8e7bb4c905cdbdab66f3d5afa827b91ddc3e282d02789b72942e3d5",
+   "bytes": 10902
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/session-8b32de4e7166.json": {
+   "sha256": "1d7d28c27d9a772d6ad7cb963e70b438b07903befaca65a8565a88166069d920",
+   "bytes": 726
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/termination.log": {
+   "sha256": "9e107cc5653e50ac63087c66a4e57cc1d9b2f091f1515e8d37d2354850dcca5d",
+   "bytes": 178
+  },
+  "experiments/data/state-representation-gpu-5da5f4/operational-restart/verification.json": {
+   "sha256": "a620a81ed5049143ac96970215697a7e127b2e42e31d310e942d83323110194f",
+   "bytes": 448
+  },
   "experiments/data/state-representation-gpu-5da5f4/reconciliation-repaired/accounting.json": {
    "sha256": "e3aab284e3ee90d23e94014700aa3ca91f0d273258cd46238df127842f421a7c",
    "bytes": 3279

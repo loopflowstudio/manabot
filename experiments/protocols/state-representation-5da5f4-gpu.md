@@ -6,15 +6,12 @@ within the original cumulative $25, and authorized a necessary Etude SDK release
 and Vast use. No winner promotion, merge or MTG-213 allocation is authorized.
 
 Reading scope, reconciled 2026-11-04: the original comparison and allocation
-sections below describe executed source `27a126422`, not the current launcher.
-The later batched amendment declares the replacement candidate; current
-`runs()`/`worker()` execute only excluded admission. Replacement scientific
-orchestration remains unimplemented and no replacement cohort has launched.
-The live plan is `scratch/representation-learning-plan.md`. Later retained
-accounting in `experiments/data/state-representation-gpu-5da5f4/reconciliation/`
-supersedes the estimates below as current reported charges, without establishing
-final settlement or releasing reservations. Historical amounts and failed
-attempts below retain their original meaning.
+sections describe executed source `27a126422`. Later amendments preserve each
+attempt's distinct source, recipe and budget. The final operational restart
+amendment supersedes the historical final-settlement-only gate and describes
+the current sequential executable. No replacement scientific cohort or plateau
+is established. The live plan is `scratch/representation-learning-plan.md`.
+Retained attempt receipts and reported charges remain immutable evidence.
 
 ## Execution outcome — allocation invalidated
 
@@ -291,3 +288,22 @@ monitoring. Missing, duplicate, failed or wrong-identity results prevent a
 qualified comparison. The fixed final-window plateau criterion is unchanged.
 Child process groups are stopped on deadlines/cancellation and reaped; failures
 remain in the denominator. No retry, winner promotion or study merge is added.
+
+Operational restart outcome: source `e5df2a58758f`, run `886233843d34`, RTX 4090
+at $0.611111111111111/hour. Locked Linux installation/native build and CUDA
+numerics passed. Pooled learning paused at the declared predictive finalization
+boundary after 3/4 updates: 768 games, 143,076 learner decisions, 560 optimizer
+updates, 348.8849 seconds collection plus learning. No GRU learner started.
+The worker recorded failure at 20:53:33 UTC; all 23 exports matched its hashes
+and are published under `operational-restart/`. The controller eventually admitted
+the same failed receipt, after a cancellation request for cleanup following its
+output-delivery lag. The rental was terminated through Etude.
+
+This incomplete admission cannot qualify a scientific arrangement. Extrapolating
+only the pooled half gives $20.22 training without allowances, or $31.39 with
+the declared 50% allowance and setup/evaluation reserve, versus at most $16.50
+remaining for the entire scientific cohort. Future game lengths/rates can differ;
+this is a partial-arm cost projection, not a complete two-arm throughput result.
+No replacement scientific cohort or plateau exists. The original cap is not
+exhausted; the current measured arrangement does not fit it. Historical failed
+attempts and their recipes, counts and charges remain unchanged.

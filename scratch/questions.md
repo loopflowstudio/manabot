@@ -20,11 +20,14 @@
   new run. Historical protocols, locks and receipts remain immutable.
 - The previous final-settlement-only gate is superseded. Fresh reported costs
   fit within the $2 prior reserve. Scientific orchestration is implemented;
-  a complete two-arm admission and affordable actual cohort remain outstanding.
+  the new 4090 admission paused at 3/4 pooled updates. Its measured pooled-only
+  projection exceeds the remaining $16.50 before GRU cost. The plan owns the
+  exact result and remaining full-cohort/plateau acceptance.
 - Operator batching assumption: 256 streams changes optimization, so it needs
   fresh paired seeds and a prospective identity, preserving the 65,536-game
   horizon and schedule by exposure. No admission score selects a treatment.
-  The last machine loss establishes neither OOM nor batching affordability.
+  The preceding machine loss established neither OOM nor affordability; the
+  current 4090 receipt establishes a wall-budget pause and unaffordable projection.
 - Reconciliation (2026-11-04): the executable now supplies sequential scientific
   orchestration as well as admission and analysis; actual scientific execution
   still requires measured affordability; no architecture decision

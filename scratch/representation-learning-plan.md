@@ -49,8 +49,8 @@ consume public Etude Git main, with `uv.lock` pinning merged PR82 at
 explicitly with `uv lock --upgrade-package etude-sdk`, then `uv sync --locked`,
 as documented in `docs/development.md`; never resolve main during an attempt.
 Anonymous access, launcher identity, archive-style worker installation and offline
-re-sync agree on the lock. Linux resolution passed only as a dry-run, not remote
-GPU/native admission. Historical locks and receipts remain frozen. No SDK
+re-sync agree on the lock. The new 4090 admission now verifies locked Linux installation, native build
+and CUDA numerics; it does not establish scientific learning success. Historical locks and receipts remain frozen. No SDK
 release is required or claimed; source tracking cannot establish settlement.
 
 Jack Heart requested actual GPU learning to the beginning of a sustained plateau
@@ -63,10 +63,9 @@ score-based retries. A necessary Etude SDK release and Vast use are authorized;
 Etude PR79/80 and release 0.2.14 already supply that capability.
 
 The plateau objective remains unmet. One scientific GPU cohort was cancelled
-before scoring and three restart admissions were unsuccessful. No replacement
-scientific cohort has launched. At the last retained provider read, all five
-relevant Vast instances were absent. No allocation is selected until accounting
-is reconciled and a complete two-arm admission demonstrates affordability.
+before scoring and four restart admissions were unsuccessful. No replacement
+scientific cohort has launched. The latest 4090 admission establishes the concrete
+throughput/budget constraint below; accounting no longer blocks execution.
 Reconciled against implementation and retained receipts on 2026-11-04.
 The 20:37 UTC operational revision below supersedes the historical settlement
 gate. Final invoices remain unknown; they do not prevent bounded execution.
@@ -94,24 +93,57 @@ keep the authored Allies/Lessons population and other treatment dimensions
 fixed. No score selected this candidate, and lost admission output does not
 establish its speed, memory sufficiency or affordability.
 
-Remaining work before scientific execution:
+## Current execution result — 2026-11-04
 
-1. The operational budget revision is complete: fresh 20:37 UTC locked-SDK
-   read reports $0.4705825939; five instances absent, later complete Vast
-   inventory empty. $2 prior compute + $6 ancillary leaves $17 new compute.
-   Receipts are in `.runs/representation/gpu-resume/` pending artifact retention.
-2. Complete both ordinary admission learners and project total sequential cost
-   with 50% training allowance, 90 minutes evaluation and 15 minutes setup.
-   No qualifying 3090 offer is currently available; the cheapest compatible
-   4090 quote is $0.611111111111111/hour, disk included, free transfers. Admission
-   now has a $0.50 total cap; retain at most $16.50 for subsequent science.
-3. Scientific orchestration is implemented in `state_representation_gpu.py`:
-   explicit frozen allocation, sequential balanced seed/arm order, all exports,
-   existing checkpoint evaluation and strict full-cohort analysis. Validate and
-   run it only if the measured total arrangement fits. No completed GPU cohort
-   or plateau exists yet. Flat poor play does not establish competence.
-4. Retain every attempt, deadlines, teardown and costs. If capacity or measured
-   throughput prevents a credible plateau within the cap, report it as unmet.
+Source `e5df2a58758f` implements scientific orchestration in the existing module:
+explicit frozen allocation, sequential balanced seed/arm order, initialization
+and curve exports, existing checkpoint evaluation and strict full-cohort
+analysis. The scientific path remains unexecuted; no replacement scientific
+seed or score was started. Eighteen focused checks passed.
+
+The repaired accounting allowed a real admission, `886233843d34`, on a 4090 at
+$0.611111111111111/hour (disk included, free transfer; $0.50 reserved). Linux
+setup built native Manabot and the exact Etude Git lock, CUDA numerics passed,
+and the pooled learner completed **3 updates, 768 games, 143,076 learner decisions
+and 560 optimizer updates**. It paused at its declared 600-second watchdog's
+predictive finalization boundary; collection + learning took 348.8849 seconds.
+Host peak was 17.41 GB and CUDA reserved peak 18.25 GB. This is a retained wall
+budget failure, not OOM or a numerical failure. The first learner did not qualify,
+so no GRU learner started and no complete two-arm throughput receipt exists.
+
+At that measured rate, the four pooled scientific learners alone project
+33.08 training hours / **$20.22 without allowances**, or **$31.39** including
+50% extrapolation allowance and the full setup/evaluation reserve. The available
+scientific reservation is at most **$16.50**; the full comparison additionally
+needs four GRU learners. This partial-arm projection is not a measured complete
+cohort or a guarantee about future game length, but it fails affordability even
+before GRU cost. No qualifying 3090 appeared in the retained fresh catalog;
+5090 offers were more expensive, without admitted batch throughput. Another
+unchanged admission cannot establish an affordable arrangement.
+
+The worker finished failed at 20:53:33 UTC. Controller delivery lagged, so all
+23 outputs (64,896,907 bytes) were copied directly and checked against the worker's
+SHA256 inventory before requesting cleanup. The controller subsequently admitted
+the identical inventory and `failed` outcome; no failure was relabeled cancelled.
+Etude termination succeeded. The 21:00:59 UTC read confirms provider absence. New reported charges are
+$0.152 versus a $0.17770 whole-lifetime quote estimate; total prior settled plus
+reported compute is $0.6225825939, not final invoices. Reserve $2 prior compute,
+$0.50 for this admission and $6 ancillary, leaving $16.50 uncommitted. The final
+receipt is `operational-restart/final-accounting.json`.
+
+Remaining acceptance is the actual four-paired-seed GPU cohort, all 72 curve
+endpoints, eight held-out endpoints and the fixed plateau criterion. It needs a
+supported execution arrangement or available hardware whose measured total cost
+fits the remaining original allowance. No CPU substitution, shorter objective,
+score-based retry, default/model promotion or merge is selected. Plateau remains
+unmet because of concrete throughput/budget evidence, not settlement uncertainty.
+The wider scientific suites remain gate's responsibility.
+
+Evidence is published under
+`experiments/data/state-representation-gpu-5da5f4/operational-restart/`, including
+the budget revision, quote/catalog, remote setup, numerical admission, all learner
+exports, original worker failure and affordability calculation. This adds the
+sixth Vast attempt to the historical denominator below; old evidence is intact.
 
 `execute_regime` owns learning; existing monitoring owns evaluation. Earlier attempts used a released
 0.2.14 launcher and locked 0.2.12 worker; those identities remain historical.
@@ -135,6 +167,7 @@ by the operational revision above; retained receipts are not rewritten.
 | `9c7c8e6841a4` / `27a12642200a35fc0cb436a9db69ce16c505016a` | Scientific eight-learner RTX 5090 cohort cancelled at 18:26:21 before scoring. Partial running snapshots retain 320 games and 57,258 decisions. Instance 59143644 deleted at 18:29:35; provider absence confirmed. |
 | `332a954fd935` / `978bf3eae` | RTX 3090 instance 59148889 never booted before startup deadline; `machine_lost_before_start`. No learning. Deleted; absent at 19:12:11. |
 | `1fca2d156e65` / `f0669347e` | Japan RTX 3090 instance 59149701 passed numerics; sequential pooled learner paused at finalization after 7/8 updates, 224 games, 40,241 decisions. Collection 204.40s + learning 143.74s (49.73s/update), 4.03 GB host RSS, 2.95 GB CUDA reserved. No GRU or concurrent pair. Deleted; absent at 19:30:36. |
+| `886233843d34` / `e5df2a58758f` | 4090 pooled admission paused after 3/4 updates (768 games); no GRU. Worker/controller failed; exports verified and published. Concrete pooled-only cost exceeds remaining scientific budget. |
 | `52617ef80df1` / `1ca17ed12` | 256-stream admission entered its pooled learner, then `lost / machine_lost`, no final exit status or output inventory. Cause/exposure unknown, not zero or an established OOM/native/model fault. Deletion confirmed at 19:41:03. |
 
 The scientific allocation required 32.23 seconds/update for 2,048 updates in
@@ -291,5 +324,7 @@ This reconciliation updates Training memory's stale SDK and billing status;
 no frozen receipt changed. Two-arm admission and the actual scientific cohort
 remain outstanding; the sequential orchestration is now implemented.
 
-Check: focused study checks pending; gate owns broader suites. The operational
-budget permits admission; measured affordability must precede scientific launch.
+Check: focused study tests — 18 passed; Ruff and `git diff --check` clean.
+Artifact retention check — 1 passed; context within limits. Gate owns broader
+suites. Actual 4090 admission
+failed its declared horizon; the original plateau objective remains unmet.
