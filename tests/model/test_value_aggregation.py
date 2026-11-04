@@ -100,7 +100,8 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         ).squeeze(-1)
         expected = expected.masked_fill(obs["actions_valid"] == 0, -1e8)
         actual, _ = agent.forward_distribution(obs)
-        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        # Dense and legal-row matrix multiplies can round differently in float32.
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-9)
 
 
 @pytest.mark.parametrize(
