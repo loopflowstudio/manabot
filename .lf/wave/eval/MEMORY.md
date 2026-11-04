@@ -1,7 +1,7 @@
 # eval wave memory
 
 Training memory (consolidation, credit and failure recovery) lives in
-`.lf/wave/training/MEMORY.md`; MTG-183's checkpoints are the shared opponent.
+`.lf/wave/experiments/MEMORY.md`; MTG-183's checkpoints are the shared opponent.
 
 ## Hosted decision comparisons (MTG-212, 2026-10-28)
 
