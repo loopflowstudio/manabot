@@ -21,32 +21,6 @@ use managym_state::{
     zone::ZoneType,
 };
 
-/// Defined cards whose behavior is incomplete. The fixed setups that name them
-/// still run them; the world does not support them for deck entry until their
-/// batch completes the missing behavior.
-pub(super) const INCOMPLETE: &[super::Incomplete] = &[
-    (
-        "tla.accumulate_wisdom",
-        "Controller must order the library remainder (CR 401.4); it is randomized",
-    ),
-    (
-        "tla.cat_gator",
-        "Any target must include planeswalkers and battles (CR 115.4)",
-    ),
-    (
-        "ths.lightning_strike",
-        "Any target must include planeswalkers and battles (CR 115.4)",
-    ),
-    (
-        "tla.suki_kyoshi_warrior",
-        "CDA power must apply outside the battlefield (CR 604.3)",
-    ),
-    (
-        "tla.water_tribe_rallier",
-        "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)",
-    ),
-];
-
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         aang_at_the_crossroads(),
@@ -351,6 +325,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::LookAndSelect {
+                    random_order: true,
                     reveal: false,
                     to_battlefield: true,
                     look: EffectValue::Fixed(5),
@@ -715,6 +690,7 @@ fn accumulate_wisdom() -> CardDefinition {
             then: vec![Effect::PutTopCardsInHand { count: 3 }],
             otherwise: vec![Effect::LookAndSelect {
                 to_battlefield: false,
+                random_order: false,
                 reveal: false,
                 look: EffectValue::Fixed(3),
                 min_select: 1,
@@ -2233,7 +2209,7 @@ fn cat_gator() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                what: ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+                what: ObjectSelector::Target(TargetSpec::AnyTarget),
             }],
         }],
         text_box: text_box.into(),
@@ -4540,6 +4516,7 @@ fn guru_pathik() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::LookAndSelect {
                     to_battlefield: false,
+                    random_order: true,
                     reveal: true,
                     look: EffectValue::Fixed(5),
                     min_select: 0,
@@ -6212,6 +6189,7 @@ fn master_piandao() -> CardDefinition {
             },
             effects: vec![Effect::LookAndSelect {
                 to_battlefield: false,
+                random_order: true,
                 reveal: true,
                 look: EffectValue::Fixed(4),
                 min_select: 0,
@@ -6489,7 +6467,7 @@ fn mongoose_lizard() -> CardDefinition {
             },
             effects: vec![Effect::deal_damage(
                 1,
-                ObjectSelector::Target(TargetSpec::CreatureOrPlayer),
+                ObjectSelector::Target(TargetSpec::AnyTarget),
             )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -7898,6 +7876,7 @@ fn seismic_sense() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::LookAndSelect {
             to_battlefield: false,
+            random_order: true,
             reveal: true,
             look: EffectValue::BattlefieldMatching {
                 predicate: CardPredicate {
@@ -10481,6 +10460,7 @@ fn water_tribe_rallier() -> CardDefinition {
             waterbend: true,
             effects: vec![Effect::LookAndSelect {
                 to_battlefield: false,
+                random_order: true,
                 reveal: true,
                 look: EffectValue::Fixed(4),
                 min_select: 0,

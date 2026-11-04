@@ -245,11 +245,28 @@ fn accumulate_wisdom_look_three_pick_one_rest_to_bottom() {
     s.step_action(index);
 
     assert_eq!(s.game().state.zones.zone_of(picked), Some(ZoneType::Hand));
-    // The other two are on the bottom of the library (random order).
-    let lib = library(&s, 0);
-    assert!(lib[..2].contains(&top3[0]));
-    assert!(lib[..2].contains(&top3[2]));
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    // The owner must choose both possible remainder orders through Commands.
+    assert_eq!(s.action_space().actions.len(), 2);
+    assert_choice_contract(&s);
+    let other = Observation::for_player(s.game(), PlayerId(1));
+    assert!(other
+        .opponent_cards
+        .iter()
+        .all(|c| c.zone != ZoneType::Library));
+    let root = s.game().clone();
+    for skip_trivial in [false, true] {
+        for (first, second) in [(top3[0], top3[2]), (top3[2], top3[0])] {
+            *s.game_mut() = root.clone();
+            s.game_mut().skip_trivial = skip_trivial;
+            select_card(&mut s, first);
+            if !skip_trivial {
+                select_card(&mut s, second);
+            }
+            let lib = library(&s, 0);
+            assert_eq!(&lib[..2], &[second, first]);
+            assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+        }
+    }
 }
 
 #[test]
@@ -14600,4 +14617,137 @@ fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
     s.advance_to_active_step(0, StepKind::End);
     settle(&mut s);
     assert!(s.game().state.permanents[token].is_none());
+}
+
+#[test]
+fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
+    let mut s = five_color_setup(&["Suki, Kyoshi Warrior", "Gray Ogre"]);
+    let suki = library_card(&s, 0, "Suki, Kyoshi Warrior");
+    assert_eq!(s.game().card_power(suki), 0);
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for zone in [
+        ZoneType::Library,
+        ZoneType::Hand,
+        ZoneType::Graveyard,
+        ZoneType::Exile,
+    ] {
+        s.game_mut().state.zones.move_card(suki, PlayerId(0), zone);
+        assert_eq!(s.game().card_power(suki), 2, "{zone:?}");
+        if zone != ZoneType::Library {
+            let obs = Observation::for_player(s.game(), PlayerId(0));
+            let row = obs
+                .agent_cards
+                .iter()
+                .find(|c| c.id == s.game().state.cards[suki].id.0 as i32)
+                .unwrap();
+            assert_eq!(row.power, 2, "{zone:?}");
+        }
+    }
+    s.game_mut()
+        .state
+        .zones
+        .move_card(suki, PlayerId(0), ZoneType::Hand);
+    cast_card(&mut s, suki);
+    assert_eq!(s.game().card_power(suki), 2);
+    // A control-changing effect changes the spell's "you", not its owner.
+    if let managym::state::stack_object::StackObject::Spell(spell) =
+        s.game_mut().state.stack_objects.last_mut().unwrap()
+    {
+        spell.controller = PlayerId(1);
+    } else {
+        panic!("Suki spell expected");
+    }
+    assert_eq!(s.game().card_power(suki), 1);
+
+    let outside = Scenario::with_sideboards(
+        deck(&[("Plains", 40)]),
+        deck(&[("Plains", 40)]),
+        deck(&[("Suki, Kyoshi Warrior", 1)]),
+        deck(&[]),
+        239,
+    );
+    let card = outside.game().state.players[0].sideboard[0];
+    assert_eq!(outside.game().card_power(card), 0);
+}
+
+#[test]
+fn water_tribe_rallier_filters_library_using_sukis_current_cda_power() {
+    for creatures in [3, 4] {
+        let mut s = five_color_setup(&["Water Tribe Rallier", "Suki, Kyoshi Warrior", "Gray Ogre"]);
+        let rallier = s.force_permanent_on_battlefield(0, "Water Tribe Rallier");
+        for _ in 1..creatures {
+            s.force_permanent_on_battlefield(0, "Gray Ogre");
+        }
+        let top = pin_top(
+            &mut s,
+            &["Suki, Kyoshi Warrior", "Forest", "Island", "Mountain"],
+        );
+        s.set_player_mana_pool(0, "5");
+        activate(&mut s, rallier, 0);
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        let obs = Observation::for_player(s.game(), PlayerId(0));
+        assert_eq!(
+            obs.agent_cards
+                .iter()
+                .find(|c| c.id == s.game().state.cards[top[0]].id.0 as i32)
+                .unwrap()
+                .power,
+            creatures
+        );
+        let available = offered_cards(&s);
+        assert_eq!(available.contains(&top[0]), creatures <= 3);
+        assert_choice_contract(&s);
+        if creatures <= 3 {
+            select_card(&mut s, top[0]);
+            assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Hand));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    }
+}
+
+#[test]
+fn cat_gator_any_target_removes_loyalty_or_defense_and_gains_life() {
+    use managym::state::card::{CardType, CardTypes};
+    for (card_type, counter) in [
+        (CardType::Planeswalker, CounterKind::Loyalty),
+        (CardType::Battle, CounterKind::Defense),
+    ] {
+        let mut s = five_color_setup(&["Cat-Gator", "Wall of Stone"]);
+        let victim = s.force_permanent_on_battlefield(1, "Wall of Stone");
+        let card = card_of(&s, victim);
+        s.game_mut().state.cards[card].types = CardTypes::new([card_type]);
+        set_counters(&mut s, victim, counter, 5);
+        force_lands(&mut s, 0, "Swamp", 2);
+        cast(&mut s, "Cat-Gator");
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(Target::Permanent(victim)));
+        settle(&mut s);
+        assert_eq!(counters_of(&s, victim, counter), 3);
+        assert_eq!(
+            s.game().state.permanents[victim].as_ref().unwrap().damage,
+            0
+        );
+        assert_eq!(s.life(0), 22);
+    }
+}
+
+#[test]
+fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand() {
+    let mut s = five_color_setup(&["Suki, Kyoshi Warrior", "Gray Ogre", "Boomerang Basics"]);
+    let suki = s.force_permanent_on_battlefield(0, "Suki, Kyoshi Warrior");
+    let card = card_of(&s, suki);
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert_eq!(s.game().card_power(card), 2);
+    until_end_of_turn(&mut s, suki, Modification::LoseAllAbilities);
+    assert_eq!(s.game().card_power(card), 0);
+    cast(&mut s, "Boomerang Basics");
+    assert!(s.choose_target(Target::Permanent(suki)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Hand));
+    assert_eq!(s.game().card_power(card), 1);
 }

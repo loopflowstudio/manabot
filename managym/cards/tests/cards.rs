@@ -38,6 +38,8 @@ mod scryfall;
 mod soi;
 #[path = "cards/stx.rs"]
 mod stx;
+#[path = "cards/ths.rs"]
+mod ths;
 #[path = "cards/tla.rs"]
 mod tla;
 #[path = "cards/war.rs"]

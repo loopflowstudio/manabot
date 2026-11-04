@@ -956,3 +956,70 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
     )
     submit_response(env, decision, stop.reference)
     assert not decision_surface_view(env, viewer)["agent"].get("inspected")
+
+
+def _assert_native_observation_parity(
+    env: managym.Env, decision: TextDecision
+) -> managym.Observation:
+    # Read the native observation: captured viewer JSON omits continuation frames.
+    viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
+    observation = env.observation_for_player(viewer)
+    encoded = ObservationSpace(ObservationConfig(policy_input_version=5)).encode(
+        observation
+    )
+    native = env.encode_observation(observation, policy_input_version=5)
+    for key, value in encoded.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    return observation
+
+
+def test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders() -> None:
+    env = priority_root(("Accumulate Wisdom",), ("Island", "Island"))
+    decision = capture_text_decision(env)
+    cast = next(a for a in decision.actions if "Cast" in a.description)
+    submit_response(env, decision, cast.reference)
+    for _ in range(8):
+        decision = capture_text_decision(env)
+        if "Stage: private inspection." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("inspection decision not reached")
+    assert len(decision.actions) == 3
+    submit_response(env, decision, decision.actions[0].reference)
+    decision = capture_text_decision(env)
+    assert "Stage: order library bottom." in decision.text
+    assert "; order library bottom" in decision.text
+    assert "Choose which remaining card to draw first." in decision.text
+    assert "Each choice commits immediately" in decision.text
+    assert "the last card is placed automatically" in decision.text
+    assert len(decision.actions) == 2
+    assert all(
+        "next on the bottom" in action.description for action in decision.actions
+    )
+    observation = _assert_native_observation_parity(env, decision)
+    assert any(
+        frame.kind == 6 and frame.decision == 23 for frame in observation.continuation
+    )
+    # Capture/Command execution preserves root isolation, replay and stale rejection.
+    before = env.state_digest()
+    for action in decision.actions:
+        branch = env.clone_env()
+        replay = env.clone_env()
+        branch_decision = capture_text_decision(branch)
+        submit_response(branch, branch_decision, action.reference)
+        submit_response(replay, capture_text_decision(replay), action.reference)
+        assert branch.state_digest() == replay.state_digest()
+        with pytest.raises(SemanticContractError):
+            submit_response(branch, branch_decision, action.reference)
+    assert env.state_digest() == before
+
+
+def test_suki_hand_power_reaches_text_and_both_encoders() -> None:
+    env = priority_root(("Suki, Kyoshi Warrior",), ("Plains", "Gray Ogre", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    assert any(
+        "Suki, Kyoshi Warrior" in line and "power/toughness 2/4" in line
+        for line in decision.text.splitlines()
+    )
+    _assert_native_observation_parity(env, decision)

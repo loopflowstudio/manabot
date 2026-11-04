@@ -128,7 +128,7 @@ impl Game {
             .zone_cards(ZoneType::Library, player)
             .iter()
             .copied()
-            .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+            .filter(|card| self.card_matches_predicate(*card, predicate))
             .collect();
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
         candidates
@@ -452,7 +452,7 @@ impl Game {
             .zones
             .zone_cards(ZoneType::Graveyard, player)
             .iter()
-            .filter(|card_id| predicate.matches_card(&self.state.cards[*card_id]))
+            .filter(|card_id| self.card_matches_predicate(**card_id, predicate))
             .count()
     }
 

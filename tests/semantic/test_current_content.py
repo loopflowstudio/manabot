@@ -70,11 +70,11 @@ def test_the_world_is_the_only_content_pool() -> None:
         "Water Tribe Rallier",
     ],
 )
-def test_cards_marked_incomplete_are_unsupported(name: str) -> None:
+def test_five_completed_cards_are_supported(name: str) -> None:
     pool = managym.content_pool("world")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
-    assert entry["eligibility"] == "unsupported"
-    assert entry["reason"]
+    assert entry["eligibility"] == "eligible"
+    assert entry["reason"] is None
 
 
 @pytest.mark.parametrize(

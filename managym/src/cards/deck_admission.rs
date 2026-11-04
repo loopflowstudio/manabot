@@ -178,17 +178,27 @@ mod tests {
     #[test]
     fn novel_decks_admit_against_the_world_without_an_authored_setup() {
         let main = BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]);
-        let sideboard = BTreeMap::from([("Island".into(), 1)]);
+        let sideboard = [
+            "Island",
+            "Accumulate Wisdom",
+            "Cat-Gator",
+            "Lightning Strike",
+            "Suki, Kyoshi Warrior",
+            "Water Tribe Rallier",
+        ]
+        .map(|name| (name.into(), 1))
+        .into();
         let deck = Deck::new(main.clone(), sideboard);
         assert!(admit_deck(&deck).is_empty());
-        let unsupported = Deck::new(main, BTreeMap::from([("Accumulate Wisdom".into(), 1)]));
+        let unsupported = Deck::new(main, BTreeMap::from([("Ally".into(), 1)]));
         let checked = check_decks(&[deck, unsupported.clone()]);
         assert!(checked[0].is_empty());
         assert_eq!(checked[1], admit_deck(&unsupported));
         let issues = &checked[1];
         assert!(issues
             .iter()
-            .any(|issue| issue.code == "unsupported"
+            .any(|issue| issue.card_name.as_deref() == Some("Ally")
+                && issue.code == "unsupported"
                 && issue.section == Some(DeckSection::Sideboard)));
     }
 

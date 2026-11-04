@@ -22,6 +22,10 @@ pub enum CounterKind {
     Finality,
     /// No rules meaning of its own; cards count it (Zhao, the Moon Slayer).
     Conqueror,
+    /// Removed by damage to a planeswalker (CR 120.3c).
+    Loyalty,
+    /// Removed by damage to a battle (CR 120.3h).
+    Defense,
     /// CR 714.2: a Saga's chapter abilities trigger as these are put on it.
     Lore,
 }
@@ -38,10 +42,12 @@ impl CounterKind {
             CounterKind::Finality => "finality",
             CounterKind::Conqueror => "conqueror",
             CounterKind::Lore => "lore",
+            CounterKind::Loyalty => "loyalty",
+            CounterKind::Defense => "defense",
         }
     }
 
-    pub const ALL: [CounterKind; 8] = [
+    pub const ALL: [CounterKind; 10] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -49,6 +55,8 @@ impl CounterKind {
         CounterKind::Quest,
         CounterKind::Finality,
         CounterKind::Conqueror,
+        CounterKind::Loyalty,
+        CounterKind::Defense,
         CounterKind::Lore,
     ];
 }

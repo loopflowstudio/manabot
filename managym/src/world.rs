@@ -2,12 +2,11 @@
 //!
 //! A world names rules meaning plus observation/action shape (see `WORLDS.md`).
 //! Any running engine knows its world: [`WORLD_VERSION`]. The world's cards are
-//! the one catalog ([`default_content_pack`]): every definition in `managym-cards`,
-//! whatever its set. A card is *supported* when its set file defines it and
-//! does not mark it incomplete. Incomplete definitions still run in the fixed
-//! setups that name them but are not supported for arbitrary decks.
-//! [`set_cards`] narrows the pool to chosen sets for deck generation or
-//! validation.
+//! every definition in `managym-cards`, whatever its set; a card is *supported*
+//! when its set file defines it as a non-token card. Tokens and rules fixtures
+//! are not deck entries. Known rules bugs do not revoke playability.
+//! [`set_cards`] narrows the pool to chosen
+//! sets for deck generation or validation.
 //!
 //! This is an eligibility check only. Deck construction policy (counts,
 //! formats, sideboards) belongs to the deck-admission caller.
@@ -94,8 +93,7 @@ mod tests {
         assert!(supports_card("Avatar Enthusiasts"));
         assert!(supports_card("Forest"));
         assert!(supports_card("Lightning Bolt"));
-        // Defined, but marked incomplete beside its definition.
-        assert!(!supports_card("Water Tribe Rallier"));
+        assert!(supports_card("Water Tribe Rallier"));
         assert!(supports_card("Counterspell"));
         assert!(!supports_card("Crossroads of Destiny"));
         assert!(!supports_card("Not A Card"));
@@ -105,7 +103,7 @@ mod tests {
             "Water Tribe Rallier",
             "Forest",
         ];
-        assert_eq!(unsupported_cards(deck), ["Water Tribe Rallier"]);
+        assert!(unsupported_cards(deck).is_empty());
     }
 
     #[test]

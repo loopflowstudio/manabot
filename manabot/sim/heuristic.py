@@ -247,8 +247,8 @@ def _specs(effects: list[Effect]) -> list[Any]:
 
 
 def _selector(spec: Any) -> str:
-    """A target spec's variant in snake case: `CreatureOrPlayer` is
-    `creature_or_player`."""
+    """A target spec's variant in snake case: `AnyTarget` is
+    `any_target`."""
     return re.sub(r"(?<!^)(?=[A-Z])", "_", _spec_name(spec)).lower()
 
 
@@ -791,10 +791,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         if damage > 0:
             # Burn that can hit players is held for a creature it kills, or
             # the last points of life.
-            if (
-                spell.selector == "creature_or_player"
-                and damage >= board.raw.opponent.life
-            ):
+            if spell.selector == "any_target" and damage >= board.raw.opponent.life:
                 return True
             return any(
                 _dies(damage, False, _Body.of(p)) for p in board.creatures(own=False)

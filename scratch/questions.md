@@ -15,10 +15,26 @@ Private searching reveals the searched zones only to the chooser. Temporary phys
 - Saga entry emits CountersPut for lore and chapter I; other entry counters retain existing behavior. Exactly-X targeting uses `max_x` with nonzero minimum; up-to-X uses zero minimum. Yangchen's optional draw is a resolution Modal inside its target clause.
 - Bending events retain their domain meaning: waterbend once per paid cost, firebend once per resolved combat-mana instruction, earthbend/airbend once per resolved instruction. Four-kind turn history is shared state.
 - One catalog preserves frozen vocabulary labels on read. The referenced-row learner optimization remains intact; full-table no-grad serving remains bitwise aligned. Old authored-pack checkpoint weights/bindings are not migrated and no retained binary was loaded. This is a review-visible compatibility limit, not an implicit promise to add a shim.
-- Authored presets retain their bypass of submitted-deck admission because some include incomplete cards. The plan records weakened assertions and actual-deck execution checks; removing this distinction is outside the accepted change.
+- Authored presets retain their bypass of submitted-deck construction checks. Main now admits every defined non-token, non-fixture front face; incomplete-card exclusions no longer exist.
 - Current w17 is mutable: definition/token changes and hash contract 13 require affected receipt refresh, not a world bump. Earlier worlds, frozen advice/experiments and retained checkpoints are never regenerated to make checks green. Engine Budget uses same-runner CI evidence; no synthetic load or local speed claim.
 - MTG-238 and MTG-235 are already integrated. Their historical blockers/delivery orders are no longer outstanding T6 work. The unrelated printed-P/T protocol choice remains outside T6.
 
 ## Historical evidence
 
 Complete inherited T2–T5, decklist, MTG-235/236/237/238, integration and previous publication notes are retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/questions.md` and `:scratch/mtg-225-tla-t6.md`. The latter preserves prior gate results and the negative Sozin reproduction. Older linked refs there remain historical evidence, not direction. No uncommitted evidence was removed: the only pre-curation scratch edit was the repair delete list, retained in the current plan.
+
+## Main sync — 2026-11-03
+
+Combine T6 with main `c823c9c8f`: preserve the single catalog and main's
+definition-based admission (no incomplete-card exclusion), plus both sets of
+card fixes. Main has published decision code 23 for library-bottom ordering
+and counter ordinals 7/8 for loyalty/defense; append T6's choose-to-exile at
+26 and lore at 9. T6 payment/search keep 24/25. This resolves the unpublished
+T6 collisions without changing main's retained meanings. Current w17 receipt
+Commands start from main's corrected Rallier/Accumulate Wisdom traces; rebind
+derived runtime values for the combined implementation. Historical receipts
+remain untouched.
+
+Main supersedes the old 142-Command tape with 135 Commands after Rallier
+correctly excludes Suki with power above three. Preserve that accepted trace
+and the explicit Accumulate Wisdom ordering Commands in navigation prefixes.

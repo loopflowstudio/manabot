@@ -465,9 +465,41 @@ mod tests {
     }
 
     #[test]
+    fn defined_cards_admit_as_whole_decklists() {
+        let names = [
+            "Accumulate Wisdom",
+            "Cat-Gator",
+            "Lightning Strike",
+            "Suki, Kyoshi Warrior",
+            "Water Tribe Rallier",
+        ];
+        for sideboard in [false, true] {
+            let mut source = "35 Plains\n".to_owned();
+            if sideboard {
+                source.push_str("Sideboard\n");
+            }
+            for name in names {
+                source.push_str(&format!("1 {name}\n"));
+            }
+            let imports = import_match(&source, VILLAIN).unwrap();
+            let hero = &imports[0];
+            assert!(hero.decklist.issues.is_empty());
+            assert_eq!(hero.decklist.source, source);
+            let admitted = if sideboard {
+                &hero.deck.sideboard
+            } else {
+                &hero.deck.main
+            };
+            for name in names {
+                assert_eq!(admitted.get(name), Some(&1));
+            }
+        }
+    }
+
+    #[test]
     fn unknown_unsupported_and_ambiguous_entries_name_their_lines() {
         let mut pool = world_pool().clone();
-        let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n2 Accumulate Wisdom\nMain\n1 Accumulate Wisdom\n";
+        let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Crossroads of Destiny\n2 Crossroads of Destiny\nMain\n1 Crossroads of Destiny\n1 Ally\nSideboard\n1 Ally\n";
         let rejected = admit_with_world(&parse_decklist(source, "x"), &pool).unwrap_err();
         assert_eq!(rejected.source, source);
         for expected in [
@@ -475,6 +507,8 @@ mod tests {
             (Some(4), "unsupported"),
             (Some(5), "unsupported"),
             (Some(7), "unsupported"),
+            (Some(8), "unsupported"),
+            (Some(10), "unsupported"),
         ] {
             assert!(lines(&rejected).contains(&expected), "{expected:?}");
         }

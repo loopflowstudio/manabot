@@ -136,7 +136,7 @@ def test_tokens_are_the_engine_definition_without_identity_or_printed_text() -> 
         )
     bolt = _card_tokens(pack, _row(pack, "Igneous Inspiration"))
     assert _variant("Effect::DealDamage") in bolt
-    assert _variant("TargetSpec::CreatureOrPlayer") in bolt
+    assert _variant("TargetSpec::AnyTarget") in bolt
     assert (TOKEN_KINDS["integer"], 3) in bolt
 
 

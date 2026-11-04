@@ -113,6 +113,7 @@ _STAGES = frozenset(
         "retarget",
         "resolution_cast",
         "surveil",
+        "order_library_bottom",
     )
 )
 
@@ -193,9 +194,10 @@ _OBLIGATIONS = (
     "keep creatures",
     "retarget",
     "surveil",
-    "choose a permanent to exile",
+    "order library bottom",
     "choose optional payment X",
     "search named cards",
+    "choose a permanent to exile",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (

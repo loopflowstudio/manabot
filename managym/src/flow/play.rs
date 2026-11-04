@@ -117,7 +117,7 @@ impl Game {
             && self.active_permanent_has(player, |source| {
                 source
                     .library_top_casting()
-                    .is_some_and(|predicate| predicate.matches_card(definition))
+                    .is_some_and(|predicate| self.card_matches_predicate(card, predicate))
             }))
         .then_some(card)
     }
@@ -213,11 +213,11 @@ impl Game {
                     && (self.active_player() != player
                         || self.state.turn.spells_cast[player.0]
                             .iter()
-                            .any(|cast| reduction.predicate.matches_card(&self.state.cards[*cast])))
+                            .any(|cast| self.card_matches_predicate(*cast, &reduction.predicate)))
                 {
                     continue;
                 }
-                if reduction.predicate.matches_card(card_ref)
+                if self.card_matches_predicate(card, &reduction.predicate)
                     && self.check_static_condition(&reduction.condition, player)
                 {
                     cost = cost.reduced_generic(reduction.generic);

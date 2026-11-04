@@ -757,7 +757,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 25;
+pub const MAX_DECISION_CODE: u8 = 26;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -788,7 +788,8 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::KeepCreatures { .. } => 20,
         Decision::Retarget { .. } => 21,
         Decision::Surveil { .. } => 22,
-        Decision::ChooseToExile { .. } => 23,
+        Decision::OrderLibraryBottom { .. } => 23,
+        Decision::ChooseToExile { .. } => 26,
     }
 }
 
@@ -1111,8 +1112,13 @@ mod tests {
                 player,
                 looked: vec![],
             },
+            Decision::OrderLibraryBottom {
+                player,
+                remaining: vec![],
+            },
             Decision::LookAndSelect {
                 to_battlefield: false,
+                random_order: true,
                 reveal: false,
                 player,
                 looked: vec![],

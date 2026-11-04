@@ -260,13 +260,16 @@ tensor and the tokens: extend the exhaustive guards in
 mechanic a directed test there. Static and cost rows name a real card and its
 behavior test in `tests/cards/<set>.rs`, which the guard checks.
 
-Support is definition: the world pool is every defined card from every set, and
-a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
-with the missing behavior). Restrict to a set with `world::set_cards` /
+Support is definition: the world pool is every defined card from every set.
+Defined non-token cards are supported for deck entry; tokens, rules fixtures
+and unknown cards are rejected. Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
-or gate a card. A test about one card goes in `managym/cards/tests/cards/<set>.rs`,
-the set file of that card; engine rules stay in `managym/tests/rules/`, and shared
-scenario helpers live in `managym/tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+or gate a card. Jack Heart clarified on 2026-11-03 that known rules bugs must
+not block previously playable cards from play; track those defects as bug
+Tasks. Playable does not mean bug-free. A test about one card goes in
+`managym/cards/tests/cards/<set>.rs`, the set file of that card; engine rules
+stay in `managym/tests/rules/`, and shared scenario helpers live in
+`managym/tests/support/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
 The default pack registers every definition in name order (`cards/content_pack.rs`).
 Card tests mirror the set files: `managym/cards/tests/cards/<set>.rs`, one module

@@ -945,9 +945,11 @@ pub enum Effect {
     Surveil { count: usize },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your
-    /// hand and the rest on the bottom of your library in a random order."
+    /// hand and the rest on the bottom of your library."
     /// `min_select` > 0 makes the selection mandatory when possible.
     LookAndSelect {
+        /// Otherwise the owner chooses the order (CR 401.4).
+        random_order: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
         /// Selected cards go onto the battlefield instead of into the hand.
@@ -1131,7 +1133,8 @@ pub enum TargetSpec {
         predicate: CardPredicate,
     },
     Creature,
-    CreatureOrPlayer,
+    /// Creature, player, planeswalker or battle (CR 115.4).
+    AnyTarget,
     Spell,
     /// "target spell or ability with a single target".
     SpellOrAbilityWithSingleTarget,

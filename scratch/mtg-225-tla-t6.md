@@ -56,7 +56,7 @@ The prior gate demonstrated that Fire Lord Sozin selected targets before payment
 | The Legend of Kuruk // Avatar Kuruk | supported; transform reentry, Spirits, extra turn |
 | The Legend of Kyoshi // Avatar Kyoshi | supported; directed test |
 | The Legend of Roku // Avatar Roku | supported; directed test |
-| The Legend of Yangchen // Avatar Yangchen | supported; decision code 23 (choose to exile) |
+| The Legend of Yangchen // Avatar Yangchen | supported; decision code 26 (choose to exile) |
 | The Rise of Sozin // Fire Lord Sozin | supported; any card name, private optional search, paid-X reflexive trigger |
 | Aang, Swift Savior // Aang and La | supported; airbends spells, transforms in place |
 | Aang, at the Crossroads // Aang, Destined Savior | supported; next-upkeep delayed transform |
@@ -76,7 +76,7 @@ With autograd, `ActorCritic._referenced_definitions` gathers all rows a batch ca
 
 The refactor alone preserved content bytes and row ordering at `2c1ba169f`; later card/rules changes deliberately changed the digest. Old authored-pack checkpoint weights/bindings are not migrated; manifest rejection and current load paths are tested, but no retained checkpoint binary has been loaded. No strength or historical compatibility claim follows.
 
-Authored presets still bypass submitted-deck admission: 19 preset decks contain cards marked incomplete (e.g. Accumulate Wisdom, Lightning Strike, Water Tribe Rallier, Cat-Gator, Suki). `PlayerConfig.submitted` therefore remains. Removing it would reject existing setups. Review-visible consequences remain: edited setup metadata alone no longer fails checkpoint loading (execution checks actual decks), authored mirrors need no pack selection, and any pair of Elemental decks receives the roster binding by membership.
+Authored presets retain their bypass of submitted-deck construction checks. Main `c823c9c8f` removes bug-based admission exclusions: every defined non-token, non-fixture front face is playable. `PlayerConfig.submitted` still selects construction validation. Review-visible consequences remain: edited setup metadata alone no longer fails checkpoint loading (execution checks actual decks), authored mirrors need no pack selection, and any pair of Elemental decks receives the roster binding by membership.
 
 ## Delete — do not maintain
 
@@ -100,7 +100,7 @@ Compression check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path man
 
 Gate owns the affected full suites and automated acceptance after this repair: debug engine/card/state tests and all-target clippy, Python model/training/current-world admission and observation checks, protocol/UI checks, and the current-world producer refresh. The new rules/content/hash inputs invalidate the previous affected receipt checks; unrelated successful checks can be reused.
 
-Only mutable w17 receipts may be rebound: semantic-kernel, authored-match, authored live parity, public commitment parity, Academy demos/navigation/trigger-order, and current belief-v3 pins. Preserve the 142 authored Commands, choice prefixes/offer ids, presentation and intended state outcomes. Historical receipts, retained checkpoints and frozen worlds remain untouched. Schema exports follow their native/Pydantic authorities, independently of receipt generation.
+Only mutable w17 receipts may be rebound: semantic-kernel, authored-match, authored live parity, public commitment parity, Academy demos/navigation/trigger-order, and current belief-v3 pins. Preserve main’s accepted 135 authored Commands (superseding the earlier 142 after Rallier’s corrected Suki filter), choice prefixes/offer ids, presentation and intended state outcomes. Historical receipts, retained checkpoints and frozen worlds remain untouched. Schema exports follow their native/Pydantic authorities, independently of receipt generation.
 
 Before this repair, gate at `a7ba7432c` passed 913 existing Rust tests (2 ignored), model/admission/training/parity checks, 102 focused Python tests, Academy's 119 unit tests and 10 Playwright cases. That established integration, not the omitted Sozin behavior; it is not final-source evidence. Exact command/results and limits remain in the git reference above.
 

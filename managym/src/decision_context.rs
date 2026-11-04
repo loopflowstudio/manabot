@@ -342,6 +342,7 @@ impl Game {
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
+                Decision::OrderLibraryBottom { .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
                 Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard; declining keeps the rest on top."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),

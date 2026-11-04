@@ -31,8 +31,9 @@ Sideboard
 The source, filename and line references survive validation errors. Unknown or
 ambiguous names, unsupported cards, bad counts and construction issues are
 reported without substituting cards. Card resolution is offline. Eligibility
-comes from the installed world: a defined card is supported unless its set file
-marks it incomplete. Authored setups (curated matchups, the Elemental roster)
+comes from the installed world: defined non-token cards are supported; tokens
+and rules fixtures are not deck entries. Known rules bugs are tracked as Tasks
+without revoking playability. Authored setups (curated matchups, the Elemental roster)
 are fixed setups, never import targets.
 
 Development construction requires a nonempty main deck, positive quantities,

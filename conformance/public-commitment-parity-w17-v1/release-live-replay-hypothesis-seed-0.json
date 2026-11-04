@@ -37,19 +37,19 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "bf4d2363edaf8babad8b9ae1ae9e1b8fd24d43785d739a3ac3bf9ee1ad9fa2de",
-    "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
+    "authority_receipt_sha256": "001b7a8b4b580351c4dc7e58acc7cb3f712457148046fa22c18920101ccacac8",
+    "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
       "algorithm": "ordered-relative-path-and-file-sha256-v1",
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "bf4d2363edaf8babad8b9ae1ae9e1b8fd24d43785d739a3ac3bf9ee1ad9fa2de"
+          "sha256": "001b7a8b4b580351c4dc7e58acc7cb3f712457148046fa22c18920101ccacac8"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "cab7f9778080b47eef11ba851d1ed3316efd1663113ac4617fe47bcc39db9764"
+          "sha256": "4e8cb27320788a842f347cbf5a1aa413f9d992e353c2c392034db69c3f9da9f1"
         },
         {
           "path": "academy/server.py",
@@ -57,7 +57,7 @@
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "86e8665d3420fd2c5f0bb0d0bba8a765275c4a263cc33e3aa23280966c4c1bf7"
+          "sha256": "842f9f6f14db1f4c8171159ce47ee98ac933e63c470974710aaa16811f6f28d4"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "763e3008e90d7e03d563e459f4f0d699449e32e9ee30f9611ac1e64fa599c8c6"
+          "sha256": "355c2b33412429266e97e69a15dc23f495e1444e57c61a197602946e08a0104a"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -89,19 +89,19 @@
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "b79293a09b6bc2db8e198b3da0c0793554036782d3e9758f8c72675cb4a0b545"
+          "sha256": "48bfdb020dcf41d0105aa9c2973851848348311efca156f25441c61e13bfdce2"
         },
         {
           "path": "managym/src/decision.rs",
-          "sha256": "fd583191a5ffafcda376e79d1194b0770b15a2833afb827f744c50ac052b3a1a"
+          "sha256": "69ba00e43ecb563e9460251c63574e24b6cb2e8ec868bb8e7e4798c2c5903d64"
         },
         {
           "path": "managym/src/possible_worlds.rs",
-          "sha256": "e1afcdfbd16dd0ed26dc77614b17a5529650602bfbb96c0b7706b9ded81a6195"
+          "sha256": "b928f7a3678ad270be794fc7a49cd19d05729555286a60078b64331f6328b9ac"
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "7447bbf245d6918ed094108583f022f5715bb7617e7a74a24b7f6a186f7effd2"
+          "sha256": "5c272890de0a31e701c779a6af5a2703ccc1209940014b90a0f2c60930b033ad"
         },
         {
           "path": "managym/cards/tests/cards/stx.rs",
@@ -121,14 +121,14 @@
         },
         {
           "path": "tests/academy/test_public_commitment_parity.py",
-          "sha256": "981f2ad6e2b579e6599d13f9acb25b863afd441f07f204e2e3ee7cb2e1039ee2"
+          "sha256": "b90d610cc120e56d96ea647a8e0a5f94fdafe522819735e8969b930853df013f"
         },
         {
           "path": "tests/sim/test_conditional_search.py",
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "bee520d71874b760cdfad523330308463e0c943d6f3a0239884ec9653132a443"
+      "sha256": "f7a43a07f429f13a3b71d884935653336e02855a5793886026d4fb6f873122f1"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1119,7 +1119,8 @@
       "command_id": "authority.policy.authored-authority-match.65",
       "ordinal": 104,
       "public_commitment": {
-        "kind": "pass_priority"
+        "card": "Forest",
+        "kind": "play_land"
       }
     },
     {
@@ -1128,7 +1129,10 @@
       "before_revision": 106,
       "command_id": "authority.policy.authored-authority-match.66",
       "ordinal": 105,
-      "public_commitment": null
+      "public_commitment": {
+        "card": "South Pole Voyager",
+        "kind": "cast"
+      }
     },
     {
       "actor": 1,
@@ -1136,7 +1140,9 @@
       "before_revision": 107,
       "command_id": "authority.policy.authored-authority-match.67",
       "ordinal": 106,
-      "public_commitment": null
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
     },
     {
       "actor": 1,
@@ -1171,42 +1177,36 @@
       "public_commitment": null
     },
     {
-      "actor": 0,
+      "actor": 1,
       "after_revision": 113,
       "before_revision": 112,
-      "command_id": "authored-authority.hero.40",
+      "command_id": "authority.policy.authored-authority-match.72",
       "ordinal": 111,
       "public_commitment": null
     },
     {
-      "actor": 0,
+      "actor": 1,
       "after_revision": 114,
       "before_revision": 113,
-      "command_id": "authored-authority.hero.41",
+      "command_id": "authority.policy.authored-authority-match.73",
       "ordinal": 112,
       "public_commitment": null
     },
     {
-      "actor": 1,
+      "actor": 0,
       "after_revision": 115,
       "before_revision": 114,
-      "command_id": "authority.policy.authored-authority-match.72",
+      "command_id": "authored-authority.hero.40",
       "ordinal": 113,
-      "public_commitment": {
-        "card": "Suki, Kyoshi Warrior",
-        "kind": "cast"
-      }
+      "public_commitment": null
     },
     {
-      "actor": 1,
+      "actor": 0,
       "after_revision": 116,
       "before_revision": 115,
-      "command_id": "authority.policy.authored-authority-match.73",
+      "command_id": "authored-authority.hero.41",
       "ordinal": 114,
-      "public_commitment": {
-        "card": "Earth Kingdom Jailer",
-        "kind": "cast"
-      }
+      "public_commitment": null
     },
     {
       "actor": 1,
@@ -1225,37 +1225,32 @@
       "before_revision": 117,
       "command_id": "authority.policy.authored-authority-match.75",
       "ordinal": 116,
-      "public_commitment": {
-        "card": "Plains",
-        "kind": "play_land"
-      }
+      "public_commitment": null
     },
     {
-      "actor": 0,
+      "actor": 1,
       "after_revision": 119,
       "before_revision": 118,
-      "command_id": "authored-authority.hero.42",
+      "command_id": "authority.policy.authored-authority-match.76",
       "ordinal": 117,
       "public_commitment": {
-        "card": "Accumulate Wisdom",
+        "card": "Earth Kingdom Jailer",
         "kind": "cast"
       }
     },
     {
-      "actor": 0,
+      "actor": 1,
       "after_revision": 120,
       "before_revision": 119,
-      "command_id": "authored-authority.hero.43",
+      "command_id": "authority.policy.authored-authority-match.77",
       "ordinal": 118,
-      "public_commitment": {
-        "kind": "pass_priority"
-      }
+      "public_commitment": null
     },
     {
-      "actor": 0,
+      "actor": 1,
       "after_revision": 121,
       "before_revision": 120,
-      "command_id": "authored-authority.hero.44",
+      "command_id": "authority.policy.authored-authority-match.78",
       "ordinal": 119,
       "public_commitment": null
     },
@@ -1263,18 +1258,17 @@
       "actor": 0,
       "after_revision": 122,
       "before_revision": 121,
-      "command_id": "authored-authority.hero.45",
+      "command_id": "authored-authority.hero.42",
       "ordinal": 120,
       "public_commitment": {
-        "card": "Island",
-        "kind": "play_land"
+        "kind": "pass_priority"
       }
     },
     {
       "actor": 0,
       "after_revision": 123,
       "before_revision": 122,
-      "command_id": "authored-authority.hero.46",
+      "command_id": "authored-authority.hero.43",
       "ordinal": 121,
       "public_commitment": {
         "card": "First-Time Flyer",
@@ -1282,24 +1276,21 @@
       }
     },
     {
-      "actor": 1,
+      "actor": 0,
       "after_revision": 124,
       "before_revision": 123,
-      "command_id": "authority.policy.authored-authority-match.76",
+      "command_id": "authored-authority.hero.44",
       "ordinal": 122,
-      "public_commitment": {
-        "card": "Forest",
-        "kind": "play_land"
-      }
+      "public_commitment": null
     },
     {
       "actor": 1,
       "after_revision": 125,
       "before_revision": 124,
-      "command_id": "authority.policy.authored-authority-match.77",
+      "command_id": "authority.policy.authored-authority-match.79",
       "ordinal": 123,
       "public_commitment": {
-        "card": "South Pole Voyager",
+        "card": "White Lotus Reinforcements",
         "kind": "cast"
       }
     },
@@ -1307,7 +1298,7 @@
       "actor": 1,
       "after_revision": 126,
       "before_revision": 125,
-      "command_id": "authority.policy.authored-authority-match.78",
+      "command_id": "authority.policy.authored-authority-match.80",
       "ordinal": 124,
       "public_commitment": null
     },
@@ -1315,15 +1306,18 @@
       "actor": 1,
       "after_revision": 127,
       "before_revision": 126,
-      "command_id": "authority.policy.authored-authority-match.79",
+      "command_id": "authority.policy.authored-authority-match.81",
       "ordinal": 125,
-      "public_commitment": null
+      "public_commitment": {
+        "card": "Plains",
+        "kind": "play_land"
+      }
     },
     {
       "actor": 1,
       "after_revision": 128,
       "before_revision": 127,
-      "command_id": "authority.policy.authored-authority-match.80",
+      "command_id": "authority.policy.authored-authority-match.82",
       "ordinal": 126,
       "public_commitment": null
     },
@@ -1331,7 +1325,7 @@
       "actor": 1,
       "after_revision": 129,
       "before_revision": 128,
-      "command_id": "authority.policy.authored-authority-match.81",
+      "command_id": "authority.policy.authored-authority-match.83",
       "ordinal": 127,
       "public_commitment": null
     },
@@ -1339,7 +1333,7 @@
       "actor": 1,
       "after_revision": 130,
       "before_revision": 129,
-      "command_id": "authority.policy.authored-authority-match.82",
+      "command_id": "authority.policy.authored-authority-match.84",
       "ordinal": 128,
       "public_commitment": null
     },
@@ -1347,7 +1341,7 @@
       "actor": 1,
       "after_revision": 131,
       "before_revision": 130,
-      "command_id": "authority.policy.authored-authority-match.83",
+      "command_id": "authority.policy.authored-authority-match.85",
       "ordinal": 129,
       "public_commitment": null
     },
@@ -1355,7 +1349,7 @@
       "actor": 1,
       "after_revision": 132,
       "before_revision": 131,
-      "command_id": "authority.policy.authored-authority-match.84",
+      "command_id": "authority.policy.authored-authority-match.86",
       "ordinal": 130,
       "public_commitment": null
     },
@@ -1363,7 +1357,7 @@
       "actor": 1,
       "after_revision": 133,
       "before_revision": 132,
-      "command_id": "authority.policy.authored-authority-match.85",
+      "command_id": "authority.policy.authored-authority-match.87",
       "ordinal": 131,
       "public_commitment": null
     },
@@ -1371,83 +1365,24 @@
       "actor": 1,
       "after_revision": 134,
       "before_revision": 133,
-      "command_id": "authority.policy.authored-authority-match.86",
+      "command_id": "authority.policy.authored-authority-match.88",
       "ordinal": 132,
       "public_commitment": null
     },
     {
-      "actor": 1,
+      "actor": 0,
       "after_revision": 135,
       "before_revision": 134,
-      "command_id": "authority.policy.authored-authority-match.87",
+      "command_id": "authored-authority.hero.45",
       "ordinal": 133,
       "public_commitment": null
     },
     {
-      "actor": 1,
+      "actor": 0,
       "after_revision": 136,
       "before_revision": 135,
-      "command_id": "authority.policy.authored-authority-match.88",
+      "command_id": "authored-authority.hero.46",
       "ordinal": 134,
-      "public_commitment": null
-    },
-    {
-      "actor": 1,
-      "after_revision": 137,
-      "before_revision": 136,
-      "command_id": "authority.policy.authored-authority-match.89",
-      "ordinal": 135,
-      "public_commitment": null
-    },
-    {
-      "actor": 1,
-      "after_revision": 138,
-      "before_revision": 137,
-      "command_id": "authority.policy.authored-authority-match.90",
-      "ordinal": 136,
-      "public_commitment": {
-        "card": "Invasion Reinforcements",
-        "kind": "cast"
-      }
-    },
-    {
-      "actor": 1,
-      "after_revision": 139,
-      "before_revision": 138,
-      "command_id": "authority.policy.authored-authority-match.91",
-      "ordinal": 137,
-      "public_commitment": null
-    },
-    {
-      "actor": 1,
-      "after_revision": 140,
-      "before_revision": 139,
-      "command_id": "authority.policy.authored-authority-match.92",
-      "ordinal": 138,
-      "public_commitment": null
-    },
-    {
-      "actor": 1,
-      "after_revision": 141,
-      "before_revision": 140,
-      "command_id": "authority.policy.authored-authority-match.93",
-      "ordinal": 139,
-      "public_commitment": null
-    },
-    {
-      "actor": 0,
-      "after_revision": 142,
-      "before_revision": 141,
-      "command_id": "authored-authority.hero.47",
-      "ordinal": 140,
-      "public_commitment": null
-    },
-    {
-      "actor": 0,
-      "after_revision": 143,
-      "before_revision": 142,
-      "command_id": "authored-authority.hero.48",
-      "ordinal": 141,
       "public_commitment": null
     }
   ],
@@ -1466,52 +1401,52 @@
     "viewer": 1
   },
   "summary": {
-    "commands": 142,
-    "commitments": 69,
-    "consumed_commitments": 55,
+    "commands": 135,
+    "commitments": 66,
+    "consumed_commitments": 53,
     "identity_stream_mismatches": 0,
     "negative_proof_mutations": 0,
     "rules_provider_gaps": 0,
     "tracker_records_per_viewer": {
       "0": 68,
-      "1": 142
+      "1": 135
     },
-    "unadmitted_commands": 73
+    "unadmitted_commands": 69
   },
   "surfaces": {
     "headless": {
-      "commands": 142,
-      "commitments": 69,
-      "identity_stream_sha256": "c8976031b082deabd337b5892c1967c904dcbc037aa58d2f6b92778cac216586",
-      "likelihood_identity_audits": 55,
+      "commands": 135,
+      "commitments": 66,
+      "identity_stream_sha256": "959f57674f31d8df2e78fbe812aad1aebaeb745ba6a376433f12f19e832cc96d",
+      "likelihood_identity_audits": 53,
       "rules_provider_gaps": 0,
       "tracker_receipts": {
         "0": {
           "consumed_commitments": 21,
-          "history_digest": "3944e7ad93e6753e603776f379392c86ef4d6287a51b4152311331506ff362b6",
-          "posterior_digest": "0d4ce6af5ebdc05ca6f9b72420b1cb5c0939946af7e7963817396dae22730f10",
-          "prior_digest": "6725783406b0bf5c2928a656f83eb94c0f947344a8cf3dc05890d016473c3699",
+          "history_digest": "64f898b1a5e24955396062113bee5722d13db148d0276cb6ade4ad8a25be4174",
+          "posterior_digest": "d74097e3d988e04df5e8f01162f55c3db20d8f870c72a03e6cbfb918800904ec",
+          "prior_digest": "a21bf1c6e8fc0e81633983647738fbb76249361e4e617e84b6280a095486a6e2",
           "records": 68
         },
         "1": {
-          "consumed_commitments": 34,
-          "history_digest": "7eba7222629d55b72bb94ca846df3a5ff874f4b254b8ed0730e572b04de65d70",
-          "posterior_digest": "3da9ed084ab8b79d01f630cd9494f49bcbfcd5e6e52070a56ce7da3aeda39178",
-          "prior_digest": "7d31d3958d1918978f76acf1e593223aed1237dd7bae5387b739da8a792b90f4",
-          "records": 142
+          "consumed_commitments": 32,
+          "history_digest": "1faf5f89a140479e523de63a2ee61188c6b043332084878934dde7006fcb5e68",
+          "posterior_digest": "ecc95e05acb71f881a19107e9a6638149f0718a287c7b6c750c66f9065fde6a1",
+          "prior_digest": "b4641fac0b8cb497ed23d81619f54c3900a9203c9c1c228ea22646145587dee7",
+          "records": 135
         }
       }
     },
     "live": {
-      "commands": 142,
-      "commitments": 69,
-      "identity_stream_sha256": "c8976031b082deabd337b5892c1967c904dcbc037aa58d2f6b92778cac216586"
+      "commands": 135,
+      "commitments": 66,
+      "identity_stream_sha256": "959f57674f31d8df2e78fbe812aad1aebaeb745ba6a376433f12f19e832cc96d"
     },
     "persisted_replay": {
       "atomic_negative_proof": null,
-      "commands": 142,
-      "commitments": 69,
-      "identity_stream_sha256": "c8976031b082deabd337b5892c1967c904dcbc037aa58d2f6b92778cac216586",
+      "commands": 135,
+      "commitments": 66,
+      "identity_stream_sha256": "959f57674f31d8df2e78fbe812aad1aebaeb745ba6a376433f12f19e832cc96d",
       "likelihood_identity_audits": 0,
       "rules_provider_gaps": 0,
       "tracker_receipts": {}
@@ -1520,17 +1455,17 @@
   "trackers": {
     "0": {
       "consumed_commitments": 21,
-      "history_digest": "3944e7ad93e6753e603776f379392c86ef4d6287a51b4152311331506ff362b6",
-      "posterior_digest": "0d4ce6af5ebdc05ca6f9b72420b1cb5c0939946af7e7963817396dae22730f10",
-      "prior_digest": "6725783406b0bf5c2928a656f83eb94c0f947344a8cf3dc05890d016473c3699",
+      "history_digest": "64f898b1a5e24955396062113bee5722d13db148d0276cb6ade4ad8a25be4174",
+      "posterior_digest": "d74097e3d988e04df5e8f01162f55c3db20d8f870c72a03e6cbfb918800904ec",
+      "prior_digest": "a21bf1c6e8fc0e81633983647738fbb76249361e4e617e84b6280a095486a6e2",
       "records": 68
     },
     "1": {
-      "consumed_commitments": 34,
-      "history_digest": "7eba7222629d55b72bb94ca846df3a5ff874f4b254b8ed0730e572b04de65d70",
-      "posterior_digest": "3da9ed084ab8b79d01f630cd9494f49bcbfcd5e6e52070a56ce7da3aeda39178",
-      "prior_digest": "7d31d3958d1918978f76acf1e593223aed1237dd7bae5387b739da8a792b90f4",
-      "records": 142
+      "consumed_commitments": 32,
+      "history_digest": "1faf5f89a140479e523de63a2ee61188c6b043332084878934dde7006fcb5e68",
+      "posterior_digest": "ecc95e05acb71f881a19107e9a6638149f0718a287c7b6c750c66f9065fde6a1",
+      "prior_digest": "b4641fac0b8cb497ed23d81619f54c3900a9203c9c1c228ea22646145587dee7",
+      "records": 135
     }
   },
   "version": 1

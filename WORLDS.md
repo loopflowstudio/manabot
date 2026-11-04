@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (330 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (335 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -238,10 +238,10 @@ their attackers (CR 500.8) are scheduled on the turn state. Bending events
 history, a spell on the stack can be airbent, spell costs can be reduced by
 colored mana that also reduces generic (CR 118.7c), and a permanent can have
 another card's activated and triggered abilities through an effect record.
-All 16 T6 cards are supported (330 supported definitions in `world`). The
+All 16 T6 cards are supported (335 supported definitions in `world`). The
 policy input adds player columns for the four bending kinds, extra turns and
 additional combats (67 → 73) and a card column for "until the end of your next
-turn" play permissions (55 → 56); decision code 23 is the each-player
+turn" play permissions (55 → 56); decision code 26 is the each-player
 exile choice. Resolution decisions 24 and 25 choose optional payment X and
 privately search named cards. Sozin pays before a separate reflexive trigger
 chooses graveyard targets within that X; search allows zero through four
@@ -297,6 +297,23 @@ remaining-sideboard counts by definition for every known decklist; v5 adds a
 possible worlds refuse a closed opponent.
 The Academy navigation fixture and the authored-match and parity receipts
 were re-recorded with the same Commands; state digests are unchanged.
+
+Task MTG-239 (2026-11-03, same open world) completes five defined cards:
+Accumulate Wisdom exposes the owner's bottom-order choice; Cat-Gator and
+Lightning Strike use `AnyTarget` (creature, player, planeswalker or battle),
+with the same specification on other printed any-target cards. Damage removes
+loyalty/defense counters and marks creature damage for every applicable type.
+Suki's CDA power applies in all zones, and Water Tribe Rallier's library filter
+reads that value. `LookAndSelect.random_order` distinguishes random placement
+from chosen placement in definition tokens. The bottom-order obligation appends
+continuation code 23; action types and frozen tensor widths are unchanged.
+Loyalty and defense use existing counter fact rows. The five former incomplete
+entries are now admitted through the ordinary whole-deck authority. No frozen
+world, checkpoint or MTG-213 corpus is changed. The current authored tape now
+has 135 Commands and 66 public commitments: at decision 90 Rallier correctly
+excludes Suki with power above three, changing the subsequent game. The former
+142-Command tape remains at `22e4aab71:conformance/authored-match-w17-v1/`.
+Admission is availability, not a claim that a playable card is bug-free.
 
 ## w16: one card authority (superseded by w17)
 
