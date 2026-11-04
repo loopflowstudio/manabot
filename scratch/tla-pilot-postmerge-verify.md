@@ -130,3 +130,30 @@ The next proof remains the affected gate checks followed by final-source frozen
 GPU execution, checkpoint export and the original paired schedule under the
 accepted cumulative budget. This review inspected implementation and test
 definitions; it did not rerun suites or establish a v10 training result.
+
+## Publication validation — 2026-11-04
+
+`lf sync` completed without conflicts. Reviewed the implementation against local
+main `510b5ec35` and the remote publication base `3de3a0ebf`; the latter also
+includes existing local-main Wave metadata changes, which are preserved.
+No runtime or protocol repair was needed during publication review.
+
+- Full debug native suite with `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2`:
+  969 passed, two ignored across 28 targets.
+- `cargo fmt --check`, all-target/all-feature Clippy with warnings denied, and
+  Ruff over changed Python modules passed. Clippy initially could not resolve
+  a relative PyO3 interpreter path; using the absolute root-venv path passed.
+- Real `tla_pilot_v10.frozen()` admission passed: w17, 134 decks, permanent64,
+  resource recovery enabled at .25 with 100/100 window/warmup.
+- All 166 added artifact files match their manifest hashes/sizes. Historical
+  manifest entries and frozen v9 protocol/regime bytes are unchanged.
+
+The required Python recovery, encoding, admission, monitoring, discovery and
+pilot suites passed: 320 tests in 447.83 seconds. This includes recovery,
+game-error recovery/ledger, active training, observation encoding, action cutoff,
+native buffer capacities, Elemental world, evaluation models/mirror admission,
+monitor evaluation, choice separability, regimes, experiment discovery, the TLA
+pilot and untracked experiment-data checks. Logs are `/tmp/mtg213-publish-python.log`,
+`/tmp/mtg213-publish-rust.log` and `/tmp/mtg213-publish-clippy.log`.
+Publication is separate from merge and Task completion; no v10 GPU execution,
+trained endpoint or completed paired evaluation is established by these checks.
