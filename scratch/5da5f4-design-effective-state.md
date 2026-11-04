@@ -76,14 +76,16 @@ native authority; the old projected JSON alone cannot supply missing provenance.
 Focused debug tests, the root native rebuild and Python checks completed.
 Evidence bytes and their manifest are published; README and HTML describe v7.
 
-Remaining for bounded delivery:
+Remaining for bounded delivery (updated by gate, 2026-11-04):
 
-1. Gate acceptance of affected suites: complete debug Rust tests and Clippy,
-   Python integration including shared-effect transport, model/checkpoint tests,
-   active-training and experiment-discovery checks, and the required current-world
-   arena/monitoring suite. Engine Budget owns same-runner performance acceptance.
-2. Demo/review of the documented contract, then publication and landing through
-   the existing Graph. No PR or merge is established by this reconciliation.
+1. The affected local suites passed; commands, repairs and retained results are in
+   `scratch/publication-verification.md`. Hosted Rust and Engine Budget passed on
+   published head `91635f583`; main integration remains pending. Gate strengthens
+   one Ty Lee expiry assertion without changing production code.
+2. Concept review and the headless demonstration accepted the bounded contract;
+   PR 419 is published. Delivery must publish the gate correction and require
+   passing checks on the resulting head before landing through the existing Graph.
+   This gate neither merges nor completes the Task.
 3. MTG-213 adoption requires its own prospective protocol/runtime selection;
    unchanged v3 is not a valid retry and this Task does not select its capacity.
    Final provider charges remain distinct from the retained rental estimate.

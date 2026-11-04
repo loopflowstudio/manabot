@@ -12625,10 +12625,7 @@ fn ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her() {
     assert!(!tapped(&s, ogre), "Ty Lee is gone");
     assert!(managym::agent::shared_effects::project(s.game())
         .iter()
-        .all(|record| record
-            .source
-            .as_ref()
-            .is_none_or(|source| source.object_id != Some(ty_lee.0 as i32))));
+        .all(|record| record.effect != lock.effect));
 }
 
 /// Tapping it on entry destroys a creature with power 4 or less; {1} strips
