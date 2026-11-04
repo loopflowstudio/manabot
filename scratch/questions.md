@@ -1,5 +1,11 @@
 # MTG-213 — decisions and assumptions (2026-11-04 UTC)
 
+Headless demo boundary (19:31 UTC): interpret this review as acceptance of the
+enabling repair before delivery, with paid pilot acceptance still owned by the
+following verification step (`lf help code`: pursue → demo → deliver → verify).
+This is an agent scope interpretation, not new human approval or Task completion.
+Fresh proof and the advance rationale are in `scratch/tla-pilot-demo.md`.
+
 Current outcome, dependency and acceptance: `scratch/tla-pilot-verify.md`.
 Results and cost receipts: `experiments/tla-trophy-pilot.md`. Training Wave
 memory now records the accepted shared-effect repair and its evidence limits.

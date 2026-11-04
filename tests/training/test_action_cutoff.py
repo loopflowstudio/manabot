@@ -11,6 +11,7 @@ from manabot.env.env import Env
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -82,6 +83,7 @@ def test_scalar_evaluation_cutoff_is_diagnostic_not_game_truncation(
             obs, _ = env.reset()
             assert obs["actions_valid"].sum() == 2
             assert len(env.last_raw_obs.action_space.actions) > 2
+            actor = env.last_raw_obs.agent.player_index
             _, _, _, truncated, info = env.step(0)
             assert not truncated and not info["action_space_truncated"]
         finally:
@@ -90,3 +92,33 @@ def test_scalar_evaluation_cutoff_is_diagnostic_not_game_truncation(
     report = json.loads(path.read_bytes())
     assert report["samples"][0]["game"]["seed"] == 213
     assert report["samples"][0]["retained_count"] == 2
+    sample = report["samples"][0]
+    assert sample["decision_kind"] == "Priority"
+    assert sample["game"]["actor"] == actor
+    assert json.loads(sample["game"]["frame"])["actor"] == actor
+    assert sample["game"]["actions"] == []
+
+
+def test_vector_reseed_retains_consumed_decision_counts(tmp_path: Path) -> None:
+    space = ObservationSpace(
+        ObservationConfig(max_actions=64, action_overflow="first-legal")
+    )
+    match = Match(
+        MatchConfig(hero_deck={"Mountain": 30}, villain_deck={"Mountain": 30})
+    )
+    with capture_scope(CaptureScope(tmp_path)):
+        env = VectorEnv(1, match, space, Reward(RewardConfig()), "cpu", seed=213)
+        try:
+            for seed in (213, 214):
+                env.reset(seed=seed)
+                env.step(torch.tensor([0]))
+        finally:
+            env.close()
+    reports = [
+        json.loads(path.read_bytes()) for path in tmp_path.glob("action-cutoff-*.json")
+    ]
+    assert len(reports) == 2
+    for report in reports:
+        assert report["counts_by_kind"] == {
+            "Priority": {"decisions": 1, "overflows": 0, "dropped_actions": 0}
+        }

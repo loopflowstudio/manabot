@@ -1,5 +1,12 @@
 # TLA pilot continuation — 2026-11-04 UTC
 
+Headless demo at 19:31 UTC accepts the enabling repair for delivery:
+[review record](tla-pilot-demo.md). Fresh evidence includes 11 passing behavior
+checks and 717 valid self-play collection decisions through the exact v8 model,
+observation and 134-deck source, plus four scalar evaluation-adapter decisions.
+This adds no GPU update, checkpoint or paired score; empirical acceptance below
+remains outstanding.
+
 Jack Heart's accepted outcome remains preliminary GPU TLA self-play and paired
 checkpoint evaluation on the frozen 134-deck trophy population, <=$1 per
 allocation and <=$10 cumulative. Corpus/runners, Vast integration and an earlier
@@ -219,3 +226,65 @@ These checks establish local behavior, not Linux CI, engine-budget comparison,
 successful paid v8 execution, trained checkpoint admission or complete paired
 evaluation. The prepared Run remains bound to its original source; later edits
 require a successor source freeze before execution. No provider action occurred.
+
+## Gate plan — 2026-11-04
+
+Comparison: supplied checkout base `5dd11cec4` through HEAD `972d55673`, plus
+working edits. The CI selector (`git diff --name-only -z --no-renames 5dd11cec4 |
+bash .github/ci/select-tests.sh`) selects all jobs because the native engine
+changed; it has no local content-keyed result cache. CI owns that full matrix.
+
+Changed paths and focused checks:
+
+- `managym/src/{flow,agent,python}`, `managym/cards/tests/cards/tla.rs`: X-cost
+  legality, prefix transport and buffer binding. The preceding publication pass
+  already ran the complete required debug suite (957 passing, two ignored),
+  formatting and Clippy on these exact unchanged Rust sources. Preserve those
+  results; no redundant full workspace run or extension rebuild is needed.
+- `manabot/env/{env,vector_env,failures,observation,target_practice}.py`,
+  `manabot/training/rollout/{collection,producers}.py`,
+  `manabot/sim/native_game.py`, `manabot/infra/config.py` and native stubs:
+  buffer parity, scalar/vector cutoff diagnostics, collection, automatic capture,
+  active training, current-world admission/monitoring, choice navigation and
+  package-boundary tests. Add regression coverage for scalar sample actors and
+  vector reseed flushing before running this affected group once.
+- `experiments/tla_pilot_v8.py`, analysis, v6–v8 regimes/protocols and evidence
+  manifest: focused pilot/discovery/regime tests plus artifact-tracking guard.
+- `.github/workflows/manabot-integration.yml`: selector/release tests and exact
+  main-shard collection (the prior 1,037-test collection remains evidence; a new
+  test in the existing cutoff module requires fresh collection).
+- Markdown/HTML: inspect README/protocol/report consistency, `git diff --check`.
+  No UI implementation changed; no new browser rendering or latency claim.
+
+After tests, run Ruff on changed Python sources. Linux/platform jobs and
+same-runner engine-budget comparison remain CI-owned, not locally certified.
+Gate does not execute a GPU run or settle empirical pilot acceptance.
+
+### Gate result
+
+The enabling repair passes the local gate. Two diagnostic defects were fixed:
+scalar cutoff samples now bind the current actor to their pending frame, with
+the same decision-kind labels as vector reports; vector reseeding flushes the
+retiring capture so zero-overflow decision totals survive. Regression coverage
+checks the actor/frame/prefix and exact per-capture counts across two seeds.
+README contracts and the report now identify v8 and the successor-source
+requirement. No action selection, rules or frozen protocol/evidence changed.
+
+- `uv run --extra dev --extra notebook --extra artifacts --extra reports --extra evaluation pytest tests/verify/test_native_buffer_capacities.py tests/training/test_action_cutoff.py tests/training/test_collection.py tests/training/test_automatic_game_capture.py tests/training/test_active_training.py tests/training/test_regimes.py tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py tests/infra/test_ci_selection.py tests/infra/test_release.py tests/infra/test_experiment_data_untracked.py tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py tests/academy/test_choice_navigation.py tests/test_package_boundaries.py -q` — 310 passed in 127.41s; `.runs/mtg213/gate-python-tests.log`.
+- Exact `Integration tests` command read from `.github/workflows/manabot-integration.yml`, with `--collect-only -q` appended — 1,038 collected in 3.67s; exact command and output in `.runs/mtg213/gate-ci-collection.log`.
+- `uv run --extra dev ruff check --fix` over existing changed `.py`/`.pyi` paths from `git diff --name-only --diff-filter=ACMR 5dd11cec4` — passed, no fixes; `.runs/mtg213/gate-ruff.log`.
+- `git diff --check` — passed.
+
+Native source is unchanged from `972d55673`; the prior 957-pass debug suite,
+formatting, Clippy and rebuilt extension remain applicable. This pass starts no
+second full native verification. The repository's CI selector correctly selects
+all jobs for the branch, without a content-keyed local reuse facility.
+
+At the final CI read, published HEAD `972d55673` had green Rust, Python unit,
+Academy, protocol, semantic conformance, UI, clean-machine and package/install
+checks. Main/long integration and Engine Budget were still running. CI on that
+HEAD does not cover these uncommitted diagnostic edits; delivery must publish
+and obtain checks for its resulting revision. No timeout or failed check was
+encountered in this gate. All gate-owned processes exited; no provider action or
+spending occurred. The Task remains open for its trained checkpoint, paired evaluation and
+qualified learning report after delivery and a new source-bound Run.

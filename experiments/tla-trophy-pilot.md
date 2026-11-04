@@ -46,8 +46,8 @@ matches; native scalar, vector and Python encoders all reject the same 256
 offered actions at capacity 64. A diagnostic 512 configuration retains all 256
 in Python, but the frozen native buffer path still enforces 64. This is evidence
 that a configuration-only retry is insufficient, not a new pilot selection.
-The prospective v7 contract below binds both the buffer repair and the later
-X-cost rules repair; executed v5 evidence remains frozen. Compared with Elemental, this
+The prospective v8 contract below binds the buffer repair, X-cost rules repair
+and explicit first-64 legal-action cutoff; executed v5 evidence remains frozen. Compared with Elemental, this
 pilot now establishes GPU execution on trophy pairs, but supplies no trained policy for a
 learning-gain or cost-to-strength comparison. Different hardware, input size and
 population also prevent interpreting raw throughput as a controlled comparison.
@@ -395,9 +395,21 @@ scalar/vector/Python parity, masks, collection and bounded replay diagnostics.
 
 V8 is now frozen as Run `f47be2d3c0d8`, source
 `900c207502bd28757d7cf66196bd464458e39402`, but remains unsubmitted.
-At19:10–19:12 UTC, the bounded RTX5090 quote refused its USD0.81/hour ceiling;
+At 19:10–19:12 UTC, the bounded RTX5090 quote refused its USD0.81/hour ceiling;
 L4 and RTX3090 quotes refused available capacity. No paid allocation or new
 evaluation occurred. The final inventory at 19:11:43 found no live rentals or
 unsettled hardware. Historical accounted cost remains USD0.32710677365251912,
 with conservative reservations USD3.9139916049382716 of the USD10 cap.
 Preflight receipts live under `experiments/data/mtg213/gpu-v8-preflight-20261104/`.
+The prepared Run remains bound to that source. Subsequent collector and
+diagnostic fixes require a successor source freeze before execution; these
+preflight receipts do not establish current availability.
+
+Local gate validation of the enabling repair passed 310 focused tests, including
+buffer parity, replay, cutoff/collection, admission, monitoring and discovery;
+the updated CI integration shard collected 1,038 tests and Ruff passed. Cutoff
+samples now bind the current actor/frame and share scalar/vector decision-kind
+labels; vector reseeding preserves exact diagnostic totals. The unchanged native
+sources retain the preceding 957-pass debug validation (two ignored) and Clippy
+result. Platform CI and the engine performance comparison remain delivery
+checks. These software checks supply no trained checkpoint or learning result.

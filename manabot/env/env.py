@@ -265,10 +265,13 @@ class Env(gym.Env):
     def _record_policy_actions(self) -> None:
         config = self.obs_space.encoder.config
         if config.action_overflow == "first-legal":
+            self._capture.inputs.actor = self._engine.current_agent_index()
             self._capture.inputs.frame = self._engine.semantic_decision_frame_json()
             self._capture.record_policy_actions(
                 len(self._last_obs.action_space.actions),
-                str(self._last_obs.action_space.action_space_type),
+                str(self._last_obs.action_space.action_space_type).removeprefix(
+                    "ActionSpaceEnum."
+                ),
                 config.max_actions,
                 self._capture.inputs,
             )

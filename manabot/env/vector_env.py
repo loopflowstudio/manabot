@@ -293,6 +293,7 @@ class VectorEnv:
         self, *, seed: Optional[int] = None, options: Optional[dict] = None
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
         if seed is not None and seed != self._base_seed:
+            self._rust_env.close()
             self._base_seed = seed
             self._rust_env = self._build_rust_env(seed=seed)
             self._rust_env.set_buffers(

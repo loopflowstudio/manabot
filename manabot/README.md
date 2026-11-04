@@ -23,6 +23,20 @@ promoted to v7 by guessing a source/controller. Text representation
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
 
+## Policy action capacity
+
+Observation overflow raises an error by default. The TLA pilot explicitly uses
+`ObservationConfig(max_actions=64, action_overflow="first-legal")` to keep the
+first 64 legal actions in native order. Retained indices and Commands are
+unchanged; the engine and Academy still expose the complete legal set. Learned
+checkpoint evaluation uses the saved policy configuration.
+
+Capture reports count consumed decisions, overflows and dropped actions by
+decision kind, with bounded replay samples. Collector/game close and vector
+reseeding flush exact totals, including zero-overflow runs. The approximation
+and its evaluation limits are specified in the
+[TLA v8 protocol](../experiments/protocols/tla-trophy-213-v8.md).
+
 ## Quickstart
 
 ```bash
