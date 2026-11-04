@@ -83,7 +83,7 @@ def runs(revision: str, canary: bool = False) -> list[Run]:
             repo=Path(__file__).resolve().parents[1],
             revision=revision,
             max_hours=0.2 if canary else 1.25,
-            max_usd=Decimal("0.20") if canary else Decimal("1.40"),
+            max_usd=Decimal("0.90") if canary else Decimal("1.75"),
         )
         for arm in ARMS
     }

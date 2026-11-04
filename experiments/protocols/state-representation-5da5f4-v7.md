@@ -11,7 +11,7 @@ on the same complete viewer-safe v7 observations? Both arms use explicit shared
 payloads and membership routing into objects before attention. `typed_pool`
 sums tokens, applies tanh and a learned projection; `typed_gru` applies a GRU
 then tanh/projection. This changes BOTH shared-effect payload reduction AND typed
-continuation reduction, including the latter's stack sequence reducer. Local
+continuation reduction over each frame's header and ordered edge tokens. Local
 facts use the same FactEncoder. Neither arm retains hidden state across decisions.
 The comparison does not isolate effect reduction from continuation reduction,
 match parameter count, or prove injective neural encoding. `rows` is omitted:
