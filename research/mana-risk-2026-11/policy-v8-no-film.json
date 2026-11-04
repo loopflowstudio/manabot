@@ -1,0 +1,193 @@
+{
+  "version": 8,
+  "seed": 242,
+  "hidden_dim": 16,
+  "threads": 1,
+  "pairs": [
+    {
+      "pair": "amount_assignment",
+      "equivalent": false,
+      "representation_delta": 0.037953853607177734,
+      "logit_delta": 0.0,
+      "value_delta": 1.4799647033214569e-05,
+      "fact_rows": [
+        6,
+        6
+      ],
+      "forward_microseconds_batch2": [
+        22657.540976069868,
+        44985.2499878034,
+        30371.250002644956,
+        48492.37506277859,
+        134198.99996370077,
+        19217.95797534287,
+        49033.66707731038,
+        14152.000076137483,
+        15839.584055356681,
+        15805.415925569832
+      ]
+    },
+    {
+      "pair": "purpose",
+      "equivalent": false,
+      "representation_delta": 0.43090081214904785,
+      "logit_delta": 0.0,
+      "value_delta": 0.00015395553782582283,
+      "fact_rows": [
+        6,
+        6
+      ],
+      "forward_microseconds_batch2": [
+        34893.041010946035,
+        19620.500039309263,
+        15893.915900960565,
+        15850.541996769607,
+        42837.125016376376,
+        15839.416068047285,
+        15864.582965150476,
+        53820.583038032055,
+        15733.708976767957,
+        49898.79101049155
+      ]
+    },
+    {
+      "pair": "combined_classes",
+      "equivalent": false,
+      "representation_delta": 3.484199047088623,
+      "logit_delta": 0.0,
+      "value_delta": 0.006565358955413103,
+      "fact_rows": [
+        6,
+        4
+      ],
+      "forward_microseconds_batch2": [
+        40215.125074610114,
+        25940.250023268163,
+        26794.832898303866,
+        43365.83404801786,
+        53611.99995968491,
+        18323.16699437797,
+        73495.33296655864,
+        89154.20807898045,
+        51365.582970902324,
+        67456.5420486033
+      ]
+    },
+    {
+      "pair": "row_order",
+      "equivalent": true,
+      "representation_delta": 4.76837158203125e-07,
+      "logit_delta": 0.0,
+      "value_delta": 6.984919309616089e-10,
+      "fact_rows": [
+        6,
+        6
+      ],
+      "forward_microseconds_batch2": [
+        14906.874974258244,
+        14843.542012386024,
+        18404.37506325543,
+        16215.750016272068,
+        15196.959022432566,
+        39627.87496857345,
+        27166.37495905161,
+        34441.20904896408,
+        21980.667021125555,
+        112582.29205850512
+      ]
+    },
+    {
+      "pair": "class_labels",
+      "equivalent": true,
+      "representation_delta": 0.9500775337219238,
+      "logit_delta": 0.0,
+      "value_delta": 0.0010261563584208488,
+      "fact_rows": [
+        6,
+        6
+      ],
+      "forward_microseconds_batch2": [
+        73178.70890256017,
+        28581.624967046082,
+        78573.95801693201,
+        40698.541910387576,
+        15046.000014990568,
+        56846.87499888241,
+        15637.208009138703,
+        38499.708054587245,
+        47939.58400841802,
+        27723.37500937283
+      ]
+    },
+    {
+      "pair": "output_mode",
+      "equivalent": false,
+      "representation_delta": 1.5828895568847656,
+      "logit_delta": 0.0,
+      "value_delta": 0.0003162170760333538,
+      "fact_rows": [
+        55,
+        55
+      ],
+      "forward_microseconds_batch2": [
+        71273.49998336285,
+        35074.87499155104,
+        23549.1250641644,
+        36743.58397256583,
+        30891.625094227493,
+        28971.958090551198,
+        23286.000010557473,
+        20285.749924369156,
+        17041.875049471855,
+        15942.332916893065
+      ]
+    },
+    {
+      "pair": "output_frame",
+      "equivalent": false,
+      "representation_delta": 2.215595245361328,
+      "logit_delta": 0.0,
+      "value_delta": 0.0007719129789620638,
+      "fact_rows": [
+        55,
+        55
+      ],
+      "forward_microseconds_batch2": [
+        20848.12498651445,
+        23320.37501037121,
+        27812.000014819205,
+        29188.374988734722,
+        27473.58405031264,
+        20892.250002361834,
+        23732.832982204854,
+        23370.124981738627,
+        19841.540954075754,
+        23733.3329860121
+      ]
+    },
+    {
+      "pair": "remaining_taps",
+      "equivalent": false,
+      "representation_delta": 0.0,
+      "logit_delta": 0.0001502427039667964,
+      "value_delta": 0.00023865699768066406,
+      "fact_rows": [
+        0,
+        0
+      ],
+      "forward_microseconds_batch2": [
+        16865.04203826189,
+        18506.707972846925,
+        20546.333049423993,
+        16217.208933085203,
+        15974.125009961426,
+        15980.749973095953,
+        15954.582951962948,
+        22926.417062990367,
+        27486.25003732741,
+        28551.624971441925
+      ]
+    }
+  ],
+  "limitations": "Initial structural probe without FiLM and with a focus-free pass at priority. Nonzero player-fact/value differences but zero action-logit changes identify the focus-free path limitation; use final paired probes for action separability."
+}

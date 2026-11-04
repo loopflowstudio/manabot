@@ -37,7 +37,7 @@ def test_v8_pending_taps_have_scalar_parity_and_explicit_legacy_rejection() -> N
     encoded = _parity(env, obs)
     assert (encoded["relations"][:, 49] == 2).any()
     assert "tap 2 more permanents" in capture_text_decision(env).text
-    for version in (5, 6, 7):
+    for version in range(1, 8):
         with pytest.raises(ValueError, match="requires policy input v8"):
             env.encode_observation(obs, version)
         with pytest.raises(ValueError, match="requires policy input v8"):
@@ -92,6 +92,63 @@ def test_v8_vector_buffers_select_the_same_layout() -> None:
         for name in ("a", "b")
     ]
     encoder = ObservationEncoder(ObservationConfig(policy_input_version=8))
+    buffers = encoder.allocate(1)
+    buffers.update(
+        rewards=np.zeros(1, dtype=np.float64),
+        terminated=np.zeros(1, dtype=np.uint8),
+        truncated=np.zeros(1, dtype=np.uint8),
+    )
+    native = managym.VectorEnv(num_envs=1, seed=123, skip_trivial=True)
+    reference = managym.VectorEnv(num_envs=1, seed=123, skip_trivial=True)
+    native.set_buffers(buffers)
+    [(obs, _)] = reference.reset_all(configs)
+    native.reset_all_into_buffers(configs)
+    for key, value in encoder.encode(obs).items():
+        np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
+
+
+def test_v9_projection_is_byte_identical_and_capacity_remains_explicit() -> None:
+    env = priority_root((), ("Hermitic Herbalist",))
+    obs = env.scenario_refresh()
+    choice = next(
+        i
+        for i, action in enumerate(obs.action_space.actions)
+        if int(action.action_type) == ActionEnum.PRIORITY_ACTIVATE_ABILITY
+        and action.ability_index == 1
+    )
+    obs, *_ = env.step(choice)
+    expected = _parity(env, obs)
+    count = int(expected["facts"][:, 11].sum())
+    assert count > 1
+    for capacity in (count, 512):
+        encoder = ObservationEncoder(
+            ObservationConfig(policy_input_version=9, max_facts=capacity)
+        )
+        encoded = encoder.encode(obs)
+        native = env.encode_observation(obs, 9, capacity)
+        buffered = {key: np.zeros_like(value) for key, value in encoded.items()}
+        env.encode_observation_into(obs, buffered)
+        for key, value in encoded.items():
+            np.testing.assert_array_equal(native[key], value, err_msg=key)
+            np.testing.assert_array_equal(buffered[key], value, err_msg=key)
+            if capacity == 512:
+                np.testing.assert_array_equal(expected[key], value, err_msg=key)
+    with pytest.raises(ValueError, match="facts"):
+        env.encode_observation(obs, 9, count - 1)
+    with pytest.raises(ValueError, match="facts"):
+        ObservationEncoder(
+            ObservationConfig(policy_input_version=9, max_facts=count - 1)
+        ).encode(obs)
+
+
+def test_v9_vector_buffers_match_python_without_a_new_wire_width() -> None:
+    configs = [
+        managym.PlayerConfig(name, {"Mountain": 10, "Gray Ogre": 20})
+        for name in ("a", "b")
+    ]
+    encoder = ObservationEncoder(
+        ObservationConfig(policy_input_version=9, max_facts=128)
+    )
     buffers = encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),

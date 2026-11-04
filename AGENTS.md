@@ -163,6 +163,15 @@ checkpoints or experiment evidence.
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
   architecture receipts hash the serialized configuration, including omissions.
+- Explicit mana input v8 adds fact kinds 11/12/13 (amount, predicate, location)
+  and relation column 49 for remaining selected taps. V9 retains exactly those
+  wire bytes and capacities, joining mana rows by object and class before model
+  pooling; class IDs are routing keys only. Native scalar/vector buffers select
+  the shared v8/v9 layout by relation width 50; the saved version selects model
+  construction. Frozen v8 models keep independent row pooling; fresh input stays
+  v6. Flat focus-free actions need the existing `policy_film=True` option to use
+  player facts. Zero-initialized fact/FiLM gates need explicit gradient and
+  opened-gate probes; initial equality alone is not evidence of information loss.
 
 ## Commands
 

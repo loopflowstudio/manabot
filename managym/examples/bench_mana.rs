@@ -80,7 +80,9 @@ fn trace(name: &str, mut s: Scenario, payable: &str) {
             times.push(start.elapsed().as_secs_f64() * 1e6);
             facts = encoded
                 .facts
-                .chunks_exact(FACT_DIM)
+                .as_chunks::<FACT_DIM>()
+                .0
+                .iter()
                 .filter(|r| r[11] == 1.0)
                 .count();
         }
@@ -174,7 +176,7 @@ fn main() {
         for _ in 0..10 {
             measurement::take();
             let start = Instant::now();
-            black_box(s.game_mut().scenario_refresh_priority().unwrap());
+            s.game_mut().scenario_refresh_priority().unwrap();
             times.push(start.elapsed().as_secs_f64() * 1e6);
             counters.push(measurement::take());
         }

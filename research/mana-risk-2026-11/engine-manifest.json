@@ -1,0 +1,31 @@
+{
+  "baseline_commit": "e88f9b4062ed307aca6c60104d4e1c7bebb57b86",
+  "candidate_mana_source_sha256": "fb601f8e3607d998013a4d5c460f547133a2662f69795b7d2805ca8a05efd295",
+  "machine": "arm64",
+  "os": "macOS-26.0.1-arm64-arm-64bit",
+  "build": "cargo build -j 2 --release --manifest-path managym/Cargo.toml --features benchmark --example bench_mana --example bench_steps --example bench_search",
+  "fixture_samples": 10,
+  "steps_games_per_round": 8,
+  "steps_rounds": 5,
+  "search_decisions_per_seed": 3,
+  "timing_scope": "Both binaries use opt-in counters. Same machine, serial execution; ambient activity uncontrolled. Bounded attribution, not the full uninstrumented CI Engine Budget.",
+  "binary_sha256": {
+    "before": {
+      "bench_mana": "b30b4d30da6f2c059033f8b6542968550ad996fea75507661c7668f4ff5c1b32",
+      "bench_steps": "e9a2fbbd962619fbc385d07c0ed351d6a966d813a28210982da0b25097180f54",
+      "bench_search": "5cbdd64c5a497277e98597b7b172e4762ff5539cb82baf596c4dfc873c0b9edc"
+    },
+    "after": {
+      "bench_mana": "fa39f1180bf3a158c63e209271703bc827f1ba32aaef9fbecadfa88d9ba3f78f",
+      "bench_steps": "6d2451b50787b3472892d03a3090a7dc648ccb57a47e36300394be96eddf5779",
+      "bench_search": "1024b022a21dbcbdedabe0c16dfe106dd554ddb60affa2405ee5fa4402ec2319"
+    }
+  },
+  "model_sources_sha256": {
+    "manabot/model/facts.py": "f42b5d357c989c56c503f1ed4f9f0ba25a6ccb8d67f2f13b9c19badc0980cb91",
+    "manabot/model/actor_critic.py": "c2dcefc332ad9fdd935b0a2383e441071742fac8507e9bd9562d4238db1b339b",
+    "manabot/infra/config.py": "5bf06e0f29c0cf0f06b04f9293bb8b11cbb6db6f1e531ce7a944118baa091487"
+  },
+  "checks": "Before/after payment outcomes and concrete remainders, trace decision counts and legal-action counts agree. Each curated steps/search digest agrees.",
+  "measurement_sources": "Baseline commit contains the measured harness; subsequent example-only Clippy edits change neither fixture semantics nor timed engine calls."
+}

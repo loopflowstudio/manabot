@@ -935,4 +935,27 @@ mod tests {
             .unwrap();
         assert_eq!(remainder.restricted_of(&parent), [0, 1, 0, 0, 0, 0]);
     }
+
+    #[test]
+    fn terminal_payment_retains_first_class_aware_remainder() {
+        for regular in 0..=2 {
+            for citizen in 0..=2 {
+                for shared in 0..=2 {
+                    let mut pool = Mana::parse(&"U".repeat(regular));
+                    pool.add(&Mana::restricted_to(ManaRestriction::spell(["Citizen"]), [0, citizen, 0, 0, 0, 0]));
+                    pool.add(&Mana::restricted_to(ManaRestriction::spell(["Citizen", "Elf"]), [0, shared, 0, 0, 0, 0]));
+                    for generic in 0..=5 {
+                        let cost = ManaCost { purpose: SpendingContext::spell(["Citizen"]), ..ManaCost::parse("U").with_generic(generic) };
+                        let options = pool.payment_options(&cost);
+                        assert_eq!(pool.can_pay(&cost), !options.is_empty());
+                        if let Some(first) = options.first() {
+                            let mut terminal = pool.clone();
+                            terminal.pay(&cost);
+                            assert_eq!(&terminal, first);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

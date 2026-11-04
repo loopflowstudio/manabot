@@ -827,9 +827,26 @@ projection and one relation column for remaining selected-object tap costs.
 Its object widths and shared-effect buffers are unchanged. Facts 11/12/13 join
 class amounts, casting/activation subtype alternatives, and pool or pending
 output locations (frame and mode). The model allocates the additional fact-kind
-embeddings only for v8; older checkpoint parameter shapes remain unchanged.
+embeddings from v8 onward; older checkpoint parameter shapes remain unchanged.
 V1–v7 reject new subtype and pending tap-cost states instead of dropping them.
 Fresh construction remains v6; choose v8 explicitly for these new mechanics.
+
+Explicit v9 retains the same native/Python wire layout and adds a model join:
+amounts, restrictions and locations are pooled within each mana class before
+nonlinear projection to its owning player. Class IDs no longer enter embeddings.
+Saved v8 models retain independent row pooling. Native scalar/vector v8 and v9
+buffers are byte-identical; the saved version selects model construction.
+Flat focus-free choices need the existing `policy_film=True` state-conditioning
+option to receive player facts. Both FiLM and fact output gates start at zero;
+the bounded probes in `manabot.verify.mana_risk` distinguish that initialization
+from a missing gradient path. Their results do not measure RL learning.
+
+Mana choices add retained decisions. Sequential GAE advances gamma/lambda per
+same-player retained decision; opponent and skipped forced choices do not add
+steps. Compound credit advances per submission or factor according to its
+existing configuration. At gamma=1, extra decisions do not discount terminal
+outcomes, but they still affect sample counts and bootstrapped trace lengths.
+No learning algorithm or historical run configuration changes with these probes.
 
 ### Current continuation input
 

@@ -66,9 +66,10 @@ class ActorCritic(nn.Module):
             5,
             7,
             8,
+            9,
         ):
             raise ValueError(
-                "typed state experiment requires policy input v5, v7 or v8"
+                "typed state experiment requires policy input v5, v7, v8 or v9"
             )
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
@@ -280,6 +281,7 @@ class ActorCritic(nn.Module):
                     kinds=FACT_KINDS_V8
                     if enc.config.policy_input_version >= 8
                     else FACT_KINDS,
+                    join_mana=enc.config.policy_input_version >= 9,
                 )
                 if enc.shows_everything
                 else None

@@ -406,6 +406,8 @@ pub(super) fn input_buffer_config(
             }
             config.max_facts = rows;
             if shared_count == 3 && relation_width == crate::agent::continuation::RELATION_DIM_V8 {
+                // V9 changes model class aggregation only; v8/v9 wire buffers
+                // are intentionally identical, including their capacity checks.
                 8
             } else if shared_count == 3 {
                 7

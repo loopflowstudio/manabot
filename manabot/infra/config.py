@@ -41,7 +41,8 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8] = Field(
+    # V9 keeps the v8 wire layout and joins mana classes before model pooling.
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
     # V6 onward carries a configurable local-fact capacity. Omission on older inputs

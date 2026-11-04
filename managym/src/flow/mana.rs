@@ -381,18 +381,20 @@ impl PaymentModel<'_> {
             if remaining.departed {
                 probe.sacrifice_permanent(source.permanent);
             } else if remaining.tapped {
-                probe.state.permanents[source.permanent]
-                    .as_mut()
-                    .unwrap()
-                    .tapped = true;
+                // Taps don't invalidate characteristics. Keep the clone's
+                // existing layer cache, with debug recomputation as its oracle.
+                probe.state.tap(source.permanent);
             }
         }
         // `self.life` excludes life reserved for an outer activation, whose
         // cost has not committed yet. Only the searched prefix's expenditure
         // changes characteristics while this output resolves.
-        probe.state.players[self.player.0].life -= (self.life - life) as i32;
-        probe.state.players[self.player.0].mana_pool = pool.clone();
-        probe.state.players[self.player.0].combat_mana_pool.clear();
+        if life != self.life {
+            probe.state.players[self.player.0].life -= (self.life - life) as i32;
+        }
+        let (regular, combat) = probe.state.mana_pools_mut(self.player);
+        *regular = pool.clone();
+        combat.clear();
         let mut choices = probe.current_mana_choices(effect, self.player)?;
         if ability.tap_source {
             let bonus = probe.tap_mana_bonus(permanent, self.player);
@@ -408,11 +410,16 @@ impl PaymentModel<'_> {
         // A variable producer can gain output when another resource leaves
         // (for example, a negative static modifier). Its current amount is not
         // an admissible upper bound; exact transitions below decide feasibility.
-        if self.sources.iter().any(|source| {
-            source
-                .abilities
-                .iter()
-                .any(|ability| ability.dynamic.is_some())
+        if self.sources.iter().zip(&state.resources).any(|(source, resources)| {
+            source.abilities.iter().any(|ability| {
+                ability.dynamic.is_some()
+                    && (resources.has_resources(ability)
+                        || state.obligations.iter().any(|obligation| matches!(
+                            obligation,
+                            Obligation::Output { source: pending, ability_index, .. }
+                                if *pending == source.permanent && *ability_index == ability.ability_index
+                        )))
+            })
         }) {
             return true;
         }
@@ -565,7 +572,26 @@ impl PaymentModel<'_> {
                         visited,
                     );
                 }
-                for permanent in candidates {
+                let available = candidates
+                    .iter()
+                    .filter(|permanent| {
+                        self.sources
+                            .iter()
+                            .zip(&resources)
+                            .any(|(source, resource)| {
+                                source.permanent == **permanent
+                                    && !resource.tapped
+                                    && !resource.departed
+                            })
+                    })
+                    .take(usize::from(*remaining))
+                    .count();
+                if available < usize::from(*remaining) {
+                    #[cfg(feature = "benchmark")]
+                    measurement::update(|c| c.pruned += 1);
+                    return None;
+                }
+                for (candidate_index, permanent) in candidates.iter().enumerate() {
                     let Some(index) = self
                         .sources
                         .iter()
@@ -579,7 +605,9 @@ impl PaymentModel<'_> {
                     let mut next = resources.clone();
                     next[index].tapped = true;
                     let mut obligations = vec![Obligation::Tap {
-                        candidates: candidates.clone(),
+                        // This obligation consumes a set. Explore each set once;
+                        // the real chooser still receives every legal first tap.
+                        candidates: candidates[candidate_index + 1..].to_vec(),
                         remaining: remaining - 1,
                     }];
                     obligations.extend_from_slice(rest);
@@ -648,7 +676,20 @@ impl PaymentModel<'_> {
                 }
             }
             Obligation::Pay { cost, waterbend } => {
-                let remainders = pool.payment_options(cost);
+                // With no parent obligation, alternative class allocations
+                // cannot affect feasibility. Retain the ordinary spending order
+                // without materializing every equivalent successful remainder.
+                let remainders = if rest.is_empty() {
+                    if pool.can_pay(cost) {
+                        let mut remainder = pool.clone();
+                        remainder.pay(cost);
+                        vec![remainder]
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    pool.payment_options(cost)
+                };
                 #[cfg(feature = "benchmark")]
                 measurement::update(|c| {
                     c.payment_remainders += remainders.len();

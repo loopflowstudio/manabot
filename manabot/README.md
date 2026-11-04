@@ -488,3 +488,18 @@ no writable model memory. Tokenizer/model recovery belongs to the caller;
 
 [Decklist file import](../docs/decklist-import.md) admits novel development decks
 against the installed world for simulation and Academy play.
+
+## Mana class inputs
+
+Explicit input v9 retains v8's wire rows and capacities, but pools each mana
+class's amount, purpose predicates and pending output location together before
+adding it to the owning player. Class IDs are joins, not learned features.
+Native scalar/vector buffer binding intentionally emits identical v8/v9 bytes;
+the saved input version selects the model aggregation. V8 checkpoints keep
+independent row embeddings and fresh configurations remain v6.
+
+For a flat policy whose focus-free actions must depend on player facts, select
+`ModelConfig(policy_film=True)`. Its zero-initialized gate and the fact encoder's
+zero output layer need gradients before those features affect action preferences.
+The bounded mana probes open those gates explicitly to test capacity and gradient
+paths; they do not establish learnability or better play.

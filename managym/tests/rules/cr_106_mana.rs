@@ -248,3 +248,74 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
         }
     }
 }
+
+/// A live variable producer cannot be bounded by its current output: paying a
+/// sacrifice may remove a negative static modifier before production resolves.
+#[test]
+fn mana_variable_bound_preserves_output_gained_after_sacrifice() {
+    use managym::state::{
+        ability::{Effect, EffectValue},
+        card::{CardType, StaticAbility, StaticPtBuff, StaticScope},
+        predicate::CardPredicate,
+    };
+    let cards = deck(&[
+        ("Mountain", 24),
+        ("White Lotus Tile", 4),
+        ("Gray Ogre", 8),
+        ("Hill Giant", 4),
+    ]);
+    let mut s = Scenario::new(cards.clone(), cards, 242);
+    s.advance_to_active_step(0, StepKind::Main);
+    let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
+    let ogre = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let treasure = s
+        .game_mut()
+        .create_token("Treasure", PlayerId(0), false)
+        .unwrap();
+    let tile_card = card_of(&s, tile);
+    let treasure_card = card_of(&s, treasure);
+    let ability = &mut s.game_mut().state.cards[tile_card].activated_abilities[0];
+    ability.mana_cost = managym::state::mana::ManaCost::parse("1");
+    ability.effects = vec![Effect::AddOneColorManaValue {
+        amount: EffectValue::GreatestPowerYouControl,
+    }];
+    s.game_mut().state.cards[treasure_card]
+        .statics
+        .push(StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::YouControl(CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            }),
+            condition: None,
+            power: -3,
+            toughness: 0,
+            per_creature_type_max: None,
+            per_color_among: None,
+            per_graveyard_matching: None,
+        }));
+    assert_eq!(s.game().characteristics(ogre).power, 0);
+    s.set_player_mana_pool(0, "0");
+    s.force_card_in_hand(0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    command(&mut s, |action| matches!(action, Action::CastSpell { .. }));
+    command(
+        &mut s,
+        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == tile),
+    );
+    command(
+        &mut s,
+        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == treasure),
+    );
+    command(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 3, .. })
+    });
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert_eq!(s.game().characteristics(ogre).power, 3);
+    command(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 3, .. })
+    });
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("RRR"));
+    assert!(s.game().state.permanents[treasure].is_none());
+    command(&mut s, |action| matches!(action, Action::PayCost { .. }));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+}

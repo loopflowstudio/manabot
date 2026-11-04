@@ -286,3 +286,14 @@ structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
 `OrderLibraryBottom`, placing cards nearest the top first through ordinary
 SelectCard Commands. Only the chooser sees the remaining inspected cards.
+
+### Bounded mana attribution
+
+`cargo run --release --features benchmark --example bench_mana` measures ten
+payment and offer samples on each declared small position. Opt-in counters name
+explored, deduplicated and pruned states, pending obligation depth, concrete
+remainders and dynamic output clones. Normal builds contain no counter writes.
+`bench_steps [games]` and `bench_search [decisions-per-seed]` accept smaller
+attribution samples; omitted arguments preserve the CI Engine Budget workloads.
+See `research/mana-risk-2026-11/` for the before/after receipts. These bounded
+samples do not replace the full same-runner CI budget.
