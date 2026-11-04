@@ -96,29 +96,29 @@ The broader-engine reviews exposed requirements to incorporate as coverage
 grows. These are design boundaries, not claims that all their cases already
 work in managym:
 
-* **Own unfinished work.** A parent operation retains its position, scoped
+- **Own unfinished work.** A parent operation retains its position, scoped
   results and finalization while a child asks a question. Resume the exact
   child and complete the parent once. Use a common ownership/completion
   protocol with operation-specific data; avoid a new continuation convention
   for every mechanic. A logical simultaneous batch survives a pause without
   exposing priority or running premature state-based actions.
-* **Separate proposals from facts.** Replacement processing transforms a
+- **Separate proposals from facts.** Replacement processing transforms a
   proposed event, rechecks applicability and records which replacements have
   applied. Only committed events enter trigger matching. Candidate indexes
   accelerate discovery; they do not own eligibility, occurrence identity or
   placement order. Retain the relevant pre-event sources and last-known facts.
-* **Keep one derived-characteristics authority.** Extend layer ordering,
+- **Keep one derived-characteristics authority.** Extend layer ordering,
   dependencies and discovery of granted abilities behind that view. New reads
   of tap state, zones, history or other conditions require corresponding cache
   invalidation. Preserve debug recomputation. Full dependency support belongs
   with the mechanic batch that needs it; ordinary definitions need not wait
   for an unrelated layer extension.
-* **Keep rules state and viewer input distinct.** Preserve exact object
+- **Keep rules state and viewer input distinct.** Preserve exact object
   incarnations and distinguish current, last-known and prospective reads.
   Project permitted information explicitly. Search forks retain pending work,
   history and RNG, and hidden-world sampling respects the viewer's knowledge.
   A reconstructed approximation of the game is not an exact fork.
-* **Share semantics before changing storage.** Native definitions remain the
+- **Share semantics before changing storage.** Native definitions remain the
   executable card representation. Broader engines are sources of counterexamples
   and algorithms, not a mandate for a parser, second IR or storage rewrite.
   Choose persistent collections, instruction sharing or other optimizations
@@ -126,13 +126,13 @@ work in managym:
 
 ## Evidence and implementation contracts
 
-Historical PRs [#42](https://github.com/loopflowstudio/manabot/pull/42),
-[#348](https://github.com/loopflowstudio/manabot/pull/348),
-[#353](https://github.com/loopflowstudio/manabot/pull/353),
-[#289](https://github.com/loopflowstudio/manabot/pull/289) and
-[#412](https://github.com/loopflowstudio/manabot/pull/412) retain the original
-implementation and review evidence. The
-[speed investigation](../docs/research/engine-speed-2026-11.md) retains
+Historical examples include the [two-deck foundation](https://github.com/loopflowstudio/manabot/pull/42),
+[payment witnesses](https://github.com/loopflowstudio/manabot/pull/348),
+[nested payments](https://github.com/loopflowstudio/manabot/pull/353),
+[policy choice distinctions](https://github.com/loopflowstudio/manabot/pull/289)
+and [composable effects](https://github.com/loopflowstudio/manabot/pull/412).
+These are dated evidence, not a current defect inventory.
+The [speed investigation](../docs/research/engine-speed-2026-11.md) retains
 measurements and rejected optimizations. Use the [engine README](README.md),
 [repository conventions](../AGENTS.md) and
 [validation guide](../docs/development.md#validation-by-change-area) for current
