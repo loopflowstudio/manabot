@@ -2,11 +2,12 @@
 
 Status (implemented 2026-11-03): all 16 cards, one catalog, Academy's accepted
 schedule projection, exact delayed capture and Jack Heart's accepted 1a lifetime
-composition are implemented. The current worktree retains main `3b122de90`
-through merge `bf7631c6a`; existing PR #417 remains the delivery boundary.
+composition are implemented at `7c790f78e`, including the subsequent compression.
+This head retains main `3b122de90` through merge `bf7631c6a` and is published
+on existing PR #417, which remains the delivery boundary.
 No scope choice remains. Hash contract 15 and changed definition tokens require
-mutable-w17 receipt refresh and combined validation by gate. No final-head CI
-acceptance, publication, auto-merge or landing is claimed by this implementation.
+mutable-w17 receipt refresh and combined validation by gate. Final-head CI acceptance and the refreshed review handoff remain outstanding;
+no auto-merge or landing is authorized.
 One cohesive PR returns to Jack Heart for review.
 
 The accepted outcome is correct play for humans and bots through the shared native rules authority, with directed debug tests for every obligation, complete viewer-safe choices and policy/text observations. `scratch/t6-direction.md` retains Jack Heart's 2026-11-02 scope decisions. Full earlier implementation, integration and publication history is retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/mtg-225-tla-t6.md` and `:scratch/questions.md`.
@@ -221,9 +222,10 @@ Remaining acceptance work:
    `docs/development.md#validation-by-change-area`. Focused successes are reused
    where inputs are unchanged. Browser layout/interaction proof remains with
    gate/CI; native, WebSocket and Svelte rendering evidence is not that proof.
-3. At reconciliation, GitHub reports PR #417 at `bf7631c6a`, open with no
-   auto-merge; Rust, Python, integration, protocol, UI and Engine Budget checks
-   are in progress. Final-head acceptance and accurate PR validation copy remain
+3. On 2026-11-03, GitHub reports PR #417 at `7c790f78e`, open with no
+   auto-merge. Detect Changes and preflight passed; Rust, Python, integration,
+   packaging, protocol, UI, clean-machine play and Engine Budget checks are
+   in progress. This is a dated status observation, not acceptance. Final-head acceptance and accurate PR validation copy remain
    outstanding. Engine Budget uses this PR's own same-runner artifact and an
    explicit reason for any reference adoption, never a local speed claim.
 4. Publication and Jack Heart's review remain the delivery boundary. There is
@@ -231,132 +233,49 @@ Remaining acceptance work:
    reconciliation. Old authored-pack checkpoint compatibility remains unproven;
    no migration or retained-binary admission is claimed.
 
-Check: `uv run --extra dev pytest tests/verify/test_observation_parity.py::test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4 -q` — 1 passed across v4/v5/v6; changed-file Ruff and `git diff --check` passed.
-
 ## Wave memory
 
 This is the selected code Graph's realign step. Engine memory records the
-accepted public schedule/captured-object contracts and v6 integration limits;
-the live gate work remains here. Engine has no immediate child directories or
+accepted public schedule, captured-object and independent lifetime contracts,
+including v6 integration and evidence limits. The live gate work remains here. Engine has no immediate child directories or
 child memories in this checkout. Training's v6 capacity lesson was read as
 upstream evidence; its experiment decisions remain outside T6.
 
-## Interactive concept review: delayed abilities — 2026-11-03
+## Accepted delayed-lifetime review — Jack Heart, 2026-11-03
 
-Requested by Jack Heart after the selector-composition discussion. Source
-inspection at `bf7631c6a` plus current working changes confirms the accepted
-capture correction is implemented. This pass changes review artifacts only;
-no implementation, publication, Graph navigation or further approval follows.
-The schedule completion and all previous T6 requirements remain accepted.
+Jack Heart selected **1a**: independently compose event matching, firing
+frequency and expiry for existing delayed abilities within T6. The prior open
+choice and deferral alternative are superseded. The small typed API may reuse
+vocabulary only where its semantics match; migration of all printed triggers,
+a second DSL and hypothetical cards are outside this correction.
 
-**Experience:** a card author describes the event, the objects to retain, the
-ordinary effects, and how long/how often the ability waits. A player receives
-the actual resulting trigger and legal choices; disconnecting cannot recreate
-an expired watcher or forget its captured object. Academy and policy consume
-viewer-safe state from the same authority.
+The authoring contract is implemented in `managym/README.md`: selectors capture
+exact incarnations at creation; event context stays separate. A once-only watcher
+is consumed on its first match even if the occurrence is countered or its effects
+do nothing. Expiry removes waiting watchers, not queued or stacked occurrences.
+Original controller and exact death-watch retirement remain independent rules.
+Academy and policy consume viewer-safe projections of that native state.
 
-**Implemented and accepted:** `CreateDelayedTrigger.remember` resolves a selector
-at creation; exact references survive waiting, placement, stack and suspended
-resolution. `Remembered` is separate from `Triggering`. Source departure or
-control change does not reassign the existing delayed ability. Foggy Swamp
-Visions and Trebuchet use generic end-step timing and ordinary sacrifice.
-Current directed tests include independent captures, incarnation changes before
-and after firing, original controller, hidden references, hash sensitivity and
-choice forks. This review inspected those tests; it did not rerun them or certify
-combined CI or durable process-crash recovery.
-
-**Pre-implementation mismatch (now removed):** `DelayedEvent::YouNextCastThisTurn` includes an event,
-first occurrence and expiry in one variant; `CreatureDiesThisTurn` implies repeat
-until cleanup. Resolution chooses the runtime `this_turn` flag from the variant,
-and the event matcher chooses consumption by its match arm. A new combination
-therefore needs another event variant even when its event and effects exist.
-This is an authoring/ownership issue, not a newly demonstrated card behavior bug.
-
-**Accepted and implemented (Jack Heart selected 1a below):** for the existing delayed-effect slice,
-separate event matching from firing policy (once or each matching occurrence)
-and expiry (cleanup this turn or no stated expiry). Capture remains creation-time
-and effects remain ordinary selectors/verbs. Use existing vocabulary where it
-has the same semantics; do not reuse continuous-effect duration blindly because
-its source/object-dependent expiry means something else. Do not migrate every
-printed `TriggerCondition`, build a second DSL, or add hypothetical cards.
-Illustrative spellings on the page are not a fixed API. Preserve death watchers'
-exact watched incarnation and their departure retirement independently of this
-lifetime split. Captured subjects and event-supplied subjects remain distinct.
-
-**Authoring contract (now in managym/README.md):** “Choose the event independently of
-how often the delayed ability fires and when it stops waiting. Capture selectors
-when creating the ability. The first matching event consumes a once-only watcher,
-even if its occurrence is countered or its effects later do nothing. A repeating
-watcher remains until its stated expiry. Expiry removes the waiting watcher,
-not occurrences already on the stack.” Existing capture and viewer-safety docs
-and skill instructions remain unchanged; no new skill procedure is needed.
-
-**Counterexamples / next proof:** compare two matching events before cleanup
-(once fires once, repeating fires twice), no matching event before expiry
-(nothing fires next turn), countered first occurrence (once does not re-arm),
-expiry with an occurrence already queued (occurrence survives), source departure,
-and captured-object reentry (new incarnation is untouched). Preserve Fatal
-Fissure, Trebuchet, Visions, Lesson-cast and upkeep behavior. A retained-session
-reconnect/fork must retain capture, original controller, expiry and remaining
-firing policy; do not infer these from UI text or replay event history. Update
-canonical hashing, viewer-safe native/Python/text/tokens and mutable current-world
-receipts if the representation changes; frozen evidence stays frozen.
-
-**Historical scope choice (resolved by the decision below):** 1a completes this decomposition for existing delayed
-abilities within T6 (recommended); 1b accepts the implemented selector correction
-and leaves lifetime/occurrence fusion as a recorded limitation. Jack Heart subsequently selected 1a; the decision below supersedes this question. Page: `scratch/concept-review.html`.
-
-
-### Historical headless concept-review outcome — 2026-11-03 (superseded)
-
-**Open product/scope choice, for loop-or-next:** Should T6 also make firing
-frequency and expiry independently composable for the existing delayed abilities
-(1a), or retain the implemented event variants and record that limitation (1b)?
-The saved interactive review explicitly leaves both alternatives unaccepted.
-Jack Heart's accepted steer separates event timing, captured subjects and effects
-and requires preserving one-shot/expiry behavior; it does not explicitly accept
-the subsequent independent lifetime authoring proposal. No answer is inferred.
-
-Source inspection confirms the remaining distinction: `state/src/ability.rs`
-(`DelayedEvent`) combines next/this-turn with the event; `flow/resolution.rs`
-(`CreateDelayedTrigger`) derives runtime expiry from that variant;
-`flow/triggers.rs` (`delayed_triggers_for_event`) consumes watchers in particular
-match arms; `flow/damage.rs` (`end_turn_modifiers`) removes this-turn watchers.
-`flow/zones.rs` separately retires exact-object death watchers on departure.
-This evidence supports the saved authoring proposal, not a new demonstrated
-failure of existing cards. Normal play, countered occurrence, cleanup and
-reconnect/fork counterexamples above remain the next proof if 1a is accepted.
-
-The accepted schedule, capture correction, all 16 cards, one catalog, viewer
-safety and publication boundary remain intact under either choice. The page is
-updated to lead with this unanswered choice and retain the accepted schedule
-requirements. Only review artifacts changed in this step; no new test run, code change,
-CI certification, publication or navigation is claimed. Outcome: open choice.
-
-### Decision received — Jack Heart, 2026-11-03
-
-Jack Heart answered **1a** to the delayed-lifetime review in the primary Task
-conversation. This supersedes the open-scope-choice and headless open-choice
-outcomes above. Complete independent event matching, firing frequency and expiry
-for the existing delayed abilities within T6. The proposed contract, authoring
-doc addition, constraints and counterexamples above are now accepted direction;
-this entry does not claim implementation or verification. Preserve the earlier
-accepted schedule/capture work and all T6 scope. The live Graph should iterate
-implementation and return the existing PR #417 for review; no landing or
-auto-merge is authorized. No product choice remains from this review.
+The accepted review page remains `scratch/concept-review.html`. The complete
+review sequence, including the superseded headless open-choice outcome and the
+received decision, is retained at
+`7c790f78e7008701c5d1bcb7903a8b83693bd093:scratch/mtg-225-tla-t6.md`.
+The implementation below and its recorded tests resolve those counterexamples;
+combined validation and review remain separate acceptance work.
 
 ## Delayed lifetime implementation — 2026-11-03
 
-Delete — do not maintain (completed): `DiesThisTurn`, `CreatureDiesThisTurn`,
+Removed: `DiesThisTurn`, `CreatureDiesThisTurn`,
 `YouNextCastThisTurn`, `NextEndStep`/`NextUpkeep` event names; inferred
 `this_turn` in resolution; event-arm-specific consumption; runtime boolean
-expiry. Replace them with event-only names, `DelayedFrequency::{Once, EachMatch}`
-and `DelayedExpiry::{ThisTurn, Never}` on the existing authoring/runtime owner.
-Keep exact-object departure retirement, original controller, captures, and all
-existing card behaviors/tests on that path. Keep observation `this_turn` as the
-existing derived expiry projection; add an optional frequency code (unknown for
-historical captures), encoded as a new relation row kind 9 without widening or
-repurposing frozen columns. No printed-trigger migration or new card definition.
+expiry. Event-only names, `DelayedFrequency::{Once, EachMatch}` and
+`DelayedExpiry::{ThisTurn, Never}` replace them on the existing authoring/runtime
+owner.
+Exact-object departure retirement, original controller, captures and existing
+card behaviors/tests remain on that path. Observation `this_turn` remains the
+derived expiry projection; an optional frequency code (unknown for historical
+captures) uses new relation row kind 9 without widening or repurposing frozen
+columns. No printed-trigger migration or new card definition.
 
 The matcher now only determines an occurrence and its event context. One shared
 frequency check consumes `Once` watchers before occurrences enter placement;
@@ -370,7 +289,7 @@ defaults. Lifetime proofs share only their life-gain setup; event, frequency and
 expiry remain explicit in each case. The relation encoder's v5/v6 fields share
 one guard, and empty watcher-consumption loops need no separate condition.
 
-Delete — do not maintain (completed): `TOKENS_AWAITING_PRODUCER` and its empty
+Removed: `TOKENS_AWAITING_PRODUCER` and its empty
 exception path (all tokens now have creators); `settle_until_modal` (use shared
 `pass_until`); the Sozin test's duplicate catalog-to-mode algorithm (choose the
 actual offered name); and `jeong_configs` with its obsolete pack-selection test
@@ -387,4 +306,44 @@ and repeating cards, and text covers explicit frequency, expiry and historical
 unknown frequency. Catalog-derived tokens cover both independent enum choices.
 The pre-existing vector test's removed `world` assignment migrated to `submitted`.
 
-Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2` with `-p managym --lib`, `--test authored_match_tests`, and `-p managym-cards --test cards` filters `tla::`, `observability::`, `lea::`, `stx::` passed 136/2/430/56/4/19 checks; changed Koh/Sozin tests passed their focused reruns. `uv run --extra dev --extra play pytest tests/verify/test_observation_parity.py::test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4 -q` passed 2 checks. Release extension rebuilt/installed atomically; pre/post world and learning-catalog digests match; format and diff checks pass (`.runs/t6-compress/`). Earlier lifetime consumer evidence remains in `.runs/t6-publication/lifetime-*.log`. Gate owns combined affected suites, mutable w17 receipt refresh to hash 15/content identity and publication of PR #417 for Jack Heart's review; no merge or auto-merge is authorized.
+Recorded evidence: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2` with `-p managym --lib`, `--test authored_match_tests`, and `-p managym-cards --test cards` filters `tla::`, `observability::`, `lea::`, `stx::` passed 136/2/430/56/4/19 checks; changed Koh/Sozin tests passed their focused reruns. `uv run --extra dev --extra play pytest tests/verify/test_observation_parity.py::test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4 -q` passed 2 checks. Release extension rebuilt/installed atomically; pre/post world and learning-catalog digests match; format and diff checks pass (`.runs/t6-compress/`). Earlier lifetime consumer evidence remains in `.runs/t6-publication/lifetime-*.log`. Gate owns combined affected suites, mutable w17 receipt refresh to hash 15/content identity and publication of PR #417 for Jack Heart's review; no merge or auto-merge is authorized.
+
+Reconciliation check: `git diff --check` — passed; existing focused logs reused, with combined validation and mutable-w17 refresh deferred to gate.
+
+## Concept-review outcome — 2026-11-03
+
+Reviewed the accepted experience against `7c790f78e` and the preserved local
+reconciliation. **Nothing to change; no open product choice.** Jack Heart's
+schedule and delayed-lifetime decisions are implemented, not proposals awaiting
+another answer. No new implementation direction or scope is introduced.
+
+The concrete interaction is Bumi's additional combat: read the committed
+restriction, advance into that combat, then reconnect before choosing attackers.
+The pending count becomes zero while the current restriction remains visible;
+the recovered frame and native offers still govern the choice. `TurnState`
+owns execution order and restrictions, `public_schedule` projects them, and
+Academy renders them without a second scheduler. A recording without that
+projection remains unknown. Equal counts with opposite turn orders and an empty
+queue during restricted combat remain the counterexamples to count-based UI.
+
+For delayed abilities, the important distinction is waiting versus already
+triggered. Creation captures exact objects; event matching creates an occurrence;
+frequency consumes the watcher; cleanup expires only waiting records. Countering
+the first occurrence cannot re-arm a once-only watcher, and reconnect or a fork
+cannot select a replacement incarnation. The small independent lifetime types
+and existing occurrence/resolution machinery express those contracts. Merging
+them back into an event name or a single generic duration would lose behavior.
+
+The one-catalog model likewise leaves deck selection as a deck choice, not a
+second world choice. Sozin's payment, reflexive targeting and private search
+remain deliberate native decisions; recovery retains committed payment or exile
+and the actual remaining choice. No browser cancellation or inferred authority
+is added. Existing `academy/README.md`, `managym/README.md` and shared-authority
+instructions already describe the accepted experience; no usage or skill edit
+is needed. Prior 16-card scope and compatibility limits remain in force.
+
+Next proof is the existing gate work above: refresh affected mutable-w17
+receipts, validate the combined head and return PR #417 for Jack Heart's review.
+This review inspected source, recovery tests and recorded focused logs; it did
+not rerun suites, render the page, establish crash durability, or certify CI.
+The following loop-or-next receives this outcome and selects navigation.

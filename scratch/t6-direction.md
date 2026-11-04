@@ -13,7 +13,7 @@ or auto-merge is authorized.
 
 - Original stacking decision: develop T6 on T5 (PR #405, Task a7234f / MTG-224),
   using its synced head rather than pre-sync `24b335fe0`. Fulfilled: T5 and the
-  later MTG-235/238/239 work are integrated in T6 head `bf7631c6a` on main
+  later MTG-235/238/239 work are integrated in T6 head `7c790f78e`, retaining main
   `3b122de90` (2026-11-03).
 - Follow the TLA PR brief: one cohesive PR covering all 16 T6 cards, then stop
   for Jack Heart's review. No merge without that review.
@@ -73,9 +73,10 @@ on 2026-11-02, targeting main. Their code is now integrated; MTG-238
 precedence is fulfilled. MTG-239 (#415) also landed and supplies the corrected
 admission, library ordering and Rallier traces. These integrations do not
 settle the related Tasks' independent empirical acceptance. T6's PR #417
-is open at `bf7631c6a`, including the audit/checkpoint repairs, schedule projection,
-composable delayed capture and main's v6 fact-capacity integration. Mutable w17
-receipt refresh and combined validation remain outstanding in the current plan;
+is open at `7c790f78e`, including the audit/checkpoint repairs, schedule projection,
+composable delayed capture, independent lifetime composition and main's v6
+fact-capacity integration. Mutable w17 receipt refresh and combined validation
+remain outstanding in the current plan;
 old pending-CI and missing-recovery notes are superseded.
 
 ## Accepted delayed-lifetime composition (Jack Heart, 2026-11-03)

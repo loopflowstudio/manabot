@@ -9,12 +9,24 @@
 </style></head>
 <body>
 <header>
-<small>MTG-225 · Concept review · 3 November 2026 · bf7631c6a + implemented lifetime composition</small>
+<small>MTG-225 · Concept review · 3 November 2026 · 7c790f78e</small>
 <h1>A delayed ability is a record.</h1>
-<p><strong>Accepted: T6 separates event matching, firing frequency and expiry.</strong> Jack Heart selected 1a on 3 November 2026. The token-specific event is already gone; the existing delayed abilities no longer encode “once” and “this turn” inside event names. Implementation and focused proofs are complete; combined gate validation and mutable receipt refresh remain pending.</p>
-<small>Built from <a href="mtg-225-tla-t6.md">the working design</a>, <code>state/src/ability.rs</code>, <code>flow/{resolution,trigger,triggers,damage,zones}.rs</code>, <code>flow/resolution_tests.rs</code>, <code>cards/src/tla.rs</code>, and <code>managym/README.md</code>. Focused debug and native/Python/text/reconnect proofs are recorded in the working design; this page is not a browser capture.</small>
+<p><strong>No further product decision is needed.</strong> The headless review found no design change or open choice. Jack Heart's accepted 1a separates event matching, firing frequency and expiry; the implementation now does so. Combined gate validation and mutable receipt refresh remain pending.</p>
+<small>Built from <a href="mtg-225-tla-t6.md">the working design</a>, <a href="t6-direction.md">accepted direction</a>, <code>managym/state/src/ability.rs</code>, <code>managym/src/flow/{resolution,trigger,triggers,damage,zones,turn}.rs</code>, <code>managym/src/flow/resolution_tests.rs</code>, <code>managym/cards/src/tla.rs</code>, <code>academy/ui/src/lib/components/Schedule.svelte</code>, the Academy recovery tests, and both package READMEs. This page illustrates inspected behavior; it is not a browser capture or final-head acceptance.</small>
 </header>
 <main>
+<h2>The distinction that matters</h2>
+<p><strong>Before:</strong> an event name also chose the subject and lifetime. <strong>Now:</strong> matching an event, consuming its watcher and resolving its occurrence are separate. Countering an occurrence cannot undo the event that consumed its watcher; cleanup cannot erase an occurrence already created.</p>
+<details><summary>Player actions → concepts → APIs: a combat survives reconnect</summary>
+<div class="proof"><p>Current combat — You. Only land creatures can attack.</p><p>No extra combats pending.</p></div>
+<p>This is the implemented display contract after Bumi's extra combat begins. Zero pending combats does not mean the active restriction is gone.</p>
+<table><thead><tr><th>Player action</th><th>Concept</th><th>Authority</th></tr></thead><tbody>
+<tr><td>Read what follows this turn</td><td>Committed execution order</td><td><code>TurnState.public_schedule()</code> → <code>ScheduleView</code></td></tr>
+<tr><td>Choose attackers</td><td>Current combat and legal choices</td><td>Native offers → frame-bound <code>Command</code>; the schedule adds explanation</td></tr>
+<tr><td>Reconnect before choosing</td><td>Retained state and pending decision</td><td>Recovery frame restores the same schedule; stale Commands are rejected</td></tr>
+</tbody></table>
+<p>Opposite extra-turn orders can have equal counts. The ordered list preserves that distinction. Historical missing data says “Schedule not recorded.” Existing recovery proofs concern retained sessions, not process-crash persistence.</p>
+</details>
 <h2>Your correction is implemented</h2>
 <p><strong>Before:</strong> <code>NextEndStepForCreatedToken</code> silently chose an object as part of choosing an event.</p>
 <pre><code>// Current Foggy Swamp Visions shape
@@ -61,7 +73,8 @@ CreateDelayedTrigger {
 </details>
 <footer><h2>Decision recorded</h2>
 <ol><li><strong>1a — Separate lifetime and occurrence for existing delayed abilities too.</strong> Accepted by Jack Heart on 3 November 2026. Deferral (1b) was not selected.</li></ol>
-<p class="muted">This resolves the headless open-choice outcome. The existing T6 Graph receives the accepted direction and returns PR #417 for review after gate validation and mutable receipt refresh. The earlier schedule decision also remains accepted. No merge or auto-merge is authorized.</p>
+<p><strong>Review outcome: nothing to change; no open choice.</strong> Existing authoring and Academy usage guidance already express this contract. All 16 cards, one catalog, deliberate Sozin choices and prior compatibility limits remain in scope.</p>
+<p class="muted">The earlier headless open question is resolved. Next proof remains combined gate validation and mutable receipt refresh; loop-or-next selects navigation. PR #417 returns for Jack Heart's review. No merge or auto-merge is authorized.</p>
 </footer>
 </main>
 <script>
