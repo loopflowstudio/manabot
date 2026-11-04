@@ -123,44 +123,6 @@ def evaluation_protocol(*, heldout: bool = False) -> MonitorProtocol:
     )
 
 
-def admit_arm(arm: Arm, out: Path, stop: Path) -> None:
-    """Ordinary learning on one excluded seed, never an architecture score."""
-    if not torch.cuda.is_available():
-        raise RuntimeError("this admission requires CUDA")
-    # One learner owns the device; leave room for contexts and workspaces.
-    torch.cuda.set_per_process_memory_fraction(0.80)
-    regime = recipe(arm)
-    regime.id = f"representation-gpu-admission-{arm}"
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = ADMISSION_UPDATES
-    stage.execution.wall_seconds = 600
-    regime.wall_seconds = 600
-    regime = TrainingRegime.model_validate(regime.model_dump())
-    out.mkdir(parents=True, exist_ok=False)
-    with VerifyStore(out / "training.sqlite") as store:
-        run = execute_regime(
-            regime,
-            ADMISSION_SEED,
-            out / "training",
-            store,
-            experiment=f"{EXPERIMENT}_admission",
-            stop_path=stop,
-            stop_reserve_seconds=120,
-        )
-    atomic_json(
-        out / "device.json",
-        {
-            "device": torch.cuda.get_device_name(0),
-            "torch": torch.__version__,
-            "cuda": torch.version.cuda,
-            "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
-        },
-    )
-    if run.status != "completed" or run.updates_through() != ADMISSION_UPDATES:
-        raise RuntimeError(f"incomplete admission: {run.status}: {run.error}")
-
-
 class ThroughputAdmission(BaseModel):
     """Ordinary two-arm work, including child startup and checkpoint exports.
 
@@ -278,22 +240,37 @@ def checkpoints(run: TrainingRun) -> list[Checkpoint]:
     return points
 
 
-def train_arm(arm: Arm, seed: int, out: Path, stop: Path) -> None:
-    """One fresh learner owns the GPU, its RNG, optimizer and all curve exports."""
-    if seed not in SEEDS:
+def train_arm(
+    arm: Arm, seed: int, out: Path, stop: Path, *, admission: bool = False
+) -> None:
+    """One fresh learner owns CUDA, execution and receipts in either mode.
+
+    Admission uses an excluded seed and short horizon without curve milestones;
+    science requires every declared export before evaluation can begin.
+    """
+    if seed not in ((ADMISSION_SEED,) if admission else SEEDS):
         raise ValueError("undeclared training seed")
     if not torch.cuda.is_available():
         raise RuntimeError("this study requires CUDA")
+    # One learner owns the device; leave room for contexts and workspaces.
     torch.cuda.set_per_process_memory_fraction(0.80)
+    regime = recipe(arm)
+    if admission:
+        regime.id = f"representation-gpu-admission-{arm}"
+        stage = regime.stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        stage.updates = ADMISSION_UPDATES
+        stage.execution.wall_seconds = regime.wall_seconds = 600
+        regime = TrainingRegime.model_validate(regime.model_dump())
     out.mkdir(parents=True, exist_ok=False)
     with VerifyStore(out / "training.sqlite") as store:
         run = execute_regime(
-            recipe(arm),
+            regime,
             seed,
             out / "training",
             store,
-            experiment=EXPERIMENT,
-            checkpoint_updates=POINTS[1:-1],
+            experiment=f"{EXPERIMENT}_admission" if admission else EXPERIMENT,
+            checkpoint_updates=() if admission else POINTS[1:-1],
             stop_path=stop,
             stop_reserve_seconds=120,
         )
@@ -306,7 +283,11 @@ def train_arm(arm: Arm, seed: int, out: Path, stop: Path) -> None:
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
         },
     )
-    checkpoints(run)
+    if admission:
+        if run.status != "completed" or run.updates_through() != ADMISSION_UPDATES:
+            raise RuntimeError(f"incomplete admission: {run.status}: {run.error}")
+    else:
+        checkpoints(run)
 
 
 def evaluate_arm(arm: Arm, seed: int, out: Path, deadline: float) -> None:
@@ -346,6 +327,10 @@ def evaluate_arm(arm: Arm, seed: int, out: Path, deadline: float) -> None:
 
 def compare_heldout(results: list[ArmEvaluation]) -> PairedEstimate:
     expected = {(arm, seed) for arm in ARMS for seed in SEEDS}
+    protocol = evaluation_protocol(heldout=True)
+    recipe_digests = {
+        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
+    }
     scores: dict[tuple[Arm, int], float] = {}
     for item in results:
         key = item.arm, item.result.training_seed
@@ -355,10 +340,7 @@ def compare_heldout(results: list[ArmEvaluation]) -> PairedEstimate:
             or item.result.coordinates.updates != UPDATES
         ):
             raise ValueError("duplicate or undeclared held-out endpoint")
-        scores[key] = item.score_for(
-            evaluation_protocol(heldout=True),
-            canonical_sha256(recipe(item.arm).model_dump(mode="json")),
-        )
+        scores[key] = item.score_for(protocol, recipe_digests[item.arm])
     if set(scores) != expected:
         raise ValueError("every held-out arm and seed is required")
     return paired_interval(
@@ -610,7 +592,7 @@ def main() -> None:
     if args.admit_arm:
         if args.out is None or args.stop is None:
             parser.error("admission needs output and stop path")
-        admit_arm(args.admit_arm, args.out, args.stop)
+        train_arm(args.admit_arm, ADMISSION_SEED, args.out, args.stop, admission=True)
     elif args.train_arm or args.evaluate_arm:
         if args.seed is None or args.out is None:
             parser.error("scientific worker needs seed and output")

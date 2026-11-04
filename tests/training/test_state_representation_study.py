@@ -24,8 +24,10 @@ from manabot.training.records import MonitoringCheckpoint, StageRecord, Training
 from manabot.training.regime import (
     ArtifactReference,
     DampedPolicyLearning,
+    TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.verify.store import VerifyStore
 
 
 def test_paired_interval_uses_independent_seeds() -> None:
@@ -253,6 +255,64 @@ def _curve_run() -> TrainingRun:
             for index, update in enumerate(gpu.POINTS[1:-1])
         ],
     )
+
+
+@pytest.mark.parametrize("admission", (False, True))
+@pytest.mark.parametrize("completed", (False, True))
+def test_gpu_training_preserves_admission_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, admission: bool, completed: bool
+) -> None:
+    seed = gpu.ADMISSION_SEED if admission else gpu.SEEDS[0]
+    stop = tmp_path / "stop"
+    out = tmp_path / "learner"
+
+    def execute(
+        regime: TrainingRegime,
+        actual_seed: int,
+        directory: Path,
+        store: VerifyStore,
+        *,
+        experiment: str,
+        checkpoint_updates: tuple[int, ...],
+        stop_path: Path,
+        stop_reserve_seconds: int,
+    ) -> TrainingRun:
+        assert actual_seed == seed
+        assert directory == out / "training"
+        assert stop_path == stop and stop_reserve_seconds == 120
+        stage = regime.stages[0]
+        assert stage.updates == (4 if admission else 256)
+        assert regime.wall_seconds == (600 if admission else 66000)
+        assert stage.execution.wall_seconds == regime.wall_seconds
+        assert checkpoint_updates == (() if admission else gpu.POINTS[1:-1])
+        assert experiment == (
+            f"{gpu.EXPERIMENT}_admission" if admission else gpu.EXPERIMENT
+        )
+        run = _curve_run()
+        run.stages[0].updates = stage.updates if completed else stage.updates - 1
+        run.status = "completed" if completed else "paused"
+        return run
+
+    def set_memory_fraction(fraction: float) -> None:
+        assert fraction == 0.80
+
+    monkeypatch.setattr(gpu, "execute_regime", execute)
+    monkeypatch.setattr(gpu.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        gpu.torch.cuda, "set_per_process_memory_fraction", set_memory_fraction
+    )
+    monkeypatch.setattr(gpu.torch.cuda, "get_device_name", lambda index: "fixture-gpu")
+    monkeypatch.setattr(gpu.torch.cuda, "max_memory_reserved", lambda: 1024)
+    if completed:
+        gpu.train_arm("typed_pool", seed, out, stop, admission=admission)
+    else:
+        error = RuntimeError if admission else ValueError
+        with pytest.raises(error, match="incomplete admission|completed training"):
+            gpu.train_arm("typed_pool", seed, out, stop, admission=admission)
+    assert json.loads((out / "device.json").read_text())["device"] == "fixture-gpu"
+    wrong_seed = gpu.SEEDS[0] if admission else gpu.ADMISSION_SEED
+    with pytest.raises(ValueError, match="undeclared training seed"):
+        gpu.train_arm("typed_pool", wrong_seed, out, stop, admission=admission)
 
 
 def test_gpu_curve_requires_every_export_and_keeps_exposure() -> None:

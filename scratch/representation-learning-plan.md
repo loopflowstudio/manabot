@@ -2,77 +2,46 @@
 
 ## Current authorization and outcome
 
+Jack Heart requested actual GPU learning through the beginning of a sustained
+plateau on 2026-11-04. The completed short CPU study is insufficient for
+architecture selection. His subsequent “start it when you can”, “seems fine”
+and “keep going” authorize execution repair and a viable prospective restart
+within the ORIGINAL cumulative **$25**, preserving failed attempts and excluding
+score-based retries. Necessary Etude SDK work and Vast use are authorized.
+Stop at results demo/review: no study merge, model/default promotion, temporal
+memory implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
+
 ### Current accounting decision — 2026-11-04
 
-After the primary conversation explained that the $24.97 hold was an
-operator-imposed deadlock rather than spending, Jack Heart said "keep going".
-Resume this Task. The requirement below to obtain a provider finalization
-watermark before releasing every unused rental allowance is superseded for
-operational budgeting. It was not a user requirement and the API supplies no
-such marker. Do not invent settlement, alter the SDK to claim it, or rewrite
-historical accounting receipts.
+Jack Heart's “keep going” supersedes the operator-created final-settlement-only
+gate throughout older scratch, protocols and Wave memory. The API provides no
+finalization watermark; do not invent one or hold cancelled rental quotes
+indefinitely. The 20:37 UTC operational revision reserved $2 for all preceding
+compute and $6 ancillary, leaving at most $17 for further compute. The subsequent
+$0.50 admission leaves **$16.50**; its result and teardown are below. These
+conservative operational reserves are not final invoices or new allowances.
 
-Before another purchase, take one fresh read of task-owned instances and
-reported charges using the locked repaired Etude source. Reconcile each deleted
-rental's whole lifetime, quoted rate, disk/transfer terms and reported amount.
-Use a conservative operational estimate plus an explicit uncertainty reserve
-instead of holding the entire cancelled 20-hour quote indefinitely. Start with
-$2 reserved for ALL prior compute (last reported total $0.4705825939) and retain
-the separate $6 ancillary reserve. That leaves at most $17 for ALL further
-compute, including admission, setup, failed launches, idle time, evaluation and
-teardown, within the ORIGINAL $25. Increase the prior-cost reserve and reduce
-the new-compute allowance if fresh evidence requires it. Do not double-count
-the same charge under both actuals and reservations. Unknown live allocations
-still retain their full commitment until resolved.
+Before another purchase, read task-owned instances and reported charges once
+using the locked repaired SDK. Reconcile whole rental lifetimes, quoted rates,
+disk/transfer terms and reported amounts. Increase prior reserves if needed;
+never double-count charges and their reservations. Unknown live allocations
+retain their full commitment. Keep historical receipts immutable. An unavailable
+settlement watermark alone does not block execution or implementation.
 
-Record this as a new operational budget revision, with unsettled reported costs
-still labelled unsettled. The $2 choice is the operator's conservative reserve,
-not a provider guarantee or a new user allowance. Preserve the prior receipts
-and their dates. Exact final invoices can reconcile later; their unavailable
-watermark alone must not cause another implementation loop. Continue useful
-scientific orchestration while resolving execution constraints; accounting is
-not a reason to postpone all non-spending implementation. Finish an ordinary
-bounded two-arm throughput check and run the prospectively frozen replicated
-study when its total cost fits. Do not repeat the known eight-context failure,
-return to CPU-only evidence, silently reduce the learning objective, or stop
-at cleanup/publication as though the plateau experiment were complete.
+Finish a bounded ordinary two-arm throughput check and execute a prospectively
+frozen affordable four-paired-seed GPU comparison. Do not repeat the eight-context
+failure, substitute CPU evidence, shorten the learning objective or treat cleanup
+as completion. The plateau objective remains unmet: one scientific cohort was
+cancelled, four restart admissions failed, and no replacement science launched.
+The latest measured throughput/budget constraint below is the remaining blocker.
 
-All older "stop until final coverage" instructions in this plan, the protocol,
-Wave memory and prior Graph summaries are historical and superseded by this
-current decision. Existing source tracking, original $25 cap, immutable failed
-evidence, separate MTG-213 budget and results-review boundary still apply.
-
-Jack Heart's 2026-11-04 dependency direction is implemented: source checkouts
-consume public Etude Git main, with `uv.lock` pinning merged PR82 at
-`64e9eaabf016f567cb9567280bcf8730f6f5d524`. All four dependency declarations use
-`>=0.2.14`; downstream package metadata remains an index requirement. Refresh
-explicitly with `uv lock --upgrade-package etude-sdk`, then `uv sync --locked`,
-as documented in `docs/development.md`; never resolve main during an attempt.
-Anonymous access, launcher identity, archive-style worker installation and offline
-re-sync agree on the lock. The new 4090 admission now verifies locked Linux installation, native build
-and CUDA numerics; it does not establish scientific learning success. Historical locks and receipts remain frozen. No SDK
-release is required or claimed; source tracking cannot establish settlement.
-
-Jack Heart requested actual GPU learning to the beginning of a sustained plateau
-on 2026-11-04; the completed 128-update CPU comparison is insufficient for
-architecture selection. His subsequent “start it when you can” and “seems fine”
-authorize execution repair and a viable prospective replacement within the
-ORIGINAL cumulative $25. They supersede earlier no-further-training and
-return-to-review restrictions, but do not erase unsuccessful attempts or permit
-score-based retries. A necessary Etude SDK release and Vast use are authorized;
-Etude PR79/80 and release 0.2.14 already supply that capability.
-
-The plateau objective remains unmet. One scientific GPU cohort was cancelled
-before scoring and four restart admissions were unsuccessful. No replacement
-scientific cohort has launched. The latest 4090 admission establishes the concrete
-throughput/budget constraint below; accounting no longer blocks execution.
-Reconciled against implementation and retained receipts on 2026-11-04.
-The 20:37 UTC operational revision below supersedes the historical settlement
-gate. Final invoices remain unknown; they do not prevent bounded execution.
-
-Stop at results demo/review. No study merge, model/default promotion, temporal
-memory implementation or MTG-213 spending is approved. The repair's earlier
-“ship it” approval applied to PR419 only.
+Jack Heart selected public Etude Git main for source checkouts. `uv.lock` pins
+merged PR82 at `64e9eaabf016f567cb9567280bcf8730f6f5d524`; all four dependency
+declarations retain `>=0.2.14` for published metadata. Refresh explicitly before
+freezing a run via the workflow in `docs/development.md`, never during training.
+Anonymous access, launcher, archive-style worker and offline sync proofs agree;
+the latest 4090 admission also verifies locked Linux installation, native build
+and CUDA numerics. Historical locks stay frozen; no SDK release is claimed.
 
 ## Surviving implementation and next proof
 
@@ -184,38 +153,26 @@ Earlier RunPod 6000Ada/L40S/A100 refusals acquired nothing. Vast 3090 launch
 allocation survives at `8c7712bc9`. Acquisition details and complete inventories
 remain in the protocol and historical plan cited below.
 
-The 20:10 UTC repaired SDK read is the current accounting evidence. All five
-rentals remain absent and terminal; reported daily charges in the table's order
-are $0.168, $0.164, $0.003, $0.042 and $0.021 ($0.398 total). Including the settled
-L4 bill of $0.07258259388618171 gives $0.47058259388618171 reported plus settled,
-not final expenditure. This supersedes the $0.4487194142 billed-plus-estimated
-provider total; both 5090 charges exceed their earlier lifetime estimates.
-Conservative reservations remain $24.97258259388618171, including the pending
-$6 ancillary reserve. Release is $0; $0.02741740611381829 remains unreserved,
-so another $0.20 admission does not fit. Reserved dollars are not money spent.
+The repaired 20:10 UTC read found the five pre-restart rentals absent and
+terminal. Their reported daily charges were $0.168, $0.164, $0.003, $0.042 and
+$0.021, in chronological attempt order, totaling $0.398. With the settled L4
+bill, reported-plus-settled compute was $0.47058259388618171, superseding the
+$0.4487194142 lifetime estimate. Both 5090 charges exceeded their earlier
+estimates. None of these reads established final settlement.
 
-The 19:55–19:57 UTC investigation reproduced two Etude 0.2.14 defects: its query
-excluded the creation day's charges, and its elapsed-interval coverage guard
-rejected daily rows (`start == end == 1793750400`, November 4 UTC midnight).
-The [provider API](https://docs.vast.ai/api-reference/billing/show-charges) documents
-date-range charge reports, not exact settled-through timestamps. The repair
-replaces `VastAPI.bill` with typed `VastAPI.charges`, including the creation UTC
-day and retaining inclusive dates and observation time. `VastMachines.bill`
-correctly supplies no settled coverage. The single repaired read at source
-`109fa4128052972699ec2a63fba5a3958fac430f` returned the same amounts. Its tree
-matches merged [Etude PR82](https://github.com/loopflowstudio/etude/pull/82),
-now pinned above. The task-local repair left other Etude checkouts unchanged;
-the patch, source identity and both accounting reads are retained as artifacts.
+The 19:55–19:57 investigation found two Etude 0.2.14 defects: excluding the
+creation day's charges and interpreting daily rows as elapsed-time coverage.
+Etude PR82 replaced `VastAPI.bill` with typed inclusive-UTC `VastAPI.charges`;
+`VastMachines.bill` supplies no invented settled coverage. Repaired source
+`109fa4128052972699ec2a63fba5a3958fac430f` matched the merged tree now locked
+above. The patch, offline reproduction and both reads remain manifest-backed.
+Daily dates, absent instances and repeated totals do not prove final invoices.
 
-Missing evidence: provider-confirmed final GPU, disk and bandwidth totals covering
-each contract through its retained teardown timestamp (17:36:17, 18:29:35,
-19:11:26, 19:27:24 and 19:41:03 UTC, respectively). Daily dates, instance absence,
-exhausted pagination and repeated identical totals do not establish this coverage;
-the documented API exposes no finalization watermark. Do not release the $17.20
-cancelled-cohort cap or poll unchanged charges. No rental, replacement scientific
-implementation, launch or score followed this accounting gate. Full preceding
-accounting details remain at
-`075378dd87600428ad3efa60b7288b327c32cee7:scratch/representation-learning-plan.md`.
+The old $24.9725825939 reservation hold and final-coverage-only stop were
+superseded by the operational revision above. Complete accounting detail and
+its original instructions remain at
+`37511d297611aa8720c52453a0034991c753be06:scratch/representation-learning-plan.md`;
+they are historical evidence, not the current budget policy.
 
 Manifest-backed evidence: `experiments/data/state-representation-gpu-5da5f4/`,
 including `restart/`, compact receipts, all attempt inventories, quotes and final
@@ -268,8 +225,14 @@ conversion and its elapsed-interval fixture were removed in the dependency
 repair. Daily-charge, pagination and unknown-settlement behavior survive on
 `VastAPI.charges` and `VastMachines.bill`. The four 0.2.12 release pins and
 registry-only SDK lock entry are replaced coherently by the Git source and
-exact lock. No remaining deletion targets. The admission-only worker dispatch is replaced
-by explicit admission/science dispatch; both use the same child lifetime owner.
+exact lock.
+
+The duplicate `admit_arm` CUDA/executor/receipt path is removed; its CLI now
+uses `train_arm` with explicit admission mode. This keeps one owner for device
+limits and retained execution evidence while preserving distinct seeds, horizons,
+checkpoint schedules and completion checks. Both modes use `_run_child` for
+lifetime ownership. No remaining deletion targets.
+
 The failed eight-context launcher (`27a126422`)
 and v5 three-arm timing/canary paths (`9dc32125f`) are retired; archived
 executions use their pinned source. The native `source_effect_root` and
@@ -305,26 +268,13 @@ No uncommitted evidence was discarded. Earlier publication validation and receip
 hash audits remain in that committed plan; gate owns broader acceptance and
 results demo/review owns scientific judgment. No rendering proof is claimed.
 
-Historical validation: `c23aacd8f95f5cea16301653fd05df72ff3156cf:scratch/representation-learning-plan.md`.
-The manifest-backed `reconciliation/` evidence includes the original offline
-Etude reproduction; `reconciliation-repaired/` retains the corrected read.
-Runtime admission and scientific execution follow the current operational budget.
+Historical validation, including the 28 isolated dependency checks, SDK suite,
+CPU endpoint reanalysis and original 18 study checks, remains at
+`37511d297611aa8720c52453a0034991c753be06:scratch/representation-learning-plan.md`.
+Manifest-backed `reconciliation-repaired/source-proof.json` and
+`sdk-validation.json` retain dependency commands and identities. The pre-existing
+uncommitted Training memory edit remains untouched; its older accounting and
+admission-only statements are superseded by this plan.
 
-Prior implementation validation at `bdb567cc0`: 16 focused study/discovery tests
-passed; read-only analysis reproduced all eight retained CPU endpoints and
-rejected missing, duplicate, incomplete and wrong-identity inputs. This prose
-reconciliation does not require repeating learning or those tests.
-
-Retained dependency validation: isolated locked-source artifact/Etude integration
-— 28 passed; release staging/untracked-artifact checks — 2 passed. SDK
-network-isolated suite — 595 passed, 6 skipped, 3 deselected; mypy/Ruff plus PR
-and merge-queue CI passed. Commands and source proof remain in
-`reconciliation-repaired/source-proof.json` and `sdk-validation.json`.
-This reconciliation updates Training memory's stale SDK and billing status;
-no frozen receipt changed. Two-arm admission and the actual scientific cohort
-remain outstanding; the sequential orchestration is now implemented.
-
-Check: focused study tests — 18 passed; Ruff and `git diff --check` clean.
-Artifact retention check — 1 passed; context within limits. Gate owns broader
-suites. Actual 4090 admission
-failed its declared horizon; the original plateau objective remains unmet.
+Check: `uv run --locked --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` — 26 passed; Ruff and `git diff --check` clean. Gate owns broader suites. The actual 4090 admission failed its declared horizon;
+the original plateau objective remains unmet.

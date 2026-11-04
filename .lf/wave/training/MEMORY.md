@@ -79,9 +79,15 @@ authorize automatic study promotion. Jack Heart subsequently authorized longer
 GPU training and a viable restart within the ORIGINAL cumulative $25, including
 a necessary Etude SDK release and Vast use (2026-11-04). That direction supersedes
 the earlier no-further-training boundary, not the cap or results-review boundary.
-Etude 0.2.14 supplies the launcher capability; its identity remains separate from
-the locked 0.2.12 worker. No study merge, default/model promotion or MTG-213 spending
-is authorized.
+Earlier GPU attempts used the 0.2.14 launcher with a locked 0.2.12 worker;
+those identities remain historical. Jack Heart subsequently selected public
+Etude Git main for source checkouts (2026-11-04). `uv.lock` pins one exact commit
+for the launcher and worker; updates are explicit before preparing a new run,
+never branch resolution during training. Published package metadata retains an
+index requirement. The retained source-install proof covers launcher and clean
+archive-style dependency installation, but Linux only by resolution dry-run;
+it does not replace GPU/native admission. No study merge, default/model promotion
+or MTG-213 spending is authorized.
 
 The first GPU admission completed four GRU updates, but the eight-learner
 scientific cohort `9c7c8e6841a4` was cancelled before scoring. Its first updates
@@ -97,20 +103,32 @@ The 2026-11-04 19:55–19:57 UTC reconciliation found all five Vast instances
 absent and all five runs terminal. Full-day provider charge rows total $0.398;
 including the settled L4 bill gives $0.4705825939 in reported charges, superseding
 the earlier $0.4487194142 lifetime estimate. This is not final settlement.
-Etude 0.2.14 filters from intra-day creation while provider rows use UTC midnight;
-an offline reproduction also shows its coverage guard rejecting a returned row.
+Released Etude 0.2.14 filtered from intra-day creation while provider rows use UTC
+midnight; an offline reproduction also showed its coverage guard rejecting a row.
 An absent SDK bill therefore does not establish zero charges, and a daily charge
 date does not establish coverage through teardown. Both 5090 charges already
 exceed the corresponding lifetime estimates. Correct daily query semantics and
 authoritative final coverage are separate accounting requirements.
+
+Etude PR82 repaired daily-charge retrieval and removed the invalid conversion
+to settled billing coverage. The branch pins its merged source
+`64e9eaabf016f567cb9567280bcf8730f6f5d524`; no SDK release is claimed.
+The repaired 20:10 UTC read returned the same $0.398 and confirmed all five
+instances absent, with settlement still unknown. Inclusive charge dates,
+observation time, repeated totals and deletion are not finalization watermarks.
+Provider-confirmed final GPU, disk and bandwidth totals through each retained
+teardown remain missing; another unchanged charge query cannot supply them.
 
 The $6 ancillary reserve remains pending. Conservative reservations of
 $24.9725825939 are not expenditure or proof that the allowance is consumed;
 no reservation was released on the available evidence. The remaining $0.0274
 cannot cover another $0.20 admission. Evidence is manifest-backed under
 `experiments/data/state-representation-gpu-5da5f4/`: `restart/final-accounting.json`
-retains the earlier accounting and `reconciliation/` retains the later charges
-and SDK reproduction. These are dated reads, not a fresh provider balance.
+retains the earlier accounting, `reconciliation/` the original SDK reproduction,
+and `reconciliation-repaired/` the corrected read, SDK validation and locked-source
+proof. These are dated reads, not a fresh provider balance. The executable still
+launches admission only; scientific orchestration and plateau acceptance remain
+outstanding after accounting and measured affordability.
 
 Wider complete-game batches change gradient estimates and optimizer exposure;
 they require a prospective identity and fresh paired seeds, even at a matched

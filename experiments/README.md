@@ -181,10 +181,11 @@ The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu
 retains four paired CUDA seeds, initialization and periodic evaluation, a
 sustained-plateau criterion, and separate held-out scoring. Its first cohort
 was cancelled before scoring when measured concurrent GPU throughput invalidated
-the allocation budget. `state_representation_gpu.py` now launches only a capped,
-excluded throughput admission for sequential 256-stream learners, following an
-incomplete 32-stream admission. Wider batches change optimization and require a
-prospective recipe; the candidate retains the original complete-game horizon.
-The failed eight-context launcher is removed. Measured whole-cohort affordability
-must precede a replacement scientific allocation. No plateau or architecture
-advantage is established; the completed CPU study remains frozen.
+the allocation budget. `state_representation_gpu.py` defaults to a capped,
+excluded two-arm throughput admission for sequential 256-stream learners;
+science requires an explicit frozen allocation backed by measured affordability.
+Wider batches change optimization; the prospective recipe retains the original
+complete-game horizon. The latest 4090 admission completed only 3/4 pooled
+updates, and its pooled-only projection exceeds the remaining scientific budget.
+No replacement scientific cohort, plateau or architecture advantage is
+established; the completed CPU study remains frozen.
