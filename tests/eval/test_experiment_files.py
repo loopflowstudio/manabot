@@ -36,7 +36,13 @@ EXPERIMENTS = ROOT / "experiments"
 
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
-    assert found == {"elemental", "mtg183-elemental-eval", "seat_comparison", "two_seat"}
+    assert found == {
+        "elemental",
+        "mtg183-elemental-eval",
+        "seat_comparison",
+        "tla_pilot_v3",
+        "two_seat",
+    }
 
 
 def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> None:
