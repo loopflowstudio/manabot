@@ -77,7 +77,7 @@ Replay reuses one fixed buffer allocation; the preservation test compares v10
 directly with frozen v9. Native code is unchanged by this simplification, so its
 prior debug isolation tests and atomic release-extension rebuild remain applicable.
 
-Check: `uv run python` static path/link, v10 protocol/regime hash, capacity/support and recovery-policy assertions plus `git diff --check` — passed; prose-only correction needed no build. Prior v10 admission/frozen-v9 checks and 146 focused passes remain applicable; remaining affected suites belong to gate.
+Check: `uv run python` static documentation path/anchor, v10 protocol/regime hash, capacity/support, recovery-policy and budget assertions plus `git diff --check` — passed on `62f20f8c8`; the documentation correction is already present, with no further runtime or documentation repair needed. Prior v10 admission/frozen-v9 checks and 146 focused passes remain retained evidence; remaining affected suites belong to gate.
 
 ## Retained Airship investigation
 
@@ -113,3 +113,20 @@ The one-page review remains `scratch/concept-review.html`. Full pre-reduction
 notes are preserved as git blob `a10bb3a7d8edb6ed871de457c48510fc97fdd182`;
 the original proposed copy is blob `efdaa0114cca17bb53ee33505d213f2303a36409`.
 No unresolved product choice blocks this slice.
+
+## Concept review outcome — 2026-11-04
+
+No further design change and no open product choice. The previous usage mismatch
+is resolved: the README names the present v10 runner and the shared game-failures
+guide owns recovery. Code inspection agrees with Jack Heart's accepted game-local
+boundary: the collector removes only the failed game's suffix from both seats,
+the existing ledger retains its input contract and allowance, and native reset
+replaces only the affected stream. Normal completion remains learnable; an
+unencodable replacement root remains fatal. These counterexamples require no
+additional recovery concept or broader capacity/representation change.
+
+The remaining gap is execution evidence, not an unsettled product decision.
+The next proof remains the affected gate checks followed by final-source frozen
+GPU execution, checkpoint export and the original paired schedule under the
+accepted cumulative budget. This review inspected implementation and test
+definitions; it did not rerun suites or establish a v10 training result.

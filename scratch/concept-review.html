@@ -27,23 +27,24 @@ Sources: <code>scratch/resource-limit-direction.md</code>,
 <code>manabot/training/rollout/collection.py</code>,
 <code>managym/src/agent/vector_env.rs</code>.</header>
 <main>
-<h1>Keep the recovery model. Fix the pilot entry point.</h1>
-<p>The accepted runtime design needs no new product choice. The next implement
-pass should make the current prospective pilot and historical runs distinct in
-the usage docs. This review changes the working design only.</p>
-<blockquote><strong>The consequential mismatch:</strong> the README tells you
-to evaluate <code>experiments/tla_pilot_v5.py</code>. That file is absent;
-current discovery and analysis use <code>tla_pilot_v10.py</code>.</blockquote>
+<h1>No further design decision is needed.</h1>
+<p>The accepted recovery model and current usage docs agree. No implementation
+direction changes in this review. V10 still needs execution evidence: a trained
+checkpoint and its paired evaluation are not established.</p>
+<blockquote><strong>The previous mismatch is resolved:</strong> the README now
+names <code>experiments/tla_pilot_v10.py</code> and links its prospective protocol.
+Historical runs remain bound to their original source. The remaining acceptance
+gap is execution, not the product contract.</blockquote>
 
 <section>
-<h2>Before → proposed usage</h2>
-<p><strong>Existing README:</strong> “The fixed TLA trophy pilot” → v5 runner
-and protocol → a local evaluation command targeting the missing file.</p>
-<p><strong>Proposed:</strong> “The current prospective TLA trophy pilot” → v10
+<h2>Before → implemented usage</h2>
+<p><strong>Previous README:</strong> “The fixed TLA trophy pilot” → v5 runner
+and protocol → a local evaluation command targeting an absent file.</p>
+<p><strong>Current README:</strong> “The current prospective TLA trophy pilot” → v10
 runner and protocol → fresh initialization and evaluation. Historical results
 remain bound to their own source and protocol.</p>
-<p>Put the capacity opt-in in the linked game-failures guide. Keep one explanation
-of recovery and link to it from the README.</p>
+<p>The linked game-failures guide now owns the capacity opt-in, isolation,
+settled-game denominator and fatal boundaries. No proposed usage change remains.</p>
 </section>
 
 <section>
@@ -98,9 +99,10 @@ run training or repeat validation.</p>
 <li>Does a capacity failure discard the batch? <strong>No.</strong> Jack Heart
 selected only the affected game's uncommitted samples, from both seats.</li>
 <li>Does this select 256/512 slots, grouped objects or a new memory strategy?
-<strong>No.</strong> Those remain separate design discussion.</li>
-<li>Is another product decision needed? <strong>No.</strong> The next direction
-is the documentation correction above. Loop-or-next owns navigation.</li>
+<strong>No.</strong> Those remain exploratory proposals, not selected pilot changes.</li>
+<li>Is another product decision needed? <strong>No.</strong> No further design
+change is selected. Gate and execution evidence remain outstanding;
+loop-or-next owns navigation.</li>
 </ol>
 </main>
 </html>
