@@ -468,6 +468,18 @@ pub enum ReplacementEffect {
 }
 
 impl ActivatedAbilityDefinition {
+    /// Structural mana-ability classification, independent of current output.
+    pub fn is_mana_ability(&self) -> bool {
+        self.mana_choices().is_some()
+            || matches!(
+                self.effects.as_slice(),
+                [Effect::AddOneColorManaValue { .. }]
+            )
+            || matches!(self.effects.as_slice(),
+            [Effect::If { then, otherwise, .. }] if [then, otherwise].iter().all(|branch|
+                matches!(branch.as_slice(), [Effect::AddMana { until_end_of_combat: false, .. }])))
+    }
+
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
         let [effect] = self.effects.as_slice() else {
             return None;
@@ -551,6 +563,13 @@ pub struct AbilityGrant {
     pub index: usize,
 }
 
+/// A choice of distinct untapped permanents, paid without tapping for mana.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TapCost {
+    pub predicate: CardPredicate,
+    pub count: u8,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
     /// Omitted for battlefield abilities so existing definition digests hold.
@@ -567,7 +586,7 @@ pub struct ActivatedAbilityDefinition {
     /// source itself qualifies, and summoning sickness doesn't matter (not a
     /// {T} cost, CR 302.6).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tap_cost: Option<CardPredicate>,
+    pub tap_cost: Option<TapCost>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,

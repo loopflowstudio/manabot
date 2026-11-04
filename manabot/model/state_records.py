@@ -99,11 +99,17 @@ class TypedContinuationEncoder(nn.Module):
     cycles and dangling parents are rejected before encoding.
     """
 
-    def __init__(self, width: int, reduction: RecordReduction) -> None:
+    def __init__(
+        self,
+        width: int,
+        reduction: RecordReduction,
+        relation_dim: int = RELATION_DIM_V5,
+    ) -> None:
         super().__init__()
         # Header values: kind/controller, mode..decline, decision, resolutions,
         # X/keywords/delayed duration; references are separate learned joins.
-        self.header_columns = (3, 4, *range(7, 22), 28, 30, *range(33, 49))
+        self.relation_dim = relation_dim
+        self.header_columns = (3, 4, *range(7, 22), 28, 30, *range(33, relation_dim))
         # Child values include mode/mana/restriction because mana-output rows
         # override those header fields; target ordinal/eligibility stay explicit.
         self.edge_columns = (0, 7, *range(12, 20), 22, *range(25, 30), 32)
@@ -119,7 +125,7 @@ class TypedContinuationEncoder(nn.Module):
         self, relations: torch.Tensor, objects: torch.Tensor, definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         rows = masked_record_rows(
-            relations, RELATION_ROWS, RELATION_DIM_V5, RELATION_VALID_INDEX
+            relations, RELATION_ROWS, self.relation_dim, RELATION_VALID_INDEX
         )
         if rows.shape[0] != objects.shape[0]:
             raise ValueError("relation and object batch sizes differ")

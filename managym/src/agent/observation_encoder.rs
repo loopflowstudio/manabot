@@ -9,8 +9,10 @@ use crate::{
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
-    state::mana::SPEND_SUBTYPES,
 };
+
+/// Frozen v5-v7 column labels, never an executable restriction vocabulary.
+pub const SPEND_SUBTYPES: [&str; 3] = ["Lesson", "Shrine", "Ally"];
 
 /// Player and card widths before policy input v5, which appends cast
 /// permissions, the hand-only lock and restricted mana by spending subtype.
@@ -115,10 +117,18 @@ pub enum FactKind {
     Transforms = 9,
     /// Attacker predicate token for a combat continuation (id: frame index).
     CombatRestriction = 10,
+    /// V8: one class/color amount; id joins the class, detail is color index + 1.
+    ManaAmount = 11,
+    /// V8: one allowed purpose/subtype; detail is the subtype token, value is
+    /// 1 casting or 2 activation. Every row in a class is an alternative.
+    ManaPredicate = 12,
+    /// V8: class location. Values are continuation frame + 1 and output mode + 1;
+    /// both zero identify the holder's pool.
+    ManaLocation = 13,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 10] = [
+    pub const ALL: [FactKind; 13] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -129,6 +139,9 @@ impl FactKind {
         FactKind::CopyException,
         FactKind::Transforms,
         FactKind::CombatRestriction,
+        FactKind::ManaAmount,
+        FactKind::ManaPredicate,
+        FactKind::ManaLocation,
     ];
 }
 
@@ -180,6 +193,7 @@ impl Default for ObservationEncoderConfig {
 impl ObservationEncoderConfig {
     pub fn relation_dim(&self) -> usize {
         match self.policy_input_version {
+            8.. => super::continuation::RELATION_DIM_V8,
             5.. => super::continuation::RELATION_DIM_V5,
             4 => super::continuation::RELATION_DIM,
             _ => super::continuation::LEGACY_RELATION_DIM,
@@ -385,6 +399,7 @@ impl EncodedObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
+    RequiresVersion(u8),
     InvalidShared(&'static str),
     Capacity {
         field: &'static str,
@@ -401,6 +416,9 @@ pub enum ObservationEncodeError {
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::RequiresVersion(version) => {
+                write!(f, "mana state requires policy input v{version}")
+            }
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
                 field,
@@ -465,6 +483,30 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    if config.policy_input_version < 8
+        && (obs
+            .continuation
+            .iter()
+            .any(|frame| frame.mana_taps_remaining > 0)
+            || [&obs.agent, &obs.opponent]
+                .iter()
+                .flat_map(|player| &player.restricted_mana)
+                .chain(
+                    obs.continuation
+                        .iter()
+                        .flat_map(|frame| &frame.mana_outputs)
+                        .flat_map(|output| &output.restrictions),
+                )
+                .any(|class| {
+                    class
+                        .spells
+                        .iter()
+                        .chain(&class.abilities)
+                        .any(|name| !SPEND_SUBTYPES.contains(&name.as_str()))
+                }))
+    {
+        return Err(ObservationEncodeError::RequiresVersion(8));
+    }
     validate_buffer_len(
         "semantic_cards",
         out.semantic_cards.len(),
@@ -785,7 +827,7 @@ pub fn encode_into(
             &object_to_index,
             &ranks,
             out.facts,
-            config.policy_input_version >= 7,
+            config.policy_input_version,
         )?;
         if config.policy_input_version >= 7 {
             super::shared_effects::encode(
@@ -1251,6 +1293,63 @@ fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
     out
 }
 
+/// V8 retains class grouping and purpose, including pending output alternatives.
+/// Group handles are observation-local joins, never rules vocabulary.
+fn mana_facts(obs: &Observation, out: &mut Vec<Fact>) {
+    let mut group = 0;
+    let mut append =
+        |object, classes: &[super::observation::RestrictedManaData], frame: usize, mode: usize| {
+            for class in classes {
+                group += 1;
+                out.push(Fact {
+                    object,
+                    kind: FactKind::ManaLocation,
+                    id: group,
+                    detail: 0,
+                    values: [frame as f32, mode as f32],
+                    effect: None,
+                });
+                for (color, amount) in class.mana.iter().enumerate() {
+                    if *amount != 0 {
+                        out.push(Fact {
+                            object,
+                            kind: FactKind::ManaAmount,
+                            id: group,
+                            detail: (color + 1) as i32,
+                            values: [*amount as f32 / 10.0, 0.0],
+                            effect: None,
+                        });
+                    }
+                }
+                for (purpose, names) in [(1.0, &class.spells), (2.0, &class.abilities)] {
+                    for name in names {
+                        out.push(Fact {
+                            object,
+                            kind: FactKind::ManaPredicate,
+                            id: group,
+                            detail: name_value(name),
+                            values: [purpose, 0.0],
+                            effect: None,
+                        });
+                    }
+                }
+            }
+        };
+    for player in [&obs.agent, &obs.opponent] {
+        append(player.id, &player.restricted_mana, 0, 0);
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        let object = if frame.controller == obs.agent.player_index as usize {
+            obs.agent.id
+        } else {
+            obs.opponent.id
+        };
+        for output in &frame.mana_outputs {
+            append(object, &output.restrictions, index + 1, output.mode + 1);
+        }
+    }
+}
+
 /// The rows of one modification: a record (`FactKind::Effect`) or a copy
 /// exception (`FactKind::CopyException`).
 fn effect_facts(object: i32, kind: FactKind, effect: &ContinuousEffectData, out: &mut Vec<Fact>) {
@@ -1328,9 +1427,12 @@ fn encode_facts(
     object_to_index: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
-    shared: bool,
+    version: u8,
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs, shared);
+    let mut facts = facts(obs, version >= 7);
+    if version >= 8 {
+        mana_facts(obs, &mut facts);
+    }
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
@@ -1553,6 +1655,50 @@ mod tests {
         )
         .unwrap();
         assert_eq!(exact.facts, encoded.facts[..140 * FACT_DIM]);
+    }
+
+    #[test]
+    fn v8_mana_classes_distinguish_purpose_grouping_and_unknown_subtypes() {
+        use crate::agent::observation::RestrictedManaData;
+        let mut obs = sample_observation();
+        obs.shared_effects = Some(Vec::new());
+        obs.agent.restricted_mana = vec![RestrictedManaData {
+            spells: vec!["Citizen".into()],
+            abilities: vec![],
+            mana: [0, 2, 0, 0, 0, 0],
+        }];
+        let config = ObservationEncoderConfig {
+            policy_input_version: 8,
+            ..Default::default()
+        };
+        let spell = encode(&obs, &config).unwrap();
+        assert!(matches!(
+            encode(&obs, &ObservationEncoderConfig::default()),
+            Err(ObservationEncodeError::RequiresVersion(8))
+        ));
+        obs.agent.restricted_mana[0].spells.clear();
+        obs.agent.restricted_mana[0].abilities = vec!["Citizen".into()];
+        let activation = encode(&obs, &config).unwrap();
+        assert_ne!(spell.facts, activation.facts);
+        obs.agent.restricted_mana = vec![
+            RestrictedManaData {
+                spells: vec!["Citizen".into()],
+                abilities: vec![],
+                mana: [0, 1, 0, 0, 0, 0],
+            },
+            RestrictedManaData {
+                spells: vec!["Elf".into()],
+                abilities: vec![],
+                mana: [0, 1, 0, 0, 0, 0],
+            },
+        ];
+        let split = encode(&obs, &config).unwrap();
+        obs.agent.restricted_mana = vec![RestrictedManaData {
+            spells: vec!["Citizen".into(), "Elf".into()],
+            abilities: vec![],
+            mana: [0, 2, 0, 0, 0, 0],
+        }];
+        assert_ne!(split.facts, encode(&obs, &config).unwrap().facts);
     }
 
     fn sample_observation() -> Observation {

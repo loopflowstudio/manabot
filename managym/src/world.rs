@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 use crate::cards::{content_pack::default_content_pack, world_pool, Eligibility, PoolDefinition};
 
 /// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
-pub const WORLD_VERSION: &str = "w17";
+pub const WORLD_VERSION: &str = "w18";
 
 /// The public name of the world pool ([`world_pool`]) and of a deck submitted
 /// to the world for admission (`PlayerConfig::submitted`); frozen evidence

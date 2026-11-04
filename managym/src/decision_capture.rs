@@ -1,4 +1,4 @@
-//! Atomic, representation-neutral input for one acting decision. Capture v4
+//! Atomic, representation-neutral input for one acting decision. Capture v5
 //! combines schema-7 observations with native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
@@ -18,8 +18,8 @@ use crate::{
 };
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
-/// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (6).
-pub const DECISION_CAPTURE_VERSION: u16 = 4;
+/// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (7).
+pub const DECISION_CAPTURE_VERSION: u16 = 5;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {

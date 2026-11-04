@@ -551,3 +551,34 @@ pub fn resolve_until_priority(s: &mut Scenario) {
         "stack should empty out".to_string(),
     );
 }
+
+/// Commit the chosen legal action through the public semantic Command API.
+pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(predicate)
+        .expect("legal action");
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let command = managym::decision::Command {
+        command_id: format!("scenario-{}", frame.revision),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: Vec::new(),
+        object_preconditions: Vec::new(),
+    };
+    let before = managym::search_state::witness(s.game());
+    let mut fork = s.game().clone();
+    fork.execute_semantic_command(&command).unwrap();
+    assert_eq!(managym::search_state::witness(s.game()), before);
+    s.game_mut().execute_semantic_command(&command).unwrap();
+    assert_eq!(
+        managym::search_state::witness(s.game()),
+        managym::search_state::witness(&fork)
+    );
+    assert!(
+        s.game_mut().execute_semantic_command(&command).is_err(),
+        "stale Command rejected"
+    );
+}

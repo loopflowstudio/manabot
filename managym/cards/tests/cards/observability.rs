@@ -2380,6 +2380,9 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::CopyException => "CopyData.exceptions",
         FactKind::Transforms => "PermanentData.transforms",
         FactKind::CombatRestriction => "ContinuationFrame.attackers",
+        FactKind::ManaAmount => "RestrictedManaData.mana",
+        FactKind::ManaPredicate => "RestrictedManaData.spells/abilities",
+        FactKind::ManaLocation => "ManaOutput.restrictions",
     }
 }
 
@@ -2515,9 +2518,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         through_next_turn => [column(Card, PERMISSION + 12)],
     }));
     fields.extend(encoding!(RestrictedManaData {
-        spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
+        spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18), Fact(FactKind::ManaPredicate)],
         abilities => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
-        mana => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18), Columns(Player, 34, 6)],
+        mana => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18), Columns(Player, 34, 6), Fact(FactKind::ManaAmount)],
     }));
     fields.extend(encoding!(CardTypeData {
         is_castable => [Definition],
@@ -2621,6 +2624,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        mana_taps_remaining => [Rows("v8 relation column 49; earlier policy inputs reject pending mana taps")],
         remembered => [Rows("v5 captured object reference relations, kind 8")],
         inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
         attackers => [Fact(FactKind::CombatRestriction)],
@@ -2660,6 +2664,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         player => [column(Relation, 25)],
     }));
     fields.extend(encoding!(ManaOutput {
+        restrictions => [Fact(FactKind::ManaLocation)],
         mode => [column(Relation, 7)],
         mana => [Columns(Relation, 12, 6)],
         lesson => [Columns(Relation, 12, 6), column(Relation, 19)],

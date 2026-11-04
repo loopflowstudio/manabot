@@ -124,7 +124,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
+[semantic-kernel-w18-v1](../conformance/semantic-kernel-w18-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -185,13 +185,15 @@ import](../docs/decklist-import.md)) or reset fails. Fixed setups and tests leav
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 
-Mana feasibility and production share typed costs and pools. `Mana.lesson`
-retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
-casting context, while resolving costs and activations remain unrestricted
-contexts. Chosen-color mana abilities pay their activation costs before their
-immediate output decision. `Game::characteristics` derives battlefield grants;
-those granted mana abilities never become activated stack objects. Waterbend
-taps are cost payment, not tapping for mana. The view is the one reader of a
+Mana feasibility and production share typed costs and pools. `ManaRestriction`
+contains positive casting/activation subtype predicates over an open vocabulary;
+`SpendingContext` records the payment purpose and characteristic snapshot, plus
+an activation's exact source and zone. Resolving payments do not inherit casting
+permissions. Restricted classes retain their identity through nested payment:
+the witness enumerates class remainders as well as colors, preserving a parent's
+completion. The historical `lesson_mana` field remains an aggregate projection.
+Chosen-output abilities commit their costs before producing mana. Waterbend and
+selected-object tap costs tap without the mana event. The view is the one reader of a
 battlefield permanent's characteristics, legendary and ward included: the
 legend rule reads its `is_legendary`, and every `CardData` field that states a
 characteristic reads it there (`tests/cards/observability.rs` classifies each
@@ -221,17 +223,33 @@ commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
 
-Every registered chosen-output mana mode consumes a tap (sometimes also a
-sacrifice), so each source has one use during a payment. The registry contract
-requires a model extension before introducing separate tap/sacrifice mana uses,
-repeatable free sources, or additional mana-ability cost methods.
-Search retains identities rather than grouping equal outputs. Its total and
-spend-purpose bounds only reject impossible branches; every accepted payment
-still requires a complete witness. This is finite search, without a general
-large-board performance guarantee.
+The resource model separates tapping, source departure, pending activation,
+once-turn/exhaust usage, life, and chosen distinct tap-cost objects. Repeatable
+abilities must consume bounded resources: selected-object taps, life, or strictly
+more total mana than they produce. Source identity is retained across repeats;
+a tapped source may still use a non-tapping ability. There is no iteration cap
+or infinite-loop solver. The registry guard rejects definitions requiring an
+unmodeled mana-ability cost (selected sacrifice/discard, crew, waterbend, or
+activation outside the battlefield) until its resource transition is added.
+This guard documents implementation coverage; it never removes playable cards.
+
+Variable outputs stay as rules effects in `Characteristics`; payment evaluates
+them after costs. Hypothetical resource changes use a fork and the ordinary
+layered view for these outputs. Ordinary fixed sources do not clone the game.
+One mana-action enumeration reuses its source inventory, but there is no cache
+across decisions: mana, life, taps, usage, turn and pending payment all matter.
+Performance remains subject to the same-runner Engine Budget.
+
+Explicit input v8 preserves v7 object widths and shared effects. Relations have
+50 columns (column 49 is the remaining selected-object mana tap cost); facts
+add kinds 11/12/13 for restriction amounts, purpose/subtype predicates and their
+pool/output location. Class handles preserve alternatives within each class;
+output locations retain frame and mode. Native scalar/vector and Python buffers
+select v8 by its relation width. V1–v7 remain frozen and reject new subtype or
+pending tap-cost states they cannot represent. Fresh defaults remain v6.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v4: the schema-7 semantic Observation, shared native continuation frames, bound public card
+v5: the schema-7 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.

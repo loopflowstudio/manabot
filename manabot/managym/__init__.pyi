@@ -793,6 +793,7 @@ class ClauseTarget:
     clause: int
 
 class ContinuationFrame:
+    mana_taps_remaining: int
     remembered: list[VisibleReference]
     inherited_from: VisibleReference | None
     attackers: str | None
@@ -825,6 +826,7 @@ def validate_observation_json(text: str) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...
 
 class ManaOutput:
+    restrictions: list[RestrictedMana]
     mode: int
     mana: list[int]
     lesson: list[int]

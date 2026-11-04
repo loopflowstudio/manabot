@@ -151,6 +151,7 @@ pub enum PendingChoice {
     /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
     /// control" activation cost.
     TapPayment {
+        remaining: u8,
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,

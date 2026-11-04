@@ -20,7 +20,7 @@ use crate::{
         ability::TargetRequirement,
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, Card, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::{ManaCost, ManaUse},
+        mana::{ManaCost, SpendingCharacteristics, SpendingContext},
         stack_object::{ActivatedAbilityOnStack, StackObject},
         zone::ZoneType,
     },
@@ -161,7 +161,13 @@ impl Game {
             self.zone_cast_cost(player, card)?
         };
         cost = cost.with_x(cast.x);
-        cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
+        cost.purpose = SpendingContext::Cast {
+            characteristics: SpendingCharacteristics {
+                subtypes: card_ref.subtypes.iter().cloned().collect(),
+                types: card_ref.types.types.clone(),
+                colors: card_ref.colors(),
+            },
+        };
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
@@ -917,7 +923,7 @@ impl Game {
                 "ability does not function on the battlefield".into(),
             ));
         }
-        if ability.mana_choices().is_some() {
+        if ability.is_mana_ability() {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
         self.check_activation_terms(player, &ability)?;
@@ -1070,7 +1076,15 @@ impl Game {
             return None;
         }
         let mut ability = ability.clone();
-        let purpose = ManaUse::ability(card_ref.subtypes.iter().map(String::as_str));
+        let purpose = SpendingContext::Activate {
+            source: self.current_object_ref(card),
+            zone: ability.zone.zone(),
+            characteristics: SpendingCharacteristics {
+                subtypes: card_ref.subtypes.iter().cloned().collect(),
+                types: card_ref.types.types.clone(),
+                colors: card_ref.colors(),
+            },
+        };
         self.price_activation(player, purpose, &mut ability);
         Some(ability)
     }
@@ -1292,8 +1306,9 @@ impl Game {
         let ability = self
             .activation_ability(source, ability_index)
             .ok_or_else(|| AgentError("missing source".into()))?;
-        if ability.tap_cost.is_some() {
+        if let Some(cost) = &ability.tap_cost {
             self.pending_choice = Some(PendingChoice::TapPayment {
+                remaining: cost.count,
                 player,
                 source,
                 ability_index,
@@ -1311,7 +1326,7 @@ impl Game {
         player: PlayerId,
         ability: &ActivatedAbilityDefinition,
     ) -> Vec<PermanentId> {
-        let Some(predicate) = &ability.tap_cost else {
+        let Some(cost) = &ability.tap_cost else {
             return Vec::new();
         };
         self.battlefield_permanents(player)
@@ -1320,7 +1335,7 @@ impl Game {
                 self.state.permanents[*id]
                     .as_ref()
                     .is_some_and(|permanent| !permanent.tapped)
-                    && self.permanent_matches_predicate(*id, predicate)
+                    && self.permanent_matches_predicate(*id, &cost.predicate)
             })
             .collect()
     }
@@ -1332,6 +1347,7 @@ impl Game {
         card: CardId,
     ) -> Result<(), AgentError> {
         let Some(PendingChoice::TapPayment {
+            remaining,
             player: payer,
             source,
             ability_index,
@@ -1352,6 +1368,16 @@ impl Game {
         };
         self.pending_choice = None;
         self.tap_permanent(tapped, false);
+        if remaining > 1 {
+            self.pending_choice = Some(PendingChoice::TapPayment {
+                remaining: remaining - 1,
+                player,
+                source,
+                ability_index,
+                targets,
+            });
+            return Ok(());
+        }
         self.continue_activation_payment(player, source, ability_index, targets, 0)
     }
 

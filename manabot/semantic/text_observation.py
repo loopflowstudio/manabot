@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-6"
+REPRESENTATION_VERSION = "manabot-text-7"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -622,10 +622,12 @@ class _Renderer:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
             )
+        if relation.mana_taps_remaining:
+            details.append(f"tap {relation.mana_taps_remaining} more permanents to pay")
         for output in relation.mana_outputs:
             for restricted, amounts in (
                 (False, output.mana),
-                (True, output.lesson),
+                (True, output.lesson if not output.restrictions else [0] * 6),
             ):
                 if any(amounts):
                     cost = ManaCost(
@@ -634,6 +636,15 @@ class _Renderer:
                         spend_on_lesson=restricted,
                     )
                     details.append(f"output mode {output.mode + 1}: {_mana(cost)}")
+            for restricted in output.restrictions:
+                amounts = ", ".join(
+                    f"{symbol} {count}"
+                    for symbol, count in zip("WUBRGC", restricted.mana, strict=True)
+                    if count
+                )
+                details.append(
+                    f"output mode {output.mode + 1}: {amounts}, only for {_spending(restricted)}"
+                )
         return "; ".join(details) + "."
 
     def _players_lines(self) -> list[str]:

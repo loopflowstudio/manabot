@@ -36,6 +36,8 @@ mod roe;
 mod scryfall;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/spm.rs"]
+mod spm;
 #[path = "cards/stx.rs"]
 mod stx;
 #[path = "cards/ths.rs"]
@@ -44,5 +46,7 @@ mod ths;
 mod tla;
 #[path = "cards/war.rs"]
 mod war;
+#[path = "cards/woe.rs"]
+mod woe;
 #[path = "cards/zen.rs"]
 mod zen;

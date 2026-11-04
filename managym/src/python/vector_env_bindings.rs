@@ -365,7 +365,8 @@ pub(super) fn input_buffer_config(
     config.policy_input_version = match shape.last() {
         Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => 3,
         Some(&crate::agent::continuation::RELATION_DIM) => 4,
-        Some(&crate::agent::continuation::RELATION_DIM_V5) => {
+        Some(&crate::agent::continuation::RELATION_DIM_V5)
+        | Some(&crate::agent::continuation::RELATION_DIM_V8) => {
             let facts = buffers
                 .get_item("facts")?
                 .ok_or_else(|| PyValueError::new_err("missing facts"))?;
@@ -378,7 +379,11 @@ pub(super) fn input_buffer_config(
                 return Err(PyValueError::new_err("invalid fact buffer shape"));
             }
             config.max_facts = fact_shape[fact_shape.len() - 2];
-            if shared_count == 3 {
+            if shared_count == 3
+                && shape.last() == Some(&crate::agent::continuation::RELATION_DIM_V8)
+            {
+                8
+            } else if shared_count == 3 {
                 7
             } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
                 5
@@ -392,7 +397,10 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
-    if shared_count != 0 && config.policy_input_version != 7 {
+    if shape.last() == Some(&crate::agent::continuation::RELATION_DIM_V8) && shared_count != 3 {
+        return Err(PyValueError::new_err("v8 requires shared-effect buffers"));
+    }
+    if shared_count != 0 && config.policy_input_version < 7 {
         return Err(PyValueError::new_err("v7 requires current relation width"));
     }
     Ok(config)

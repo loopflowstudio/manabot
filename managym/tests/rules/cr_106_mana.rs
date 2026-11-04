@@ -121,17 +121,17 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
 /// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
 #[test]
 fn audit_restricted_mana_never_pays_unrelated_costs() {
-    use managym::state::mana::{Mana, ManaCost, ManaUse};
+    use managym::state::mana::{Mana, ManaCost, ManaRestriction, SpendingContext};
 
-    let lesson = ManaUse::spell(["Lesson"]);
+    let lesson = ManaRestriction::spell(["Lesson"]);
     for slot in 0..6 {
         for eligible in [false, true] {
             let mut amounts = [0; 6];
             amounts[slot] = 1;
-            let mut pool = Mana::restricted_to(lesson, amounts);
+            let mut pool = Mana::restricted_to(lesson.clone(), amounts);
             let mut cost = ManaCost::parse("1");
             if eligible {
-                cost.purpose = lesson;
+                cost.purpose = SpendingContext::spell(["Lesson"]);
             }
             assert_eq!(pool.can_pay(&cost), eligible);
             if eligible {

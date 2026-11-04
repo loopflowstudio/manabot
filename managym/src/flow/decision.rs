@@ -230,6 +230,7 @@ pub enum Decision {
     Payment(PaymentProgress),
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
+        taps_remaining: u8,
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
@@ -884,7 +885,7 @@ impl Game {
             Decision::ManaUpfront { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
-                actions: self.mana_ability_actions(*player, None),
+                actions: self.mana_upfront_actions(*player),
                 focus: source_focus,
             },
             Decision::Payment(payment) => {
@@ -1233,6 +1234,11 @@ impl Game {
                 .ok_or_else(|| AgentError("illegal mana color".into()))?;
             if !self.mana_choice_completes_payment(*player, mana) {
                 return Err(AgentError("mana color cannot complete the payment".into()));
+            }
+        }
+        if matches!(suspended.decision, Decision::ManaUpfront { .. }) {
+            if let Action::SelectCard { player, card } = action {
+                return self.pay_mana_tap(*player, *card);
             }
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();

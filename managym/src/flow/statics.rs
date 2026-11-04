@@ -63,7 +63,7 @@ use crate::{
         },
         effect::Modification,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
-        mana::{Mana, ManaUse},
+        mana::{Mana, SpendingCharacteristics, SpendingContext},
         permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         zone::ZoneType,
@@ -349,7 +349,7 @@ impl Game {
         let (power, toughness) = self.pt_with(permanent_id, &basis, sources);
         let types = self.types_with(permanent_id, sources);
         let is_land = types.is_land();
-        Characteristics {
+        let mut view = Characteristics {
             name: basis
                 .set
                 .map_or(card.name.as_str(), |set| set.named.as_str())
@@ -373,7 +373,22 @@ impl Game {
                 sources,
             ),
             added_subtypes: owned(basis.added_subtypes),
+        };
+        if !view.activated_abilities.is_empty() {
+            let purpose = SpendingContext::Activate {
+                source: self.permanent_object_ref(permanent_id),
+                zone: ZoneType::Battlefield,
+                characteristics: SpendingCharacteristics {
+                    subtypes: view.subtypes.iter().cloned().collect(),
+                    types: view.types.types.clone(),
+                    colors: card.colors(),
+                },
+            };
+            for ability in &mut view.activated_abilities {
+                self.price_activation(permanent.controller, purpose.clone(), ability);
+            }
         }
+        view
     }
 
     /// The static-source index at the current state revision, built once per
@@ -1624,12 +1639,6 @@ impl Game {
             return Vec::new();
         };
         let card = &self.state.cards[source.card];
-        let purpose = ManaUse::ability(
-            card.subtypes
-                .iter()
-                .map(String::as_str)
-                .chain(basis.added_subtypes.iter().copied()),
-        );
         let lost = basis.lost.is_some();
         let mut abilities = Vec::new();
         if !lost {
@@ -1664,14 +1673,10 @@ impl Game {
                 });
             }
         }
-        for ability in &mut abilities {
-            self.price_activation(source.controller, purpose, ability);
-        }
         abilities
     }
 
-    /// Read state-dependent mana outputs of printed abilities, then add mana
-    /// abilities from `mana_grant` permanents and gained basic land types:
+    /// Add mana abilities from `mana_grant` permanents and gained basic land types:
     /// everything `permanent` loses with its abilities.
     fn extend_own_abilities(
         &self,
@@ -1682,13 +1687,6 @@ impl Game {
         abilities: &mut Vec<ActivatedAbilityDefinition>,
     ) {
         let source = self.state.permanents[permanent].as_ref().unwrap();
-        for ability in abilities.iter_mut() {
-            if let [effect] = ability.effects.as_slice() {
-                if let Some(effect) = self.current_mana_output(effect, source.controller) {
-                    ability.effects = vec![effect];
-                }
-            }
-        }
         for &(_, controller, grantor) in sources {
             if controller == source.controller
                 && self.state.cards[grantor].statics.iter().any(|ability| {

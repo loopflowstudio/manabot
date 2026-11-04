@@ -13,7 +13,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
+        mana::{ManaCost, ManaRestriction},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -108,6 +108,7 @@ pub struct PlayerData {
 /// `abilities`' subtypes. Amounts are W/U/B/R/G/C.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 pub struct RestrictedManaData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spells: Vec<String>,
@@ -117,18 +118,10 @@ pub struct RestrictedManaData {
 }
 
 impl RestrictedManaData {
-    fn new(restriction: ManaUse, amounts: [u8; 6]) -> Self {
-        let names = |mask: u8| {
-            SPEND_SUBTYPES
-                .iter()
-                .enumerate()
-                .filter(|(bit, _)| mask & 1 << bit != 0)
-                .map(|(_, name)| name.to_string())
-                .collect()
-        };
+    pub(crate) fn new(restriction: &ManaRestriction, amounts: [u8; 6]) -> Self {
         Self {
-            spells: names(restriction.spells),
-            abilities: names(restriction.abilities),
+            spells: restriction.subtypes(false),
+            abilities: restriction.subtypes(true),
             mana: amounts.map(i32::from),
         }
     }
@@ -1019,7 +1012,7 @@ impl Observation {
             restricted_mana: pool
                 .restricted()
                 .iter()
-                .map(|(restriction, amounts)| RestrictedManaData::new(*restriction, *amounts))
+                .map(|(restriction, amounts)| RestrictedManaData::new(restriction, *amounts))
                 .collect(),
             hand_only_until: game
                 .hand_only_until(player)

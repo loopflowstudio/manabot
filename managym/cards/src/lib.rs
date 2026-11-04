@@ -32,6 +32,7 @@ mod ptk;
 mod roe;
 mod rtr;
 mod soi;
+mod spm;
 mod sth;
 mod stx;
 mod ths;
@@ -39,6 +40,7 @@ mod tla;
 mod tokens;
 mod vis;
 mod war;
+mod woe;
 mod zen;
 
 use std::sync::OnceLock;
@@ -58,7 +60,7 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 30] = [
+const SETS: [fn() -> Vec<CardDefinition>; 32] = [
     afr::cards,
     blb::cards,
     bro::cards,
@@ -81,6 +83,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 30] = [
     roe::cards,
     rtr::cards,
     soi::cards,
+    spm::cards,
     sth::cards,
     stx::cards,
     ths::cards,
@@ -88,5 +91,6 @@ const SETS: [fn() -> Vec<CardDefinition>; 30] = [
     tokens::cards,
     vis::cards,
     war::cards,
+    woe::cards,
     zen::cards,
 ];

@@ -4150,7 +4150,7 @@ impl PyEnv {
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=7) {
+        if !matches!(policy_input_version, 1..=8) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {

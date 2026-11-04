@@ -146,7 +146,7 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[3, 4]
+    capture_version: Literal[3, 4, 5]
     world_version: str
     content_digest: str
     observation: SkipValidation[Observation]

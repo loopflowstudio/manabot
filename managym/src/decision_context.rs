@@ -365,6 +365,13 @@ impl Game {
             };
             view.stage = stage.into();
             view.instruction = instruction.into();
+            if let Decision::ManaUpfront { taps_remaining, .. } = &suspended.decision {
+                if *taps_remaining > 0 {
+                    view.instruction = format!(
+                        "Tap {taps_remaining} more untapped permanents to pay the mana ability's cost. Each selected tap commits immediately; mana is added only after all costs are paid and an output is chosen."
+                    );
+                }
+            }
         }
         if let Some(placement) = &self.state.trigger_placement {
             let choosing_mode = placement

@@ -4569,5 +4569,29 @@
     "colors": [
       "B"
     ]
+  },
+  "Scarecrow Guide": {
+    "name": "Scarecrow Guide",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Scarecrow",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach\n{1}: Add one mana of any color. Activate only once each turn.",
+    "colors": []
+  },
+  "Supportive Parents": {
+    "name": "Supportive Parents",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Human Citizen",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Tap two untapped creatures you control: Add one mana of any color.",
+    "colors": [
+      "G"
+    ]
   }
 }

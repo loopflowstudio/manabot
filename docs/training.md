@@ -822,6 +822,15 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 ## Policy inputs
 
+Explicit policy input v8 adds complete mana restriction classes to v7's fact
+projection and one relation column for remaining selected-object tap costs.
+Its object widths and shared-effect buffers are unchanged. Facts 11/12/13 join
+class amounts, casting/activation subtype alternatives, and pool or pending
+output locations (frame and mode). The model allocates the additional fact-kind
+embeddings only for v8; older checkpoint parameter shapes remain unchanged.
+V1–v7 reject new subtype and pending tap-cost states instead of dropping them.
+Fresh construction remains v6; choose v8 explicitly for these new mechanics.
+
 ### Current continuation input
 
 Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.

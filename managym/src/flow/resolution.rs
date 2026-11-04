@@ -1831,10 +1831,12 @@ impl Game {
                 (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::AddOneColorManaValue { .. } => {
-                frame.prepend_effects(
-                    self.current_mana_output(effect, frame.controller)
-                        .into_iter(),
-                );
+                let choices = self.current_mana_choices(effect, frame.controller)?;
+                let output = match choices.as_slice() {
+                    [mana] => Effect::add_mana(mana.clone()),
+                    _ => Effect::mana_choice(choices),
+                };
+                frame.prepend_effects(std::iter::once(output));
                 None
             }
             Effect::ForEachTarget { effects } => {

@@ -54,6 +54,8 @@ RELATION_VALID_INDEX = 31
 # observation_encoder.rs owns the layout and these mirror it exactly. V5 widens
 # the player, card and permanent rows; v1-v4 keep the legacy widths.
 RELATION_DIM_V5 = 49
+RELATION_DIM_V8 = 50
+RELATION_MANA_TAPS_INDEX = 49
 RELATION_X_INDEX = 33
 RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
 RELATION_THIS_TURN_INDEX = 48  # a waiting delayed trigger ends this turn
@@ -125,6 +127,10 @@ FACT_COPY_EXCEPTION = 8
 FACT_TRANSFORMS = 9
 FACT_COMBAT_RESTRICTION = 10
 FACT_KINDS = 10
+FACT_MANA_AMOUNT = 11
+FACT_MANA_PREDICATE = 12
+FACT_MANA_LOCATION = 13
+FACT_KINDS_V8 = 13
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # v5 decklist rows: definition id + 1, then main, unseen, sideboard and
@@ -193,7 +199,9 @@ class ObservationEncoder:
     def __init__(self, config: ObservationConfig) -> None:
         self.config = config
         self.shows_everything = config.policy_input_version >= 5
-        if self.shows_everything:
+        if config.policy_input_version >= 8:
+            self.relation_dim = RELATION_DIM_V8
+        elif self.shows_everything:
             self.relation_dim = RELATION_DIM_V5
         elif config.policy_input_version >= 4:
             self.relation_dim = RELATION_DIM
@@ -304,6 +312,24 @@ class ObservationEncoder:
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+        if self.config.policy_input_version < 8:
+            restrictions = [
+                r
+                for player in (obs.agent, obs.opponent)
+                for r in player.restricted_mana
+            ]
+            restrictions.extend(
+                r
+                for frame in obs.continuation
+                for output in frame.mana_outputs
+                for r in output.restrictions
+            )
+            if any(frame.mana_taps_remaining for frame in obs.continuation) or any(
+                name not in SPEND_SUBTYPES
+                for r in restrictions
+                for name in (*r.spells, *r.abilities)
+            ):
+                raise ValueError("mana state requires policy input v8")
         # Fixed training tensors must never turn a complete rules decision into
         # a smaller, apparently legal policy decision.
         for label, size, capacity in (
@@ -601,6 +627,48 @@ class ObservationEncoder:
             for obj, effects in holders:
                 for effect in effects:
                     push_modification(obj, FACT_EFFECT, effect)
+        if self.config.policy_input_version >= 8:
+            group = 0
+
+            def mana_classes(
+                obj: int, classes: list[managym.RestrictedMana], frame: int, mode: int
+            ) -> None:
+                nonlocal group
+                for restricted in classes:
+                    group += 1
+                    push(obj, FACT_MANA_LOCATION, group, (float(frame), float(mode)))
+                    for color, amount in enumerate(restricted.mana):
+                        if amount:
+                            push(
+                                obj,
+                                FACT_MANA_AMOUNT,
+                                group,
+                                (amount / 10.0, 0.0),
+                                color + 1,
+                            )
+                    for purpose, names in (
+                        (1.0, restricted.spells),
+                        (2.0, restricted.abilities),
+                    ):
+                        for name in names:
+                            push(
+                                obj,
+                                FACT_MANA_PREDICATE,
+                                group,
+                                (purpose, 0.0),
+                                token(name),
+                            )
+
+            for player in (obs.agent, obs.opponent):
+                mana_classes(player.id, player.restricted_mana, 0, 0)
+            for index, frame in enumerate(obs.continuation):
+                obj = (
+                    obs.agent.id
+                    if frame.controller == obs.agent.player_index
+                    else obs.opponent.id
+                )
+                for output in frame.mana_outputs:
+                    mana_classes(obj, output.restrictions, index + 1, output.mode + 1)
         if len(rows) > self.config.fact_rows:
             raise ValueError(
                 f"observation capacity exceeded: facts {len(rows)} > {self.config.fact_rows}"
@@ -627,6 +695,8 @@ class ObservationEncoder:
 
         for index, frame in enumerate(frames):
             row = np.zeros(self.relation_dim, dtype=np.float32)
+            if self.config.policy_input_version >= 8:
+                row[RELATION_MANA_TAPS_INDEX] = frame.mana_taps_remaining
             row[:5] = (
                 1,
                 index + 1,

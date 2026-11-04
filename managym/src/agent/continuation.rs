@@ -30,6 +30,8 @@ pub const RELATION_DIM: usize = 33;
 /// `KeywordData` field order) and a waiting delayed trigger's "this turn"
 /// (48) after v4's eligibility column.
 pub const RELATION_DIM_V5: usize = 49;
+/// V8 appends the remaining selected-object taps of a mana activation.
+pub const RELATION_DIM_V8: usize = 50;
 pub const RELATION_X_INDEX: usize = 33;
 pub const RELATION_KEYWORDS_INDEX: usize = 34;
 pub const RELATION_THIS_TURN_INDEX: usize = RELATION_KEYWORDS_INDEX + KEYWORD_COUNT;
@@ -62,6 +64,8 @@ pub struct ManaOutput {
     pub mana: [u8; 6],
     /// Spend-restricted output by color, whatever its restriction.
     pub lesson: [u8; 6],
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restrictions: Vec<super::observation::RestrictedManaData>,
 }
 
 /// Public stack entries precede the viewer's private announcement/resolution
@@ -71,6 +75,8 @@ pub struct ManaOutput {
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub mana_taps_remaining: u8,
     /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<VisibleReference>,
@@ -167,7 +173,16 @@ impl ContinuationFrame {
             .iter()
             .map(|pair| [pair[0] as u8, pair[1] as u8])
             .collect();
-        self.lesson = !cost.purpose.is_ordinary();
+        self.lesson = match &cost.purpose {
+            crate::state::mana::SpendingContext::Resolving => false,
+            crate::state::mana::SpendingContext::Cast { characteristics }
+            | crate::state::mana::SpendingContext::Activate {
+                characteristics, ..
+            } => characteristics
+                .subtypes
+                .iter()
+                .any(|name| super::observation_encoder::SPEND_SUBTYPES.contains(&name.as_str())),
+        };
     }
 }
 
@@ -746,9 +761,11 @@ impl Game {
                 Decision::ManaUpfront {
                     permanent,
                     ability_index,
+                    taps_remaining,
                     resume,
                     ..
                 } => {
+                    frame.mana_taps_remaining = *taps_remaining;
                     frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                     frame.ability = Some(*ability_index);
                     frame.cost(
@@ -767,6 +784,16 @@ impl Game {
                             mode,
                             mana: output.mana,
                             lesson: output.restricted_colors(),
+                            restrictions: output
+                                .restricted()
+                                .iter()
+                                .map(|(restriction, amounts)| {
+                                    super::observation::RestrictedManaData::new(
+                                        restriction,
+                                        *amounts,
+                                    )
+                                })
+                                .collect(),
                         })
                         .collect();
                     resume.as_deref()
@@ -868,7 +895,13 @@ pub fn encode_into(
 ) -> Result<(), super::observation_encoder::ObservationEncodeError> {
     use super::observation_encoder::ObservationEncodeError;
     let dim = out.len() / RELATION_ROWS;
-    if ![LEGACY_RELATION_DIM, RELATION_DIM, RELATION_DIM_V5].contains(&dim)
+    if ![
+        LEGACY_RELATION_DIM,
+        RELATION_DIM,
+        RELATION_DIM_V5,
+        RELATION_DIM_V8,
+    ]
+    .contains(&dim)
         || out.len() != RELATION_ROWS * dim
     {
         return Err(ObservationEncodeError::InvalidLength {
@@ -879,7 +912,7 @@ pub fn encode_into(
     }
     // Delayed triggers and scheduling are v5 facts; frozen v2-v4 inputs keep their
     // rows. They follow every other frame, so no index moves.
-    let frames = if dim == RELATION_DIM_V5 {
+    let frames = if dim >= RELATION_DIM_V5 {
         frames
     } else {
         let shown = frames
@@ -894,7 +927,7 @@ pub fn encode_into(
             1 + f.targets.len()
                 + usize::from(f.context.is_some())
                 + usize::from(f.sacrifice.is_some())
-                + if dim == RELATION_DIM_V5 {
+                + if dim >= RELATION_DIM_V5 {
                     usize::from(f.inherited_from.is_some())
                         + f.remembered.len()
                         + usize::from(f.delayed_frequency.is_some())
@@ -923,7 +956,8 @@ pub fn encode_into(
     let definition =
         |reference: VisibleReference| reference.definition.map_or(0.0, |id| (id + 1) as f32);
     for (index, frame) in frames.iter().enumerate() {
-        let mut header = [0.0; RELATION_DIM_V5];
+        let mut header = [0.0; RELATION_DIM_V8];
+        header[49] = f32::from(frame.mana_taps_remaining);
         header[0] = 1.0;
         header[1] = (index + 1) as f32;
         header[2] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
@@ -990,7 +1024,7 @@ pub fn encode_into(
         if let Some(target) = frame.sacrifice {
             reference_row(4.0, target, 0, 0, None);
         }
-        if dim == RELATION_DIM_V5 {
+        if dim >= RELATION_DIM_V5 {
             if let Some(definition) = frame.inherited_from {
                 reference_row(7.0, definition, 0, 0, None);
             }
@@ -1131,6 +1165,7 @@ mod tests {
                 vec![],
             )),
             Decision::ManaUpfront {
+                taps_remaining: 0,
                 player,
                 permanent: PermanentId(0),
                 ability_index: 0,

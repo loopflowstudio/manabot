@@ -136,6 +136,9 @@ impl Game {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
+                        Decision::ManaUpfront { .. } => {
+                            Some(format!("Tap {} to pay", self.state.cards[*card].name))
+                        }
                         Decision::ChooseObject { effect, .. } => Some(format!(
                             "{} {}",
                             choice_verb(effect),
@@ -247,7 +250,7 @@ impl Game {
                 {
                     continue;
                 }
-                if ability.mana_choices().is_some() {
+                if ability.is_mana_ability() {
                     if self.can_activate_mana_ability(player, permanent_id, ability_index) {
                         actions.push(Action::ActivateAbility {
                             player,
@@ -296,9 +299,9 @@ impl Game {
                 {
                     continue;
                 }
-                if ability.tap_cost.is_some()
-                    && self.tap_cost_candidates(player, ability).is_empty()
-                {
+                if ability.tap_cost.as_ref().is_some_and(|cost| {
+                    self.tap_cost_candidates(player, ability).len() < usize::from(cost.count)
+                }) {
                     continue;
                 }
                 let affordable = if ability.waterbend {

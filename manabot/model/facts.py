@@ -1,9 +1,10 @@
 """
-Policy-input v5/v6 fact rows, joined to the player or permanent each describes.
+Policy-input v5–v8 fact rows, joined to the player or permanent each describes.
 
 A fact row states one open-vocabulary fact (a counter kind, an added subtype, a
 set name or creature type, a spent ability, a continuous-effect record) about
-one object; `manabot.env.observation` documents the columns. Each row is
+one object. V8 adds restricted-mana classes and their predicates/output locations;
+`manabot.env.observation` documents the columns. Each row is
 embedded from its kind, its vocabulary id and effect detail (learning-token
 values, rebuilt from their 16-bit halves and hashed into `buckets` rows) and its
 amounts, duration, timestamp rank and source, then summed into its object's
@@ -32,11 +33,14 @@ from manabot.env.observation import (
 
 
 class FactEncoder(nn.Module):
-    def __init__(self, width: int, max_facts: int, buckets: int = 4096) -> None:
+    def __init__(
+        self, width: int, max_facts: int, buckets: int = 4096, kinds: int = FACT_KINDS
+    ) -> None:
         super().__init__()
+        self.kinds = kinds
         self.buckets = buckets
         self.max_facts = max_facts
-        self.kind = nn.Embedding(FACT_KINDS + 1, width)
+        self.kind = nn.Embedding(kinds + 1, width)
         self.ident = nn.Embedding(buckets, width)
         self.detail = nn.Embedding(buckets, width)
         self.source = nn.Embedding(buckets, width)
@@ -66,7 +70,7 @@ class FactEncoder(nn.Module):
             (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
         ).all():
             raise ValueError("invalid fact object reference")
-        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
+        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= self.kinds)).all():
             raise ValueError("invalid fact kind")
         duration = facts[..., FACT_DURATION_INDEX]
         numeric = torch.stack(
