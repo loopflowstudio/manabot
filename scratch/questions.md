@@ -68,3 +68,5 @@ sync resolution and links to older decision history. V2 source is
 Uncommitted continuation notes before consolidation are preserved in
 `.runs/mtg213/context-before-compress/`; their substantive findings remain in
 the continuation note. The manifest retains all 120 added v3 evidence entries.
+
+Shared-effect owner decisions remain at `fb5ad2c1372f9c967b550f0b8ae0f84883f75563:scratch/questions.md`; its memory section was preserved during integration.

@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-5"
+REPRESENTATION_VERSION = "manabot-text-6"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -353,6 +353,14 @@ class _Renderer:
         self.state = managym.Observation.from_json(
             json.dumps(capture.observation.viewer_state)
         )
+        timestamps = {
+            p.id if p.timestamp is None else p.timestamp
+            for p in self.state.agent_permanents + self.state.opponent_permanents
+        }
+        timestamps.update(r.effect.timestamp for r in self.state.shared_effects or [])
+        self.timestamp_ranks = {
+            stamp: index + 1 for index, stamp in enumerate(sorted(timestamps))
+        }
         self.names: dict[int, str] = {}
         self.seats: dict[int, str] = {}
         self.objects: dict[tuple[int, int], str] = {}
@@ -619,8 +627,9 @@ class _Renderer:
                 lines.append("Keeps unspent red mana until end of turn.")
             if history := _turn_history(player.turn_history):
                 lines.append(f"This turn: {history}.")
-            for effect in player.effects:
-                lines.append(f"Effect: {self._effect(effect)}.")
+            if state.shared_effects is None:
+                for effect in player.effects:
+                    lines.append(f"Effect: {self._effect(effect)}.")
             counts: list[tuple[str, dict[int, int]]] = [
                 ("Publicly known hand minima", player.known_hand)
             ]
@@ -738,6 +747,8 @@ class _Renderer:
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
             optional += self._characteristics(permanent)
+            if state.shared_effects is not None:
+                optional += f"; timestamp rank {self.timestamp_ranks[permanent.id if permanent.timestamp is None else permanent.timestamp]}"
             lines.append(
                 f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: controller {self.name(permanent.controller_id)}; power/toughness {permanent.power}/{permanent.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false."
             )
@@ -772,7 +783,10 @@ class _Renderer:
             parts.append("dealt damage this turn")
         if permanent.copy is not None:
             parts.append(self._copy(permanent.copy))
-        parts.extend(f"effect {self._effect(effect)}" for effect in permanent.effects)
+        if self.state.shared_effects is None:
+            parts.extend(
+                f"effect {self._effect(effect)}" for effect in permanent.effects
+            )
         return "".join(f"; {part}" for part in parts)
 
     def _copy(self, copy: managym.CopyEffect) -> str:
@@ -781,6 +795,35 @@ class _Renderer:
         return f"copy of {self.definition(copy.registry_key)}" + (
             f", except {exceptions}" if exceptions else ""
         )
+
+    def _effect_object(self, reference: managym.EffectObject) -> str:
+        if reference.object_id is None:
+            raise TextEncodingError("unavailable shared-effect object")
+        if reference.incarnation is None:
+            return self.name(reference.object_id)
+        try:
+            return self.objects[reference.object_id, reference.incarnation]
+        except KeyError as error:
+            raise TextEncodingError("stale shared-effect incarnation") from error
+
+    def _shared_effect_lines(self) -> list[str]:
+        lines: list[str] = []
+        for index, record in enumerate(self.state.shared_effects or [], 1):
+            source = (
+                f"; exact source {self._effect_object(record.source)}"
+                if record.source is not None
+                else ""
+            )
+            members = ", ".join(
+                f"{self._effect_object(member.target)} (record {member.order + 1})"
+                for member in record.members
+            )
+            lines.append(
+                f"Effect {index}: {self._effect(record.effect)}; timestamp rank "
+                f"{self.timestamp_ranks[record.effect.timestamp]}; controller "
+                f"{self.name(record.controller_id)}{source}; affects {members}."
+            )
+        return lines
 
     def _effect(self, effect: managym.ContinuousEffect) -> str:
         """One continuous-effect record: how long, what, and its source."""
@@ -882,6 +925,9 @@ class _Renderer:
             lines.append("Empty.")
         lines += ["", "Battlefield effective state:"]
         lines.extend(self._permanents_lines())
+        if self.state.shared_effects:
+            lines.extend(("", "SHARED CONTINUOUS EFFECTS"))
+            lines.extend(self._shared_effect_lines())
         lines += ["", "Stack (native order, top to bottom):"]
         for index, item in enumerate(state.stack_objects):
             stack_frame = capture.frames[index]

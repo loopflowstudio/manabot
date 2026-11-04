@@ -38,9 +38,6 @@ from manabot.sim.search.flat_mc import (
     SearchStats,
 )
 
-OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
-
-
 # -----------------------------------------------------------------------------
 # Batched action selection
 # -----------------------------------------------------------------------------
@@ -79,7 +76,7 @@ class BatchedSampler:
 
         obs = {
             key: torch.from_numpy(buffers[key][rows]).to(self.device)
-            for key in OBS_KEYS
+            for key in self.agent.observation_space.shapes
         }
         with torch.inference_mode():
             logits, _ = self.agent.forward(obs)
