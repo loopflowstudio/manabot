@@ -4,7 +4,7 @@ V5 Run **e8c76bc2c06f**, frozen source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, ran on a Vast **RTX 5090** on
 2026-11-04. CUDA numerical admission passed. Training completed **3 rollout
 updates, 585 optimizer minibatch steps and 149,260 learner transitions** before
-the next collection failed: **256 legal actions exceeded the frozen capacity
+the next collection failed: **256 offered actions exceeded the frozen capacity
 of 64**. Settled batches contain 771 completed games. This establishes actual
 GPU learning execution, not improvement in game strength or a completed pilot.
 
@@ -43,7 +43,7 @@ was approximate and is corrected here). The
 [retained-prefix replay](data/mtg213/gpu-v5-20261104/capacity-replay.json)
 identifies stream 103, seed 32172, after 76 actions. The pre-command frame
 matches; native scalar, vector and Python encoders all reject the same 256
-legal actions at capacity 64. A diagnostic 512 configuration retains all 256
+offered actions at capacity 64. A diagnostic 512 configuration retains all 256
 in Python, but the frozen native buffer path still enforces 64. This is evidence
 that a configuration-only retry is insufficient, not a new pilot selection.
 A new prospective action-capacity contract is needed before further paid
@@ -342,6 +342,26 @@ universal capacity bound, or supply missing trained-checkpoint evaluations.
 The [v6 protocol](protocols/tla-trophy-213-v6.md) binds current world/content and
 73/56/38 object widths with 512 actions. Native scalar/vector buffers now derive
 all configurable capacities from the supplied arrays; scalar companion validation
-finishes before copying any output. The active runner and analysis move to v6;
+finishes before copying any output. V6 prepared the runner and analysis;
 v5 source, protocols and evidence remain frozen. This prepares fresh training
 and evaluation on the same 134 decks; it supplies no new learner or cost result.
+
+## Prospective v7 rules repair (2026-11-04 UTC)
+
+The [v7 protocol](protocols/tla-trophy-213-v7.md) supersedes unsubmitted v6 Run
+`bcde93e9ff8c` (source `ad2c3a010f53`), which incurred no rental or scoring.
+Operator comment a85a89e8 required examining the 256 offers before continuation.
+They were **illegal X choices**, not 256 distinct payable strategies: an airbent
+Wan Shi Tong selected X from its printed cost but paid fixed {2}. CR 107.3b
+requires X=0. Shared selected-cost handling fixes announcement and payment;
+any-type mana retains X, and free casts retain additional waterbend X when the
+printed mana cost has no X. The original v5 observations remain frozen evidence
+of that failure, rather than a rules-correct action contract.
+
+The repaired retained prefix agrees across scalar/vector/Python paths at
+non-default capacities. A separately retained historical observation tests the
+256-row encoder boundary without generating or playing those illegal actions.
+Directed debug tests check payment, counters and draws. The active runner and
+analysis now select v7, with fresh initialization, the same 134 decks and recipe,
+512 actions and unchanged evaluation and budget limits. Source freezing and
+fresh launch reconciliation remain required before execution.

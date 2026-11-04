@@ -4,7 +4,7 @@ Jack Heart's accepted outcome is preliminary TLA self-play and paired evaluation
 on the frozen 134-deck trophy population. GPUs and enabling repairs are authorized
 under a cumulative $10 cap, with each allocation <=$1. The corpus, runners,
 Vast integration and GPU learning milestone are delivered. V5 completed three
-updates, then failed at 256 legal actions versus capacity 64 before exporting a
+updates, then failed at 256 offered actions versus capacity 64 before exporting a
 trained checkpoint. The pilot remains incomplete.
 
 [Accepted decisions](questions.md) own scope and provenance;
@@ -32,7 +32,7 @@ identity and widths; they never authorize real replay, encoding or training
 under that identity.
 
 The frozen-source replay matches stream 103 / seed 32172 after 76 actions:
-scalar, vector and Python encoders all reject 256 legal actions at capacity 64.
+scalar, vector and Python encoders all reject 256 offered actions at capacity 64.
 Diagnostic Python configuration at 512 retains all 256; frozen native buffers
 still enforce 64. A configuration-only retry on that source is insufficient.
 
@@ -55,11 +55,18 @@ and controlled non-default capacities, including overflow rejection. Historical
 configurations and all legal actions must remain intact. The implementation cut below now resolves that buffer boundary, with focused
 parity and overflow checks; it is not evidence of completed GPU acceptance.
 
-Prospective v6 now binds the current world/content and tensor shapes, 512
-actions and the unchanged 134 entries in its new regime/protocol. Exact
-executable source freezing and fresh initialization/evaluation remain before
-scoring. The executed v5 identity cannot be
-reused for the repair or silently rebound to main's different world and widths.
+Prospective v7 binds the repaired X-cost rules, current world/content and
+73/56/38 widths, 512 actions and unchanged 134 entries. V6 Run `bcde93e9ff8c`
+(source `ad2c3a010f53`) was frozen but never submitted or scored. Operator
+comment a85a89e8 (18:11 UTC) required examining its 256 offers before training;
+replay identified illegal X=0..255 for an airbend {2} cast of Wan Shi Tong.
+Announcement/payment now share the selected base cost, fixing X=0 here;
+any-type mana preserves X and free casts preserve additional waterbend X when
+the printed cost has no X. Current source replay has no illegal X choice.
+Historical evidence stays frozen; no training may use the prepared v6 Run.
+The other live Vast rental 59143644 / session d123328bc691 belongs to
+`state_representation_gpu`, Run 9c7c8e6841a4, source 27a12642200a in Task
+5da5f4's checkout. It is outside MTG-213's allocation and cleanup ownership.
 
 Remaining acceptance: an admitted trained checkpoint, complete paired schedule
 and a report of learning and full cost relative to Elemental. The next execution
@@ -101,7 +108,7 @@ release completion receipt at the same commit's `scratch/etude-release-status.md
 Uncommitted pre-compression evidence is preserved in
 `.runs/mtg213/context-before-compress-20261104-1745/`.
 
-Check: release extension rebuilt/atomically installed; 50 buffer regressions and focused v6 identity/discovery checks pass, as does the debug Rust `learn_outside_focus_is_complete_and_capacity_errors_are_explicit` test; Ruff and diff checks pass. Gate owns affected suites, full debug/Clippy, current-world admission, training checks and CI collection.
+Check: release extension rebuilt/atomically installed; initial 50 buffer checks passed, then seven changed historical/live-prefix checks and seven prospective identity/discovery checks passed after the X repair; directed debug Wan Shi Tong and free-cast additional-X tests pass. Ruff passes. Gate owns affected suites, full debug/Clippy, current-world admission, training checks and CI collection.
 
 ## Current implementation cut
 
@@ -110,14 +117,14 @@ capacity/default selection. `input_buffer_config` remains the single native
 owner of configurable axes for scalar/vector buffers; relation/shared-effect
 widths and historical input semantics remain fixed. Validate all companions
 before scalar copies, preserving explicit overflow and public-history bounds.
-Add controlled non-default capacity and retained 256-action parity fixtures.
+Keep controlled non-default capacity parity, a historical 256-offer transport fixture and repaired live-prefix parity. Remove the printed-cost-only X announcement predicate in favor of shared casting_mana_cost.
 The prospective pilot keeps v7, 128 cards, 40 permanents, 128 facts, 512 actions,
 2 focus objects and 32 legacy events; no population or recipe change beyond
 current runtime binding and the repaired action capacity. Publication and
 landing remain the caller Graph's delivery steps.
 
-The active experiment entry moves from `tla_pilot_v5.py` to `tla_pilot_v6.py`
-with its analysis/discovery consumers. Delete the v5 entry rather than keep a
+The active experiment entry moves from `tla_pilot_v5.py` through unsubmitted v6 to `tla_pilot_v7.py`
+with its analysis/discovery consumers. Delete both predecessor entries rather than keep a
 second live launcher; frozen v5 protocols, regimes, data and source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd` remain the historical execution path.
 

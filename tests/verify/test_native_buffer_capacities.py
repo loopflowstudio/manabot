@@ -1,5 +1,6 @@
 """Supplied tensor axes govern native encoding, including retained pilot failures."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -61,10 +62,41 @@ def test_nondefault_axes_match_scalar_vector_and_python(
         vector.step_into_buffers([0])
 
 
-@pytest.mark.parametrize(
-    "capacity,permanents", [(64, 40), (255, 40), (256, 40), (777, 40), (777, 1)]
-)
-def test_retained_256_actions_respect_supplied_capacity(
+@pytest.mark.parametrize("capacity", [64, 255, 256, 777])
+def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) -> None:
+    # These offers were an X-cost rules defect. Preserve their transport bytes;
+    # do not require the repaired game to offer them or execute one of them.
+    capture = json.loads(
+        (
+            Path(__file__).parents[1] / "fixtures/tla-pilot-action-observation.json"
+        ).read_bytes()
+    )
+    obs = managym.Observation.from_json(json.dumps(capture["observation"]))
+    assert len(obs.action_space.actions) == 256
+    scalar = managym.Env(seed=213)
+    encoder = ObservationEncoder(
+        ObservationConfig(
+            policy_input_version=7,
+            max_cards_per_player=128,
+            max_actions=capacity,
+        )
+    )
+    into = encoder.allocate()
+    if capacity < 256:
+        with pytest.raises(ValueError, match=f"actions 256 > {capacity}"):
+            encoder.encode(obs)
+        with pytest.raises(ValueError, match=f"actions 256 > {capacity}"):
+            scalar.encode_observation_into(obs, into)
+    else:
+        reference = encoder.encode(obs)
+        scalar.encode_observation_into(obs, into)
+        assert reference["actions_valid"].sum() == 256
+        for key, expected in reference.items():
+            np.testing.assert_array_equal(into[key], expected, err_msg=key)
+
+
+@pytest.mark.parametrize("capacity,permanents", [(64, 40), (777, 40), (777, 1)])
+def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     capacity: int, permanents: int
 ) -> None:
     evidence = read_failure(
@@ -92,7 +124,9 @@ def test_retained_256_actions_respect_supplied_capacity(
     last = game.actions[-1]
     assert isinstance(last, int)
     obs, *_ = scalar.step(last)
-    assert len(obs.action_space.actions) == 256
+    assert not obs.game_over
+    assert len(obs.action_space.actions) < 256
+    assert all(action.mode_index is None for action in obs.action_space.actions)
     encoder = ObservationEncoder(
         ObservationConfig(
             policy_input_version=7,
@@ -104,22 +138,19 @@ def test_retained_256_actions_respect_supplied_capacity(
     into = encoder.allocate()
     buffers = _vector_buffers(encoder)
     vector.set_buffers(buffers)
-    if capacity < 256 or permanents == 1:
-        error = f"actions 256 > {capacity}" if capacity < 256 else "permanents"
-        if permanents == 1:
-            assert max(len(obs.agent_permanents), len(obs.opponent_permanents)) > 1
+    if permanents == 1:
+        assert max(len(obs.agent_permanents), len(obs.opponent_permanents)) > 1
         for encode in (
             lambda: encoder.encode(obs),
             lambda: scalar.encode_observation_into(obs, into),
             lambda: vector.step_into_buffers([last]),
         ):
-            with pytest.raises(Exception, match=error):
+            with pytest.raises(Exception, match="permanents"):
                 encode()
     else:
         reference = encoder.encode(obs)
         scalar.encode_observation_into(obs, into)
         vector.step_into_buffers([last])
-        assert reference["actions_valid"].sum() == 256
         for key, expected in reference.items():
             np.testing.assert_array_equal(into[key], expected, err_msg=key)
             np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)

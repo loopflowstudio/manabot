@@ -30,7 +30,7 @@ from etude.report import Curve, Matches, Report, Score
 from pydantic import Field
 import torch
 
-from experiments import tla_pilot_v6
+from experiments import tla_pilot_v7
 from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -45,9 +45,9 @@ from manabot.training.regime import TrainingRegime
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENT = "tla_pilot_v6"
-REGIME = ROOT / "experiments/regimes/tla-trophy-213-v6.json"
-PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v6.json"
+EXPERIMENT = "tla_pilot_v7"
+REGIME = ROOT / "experiments/regimes/tla-trophy-213-v7.json"
+PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v7.json"
 GAMES_PER_PAIR = 4
 
 type Anchor = Literal["heuristic", "initial"]
@@ -141,7 +141,7 @@ def _source() -> list[Path]:
 
 def environment(protocol: Protocol) -> Environment:
     return Environment(
-        name="tla-trophy-213-v6",
+        name="tla-trophy-213-v7",
         files=canonical_sha256(
             {
                 "world": managym.world_identity(),
@@ -174,7 +174,7 @@ def comparison_schedule(
     required checkpoints can be played, but all slots count in the analysis.
     """
     if run.experiment != EXPERIMENT:
-        raise ValueError("v6 comparisons require a fresh v6 initialization")
+        raise ValueError("v7 comparisons require a fresh v7 initialization")
     source = _source()
     inference = Inference(source=source)
     heuristic = Code(name="heuristic", source=source, config={"kind": "heuristic"})
@@ -222,7 +222,7 @@ def comparison_schedule(
 def eval(state: ExperimentState) -> list[Job]:
     """Play available comparisons; Etude owns already-delivered matches."""
     if state.experiment != EXPERIMENT:
-        raise ValueError("v6 evaluation requires fresh v6 training runs")
+        raise ValueError("v7 evaluation requires fresh v7 training runs")
     _, protocol = frozen()
     matchups = tuple(
         comparison.matchup
@@ -235,13 +235,13 @@ def eval(state: ExperimentState) -> list[Job]:
     return [
         evaluation(
             Benchmark(
-                name="tla-trophy-paired-v6",
+                name="tla-trophy-paired-v7",
                 environment=environment(protocol),
                 matchups=matchups,
             ),
             # Etude discovers this file with runpy; callbacks need an importable
             # module identity even when eval itself came from <run_path>.
-            play=tla_pilot_v6.play,
+            play=tla_pilot_v7.play,
             workers=1,
             max_hours=4,
         )
@@ -329,7 +329,7 @@ def play(match: Match) -> Tables:
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="tla-trophy-213-v6",
+        arena_version="tla-trophy-213-v7",
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),

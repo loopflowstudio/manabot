@@ -108,3 +108,24 @@ completed at 17:40:58 UTC; release and provider handoff facts are consolidated
 there. Their complete pre-edit text, together
 with this file and the report, is preserved under
 `.runs/mtg213/context-before-compress-20261104-1745/`.
+
+## X-cost blocker found before v6 submission — 2026-11-04 UTC
+
+Operator comment a85a89e8 (18:11 UTC), read during fresh launch reconciliation,
+requires investigating the 256 X offers before any successor training. The
+prepared v6 Run `bcde93e9ff8c` / source `ad2c3a010f53` was never submitted: a
+new unrelated/unidentified Vast instance failed the empty-inventory guard first.
+Do not reuse this prepared Run after a rules repair.
+
+Exact current-source replay identifies Wan Shi Tong in exile with an airbend
+{2} grant, seven untapped basics and zero ordinary/combat/restricted mana. The
+cast path asks for X from the printed {X}{U}{U}, while payment uses fixed {2},
+so it admits 0..255 and can draw into a deck-out. CR 107.3b fixes X to zero for
+that alternative cost. The independent buffer contract remains needed.
+
+Delete — do not maintain: the printed-cost-only X announcement predicate.
+Use the same selected base cost for announcement and payment; preserve X when
+any-type mana converts colored pips. Add directed Wan Shi Tong payment/counter/
+draw coverage, preserve the historical 256-offer observation as transport-only
+data, and check the repaired live prefix separately. w17 remains open per
+WORLDS.md; bind repaired executable source prospectively before training.
