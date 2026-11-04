@@ -1,40 +1,76 @@
-# Decisions and open questions — 5da5f4
+# MTG-213 — decisions and assumptions (2026-11-04 UTC)
 
-- Jack Heart's 2026-11-04 02:49 UTC direction prioritizes pre-encoding complete
-  effect consolidation after MTG-213 v3 reached270facts. Same-input v5 neural
-  factoring is insufficient. The plan now implements an explicit v7 cut; merged
-  PR416's v6 and every frozen protocol/input/receipt remain unchanged.
-- Lossless grouping preserves full native payload, controller, exact source,
-  membership, multiplicity and order. Semantic deletion/coalescing across
-  distinct activations is deferred unless every relevant continuation is proved;
-  audit intervening grants, expiry, source changes, entrants and additive effects.
-- Historical captures omit native provenance. The transferred270-row audit
-  proves only old-projection roundtrip; do not synthesize the absent source or
-  controller. New native fixtures supply the full-authority proof.
-- Engineering choice: explicit v7 with bounded128payloads/512detailtokens/2048
-  memberships; local fact table excludes active effects. Fresh defaults stayv6.
-  These capacities are not a guarantee over all legal games. Tensor/model/text
-  and native scalar/vector/Python paths must move together.
-- No scientific seed has run. Freeze a revised common-input comparison after
-  the transport passes; previous canaries are excluded. Persistent game memory
-  remains separate. Jack Heart’s 03:01 UTC ship approval authorizes delivery of the bounded repair
-  after gate; fresh defaults and scientific experiments remain unchanged.
-- Task budget is$25total, separate from MTG-213's$10. Only paid rental is deleted;
-  estimate$0.07083924 plus ancillary storage. Three later availability/admission
-  failures created no rental. CPU canary passed all3arms at22–27seconds/update;
-  no training process remains. Preserve all evidence under.runs/representation.
-- RunPod credentials are Doppler etude/prd, artifacts manabot/prd. Inject through
-  nested Doppler commands; never copy/print keys. Task-local Etude state contains
-  only this Task's allocations. No further rental is required for investigation.
-- Older complete decisions and chronology are retained at
-  8e6cc62df:scratch/questions.md and the design at the same commit. PR416's
-  inherited notes remain at3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md.
+Current outcome, dependency and acceptance: `scratch/tla-pilot-verify.md`.
+Results and cost receipts: `experiments/tla-trophy-pilot.md`. Training Wave
+memory now records the accepted shared-effect repair and its evidence limits.
 
-- New native counterexample: an Indefinite LoseKeywords(Flying), later
-  Indefinite AddKeywords(Flying), and later EndOfTurn LoseKeywords still lack
-  flying after cleanup. Existing statics.rs:1407 subtracts all lost_keywords
-  after collecting grants at1478, ignoring grant/removal timestamp order.
-  This predates the projection change. No semantic coalescing is shipped;
-  records/timestamps remain intact. The new directed expiry/grant behavior
-  check uses the existing correctly ordered LoseAllAbilities mechanism.
-  A separate rules repair needs its own world/evidence assessment.
+## Accepted direction
+
+Jack Heart's comment 1540e0ad selects preliminary fixed-corpus TLA self-play
+and evaluation now, superseding the deferred Task brief. Comment 6434b4dd
+authorizes GPUs under a hard $10 cumulative cap and shipping after checks.
+Comment d2108241 requires a launch milestone only after observed GPU learner
+updates, including job/GPU/progress/rate/deadline evidence. Neither quotes nor
+the CPU proof satisfy it.
+
+Comment 42a12145 resolves the next repair: Jack Heart approved shared-effect
+fixed tensors, encoding each effect once and routing it to affected object
+embeddings before attention. Task 5da5f4 delivered the implementation in PR #419 and owns redundant-
+activation investigation. Preserve semantics; no competing representation
+implementation or unchanged v3 retry. V4 consumed that contract; the prepared
+v5 retains it with fresh initialization/evaluation and the same budget/population.
+
+## Scientific and operational choices
+
+- Population: CC BY 4.0 public TLA PremierDraft dump; the trophy API restricts
+  reuse to 17Lands.com. First 1,000 events with seven observed wins in source
+  order, retaining seventh-win main/sideboards and event/build/results. Missing
+  losses remain unknown. Native whole-list admission yielded 134 eligible and
+  866 rejected without resampling. This is historical trophy data, not a uniform
+  draft sample. Live fetching and held-out-deck generalization are deferred.
+- Recipe: MTG-181/183's 64x2/four-head damped policy, with explicit new-world,
+  full-vocabulary and trophy-population deviations; no checkpoint or budget
+  inheritance. The $1 allocation, 100-update target, 2,700-second watchdog and
+  eight-pair/four-leg evaluation are frozen engineering choices.
+- Credentials: nested Doppler `manabot/prd` then `etude/prd` supplies artifacts
+  and RunPod. Configured GPU alternatives are authorized within $10; record
+  hardware/allocation deviations before scoring. Quotes reserve nothing.
+- Launch: freeze source once through `source.freeze`, retain the typed Run,
+  quote/submit through `client.launch_cohort`. Etude 0.2.12 could not append
+  cohort runs, so `mtg213-pilot-v1-correction1` used a separate $1 ceiling
+  without creating a scientific sample. T6 and MTG-239 retain separate owners.
+- Analysis: retain milestones after early endpoints and both comparison slots
+  for unknown endpoints. Failed callbacks count as failed matches; unknown
+  games remain missing and attempted games are a lower bound. The companion
+  analysis CLI owns the joint criterion; Etude curves are descriptive.
+
+## Frozen compatibility and provenance
+
+V1's 140 distinct facts exceeded 128. The operator selected v6/512, then 256
+following Jack Heart's question (78f4c226); be5b1394 relays his explicit approval
+of the immediate larger-capacity hotfix. Comment 0c17ad58 was an operator-issued
+run reason, not separate human confirmation. No v2 execution/scoring existed
+at amendment (`.runs/mtg213/v2-pre-amendment-state.json`). V6 retains all columns,
+timestamp rank / 128 and fatal overflow; v5 stays fixed at 128 and legacy
+serialization omits `max_facts`. Generic fresh v6 defaults to 512.
+
+PR #415 changed the native digest, so v3 bound the merged runtime with the same
+134 entries, v6/256, recipe and schedule. The later 306-list admission audit
+never expands this population. V3's 270-row failure invalidates its capacity
+assumption; frozen v1/v2/v3 inputs and evidence remain reproducibility records.
+The native/Python duration-parity repair does not refresh those runtime pins.
+
+Historical details: `b0d921cec92784d9303aea3d0d904416e8607982:scratch/questions.md`
+retains source-binding decisions, fixture repairs, documentation contributions,
+sync resolution and links to older decision history. V2 source is
+`d655d37996d2702cd5fee6ac37db11d855e87640`; pre-merge validation is at
+`7b8bb32731205981b6be09097eb4ca4b39b3864f:experiments/tla-trophy-pilot.md`.
+Uncommitted continuation notes before consolidation are preserved in
+`.runs/mtg213/context-before-compress/`; their substantive findings remain in
+the continuation note. The manifest retains all 120 added v3 evidence entries.
+
+Shared-effect owner decisions remain at `fb5ad2c1372f9c967b550f0b8ae0f84883f75563:scratch/questions.md`; its memory section was preserved during integration.
+
+Prospective v4 uses delivered v7 defaults explicitly: 128 local facts, 128 × 18 effect headers, 512 × 3 details, 2048 × 2 memberships. Protocol schema 3 serializes every ObservationSpace shape and checks it at runtime; capacities remain bounded engineering choices, not universal coverage. This is a new initialization, preserving the prior recipe and all 134 entries.
+
+V4 failed before learning at 61 card objects including sideboard (40 original cards + 5 tokens + 16 sideboard). Under the existing workflow-bug authorization, the prospective v5 pilot explicitly raises the existing `max_cards_per_player` configuration to 128, retaining v7 and all shared-effect capacities. This is an operator allocation to accommodate generated objects, not a representation change, population exclusion or universal bound. V4 source/evidence remains frozen at `0b6c2bb854ba48b37fb7e5ac360c0c9d047cea34`.
