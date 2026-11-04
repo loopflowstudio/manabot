@@ -25,12 +25,18 @@ use crate::{
     },
 };
 
-/// What to do with the resolving object once its effects finish (CR 608.2m:
-/// a spell moves out of the stack as the final part of its resolution).
+/// The caller awaiting a frame's completion. A child owns exactly one return
+/// destination; unfinished effects never grant priority or expose a saved
+/// decision. Spells leave the stack as the final part of resolution (CR 608.2m).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum FrameFinalize {
-    /// Abilities: nothing to clean up.
-    None,
+pub enum FrameCompletion {
+    /// A completed root ability restarts the priority round.
+    Priority,
+    /// An iteration child returns to its interrupted scope.
+    Frame(Box<EffectFrame>),
+    /// Cost effects finish before the saved caller decision becomes available.
+    /// Its frame, output and parent payment remain owned here across choices.
+    Decision(Box<SuspendedResolution>),
     /// Spells: remove the stack object, then put the card into the
     /// battlefield (permanents) or graveyard. A resolving Aura spell enters
     /// attached to `attach_to`, the object its attach instruction chose
@@ -56,9 +62,6 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
-    /// Interrupted scope. Only the root owns stack finalization and priority.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent: Option<Box<EffectFrame>>,
     /// An iteration owns its remaining subjects while one child scope runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iteration: Option<TargetIteration>,
@@ -122,7 +125,7 @@ pub struct EffectFrame {
     pub ability: Option<usize>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
-    pub finalize: FrameFinalize,
+    pub completion: FrameCompletion,
 }
 
 /// Runtime progress through one authored `ForEachTarget`, not another program.
@@ -137,7 +140,6 @@ impl EffectFrame {
     /// their source and targets; only a root spell supplies finalization.
     pub(crate) fn new(controller: PlayerId, effects: Vec<Effect>) -> Self {
         Self {
-            parent: None,
             iteration: None,
             remembered: Vec::new(),
             inherited_from: None,
@@ -160,7 +162,7 @@ impl EffectFrame {
             grantor: None,
             ability: None,
             queue: effects.into(),
-            finalize: FrameFinalize::None,
+            completion: FrameCompletion::Priority,
         }
     }
 
@@ -190,7 +192,7 @@ impl EffectFrame {
             ability: self.ability,
             ..Self::new(self.controller, iteration.effects.clone())
         };
-        child.parent = Some(Box::new(self));
+        child.completion = FrameCompletion::Frame(Box::new(self));
         child
     }
 
@@ -280,6 +282,13 @@ pub enum ResolutionCastOffer {
         source: ObjectRef,
         predicate: CardPredicate,
     },
+}
+
+/// Which end of the library receives an ordered group (first to draw first).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LibraryEnd {
+    Top,
+    Bottom,
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -387,8 +396,8 @@ pub enum Decision {
         top: Vec<CardId>,
         bottom: Vec<CardId>,
     },
-    /// Surveil (CR 701.25): each selected card goes to the graveyard;
-    /// declining keeps the rest on top in order.
+    /// Surveil (CR 701.25): select cards for the graveyard, then order
+    /// the kept cards on top through the shared library-order decision.
     Surveil {
         player: PlayerId,
         /// Inspected cards still on top of the library, top first.
@@ -411,11 +420,14 @@ pub enum Decision {
         min_select: usize,
         max_select: usize,
     },
-    /// Order inspected library cards on the bottom, nearest the top first.
-    /// Each choice commits its placement; only unplaced cards remain visible.
-    OrderLibraryBottom {
+    /// Order inspected cards, first to draw first. `cards[..next]` is the
+    /// committed prefix; the suffix contains the remaining choices. Top
+    /// ordering keeps the whole inspected segment pinned and visible.
+    OrderLibrary {
         player: PlayerId,
-        remaining: Vec<CardId>,
+        cards: Vec<CardId>,
+        next: usize,
+        end: LibraryEnd,
     },
     /// Search for up to `remaining` more land cards with different names,
     /// revealing each (Elemental Teachings). The revealed cards stay in the
@@ -556,7 +568,7 @@ impl Decision {
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
             | Decision::Surveil { player, .. }
-            | Decision::OrderLibraryBottom { player, .. }
+            | Decision::OrderLibrary { player, .. }
             | Decision::LookAndSelect { player, .. }
             | Decision::Modal { player, .. }
             | Decision::Learn { player }
@@ -581,7 +593,12 @@ impl Decision {
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
-            Decision::OrderLibraryBottom { remaining, .. } => remaining,
+            Decision::OrderLibrary {
+                cards, next, end, ..
+            } => match end {
+                LibraryEnd::Top => cards,
+                LibraryEnd::Bottom => &cards[*next..],
+            },
             Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
@@ -838,6 +855,18 @@ impl Game {
         }
     }
 
+    /// Run cost effects before making the caller's next decision available.
+    /// The caller has already committed its earlier costs; resumption restores
+    /// its exact progress instead of invoking the payment entry point again.
+    pub(crate) fn run_before_decision(
+        &mut self,
+        mut child: EffectFrame,
+        caller: SuspendedResolution,
+    ) {
+        child.completion = FrameCompletion::Decision(Box::new(caller));
+        self.run_frame(child);
+    }
+
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
@@ -847,9 +876,16 @@ impl Game {
                 continue;
             }
             let Some(effect) = frame.queue.pop_front() else {
-                if let Some(parent) = frame.parent.take() {
-                    frame = *parent;
-                    continue;
+                match frame.completion {
+                    FrameCompletion::Frame(parent) => {
+                        frame = *parent;
+                        continue;
+                    }
+                    FrameCompletion::Decision(caller) => {
+                        *self.state.suspended_decision_mut() = Some(*caller);
+                        return;
+                    }
+                    FrameCompletion::Priority | FrameCompletion::Spell { .. } => {}
                 }
                 self.finalize_frame(frame);
                 return;
@@ -865,7 +901,7 @@ impl Game {
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
-        if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
+        if let FrameCompletion::Spell { card, attach_to } = frame.completion {
             // A spell that exiled itself ("Exile Avatar's Wrath") has
             // already left the stack (CR 608.2n).
             if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
@@ -1137,15 +1173,22 @@ impl Game {
                 player,
                 revealed: cards,
                 ..
-            }
-            | Decision::OrderLibraryBottom {
-                player,
-                remaining: cards,
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(*player, cards.iter().copied(), false),
                 focus: self.card_focus(cards),
+            },
+            Decision::OrderLibrary {
+                player,
+                cards,
+                next,
+                ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(*player, cards[*next..].iter().copied(), false),
+                focus: self.card_focus(&cards[*next..]),
             },
             Decision::Discard { player, .. } | Decision::OptionalDiscardDraw { player, .. } => {
                 ActionSpace {
@@ -1815,7 +1858,12 @@ impl Game {
                     .any(|c| self.card_matches_predicate(*c, predicate));
                 if *selected >= *max_select || !more_selectable {
                     let rest = std::mem::take(looked);
-                    let decision = self.library_bottom_decision(player, rest, *random_order);
+                    let decision = self.library_order_decision(
+                        player,
+                        rest,
+                        LibraryEnd::Bottom,
+                        *random_order,
+                    );
                     self.continue_resolution(suspended, decision);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -1843,20 +1891,38 @@ impl Game {
                     return Err(err);
                 }
                 let rest = std::mem::take(looked);
-                let decision = self.library_bottom_decision(*player, rest, *random_order);
+                let decision =
+                    self.library_order_decision(*player, rest, LibraryEnd::Bottom, *random_order);
                 self.continue_resolution(suspended, decision);
                 Ok(())
             }
-            (Decision::OrderLibraryBottom { remaining, .. }, Action::SelectCard { card, .. }) => {
-                let Some(index) = remaining.iter().position(|candidate| candidate == card) else {
+            (
+                Decision::OrderLibrary {
+                    player,
+                    cards,
+                    next,
+                    end,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let Some(offset) = cards[*next..]
+                    .iter()
+                    .position(|candidate| candidate == card)
+                else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError(
                         "card is not in the pending library order".into(),
                     ));
                 };
-                remaining.remove(index);
-                self.put_on_bottom_of_library(*card);
-                if remaining.is_empty() {
+                // Move the chosen card into the prefix without disturbing the
+                // relative order of the remaining offers.
+                cards[*next..=*next + offset].rotate_right(1);
+                *next += 1;
+                match end {
+                    LibraryEnd::Bottom => self.put_on_bottom_of_library(*card),
+                    LibraryEnd::Top => self.put_on_top_of_library(*player, cards),
+                }
+                if *next == cards.len() {
                     self.run_frame(suspended.frame);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2017,8 +2083,14 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::Surveil { .. }, Action::Decline { .. }) => {
-                self.run_frame(suspended.frame);
+            (Decision::Surveil { player, looked }, Action::Decline { .. }) => {
+                let decision = self.library_order_decision(
+                    *player,
+                    std::mem::take(looked),
+                    LibraryEnd::Top,
+                    false,
+                );
+                self.continue_resolution(suspended, decision);
                 Ok(())
             }
             (
@@ -2334,25 +2406,41 @@ impl Game {
 
     /// Random placement and owner-chosen placement share the same library
     /// move. A singleton is forced and needs no pending choice.
-    fn library_bottom_decision(
+    fn library_order_decision(
         &mut self,
         player: PlayerId,
         mut cards: Vec<CardId>,
+        end: LibraryEnd,
         random_order: bool,
     ) -> Option<Decision> {
         if !random_order && cards.len() > 1 {
-            return Some(Decision::OrderLibraryBottom {
+            return Some(Decision::OrderLibrary {
                 player,
-                remaining: cards,
+                cards,
+                next: 0,
+                end,
             });
         }
         if random_order {
             cards.shuffle(self.state.rng_mut());
         }
-        for card in cards {
-            self.put_on_bottom_of_library(card);
+        match end {
+            LibraryEnd::Bottom => {
+                for card in cards {
+                    self.put_on_bottom_of_library(card);
+                }
+            }
+            LibraryEnd::Top => self.put_on_top_of_library(player, &cards),
         }
         None
+    }
+
+    /// Reorder inspected library cards, first to draw first. Their exact
+    /// objects survive: placement within a zone emits no zone-change events.
+    fn put_on_top_of_library(&mut self, player: PlayerId, cards: &[CardId]) {
+        let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
+        library.retain(|card| !cards.contains(card));
+        library.extend(cards.iter().rev());
     }
 
     /// Move a library card to the bottom of its owner's library. Not a zone

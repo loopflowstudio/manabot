@@ -1,21 +1,19 @@
 # MTG-241 decisions — 2026-11-04
 
 Jack Heart authorized one composable-rules PR, stopping at interactive review;
-no merge, auto-merge or experiments. The directive snapshot is in
+no merge, auto-merge or experiments. Directive snapshot:
 `.lf/prompts/20261104-121409-da34bb73-ee11-4664-ae5a-7799bda7c435-aryo5a-summary.md`.
-The inherited T7 note remains historical at `4463e57f5:scratch/questions.md`.
+Inherited T7 history remains at `4463e57f5:scratch/questions.md`.
 
-Nested iteration owns a fresh result scope; branches/sequences within it share
-that scope. Parent results and finalization stay suspended until every child
-completes. Native Effect remains the only authored program. This internal cut
-and both contextual-read fixes are implemented and tested, not the full Task.
+The [plan](mtg-241-composable-rules-execution.md) owns the implementation decisions,
+coordination, evidence and remaining deletions. No product judgment or new
+permission is needed. Actual linked-entry replacement suspension remains unbuilt.
 
-The proposed frame-local replacement continuation proved insufficient: a mana
-cost's sacrifice can return an exiled card whose entry asks a replacement
-question; synchronous payment and zone postambles would overwrite that question.
-A retained completion protocol across effect, event-batch and payment owners is
-the unresolved architecture boundary. The [plan](mtg-241-composable-rules-execution.md)
-records exact callers, the revised proposal, deletions and remaining acceptance.
-Replacement and selection executors remain unchanged pending that design review.
-MTG-242 received the concrete payment-interface finding; MTG-243 the frame shape.
-MTG-244's layers remain untouched. No competing Tasks or worktrees were created.
+Reversible implementation choice: top and bottom ordering share `OrderLibrary`;
+top keeps its inspected prefix visible while bottom retains remaining-only
+visibility. Existing bottom code 23 stays fixed; top code 27 is appended.
+No real current definition prints Surveil above 1, so a constructed rules program
+proves arbitrary kept order while Joo Dee verifies existing real-card behavior.
+This does not claim atomic Surveil movement or its full keyword-event contract.
+
+Full event/result and policy-input version choices remain implementation work.

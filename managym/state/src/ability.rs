@@ -962,9 +962,7 @@ pub enum Effect {
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
     Scry { count: usize },
     /// Surveil `count` (CR 701.25): look at the top cards and put any
-    /// number of them into the graveyard. Kept cards stay on top in their
-    /// existing order, which is the whole choice for surveil 1, the only
-    /// amount the pool prints.
+    /// number of them into the graveyard, then order the kept cards on top.
     Surveil { count: usize },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your

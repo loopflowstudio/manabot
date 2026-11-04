@@ -2,127 +2,177 @@
 
 ## Outcome and status
 
-Accepted directive: Jack Heart, 2026-11-04. One PR using the code Graph, review
-boundary only. Implementation began from `4463e57f5` (also the local main ref;
-source findings at `5dd11cec4` still apply). The independent iteration and
-contextual-read cut is implemented; the full Task is incomplete. The wider
-replacement completion design requires review before its dependent cut.
-No training, publication, landing or retained-evidence rewriting occurred.
+Accepted directive: Jack Heart, 2026-11-04. One PR using the code Graph, stopping
+at interactive review. Base `4463e57f5`; checkpoint `37928095d` contains nested
+iteration and both contextual-read fixes. The working tree adds common frame
+completion and shared library ordering. The full Task is **incomplete**, with
+replacement/event completion the largest remaining cut. No human decision is
+missing. No publication, merge, training or retained-evidence rewriting occurred.
+This Task has no Wave.
 
-Effect execution must retain nested operations, exact objects, scoped results
-and root finalization across native choices. Replacement proposals must retain
+Effect execution retains nested operations, exact objects, scoped results and
+root finalization across native choices. Replacement proposals must retain
 transformed events, affected chooser, applied identities and logical batches,
-re-evaluate applicability, and emit facts only at commit. Selection primitives
-must preserve cardinality, visibility, order, shuffle, reveal and result binding.
+re-evaluate applicability, and emit facts only at commit. Selection must preserve
+cardinality, visibility, order, shuffle, reveal and result binding.
 
-## Owners and approach
+## Implemented ownership
 
-`EffectFrame`/`run_frame` own execution and completion; `Decision` owns the current
-question. Iteration retains its parent and remaining targets, creates a fresh
-child scope, and returns without granting priority. Conditional branches use
-the current scope. `proposed_event.rs` owns transformation and commit; callers
-must retain their post-commit obligations rather than treating suspension as a
-boolean result. `Game::select` and exact object references remain authoritative.
-Observation continuation projection follows the same retained ownership chain.
-`EffectFrame::new` owns fresh-scope initialization for roots and iteration
-children. Callers bind only their source, targets and completion; result fields
-start empty in one place. Frame fields and their serialized meanings stay intact.
+`EffectFrame`/`run_frame` own execution; `Decision` owns the current question.
+Native `Effect` remains the sole authored program. `FrameCompletion` now owns
+one return destination: `Priority`, `Spell`, `Frame(Box<EffectFrame>)`, or
+`Decision(Box<SuspendedResolution>)`. It replaces the independent `parent` and
+`finalize` fields. Iteration keeps its remaining targets and creates a fresh
+child scope; branches share their scope. Parent results and stack cleanup wait
+until every child completes. `EffectFrame::new` initializes fresh result state.
+
+`advance_mana_upfront` commits the automatic mana prefix, tap and life costs,
+then retains the output decision and original payment frame. A sacrifice runs
+through `run_before_decision` as an ordinary effect frame. Completing it restores
+the saved output without re-entering payment, paying costs again or granting
+priority. Nested continuation projection includes the saved caller's frame and
+obligation chain before the active child.
+
+Mana activation transfers the caller frame and decision by ownership; it does
+not clone the decision chain or allocate a placeholder frame to overwrite.
+
+This establishes the completion owner and its payment caller, **not** resumable
+zone/replacement execution. The cost-completion witness uses a constructed child
+program (sacrifice then Surveil) to exercise a real pause through Commands. It is
+not evidence of the still-unimplemented linked-entry replacement scenario.
+
+`OrderLibrary` owns both top and bottom ordering. It retains cards, a committed
+prefix cursor and `LibraryEnd`. Bottom ordering preserves its existing immediate
+placement and private remaining-card contract (obligation code 23). Surveil's
+keep action enters top ordering when multiple cards remain; all kept cards stay
+privately visible/pinned, and choices commit a first-to-draw-first prefix. Top
+ordering appends obligation code 27; its `mode` is the prefix length. Native
+context, labels, text and Academy name that choice. The shared encoders already
+encode the obligation code/cursor and visible library cards in their native order.
+Existing widths and code meanings are unchanged. Complete iteration/results and
+event payload projection still needs its explicit policy version boundary.
+
+Top placement has one helper for forced and chosen ordering. Selecting a card
+rotates it into the committed prefix, preserving the remaining offer order
+without removing and reinserting it. Nested iteration, payment and ordering
+witnesses share the same bound Command/replay/stale-rejection check.
 
 ## Delete — do not maintain
 
-- Removed: the local ForEachTarget subframe loop and its no-decision assertion.
-  Retained parent frames preserve target eligibility/order, isolated child
-  results and root finalization. Continuation projection emits the parent chain.
-- Removed: owner-based entry-condition reads and live-only SourcePower. The
-  surviving reads use prospective entry control and exact-source current/LKI power.
-- Removed: repeated fresh-frame literals in resolution, rule decisions and
-  fixtures, and the one-use `with_parent` helper. New child scopes share the
-  constructor; the interrupted parent retains its own results and cleanup.
-- Specialized MillAndSelect, ReturnMilledThisWay, OptionalDiscardDraw, MayDiscard,
-  SearchBasicLand and overlapping search/move handlers and their dedicated
-  decisions, after migrating real card consumers to the shared selection owner.
-  Preserve keyword-specific events, private viewing, decline and ordered remainders.
-- Fixed-order/one-pass replacement application. Preserve no-replacement speed,
-  exact applicability, pre-batch sources, transformed event and single commit.
+Removed in checkpoint `37928095d`:
+- Local ForEachTarget subframe loop and no-decision assertion; retained scopes
+  preserve eligibility/order, isolated results and root finalization.
+- Owner-based entry conditions and live-only SourcePower. Surviving reads use
+  prospective entry control and exact-source current/LKI power.
+- Repeated fresh-frame literals and the one-use `with_parent` helper.
 
-## Remaining implementation and witnesses
+Removed in the working tree:
+- Independent `EffectFrame.parent` and `FrameFinalize` ownership; completion
+  names the interrupted scope or caller in one place.
+- Mana sacrifice's post-call `ManaUpfront` mutation; its output is retained
+  before child work starts.
+- Mana activation's cloned resume chain and throwaway frame; transfer the
+  retained caller directly.
+- `OrderLibraryBottom` and `library_bottom_decision`; all current consumers use
+  shared top/bottom ordering. Surveil no longer resumes immediately on keeping
+  multiple cards.
 
-1. Extend the reviewed completion protocol beyond effect scopes (see counterexample
-   below); preserve the now-working nested iteration and contextual reads.
-2. Shared selection migration and Surveil 2+ kept ordering; exact result use,
-   decline/private inspection, simultaneous moves and replay/fork checks.
-3. Resumable replacement batches: affected-player order, newly applicable
-   replacements, once-per-event identity; Leaves from the Vine counters yield
-   three or four with Caradora and Doubling Season in the selected order.
-4. Native/Python policy, LLM, Academy, replay and reconnect projection; explicit
-   version boundaries where meanings change. Preserve frozen inputs/evidence.
-5. Gate owns affected suites and
-   automated acceptance once, including same-runner Engine Budget and world
-   admission checks from `docs/development.md`.
+Still slated for removal in the same PR:
+- MillAndSelect, ReturnMilledThisWay, OptionalDiscardDraw, MayDiscard,
+  SearchBasicLand and overlapping search/move handlers and dedicated decisions,
+  after moving real-card consumers to shared selection. Preserve distinct
+  keyword events, private inspection, decline and ordered remainders.
+- Fixed-order/one-pass replacement processing. Preserve exact applicability,
+  cheap no-replacement execution, pre-batch sources and single commit.
+- Synchronous zone/event postambles whose callers can suspend. Replace them
+  with retained completion/results, not a pending-as-success bool/void adapter.
 
-## Completion-boundary counterexample and revised design proposal
+## Remaining implementation and acceptance
 
-Discovered 2026-11-04 during implementation. An EffectFrame-only replacement
-continuation cannot satisfy the accepted timing contract:
+1. Extend common completion across event batches and zone entry, combat and
+   SBA callers. Event results must carry committed/moved objects and damage
+   results to the interrupted instruction, before its suffix or caller resumes.
+   The current payment frame is ready to retain child work, but sacrifice,
+   zone moves and `finalize_frame` still execute synchronously underneath it.
+2. Retain replacement batches across affected-player ordering choices. Recheck
+   applicability after every replacement, retain applied identities and all
+   proposals, and commit the logical batch once using pre-batch sources.
+   Leaves from the Vine with Caradora and Doubling Season must yield three or
+   four counters depending on order. These replacement types/cards are not
+   implemented in this checkout. A separate witness must make a previously
+   inapplicable replacement applicable and prevent identity reapplication.
+3. Actual payment integration witness: sacrifice a mana source with a linked
+   return; suspend the return's entry replacement; show committed costs remain
+   single, output unavailable until completion, and original payment resumes.
+   Neither the constructed completion test nor existing Prism/Treasure tests
+   proves this integration yet.
+4. Complete shared candidate/move/result selection migration and delete the
+   listed composite handlers. Surveil kept ordering is implemented; its
+   graveyard selections still move one at a time, so simultaneous selection
+   movement and the complete keyword-event contract remain open.
+5. Complete versioned native/Python inputs, learning, LLM, Academy and reconnect
+   coverage for nested iteration/results and future batches. Retained caller
+   inspection across nested decisions also needs auditing: current observation
+   and determinization inspected-card readers primarily use the active Decision.
+   Current root/caller frame projection alone does not establish full observability.
+   World/hash and capture version boundaries and a new conformance corpus remain
+   part of the completed change; frozen receipts must not be rewritten.
+6. Gate owns full debug Rust/Clippy, affected Python and headless Academy checks,
+   world admission and same-runner Engine Budget under `docs/development.md`.
+   No speed claim follows from focused checks. A rules-driven digest change
+   requires its own explanation and accepted baseline handling.
 
-- `advance_mana_upfront` (`flow/mana.rs`) sacrifices a source, then replaces the
-  retained ManaUpfront obligation with ManaChoice. `sacrifice_permanent` calls
-  `move_card`; `commit_zone_move` calls `handle_leaves_battlefield`, which can
-  return linked exiled cards. With competing entry replacements, that return
-  must ask a question before the payment can finish. Installing a replacement
-  Decision inside today's synchronous helpers would be overwritten by the
-  payment's postamble, and falsely treating suspension as success credits output.
-- `finalize_frame` similarly moves a permanent spell, then emits SpellResolved
-  and restarts priority. A pending entry replacement is not a completed spell.
-- Combat damage accumulates hits in a local vector; Saga entry recursively puts
-  counters during zone commit. Neither has a retained completion boundary.
-  Per-target iteration also does not, by itself, preserve one simultaneous event.
+## Completion-boundary evidence and next interface
 
-The initial local-frame approach is therefore insufficient for the replacement
-cut. Proposed revision (not implemented): retain event transformation as a child
-operation with explicit completion carrying event results to its caller. Root
-completion distinguishes resolution, payment, turn action and SBA stabilization;
-zone entry owns its remaining post-commit work, and a logical batch owns all
-proposals plus pre-batch trigger sources until every replacement is settled.
-The no-replacement case returns Completed inline. Pending is never represented
-as a false/true commit result. The same protocol resumes the original payment
-owner; a second replacement-only scheduler or replaying committed costs is not
-an acceptable workaround.
+The original counterexample (2026-11-04) was `advance_mana_upfront` sacrificing
+then assuming `ManaUpfront` survived. `sacrifice_permanent` → `move_card` →
+`commit_zone_move` → `handle_leaves_battlefield` returns linked exiled cards.
+With competing entry replacements, that return must ask a question. Installing
+a Decision in today's synchronous helpers either clobbers its caller or permits
+premature completion. Saving the payment caller now removes its post-sacrifice
+assumption, but does not make those helpers return a child operation.
 
-MTG-242 owns the payment model; this exact call-path counterexample and the new
-root EffectFrame fields were recorded in its Task comments. MTG-243 received
-the retained-frame interface. MTG-244's characteristic algorithm is untouched.
-The wider runtime cut needs an agreed completion interface across these owners;
-selection migration depends on that move/batch owner and remains unstarted.
-The Task is not ready for gate or publication merely because the independent
-checks pass.
+`finalize_frame` likewise moves a permanent spell then emits SpellResolved and
+restarts priority. Combat accumulates hits in a local vector. Saga entry puts
+counters recursively during zone commit. These postambles need retained owners;
+per-target iteration alone cannot preserve a simultaneous event.
 
-## Rules evidence
+Technical continuation of the accepted design: an event batch owns transformed
+proposals, applied identities, logical progress, pre-batch trigger sources and
+results. Its completion returns results to the caller frame/instruction before
+continuing. Zone commit owns its linked returns and Saga follow-up; terminal
+root completion distinguishes resolution, turn action and SBA stabilization.
+No-replacement work completes inline. A second replacement-only scheduler,
+replaying already committed costs, or silently accepting Pending is excluded.
+The concrete batch/result payload is still to be implemented; the frame/caller
+completion interface above is working code, not a claim that this wider cut is done.
 
-Wizards' Aetherdrift release notes (Caradora) state that the affected permanent's
-controller orders counter replacements, including on entry; Foundations release
-notes state Doubling Season also changes entry counters. Thus (1 + 1) × 2 = 4
-and (1 × 2) + 1 = 3 are both meaningful choices.
+## Coordination and evidence
+
+MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. On
+2026-11-04 their shared Task status showed ongoing implementation (242/243).
+Task comments now carry FrameCompletion and the paid-output child protocol;
+MTG-243 also has the code-27 reservation. No response has reserved an input or
+world version. Their checkouts were not modified or copied. Ordinary Task sync
+remains integration; the layers algorithm is untouched.
+
+Wizards' Aetherdrift release notes (Caradora) give counter replacement order to
+the affected permanent's controller, including entry. Foundations release notes
+state Doubling Season also changes entry counters. Thus (1 + 1) × 2 = 4 and
+(1 × 2) + 1 = 3 are distinct legal outcomes:
 - https://magic.wizards.com/en/news/feature/aetherdrift-release-notes
 - https://magic.wizards.com/en/news/feature/foundations-release-notes
 
-Validation (repository root; debug assertions enabled):
+Prior checkpoint evidence is at
+`37928095d:scratch/mtg-241-composable-rules-execution.md`: 43 focused debug tests,
+two real-card contextual tests and one native/Python parity test; extension
+rebuilt/atomically installed. The nested Command witness covers both seats,
+two nesting levels, divergent forks, replay, stale rejection and one finalization;
+the timing witness defers SBAs. Combustion Man uses departed seven-power LKI
+instead of the returned four-power incarnation; raid uses entering control.
 
-- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -p managym --lib -j 2 -- resolution_tests flow::decision:: agent::continuation:: --test-threads=2` — 43 passed.
-- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards -j 2 -- combustion_man_uses_departed_source_power_across_a_choice_and_reentry cruel_administrator_entry_raid_reads_the_entering_controller --test-threads=2` — 2 passed.
-- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — built; cp312 extension atomically installed.
-- `uv run --extra dev pytest tests/verify/test_continuation_input.py::test_native_fixture_relation_parity_and_other_viewer_safety -q` — 1 passed.
-- `cargo fmt --manifest-path managym/Cargo.toml --all --check` and `git diff --check` — passed. Full suites/Clippy, wider observation/reconnect proofs, world receipts and Engine Budget remain with the completed cut and gate.
+Approved `managym/PRINCIPLES.md` and its README link remain. Its final evidence
+paragraph follows Jack Heart's steer: public PRs #42, #348, #353, #289 and #412
+plus the speed investigation, without relying on the uncommitted retrospective.
 
-The iteration Command witness covers both seats, two nesting levels, divergent
-forks, replay, stale rejection and single finalization. The separate timing
-witness leaves lethally damaged creatures present through the sibling choice
-and removes them only after root completion. The real-card LKI witness removes
-and returns Combustion Man while its opponent's decision is pending: seven
-last-known power applies, not the new object's four. Raid differs between owner
-and entering controller. These tests do not prove the unimplemented event-batch
-or shared-selection behavior.
-
-Approved engine principles are in `managym/PRINCIPLES.md` with the README link.
-Its final evidence paragraph follows Jack Heart's 2026-11-04 steer: public PRs
-#42, #348, #353, #289 and #412 plus the existing speed investigation.
+Validation (2026-11-04): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 -p managym --lib -- resolution_tests payment_tests` — 27 passed; the cards target with filters `audit_prism_treasure_empty_pool_activation`, `prism_payment_offers_execute_and_restore_without_mutating_sibling_forks`, `accumulate_wisdom_look_three_pick_one_rest_to_bottom`, `joo_dee_` — 7 passed. Required release wheel rebuilt and extension atomically installed; `uv run --extra dev pytest tests/semantic/test_text_observation.py::test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders -q` — 1 passed. Earlier decision-code bound and text-label checks passed and remain applicable. Formatting, diff whitespace and context-budget checks passed. Gate owns broader checks after implementation; top-order native/Python parity and full reconnect proofs remain unclaimed.

@@ -20,7 +20,7 @@ use crate::{
 
 impl Game {
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
-        use crate::flow::decision::Decision;
+        use crate::flow::decision::{Decision, LibraryEnd};
         match action {
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
@@ -151,9 +151,13 @@ impl Game {
                             self.state.cards[*card].name,
                             if *tapped { " tapped" } else { "" }
                         )),
-                        Decision::OrderLibraryBottom { .. } => Some(format!(
-                            "Put {} next on the bottom",
-                            self.state.cards[*card].name
+                        Decision::OrderLibrary { end, .. } => Some(format!(
+                            "Put {} next on the {}",
+                            self.state.cards[*card].name,
+                            match end {
+                                LibraryEnd::Top => "top",
+                                LibraryEnd::Bottom => "bottom",
+                            }
                         )),
                         Decision::Surveil { .. } => Some(format!(
                             "Put {} into your graveyard",

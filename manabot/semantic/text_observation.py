@@ -114,6 +114,7 @@ _STAGES = frozenset(
         "resolution_cast",
         "surveil",
         "order_library_bottom",
+        "order_library_top",
     )
 )
 
@@ -198,6 +199,7 @@ _OBLIGATIONS = (
     "choose optional payment X",
     "search named cards",
     "choose a permanent to exile",
+    "order library top",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -535,6 +537,8 @@ class _Renderer:
             details.append(f"parent R{relation.parent + 1}")
         if relation.kind == 6 and relation.decision == 25:
             details.append(f"may exile up to {relation.mode} more cards")
+        elif relation.kind == 6 and relation.decision == 27:
+            details.append(f"{relation.mode or 0} kept cards already ordered on top")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):

@@ -55,5 +55,6 @@ export function stageLabel(stage: string): string {
     keep_creatures: 'Choose creatures to keep', retarget: 'Choose a new target',
     resolution_cast: 'Cast a spell now',
     order_library_bottom: 'Order the bottom cards',
+    order_library_top: 'Order the kept cards',
   } as Record<string, string>)[stage] ?? 'Pending decision';
 }

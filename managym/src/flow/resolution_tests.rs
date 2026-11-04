@@ -1240,33 +1240,13 @@ fn nested_iteration_retains_choices_scopes_and_finalizes_once() {
         for first_mode in [0, 1] {
             let mut branch = game.clone();
             for mode in [first_mode, 1 - first_mode] {
-                let index = branch
-                    .action_space()
-                    .unwrap()
-                    .actions
-                    .iter()
-                    .position(|action| {
-                        matches!(action, Action::ChooseMode { mode: choice, .. } if *choice == mode)
-                    })
-                    .unwrap();
-                let frame = branch.semantic_decision_frame().unwrap();
-                let command = Command {
-                    command_id: format!("nested-{first_mode}-{mode}"),
-                    expected_revision: frame.revision,
-                    offer_id: frame.offers[index].id.0,
-                    answers: vec![],
-                    object_preconditions: vec![],
-                };
-                let mut replay = branch.clone();
-                branch.execute_semantic_command(&command).unwrap();
-                replay.execute_semantic_command(&command).unwrap();
-                assert_eq!(
-                    branch.state.deterministic_hash(),
-                    replay.state.deterministic_hash()
+                checked_command(
+                    &mut branch,
+                    Action::ChooseMode {
+                        player: controller,
+                        mode,
+                    },
                 );
-                let after = branch.state.deterministic_hash();
-                assert!(branch.execute_semantic_command(&command).is_err());
-                assert_eq!(branch.state.deterministic_hash(), after);
             }
             assert!(branch.state.suspended_decision.is_none());
             assert!(branch.state.stack_objects.is_empty());
@@ -1338,4 +1318,256 @@ fn nested_iteration_defers_state_based_actions_until_root_completion() {
             .count(),
         1
     );
+}
+
+/// Apply one ordinary bound Command, checking replay and stale rejection at
+/// each choice boundary rather than calling a decision helper.
+fn checked_command(game: &mut Game, action: Action) {
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|candidate| *candidate == action)
+        .expect("action must be a legal offer");
+    let frame = game.semantic_decision_frame().unwrap();
+    let command = Command {
+        command_id: format!("choice-{}", frame.revision),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    let mut replay = game.clone();
+    game.execute_semantic_command(&command).unwrap();
+    replay.execute_semantic_command(&command).unwrap();
+    assert_eq!(
+        game.state.deterministic_hash(),
+        replay.state.deterministic_hash()
+    );
+    let after = game.state.deterministic_hash();
+    assert!(game.execute_semantic_command(&command).is_err());
+    assert_eq!(game.state.deterministic_hash(), after);
+}
+
+#[test]
+fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
+    use crate::agent::observation::Observation;
+
+    for player in [PlayerId(0), PlayerId(1)] {
+        let (mut root, _, _) = fixture(player);
+        // More than two kept cards exposes an intermediate ordered prefix.
+        let looked = root.library_top(player, 4);
+        let original_refs: Vec<_> = looked
+            .iter()
+            .map(|card| root.current_object_ref(*card))
+            .collect();
+        stack(
+            &mut root,
+            Entry::Spell,
+            player,
+            vec![
+                Effect::Surveil { count: 4 },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+            ],
+            vec![],
+            vec![],
+        );
+        root.resolve_top_of_stack();
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        checked_command(
+            &mut root,
+            Action::SelectCard {
+                player,
+                card: looked[0],
+            },
+        );
+        assert_eq!(
+            root.state.zones.zone_of(looked[0]),
+            Some(ZoneType::Graveyard)
+        );
+        checked_command(&mut root, Action::Decline { player });
+        let before = root.state.deterministic_hash();
+        let hand = root.state.zones.size(ZoneType::Hand, player);
+        let inspected = |game: &Game, viewer: PlayerId| {
+            let observation = Observation::for_player(game, viewer);
+            observation
+                .agent_cards
+                .into_iter()
+                .chain(observation.opponent_cards)
+                .filter(|card| card.zone == ZoneType::Library)
+                .map(|card| card.id)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(inspected(&root, player).len(), 3);
+        assert!(inspected(&root, PlayerId(1 - player.0)).is_empty());
+        assert_eq!(
+            root.capture_decision(player, 0)
+                .unwrap()
+                .frames
+                .last()
+                .unwrap()
+                .decision,
+            27
+        );
+        assert_eq!(
+            root.decision_context(player).unwrap().stage,
+            "order_library_top"
+        );
+        for order in [
+            [looked[3], looked[1], looked[2]],
+            [looked[2], looked[3], looked[1]],
+        ] {
+            let mut branch = root.clone();
+            for (index, card) in order.into_iter().enumerate() {
+                assert!(!branch
+                    .action_space()
+                    .unwrap()
+                    .actions
+                    .iter()
+                    .any(|action| matches!(action, Action::Decline { .. })));
+                checked_command(&mut branch, Action::SelectCard { player, card });
+                if index < 2 {
+                    assert_eq!(
+                        branch.state.zones.size(ZoneType::Hand, player),
+                        hand,
+                        "suffix waits for the complete order"
+                    );
+                    assert_eq!(branch.state.stack_objects.len(), 1);
+                    assert_eq!(
+                        inspected(&branch, player).len(),
+                        3,
+                        "chosen prefix stays visible"
+                    );
+                    assert!(inspected(&branch, PlayerId(1 - player.0)).is_empty());
+                    let frames = branch.capture_decision(player, 0).unwrap().frames;
+                    assert_eq!(frames.last().unwrap().mode, Some(index + 1));
+                    let mut sampled = branch.clone();
+                    sampled.determinize(player, 119);
+                    assert_eq!(
+                        sampled.library_top(player, 3),
+                        branch.library_top(player, 3)
+                    );
+                }
+            }
+            assert_eq!(branch.state.zones.zone_of(order[0]), Some(ZoneType::Hand));
+            assert_eq!(branch.library_top(player, 2), order[1..]);
+            for card in &order[1..] {
+                let index = looked
+                    .iter()
+                    .position(|candidate| candidate == card)
+                    .unwrap();
+                assert_eq!(
+                    branch.current_object_ref(*card),
+                    original_refs[index],
+                    "reorder is not a zone change"
+                );
+            }
+            assert_eq!(branch.state.zones.size(ZoneType::Hand, player), hand + 1);
+            assert!(branch.state.stack_objects.is_empty());
+            assert!(branch.state.suspended_decision.is_none());
+            assert_eq!(
+                branch
+                    .state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event, GameEvent::SpellResolved { .. }))
+                    .count(),
+                1
+            );
+            assert_eq!(root.state.deterministic_hash(), before);
+        }
+    }
+}
+
+#[test]
+fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
+    use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
+    use crate::state::ability::PaymentCost;
+    use crate::state::mana::{Mana, ManaCost};
+
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let card = game.state.permanents[source].as_ref().unwrap().card;
+    let source_ref = game.permanent_object_ref(source).unwrap();
+    let looked = game.library_top(player, 2);
+    let caller = SuspendedResolution {
+        frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
+        decision: Decision::ManaChoice {
+            player,
+            choices: vec![Mana::parse("U"), Mana::parse("B")],
+            resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
+                player,
+                PaymentCost::Mana(ManaCost::parse("{1}")),
+                vec![Effect::gain_life(2)],
+                vec![],
+            )))),
+        },
+    };
+    let mut child = EffectFrame::new(
+        player,
+        vec![Effect::sacrifice_this(), Effect::Surveil { count: 2 }],
+    );
+    child.source = Some(card);
+    child.source_ref = Some(source_ref);
+    // A rules-level child choice isolates completion ownership. Entry
+    // replacement suspension is a separate event-batch integration witness.
+    game.run_before_decision(child, caller.clone());
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert_eq!(game.state.zones.zone_of(card), Some(ZoneType::Graveyard));
+    let after_sacrifice = game.state.deterministic_hash();
+    let frames = game.capture_decision(player, 0).unwrap().frames;
+    let obligations: Vec<_> = frames
+        .iter()
+        .filter(|frame| frame.kind == 6)
+        .map(|frame| frame.decision)
+        .collect();
+    assert_eq!(
+        obligations,
+        [1, 3, 22],
+        "payment and output callers precede the active child"
+    );
+    assert_eq!(game.state.players[player.0].mana_pool.total(), 0);
+    assert!(!game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .any(|action| matches!(action, Action::ChooseMode { .. })));
+    let mut fork = game.clone();
+    checked_command(&mut fork, Action::Decline { player });
+    for card in looked.iter().rev() {
+        checked_command(
+            &mut fork,
+            Action::SelectCard {
+                player,
+                card: *card,
+            },
+        );
+    }
+    assert_eq!(fork.state.suspended_decision, Some(caller));
+    assert_eq!(
+        fork.state.players[player.0].life, 20,
+        "parent suffix has not executed"
+    );
+    assert_eq!(
+        fork.state.players[player.0].mana_pool.total(),
+        0,
+        "output remains an explicit choice"
+    );
+    checked_command(&mut fork, Action::ChooseMode { player, mode: 0 });
+    assert_eq!(fork.state.players[player.0].mana_pool, Mana::parse("U"));
+    checked_command(&mut fork, Action::PayCost { player });
+    assert_eq!(fork.state.players[player.0].mana_pool.total(), 0);
+    assert_eq!(
+        fork.state.players[player.0].life, 25,
+        "paid branch and parent suffix each ran once"
+    );
+    assert_eq!(fork.state.events.iter().filter(|event| matches!(event, GameEvent::PermanentSacrificed { card: sacrificed, .. } if *sacrificed == card)).count(), 1);
+    assert_eq!(game.state.deterministic_hash(), after_sacrifice);
 }

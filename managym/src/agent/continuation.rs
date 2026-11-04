@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
-        decision::{Decision, SuspendedResolution},
+        decision::{Decision, FrameCompletion, LibraryEnd, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
@@ -670,9 +670,18 @@ impl Game {
     ) {
         // Walk outward, then project root first so every parent precedes its child.
         let scopes: Vec<_> =
-            std::iter::successors(Some(&suspended.frame), |effect| effect.parent.as_deref())
-                .collect();
+            std::iter::successors(Some(&suspended.frame), |effect| match &effect.completion {
+                FrameCompletion::Frame(parent) => Some(parent.as_ref()),
+                _ => None,
+            })
+            .collect();
         let mut parent = self.pending_choice.as_ref().map(|_| frames.len() - 1);
+        if let Some(root) = scopes.last() {
+            if let FrameCompletion::Decision(caller) = &root.completion {
+                self.append_suspended_frames(caller, viewer, frames);
+                parent = frames.len().checked_sub(1);
+            }
+        }
         for effect in scopes.into_iter().rev() {
             let frame = ContinuationFrame {
                 kind: 5,
@@ -771,6 +780,16 @@ impl Game {
                         .collect();
                     resume.as_deref()
                 }
+                Decision::OrderLibrary {
+                    next,
+                    end: LibraryEnd::Top,
+                    ..
+                } => {
+                    // The visible library segment is top-first. Its first
+                    // `next` cards have already been ordered by the player.
+                    frame.mode = Some(*next);
+                    None
+                }
                 Decision::ChooseObject { optional, .. } => {
                     frame.can_decline = *optional;
                     None
@@ -822,7 +841,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 26;
+pub const MAX_DECISION_CODE: u8 = 27;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -853,7 +872,14 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::KeepCreatures { .. } => 20,
         Decision::Retarget { .. } => 21,
         Decision::Surveil { .. } => 22,
-        Decision::OrderLibraryBottom { .. } => 23,
+        Decision::OrderLibrary {
+            end: LibraryEnd::Bottom,
+            ..
+        } => 23,
+        Decision::OrderLibrary {
+            end: LibraryEnd::Top,
+            ..
+        } => 27,
         Decision::ChooseToExile { .. } => 26,
     }
 }
@@ -1192,9 +1218,17 @@ mod tests {
                 player,
                 looked: vec![],
             },
-            Decision::OrderLibraryBottom {
+            Decision::OrderLibrary {
                 player,
-                remaining: vec![],
+                cards: vec![],
+                next: 0,
+                end: LibraryEnd::Bottom,
+            },
+            Decision::OrderLibrary {
+                player,
+                cards: vec![],
+                next: 0,
+                end: LibraryEnd::Top,
             },
             Decision::LookAndSelect {
                 to_battlefield: false,

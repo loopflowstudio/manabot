@@ -6,7 +6,10 @@
 
 use crate::{
     agent::action::AgentError,
-    flow::game::Game,
+    flow::{
+        decision::{EffectFrame, SuspendedResolution},
+        game::Game,
+    },
     state::{
         ability::Effect,
         card::{ActivatedAbilityDefinition, ReplacementEffect},
@@ -936,16 +939,19 @@ impl Game {
         }
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         self.record_activation(permanent, ability_index, &ability);
-        let old = self.state.suspended_decision_mut().take();
-        self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {
-            player,
-            permanent,
-            ability_index,
-            resume: old.as_ref().map(|s| Box::new(s.decision.clone())),
+        let (frame, resume) = match self.state.suspended_decision_mut().take() {
+            Some(caller) => (caller.frame, Some(Box::new(caller.decision))),
+            None => (EffectFrame::new(player, Vec::new()), None),
+        };
+        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+            frame,
+            decision: crate::flow::decision::Decision::ManaUpfront {
+                player,
+                permanent,
+                ability_index,
+                resume,
+            },
         });
-        if let Some(old) = old {
-            self.state.suspended_decision_mut().as_mut().unwrap().frame = old.frame;
-        }
         self.advance_mana_upfront()
     }
 
@@ -1000,18 +1006,27 @@ impl Game {
         if ability.life_cost > 0 {
             self.change_life(player, -(ability.life_cost as i32));
         }
-        if ability.sacrifice_source {
-            self.sacrifice_permanent(permanent);
-        }
-        let suspended = self.state.suspended_decision_mut().as_mut().unwrap();
-        let Decision::ManaUpfront { resume, .. } = &mut suspended.decision else {
+        // Retain the output and original payment frame before any cost
+        // effect can suspend. Resumption must not spend mana, tap or pay life
+        // again, nor expose this output before sacrifice/zone work finishes.
+        let mut caller = self.state.suspended_decision_mut().take().unwrap();
+        let Decision::ManaUpfront { resume, .. } = caller.decision else {
             unreachable!()
         };
-        suspended.decision = Decision::ManaChoice {
+        caller.decision = Decision::ManaChoice {
             player,
             choices: ability.mana_choices().unwrap(),
-            resume: resume.take(),
+            resume,
         };
+        if ability.sacrifice_source {
+            let source_ref = self.permanent_object_ref(permanent);
+            let mut child = EffectFrame::new(player, vec![Effect::sacrifice_this()]);
+            child.source = self.state.permanents[permanent].as_ref().map(|p| p.card);
+            child.source_ref = source_ref;
+            self.run_before_decision(child, caller);
+        } else {
+            *self.state.suspended_decision_mut() = Some(caller);
+        }
         Ok(())
     }
 

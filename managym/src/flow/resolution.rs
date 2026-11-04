@@ -6,7 +6,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         decision::{
-            Decision, EffectFrame, FrameFinalize, PaymentProgress, ResolutionCastOffer,
+            Decision, EffectFrame, FrameCompletion, PaymentProgress, ResolutionCastOffer,
             ResolutionTarget, TargetIteration,
         },
         event::GameEvent,
@@ -179,7 +179,7 @@ impl Game {
             kicked: spell.kicked,
             x: spell.x,
             targets,
-            finalize: FrameFinalize::Spell {
+            completion: FrameCompletion::Spell {
                 card,
                 attach_to: None,
             },
@@ -1427,7 +1427,7 @@ impl Game {
             }
             Effect::AttachSourceTo { .. } => {
                 if let Target::Permanent(permanent_id) = self.present_primary_target(frame)? {
-                    if let FrameFinalize::Spell { attach_to, .. } = &mut frame.finalize {
+                    if let FrameCompletion::Spell { attach_to, .. } = &mut frame.completion {
                         *attach_to = self.permanent_object_ref(permanent_id);
                     } else {
                         self.attach_source_to(frame, permanent_id);

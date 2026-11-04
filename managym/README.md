@@ -264,5 +264,16 @@ controller or card's owner elsewhere (including outside the game). Zone
 filters use `card_matches_predicate`; printed-only matching belongs to
 structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
-`OrderLibraryBottom`, placing cards nearest the top first through ordinary
-SelectCard Commands. Only the chooser sees the remaining inspected cards.
+`OrderLibrary`, placing cards first-to-draw first through ordinary SelectCard
+Commands. Bottom ordering exposes the remaining inspected cards; Surveil uses
+the same owner to order kept cards on top, retaining the chosen prefix privately
+until ordering finishes. Top ordering has obligation code 27 (mode is the
+committed prefix length); code 23 retains its bottom-order meaning.
+
+`EffectFrame::completion` owns the return destination: the interrupted iteration
+frame, a retained caller decision, root spell cleanup, or root priority. Mana
+activation sacrifice effects retain their output and parent payment there after
+upfront mana, tap and life costs commit. Returning from that child restores the
+saved decision without paying those costs again or opening priority. Zone/event
+replacement completion is still synchronous; this interface does not yet make
+those operations suspendable.
