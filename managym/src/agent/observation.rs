@@ -1,6 +1,7 @@
 use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
+    cards::content_pack::default_content_pack,
     flow::{
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
@@ -89,6 +90,13 @@ pub struct PlayerData {
     /// What this player has done this turn (public: every event in it was).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: PlayerTurnHistory,
+    /// Extra turns this player will take after this one (CR 500.7).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub extra_turns: u32,
+    /// Additional combat phases still to come this turn, on the active
+    /// player's row (CR 500.8).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub additional_combats: u32,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
@@ -152,6 +160,9 @@ pub struct CastPermissionData {
     /// Ends in this turn's cleanup step.
     #[serde(default)]
     pub this_turn: bool,
+    /// Ends in the cleanup step of the permitted player's next turn.
+    #[serde(default)]
+    pub through_next_turn: bool,
     /// Usable only during the permitted player's turn.
     #[serde(default)]
     pub own_turn_only: bool,
@@ -483,12 +494,10 @@ pub struct CopyData {
 }
 
 impl CopyData {
-    fn new(game: &Game, copy: &CopyEffect, timestamp: i32) -> Self {
+    fn new(copy: &CopyEffect, timestamp: i32) -> Self {
         Self {
             registry_key: copy.of.0 as i32,
-            name: game
-                .state
-                .content
+            name: default_content_pack()
                 .definition(copy.of)
                 .map(|definition| definition.name.clone())
                 .unwrap_or_default(),
@@ -497,7 +506,6 @@ impl CopyData {
                 .iter()
                 .map(|exception| {
                     ContinuousEffectData::of_modification(
-                        game,
                         exception,
                         "Indefinite".into(),
                         Some(copy.of),
@@ -510,9 +518,8 @@ impl CopyData {
 }
 
 impl ContinuousEffectData {
-    pub(super) fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+    pub(super) fn new(effect: &ContinuousEffect) -> Self {
         Self::of_modification(
-            game,
             &effect.modification,
             format!("{:?}", effect.duration),
             effect.source,
@@ -523,7 +530,6 @@ impl ContinuousEffectData {
     /// One modification with its provenance: a record's, or a copy
     /// exception's (`CopyData`).
     fn of_modification(
-        game: &Game,
         modification: &Modification,
         duration: String,
         source: Option<CardDefId>,
@@ -534,7 +540,7 @@ impl ContinuousEffectData {
             duration,
             source_registry_key: source.map(|id| id.0 as i32),
             source_name: source
-                .and_then(|id| game.state.content.definition(id))
+                .and_then(|id| default_content_pack().definition(id))
                 .map(|definition| definition.name.clone()),
             timestamp,
             ..Default::default()
@@ -584,6 +590,7 @@ impl ContinuousEffectData {
                 data.amount = Some(i32::from(*mode));
                 "ModeChosen"
             }
+            Modification::HasAbilitiesOfSource => "HasAbilitiesOfSource",
         }
         .to_string();
         data
@@ -595,7 +602,7 @@ impl ContinuousEffectData {
             .effects
             .iter()
             .filter(|effect| Some(effect.affected) == affected)
-            .map(|effect| Self::new(game, effect))
+            .map(Self::new)
             .collect()
     }
 }
@@ -603,6 +610,9 @@ impl ContinuousEffectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermanentData {
+    /// Transformations of this exact permanent; repeated flips still count.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub transforms: u32,
     pub id: i32,
     /// Definition of the backing card, in the match's bound content pack.
     pub registry_key: i32,
@@ -1021,6 +1031,18 @@ impl Observation {
                 .collect(),
             keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
             turn_history: game.state.turn.history[player.0],
+            extra_turns: game
+                .state
+                .turn
+                .extra_turns
+                .iter()
+                .filter(|taker| **taker == player)
+                .count() as u32,
+            additional_combats: if game.active_player() == player {
+                game.state.turn.additional_combats.len() as u32
+            } else {
+                0
+            },
             effects: ContinuousEffectData::list(game, Some(Affected::Player(player))),
         }
     }
@@ -1059,6 +1081,14 @@ impl Observation {
         if let Some(suspended) = &game.state.suspended_decision {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
+                    crate::flow::decision::Decision::SearchNamed { owner, .. } => game
+                        .named_search_cards(*owner)
+                        .filter(|card| {
+                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
+                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
+                                    && game.state.cards[*card].owner != agent_player)
+                        })
+                        .collect(),
                     crate::flow::decision::Decision::SearchBasicLand {
                         player,
                         subtype,
@@ -1164,6 +1194,7 @@ impl Observation {
     ) {
         let characteristics = game.characteristics(perm_id);
         let pdat = PermanentData {
+            transforms: permanent.transforms,
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
@@ -1246,7 +1277,7 @@ impl Observation {
             copy: game.state.cards[permanent.card]
                 .copy
                 .as_ref()
-                .map(|copy| CopyData::new(game, copy, permanent.timestamp.0 as i32)),
+                .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -1318,6 +1349,7 @@ impl Observation {
                     player_id: game.state.players[grant.player.0].id.0 as i32,
                     cost: game.grant_cast_cost(grant, card_id),
                     this_turn: grant.this_turn,
+                    through_next_turn: grant.through_next_turn.is_some(),
                     own_turn_only: grant.own_turn_only,
                     after_turn: grant.after_turn,
                     source_permanent_id: grant.source.and_then(|source| {
@@ -1461,7 +1493,7 @@ impl Observation {
     pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
-            GameEvent::PermanentSacrificed { .. } => Vec::new(),
+            GameEvent::PermanentSacrificed { .. } | GameEvent::Bent { .. } => Vec::new(),
             GameEvent::CardRevealed { owner, definition } => {
                 let mut data =
                     Self::build_event_data(EventType::CardRevealed, None, None, 0, Some(*owner));
@@ -1928,6 +1960,7 @@ impl Observation {
             }
             for (key, set) in [
                 ("this_turn", permission.this_turn),
+                ("through_next_turn", permission.through_next_turn),
                 ("own_turn_only", permission.own_turn_only),
                 ("flash", permission.flash),
                 ("any_mana", permission.any_mana),

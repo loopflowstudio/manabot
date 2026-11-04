@@ -7,6 +7,7 @@
 
   import HoverPreview from './HoverPreview.svelte';
   import PlayerArea from './PlayerArea.svelte';
+  import Schedule from './Schedule.svelte';
   import PresentationStage from './PresentationStage.svelte';
 
   // The score column of the sheet: the opponent's region, the stack — the
@@ -116,6 +117,9 @@
       {turnLine}
     </span>
   </div>
+
+  <Schedule schedule={observation.schedule} heroSeat={observation.agent.player_index}
+    {heroLabel} {villainLabel} />
 
   <PlayerArea
         definitionNames={observation.definition_names ?? {}}

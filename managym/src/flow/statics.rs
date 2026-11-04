@@ -530,8 +530,10 @@ impl Game {
     }
 
     /// Layer 7: power and toughness (CDA-aware or set base, plus static buffs,
-    /// records and +1/+1 counters).
-    fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
+    /// records and +1/+1 counters), without the rest of the characteristics
+    /// view: what a mana ability's output may read while that view lists the
+    /// ability (Avatar Kyoshi).
+    pub(crate) fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
         let index = self.static_index();
         self.pt_with(
             permanent_id,
@@ -1229,6 +1231,7 @@ impl Game {
             }
             Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
+            Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
             }
@@ -1538,6 +1541,9 @@ impl Game {
         if predicate.with_counter && permanent.counter_count(CounterKind::PlusOnePlusOne) <= 0 {
             return false;
         }
+        if predicate.tapped && !permanent.tapped {
+            return false;
+        }
         if predicate.attacking
             && !self
                 .state
@@ -1573,6 +1579,7 @@ impl Game {
             flying: false,
             with_counter: false,
             attacking: false,
+            tapped: false,
             subtype: None,
             subtypes_any: Vec::new(),
             not_subtypes: Vec::new(),
@@ -1627,6 +1634,10 @@ impl Game {
         let mut abilities = Vec::new();
         if !lost {
             abilities = card.activated_abilities.clone();
+            // Inherited abilities follow the printed ones (Koh).
+            if let Some(definition) = self.inherited_definition(permanent) {
+                abilities.extend(definition.activated_abilities.iter().cloned());
+            }
             self.extend_own_abilities(permanent, basis, is_land, sources, &mut abilities);
         }
         for &(grantor, card) in &basis.attachments {

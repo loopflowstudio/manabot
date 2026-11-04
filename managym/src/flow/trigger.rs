@@ -3,7 +3,7 @@
 //! controller has placed its abilities (CR 603.3b, 2026-09-25 rules snapshot).
 
 use crate::state::{
-    ability::Effect,
+    ability::{DelayedExpiry, DelayedFrequency, Effect},
     game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
     predicate::CardPredicate,
 };
@@ -48,6 +48,9 @@ impl TriggerPlacement {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PendingTrigger {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
     pub source_card: CardId,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
@@ -88,18 +91,19 @@ pub struct PendingTrigger {
 /// that is a battlefield object, supplies last known information).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DelayedTrigger {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
     pub source_card: CardId,
     pub source_ref: Option<ObjectRef>,
     pub effects: Vec<Effect>,
-    /// "this turn": removed in the cleanup step if it has not fired.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub this_turn: bool,
+    pub frequency: DelayedFrequency,
+    pub expiry: DelayedExpiry,
 }
 
-/// What a waiting delayed trigger watches for. All but `CreatureDies` fire
-/// once (CR 603.7c).
+/// Event matching only; frequency and expiry belong to the waiting watcher.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DelayedTriggerEvent {
     /// The exact object dies (or, `or_exiled`, is exiled: earthbend's "when
@@ -108,11 +112,15 @@ pub enum DelayedTriggerEvent {
     Leaves { watched: ObjectRef, or_exiled: bool },
     /// "Whenever a creature dies".
     CreatureDies,
-    /// "At the beginning of the next end step"; `context` is the trigger's
-    /// context ("sacrifice that token").
-    NextEndStep { context: Option<Target> },
-    /// "When you next cast a [predicate] spell"; that spell is the context.
+    /// "At the beginning of the end step", optionally only the controller's.
+    EndStep {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        your_turn: bool,
+    },
+    /// "When you cast a [predicate] spell"; that spell is the context.
     YouCastSpell(CardPredicate),
+    /// "At the beginning of upkeep".
+    Upkeep,
 }
 
 /// A card exiled with an exact `source` object (CR 607.2a). "Until [source]

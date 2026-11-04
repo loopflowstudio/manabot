@@ -16,11 +16,6 @@ use managym::{
 fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {
     let mut first = build_fixture("interactive-heavy-80-w4-v1").expect("first heavy fixture");
     let mut second = build_fixture("interactive-heavy-80-w4-v1").expect("second heavy fixture");
-    second.state.content = Arc::new((*second.state.content).clone());
-    assert!(
-        !Arc::ptr_eq(&first.state.content, &second.state.content),
-        "the proof needs independently allocated immutable definition packs"
-    );
     assert_eq!(witness(&first), witness(&second));
     first.reseed(0x197c0de);
     second.reseed(0x197c0de);

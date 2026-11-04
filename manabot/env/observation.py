@@ -70,11 +70,17 @@ PLAYER_ATTACKED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
 PLAYER_SACRIFICED_INDEX = PLAYER_ATTACKED_INDEX + 1
 PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
 PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
-PLAYER_DIM = PLAYER_CARDS_DRAWN_INDEX + 1
+# Bending done this turn: water, earth, fire, air.
+PLAYER_BENT_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
+# Extra turns this player will take after this one.
+PLAYER_EXTRA_TURNS_INDEX = PLAYER_BENT_INDEX + 4
+# Additional combat phases still to come this turn (active player's row).
+PLAYER_ADDITIONAL_COMBATS_INDEX = PLAYER_EXTRA_TURNS_INDEX + 1
+PLAYER_DIM = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
-CARD_X_INDEX = CARD_PERMISSION_INDEX + 12
+CARD_X_INDEX = CARD_PERMISSION_INDEX + 13
 CARD_DIM = CARD_X_INDEX + 2 + 1
 LEGACY_PERMANENT_DIM = 29
 # V5 permanent terms start where v4's validity flag was; validity stays last.
@@ -116,7 +122,9 @@ FACT_USED_ABILITY = 5
 FACT_EFFECT = 6
 FACT_COPY = 7
 FACT_COPY_EXCEPTION = 8
-FACT_KINDS = 8
+FACT_TRANSFORMS = 9
+FACT_COMBAT_RESTRICTION = 10
+FACT_KINDS = 10
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # v5 decklist rows: definition id + 1, then main, unseen, sideboard and
@@ -512,8 +520,37 @@ class ObservationEncoder:
                 push(perm.id, FACT_SET_NAME, token(perm.name), (1.0, 0.0))
             for creature_type in perm.creature_types or ():
                 push(perm.id, FACT_SET_CREATURE_TYPE, token(creature_type), (1.0, 0.0))
+            if perm.transforms:
+                push(perm.id, FACT_TRANSFORMS, 0, (float(perm.transforms), 0.0))
             for index in perm.used_abilities:
                 push(perm.id, FACT_USED_ABILITY, index, (1.0, 0.0))
+
+        for index, frame in enumerate(obs.continuation):
+            if frame.source_transforms:
+                push(
+                    frame.source.object
+                    if frame.source.object is not None
+                    else (
+                        obs.agent.id
+                        if frame.controller == obs.agent.player_index
+                        else obs.opponent.id
+                    ),
+                    FACT_TRANSFORMS,
+                    index + 1,
+                    (float(frame.source_transforms), 0.0),
+                )
+
+        for index, frame in enumerate(obs.continuation):
+            if frame.attackers is not None:
+                push(
+                    obs.agent.id
+                    if frame.controller == obs.agent.player_index
+                    else obs.opponent.id,
+                    FACT_COMBAT_RESTRICTION,
+                    index + 1,
+                    (0.0, 0.0),
+                    detail=token(frame.attackers),
+                )
 
         def push_modification(
             obj: int, kind: int, effect: managym.ContinuousEffect
@@ -579,8 +616,8 @@ class ObservationEncoder:
         """Reference implementation of native current-continuation relation rows."""
         rows: list[np.ndarray] = []
         if not self.shows_everything:
-            # Waiting delayed triggers (kind 10, always last) are v5 facts.
-            frames = [frame for frame in frames if frame.kind != 10]
+            # Delayed triggers and scheduled turns/combats (kinds 10+) are v5 facts.
+            frames = [frame for frame in frames if frame.kind < 10]
 
         def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
             row[23] = 0 if value.definition is None else value.definition + 1
@@ -639,6 +676,21 @@ class ObservationEncoder:
                     context_row[0], context_row[22], context_row[29] = kind, 1, 1
                     _reference(context_row, reference)
                     rows.append(context_row)
+            if self.shows_everything and frame.inherited_from is not None:
+                inherited = row.copy()
+                inherited[0], inherited[22], inherited[29] = 7, 1, 1
+                _reference(inherited, frame.inherited_from)
+                rows.append(inherited)
+            if self.shows_everything:
+                for ordinal, reference in enumerate(frame.remembered, 1):
+                    remembered = row.copy()
+                    remembered[0], remembered[22], remembered[29] = 8, 1, ordinal
+                    _reference(remembered, reference)
+                    rows.append(remembered)
+            if self.shows_everything and frame.delayed_frequency is not None:
+                frequency = row.copy()
+                frequency[0], frequency[28] = 9, frame.delayed_frequency
+                rows.append(frequency)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1
@@ -709,6 +761,12 @@ class ObservationEncoder:
             arr[PLAYER_SACRIFICED_INDEX] = float(history.permanents_sacrificed) / 10.0
             arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
             arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
+            for index in range(4):
+                arr[PLAYER_BENT_INDEX + index] = float(
+                    bool(history.bent & (1 << index))
+                )
+            arr[PLAYER_EXTRA_TURNS_INDEX] = float(player.extra_turns)
+            arr[PLAYER_ADDITIONAL_COMBATS_INDEX] = float(player.additional_combats)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -820,6 +878,7 @@ class ObservationEncoder:
                 arr[base + 9] = float(permission.any_mana)
                 arr[base + 10] = float(permission.waterbend)
                 arr[base + 11] = float(permission.foretold)
+                arr[base + 12] = float(permission.through_next_turn)
             if card.x is not None:
                 arr[CARD_X_INDEX] = 1.0
                 arr[CARD_X_INDEX + 1] = float(card.x) / 10.0

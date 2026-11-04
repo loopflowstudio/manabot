@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -468,6 +470,8 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     obs.agent_permanents = [mine]
     agent = obs.agent
     agent.keeps_red_mana = agent.no_maximum_hand_size = True
+    agent.extra_turns = 2
+    agent.additional_combats = 1
     kept = managym.ContinuousEffect()
     kept.modification, kept.color = "KeepUnspentMana", "Red"
     kept.duration, kept.timestamp = "EndOfTurn", base + 3
@@ -515,7 +519,7 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     assert effects[2, FACT_SOURCE_INDEX] == theirs.registry_key + 1
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
-        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2],
+        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1],
     )
     assert actual["agent_cards"][0, CARD_DIM - 1] == 1
     v4 = env.encode_observation(obs, 4)
@@ -594,8 +598,10 @@ def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
         env.encode_observation_into(obs, buffers)
 
 
-def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
-    env = priority_root(("Fatal Fissure",), ("Swamp", "Swamp"), opponent=("Gray Ogre",))
+@pytest.mark.parametrize("frequency", [1, 2])
+def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -> None:
+    card = "Fatal Fissure" if frequency == 1 else "Ruinous Waterbending"
+    env = priority_root((card,), ("Swamp",) * 7, opponent=("Gray Ogre",))
     obs = env.scenario_refresh()
     ogre = obs.opponent_permanents[0].id
     for _ in range(12):
@@ -606,7 +612,11 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
             range(len(actions)),
             key=lambda index: (
                 actions[index].action_type
-                not in (ActionEnum.PRIORITY_CAST_SPELL, ActionEnum.CHOOSE_TARGET)
+                not in (
+                    ActionEnum.PRIORITY_CAST_SPELL,
+                    ActionEnum.CHOOSE_TARGET,
+                    ActionEnum.PAY_COST,
+                )
                 or (
                     actions[index].action_type == ActionEnum.CHOOSE_TARGET
                     and ogre not in actions[index].focus
@@ -616,8 +626,8 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         )
         obs, *_ = env.step(ranked[0])
     else:
-        raise AssertionError("Fatal Fissure's trigger is not waiting")
-    for version in (4, 5):
+        raise AssertionError(f"{card} trigger is not waiting")
+    for version in (4, 5, 6, 7):
         expected = ObservationEncoder(
             ObservationConfig(policy_input_version=version)
         ).encode(obs)
@@ -630,9 +640,124 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
             assert not waiting.any(), "a v5 fact"
             continue
         header = relations[waiting & (relations[:, 0] == 1)][0]
-        watched = relations[waiting & (relations[:, 0] == 3)][0]
-        assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
-        assert watched[24] > 0
+        assert header[28] == (1 if frequency == 1 else 3)
+        assert header[RELATION_THIS_TURN_INDEX] == 1
+        lifetime = relations[waiting & (relations[:, 0] == 9)][0]
+        assert lifetime[28] == frequency
+        if frequency == 1:
+            watched = relations[waiting & (relations[:, 0] == 3)][0]
+            remembered = relations[waiting & (relations[:, 0] == 8)][0]
+            assert remembered[24] == watched[24] > 0
+
+
+@pytest.mark.parametrize("version", [4, 5, 6, 7])
+def test_t6_transform_parity_and_schedule_relation_versions(
+    version: int,
+) -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    obs = env.scenario_refresh()
+    mine = obs.agent_permanents[-1]
+    mine.transforms = 2
+    obs.agent_permanents = [*obs.agent_permanents[:-1], mine]
+    reference = {"object": mine.id, "definition": mine.registry_key, "player": None}
+    empty = {"object": None, "definition": None, "player": None}
+    frame: dict[str, object] = {
+        "kind": 2,
+        "decision": 0,
+        "parent": None,
+        "controller": obs.agent.player_index,
+        "source": reference,
+        "mode": None,
+        "ability": 1,
+        "kicked": False,
+        "active_clause": None,
+        "targets": [],
+        "context": None,
+        "sacrifice": None,
+        "cost": None,
+        "hybrid": [],
+        "lesson": False,
+        "waterbend": False,
+        "can_decline": False,
+        "mana_outputs": [],
+        "resolutions_this_turn": 0,
+    }
+    frames = [
+        frame | {"source_transforms": 1, "inherited_from": reference},
+        frame | {"kind": 3, "x": 6},
+        frame | {"kind": 6, "decision": 24, "can_decline": True},
+        frame | {"kind": 6, "decision": 25, "mode": 3, "can_decline": True},
+        frame | {"kind": 10, "decision": 7, "delayed_frequency": 2},
+        frame | {"kind": 11, "source": empty, "mode": 0},
+        frame | {"kind": 12, "source": empty, "mode": 1, "attackers": "land creatures"},
+    ]
+    frames = managym.parse_continuation_frames_json(json.dumps(frames))
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+    expected = encoder.encode(obs)
+    actual = env.encode_observation(obs, version)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    # Retained frames are read-only: the native environment remains the
+    # execution authority, and offline relation encoding consumes the capture.
+    relations = encoder._encode_relations(frames, obs.agent.player_index)
+    if version >= 5:
+        assert (relations[:, 0] == 7).any(), (
+            "inherited definition joins learning tokens"
+        )
+        frequency = relations[relations[:, 0] == 9]
+        assert len(frequency) == 1 and frequency[0, 28] == 2
+        assert (relations[:, 3] == 12).any(), "pending combat is visible"
+        assert (relations[:, RELATION_X_INDEX] == 6).any(), "paid X is retained"
+        for kind in (9,):
+            rows = actual["facts"][actual["facts"][:, FACT_KIND_INDEX] == kind]
+            assert len(rows) and (rows[:, FACT_OBJECT_INDEX] > 0).all()
+    else:
+        assert not (relations[:, 0] == 7).any()
+        assert not (relations[:, 3] >= 10).any(), "frozen v4 omits v5 scheduling"
+
+
+def test_saved_action_capacity_retains_its_historical_default() -> None:
+    assert ObservationConfig().max_actions >= managym.CARD_DEFINITION_COUNT
+    assert ObservationConfig.from_checkpoint({}).max_actions == 64
+    assert ObservationConfig.from_checkpoint({"max_actions": 128}).max_actions == 128
+
+
+def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> None:
+    env = priority_root((), ("Bumi, Unleashed", "Swamp"), opponent=("Swamp",))
+    obs = env.scenario_refresh()
+    for _ in range(100):
+        if any(frame.kind == 12 for frame in obs.continuation):
+            break
+        actions = obs.action_space.actions
+        attack = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == ActionEnum.DECLARE_ATTACKER and action.declared
+            ),
+            None,
+        )
+        quiet = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == ActionEnum.PRIORITY_PASS_PRIORITY
+            ),
+            0,
+        )
+        obs, *_ = env.step(attack if attack is not None else quiet)
+    else:
+        raise AssertionError("Bumi's additional combat was not scheduled")
+    expected = ObservationEncoder(ObservationConfig()).encode(obs)
+    actual = env.encode_observation(obs)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    facts = actual["facts"]
+    restriction = facts[facts[:, FACT_KIND_INDEX] == 10]
+    assert len(restriction) == 1 and restriction[0, FACT_OBJECT_INDEX] > 0
+    assert "land" in next(
+        frame.attackers for frame in obs.continuation if frame.kind == 12
+    )
 
 
 def test_v5_source_dependent_duration_matches_native_authority() -> None:

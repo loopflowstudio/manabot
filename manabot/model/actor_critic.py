@@ -544,11 +544,17 @@ class ActorCritic(nn.Module):
             dim=1,
         )
         if self.semantic_cards is not None:
-            definitions = (
-                obs.scope.catalog()
-                if isinstance(obs, PreparedObservation)
-                else self.semantic_cards.definitions()
-            )
+            # Learning encodes only referenced definitions (same values within
+            # float rounding, identical gradient support); without autograd the
+            # full table keeps unprepared inference bitwise equal to serving.
+            if isinstance(obs, PreparedObservation):
+                definitions = obs.scope.catalog()
+            elif torch.is_grad_enabled():
+                definitions = self.semantic_cards.definitions(
+                    self._referenced_definitions(obs, permanent_ids)
+                )
+            else:
+                definitions = self.semantic_cards.definitions()
             assert definitions is not None
             cards, known = self.semantic_cards(obs, definitions, references)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
@@ -709,6 +715,34 @@ class ActorCritic(nn.Module):
                 objects.gather(1, targets)
             ).masked_fill(~linked, 0)
         return objects + delta
+
+    def _referenced_definitions(
+        self, obs: Dict[str, torch.Tensor], permanent_ids: torch.Tensor
+    ) -> torch.Tensor:
+        """Unique catalog rows + 1 this batch can index: visible cards,
+        permanents, known hands, decklists, public history and relations.
+
+        A source added to the forward pass must be added here, or its rows
+        read zero embeddings.
+        """
+        assert self.semantic_cards is not None
+        ids = [obs["semantic_cards"], permanent_ids, obs["known_hand"][..., 0]]
+        if self.semantic_cards.decklist_projection is not None:
+            ids.append(obs["decklists"][..., 0])
+        events, valid = obs.get("events"), obs.get("events_valid")
+        if (
+            self.recent_events is not None
+            and events is not None
+            and valid is not None
+            and events.ndim == 3
+            and events.shape[-1] == 12
+            and valid.shape == events.shape[:2]
+        ):
+            # Malformed history is rejected by RecentEventEncoder itself.
+            ids.extend(events[..., column][valid == 1] for column in (2, 7))
+        if self.continuation is not None:
+            ids.append(obs["relations"][..., [5, 23]])
+        return self.semantic_cards.referenced_rows(ids)
 
     def _generic_definitions(
         self, ids: torch.Tensor, admitted: torch.Tensor | None = None

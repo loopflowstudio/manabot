@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import subprocess
 import sys
+from textwrap import dedent
 from typing import Literal
 
 import duckdb
@@ -28,7 +29,16 @@ import pytest
 
 from experiments import tla_pilot_v5
 from experiments.tla_pilot_analysis import analyze
-from experiments.tla_pilot_v5 import EXPERIMENT, ROOT, eval, frozen
+from experiments.tla_pilot_v5 import (
+    EXPERIMENT,
+    PROTOCOL,
+    ROOT,
+    Protocol,
+    RuntimeWorld,
+    eval,
+    frozen,
+)
+from manabot.env import observation as observation_module
 from manabot.env.failures import read_failure
 from manabot.env.observation import ObservationEncoder
 from manabot.eval.results import RateInterval
@@ -36,6 +46,80 @@ from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 import managym
+
+
+@pytest.fixture
+def pilot_world(monkeypatch: pytest.MonkeyPatch) -> RuntimeWorld:
+    """Declare compatible identity for fixtures that never play or train.
+
+    Historical scheduling and controlled analysis outcomes must not depend on
+    the evolving native catalog. Runtime admission is tested without this seam.
+    """
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    world = protocol.runtime_world
+    monkeypatch.setattr(managym, "world_identity", world.model_dump)
+    # Synthetic scheduling also needs the historical schema. Never use these
+    # widths for encoding or playing; runtime shape rejection is tested below.
+    monkeypatch.setattr(
+        observation_module, "PLAYER_DIM", protocol.observation_shapes["agent_player"][1]
+    )
+    monkeypatch.setattr(
+        observation_module, "CARD_DIM", protocol.observation_shapes["agent_cards"][1]
+    )
+    return world
+
+
+@pytest.mark.parametrize("entry", ["frozen", "runs", "eval"])
+def test_pilot_rejects_current_runtime_world(entry: str) -> None:
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    assert managym.world_identity() != protocol.runtime_world.model_dump()
+    with pytest.raises(ValueError, match="runtime world differs"):
+        if entry == "frozen":
+            frozen()
+        elif entry == "runs":
+            tla_pilot_v5.runs("HEAD")
+        else:
+            eval(_state())
+
+
+def test_pilot_rejects_current_tensor_shapes(monkeypatch: pytest.MonkeyPatch) -> None:
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    monkeypatch.setattr(managym, "world_identity", protocol.runtime_world.model_dump)
+    with pytest.raises(ValueError, match="tensor capacities differ"):
+        frozen()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_actions", 512),
+        ("max_facts", 512),
+        ("policy_input_version", 6),
+        ("max_cards_per_player", 60),
+    ],
+)
+def test_pilot_rejects_changed_input_contract(
+    pilot_world: RuntimeWorld,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    field: str,
+    value: int,
+) -> None:
+    # Temporary copies keep the frozen bytes intact and pass the file-integrity
+    # guard so this check reaches observation admission under compatible identity.
+    regime = json.loads(tla_pilot_v5.REGIME.read_bytes())
+    regime["observation"][field] = value
+    regime_path = tmp_path / "regime.json"
+    regime_path.write_text(json.dumps(regime))
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes()).model_copy(
+        update={"regime_sha256": file_sha256(regime_path)}
+    )
+    protocol_path = tmp_path / "protocol.json"
+    protocol_path.write_text(protocol.model_dump_json())
+    monkeypatch.setattr(tla_pilot_v5, "REGIME", regime_path)
+    monkeypatch.setattr(tla_pilot_v5, "PROTOCOL", protocol_path)
+    with pytest.raises(ValueError, match="tensor capacities differ"):
+        frozen()
 
 
 def _checkpoint(update: int) -> Checkpoint:
@@ -51,6 +135,7 @@ def _checkpoint(update: int) -> Checkpoint:
     )
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None:
     regime, protocol = frozen()
     assert regime.deck_source is not None
@@ -70,12 +155,14 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert stage.execution.device == "cuda" and stage.behavior == "current-self"
     assert regime.observation.policy_input_version == 7
     assert regime.observation.max_facts == 128
+    assert regime.observation.max_actions == 64
     assert regime.observation.max_cards_per_player == 128
     assert protocol.observation_shapes["facts"] == (128, 12)
     assert protocol.observation_shapes["effects"] == (128, 18)
     assert protocol.observation_shapes["effect_details"] == (512, 3)
     assert protocol.observation_shapes["effect_members"] == (2048, 2)
     assert ObservationConfig().max_facts == 512
+    assert ObservationConfig().max_actions == 512
     assert protocol.allocation_usd == Decimal(1) < protocol.max_paid_usd == Decimal(10)
     rng = random.Random(protocol.deck_seed)
     assert [(p.first, p.second) for p in protocol.pairs] == [
@@ -85,6 +172,7 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert protocol.training_seed not in {p.deal for p in protocol.pairs}
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors() -> (
     None
 ):
@@ -110,6 +198,7 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
     assert eval(ExperimentState(experiment=EXPERIMENT)) == []
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
     experiment = read_experiment(ROOT / "experiments/tla_pilot_v5.py")
     job = experiment.eval(_state((0,)))[0]
@@ -121,7 +210,7 @@ def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
 # Controlled outcomes exercise the analysis without running games or training.
 # This schema is Etude's public statsdb projection, including both participants.
 @pytest.fixture
-def pilot_db() -> Iterator[duckdb.DuckDBPyConnection]:
+def pilot_db(pilot_world: RuntimeWorld) -> Iterator[duckdb.DuckDBPyConnection]:
     with duckdb.connect() as db:
         db.execute("CREATE TABLE runs (run VARCHAR, environment VARCHAR)")
         db.execute(
@@ -369,6 +458,7 @@ def test_pilot_analysis_counts_failures_without_a_score_column(
 @pytest.mark.parametrize("with_failure_column", [True, False])
 def test_pilot_analysis_cli_reads_sealed_etude_results(
     pilot_db: duckdb.DuckDBPyConnection,
+    pilot_world: RuntimeWorld,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     with_failure_column: bool,
@@ -427,8 +517,30 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     result = subprocess.run(
         [
             sys.executable,
-            "-m",
-            "experiments.tla_pilot_analysis",
+            "-c",
+            # A fresh interpreter does not inherit pytest's identity fixture.
+            # Run the real CLI with the same explicit compatible identity; only
+            # synthetic sealed outcomes are read, with no game or training run.
+            dedent("""\
+                import json
+                import runpy
+                import sys
+                from unittest.mock import patch
+
+                from experiments.tla_pilot_v5 import PROTOCOL, Protocol
+
+                world = json.loads(sys.argv.pop(1))
+                shapes = Protocol.model_validate_json(PROTOCOL.read_bytes()).observation_shapes
+                with (
+                    patch("managym.world_identity", return_value=world),
+                    patch("manabot.env.observation.PLAYER_DIM", shapes["agent_player"][1]),
+                    patch("manabot.env.observation.CARD_DIM", shapes["agent_cards"][1]),
+                ):
+                    runpy.run_module(
+                        "experiments.tla_pilot_analysis", run_name="__main__", alter_sys=True
+                    )
+                """),
+            pilot_world.model_dump_json(),
             "--source",
             str(store),
             "--out",
@@ -460,6 +572,7 @@ def test_pilot_analysis_counts_draws_without_fabricating_wins(
     )
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_prospective_pilot_preserves_population_and_rejects_old_initialization() -> (
     None
 ):
@@ -489,6 +602,7 @@ def test_prospective_pilot_preserves_population_and_rejects_old_initialization()
             eval(ExperimentState(experiment=experiment))
 
 
+@pytest.mark.usefixtures("pilot_world")
 @pytest.mark.parametrize("binding", ("regime", "tensor_shapes"))
 def test_pilot_rejects_changed_observation_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, binding: str
@@ -514,11 +628,16 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
 ) -> None:
     evidence = read_failure(ROOT / "tests/fixtures/tla-pilot-card-capacity.jsonl")
     (game,) = evidence.games
-    regime, _ = frozen()
+    # Replay uses the real current world and action capacity; the retained
+    # pilot's card-allocation boundary is the regression under test.
+    regime = TrainingRegime.model_validate_json(tla_pilot_v5.REGIME.read_bytes())
+    replay_config = regime.observation.model_copy(
+        update={"max_actions": ObservationConfig().max_actions}
+    )
     # Both the exact occupied boundary and the pilot allocation retain every
     # generated token and sideboard card through scalar/vector/Python paths.
     encoder = ObservationEncoder(
-        regime.observation.model_copy(update={"max_cards_per_player": card_capacity})
+        replay_config.model_copy(update={"max_cards_per_player": card_capacity})
     )
     players = [player.native() for player in game.players]
     scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
@@ -554,7 +673,7 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
         np.testing.assert_array_equal(value, buffers[key][0], err_msg=key)
     # One fewer slot rejects rather than silently dropping an object.
     old = ObservationEncoder(
-        regime.observation.model_copy(update={"max_cards_per_player": 60})
+        replay_config.model_copy(update={"max_cards_per_player": 60})
     )
     with pytest.raises(ValueError, match="agent_cards plus sideboard"):
         old.encode(observation)

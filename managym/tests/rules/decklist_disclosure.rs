@@ -9,14 +9,14 @@ use managym::{
         observation::{Observation, PlayerData},
         observation_encoder::{encode, ObservationEncoderConfig, DECKLIST_DIM},
     },
-    cards::setups::authored_pack,
+    cards::setups::authored_setup,
     possible_worlds::HiddenHandConstraints,
     state::{game_object::PlayerId, player::DecklistDisclosure, zone::ZoneType},
     Env, Game, PlayerConfig,
 };
 
 fn configs(disclosure: DecklistDisclosure) -> Vec<PlayerConfig> {
-    let pack = authored_pack("two_deck").unwrap();
+    let pack = authored_setup("two_deck").unwrap();
     ["ur_lessons", "gw_allies"]
         .iter()
         .map(|key| {

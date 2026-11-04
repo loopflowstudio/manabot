@@ -94,6 +94,11 @@ declarations named `run.json`.
 must not import DuckDB). Adding, renaming or removing an Etude experiment also
 requires updating its exact discovery inventory and running
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_experiment_files.py -q`.
+When integrating a frozen pilot with a changed world or tensor schema, run its
+focused tests too. Synthetic scheduling/analysis fixtures must pin both identity
+and schema; test real runtime rejection separately, and keep those fixtures off
+replay, encoding and training paths. Never rewrite frozen protocols to fit the
+current runtime.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.

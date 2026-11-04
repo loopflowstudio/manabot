@@ -65,6 +65,7 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
         terms["cost"] = _mana_symbols(permission.cost)
     for key in (
         "this_turn",
+        "through_next_turn",
         "own_turn_only",
         "flash",
         "any_mana",
@@ -133,6 +134,7 @@ def _serialize_permanent(
         **{
             field: int(getattr(permanent, field))
             for field in (
+                "transforms",
                 "exhausted_abilities",
                 "once_each_turn_used",
                 "granted_firebending",
@@ -188,6 +190,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "permanents_sacrificed": history.permanents_sacrificed,
         "land_entered": history.land_entered,
         "cards_drawn": history.cards_drawn,
+        "bent": history.bent,
     }
     return {key: value for key, value in values.items() if value}
 
@@ -303,6 +306,12 @@ def _serialize_player(
             if (counts := getattr(player, name)) is not None
         },
         **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
+        **({"extra_turns": player.extra_turns} if player.extra_turns else {}),
+        **(
+            {"additional_combats": player.additional_combats}
+            if player.additional_combats
+            else {}
+        ),
         **(
             {"turn_history": turn_history}
             if (turn_history := _turn_history(player.turn_history))
@@ -345,6 +354,16 @@ def serialize_observation(
         ),
     }
 
+    # Native visibility already authorizes these cards. Carry them through the
+    # existing chooser-inspection surface; opponent.hand remains redacted in
+    # portable replay/Study projections. Ownership and original zone stay intact.
+    inspected = [
+        _serialize_card(card)
+        for card in obs.opponent_cards
+        if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
+    ]
+    if inspected:
+        data["agent"].setdefault("inspected", []).extend(inspected)
     data["agent"]["sideboard"] = [
         {
             "candidate_id": int(card.candidate_id),
@@ -388,6 +407,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """
     observation = env.observation_for_player(viewer)
     data = serialize_observation(observation, include_details=True)
+    data["schedule"] = json.loads(env.public_schedule_json())
     context = json.loads(env.decision_context_json(viewer))
     if context is not None:
         data["decision_context"] = context

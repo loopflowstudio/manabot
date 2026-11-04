@@ -18,7 +18,6 @@ import managym
 from .server import DecisionContext, GameSession
 
 ROOT = Path(__file__).parents[1]
-SEMANTIC_PACK_KEY = "ur-lessons-vs-gw-allies"
 DEFAULT_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json"
 )
@@ -85,14 +84,14 @@ def _json_bytes(value: object) -> bytes:
 def _program_index() -> tuple[
     dict[int, list[dict[str, Any]]], dict[str, dict[str, Any]]
 ]:
-    """Name every program of the authored pack from the engine's own catalog.
+    """Name every program of the world's catalog from the engine's own tokens.
 
     A program is one span of ``managym.learning_catalog``: each triggered,
     mana, triggered-mana and activated ability, plus the spell. Its key is
     ``<definition key>.<kind>.<ordinal within the definition>``.
     """
-    pool = managym.content_pool(SEMANTIC_PACK_KEY)
-    catalog = managym.learning_catalog(SEMANTIC_PACK_KEY)
+    pool = managym.content_pool(managym.WORLD_SETUP)
+    catalog = managym.learning_catalog()
     kind_names = {value: name for name, value in PROGRAM_KINDS.items()}
     definitions = {int(row["card_def_id"]): row for row in pool["definitions"]}
     offsets = catalog["definition_program_offsets"]
@@ -120,9 +119,7 @@ def _program_index() -> tuple[
 
 
 def _validate_manifest(manifest: dict[str, Any]) -> None:
-    if manifest.get("pack_key") != SEMANTIC_PACK_KEY:
-        raise RuntimeError("authored release-stack match did not select its pack")
-    pool = managym.content_pool(SEMANTIC_PACK_KEY)
+    pool = managym.content_pool(managym.WORLD_SETUP)
     if manifest["content_digest"] != pool["content_digest"]:
         raise RuntimeError("authored content digest drifted from the native pool")
     names = {

@@ -18,6 +18,7 @@ use crate::{
     state::{
         ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        mana::ManaCost,
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -55,6 +56,13 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherited_from: Option<crate::state::card::CardDefId>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub source_transforms: u32,
     /// The card whose spell or ability is resolving.
     pub source: Option<CardId>,
     /// Exact battlefield source when the effect belongs to an ability of a
@@ -205,6 +213,20 @@ pub enum ResolutionCastOffer {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    /// Select the generic X of an optional resolution payment, or decline.
+    ChoosePaymentX {
+        player: PlayerId,
+        if_paid: Vec<Effect>,
+    },
+    /// Privately search the owner's graveyard, hand and library for up to
+    /// `remaining` cards of a named identity. Every pick is an exact card;
+    /// stopping or reaching the bound shuffles the searched library.
+    SearchNamed {
+        player: PlayerId,
+        owner: PlayerId,
+        name: String,
+        remaining: usize,
+    },
     Payment(PaymentProgress),
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
@@ -304,6 +326,9 @@ pub enum Decision {
         random_order: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
+        /// Selected cards go onto the battlefield, not into the hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
         player: PlayerId,
         /// Looked-at cards still in the library, top first.
         looked: Vec<CardId>,
@@ -407,6 +432,16 @@ pub enum Decision {
         slot: usize,
         may_keep: bool,
     },
+    /// "Starting with you, each player chooses up to one [predicate]
+    /// permanent from among permanents your opponents control. Exile those
+    /// permanents." `player` chooses now; `controller` is "you". Once the
+    /// last player has chosen, every chosen permanent is exiled together.
+    ChooseToExile {
+        player: PlayerId,
+        controller: PlayerId,
+        predicate: CardPredicate,
+        chosen: Vec<PermanentId>,
+    },
     /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
     LegendRule {
         player: PlayerId,
@@ -427,10 +462,13 @@ impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::ManaUpfront { player, .. }
+            Decision::ChoosePaymentX { player, .. }
+            | Decision::SearchNamed { player, .. }
+            | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
             | Decision::ChooseObject { player, .. }
             | Decision::KeepCreatures { player, .. }
+            | Decision::ChooseToExile { player, .. }
             | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
@@ -458,11 +496,14 @@ impl Decision {
     /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
-            Decision::ManaUpfront { .. }
+            Decision::ChoosePaymentX { .. }
+            | Decision::SearchNamed { .. }
+            | Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
             | Decision::ChooseObject { .. }
             | Decision::KeepCreatures { .. }
+            | Decision::ChooseToExile { .. }
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
@@ -573,6 +614,64 @@ impl Game {
         self.stop_keeping_creatures(player, max_total_power, kept)
     }
 
+    /// The permanents a `Decision::ChooseToExile` may add: matching, controlled
+    /// by an opponent of its controller, not yet chosen.
+    fn exile_choice_candidates(
+        &self,
+        controller: PlayerId,
+        predicate: &CardPredicate,
+        chosen: &[PermanentId],
+    ) -> Vec<PermanentId> {
+        self.battlefield_permanents(PlayerId(1 - controller.0))
+            .into_iter()
+            .filter(|id| !chosen.contains(id) && self.permanent_matches_predicate(*id, predicate))
+            .collect()
+    }
+
+    /// Ask `player` to choose, skipping a player with nothing to choose;
+    /// after the last player (the controller's opponent), exile the choices.
+    pub(crate) fn choose_to_exile(
+        &mut self,
+        player: PlayerId,
+        controller: PlayerId,
+        predicate: CardPredicate,
+        chosen: Vec<PermanentId>,
+    ) -> Option<Decision> {
+        if self
+            .exile_choice_candidates(controller, &predicate, &chosen)
+            .is_empty()
+        {
+            return self.next_exile_chooser(player, controller, predicate, chosen);
+        }
+        Some(Decision::ChooseToExile {
+            player,
+            controller,
+            predicate,
+            chosen,
+        })
+    }
+
+    fn next_exile_chooser(
+        &mut self,
+        player: PlayerId,
+        controller: PlayerId,
+        predicate: CardPredicate,
+        chosen: Vec<PermanentId>,
+    ) -> Option<Decision> {
+        if player == controller {
+            return self.choose_to_exile(PlayerId(1 - controller.0), controller, predicate, chosen);
+        }
+        let objects: Vec<_> = chosen
+            .iter()
+            .filter_map(|id| self.permanent_object_ref(*id))
+            .collect();
+        for object in objects {
+            self.move_object_to_zone(object, ZoneType::Exile);
+        }
+        self.process_game_events();
+        None
+    }
+
     /// `player` has stopped keeping creatures: the nonactive player chooses
     /// next, or every unkept creature is sacrificed.
     fn stop_keeping_creatures(
@@ -619,6 +718,26 @@ impl Game {
             .collect()
     }
 
+    /// Temporary native permission to inspect another player's hidden zones.
+    /// It ends with the search instruction and never depends on deck disclosure.
+    pub(crate) fn searches_private_zones(&self, viewer: PlayerId, owner: PlayerId) -> bool {
+        self.state
+            .suspended_decision
+            .as_ref()
+            .is_some_and(|suspended| {
+                matches!(suspended.decision, Decision::SearchNamed { player, owner: searched, .. }
+                if player == viewer && searched == owner)
+            })
+    }
+
+    /// Search permission reveals all cards in the searched zones only to
+    /// the chooser; eligibility by name restricts actions, not information.
+    pub(crate) fn named_search_cards(&self, owner: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+        [ZoneType::Graveyard, ZoneType::Hand, ZoneType::Library]
+            .into_iter()
+            .flat_map(move |zone| self.state.zones.zone_cards(zone, owner).iter().copied())
+    }
+
     fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
         cards
             .iter()
@@ -629,8 +748,11 @@ impl Game {
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
             frame: EffectFrame {
+                remembered: Vec::new(),
                 source: None,
                 source_ref: None,
+                inherited_from: None,
+                source_transforms: 0,
                 controller: decision.player(),
                 resolutions_this_turn: 0,
                 kicked: false,
@@ -728,6 +850,37 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::ChoosePaymentX { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: (0..=u8::MAX)
+                    .take_while(|x| {
+                        self.can_pay_mana_cost(*player, &ManaCost::default().with_generic(*x))
+                    })
+                    .map(|x| Action::ChooseMode {
+                        player: *player,
+                        mode: usize::from(x),
+                    })
+                    .chain([Action::Decline { player: *player }])
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::SearchNamed {
+                player,
+                owner,
+                name,
+                remaining,
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.named_search_cards(*owner)
+                        .filter(|card| self.state.cards[*card].name == *name && *remaining > 0),
+                    true,
+                ),
+                focus: source_focus,
+            },
             Decision::ManaUpfront { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
@@ -811,6 +964,23 @@ impl Game {
                     })
                     .chain(may_keep.then_some(Action::Decline { player: *player }))
                     .collect(),
+                focus: source_focus,
+            },
+            Decision::ChooseToExile {
+                player,
+                controller,
+                predicate,
+                chosen,
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.exile_choice_candidates(*controller, predicate, chosen)
+                        .into_iter()
+                        .map(|id| self.state.permanents[id].as_ref().unwrap().card),
+                    true,
+                ),
                 focus: source_focus,
             },
             Decision::KeepCreatures { player, .. } => ActionSpace {
@@ -1069,6 +1239,63 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::ChoosePaymentX { player, if_paid }, Action::ChooseMode { mode, .. }) => {
+                let x = u8::try_from(*mode).ok();
+                let Some(x) = x.filter(|x| {
+                    self.can_pay_mana_cost(*player, &ManaCost::default().with_generic(*x))
+                }) else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("unpayable X".into()));
+                };
+                suspended.frame.x = x;
+                let payment = PaymentProgress::new(
+                    *player,
+                    PaymentCost::Mana(ManaCost::default().with_generic(x)),
+                    std::mem::take(if_paid),
+                    Vec::new(),
+                );
+                self.continue_resolution(suspended, Some(Decision::Payment(payment)));
+                Ok(())
+            }
+            (Decision::ChoosePaymentX { .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchNamed {
+                    owner,
+                    name,
+                    remaining,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                if *remaining == 0
+                    || self.state.cards[*card].owner != *owner
+                    || self.state.cards[*card].name != *name
+                    || !matches!(
+                        self.state.zones.zone_of(*card),
+                        Some(ZoneType::Hand | ZoneType::Library | ZoneType::Graveyard)
+                    )
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("illegal named-search card".into()));
+                }
+                self.move_card(*card, ZoneType::Exile);
+                *remaining -= 1;
+                if *remaining == 0 {
+                    self.shuffle_library(*owner);
+                    self.run_frame(suspended.frame);
+                } else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                }
+                Ok(())
+            }
+            (Decision::SearchNamed { owner, .. }, Action::Decline { .. }) => {
+                self.shuffle_library(*owner);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (
                 Decision::Payment(PaymentProgress {
                     player,
@@ -1098,6 +1325,9 @@ impl Game {
                 }
                 if let Some(key) = payment.spends {
                     self.spend_once_each_turn(key);
+                }
+                if matches!(payment.remaining, PaymentCost::Waterbend { .. }) {
+                    self.record_bending(payment.player, crate::flow::turn::Bending::Water);
                 }
                 let effects = std::mem::take(&mut payment.if_paid);
                 suspended.frame.prepend_effects(effects.into_iter());
@@ -1167,7 +1397,34 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-
+            (
+                Decision::ChooseToExile {
+                    player,
+                    controller,
+                    predicate,
+                    chosen,
+                },
+                action @ (Action::SelectCard { .. } | Action::Decline { .. }),
+            ) => {
+                if let Action::SelectCard { card, .. } = action {
+                    let candidates = self.exile_choice_candidates(*controller, predicate, chosen);
+                    let selected =
+                        self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
+                    let Some(selected) = selected else {
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Err(AgentError("illegal permanent to choose".into()));
+                    };
+                    chosen.push(selected);
+                }
+                let next = self.next_exile_chooser(
+                    *player,
+                    *controller,
+                    predicate.clone(),
+                    std::mem::take(chosen),
+                );
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
             (Decision::KeepCreatures { .. }, Action::SelectCard { card, .. }) => {
                 let candidates = self.keep_candidates(&suspended.decision);
                 let selected =
@@ -1467,6 +1724,7 @@ impl Game {
                     predicate,
                     selected,
                     reveal,
+                    to_battlefield,
                     random_order,
                     max_select,
                     ..
@@ -1483,7 +1741,9 @@ impl Game {
                 let player = *player;
                 looked.retain(|c| c != card);
                 *selected += 1;
-                if *reveal {
+                if *to_battlefield {
+                    self.move_card(*card, ZoneType::Battlefield);
+                } else if *reveal {
                     self.reveal_card_to_hand(*card, player);
                 } else {
                     self.move_card(*card, ZoneType::Hand);
@@ -2089,8 +2349,11 @@ mod learn_tests {
 
     fn learn(game: &mut Game) {
         game.run_frame(EffectFrame {
+            remembered: Vec::new(),
             source: None,
             source_ref: None,
+            inherited_from: None,
+            source_transforms: 0,
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
@@ -2807,8 +3070,11 @@ mod payment_tests {
             false,
         );
         game.run_frame(EffectFrame {
+            remembered: Vec::new(),
             source: None,
             source_ref: None,
+            inherited_from: None,
+            source_transforms: 0,
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,

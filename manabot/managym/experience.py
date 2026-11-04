@@ -290,6 +290,7 @@ class LegacyCastPermissionView(ProtocolModel):
     player_id: UInt32
     cost: str | None = Field(default=None, exclude_if=lambda value: value is None)
     this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    through_next_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     own_turn_only: bool = Field(default=False, exclude_if=lambda value: not value)
     after_turn: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -316,6 +317,7 @@ class PlayerTurnHistoryView(ProtocolModel):
     permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class LegacyCardView(ProtocolModel):
@@ -377,6 +379,7 @@ class LegacyPermanentView(ProtocolModel):
     exile_if_dies_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
+    transforms: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
@@ -487,6 +490,8 @@ class LegacyPlayerView(ProtocolModel):
         default_factory=PlayerTurnHistoryView,
         exclude_if=lambda value: value == PlayerTurnHistoryView(),
     )
+    extra_turns: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    additional_combats: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     no_maximum_hand_size: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
@@ -525,7 +530,28 @@ class StackEntryView(ProtocolModel):
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class CombatView(ProtocolModel):
+    player_index: UInt32
+    attackers: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class ScheduleView(ProtocolModel):
+    """Committed native scheduling, in execution order within each domain."""
+
+    extra_turns: list[UInt32]
+    resume_with: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    current_combat: CombatView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    additional_combats: list[CombatView]
+
+
 class LegacyHeroObservation(ProtocolModel):
+    schedule: ScheduleView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     stack_objects: list[StackEntryView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

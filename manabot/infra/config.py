@@ -53,9 +53,9 @@ class ObservationConfig(BaseConfig):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Fits all Learn choices in the selected setup. Larger action sets fail
-    # encoding explicitly; this is not a universal priority/combat bound.
-    max_actions: int = 64
+    # Includes every name in the current catalog (The Rise of Sozin).
+    # Larger action sets still fail explicitly, never truncate choices.
+    max_actions: int = 512
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(
@@ -83,15 +83,17 @@ class ObservationConfig(BaseConfig):
     @classmethod
     def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
         """Missing version means the frozen input-v1 contract, never today's default."""
-        return cls(**{"policy_input_version": 1, **payload})
+        return cls(**{"policy_input_version": 1, "max_actions": 64, **payload})
 
 
 class MatchConfig(BaseConfig):
     """Parameters passed to the match builder."""
 
-    # An authored pack key runs that pack's fixed setups; `WORLD_SETUP` submits
-    # the decks to the installed world's admission. Frozen regimes name this
-    # selector `content_pack`.
+    # `WORLD_SETUP` submits the decks to the installed world's admission;
+    # `None` runs them as given. Every match runs on the world's one catalog.
+    # Frozen regimes name this selector `content_pack` and may record an
+    # authored setup's `pack_key` here; that label is kept so their identities
+    # hold, and it runs like `None`.
     world: str | None = Field(
         default=None,
         validation_alias=AliasChoices("world", "content_pack"),
@@ -117,6 +119,15 @@ class MatchConfig(BaseConfig):
     decklists: Literal["open", "closed"] = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
+
+    @field_validator("world")
+    @classmethod
+    def validate_world(cls, value: str | None) -> str | None:
+        if value is not None and value != WORLD_SETUP:
+            import managym
+
+            managym.authored_deck_keys(value)  # raises for an unknown setup
+        return value
 
     @model_validator(mode="after")
     def validate_sources(self) -> "MatchConfig":
@@ -161,25 +172,19 @@ class MatchConfig(BaseConfig):
     @classmethod
     def authored(
         cls,
-        pack_key: str,
+        setup: str,
         hero_deck: str,
         villain_deck: str,
         *,
         hero: str = "gaea",
         villain: str = "urza",
     ) -> "MatchConfig":
-        """Resolve both complete setups from the compiled rules pack."""
+        """Resolve both complete setups of an authored setup (preset or `pack_key`)."""
         import managym
 
-        first = managym.authored_deck_setup(pack_key, hero_deck)
-        second = managym.authored_deck_setup(pack_key, villain_deck)
+        first = managym.authored_deck_setup(setup, hero_deck)
+        second = managym.authored_deck_setup(setup, villain_deck)
         return cls(
-            world=(
-                pack_key
-                if hero_deck == villain_deck
-                or len(managym.authored_deck_keys(pack_key)) > 2
-                else None
-            ),
             hero=hero,
             villain=villain,
             hero_deck=first.decklist,
@@ -216,8 +221,10 @@ class ModelConfig(BaseConfig):
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
-    # The world or authored pack whose vocabulary the model reads. Frozen
-    # checkpoints and recipes name it `semantic_pack`.
+    # The semantic vocabulary the model reads: the world's one catalog. Fresh
+    # recipes write "world"; older labels in `FROZEN_VOCABULARY_LABELS` are
+    # accepted on read and bind the same catalog. Frozen checkpoints and
+    # recipes name the field `semantic_pack`.
     world: str | None = Field(
         default=None, validation_alias=AliasChoices("world", "semantic_pack")
     )

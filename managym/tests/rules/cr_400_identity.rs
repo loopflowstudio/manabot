@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use managym::state::{
     game_object::{EntityId, Incarnation, ObjectLookupError, ObjectRef, PlayerId},
     zone::ZoneType,
@@ -90,7 +88,6 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
     );
 
     let branch = s.game().clone();
-    assert!(Arc::ptr_eq(&s.game().state.content, &branch.state.content));
     assert_eq!(branch.current_object_ref(card), Some(new_ref));
     assert_eq!(branch.object_lki(old_ref), Some(&lki));
     assert_eq!(

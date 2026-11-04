@@ -40,6 +40,8 @@ export interface CastPermission {
   /** Mana symbols paid to cast it; absent for a land play. */
   cost?: string;
   this_turn?: boolean;
+  /** Ends with the permitted player's next turn. */
+  through_next_turn?: boolean;
   own_turn_only?: boolean;
   /** Usable only on a turn numbered after this one. */
   after_turn?: number;
@@ -82,6 +84,7 @@ export interface PermanentState {
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */
+  transforms?: number;
   exhausted_abilities?: number;
   /** "Once each turn" abilities this object has used this turn. */
   once_each_turn_used?: number;
@@ -142,6 +145,8 @@ export interface PlayerTurnHistory {
   permanents_sacrificed?: number;
   land_entered?: boolean;
   cards_drawn?: number;
+  /** Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8. */
+  bent?: number;
 }
 
 export interface PlayerState {
@@ -174,6 +179,10 @@ export interface PlayerState {
   keeps_red_mana?: boolean;
   /** What this player has done this turn. */
   turn_history?: PlayerTurnHistory;
+  /** Extra turns this player will take after this one. */
+  extra_turns?: number;
+  /** Additional combat phases still to come this turn. */
+  additional_combats?: number;
   /** Continuous effects on this player, in timestamp order. */
   effects?: ContinuousEffect[];
   hand: CardState[];
@@ -224,7 +233,22 @@ export interface StackEntryView {
   x?: number;
 }
 
+export interface CombatView {
+  player_index: number;
+  /** Absent means no additional attacker restriction; legal offers still govern. */
+  attackers?: string;
+}
+
+export interface ScheduleView {
+  extra_turns: number[];
+  resume_with?: number;
+  current_combat?: CombatView;
+  additional_combats: CombatView[];
+}
+
 export interface Observation {
+  /** Missing on historical captures means unknown, not an empty schedule. */
+  schedule?: ScheduleView;
   stack_objects?: StackEntryView[];
   decision_context?: DecisionContextView;
   definition_names?: Record<string, string>;

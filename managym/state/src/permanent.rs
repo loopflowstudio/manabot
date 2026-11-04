@@ -26,6 +26,8 @@ pub enum CounterKind {
     Loyalty,
     /// Removed by damage to a battle (CR 120.3h).
     Defense,
+    /// CR 714.2: a Saga's chapter abilities trigger as these are put on it.
+    Lore,
 }
 
 impl CounterKind {
@@ -39,12 +41,13 @@ impl CounterKind {
             CounterKind::Quest => "quest",
             CounterKind::Finality => "finality",
             CounterKind::Conqueror => "conqueror",
+            CounterKind::Lore => "lore",
             CounterKind::Loyalty => "loyalty",
             CounterKind::Defense => "defense",
         }
     }
 
-    pub const ALL: [CounterKind; 9] = [
+    pub const ALL: [CounterKind; 10] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -54,6 +57,7 @@ impl CounterKind {
         CounterKind::Conqueror,
         CounterKind::Loyalty,
         CounterKind::Defense,
+        CounterKind::Lore,
     ];
 }
 
@@ -113,6 +117,9 @@ impl serde::Serialize for Counters {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
+    /// Number of transformations of this incarnation (CR 701.27f).
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub transforms: u32,
     pub id: ObjectId,
     pub card: CardId,
     pub controller: PlayerId,
@@ -174,6 +181,7 @@ impl Permanent {
 
     pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
         Self {
+            transforms: 0,
             id,
             card: card_id,
             controller: card.owner,

@@ -58,18 +58,23 @@ impl Game {
             self.decklist_known(opponent, perspective),
             "determinize requires the opponent's open decklist"
         );
-        let (mut known, mut residual) = self.hidden_hand_partition(opponent);
-        residual.extend(self.foretold_cards(opponent));
-        residual.sort_unstable_by_key(|card| card.0);
-        residual.shuffle(&mut rng);
-        assert!(
-            self.fill_foretold_slots(opponent, &mut residual),
-            "foretold cards are in their own pool"
-        );
-        let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
-        let library = residual.split_off(unknown_slots);
-        known.extend(residual);
-        self.state.zones.reassign_hidden(opponent, known, library);
+        // Searching an opponent's hand and library reveals their exact
+        // membership to the searcher until this instruction finishes.
+        let searching_opponent = self.searches_private_zones(perspective, opponent);
+        if !searching_opponent {
+            let (mut known, mut residual) = self.hidden_hand_partition(opponent);
+            residual.extend(self.foretold_cards(opponent));
+            residual.sort_unstable_by_key(|card| card.0);
+            residual.shuffle(&mut rng);
+            assert!(
+                self.fill_foretold_slots(opponent, &mut residual),
+                "foretold cards are in their own pool"
+            );
+            let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
+            let library = residual.split_off(unknown_slots);
+            known.extend(residual);
+            self.state.zones.reassign_hidden(opponent, known, library);
+        }
         // A top card the perspective may look at stays where it is.
         let known_top = self
             .library_top_card(perspective)
@@ -104,6 +109,7 @@ impl Game {
                                 | Decision::SearchBasicLand { .. }
                                 | Decision::SearchLibraryToHand { .. }
                                 | Decision::SearchDistinctLands { .. }
+                                | Decision::SearchNamed { .. }
                                 | Decision::CastDuringResolution { .. }
                         )
             });

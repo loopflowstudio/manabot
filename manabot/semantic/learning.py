@@ -1,10 +1,10 @@
 """Viewer-safe projection of card rules for learning.
 
 The rules engine remains authoritative and is also the only source of card
-programs: ``managym.learning_catalog`` walks each pack definition (the same
+programs: ``managym.learning_catalog`` walks each catalog definition (the same
 ``CardDefinition`` the engine runs) into typed tokens. This module binds that
-catalog to one ContentPack manifest and maps only already-viewer-safe
-Observation objects into it. Rows are ``CardDefId`` values.
+catalog to a ContentPack manifest of the world's one catalog and maps only
+already-viewer-safe Observation objects into it. Rows are ``CardDefId`` values.
 
 Principal types: ``LearningSchema`` (token kinds and object roles),
 ``BoundSemanticPack`` (a catalog bound to one manifest) and the projection
@@ -25,8 +25,12 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
 SCHEMA_VERSION = 10
 
-# Explicit current packs shared by live-manifest and policy binding.
-CURRENT_PACK_KEYS = frozenset(
+# Labels accepted on read for a policy's semantic vocabulary
+# (``ModelConfig.world``). There is one vocabulary, the world's catalog, and
+# every label binds it; fresh recipes write ``"world"``. The authored setup
+# names are kept byte-for-byte because frozen recipes, regimes, checkpoints and
+# architecture receipts record them. The set never grows.
+FROZEN_VOCABULARY_LABELS = frozenset(
     {
         "world",
         "tla-baseline-v1",
@@ -379,7 +383,6 @@ class SemanticObjectBatch:
 @dataclass(frozen=True)
 class BoundSemanticPack:
     schema: LearningSchema
-    pack_key: str | None
     content_pack_schema_version: int
     content_pack_hash: str
     binding_hash: str
@@ -396,7 +399,7 @@ class BoundSemanticPack:
         *,
         schema_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
-        """Bind the engine's catalog for the manifest's pack (or the default pack).
+        """Bind the engine's catalog to a manifest of it.
 
         The catalog's content digest must equal the manifest's, so the tokens
         describe exactly the definitions the match runs. Manifest IDs join
@@ -405,11 +408,14 @@ class BoundSemanticPack:
         import managym  # Native only on this path; historical readers stay pure.
 
         manifest = _mapping(manifest, "content_pack_manifest")
-        pack_key = manifest.get("pack_key")
-        if pack_key is not None:
-            pack_key = _string(pack_key, "content_pack_manifest.pack_key")
+        # Retained default-pack manifests carry `pack_key: None`; an authored
+        # pack named its own smaller catalog, which no longer exists.
+        if manifest.get("pack_key") is not None:
+            raise ContentPackBindingError(
+                f"authored content pack {manifest['pack_key']!r} is retired"
+            )
         schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
-        raw = _mapping(managym.learning_catalog(pack_key), "learning_catalog")
+        raw = _mapping(managym.learning_catalog(), "learning_catalog")
         pack_schema = _integer(
             manifest.get("schema_version"), "content_pack_manifest.schema_version"
         )
@@ -472,7 +478,6 @@ class BoundSemanticPack:
         )
         return cls(
             schema=schema,
-            pack_key=pack_key,
             content_pack_schema_version=pack_schema,
             content_pack_hash=pack_hash,
             binding_hash=binding_hash,
@@ -665,35 +670,56 @@ class BoundSemanticPack:
             ]
             definition_program_mask[row, :size] = True
 
+        # Characteristics spans precede program spans in the token arrays. A
+        # created token is referenced from a program; a back face from its
+        # front's characteristics, so each kind of span has its own table.
         refs_by_program: list[list[tuple[int, int]]] = [
             [] for _ in range(self.catalog.programs)
+        ]
+        refs_by_definition: list[list[tuple[int, int]]] = [
+            [] for _ in range(self.catalog.definitions)
         ]
         for source, target in zip(
             self.catalog.definition_ref_source_tokens,
             self.catalog.definition_ref_target_rows,
         ):
-            program_row = int(
-                np.searchsorted(self.catalog.program_offsets, source, side="right") - 1
+            in_characteristics = source < self.catalog.definition_offsets[-1]
+            offsets = (
+                self.catalog.definition_offsets
+                if in_characteristics
+                else self.catalog.program_offsets
             )
-            if not 0 <= program_row < len(refs_by_program):
+            spans = refs_by_definition if in_characteristics else refs_by_program
+            row = int(np.searchsorted(offsets, source, side="right") - 1)
+            if not 0 <= row < len(spans):
                 raise SemanticProjectionError(
-                    "definition reference is outside program spans"
+                    "definition reference is outside definition and program spans"
                 )
-            local_source = int(source - self.catalog.program_offsets[program_row])
-            refs_by_program[program_row].append((local_source, int(target)))
-        ref_width = max((len(refs) for refs in refs_by_program), default=0)
-        ref_source_positions = np.full(
-            (len(refs_by_program), ref_width), -1, dtype=np.int32
+            spans[row].append((int(source - offsets[row]), int(target)))
+
+        def pad_refs(
+            refs_by_span: list[list[tuple[int, int]]],
+        ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+            width = max((len(refs) for refs in refs_by_span), default=0)
+            sources = np.full((len(refs_by_span), width), -1, dtype=np.int32)
+            targets = np.full((len(refs_by_span), width), -1, dtype=np.int32)
+            mask = np.zeros((len(refs_by_span), width), dtype=np.bool_)
+            for row, refs in enumerate(refs_by_span):
+                for column, (source, target) in enumerate(refs):
+                    sources[row, column] = source
+                    targets[row, column] = target
+                    mask[row, column] = True
+            return sources, targets, mask
+
+        ref_source_positions, ref_target_rows, ref_mask = pad_refs(refs_by_program)
+        characteristics_sources, characteristics_targets, characteristics_mask = (
+            pad_refs(refs_by_definition)
         )
-        ref_target_rows = np.full((len(refs_by_program), ref_width), -1, dtype=np.int32)
-        ref_mask = np.zeros((len(refs_by_program), ref_width), dtype=np.bool_)
-        for row, refs in enumerate(refs_by_program):
-            for column, (source, target) in enumerate(refs):
-                ref_source_positions[row, column] = source
-                ref_target_rows[row, column] = target
-                ref_mask[row, column] = True
 
         return {
+            "characteristics_ref_source_positions": characteristics_sources,
+            "characteristics_ref_target_rows": characteristics_targets,
+            "characteristics_ref_mask": characteristics_mask,
             "definition_token_kind": definition_kind,
             "definition_token_value": definition_value,
             "definition_token_mask": definition_mask,
@@ -755,7 +781,7 @@ __all__ = [
     "ArtifactCompatibilityError",
     "BoundSemanticPack",
     "ContentPackBindingError",
-    "CURRENT_PACK_KEYS",
+    "FROZEN_VOCABULARY_LABELS",
     "DEFAULT_SCHEMA_PATH",
     "LearningSchema",
     "PROGRAM_KINDS",

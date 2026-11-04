@@ -1,76 +1,87 @@
-# MTG-213 — decisions and assumptions (2026-11-04 UTC)
+# T6 decisions and assumptions — 2026-11-03
 
-Current outcome, dependency and acceptance: `scratch/tla-pilot-verify.md`.
-Results and cost receipts: `experiments/tla-trophy-pilot.md`. Training Wave
-memory now records the accepted shared-effect repair and its evidence limits.
+Jack Heart's accepted scope is all 16 T6 cards plus one catalog (2026-11-02). His 2026-11-03 steer requires completing the detected Sozin gaps and auditing earlier approximations, then publishing for review. No merge or auto-merge is authorized. The current plan is [mtg-225-tla-t6.md](mtg-225-tla-t6.md).
 
-## Accepted direction
+## Resolved by implementation
 
-Jack Heart's comment 1540e0ad selects preliminary fixed-corpus TLA self-play
-and evaluation now, superseding the deferred Task brief. Comment 6434b4dd
-authorizes GPUs under a hard $10 cumulative cap and shipping after checks.
-Comment d2108241 requires a launch milestone only after observed GPU learner
-updates, including job/GPU/progress/rate/deadline evidence. Neither quotes nor
-the CPU proof satisfy it.
+The earlier claims that targets-before-payment had the same outcome, searching could automatically exile four matches, a face comparison represented intervening transforms, inherited abilities could disappear when Koh left, and any next end step sufficed for Foggy Swamp Visions were incorrect. They are replaced by shared payment/reflexive-trigger/search decisions, captured transform/ability state, LKI and controller-specific delayed timing. Ordered turn/combat scheduling and restrictions now reach identity and public observation. These repairs are acceptance work, not new product choices.
 
-Comment 42a12145 resolves the next repair: Jack Heart approved shared-effect
-fixed tensors, encoding each effect once and routing it to affected object
-embeddings before attention. Task 5da5f4 delivered the implementation in PR #419 and owns redundant-
-activation investigation. Preserve semantics; no competing representation
-implementation or unchanged v3 retry. V4 consumed that contract; the prepared
-v5 retains it with fresh initialization/evaluation and the same budget/population.
+Private searching reveals the searched zones only to the chooser. Temporary physical visibility ends on completion, but previously inspected hand definitions remain known. Both native samplers preserve exact visible cards during search. Academy maps native-visible opponent hand/library cards to the existing agent inspection list with original ownership and zone; replay/Study opponent.hand stays redacted. Two-player hand knowledge uses the existing definition-count authority without fabricating reveal events. Naming covers real catalog names including back faces; no unsupported outside-catalog names are invented. Fresh action capacity 512 fits this catalog; saved omitted capacity remains 64 and oversized input still fails explicitly.
 
-## Scientific and operational choices
+## Retained design decisions and review limits
 
-- Population: CC BY 4.0 public TLA PremierDraft dump; the trophy API restricts
-  reuse to 17Lands.com. First 1,000 events with seven observed wins in source
-  order, retaining seventh-win main/sideboards and event/build/results. Missing
-  losses remain unknown. Native whole-list admission yielded 134 eligible and
-  866 rejected without resampling. This is historical trophy data, not a uniform
-  draft sample. Live fetching and held-out-deck generalization are deferred.
-- Recipe: MTG-181/183's 64x2/four-head damped policy, with explicit new-world,
-  full-vocabulary and trophy-population deviations; no checkpoint or budget
-  inheritance. The $1 allocation, 100-update target, 2,700-second watchdog and
-  eight-pair/four-leg evaluation are frozen engineering choices.
-- Credentials: nested Doppler `manabot/prd` then `etude/prd` supplies artifacts
-  and RunPod. Configured GPU alternatives are authorized within $10; record
-  hardware/allocation deviations before scoring. Quotes reserve nothing.
-- Launch: freeze source once through `source.freeze`, retain the typed Run,
-  quote/submit through `client.launch_cohort`. Etude 0.2.12 could not append
-  cohort runs, so `mtg213-pilot-v1-correction1` used a separate $1 ceiling
-  without creating a scientific sample. T6 and MTG-239 retain separate owners.
-- Analysis: retain milestones after early endpoints and both comparison slots
-  for unknown endpoints. Failed callbacks count as failed matches; unknown
-  games remain missing and attempted games are a lower bound. The companion
-  analysis CLI owns the joint criterion; Etude curves are descriptive.
+- A double-faced card is one definition function with a back face registered immediately after it; the back face has no independent key/Scryfall id and is not a deck entry. Its mana value reads its front face. Leaving the battlefield returns the card to its front face; transform retains permanent identity.
+- CR 707.8a permits a copied transformed permanent to be a transforming double-faced token. The earlier cannot-transform proposal is superseded by the printed rules, not a house rule. Back-face colors use Scryfall face data (Sozin black; other back faces colorless); retained review caveat is to compare printed cards. No new external data assumption was made in this repair.
+- Saga entry emits CountersPut for lore and chapter I; other entry counters retain existing behavior. Exactly-X targeting uses `max_x` with nonzero minimum; up-to-X uses zero minimum. Yangchen's optional draw is a resolution Modal inside its target clause.
+- Bending events retain their domain meaning: waterbend once per paid cost, firebend once per resolved combat-mana instruction, earthbend/airbend once per resolved instruction. Four-kind turn history is shared state.
+- One catalog preserves frozen vocabulary labels on read. The referenced-row learner optimization remains intact; full-table no-grad serving remains bitwise aligned. Old authored-pack checkpoint weights/bindings are not migrated and no retained binary was loaded. This is a review-visible compatibility limit, not an implicit promise to add a shim.
+- Authored presets retain their bypass of submitted-deck construction checks. Main now admits every defined non-token, non-fixture front face; incomplete-card exclusions no longer exist.
+- Current w17 is mutable: definition/token changes and hash contract 15 require affected receipt refresh, not a world bump. Earlier worlds, frozen advice/experiments and retained checkpoints are never regenerated to make checks green. Engine Budget uses same-runner CI evidence; no synthetic load or local speed claim.
+- MTG-238 and MTG-235 are already integrated. Their historical blockers/delivery orders are no longer outstanding T6 work. The unrelated printed-P/T protocol choice remains outside T6.
 
-## Frozen compatibility and provenance
+## Historical evidence
 
-V1's 140 distinct facts exceeded 128. The operator selected v6/512, then 256
-following Jack Heart's question (78f4c226); be5b1394 relays his explicit approval
-of the immediate larger-capacity hotfix. Comment 0c17ad58 was an operator-issued
-run reason, not separate human confirmation. No v2 execution/scoring existed
-at amendment (`.runs/mtg213/v2-pre-amendment-state.json`). V6 retains all columns,
-timestamp rank / 128 and fatal overflow; v5 stays fixed at 128 and legacy
-serialization omits `max_facts`. Generic fresh v6 defaults to 512.
+Complete inherited T2–T5, decklist, MTG-235/236/237/238, integration and previous publication notes are retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/questions.md` and `:scratch/mtg-225-tla-t6.md`. The latter preserves prior gate results and the negative Sozin reproduction. Older linked refs there remain historical evidence, not direction. No uncommitted evidence was removed: the only pre-curation scratch edit was the repair delete list, retained in the current plan.
 
-PR #415 changed the native digest, so v3 bound the merged runtime with the same
-134 entries, v6/256, recipe and schedule. The later 306-list admission audit
-never expands this population. V3's 270-row failure invalidates its capacity
-assumption; frozen v1/v2/v3 inputs and evidence remain reproducibility records.
-The native/Python duration-parity repair does not refresh those runtime pins.
+## Main sync — 2026-11-03
 
-Historical details: `b0d921cec92784d9303aea3d0d904416e8607982:scratch/questions.md`
-retains source-binding decisions, fixture repairs, documentation contributions,
-sync resolution and links to older decision history. V2 source is
-`d655d37996d2702cd5fee6ac37db11d855e87640`; pre-merge validation is at
-`7b8bb32731205981b6be09097eb4ca4b39b3864f:experiments/tla-trophy-pilot.md`.
-Uncommitted continuation notes before consolidation are preserved in
-`.runs/mtg213/context-before-compress/`; their substantive findings remain in
-the continuation note. The manifest retains all 120 added v3 evidence entries.
+Completed at `64b79d895`: T6 incorporates main `c823c9c8f`, preserving the single catalog and main's
+definition-based admission (no incomplete-card exclusion), plus both sets of
+card fixes. Main has published decision code 23 for library-bottom ordering
+and counter ordinals 7/8 for loyalty/defense; T6's choose-to-exile is appended at
+26 and lore at 9. T6 payment/search keep 24/25. This resolves the unpublished
+T6 collisions without changing main's retained meanings. Refreshed current w17 receipt
+Commands use main's corrected Rallier/Accumulate Wisdom traces, with derived
+runtime values rebound to the combined implementation. Historical receipts
+remain untouched.
 
-Shared-effect owner decisions remain at `fb5ad2c1372f9c967b550f0b8ae0f84883f75563:scratch/questions.md`; its memory section was preserved during integration.
+Main supersedes the old 142-Command tape with 135 Commands after Rallier
+correctly excludes Suki with power above three. Preserve that accepted trace
+and the explicit Accumulate Wisdom ordering Commands in navigation prefixes.
 
-Prospective v4 uses delivered v7 defaults explicitly: 128 local facts, 128 × 18 effect headers, 512 × 3 details, 2048 × 2 memberships. Protocol schema 3 serializes every ObservationSpace shape and checks it at runtime; capacities remain bounded engineering choices, not universal coverage. This is a new initialization, preserving the prior recipe and all 134 entries.
+## Schedule projection assumption — 2026-11-03
 
-V4 failed before learning at 61 card objects including sideboard (40 original cards + 5 tokens + 16 sideboard). Under the existing workflow-bug authorization, the prospective v5 pilot explicitly raises the existing `max_cards_per_player` configuration to 128, retaining v7 and all shared-effect capacities. This is an operator allocation to accommodate generated objects, not a representation change, population exclusion or universal bound. V4 source/evidence remains frozen at `0b6c2bb854ba48b37fb7e5ac360c0c9d047cea34`.
+Current combat is displayed for both ordinary and extra combat, with the native
+restriction if any. This avoids inventing a persisted “is extra” flag that the
+accepted display does not need. `resume_with` is shown only when native state
+retains it; the client does not predict the next normal turn from counts.
+Missing historical schedule data remains unknown. These reversible presentation
+choices preserve Jack Heart's accepted 1a direction.
+
+## Main v6 sync — 2026-11-03
+
+Merged main `3b122de9078c985f846a0f3c5a3a42ebca3b1182` at `bf7631c6a`, retaining
+v6's configurable fact capacity (fresh default 512), T6's fresh 512-action
+capacity, and the checkpoint reader's historical v1/64-action defaults. V5
+remains fixed at 128 facts; explicit saved values remain authoritative. Preserve
+both branches' parity tests, extending T6 scheduling/transform coverage to v6.
+Main's MTG-213 experiment decisions remain historical context at
+`3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md`; they do not
+replace T6's scope or authorize experiment work in this sync.
+
+## Delayed lifetime projection — 2026-11-03
+
+The small typed API uses `DelayedFrequency::{Once, EachMatch}` and
+`DelayedExpiry::{ThisTurn, Never}`; no continuous-effect duration is reused.
+The existing `this_turn` observation field remains a derived expiry fact. An
+optional frequency code, unknown in historical captures, gets relation row
+kind 9 in v5/v6; existing columns and v1–v4 exclusions remain fixed. Canonical
+hashing moves to contract 15 because the waiting record serialization changed.
+Gate owns the resulting mutable-w17 refresh.
+
+## Main v7 sync and pilot isolation — 2026-11-03
+
+Main `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` adds the explicit v7
+shared-effect projection; fresh inputs remain v6. Retain its public native
+provenance and T6's catalog, schedule and delayed-lifetime semantics together.
+Its experiment decisions and full notes remain at that commit's
+`scratch/questions.md`; no experiment or resource allocation is inherited.
+The frozen v3 pilot's controlled scheduling/analysis fixtures use its declared
+world identity; real runtime rejection remains separate. Pin its expected
+64-action input instead of inheriting the fresh 512-action default.
+
+## Required integration repair — 2026-11-04
+
+The recorded head `8ed124a8d5704446a99fc00a5ac064fe5a075927` conflicts with main `0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. Preserve main’s v5 pilot rename and frozen shape contract, and adapt T6’s synthetic-world fixture to v5. Native replay uses the real runtime and current action capacity with the recorded card-allocation boundary; it never uses the synthetic-world fixture. Main’s MTG-213 decisions remain at that commit’s `scratch/questions.md`; they authorize no experiment execution here. The current ci-fix request authorizes publication and auto-merge on PR #417.
+
+The frozen v5 protocol pins player/card widths 67/55; T6 uses 73/56. Synthetic scheduling/analysis fixtures pin these historical widths as well as world identity, while separate negative tests prove real-world and real-schema rejection. Frozen protocol/regime/evidence bytes stay unchanged.

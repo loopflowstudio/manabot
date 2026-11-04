@@ -17,7 +17,7 @@
     "setup": {
       "scope": "Two-player ordinary game setup; physical tournament procedures and variants outside training setup.",
       "inspected_owners": [
-        "managym/src/flow/setup.rs:Game::new_with_content",
+        "managym/src/flow/setup.rs:Game::construct",
         "managym/src/state/player.rs:PlayerConfig"
       ],
       "evidence": [
@@ -388,7 +388,7 @@
     "outside_formats": {
       "scope": "Unsupported multiplayer/casual formats, outside admitted ordinary two-player worlds.",
       "inspected_owners": [
-        "managym/src/flow/setup.rs:Game::new_with_content",
+        "managym/src/flow/setup.rs:Game::construct",
         "managym/src/state/player.rs:PlayerConfig",
         "managym/state/src/zone.rs:ZoneManager"
       ],
@@ -561,7 +561,7 @@
     "103.5": {
       "status": "partial",
       "scope": "Ordinary setup: seven-card draw, no mulligan decisions.",
-      "authority": "managym/src/flow/setup.rs:Game::new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "tests": [
         "managym/tests/rules/cr_103_game_start.rs"
       ],
@@ -2151,13 +2151,13 @@
     "603.10g": {
       "status": "not_applicable",
       "scope": "Planeswalk-away look-back is specific to Planechase.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No Planechase state or admission; not a supported two-player rules defect.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "603.11": {
@@ -2873,85 +2873,85 @@
     "704.6": {
       "status": "not_applicable",
       "scope": "Variant-only additional SBAs.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.6a": {
       "status": "not_applicable",
       "scope": "Two-Headed Giant team life loss.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.6b": {
       "status": "not_applicable",
       "scope": "Two-Headed Giant team poison loss.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.6c": {
       "status": "not_applicable",
       "scope": "Commander damage loss.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.6d": {
       "status": "not_applicable",
       "scope": "Commander public-zone return choice.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.6e": {
       "status": "not_applicable",
       "scope": "Archenemy non-ongoing scheme cleanup.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.6f": {
       "status": "not_applicable",
       "scope": "Planechase phenomenon departure.",
-      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "authority": "managym/src/flow/setup.rs:Game::construct",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
       "anchors": [
-        "managym/src/flow/setup.rs::new_with_content"
+        "managym/src/flow/setup.rs::fn construct("
       ]
     },
     "704.7": {

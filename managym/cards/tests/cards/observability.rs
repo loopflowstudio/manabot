@@ -41,7 +41,8 @@ use managym::{
             PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX, PERMANENT_DEALT_DAMAGE_INDEX,
             PERMANENT_DIM, PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX,
             PERMANENT_GRANTED_LAND_INDEX, PERMANENT_ONCE_EACH_TURN_INDEX,
-            PERMANENT_TIMESTAMP_INDEX, PLAYER_ATTACKED_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM,
+            PERMANENT_TIMESTAMP_INDEX, PLAYER_ADDITIONAL_COMBATS_INDEX, PLAYER_ATTACKED_INDEX,
+            PLAYER_BENT_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_EXTRA_TURNS_INDEX,
             PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
             PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
             PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
@@ -65,9 +66,10 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, Condition, DelayedEvent, Effect, EffectValue, Except, LinkedChooser,
-            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector, Scope,
-            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
+            Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
+            PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+            TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -132,8 +134,9 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
     let Permanent {
+        transforms: _,
         id: _,
         card: _,
         controller: _,
@@ -155,6 +158,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
         ("id", Seen::Identity),
         ("card", Seen::Permanent(24)),
         ("controller", Seen::Permanent(0)),
+        ("transforms", Seen::Via("Transforms fact rows")),
         ("tapped", Seen::Permanent(1)),
         ("summoning_sick", Seen::Permanent(3)),
         ("damage", Seen::Permanent(2)),
@@ -277,6 +281,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::ModeChosen",
             Seen::Actions("a chosen mode is no longer offered"),
         ),
+        Modification::HasAbilitiesOfSource => (
+            "Modification::HasAbilitiesOfSource",
+            Seen::Fact(FactKind::Effect),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -321,10 +329,11 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
             previous: PlayerId(1),
         }),
         permanent(Modification::ModeChosen { mode: 1 }),
+        permanent(Modification::HasAbilitiesOfSource),
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 17;
+const MODIFICATION_VARIANTS: usize = 18;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -343,6 +352,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
+        ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::You => "ObjectSelector::You",
@@ -351,13 +361,14 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 10] {
+fn selector_witnesses() -> [ObjectSelector; 11] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
+        ObjectSelector::Remembered,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
         ObjectSelector::You,
@@ -413,7 +424,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 6] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 21] {
     let TurnState {
         active_player: _,
         turn_number: _,
@@ -422,6 +433,10 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
         history,
         ability_triggers_this_turn: _,
         ability_resolutions_this_turn: _,
+        extra_turns: _,
+        resume_with: _,
+        additional_combats: _,
+        combat_attackers: _,
         current_phase: _,
         current_step: _,
         step_initialized: _,
@@ -433,6 +448,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
         permanents_sacrificed: _,
         land_entered: _,
         cards_drawn: _,
+        bent: _,
     } = history[0];
     [
         ("active_player", Seen::Player(1, 2)),
@@ -453,8 +469,31 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
             Seen::Via("each player's history columns, listed next"),
         ),
         (
+            "extra_turns",
+            Seen::Player(PLAYER_EXTRA_TURNS_INDEX, PLAYER_EXTRA_TURNS_INDEX + 1),
+        ),
+        (
+            "additional_combats",
+            Seen::Player(
+                PLAYER_ADDITIONAL_COMBATS_INDEX,
+                PLAYER_ADDITIONAL_COMBATS_INDEX + 1,
+            ),
+        ),
+        (
+            "combat_attackers",
+            Seen::Actions("attack offers omit creatures the additional combat excludes"),
+        ),
+        (
+            "resume_with",
+            Seen::Via("the player after the interrupted turn: the extra-turn columns and the active player"),
+        ),
+        (
             "history.cards_drawn",
             Seen::Player(PLAYER_CARDS_DRAWN_INDEX, PLAYER_CARDS_DRAWN_INDEX + 1),
+        ),
+        (
+            "history.bent",
+            Seen::Player(PLAYER_BENT_INDEX, PLAYER_BENT_INDEX + 4),
         ),
         (
             "history.attacked",
@@ -489,6 +528,16 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
         Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
+        Effect::TransformSource => "Effect::TransformSource",
+        Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
+        Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
+        Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
+        Effect::NameAndExileFromTargetPlayer { .. } => "Effect::NameAndExileFromTargetPlayer",
+        Effect::ExileNamed { .. } => "Effect::ExileNamed",
+        Effect::OptionalManaPaymentX { .. } => "Effect::OptionalManaPaymentX",
+        Effect::MayExileTriggeringWithSource => "Effect::MayExileTriggeringWithSource",
+        Effect::ChooseExiledWithSource { .. } => "Effect::ChooseExiledWithSource",
+        Effect::HaveAbilitiesOf { .. } => "Effect::HaveAbilitiesOf",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::OptionalPayment { .. } => "Effect::OptionalPayment",
         Effect::Sacrifice { .. } => "Effect::Sacrifice",
@@ -531,7 +580,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::Airbend { .. } => "Effect::Airbend",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
-        Effect::ExileTopCardPlayThisTurn => "Effect::ExileTopCardPlayThisTurn",
+        Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
@@ -567,7 +616,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 71;
+const EFFECT_VARIANTS: usize = 81;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -581,6 +630,7 @@ fn effect_witnesses() -> Vec<Effect> {
     };
     vec![
         Effect::CreateTokenCopy {
+            of: Some(TargetSpec::Creature),
             exceptions: vec![Modification::Nonlegendary],
         },
         Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
@@ -668,6 +718,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Scry { count: 1 },
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
+            to_battlefield: true,
             random_order: true,
             reveal: false,
             look: EffectValue::Fixed(3),
@@ -703,7 +754,10 @@ fn effect_witnesses() -> Vec<Effect> {
             },
         },
         Effect::OpponentsCastOnlyFromHand,
-        Effect::ExileTopCardPlayThisTurn,
+        Effect::ExileTopCardsToPlay {
+            count: 3,
+            until: PlayWindow::ThroughYourNextTurn,
+        },
         Effect::ExileLinked {
             chooser: LinkedChooser::TargetPlayer,
             zone: ZoneType::Battlefield,
@@ -768,7 +822,10 @@ fn effect_witnesses() -> Vec<Effect> {
             count: 3,
         },
         Effect::CreateDelayedTrigger {
-            event: DelayedEvent::CreatureDiesThisTurn,
+            remember: None,
+            event: DelayedEvent::CreatureDies,
+            frequency: DelayedFrequency::EachMatch,
+            expiry: DelayedExpiry::ThisTurn,
             effects: vec![Effect::gain_life(1)],
         },
         Effect::ForPlayer {
@@ -782,6 +839,29 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::MayDiscard {
             then: vec![Effect::discard()],
+        },
+        Effect::TransformSource,
+        Effect::TakeExtraTurn,
+        Effect::AdditionalCombatPhase {
+            attackers: Some(CardPredicate::creature()),
+        },
+        Effect::EachPlayerChoosesToExile {
+            predicate: CardPredicate::creature(),
+        },
+        Effect::NameAndExileFromTargetPlayer { count: 4 },
+        Effect::ExileNamed {
+            name: "Gray Ogre".into(),
+            count: 4,
+        },
+        Effect::OptionalManaPaymentX {
+            if_paid: vec![Effect::discard()],
+        },
+        Effect::MayExileTriggeringWithSource,
+        Effect::ChooseExiledWithSource {
+            predicate: CardPredicate::creature(),
+        },
+        Effect::HaveAbilitiesOf {
+            definition: managym::state::card::CardDefId(0),
         },
         Effect::GainControl {
             player: PlayerSelector::You,
@@ -857,6 +937,13 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YourAttackingCreatureTriggers => {
             "TriggerCondition::YourAttackingCreatureTriggers"
         }
+        TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
+        TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
+        TriggerCondition::BeginningOfEachUpkeep => "TriggerCondition::BeginningOfEachUpkeep",
+        TriggerCondition::YouBend => "TriggerCondition::YouBend",
+        TriggerCondition::YouCastNthSpellThisTurn { .. } => {
+            "TriggerCondition::YouCastNthSpellThisTurn"
+        }
     }
 }
 
@@ -926,6 +1013,15 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         },
         TriggerCondition::BeginningOfYourFirstMainPhase,
         TriggerCondition::YourAttackingCreatureTriggers,
+        TriggerCondition::Chapter { chapter: 2 },
+        TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
+        TriggerCondition::BeginningOfEachUpkeep,
+        TriggerCondition::YouBend,
+        TriggerCondition::WhileSourceAttacking {
+            condition: Box::new(TriggerCondition::YouCastSpell {
+                predicate: CardPredicate::default(),
+            }),
+        },
     ]
 }
 
@@ -945,6 +1041,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::ControlsAtLeast { .. } => "Condition::ControlsAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
+        Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
         Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
         Condition::AnyOf(_) => "Condition::AnyOf",
@@ -979,6 +1076,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
+        Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
@@ -1191,6 +1289,20 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker",
         ),
+        StaticAbility::SpellsCostLessMana(_) => witnessed(
+            "StaticAbility::SpellsCostLessMana",
+            Seen::Actions("casts are offered at the reduced cost"),
+            "Aang, Master of Elements",
+            "tla",
+            "avatar_aang_draws_on_each_bending_and_transforms_after_all_four",
+        ),
+        StaticAbility::UntapsDuringOtherUntapSteps => witnessed(
+            "StaticAbility::UntapsDuringOtherUntapSteps",
+            Seen::Via("the permanent's tapped column after another player's untap step"),
+            "Bender's Waterskin",
+            "tla",
+            "benders_waterskin_untaps_during_the_other_players_untap_step",
+        ),
         StaticAbility::TypeGrant(_) => witnessed(
             "StaticAbility::TypeGrant",
             Seen::Via("the granted permanents' card type columns"),
@@ -1341,6 +1453,8 @@ fn static_witnesses() -> Vec<StaticAbility> {
             kind: Restriction::DoesntUntap,
             unless: None,
         }),
+        StaticAbility::UntapsDuringOtherUntapSteps,
+        StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
             types: vec![CardType::Creature],
@@ -1441,7 +1555,7 @@ fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
 }
 
 fn tokens_of(definition: &CardDefinition) -> Vec<(TokenKind, i32)> {
-    definition_tokens(definition, &default_content_pack()).unwrap()
+    definition_tokens(definition, default_content_pack()).unwrap()
 }
 
 fn spell(effects: Vec<Effect>) -> CardDefinition {
@@ -1653,6 +1767,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
             tapped: false,
+            transformed: false,
             under: Some(player),
             with_counter: None,
             linked: None,
@@ -1839,9 +1954,14 @@ fn turn_history_moves_each_players_named_column() {
         match field {
             "turn_number" => turn.turn_number += 1,
             "history.cards_drawn" => history.cards_drawn += 1,
+            "history.bent" => history.bent = 0b0101,
             "history.attacked" => history.attacked = true,
             "history.permanents_sacrificed" => history.permanents_sacrificed = 2,
             "history.land_entered" => history.land_entered = true,
+            "extra_turns" => turn.extra_turns.push(PlayerId(0)),
+            "additional_combats" => turn
+                .additional_combats
+                .push(managym::flow::turn::AdditionalCombat { attackers: None }),
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -1904,7 +2024,7 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
 fn learning_tokens_never_carry_names_or_printed_text() {
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
-        let tokens = definition_tokens(definition, &pack).unwrap();
+        let tokens = definition_tokens(definition, pack).unwrap();
         for field in ["key", "scryfall_id", "name", "text_box"] {
             assert!(
                 !tokens.contains(&(TokenKind::Field, name_value(field))),
@@ -2134,17 +2254,12 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 // ---------------------------------------------------------------------------
 // Tokens.
 
-/// Defined tokens whose producing card is not defined yet, with that producer.
-/// When the producer lands, its reference makes the token leave this list.
-const TOKENS_AWAITING_PRODUCER: [(&str, &str); 1] = [("token.dragon", "The Legend of Roku")];
-
 /// Every `token.*` definition is a definition reference from a card that
-/// creates it (or awaits a named producer), and a created token's observation
-/// carries its characteristics.
+/// creates it, and a created token's observation carries its characteristics.
 #[test]
 fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
     let pack = default_content_pack();
-    let catalog = learning_catalog(&pack).unwrap();
+    let catalog = learning_catalog(pack).unwrap();
     let tokens = managym_cards::catalog()
         .iter()
         .filter(|definition| definition.key.starts_with("token."))
@@ -2159,12 +2274,8 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
             .zip(&catalog.definition_ref_target_rows)
             .filter(|(_, &target)| target == row)
             .count();
-        let awaiting = TOKENS_AWAITING_PRODUCER
-            .iter()
-            .any(|(key, _)| *key == token.key);
-        assert_eq!(
+        assert!(
             referencing > 0,
-            !awaiting,
             "{}: {referencing} creating references",
             token.key
         );
@@ -2260,6 +2371,8 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::Effect => "ContinuousEffectData.modification",
         FactKind::Copy => "PermanentData.copy",
         FactKind::CopyException => "CopyData.exceptions",
+        FactKind::Transforms => "PermanentData.transforms",
+        FactKind::CombatRestriction => "ContinuationFrame.attackers",
     }
 }
 
@@ -2348,12 +2461,15 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
         effects => [Rows("Effect fact rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
+        extra_turns => [column(Player, PLAYER_EXTRA_TURNS_INDEX)],
+        additional_combats => [column(Player, PLAYER_ADDITIONAL_COMBATS_INDEX)],
     }));
     fields.extend(encoding!(PlayerTurnHistory {
         attacked => [column(Player, PLAYER_ATTACKED_INDEX)],
         permanents_sacrificed => [column(Player, PLAYER_SACRIFICED_INDEX)],
         land_entered => [column(Player, PLAYER_LAND_ENTERED_INDEX)],
         cards_drawn => [column(Player, PLAYER_CARDS_DRAWN_INDEX)],
+        bent => [Columns(Player, PLAYER_BENT_INDEX, 4)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, 0, 7)],
@@ -2389,6 +2505,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         any_mana => [column(Card, PERMISSION + 9)],
         waterbend => [column(Card, PERMISSION + 10)],
         foretold => [column(Card, PERMISSION + 11)],
+        through_next_turn => [column(Card, PERMISSION + 12)],
     }));
     fields.extend(encoding!(RestrictedManaData {
         spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
@@ -2417,6 +2534,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        transforms => [Fact(FactKind::Transforms)],
         id => [Identity],
         registry_key => [Join(Permanent, 24)],
         controller_id => [column(Permanent, 0), Side],
@@ -2496,6 +2614,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        remembered => [Rows("v5 captured object reference relations, kind 8")],
+        inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
+        attackers => [Fact(FactKind::CombatRestriction)],
+        source_transforms => [Rows("Transforms fact rows, id = frame index + 1")],
         kind => [column(Relation, 3)],
         decision => [column(Relation, 28)],
         parent => [column(Relation, 2)],
@@ -2518,6 +2640,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         x => [column(Relation, RELATION_X_INDEX)],
         granted_keywords => [Columns(Relation, RELATION_KEYWORDS_INDEX, KEYWORD_COUNT)],
         this_turn => [column(Relation, RELATION_THIS_TURN_INDEX)],
+        delayed_frequency => [Rows("v5/v6 delayed frequency relation kind 9, code in column 28")],
     }));
     fields.extend(encoding!(ClauseTarget {
         reference => [Rows("VisibleReference below")],
@@ -3285,8 +3408,9 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
             or_exiled: true, ..
         } => (2, true),
         DelayedTriggerEvent::CreatureDies => (3, false),
-        DelayedTriggerEvent::NextEndStep { context } => (4, context.is_some()),
+        DelayedTriggerEvent::EndStep { your_turn } => (if *your_turn { 7 } else { 4 }, false),
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
+        DelayedTriggerEvent::Upkeep => (6, false),
     }
 }
 
@@ -3306,8 +3430,10 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
             or_exiled: true,
         },
         DelayedTriggerEvent::CreatureDies,
-        DelayedTriggerEvent::NextEndStep { context: None },
+        DelayedTriggerEvent::EndStep { your_turn: false },
+        DelayedTriggerEvent::EndStep { your_turn: true },
         DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
+        DelayedTriggerEvent::Upkeep,
     ];
     let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();
     assert_eq!(codes.len(), events.len());
@@ -3353,6 +3479,24 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
             (if viewer == 0 { 1.0 } else { 2.0 }, 1.0, 1.0)
         );
         assert!(watched > 0.0, "the watched creature is joined");
+        let observation = encoded(&s, viewer, 5);
+        let remembered = observation
+            .relations
+            .as_chunks::<RELATION_DIM_V5>()
+            .0
+            .iter()
+            .find(|row| row[0] == 8.0 && row[3] == 10.0)
+            .expect("captured subject row");
+        assert_eq!(
+            remembered[24], watched,
+            "capture and event watch are distinct relations"
+        );
+        assert!(!encoded(&s, viewer, 4)
+            .relations
+            .as_chunks::<33>()
+            .0
+            .iter()
+            .any(|row| row[0] == 8.0));
         assert!(
             definitions_seen(&s, viewer).contains(&s.game().state.cards[fissure].definition_id.0)
         );
@@ -3918,6 +4062,40 @@ fn a_later_record_has_a_later_order_than_an_earlier_one() {
 }
 
 #[test]
+fn transforms_and_scheduled_combat_restrictions_reach_policy_facts() {
+    let mut s = five_color_setup(&["Aang, Swift Savior"]);
+    let aang = s.force_permanent_on_battlefield(0, "Aang, Swift Savior");
+    let baseline = encoded(&s, 0, 5);
+    s.game_mut().transform_permanent(aang);
+    s.game_mut().transform_permanent(aang);
+    let flipped = encoded(&s, 0, 5);
+    assert_ne!(baseline.facts, flipped.facts, "a round trip is visible");
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat {
+            attackers: Some(CardPredicate::creature()),
+        });
+    let scheduled = encoded(&s, 0, 5);
+    assert_ne!(flipped.facts, scheduled.facts);
+    assert_ne!(flipped.relations, scheduled.relations);
+    let before = Observation::for_player(s.game(), PlayerId(0));
+    s.game_mut().state.turn.extra_turns = vec![PlayerId(0), PlayerId(1)];
+    let order = encoded(&s, 0, 5).relations;
+    s.game_mut().state.turn.extra_turns.reverse();
+    assert_ne!(
+        order,
+        encoded(&s, 0, 5).relations,
+        "same turn counts, different order"
+    );
+    assert!(before
+        .continuation
+        .iter()
+        .any(|f| f.kind == 12 && f.attackers.is_some()));
+}
+
+#[test]
 fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
     let mut s = five_color_setup(&["Suki, Kyoshi Warrior", "Gray Ogre"]);
     s.force_card_in_hand(0, "Suki, Kyoshi Warrior");
@@ -3942,6 +4120,7 @@ fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
 fn library_order_and_any_target_are_distinct_learning_rules() {
     let effect = |random_order| Effect::LookAndSelect {
         random_order,
+        to_battlefield: false,
         reveal: false,
         look: EffectValue::Fixed(3),
         min_select: 1,
@@ -3954,4 +4133,55 @@ fn library_order_and_any_target_are_distinct_learning_rules() {
     );
     let tokens = tokens_of(&card_definition("Lightning Strike"));
     assert!(tokens.contains(&(TokenKind::Variant, name_value("TargetSpec::AnyTarget"))));
+}
+
+#[test]
+fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
+    for frequency in [DelayedFrequency::Once, DelayedFrequency::EachMatch] {
+        for expiry in [DelayedExpiry::ThisTurn, DelayedExpiry::Never] {
+            let tokens = tokens_of(&spell(vec![Effect::CreateDelayedTrigger {
+                event: DelayedEvent::Upkeep,
+                frequency,
+                expiry,
+                remember: None,
+                effects: vec![Effect::gain_life(1)],
+            }]));
+            assert!(tokens.contains(&(
+                TokenKind::Variant,
+                name_value(match frequency {
+                    DelayedFrequency::Once => "DelayedFrequency::Once",
+                    DelayedFrequency::EachMatch => "DelayedFrequency::EachMatch",
+                })
+            )));
+            assert!(tokens.contains(&(
+                TokenKind::Variant,
+                name_value(match expiry {
+                    DelayedExpiry::ThisTurn => "DelayedExpiry::ThisTurn",
+                    DelayedExpiry::Never => "DelayedExpiry::Never",
+                })
+            )));
+            let code = if frequency == DelayedFrequency::Once {
+                1
+            } else {
+                2
+            };
+            let frame = ContinuationFrame {
+                kind: 10,
+                decision: 6,
+                delayed_frequency: Some(code),
+                this_turn: expiry == DelayedExpiry::ThisTurn,
+                ..Default::default()
+            };
+            let mut rows = vec![0.0; 64 * RELATION_DIM_V5];
+            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
+                .unwrap();
+            assert_eq!(rows[28], 6.0, "event code stays on header");
+            assert_eq!(rows[RELATION_DIM_V5], 9.0);
+            assert_eq!(rows[RELATION_DIM_V5 + 28], f32::from(code));
+            assert_eq!(
+                rows[RELATION_DIM_V5 + RELATION_THIS_TURN_INDEX],
+                f32::from(expiry == DelayedExpiry::ThisTurn)
+            );
+        }
+    }
 }

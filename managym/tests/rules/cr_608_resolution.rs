@@ -22,6 +22,7 @@ use crate::support::{game::*, play::select_card};
 fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
     let source_ref = s.game().current_object_ref(source);
     s.game_mut().state.pending_triggers.push(PendingTrigger {
+        remembered: Vec::new(),
         source_card: source,
         source_ref,
         source_lki: None,

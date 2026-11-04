@@ -6,6 +6,7 @@ use crate::state::card::Keyword;
 use std::collections::VecDeque;
 
 use crate::{
+    cards::content_pack::default_content_pack,
     flow::{
         decision::{
             Decision, EffectFrame, FrameFinalize, PaymentProgress, ResolutionCastOffer,
@@ -19,12 +20,15 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, DelayedEvent, Effect, EffectValue, Except, LinkedChooser, LinkedExile,
-            ObjectSelector, PaymentCost, PlayerSelector, Scope, TargetRequirement, TargetSpec,
+            Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
+            LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
+            TargetRequirement, TargetSpec,
         },
+        card::{ActivatedAbilityDefinition, CardDefId, CardDefinition},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Counters, Permanent},
+        predicate::CardPredicate,
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
         },
@@ -99,6 +103,15 @@ impl Game {
             EffectValue::GreatestSharedCreatureType => {
                 self.greatest_shared_creature_type(controller) as i32
             }
+            EffectValue::GreatestPowerYouControl => self
+                .battlefield_permanents(controller)
+                .into_iter()
+                .filter(|id| self.permanent_is_battlefield_creature(*id))
+                .map(|id| self.effective_pt(id).0)
+                .max()
+                .unwrap_or(0)
+                .max(0),
+            EffectValue::CardsInHand => self.state.zones.size(ZoneType::Hand, controller) as i32,
             EffectValue::PermanentsSacrificedThisTurn => {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
@@ -157,8 +170,11 @@ impl Game {
         };
 
         let frame = EffectFrame {
+            remembered: Vec::new(),
             source: Some(card),
             source_ref: self.current_object_ref(card),
+            inherited_from: None,
+            source_transforms: 0,
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
@@ -211,17 +227,43 @@ impl Game {
         self.emit(GameEvent::SpellCountered { card, by });
     }
 
-    fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        // A granted ability keeps its grantor's text after the grantor leaves.
-        let definition = match ability.granted_by {
-            Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
+    /// The face an ability on the stack came from: the card as it stands
+    /// while that face is up, else that face's row (the card has turned over
+    /// or left since; the ability exists independently, CR 113.7a).
+    pub(crate) fn source_face(&self, card: CardId, face: CardDefId) -> Option<&CardDefinition> {
+        let current = self.state.cards.get(card.0)?;
+        if current.definition_id == face {
+            Some(current)
+        } else {
+            default_content_pack().definition(face)
+        }
+    }
+
+    /// The definition retained by an activation, shared by resolution and
+    /// retargeting. Printed, inherited and attached grants keep their source
+    /// even when that source leaves or the permanent chooses new abilities.
+    pub(crate) fn stacked_activated_ability(
+        &self,
+        ability: &ActivatedAbilityOnStack,
+    ) -> Option<&ActivatedAbilityDefinition> {
+        if let Some(grant) = ability.granted_by {
+            return self.state.cards[CardId::from(grant.grantor.entity)]
                 .attached_grants()
-                .nth(grant.index),
-            None => self.state.cards[ability.source_card]
+                .nth(grant.index);
+        }
+        let printed = &self
+            .source_face(ability.source_card, ability.source_definition_id)?
+            .activated_abilities;
+        printed.get(ability.ability_index).or_else(|| {
+            default_content_pack()
+                .definition(ability.inherited_from?)?
                 .activated_abilities
-                .get(ability.ability_index),
-        };
-        let Some(definition) = definition.cloned() else {
+                .get(ability.ability_index - printed.len())
+        })
+    }
+
+    fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
+        let Some(definition) = self.stacked_activated_ability(&ability).cloned() else {
             return;
         };
 
@@ -245,8 +287,11 @@ impl Game {
         let source_ref = Some(ability.source_ref);
 
         let frame = EffectFrame {
+            remembered: Vec::new(),
             source: Some(ability.source_card),
             source_ref,
+            inherited_from: ability.inherited_from,
+            source_transforms: ability.source_transforms,
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
@@ -284,10 +329,8 @@ impl Game {
             (effects, None)
         } else {
             let Some(ability) = self
-                .state
-                .cards
-                .get(source_card.0)
-                .and_then(|card| card.abilities.get(triggered.ability_index))
+                .source_face(source_card, triggered.source_definition_id)
+                .and_then(|face| face.abilities.get(triggered.ability_index))
                 .cloned()
             else {
                 return;
@@ -337,9 +380,15 @@ impl Game {
         let resolutions_this_turn = *count;
 
         let frame = EffectFrame {
+            remembered: triggered.remembered,
             source: Some(source_card),
             source_ref: triggered.source_ref,
-            controller: source_controller,
+            inherited_from: triggered
+                .source_lki
+                .as_ref()
+                .and_then(|lki| lki.inherited_from),
+            source_transforms: triggered.source_transforms,
+            controller: triggered.controller,
             resolutions_this_turn,
             kicked: false,
             x: triggered.x,
@@ -611,6 +660,7 @@ impl Game {
                 what,
                 to,
                 tapped,
+                transformed,
                 under,
                 with_counter,
                 linked,
@@ -646,6 +696,18 @@ impl Game {
                     let card = CardId::from(object.entity);
                     let owner = self.state.cards[card].owner;
                     let from = self.state.zones.zone_of(card);
+                    // A token cannot return after leaving the battlefield (CR 111.7).
+                    // Returning transformed requires a back face (CR 712.14a).
+                    if *to == ZoneType::Battlefield
+                        && ((self.state.cards[card].is_token
+                            && from != Some(ZoneType::Battlefield))
+                            || (*transformed
+                                && default_content_pack()
+                                    .back_face(self.state.cards[card].definition_id)
+                                    .is_none()))
+                    {
+                        continue;
+                    }
                     match to {
                         ZoneType::Hand if from == Some(ZoneType::Graveyard) => {
                             self.reveal_card_to_hand(card, owner);
@@ -659,6 +721,7 @@ impl Game {
                             ZoneType::Battlefield,
                             ZoneEntry {
                                 tapped: *tapped,
+                                transformed: *transformed,
                                 counters: counters.clone(),
                                 controller,
                                 ..ZoneEntry::default()
@@ -906,6 +969,28 @@ impl Game {
                 let object = self.present_primary_target(frame)?;
                 self.next_retarget(frame.controller, object, 0, false)
             }
+            Effect::AdditionalCombatPhase { attackers } => {
+                self.state
+                    .turn
+                    .additional_combats
+                    .push(crate::flow::turn::AdditionalCombat {
+                        attackers: attackers.clone(),
+                    });
+                None
+            }
+            Effect::TakeExtraTurn => {
+                self.state.turn.extra_turns.push(frame.controller);
+                None
+            }
+            Effect::TransformSource => {
+                let id = self.source_permanent_id(frame)?;
+                // CR 701.27f: only if it hasn't turned over since this ability
+                // went on the stack.
+                if frame.source_transforms == self.state.permanents[id].as_ref()?.transforms {
+                    self.transform_permanent(id);
+                }
+                None
+            }
             Effect::GainControl {
                 player,
                 what,
@@ -932,8 +1017,26 @@ impl Game {
                 None
             }
             Effect::Airbend { what } => {
-                for id in self.selected_permanents(what, frame) {
-                    self.airbend_permanent(id);
+                let selected = self.select(what, frame);
+                let mut bent = false;
+                for object in selected {
+                    let card = CardId::from(object.entity);
+                    match self.state.zones.zone_of(card) {
+                        Some(ZoneType::Battlefield) => {
+                            if let Ok(id) = self.lookup_current_permanent(object) {
+                                self.airbend_permanent(id);
+                                bent = true;
+                            }
+                        }
+                        Some(ZoneType::Stack) => {
+                            self.airbend_spell(card);
+                            bent = true;
+                        }
+                        _ => {}
+                    }
+                }
+                if bent {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
                 }
                 None
             }
@@ -1069,8 +1172,8 @@ impl Game {
                 }
                 None
             }
-            Effect::ExileTopCardPlayThisTurn => {
-                self.exile_top_card_play_this_turn(frame.controller);
+            Effect::ExileTopCardsToPlay { count, until } => {
+                self.exile_top_cards_to_play(frame.controller, *count, *until);
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {
@@ -1122,6 +1225,9 @@ impl Game {
                 };
                 for _ in 0..count {
                     pool.add(mana);
+                }
+                if *until_end_of_combat {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);
                 }
                 None
             }
@@ -1207,12 +1313,32 @@ impl Game {
                 }
                 None
             }
-            Effect::CreateTokenCopy { exceptions } => {
+            Effect::CreateTokenCopy { of, exceptions } => {
                 let exceptions = exceptions
                     .iter()
                     .map(|exception| exception.resolve(|value| self.effect_value(value, frame)))
                     .collect();
-                self.create_token_copy(frame.source?, frame.controller, exceptions);
+                let copied = match of {
+                    None => frame.source?,
+                    // The target as it was chosen, even once the resolution
+                    // has moved it ("exile ..., create a copy of it").
+                    Some(_) => match frame.primary_target()? {
+                        Target::Permanent(id) => {
+                            self.present_primary_target(frame)?;
+                            self.state.permanents[id].as_ref()?.card
+                        }
+                        // Copied once this resolution has exiled it.
+                        Target::GraveyardCard(object) => {
+                            let card = CardId::from(object.entity);
+                            if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
+                                return None;
+                            }
+                            card
+                        }
+                        _ => return None,
+                    },
+                };
+                frame.created = self.create_token_copy(copied, frame.controller, exceptions);
                 None
             }
             Effect::OptionalPayment {
@@ -1241,13 +1367,16 @@ impl Game {
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
-                self.enqueue_inline_trigger(
+                let trigger = self.enqueue_inline_trigger(
                     frame.source?,
                     frame.source_ref,
                     frame.controller,
                     effects.clone(),
-                    None,
+                    frame.context_target,
                 );
+                trigger.remembered = frame.remembered.clone();
+                trigger.x = frame.x;
+                trigger.player = frame.triggering_player;
                 None
             }
             Effect::MayOnceEachTurn { effects } => {
@@ -1335,43 +1464,166 @@ impl Game {
                 frame.controller = *player;
                 None
             }
+            Effect::MayExileTriggeringWithSource => {
+                // The card the dying creature became (CR 400.7), still in its
+                // graveyard; `Move` exiles it as the frame's target and retains the link.
+                let Some(Target::Permanent(id)) = frame.context_target else {
+                    return None;
+                };
+                let card = self.departed_permanent_lki(id)?.card;
+                if self.state.zones.zone_of(card) != Some(ZoneType::Graveyard) {
+                    return None;
+                }
+                frame.targets = vec![crate::flow::decision::ResolutionTarget {
+                    target: Target::GraveyardCard(self.current_object_ref(card)?),
+                    requirement: 0,
+                    legal: true,
+                }];
+                Some(Decision::Modal {
+                    player: frame.controller,
+                    modes: vec![
+                        vec![Effect::exile_linked(
+                            ObjectSelector::Target(TargetSpec::GraveyardCard {
+                                predicate: CardPredicate::default(),
+                            }),
+                            LinkedExile::WithSource,
+                        )],
+                        vec![],
+                    ],
+                })
+            }
+            Effect::ChooseExiledWithSource { predicate } => {
+                let source = frame.source_ref?;
+                let modes: Vec<Vec<Effect>> = self
+                    .state
+                    .exile_links
+                    .iter()
+                    .filter(|link| link.source == source)
+                    .map(|link| link.exiled_card)
+                    .filter(|card| {
+                        self.state.zones.zone_of(*card) == Some(ZoneType::Exile)
+                            && predicate.matches_card(&self.state.cards[*card])
+                    })
+                    .map(|card| {
+                        vec![Effect::HaveAbilitiesOf {
+                            definition: self.state.cards[card].definition_id,
+                        }]
+                    })
+                    .collect();
+                (!modes.is_empty()).then_some(Decision::Modal {
+                    player: frame.controller,
+                    modes,
+                })
+            }
+            Effect::HaveAbilitiesOf { definition } => {
+                let id = self.source_permanent_id(frame)?;
+                let affected = self.affected_permanent(id)?;
+                let timestamp = self.state.id_gen.next_id();
+                self.state
+                    .effects
+                    .push(crate::state::effect::ContinuousEffect {
+                        timestamp,
+                        source: Some(*definition),
+                        controller: frame.controller,
+                        affected,
+                        modification: Modification::HasAbilitiesOfSource,
+                        duration: EffectDuration::Indefinite,
+                        source_object: None,
+                    });
+                self.invalidate_mana_cache(frame.controller);
+                None
+            }
+            Effect::NameAndExileFromTargetPlayer { count } => {
+                // Every name a deck may hold; names are public knowledge.
+                let names: std::collections::BTreeSet<String> = default_content_pack()
+                    .definition_entries()
+                    .filter(|(id, definition)| {
+                        !definition.is_token
+                            && (!definition.key.is_empty()
+                                || default_content_pack().front_face(*id).is_some())
+                    })
+                    .map(|(_, definition)| definition.name.clone())
+                    .collect();
+                Some(Decision::Modal {
+                    player: frame.controller,
+                    modes: names
+                        .into_iter()
+                        .map(|name| {
+                            vec![Effect::ExileNamed {
+                                name,
+                                count: *count,
+                            }]
+                        })
+                        .collect(),
+                })
+            }
+            Effect::ExileNamed { name, count } => {
+                let Some(Target::Player(player)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                self.remember_hand(player);
+                self.emit(GameEvent::LibrarySearched { player });
+                Some(Decision::SearchNamed {
+                    player: frame.controller,
+                    owner: player,
+                    name: name.clone(),
+                    remaining: *count,
+                })
+            }
+            Effect::OptionalManaPaymentX { if_paid } => Some(Decision::ChoosePaymentX {
+                player: frame.controller,
+                if_paid: if_paid.clone(),
+            }),
+            Effect::EachPlayerChoosesToExile { predicate } => self.choose_to_exile(
+                frame.controller,
+                frame.controller,
+                predicate.clone(),
+                Vec::new(),
+            ),
             Effect::EachPlayerKeepsCreatures { max_total_power } => {
                 self.keep_creatures(self.active_player(), *max_total_power, Vec::new())
             }
-            Effect::CreateDelayedTrigger { event, effects } => {
-                let (event, this_turn) = match event {
-                    DelayedEvent::TargetDiesThisTurn => {
-                        let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
-                            return None;
-                        };
-                        let watched = self.permanent_object_ref(id)?;
-                        (
-                            DelayedTriggerEvent::Leaves {
-                                watched,
-                                or_exiled: false,
-                            },
-                            true,
-                        )
+            Effect::CreateDelayedTrigger {
+                event,
+                frequency,
+                expiry,
+                remember,
+                effects,
+            } => {
+                let remembered = remember
+                    .as_ref()
+                    .map_or_else(Vec::new, |what| self.select(what, frame));
+                let events = match event {
+                    DelayedEvent::Dies => remembered
+                        .iter()
+                        .copied()
+                        .filter(|object| self.lookup_current_permanent(*object).is_ok())
+                        .map(|watched| DelayedTriggerEvent::Leaves {
+                            watched,
+                            or_exiled: false,
+                        })
+                        .collect(),
+                    DelayedEvent::CreatureDies => vec![DelayedTriggerEvent::CreatureDies],
+                    DelayedEvent::EndStep { your_turn } => vec![DelayedTriggerEvent::EndStep {
+                        your_turn: *your_turn,
+                    }],
+                    DelayedEvent::YouCastSpell(predicate) => {
+                        vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())]
                     }
-                    DelayedEvent::CreatureDiesThisTurn => (DelayedTriggerEvent::CreatureDies, true),
-                    DelayedEvent::NextEndStepForCreatedToken => (
-                        DelayedTriggerEvent::NextEndStep {
-                            context: frame.created.map(Target::Permanent),
-                        },
-                        false,
-                    ),
-                    DelayedEvent::YouNextCastThisTurn(predicate) => {
-                        (DelayedTriggerEvent::YouCastSpell(predicate.clone()), true)
-                    }
+                    DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
                 };
-                self.add_delayed_trigger(DelayedTrigger {
-                    event,
-                    controller: frame.controller,
-                    source_card: frame.source?,
-                    source_ref: frame.source_ref,
-                    effects: effects.clone(),
-                    this_turn,
-                });
+                for event in events {
+                    self.add_delayed_trigger(DelayedTrigger {
+                        remembered: remembered.clone(),
+                        event,
+                        controller: frame.controller,
+                        source_card: frame.source?,
+                        source_ref: frame.source_ref,
+                        effects: effects.clone(),
+                        frequency: *frequency,
+                        expiry: *expiry,
+                    });
+                }
                 None
             }
             Effect::GainLife { amount } => {
@@ -1413,6 +1665,7 @@ impl Game {
             Effect::LookAndSelect {
                 random_order,
                 reveal,
+                to_battlefield,
                 look,
                 min_select,
                 max_select,
@@ -1426,6 +1679,7 @@ impl Game {
                 Some(Decision::LookAndSelect {
                     random_order: *random_order,
                     reveal: *reveal,
+                    to_battlefield: *to_battlefield,
                     player: frame.controller,
                     looked,
                     predicate: predicate.clone(),
@@ -1501,7 +1755,9 @@ impl Game {
             }
             Effect::Earthbend { count, what } => {
                 let count = self.effect_value(count, frame);
-                for permanent_id in self.selected_permanents(what, frame) {
+                let selected = self.selected_permanents(what, frame);
+                let bent = !selected.is_empty();
+                for permanent_id in selected {
                     let Some(watched) = self.permanent_object_ref(permanent_id) else {
                         continue;
                     };
@@ -1510,17 +1766,17 @@ impl Game {
                     };
                     let controller = permanent.controller;
                     self.animate_permanent(permanent_id, frame.source, controller);
-                    if !self.put_counters(
+                    // Earthbend 0 still animates the land and creates its return trigger.
+                    self.put_counters(
                         permanent_id,
                         CounterKind::PlusOnePlusOne,
                         count,
                         frame.controller,
-                    ) {
-                        continue;
-                    }
+                    );
                     // Delayed trigger: when it dies or is exiled, return it to
                     // the battlefield tapped (CR 603.7 one-shot).
                     self.add_delayed_trigger(DelayedTrigger {
+                        remembered: Vec::new(),
                         event: DelayedTriggerEvent::Leaves {
                             watched,
                             or_exiled: true,
@@ -1532,12 +1788,17 @@ impl Game {
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,
                             tapped: true,
+                            transformed: false,
                             under: Some(PlayerSelector::Owner),
                             with_counter: None,
                             linked: None,
                         }],
-                        this_turn: false,
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::Never,
                     });
+                }
+                if bent {
+                    self.record_bending(frame.controller, crate::flow::turn::Bending::Earth);
                 }
                 None
             }
@@ -1565,8 +1826,11 @@ impl Game {
                 // target as the primary. Inner effects must not suspend.
                 for target in frame.active_targets() {
                     let mut sub = EffectFrame {
+                        remembered: frame.remembered.clone(),
                         source: frame.source,
                         source_ref: frame.source_ref,
+                        inherited_from: frame.inherited_from,
+                        source_transforms: frame.source_transforms,
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,
@@ -1651,14 +1915,19 @@ impl Game {
                 .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())
                 .into_iter()
                 .collect(),
-            ObjectSelector::Moved => frame
-                .moved
+            ObjectSelector::Moved | ObjectSelector::Remembered => {
+                (if matches!(what, ObjectSelector::Moved) {
+                    &frame.moved
+                } else {
+                    &frame.remembered
+                })
                 .iter()
                 .copied()
                 .filter(|object| {
                     self.current_object_ref(CardId::from(object.entity)) == Some(*object)
                 })
-                .collect(),
+                .collect()
+            }
             ObjectSelector::You => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");
@@ -1862,7 +2131,7 @@ impl Game {
             Target::StackSpell(card) => {
                 self.find_spell_on_stack_index(card).is_some()
                     && match spec {
-                        TargetSpec::Spell => true,
+                        TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
                         TargetSpec::SpellOrPermanent { min_mana_value } => {
                             self.card_mana_value(card) >= *min_mana_value
                         }
@@ -1891,6 +2160,13 @@ impl Game {
                         (predicate, true)
                     }
                     TargetSpec::GraveyardCard { predicate } => (predicate, false),
+                    TargetSpec::GraveyardCardOpponentOwns { predicate } => {
+                        let card = CardId::from(object.entity);
+                        if self.state.cards[card].owner == controller {
+                            return false;
+                        }
+                        (predicate, false)
+                    }
                     _ => return false,
                 };
                 let card = CardId::from(object.entity);
@@ -1960,6 +2236,7 @@ impl Game {
             TargetSpec::CreatureYouControl => {
                 permanent.controller == controller && self.characteristics(id).is_creature()
             }
+            TargetSpec::CreatureOrSpell => self.characteristics(id).is_creature(),
             TargetSpec::CreatureOpponentControls => {
                 permanent.controller != controller && self.characteristics(id).is_creature()
             }
@@ -1976,7 +2253,7 @@ impl Game {
     /// The card's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn card_mana_value(&self, card: CardId) -> u8 {
-        let Some(cost) = self.state.cards[card].mana_cost.as_ref() else {
+        let Some(cost) = self.state.cards[card].mana_value_cost() else {
             return 0;
         };
         let x = match self

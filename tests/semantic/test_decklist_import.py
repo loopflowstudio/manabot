@@ -141,7 +141,7 @@ def test_retained_sources_reject_tampering_and_follow_seat_swaps() -> None:
     with pytest.raises(ValueError, match="retained source"):
         MatchConfig.model_validate(edited)
     authored = config.model_dump()
-    authored["world"] = "ur-lessons-vs-gw-allies"
+    authored["world"] = None
     with pytest.raises(ValueError, match="plays in the world"):
         MatchConfig.model_validate(authored)
     swapped = Match(config).swapped().config

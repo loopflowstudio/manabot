@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil | `world` (the default pack): every defined card (319 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (335 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -72,6 +72,13 @@ the default pack registers definitions in name order (the legacy `CardDefId`
 prefix is gone). Content digests, state digests and learning tokens changed, so
 w17 conformance, authored-match, parity and Academy fixtures were re-recorded
 with the same Commands and decision revisions; the learning schema stays 9.
+
+MTG-225 (2026-11-02, same world) made the catalog the only content: authored
+setups are decklists over it rather than packs of their own cards, so every
+match runs on the catalog's `CardDefId`s and digest (unchanged). Matches of an
+authored setup therefore change state digests and manifests: their conformance
+cases, receipts and Academy fixtures need re-recording, and checkpoints bound
+to an authored pack's manifest no longer load.
 
 Task MTG-238 (2026-11-02, same world) gave the engine catalog-scale types
 without changing rules: counters are stored sparsely by kind (`Counters`
@@ -215,6 +222,43 @@ Ally and Lesson, ward, keywords) states the layered characteristics the rules
 read, not the printed card; off the battlefield it states the printed card.
 Legendary is a layered supertype: the legend rule and the card row both read
 it, so a `Nonlegendary` record exempts its permanent (CR 704.5j).
+
+Task MTG-225 (TLA batch T6) extends w17 with Sagas and transforming
+double-faced cards. A back face is its own definition row, registered right
+after its front; a permanent shows it while transformed (CR 712.8), keeps its
+object identity when it transforms (CR 701.27a), turns front face up as it
+leaves the battlefield, and has its front face's mana value (CR 712.8e). A
+copy of a double-faced permanent has both faces and is transformed if the
+original is (CR 707.8a). Sagas enter with a lore counter, gain one as their
+controller's precombat main phase begins, trigger each chapter a lore counter
+crosses and are sacrificed once their final chapter has left the stack (CR
+714). Extra turns (CR 500.7) and additional combat phases that may limit
+their attackers (CR 500.8) are scheduled on the turn state. Bending events
+(waterbend payments, earthbend, firebending mana, airbend) join the turn
+history, a spell on the stack can be airbent, spell costs can be reduced by
+colored mana that also reduces generic (CR 118.7c), and a permanent can have
+another card's activated and triggered abilities through an effect record.
+All 16 T6 cards are supported (335 supported definitions in `world`). The
+policy input adds player columns for the four bending kinds, extra turns and
+additional combats (67 → 73) and a card column for "until the end of your next
+turn" play permissions (55 → 56); decision code 26 is the each-player
+exile choice. Resolution decisions 24 and 25 choose optional payment X and
+privately search named cards. Sozin pays before a separate reflexive trigger
+chooses graveyard targets within that X; search allows zero through four
+individually selected cards. Transform histories (including round trips),
+inherited ability definitions, ordered extra turns and combat restrictions
+reach v5 facts/continuations, Python and text without widening frozen rows.
+Fresh action tables hold 512 alternatives for unrestricted catalog names;
+checkpoint readers retain an omitted historical action capacity of 64.
+Match-state hash contract 15 includes pending scheduling, retained ability
+meaning, exact delayed-trigger subjects, and explicit firing frequency/expiry. Delayed timing is independent of
+selector capture; remembered incarnations remain distinct from event context
+through placement, stack and resolution. V5 carries them in reference rows of
+kind 8; a kind-9 relation row carries frequency (1 once, 2 each match), while
+column 48 keeps cleanup expiry. V5/v6 retain their 49-column width; v1–v4 exclude
+these delayed facts. Retargeting and resolution both read the ability's captured face,
+including when its source has transformed. Only mutable current-w17 evidence
+is refreshed; earlier worlds stay fixed.
 
 Policy input **v6** is the default, with configurable fact capacity (512 by
 default). V5 stays at 128 rows; v1–v4 keep their widths. V6 changes no column

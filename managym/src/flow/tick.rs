@@ -9,7 +9,7 @@ use crate::{
         game::Game,
         turn::{StepKind, TurnState},
     },
-    state::{card::StaticAbility, game_object::PlayerId},
+    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind},
 };
 
 impl Game {
@@ -231,6 +231,23 @@ impl Game {
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);
+                self.untap_during_other_untap_steps(active);
+                None
+            }
+            StepKind::Main => {
+                // CR 714.3b — As the precombat main phase begins, the active
+                // player puts a lore counter on each Saga they control.
+                let active = self.active_player();
+                for saga in self.battlefield_permanents(active) {
+                    let card = self.state.permanents[saga]
+                        .as_ref()
+                        .expect("battlefield")
+                        .card;
+                    if self.state.cards[card].is_saga() {
+                        self.put_counters(saga, CounterKind::Lore, 1, active);
+                    }
+                }
+                self.process_game_events();
                 None
             }
             StepKind::Draw => {

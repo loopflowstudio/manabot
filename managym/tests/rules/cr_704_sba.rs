@@ -319,6 +319,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
     assert_ne!(old_ref, new_ref);
 
     s.game_mut().state.delayed_triggers.push(DelayedTrigger {
+        remembered: Vec::new(),
         event: DelayedTriggerEvent::Leaves {
             watched: old_ref,
             or_exiled: true,
@@ -330,11 +331,13 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
             tapped: true,
+            transformed: false,
             under: Some(PlayerSelector::Owner),
             with_counter: None,
             linked: None,
         }],
-        this_turn: false,
+        frequency: managym::state::ability::DelayedFrequency::Once,
+        expiry: managym::state::ability::DelayedExpiry::Never,
     });
     s.game_mut().state.permanents[new_permanent]
         .as_mut()
