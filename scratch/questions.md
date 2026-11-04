@@ -70,7 +70,7 @@ and deadline evidence. Neither quotes nor the CPU proof satisfy it.
   field to preserve architecture hashes. Native buffers infer capacity from
   their fact axis; 128-row v6 and v5 have identical encoding semantics. Existing v5 evidence remains unchanged.
 
-Current results, reservations and remaining work: `scratch/mtg-213.md`;
+Current results, reservations and remaining work: `scratch/tla-pilot-verify.md`;
 retained receipts: `experiments/tla-trophy-pilot.md`. Detailed decision chronology
 is at `72d67d4cf69cb055df4314849e55abf7f7448556:scratch/questions.md`.
 Inherited unrelated notes remain at
@@ -97,31 +97,6 @@ one-seat decision quotas do not guarantee any completed games after the merged
 rules change. Preserve exact state/metrics equality for both modes and require
 positive completed games only for the two-seat mode that guarantees them.
 
-## Inherited MTG-239 context from main c823c9c8f
-
-# Questions and assumptions — MTG-239, 2026-11-03
-
-- Jack Heart's Task directive is the scope. The design is
-  [mtg-239-complete-five-defined.md](mtg-239-complete-five-defined.md).
-- Existing inherited notes select no work. Their complete committed source is
-  `22e4aab716f2b582d704b88dc5d22cb1547ce623:scratch/questions.md`; frozen failures
-  and historical evidence remain unchanged.
-- PR #414 delivered at `44388ad42` and is integrated here. Its card/state
-  crates and sparse counter storage are the surviving owners.
-- Headless choice: no new planeswalker/battle definitions or combat system.
-  Existing type flags plus loyalty/defense counters support the requested
-  any-target damage contract, tested with controlled shells.
-- Jack Heart’s November 3 steer (comment 1f3876a7) resolves the policy
-  discussion: preserve playability for known bugs, track defects as bug Tasks,
-  finish these five fixes without broader policy work or new Tasks.
-- Jack Heart accepted both follow-up concept-review decisions on November 3
-  (comment 6b64d212): remove the empty bug-based admission exclusion and retain
-  immediate ordering Commands with clearer draw-order wording. Keep automatic
-  final placement; no draft, confirmation or undo lifecycle.
-- Current w17 receipts are open-world evidence: Rallier’s corrected filter
-  changes the authored match, and Accumulate Wisdom adds explicit Commands to
-  three navigation prefixes. Prior bytes remain at the base git reference.
-
-Sync completed with `lf sync --continue`; the combined-runtime receipt refresh
-is retained at `6d30c9013`. The plan owns its proof limits and remaining gate,
-demo and delivery work. No new product decision is unresolved.
+Inherited MTG-239 decisions are preserved at
+`7b8bb32731205981b6be09097eb4ca4b39b3864f:scratch/questions.md`;
+they select no additional work for this pilot.
