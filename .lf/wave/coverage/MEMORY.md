@@ -10,6 +10,52 @@ Rules leads with playable curated worlds and real search/Study consumers.
 Conformance, fuzzing, benchmarks, and micro-katas are instruments for observed
 ambiguity or safety-critical invariants, not substitute products.
 
+## Standard direction and catalog naming (2026-11-04)
+
+- Jack Heart selected full post-rotation Standard, shared rules/performance
+  foundations first and FDN as the first set closure. The published
+  [roadmap](../../../docs/research/standard-2026-11/milestone.md) at main
+  `1546aae3f` supersedes the earlier Allies/Lessons-only expansion boundary;
+  its sequence and API sketches remain proposals. The [engine principles](../../../managym/PRINCIPLES.md)
+  preserve one authority, observable choices and scoped evidence. Coverage is
+  the renamed engine directory; engine-performance and infrastructure are
+  sibling scopes. No immediate child memory directories existed at this
+  reconciliation; those sibling memories contained no lessons yet.
+- Jack Heart authorized MTG-243 as one reviewable naming PR, followed by
+  measurement and amelioration of its risks. Merge, auto-merge and training
+  experiments remain unauthorized for that Task. Broader roadmap campaigns
+  and MTG-245 methodology do not confer execution authority on engine work.
+- The pending implementation (`5a57096f2`, docs-only main sync `d11ca430d`)
+  shares an immutable name vocabulary and constructs only the chosen effect.
+  Names are public vocabulary, not game objects; optional definition joins
+  carry semantics without inventing unsupported cards. Explicit v8 reserves
+  the complete installed vocabulary independently of configured action slots;
+  fresh v6 and frozen v1–v7 shapes stay unchanged. Default overflow rejects;
+  explicit legacy first-legal behavior is not complete naming support.
+- Distinct action vectors alone do not establish contextual learnability.
+  Equal-rule definitions yielded identical public-state logits until v8 joined
+  name identities into visible object/knowledge inputs. A paired linear-head
+  fit then expressed opposite preferences, retained them under reordering and
+  lost the distinction under closed disclosure. A preceding 16-step Adam probe
+  failed to converge. This proves representability, not learning efficiency or
+  strength. The unreleased v8 binding now includes `public-identity-v1` and
+  rejects earlier previews before loading weights.
+- Legal-row scoring and compact retained action/distribution storage preserve
+  original slots and behavior evidence through both learners and incidents;
+  only selected minibatches expand onto the device. Four controlled observations
+  used 81.8% fewer retained action bytes, but live buffers/logits remain dense.
+  Program encoding/backprop dominates measured cost; variable CPU timings do
+  not establish end-to-end speedup. The 928-name fixture mostly adds names
+  without programs, so it cannot stand for 928 executable definitions. Native
+  legality/model reachability above 512 and installed-catalog vector/Academy
+  proofs are separate; a combined large-catalog workflow remains unproven.
+  Full acceptance and final-source CI remain outstanding.
+- Historical capture 3/4 uses schema 7 for read-only validation while live
+  naming uses schema 8/capture 5/hash 16. Compatibility readers preserve old
+  identity and reject new name references under schema 7; they do not admit an
+  old checkpoint to the new world. Public projection changes require explicit
+  comparisons, not rewriting frozen captures to make bytes match.
+
 ## Learn decisions and current evidence
 
 - On 2026-10-04 Jack Heart authorized autonomous implementation/publication/
@@ -70,10 +116,12 @@ preserves accepted decisions, dated proof limits and source history.
   delivery blockers; do not rewrite them to make the branch green.
   ETU-75 stays open. No trained-challenger admission, missing human tapes,
   strength or runtime-budget result is supplied by synthetic checkpoint tests.
-- Changed rules invalidate compatible-looking old evidence. Preserve frozen
-  receipts and register all 16 seed/seat attempts before scoring the corrected
-  world. Human interaction acceptance and consumer conformance are separate
-  claims. No strength or numeric runtime-budget result follows from this work.
+- Changed Learn rules require new evidence for affected claims. The retained
+  corrected-world protocol registers all 16 seed/seat attempts before scoring;
+  frozen receipts remain intact. Human interaction acceptance and consumer
+  conformance are separate claims. No strength or numeric runtime-budget result
+  follows from this work, and unrelated run conclusions are not automatically
+  invalidated by a defect.
 
 ## Shipped substrate
 
@@ -198,8 +246,9 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Durable design decisions
 
-- The destination is the creator's selected decks and matchups, not general
-  Magic or Commander support.
+- Coverage follows Jack Heart's selected scope: the November 4 Standard
+  direction broadens the earlier selected-deck boundary, without implying
+  arbitrary Magic formats or Commander support.
 - Steal Phase's invariants, not its shapes: incarnation and LKI, typed meaning,
   proposed-event replacement flow, explicit legal interaction, and viewer-safe
   projection.

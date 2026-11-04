@@ -10,8 +10,9 @@ catalog-derived explicit v8 capacity preserve complete naming without a multi-st
 protocol. Fresh v6 and frozen inputs remain unchanged. Names outside the real
 supported catalog and default adoption of v8 remain separate decisions.
 
-Main `8e8d702f8` capacity binding and explicit first-legal behavior remain
-incorporated. MTG-241 owns its separate continuation work and awaits ordinary sync.
+Main `1546aae3f` is incorporated; the plan records its documentation-only change
+and MTG-241's unsynced continuation codes 27–29. The separate native/model
+greater-than-512 witnesses leave a combined vector/Academy proof outstanding.
 Inherited T7 context is historical at `4463e57f5:scratch/questions.md`.
 The duplicate uncommitted notes are preserved at
-`.lf/logs/naming-risk/questions-before-compress.md`. No Wave files were edited.
+`.lf/logs/naming-risk/questions-before-compress.md`.

@@ -30,16 +30,17 @@
 </head>
 <body>
 <main>
-  <header>MTG-243 · concept-review · 2026-11-04<br>Headless review of the accepted directive and current checkout</header>
+  <header>MTG-243 · concept-review · 2026-11-04 · head d11ca430d<br>Built from the accepted directive, <code>scratch/mtg-243-naming.md</code>, <code>docs/training.md</code>, and the source files listed below.</header>
   <h1>Keep naming one shared choice.</h1>
   <p><strong>No new product decision is needed for this Task.</strong> The implemented design fits the authorized real-catalog scope. No design change is proposed; validation and interactive review remain pending.</p>
   <div class="finding">
-    <p><strong>The consequential mismatch:</strong> “Name Gray Ogre” was represented by an owned effect branch for every possible name, while policy inputs had a fixed action capacity. A public name is a candidate identity, not a card object or a separate rules program.</p>
+    <p><strong>The consequential mismatch, now addressed:</strong> a policy could distinguish candidate names yet see identical public-state representations for differently named cards with equal rules. V8 now joins the same name identity into viewer-visible definition references. Knowing the public vocabulary still reveals nothing about hidden deck membership.</p>
   </div>
 
   <h2>Before → implemented now</h2>
   <p><strong>Before:</strong> choose an effect → generic modal branches containing every name → <code>ChooseMode</code> selects one branch. Oversized fixed policy inputs cannot represent the full support.</p>
   <p><strong>Implemented:</strong> name a card → one shared <code>NameVocabulary</code> and pending <code>NameCard</code> → the same bound <code>ChooseMode</code> selects one candidate. Explicit v8 scores every installed name; only that selection constructs <code>ExileNamed</code>.</p>
+  <p><strong>Risk pass, implemented:</strong> public card identity → shared name vectors in visible state and candidate scoring → contextual preferences without a new game action. Legal-row scoring and compact rollout storage preserve the complete choices and their original coordinates.</p>
 
   <h2>One concrete interaction</h2>
   <div class="sample" aria-label="Illustrative excerpt of existing Academy interaction">
@@ -59,20 +60,24 @@
       <tr><td data-label="Action">Find and choose a name</td><td data-label="Concept">Public candidate; one deliberate choice</td><td data-label="API"><code>ContentPack::name_candidates</code> → <code>Decision::NameCard</code> → bound Command / <code>execute_semantic_command</code></td></tr>
       <tr><td data-label="Action">Select matching cards; stop early if desired</td><td data-label="Concept">Committed name, remaining selections, temporary inspection</td><td data-label="API">Suspended frame → one <code>ExileNamed</code> → existing <code>SearchNamed</code></td></tr>
       <tr><td data-label="Action">Reconnect or retry</td><td data-label="Concept">The actual pending decision and committed effects</td><td data-label="API"><code>/ws/play</code> resume → recovery frame; Command identity / revision checks</td></tr>
+      <tr><td data-label="Action">Configure a complete naming policy</td><td data-label="Concept">Explicit v8; public names and optional program joins</td><td data-label="API"><code>ObservationConfig(policy_input_version=8)</code> → <code>NameCandidateEncoder</code> → complete legal scores</td></tr>
     </tbody>
   </table>
-  <p>A disconnect before naming restores naming offers. A disconnect during search restores the remaining selections and authorized inspection. Duplicate submission does not repeat an exile; a new stale submission is rejected. Stopping search ends inspection and keeps exiled cards exiled.</p>
+  <p>A disconnect before naming restores naming offers. A disconnect during search restores the remaining selections and authorized inspection. Duplicate submission does not repeat an exile; a new stale submission is rejected. Stopping search ends inspection and keeps exiled cards exiled. This is retained-session recovery, not a claim of process-crash durability.</p>
 
   <h2>What must stay distinct</h2>
   <p>A public name does not reveal that the opponent owns a card. Optional learning-definition joins do not make a name playable. The current universe remains real non-token catalog names, including back faces; broader name legality and deck admission are separate.</p>
   <p>V8 binds ordered names and definition joins in checkpoints and derives capacity from the vocabulary. Fresh v6 and historical inputs keep their documented behavior. Explicit legacy <code>first-legal</code> truncation is not complete naming support. A mismatched checkpoint must fail admission rather than reinterpret its learned names.</p>
+  <p><code>PackedActions</code> retains every legal behavior probability and original slot through collection, learning and incident evidence. Minibatches restore dense policy rows. This is storage machinery, not a reduced choice set or a promise of mid-rollout crash recovery.</p>
 
   <h2>What would overturn this conclusion?</h2>
-  <p>A name beyond row 511 without a legal policy score; a lost Command binding after filtering or reconnect; leaked hidden membership; repeated or reversed committed exiles; or silently remapped checkpoint names. Directed checks address parts of these cases. A single end-to-end large-catalog proof, full checkpoint mismatch coverage and final performance evidence are not established by this review.</p>
+  <p>A name beyond row 511 without a legal policy score; preferences tied to action order; a lost Command binding after filtering or reconnect; leaked hidden membership; lost behavior probabilities; repeated or reversed committed exiles; or silently remapped checkpoint names. Directed witnesses address these boundaries separately. The combined greater-than-512 scalar/vector/Academy workflow and final-source gate checks remain outstanding.</p>
+  <p>The paired equal-rule check establishes representability, not training strength: a fitted final head expresses opposite preferences, while an earlier short Adam probe did not converge. The small CPU measurements establish storage savings, not end-to-end speedup, accelerator behavior or intended-size throughput.</p>
+  <p><strong>Proposed product changes: none.</strong> Existing usage guidance already says to select explicit v8 for complete catalog naming. Academy needs no new draft, confirmation or cancellation flow, and repository skills need no new workflow.</p>
   <p class="note">Code and tests were inspected, not rerun. No rendering environment is available. Existing gate obligations remain in the working design. This step does not select Graph navigation or authorize publication, merge or training.</p>
 
   <h2>Sources</h2>
-  <p class="note">Built from <code>scratch/mtg-243-naming.md</code>, the supplied Task directive, <code>docs/training.md</code>, <code>managym/src/cards/names.rs</code>, <code>managym/src/flow/{decision,resolution,naming_tests}.rs</code>, <code>manabot/model/{name_candidates,actor_critic,world}.py</code>, <code>academy/ui/src/lib/components/{ActionPanel,DecisionSurface}.svelte</code>, <code>tests/academy/test_named_search_recovery.py</code> and <code>tests/model/test_catalog_naming.py</code>.</p>
+  <p class="note">Built from <code>scratch/mtg-243-naming.md</code>, the supplied Task directive, <code>docs/training.md</code>, <code>managym/src/cards/names.rs</code>, <code>managym/src/flow/{decision,resolution,naming_tests}.rs</code>, <code>manabot/model/{name_candidates,actor_critic,world}.py</code>, <code>manabot/training/rollout/{actions,collection}.py</code>, <code>academy/ui/src/lib/components/{ActionPanel,DecisionSurface}.svelte</code>, <code>tests/academy/test_named_search_recovery.py</code> and <code>tests/model/test_catalog_naming.py</code>.</p>
 
   <h2>Review questions and disposition</h2>
   <ol>
