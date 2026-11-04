@@ -170,8 +170,12 @@ Bounded observation encoders reserve card rows after the owner's visible cards
 for outside candidates. Their seven zone bits stay zero and the explicit outside
 bit is set; action focus uses the same padded object table as the model. The
 current default has 512 action rows. Card, permanent, action and focus capacity
-excesses raise encoding errors; they must not be treated as a random-policy
-fallback. Complete outside program bindings and public known-hand definition
+excesses raise encoding errors by default; they must not be treated as a random-policy
+fallback. An explicit `action_overflow="first-legal"` policy retains the first
+`max_actions` legal actions with their original indices and Commands. The TLA
+pilot selects 64 slots and records replay-linked cutoff counts; the native and
+Academy legal action sets remain complete. Other capacity excesses still fail.
+Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
 
 The optional [policy-history v1 projection](../docs/training.md#policy-inputs) is a bounded

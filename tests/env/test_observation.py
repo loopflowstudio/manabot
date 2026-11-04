@@ -419,7 +419,7 @@ class TestObservationEncoder:
         with pytest.raises(ValueError, match="actions 3 > 2"):
             encoder.encode(obs)
 
-    def test_action_capacity_rejects_omitted_choices(self):
+    def test_action_capacity_rejects_omitted_choices(self) -> None:
         encoder = ObservationEncoder(ObservationConfig(max_actions=2))
         obs = SimpleNamespace(
             action_space=SimpleNamespace(
@@ -427,7 +427,7 @@ class TestObservationEncoder:
             )
         )
         with pytest.raises(ValueError, match="capacity exceeded: actions 3 > 2"):
-            encoder._encode_actions(obs)
+            encoder.encode(obs)
 
     @pytest.mark.parametrize(
         "method, capacity, label",
@@ -463,7 +463,7 @@ class TestObservationEncoder:
             )
         )
         with pytest.raises(ValueError, match="capacity exceeded: action focus"):
-            encoder._encode_actions(obs)
+            encoder._encode_actions(obs.action_space.actions)
 
 
 if __name__ == "__main__":

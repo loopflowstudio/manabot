@@ -319,7 +319,10 @@ class SeatRoutedCollector:
             self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
         try:
             self._buffers = _allocate_buffers(observation_space, num_envs)
-            self._env.set_buffers(self._buffers)
+            self._env.set_buffers(
+                self._buffers,
+                action_overflow=observation_space.encoder.config.action_overflow,
+            )
             self.stream_matches = (
                 []
                 if self._uniform_roster
@@ -369,7 +372,7 @@ class SeatRoutedCollector:
 
     def close(self) -> None:
         """Join owned CPU producers; ordinary single-vector collectors own no pool."""
-        if isinstance(self._env, ShardedVectorEnv):
+        if isinstance(self._env, (ShardedVectorEnv, CapturedVector)):
             self._env.close()
 
     def snapshot(self) -> CollectorSnapshot:

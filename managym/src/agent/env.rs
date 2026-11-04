@@ -964,6 +964,16 @@ impl Env {
         Ok(witness(game))
     }
 
+    /// Complete native support, independent of any policy tensor cutoff.
+    pub fn current_action_summary(&self) -> (usize, String) {
+        self.game
+            .as_ref()
+            .and_then(|game| game.action_space())
+            .map_or((0, "None".into()), |space| {
+                (space.actions.len(), format!("{:?}", space.kind))
+            })
+    }
+
     pub fn selected_revision(&self) -> Result<u64, AgentError> {
         self.game
             .as_ref()

@@ -17,3 +17,11 @@ proves arbitrary kept order while Joo Dee verifies existing real-card behavior.
 This does not claim atomic Surveil movement or its full keyword-event contract.
 
 Full event/result and policy-input version choices remain implementation work.
+
+## Sync with main — 2026-11-04
+
+Resolution assumption: this checkout keeps MTG-241's active decisions above.
+Incoming MTG-213 pilot decisions, concept review and CI evidence remain at
+`8e8d702f807d61675fc1bca46417eee69316daa0:scratch/questions.md`.
+That Task's experiment and delivery authorization does not extend this Task's
+interactive-review boundary. Main's implementation changes are retained.

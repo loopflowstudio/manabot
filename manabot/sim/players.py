@@ -48,6 +48,16 @@ def build_code_player(registration: PlayerRegistration, *, seed: int) -> CodePla
     if kind == "demo_search":
         return DemoSearchPlayer(dict(spec), seed)
     if kind == "heuristic":
+        if "max_actions" in spec or "action_overflow" in spec:
+            if (
+                spec.get("action_overflow") != "first-legal"
+                or type(spec.get("max_actions")) is not int
+                or spec["max_actions"] < 1
+            ):
+                raise ValueError(
+                    "bounded heuristic requires explicit first-legal support"
+                )
+            return HeuristicPlayer(max_actions=spec["max_actions"])
         return HeuristicPlayer()
     if kind == "scripted_greedy":
         return ScriptedGreedyPlayer()
