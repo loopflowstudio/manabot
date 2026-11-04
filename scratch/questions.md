@@ -83,7 +83,7 @@ owns the executed v5 Run, T6 runtime/schema mismatch and fixture limitations.
 V5 is now closed as failed. Operator comment bbc34e15 (2026-11-04 17:49 UTC)
 selects native configurable-axis repair and prospective continuation under
 Jack Heart's existing authorization; no new product decision is required. The
-successor source/capacity/protocol identity remains to be bound before execution.
+successor source/capacity/protocol identity is now bound in the continuation note.
 Synthetic fixtures never authorize actual training, encoding or replay under
 a historical identity.
 
@@ -114,7 +114,7 @@ with this file and the report, is preserved under
 Operator comment a85a89e8 (18:11 UTC), read during fresh launch reconciliation,
 requires investigating the 256 X offers before any successor training. The
 prepared v6 Run `bcde93e9ff8c` / source `ad2c3a010f53` was never submitted: a
-new unrelated/unidentified Vast instance failed the empty-inventory guard first.
+new unrelated Vast instance failed the empty-inventory guard first.
 Do not reuse this prepared Run after a rules repair.
 
 Exact current-source replay identifies Wan Shi Tong in exile with an airbend
@@ -129,3 +129,11 @@ any-type mana converts colored pips. Add directed Wan Shi Tong payment/counter/
 draw coverage, preserve the historical 256-offer observation as transport-only
 data, and check the repaired live prefix separately. w17 remains open per
 WORLDS.md; bind repaired executable source prospectively before training.
+
+
+V7 continuation is now source-bound but unsubmitted: Run `af3661790ac5` at
+`b5406bb33abd98870af6ca07c3beed63a92b7c1c`. Vast refused its price ceiling;
+the configured L4 alternative refused actual capacity. No new spending or
+scoring occurred. The continuation note owns dated inventory/cost receipts and
+remaining acceptance. Do not re-freeze the prepared Run onto later documentation
+commits or reuse the unsubmitted, pre-rules-repair v6 Run.

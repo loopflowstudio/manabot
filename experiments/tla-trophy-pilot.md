@@ -363,5 +363,17 @@ non-default capacities. A separately retained historical observation tests the
 256-row encoder boundary without generating or playing those illegal actions.
 Directed debug tests check payment, counters and draws. The active runner and
 analysis now select v7, with fresh initialization, the same 134 decks and recipe,
-512 actions and unchanged evaluation and budget limits. Source freezing and
-fresh launch reconciliation remain required before execution.
+512 actions and unchanged evaluation and budget limits. Source freezing completed as Run **af3661790ac5** at
+`b5406bb33abd98870af6ca07c3beed63a92b7c1c`. The
+[source receipt](data/mtg213/gpu-v7-preflight-20261104/source.json) records its
+world, shapes and protocol/regime hashes. It was **never submitted or scored**.
+
+At 18:44:18 UTC, fresh [inventory/cost reconciliation](data/mtg213/gpu-v7-preflight-20261104/inventory.json)
+found no remaining provider rentals or unsettled hardware. Cumulative accounted
+cost remains $0.32710677365251912 and conservative reservations
+$3.9139916049382716. [Actual quote refusals](data/mtg213/gpu-v7-preflight-20261104/refusals.json)
+blocked execution: Vast RTX 5090 exceeded its $0.81/hour ceiling, and the
+configured RunPod L4 alternative reported no available machines. No new cost,
+initialization result or trained-policy result exists. Continuation needs
+compatible capacity under the unchanged <=$1/$10 limits; the scientific
+acceptance remains unfinished.

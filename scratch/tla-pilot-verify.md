@@ -1,11 +1,13 @@
-# TLA pilot continuation — reconciled 2026-11-04 after the GPU result
+# TLA pilot continuation — reconciled 2026-11-04 18:44 UTC
 
 Jack Heart's accepted outcome is preliminary TLA self-play and paired evaluation
 on the frozen 134-deck trophy population. GPUs and enabling repairs are authorized
 under a cumulative $10 cap, with each allocation <=$1. The corpus, runners,
 Vast integration and GPU learning milestone are delivered. V5 completed three
 updates, then failed at 256 offered actions versus capacity 64 before exporting a
-trained checkpoint. The pilot remains incomplete.
+trained checkpoint. The native buffer and X-cost repairs are implemented; v7
+is frozen but unsubmitted because both bounded GPU quotes refused capacity.
+The pilot remains incomplete.
 
 [Accepted decisions](questions.md) own scope and provenance;
 [the report](../experiments/tla-trophy-pilot.md) owns measured results, costs and
@@ -20,7 +22,8 @@ PR #420 merged at 08:15:17 UTC as
 `0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. V5 Run `e8c76bc2c06f` executed
 frozen source `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, input v7 and
 `max_cards_per_player=128`, with fresh initialization. Its source, protocol,
-failed attempt and initialization evaluation remain frozen.
+failed attempt and initialization evaluation remain frozen. The later rules
+investigation established that its 256 X offers were illegal.
 
 The 09:58 verification, reconfirmed at 10:09, found executable source, protocols
 and tests equal to main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`. SSH fetch
@@ -48,12 +51,11 @@ and relation axes are version-fixed, not configurable capacities. Merely using
 
 Primary operator comment bbc34e15 (2026-11-04 17:49 UTC) selects the routine
 buffer repair under Jack Heart's existing enabling-fix and $10 authorization;
-no new product choice is needed. Remaining implementation is to derive every
-configurable axis at the shared native boundary, validate companion shapes,
-and establish scalar/vector/Python parity on the retained 256-action position
-and controlled non-default capacities, including overflow rejection. Historical
-configurations and all legal actions must remain intact. The implementation cut below now resolves that buffer boundary, with focused
-parity and overflow checks; it is not evidence of completed GPU acceptance.
+no new product choice is needed. The implementation derives every configurable
+axis at the shared native boundary, validates companion shapes, and verifies
+scalar/vector/Python parity and overflow. Historical configurations and complete
+action spaces are preserved. These checks resolve the buffer boundary, not GPU
+acceptance.
 
 Prospective v7 binds the repaired X-cost rules, current world/content and
 73/56/38 widths, 512 actions and unchanged 134 entries. V6 Run `bcde93e9ff8c`
@@ -64,17 +66,29 @@ Announcement/payment now share the selected base cost, fixing X=0 here;
 any-type mana preserves X and free casts preserve additional waterbend X when
 the printed cost has no X. Current source replay has no illegal X choice.
 Historical evidence stays frozen; no training may use the prepared v6 Run.
-The other live Vast rental 59143644 / session d123328bc691 belongs to
+The separately observed Vast rental 59143644 / session d123328bc691 belonged to
 `state_representation_gpu`, Run 9c7c8e6841a4, source 27a12642200a in Task
-5da5f4's checkout. It is outside MTG-213's allocation and cleanup ownership.
+5da5f4's checkout. It was left to its owner and was absent by the fresh 18:39 read.
 
 Remaining acceptance: an admitted trained checkpoint, complete paired schedule
-and a report of learning and full cost relative to Elemental. The next execution
-step owns fresh inventory, billing and quote reconciliation within both caps.
-At the 17:33:51 settlement all pilot rentals had ended, with no Vast instances,
-RunPod pods or unsettled hardware. Cumulative billed-plus-estimated cost was
-$0.32710677365251912; conservative reservations remain $3.9139916049382716/$10.
-Vast billing is still unavailable; these are dated receipts, not a fresh balance.
+and a report of learning and full cost relative to Elemental. V7 Run
+`af3661790ac5` is frozen at `b5406bb33abd98870af6ca07c3beed63a92b7c1c`;
+`.runs/mtg213/v7-continuation/prepared-run.json` retains its typed Run. The local
+evaluation archive is `.runs/mtg213/runtime-b5406bb33`, bound to those bytes and
+the rebuilt extension. It supplies no empirical training/evaluation result.
+
+Fresh 18:44:18 UTC reconciliation found no Vast instances, RunPod pods or
+unsettled hardware. Accounted whole-rental cost remains
+$0.32710677365251912; conservative historical reservations remain
+$3.9139916049382716/$10. The RTX 5090 quote refused price above $0.81/hour
+(the next offer read was $1.1481481481481481/hour). The existing L4 supply
+briefly reported available at $0.59/hour, then refused the actual quote with
+no machines available. Neither quote submitted or rented anything. No training,
+initialization evaluation, watcher or background process remains. These are
+external availability/price refusals, not missing authorization; continuation
+still requires a fresh quote/inventory within <=$1 allocation and $10 cumulative.
+Source, inventory and refusal receipts are manifest-published under
+`experiments/data/mtg213/gpu-v7-preflight-20261104/`.
 
 ## Operational handoff
 
@@ -127,9 +141,3 @@ The active experiment entry moves from `tla_pilot_v5.py` through unsubmitted v6 
 with its analysis/discovery consumers. Delete both predecessor entries rather than keep a
 second live launcher; frozen v5 protocols, regimes, data and source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd` remain the historical execution path.
-
-Fresh read at 2026-11-04 18:10:23 UTC (`.runs/mtg213/v6-continuation/inventory.json`):
-no Vast instances, RunPod pods or unsettled hardware; accounted full rental
-cost $0.32710677365251912, conservative reservations $3.9139916049382716.
-The same $1 allocation fits the cumulative $10 cap. A fresh quote/submission
-still owns its exact source and hardware reservation.

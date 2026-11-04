@@ -36946,6 +36946,18 @@
    "sha256": "c8050da2d6708eeeecc5d38ad9340b3a696574d4768ac08595334722da5c6af8",
    "bytes": 9449248
   },
+  "experiments/data/mtg213/gpu-v7-preflight-20261104/inventory.json": {
+   "sha256": "33a15f2ce171453d8f19f84bbf0b91fc3df6aa6a9dec741b85bfb8f11a0f73ca",
+   "bytes": 5814
+  },
+  "experiments/data/mtg213/gpu-v7-preflight-20261104/refusals.json": {
+   "sha256": "594116449a51b30cc292bf9fe35c43ea6c7cfa79e87a81942b1900bce10eae6a",
+   "bytes": 620
+  },
+  "experiments/data/mtg213/gpu-v7-preflight-20261104/source.json": {
+   "sha256": "6300e204030789beed54c95e3a7952a988a58ddac45484f3f58b418f6c618f84",
+   "bytes": 2184
+  },
   "experiments/data/mtg213/launch-audit-20261103-resume/prepared-run.json": {
    "sha256": "6ba7fc74eb2c061d7e428625593965d14045c731cc1e53bfe000807cf89c0a8e",
    "bytes": 276414
