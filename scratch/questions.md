@@ -100,3 +100,9 @@ positive completed games only for the two-seat mode that guarantees them.
 Inherited MTG-239 decisions are preserved at
 `7b8bb32731205981b6be09097eb4ca4b39b3864f:scratch/questions.md`;
 they select no additional work for this pilot.
+
+Sync resolution: target main `3b122de9078c985f846a0f3c5a3a42ebca3b1182`
+contains the earlier pilot report. Retain the branch’s later v3 outcome and
+continuation notes, including the removal of inherited unrelated notes. All
+shared artifact manifest entries match exactly; retain the 120 additional v3
+evidence entries. This sync selects no new training or capacity change.
