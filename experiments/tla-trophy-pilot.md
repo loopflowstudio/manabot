@@ -46,7 +46,7 @@ matches; native scalar, vector and Python encoders all reject the same 256
 offered actions at capacity 64. A diagnostic 512 configuration retains all 256
 in Python, but the frozen native buffer path still enforces 64. This is evidence
 that a configuration-only retry is insufficient, not a new pilot selection.
-The prospective v8 contract below binds the buffer repair, X-cost rules repair
+The historical v8 contract below binds the buffer repair, X-cost rules repair
 and explicit first-64 legal-action cutoff; executed v5 evidence remains frozen. Compared with Elemental, this
 pilot now establishes GPU execution on trophy pairs, but supplies no trained policy for a
 learning-gain or cost-to-strength comparison. Different hardware, input size and
@@ -413,3 +413,19 @@ labels; vector reseeding preserves exact diagnostic totals. The unchanged native
 sources retain the preceding 957-pass debug validation (two ignored) and Clippy
 result. Platform CI and the engine performance comparison remain delivery
 checks. These software checks supply no trained checkpoint or learning result.
+
+## Prospective v9: integration and matched support (2026-11-04)
+
+Jack Heart selected the same first-64 legal prefix for the heuristic as for
+learned policies (comment ffd29028). The [v9 protocol](protocols/tla-trophy-213-v9.md)
+binds that benchmark and the integrated T7 runtime. V8's prepared source and
+evidence stay frozen; its runtime guard rejects the new catalog. V9 keeps the
+134-deck population, learning recipe, schedule and budget, and requires fresh
+initialization and evaluation. No new paid execution occurred during CI repair.
+
+The heuristic restricts candidates before scoring and fallback. A constructed
+native position has 67 legal choices: the full heuristic prefers Shivan Dragon
+at index 65, while the matched heuristic selects Hill Giant at original index 0
+and executes that exact Command. The full native offer set stays intact.
+Aggregate cutoff diagnostics cover all participating policy decisions, including
+the heuristic; they cannot establish actor-specific or learner-only rates.

@@ -99,10 +99,9 @@ and Academy authority and original index/Command identities. V8's serialized
 configuration and protocol bind it; prepared v7 must not launch. Earlier
 exploratory steers d5dfad91/d47cb28b did not select a method; 3b0f8826 does.
 
-Reversible interpretation: the fixed heuristic baseline retains its established
-full native policy. Learned candidate and initialization-anchor policies both
-use the declared 64-slot cutoff. Evaluation reports measure observation cutoff
-frequency and retain the full game trace; no baseline redesign was requested.
+Superseded interpretation: v8 originally retained the heuristic's full native
+policy. Jack Heart subsequently selected concept-review option 1b below: all
+pilot evaluation participants use the same first-64 legal prefix.
 
 V8 placement assumption at 19:12 UTC: after fresh RTX5090 price and L4 capacity
 refusals, try a separate RTX3090 supply with the same >=6vCPU/48GBRAM/80GB disk,
@@ -125,12 +124,12 @@ executes the original Command, and records 16 omitted choices. Academy can
 still display all 80. Padding is unavailable, and no page/continue action is
 invented. The cutoff changes policy support, not game termination.
 
-The consequential open choice is evaluation symmetry. Current v8 keeps the
-heuristic's full native choices, while the learned candidate and initialization
-anchor share the saved cutoff. Recommendation: keep that established benchmark
-and disclose the asymmetry; a matched-cutoff heuristic would answer a different
-comparison. Jack Heart has been asked here; no answer is assumed. Changing the
-benchmark must be prospective and must not rewrite executed evidence.
+Accepted decision: Jack Heart answered **1b** on 2026-11-04. The heuristic,
+learned candidate and initialization anchor must all use the same first-64
+legal native-action prefix. This supersedes the earlier recommendation and v8
+full-support heuristic interpretation. Implementation remains with the live
+Graph (steer ffd29028); this review does not claim delivery. Bind the matched
+benchmark prospectively; preserve frozen sources and executed evidence.
 
 Reporting finding: `Env.step` and `step_semantic` record cutoff diagnostics for
 every consumed environment decision. `ActionCutoffCounts` aggregates by kind,
@@ -146,9 +145,9 @@ no executable changes are made in this review.
 
 Draft usage guidance (proposed clarification): “A checkpoint saves its action
 budget. Training and checkpoint evaluation use the same first-64 native prefix.
-The engine's full legal set and human play are unchanged. The heuristic benchmark
-retains full choices. Report model-restricted decisions separately from whole-game
-observation overflow; neither ordering neutrality nor rare strategic impact is
+The engine's full legal set and human play are unchanged. The pilot heuristic
+also chooses from that same prefix. Label whole-game and per-participant cutoff
+counts distinctly; neither ordering neutrality nor rare strategic impact is
 established by a low aggregate count.” Existing README setup guidance stays.
 
 Draft operator guidance (proposed clarification): “A capacity cutoff is a logged
@@ -158,9 +157,13 @@ and costs; do not infer zero overflows from an absent final report or reconstruc
 lost optimizer state from counters. Any changed selection rule needs a new
 prospective experiment identity.” No separate skill installation is needed.
 
-Next proof: construct a mixed checkpoint/heuristic match where only the heuristic
-has >64 actions; show that whole-game overflow is positive while model-restricted
-decisions are zero. Also challenge a prefix whose only useful action occurs
+Next proof: construct a >64-action position where the unrestricted heuristic
+prefers an excluded action; the matched-support heuristic must select its best
+retained legal action. Restrict candidate selection before scoring/choosing;
+never clamp or remap an excluded chosen action. Preserve original Command
+identity. In a mixed match with overflow only on heuristic turns, aggregate
+policy restrictions must be positive while learned-bot restrictions are zero.
+Also challenge a prefix whose only useful action occurs
 after row 63: it remains legal but inaccessible, illustrating the accepted
 approximation. Retain the existing <=64, prefix/Command, illegal-X rejection,
 masked distribution, close/reseed accounting and frozen-configuration proofs.
@@ -175,3 +178,16 @@ required integration with main. The only textual conflict is this notes file.
 Preserve MTG-213 direction and the concurrent concept review above; incoming T7
 notes remain at `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372:scratch/questions.md`.
 Those historical T7 delivery boundaries do not replace this Task’s authorization.
+
+The CI repair implements comment ffd29028 in prospective v9: matched first-64
+heuristic support before ranking/fallback, an explicit benchmark identity and
+the T7-integrated runtime. V8 prepared source/protocol/evidence remain frozen.
+No paid run was launched. Aggregate diagnostics describe all participating
+policies; actor-specific claims remain unsupported by aggregate counts.
+
+CI repair validation: integrated main 4463e57f5a; 968 debug Rust tests passed
+(two ignored), Rust formatting and Clippy passed, extension rebuilt atomically.
+Python focused suite passed 141 tests, then 84 relevant tests passed after five
+additional invalid-capacity cases; 96 broader admission/monitoring/boundary tests
+passed. Ruff and diff whitespace checks passed. Recorded failure remains
+d2ff60e6a1c11aa77e9592d0ecc3aedd72e0c3a7 / required-integration. No paid launch.

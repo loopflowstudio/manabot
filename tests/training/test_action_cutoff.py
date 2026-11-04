@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from managym.decision import Command, DecisionFrame
 import numpy as np
 import pytest
 import torch
@@ -19,7 +20,70 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
+from manabot.sim.heuristic import HeuristicPlayer
 from manabot.training.rollout.collection import SeatRoutedCollector
+
+
+def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
+    deck = {"Mountain": 10, "Gray Ogre": 64, "Hill Giant": 1, "Shivan Dragon": 1}
+    space = ObservationSpace(
+        ObservationConfig(
+            max_cards_per_player=128, max_actions=64, action_overflow="first-legal"
+        )
+    )
+    with capture_scope(CaptureScope(tmp_path)):
+        env = Env(
+            Match(MatchConfig(hero_deck=deck, villain_deck=deck)),
+            space,
+            Reward(RewardConfig()),
+            seed=213,
+        )
+        try:
+            env.reset()
+            actor = env.last_raw_obs.agent.player_index
+            engine = env._engine
+            engine.scenario_clear_hand(actor)
+            engine.scenario_force_card_in_hand(actor, "Hill Giant")
+            for _ in range(64):
+                engine.scenario_force_card_in_hand(actor, "Gray Ogre")
+            engine.scenario_force_card_in_hand(actor, "Shivan Dragon")
+            for _ in range(6):
+                engine.scenario_force_battlefield(actor, "Mountain")
+            raw = env._last_obs = engine.scenario_refresh()
+            obs = space.encoder.encode(raw)
+            assert len(raw.action_space.actions) == 67
+            assert obs["actions_valid"].sum() == 64
+            frame = json.loads(engine.semantic_decision_frame_json())
+            before = engine.state_digest()
+            unrestricted = HeuristicPlayer().act(env, obs)
+            retained = HeuristicPlayer(max_actions=64).act(env, obs)
+            assert unrestricted == 65 and retained == 0
+            cards = {card.id: card.name for card in raw.agent_cards}
+            assert (
+                cards[raw.action_space.actions[unrestricted].focus[0]]
+                == "Shivan Dragon"
+            )
+            assert cards[raw.action_space.actions[retained].focus[0]] == "Hill Giant"
+            assert engine.state_digest() == before
+            assert json.loads(engine.semantic_decision_frame_json()) == frame
+            assert len(env.last_raw_obs.action_space.actions) == 67
+            # Execute the exact retained offer, without clamping or remapping.
+            decision = DecisionFrame.from_json(engine.semantic_decision_frame_json())
+            command = Command(
+                "matched-prefix",
+                decision.revision,
+                int(decision.offers[retained]["id"]),
+            )
+            env.step_semantic(command)
+            assert engine.state_digest() != before
+        finally:
+            env.close()
+    (path,) = tmp_path.glob("action-cutoff-*.json")
+    report = json.loads(path.read_bytes())
+    assert report["counts_by_kind"] == {
+        "Priority": {"decisions": 1, "overflows": 1, "dropped_actions": 3}
+    }
+    assert report["samples"][0]["game"]["actor"] == actor
 
 
 @pytest.mark.parametrize("workers", [1, 2])
