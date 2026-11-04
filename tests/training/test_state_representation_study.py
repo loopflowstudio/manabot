@@ -112,7 +112,7 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
     assert run.job.experiment == gpu.EXPERIMENT
     assert run.job.max_attempts == 1
     assert run.job.max_usd == Decimal("0.50")
-    assert run.job.max_hours == 0.5
+    assert run.job.max_hours == 1.25
     assert run.job.until == "updates=4"
     assert gpu.ADMISSION_SEED not in gpu.SEEDS
     assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
@@ -282,7 +282,7 @@ def test_gpu_training_preserves_admission_boundary(
         assert stop_path == stop and stop_reserve_seconds == 120
         stage = regime.stages[0]
         assert stage.updates == (4 if admission else 256)
-        assert regime.wall_seconds == (600 if admission else 66000)
+        assert regime.wall_seconds == (1800 if admission else 66000)
         assert stage.execution.wall_seconds == regime.wall_seconds
         assert checkpoint_updates == (() if admission else gpu.POINTS[1:-1])
         assert experiment == (

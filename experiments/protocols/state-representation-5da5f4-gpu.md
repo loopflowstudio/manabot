@@ -307,3 +307,24 @@ this is a partial-arm cost projection, not a complete two-arm throughput result.
 No replacement scientific cohort or plateau exists. The original cap is not
 exhausted; the current measured arrangement does not fit it. Historical failed
 attempts and their recipes, counts and charges remain unchanged.
+
+## Cheaper 3090 admission amendment — 2026-11-04 22:00 UTC
+
+Jack Heart explicitly authorized another bounded attempt after a cheaper Japan
+RTX 3090 became available. The fresh SDK read confirms availability at
+$0.24740740740740744/hour, including 40 GB disk and zero transfer rates, and
+all six prior Vast rentals absent. Reported plus settled compute is
+$0.64958259388618171; no final settlement is asserted. Retain $2 prior compute,
+$0.50 for the preceding admission, $6 ancillary and a new $0.50 admission reserve:
+at most $16 remains for science within the original $25 total.
+
+This prospective amendment changes only admission watchdogs and rental duration:
+1,800 seconds per learner, 120 seconds additional child shutdown allowance,
+and 75 minutes work plus 15 minutes setup. At the quoted rate the full window
+costs $0.3711111111, leaving margin within $0.50 for teardown. The earlier
+600-second predictive-finalization failure informs this limit; it is not a
+reason to shorten the four-update, 256-stream two-arm workload. Scientific
+recipes, seeds, horizons and criteria remain unchanged. The locked Etude Git
+source remains 64e9eaabf016f567cb9567280bcf8730f6f5d524. Admission scores are
+neither calculated nor used for selection. Proceed with science only if the
+complete two-arm elapsed-time projection, including allowances, fits $16.

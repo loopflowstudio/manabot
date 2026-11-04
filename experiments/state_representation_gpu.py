@@ -59,6 +59,10 @@ CADENCE = 32
 POINTS = tuple(range(0, UPDATES + 1, CADENCE))
 ADMISSION_UPDATES = 4
 ADMISSION_SEED = 74200
+# Four ordinary updates must fit alongside the executor's finalization reserve.
+# The earlier 600-second watchdog paused even a healthy three-update learner.
+ADMISSION_ARM_SECONDS = 1800
+ADMISSION_WORK_HOURS = 1.25
 CURVE_DEALS = tuple(range(85001, 85033))
 HELDOUT_DEALS = tuple(range(86001, 86065))
 SCORING = {
@@ -200,7 +204,7 @@ def runs(revision: str, allocation: str = "") -> list[Run]:
         revision=revision,
         config=spec.model_dump_json(),
         until=f"updates={UPDATES if admitted else ADMISSION_UPDATES}",
-        max_hours=admitted.work_hours if admitted else 0.5,
+        max_hours=admitted.work_hours if admitted else ADMISSION_WORK_HOURS,
         max_usd=admitted.max_usd if admitted else Decimal("0.50"),
         max_attempts=1,
     )
@@ -260,7 +264,7 @@ def train_arm(
         stage = regime.stages[0]
         assert isinstance(stage, TrainSelfPlay)
         stage.updates = ADMISSION_UPDATES
-        stage.execution.wall_seconds = regime.wall_seconds = 600
+        stage.execution.wall_seconds = regime.wall_seconds = ADMISSION_ARM_SECONDS
         regime = TrainingRegime.model_validate(regime.model_dump())
     out.mkdir(parents=True, exist_ok=False)
     with VerifyStore(out / "training.sqlite") as store:
@@ -439,7 +443,12 @@ def admit_throughput(out: Path, stop: Path, deadline: float) -> None:
             "--stop",
             str(stop),
         ]
-        _run_child(command, batch, stop, min(deadline - 120, time.time() + 720))
+        _run_child(
+            command,
+            batch,
+            stop,
+            min(deadline - 120, time.time() + ADMISSION_ARM_SECONDS + 120),
+        )
         print(f"admission: {arm} completed", flush=True)
     result = ThroughputAdmission(
         concurrency=1,
@@ -497,7 +506,8 @@ def worker() -> None:
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     stop = Path(os.environ["ETUDE_STOP_FILE"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
-    required = spec.allocation.work_hours * 3600 - 180 if spec.allocation else 1620
+    work_hours = spec.allocation.work_hours if spec.allocation else ADMISSION_WORK_HOURS
+    required = work_hours * 3600 - 180
     if deadline - time.time() < required:
         raise ValueError("remaining allocation cannot cover declared work")
     out.mkdir(parents=True, exist_ok=True)
