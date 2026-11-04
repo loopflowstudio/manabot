@@ -21,7 +21,7 @@ Four fresh paired seeds 74201–74204, alternating treatment order within seed.
 curriculum. Target 2,048 updates: 65,536 games per replicate, sixteen times the
 previous horizon. Record actual decisions, optimizer exposure and completion.
 CUDA float32 training only, 6 GiB host-memory watchdog per learner. Eight independent
-processes share one RTX4090 with at least60 GB host RAM and16 CPUs. Each CUDA
+processes share one RTX3090 with at least60 GB host RAM and16 CPUs. Each CUDA
 caching allocator is capped at10% of device memory, leaving20% for contexts and
 external workspaces. No CPU substitution. The same sharing applies to both arms;
 wall-time contrasts are concurrent-use measurements, not isolated speed claims.
@@ -68,7 +68,7 @@ Prior known provider bill $0.07258259388618171; keep the existing $6 ancillary
 reserve pending settlement. Maximum new scientific rental reservation $17.20 for one whole-cohort allocation,
 plus at most $0.50 excluded CUDA admission: cumulative reservation
 $23.77258259388618171, leaving $1.2274. The allocation has20 job hours plus the
-launcher's15-minute setup reserve. At the observed$0.611111/hour this is$12.375;
+launcher's15-minute setup reserve. At the observed$0.179556/hour this is$3.636;
 quotes above$17.20 are refused. Provider disk and transfer must be included;
 Vast offers must have free upload/download under the supported SDK selection.
 No network volumes. Each independent learner has66,000 training seconds; the
@@ -82,7 +82,8 @@ RSS. It disproved the earlier two-hour-per-replicate allocation for2,048updates.
 Before scoring, the execution arrangement was amended to colocate independent
 learners on one GPU; source, recipes, observations, seeds and all results are
 prospectively bound to this amendment. No scores chose the change. The5090 hosts then refused whole-cohort capacity;
-a fresh4090 quote at$0.611111/hour permits a20-hour allocation within the same
+the4090 quote also disappeared before acquisition. A fresh3090 quote with at
+least16CPUs/60GB at$0.179556/hour permits the20-hour allocation within the same
 $17.20 ceiling, with CUDA numerical admission repeated on that hardware. The earlier
 per-replicate Job allocation is removed, not maintained as a fallback.
 
