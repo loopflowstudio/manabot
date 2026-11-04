@@ -1,4 +1,25 @@
-# TLA trophy pilot: GPU learning reached, action capacity stopped the run
+# TLA trophy pilot: v9 prepared, GPU capacity unavailable
+
+V9 Run **2171156493ca** freezes merged source
+`6da60684cb628ec9b431dbbb9d7dc91348743622`, the original 134 decks and matched
+first-64 legal support for all participants. It remains **unsubmitted**.
+On 2026-11-04 at 20:48–20:49 UTC, Vast RTX 5090 exceeded the USD0.81/hour
+ceiling; RTX 3090 and RunPod L4 quotes refused capacity. RunPod A6000 was
+unavailable. A4000 availability initially returned USD0.25/hour, but its
+subsequent quote also refused capacity. Availability alone did not authorize
+or establish an allocation. [Preflight evidence](data/mtg213/gpu-v9-preflight-20261104/outcome.json)
+retains the frozen Run, launch scripts, refusals and fresh accounting.
+
+The final 20:49:51 UTC inventory confirms no active pilot rental, no RunPod
+pods and no unsettled launcher hardware. The independently owned Vast
+representation experiment remains untouched. Accounted prior full-rental cost
+is **USD0.32710677365251912**, with **USD3.9139916049382716** conservatively
+reserved against USD10; **new paid compute is USD0**. Provider billing for the
+earlier Vast rental remains unavailable, so its full-rental estimate is retained.
+The USD1 allocation cap is unchanged. V9 still needs GPU execution, an admitted
+trained checkpoint, paired evaluation and the qualified Elemental comparison.
+
+## Last executed pilot: v5
 
 V5 Run **e8c76bc2c06f**, frozen source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, ran on a Vast **RTX 5090** on
@@ -337,7 +358,7 @@ These checks establish the retained 61-card repair and CPU learner/export/reload
 behavior at 128 cards. They do not execute the prepared v5 GPU Run, establish a
 universal capacity bound, or supply missing trained-checkpoint evaluations.
 
-## Prospective v6 buffer repair (2026-11-04 UTC)
+## Superseded v6 buffer repair (2026-11-04 UTC)
 
 The [v6 protocol](protocols/tla-trophy-213-v6.md) binds current world/content and
 73/56/38 object widths with 512 actions. Native scalar/vector buffers now derive
@@ -346,7 +367,7 @@ finishes before copying any output. V6 prepared the runner and analysis;
 v5 source, protocols and evidence remain frozen. This prepares fresh training
 and evaluation on the same 134 decks; it supplies no new learner or cost result.
 
-## Prospective v7 rules repair (2026-11-04 UTC)
+## Superseded v7 rules repair (2026-11-04 UTC)
 
 The [v7 protocol](protocols/tla-trophy-213-v7.md) supersedes unsubmitted v6 Run
 `bcde93e9ff8c` (source `ad2c3a010f53`), which incurred no rental or scoring.
@@ -361,8 +382,8 @@ of that failure, rather than a rules-correct action contract.
 The repaired retained prefix agrees across scalar/vector/Python paths at
 non-default capacities. A separately retained historical observation tests the
 256-row encoder boundary without generating or playing those illegal actions.
-Directed debug tests check payment, counters and draws. The active runner and
-analysis now select v7, with fresh initialization, the same 134 decks and recipe,
+Directed debug tests check payment, counters and draws. V7 selected fresh
+initialization, the same 134 decks and recipe,
 512 actions and unchanged evaluation and budget limits. Source freezing completed as Run **af3661790ac5** at
 `b5406bb33abd98870af6ca07c3beed63a92b7c1c`. The
 [source receipt](data/mtg213/gpu-v7-preflight-20261104/source.json) records its
@@ -378,7 +399,7 @@ initialization result or trained-policy result exists. Continuation needs
 compatible capacity under the unchanged <=$1/$10 limits; the scientific
 acceptance remains unfinished.
 
-## Prospective v8: explicit legal-action cutoff (2026-11-04)
+## Superseded v8: explicit legal-action cutoff (2026-11-04)
 
 Jack Heart selected 64 action slots with deterministic first 64 legal actions and
 logging (comment 3b0f8826). The [v8 protocol](protocols/tla-trophy-213-v8.md) binds
@@ -393,7 +414,7 @@ the complete rules-state witness unchanged. Airbend and any-type-mana casts
 also reject unavailable X. Prefix tests preserve original native Command mapping,
 scalar/vector/Python parity, masks, collection and bounded replay diagnostics.
 
-V8 is now frozen as Run `f47be2d3c0d8`, source
+V8 was frozen as Run `f47be2d3c0d8`, source
 `900c207502bd28757d7cf66196bd464458e39402`, but remains unsubmitted.
 At 19:10–19:12 UTC, the bounded RTX5090 quote refused its USD0.81/hour ceiling;
 L4 and RTX3090 quotes refused available capacity. No paid allocation or new
