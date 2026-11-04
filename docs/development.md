@@ -91,7 +91,10 @@ declarations named `run.json`.
 
 **Python package and CLI moves.** Experiment imports or recipe discovery:
 `uv run --extra dev pytest tests/training/test_regimes.py -q` (listing recipes
-must not import DuckDB). When moving modules, tests or entry points, collect the
+must not import DuckDB). Adding, renaming or removing an Etude experiment also
+requires updating its exact discovery inventory and running
+`uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_experiment_files.py -q`.
+When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
 Training CLI changes need the installed-wheel smoke from

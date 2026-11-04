@@ -15,7 +15,7 @@ from manabot.belief import (
     ViewerDecision,
     ViewerHistory,
 )
-from manabot.env.observation import FACT_DIM, FACT_ROWS, RELATION_ROWS, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 
@@ -74,43 +74,14 @@ def fixture_schema(space: PossibleWorldSpace) -> BeliefEncodingSchema:
 
 
 def fixture_torch_observation() -> dict[str, torch.Tensor]:
-    encoder = ObservationSpace().encoder
-    batch = 1
+    # Use the policy's allocation contract, including versioned fact capacity.
     observation = {
-        "agent_player": torch.zeros((batch, 1, encoder.player_dim)),
-        "opponent_player": torch.zeros((batch, 1, encoder.player_dim)),
-        "agent_cards": torch.zeros((batch, encoder.cards_per_player, encoder.card_dim)),
-        "opponent_cards": torch.zeros(
-            (batch, encoder.cards_per_player, encoder.card_dim)
-        ),
-        "agent_permanents": torch.zeros(
-            (batch, encoder.perms_per_player, encoder.permanent_dim)
-        ),
-        "opponent_permanents": torch.zeros(
-            (batch, encoder.perms_per_player, encoder.permanent_dim)
-        ),
-        "actions": torch.zeros((batch, encoder.max_actions, encoder.action_dim)),
-        "action_focus": torch.full(
-            (batch, encoder.max_actions, encoder.max_focus_objects),
-            -1,
-            dtype=torch.long,
-        ),
-        "agent_player_valid": torch.ones((batch, 1)),
-        "opponent_player_valid": torch.ones((batch, 1)),
-        "agent_cards_valid": torch.zeros((batch, encoder.cards_per_player)),
-        "opponent_cards_valid": torch.zeros((batch, encoder.cards_per_player)),
-        "agent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
-        "opponent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
-        "actions_valid": torch.zeros((batch, encoder.max_actions)),
-        "semantic_cards": torch.zeros((batch, 2, encoder.cards_per_player)),
-        "known_hand": torch.zeros((batch, 2, encoder.cards_per_player, 2)),
-        "relations": torch.zeros((batch, RELATION_ROWS, encoder.relation_dim)),
-        **(
-            {"facts": torch.zeros((batch, FACT_ROWS, FACT_DIM))}
-            if encoder.shows_everything
-            else {}
-        ),
+        key: torch.from_numpy(value)
+        for key, value in ObservationSpace().encoder.allocate(1).items()
     }
+    observation["action_focus"].fill_(-1)
+    observation["agent_player_valid"].fill_(1)
+    observation["opponent_player_valid"].fill_(1)
     observation["actions"][0, 0, 0] = 1.0
     observation["actions"][0, 1, 1] = 1.0
     observation["actions"][0, 2, 2] = 1.0

@@ -264,9 +264,20 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
 
-def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
+@pytest.mark.parametrize(
+    "config",
+    [
+        ObservationConfig(policy_input_version=5),
+        ObservationConfig(policy_input_version=6, max_facts=256),
+        ObservationConfig(),
+    ],
+    ids=["v5", "v6-pilot", "current-default"],
+)
+def test_once_each_turn_use_reaches_text_and_both_encoders(
+    config: ObservationConfig,
+) -> None:
     """Barrels' once-each-turn mana ability, once used, is in the text and in
-    the same v5 permanent column of the reference and native encoders."""
+    the same permanent column of the reference and native encoders."""
     env = priority_root((), ("Barrels of Blasting Jelly", "Mountain"))
     decision = capture_text_decision(env)
     barrels = next(
@@ -282,7 +293,7 @@ def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
         submit_response(env, decision, decision.actions[0].reference)
 
     observation = _viewer_observation(decision)
-    space = ObservationSpace(ObservationConfig())
+    space = ObservationSpace(config)
     encoded = space.encode(observation)
     row = next(
         index
@@ -290,7 +301,11 @@ def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
         if permanent.once_each_turn_used
     )
     assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
-    native = env.encode_observation(observation, policy_input_version=5)
+    native = env.encode_observation(
+        observation,
+        policy_input_version=config.policy_input_version,
+        max_facts=config.max_facts,
+    )
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
 

@@ -258,7 +258,10 @@ kind 8 (unchanged 49-column width); v1–v4 exclude them. Retargeting and resolu
 including when its source has transformed. Only mutable current-w17 evidence
 is refreshed; earlier worlds stay fixed.
 
-Policy input **v5** is the default; v1–v4 keep their widths. In every widened
+Policy input **v6** is the default, with configurable fact capacity (512 by
+default). V5 stays at 128 rows; v1–v4 keep their widths. V6 changes no column
+meanings or timestamp normalization (rank / 128). A checkpoint binds the
+version and selected capacity independently of this open rules-world label. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the
 hand-only lock, no maximum hand size, turn number, seat, kept red mana and

@@ -47,3 +47,14 @@ accepted display does not need. `resume_with` is shown only when native state
 retains it; the client does not predict the next normal turn from counts.
 Missing historical schedule data remains unknown. These reversible presentation
 choices preserve Jack Heart's accepted 1a direction.
+
+## Main v6 sync — 2026-11-03
+
+Reconcile main `3b122de9078c985f846a0f3c5a3a42ebca3b1182` with T6 by retaining
+v6's configurable fact capacity (fresh default 512), T6's fresh 512-action
+capacity, and the checkpoint reader's historical v1/64-action defaults. V5
+remains fixed at 128 facts; explicit saved values remain authoritative. Preserve
+both branches' parity tests, extending T6 scheduling/transform coverage to v6.
+Main's MTG-213 experiment decisions remain historical context at
+`3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md`; they do not
+replace T6's scope or authorize experiment work in this sync.

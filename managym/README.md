@@ -226,7 +226,8 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v5 keeps v4's trigger-placement action joins and retained
+Fresh policy input v6 has configurable fact capacity (512 by default), with
+v5 frozen at 128 rows and identical column meanings. It keeps v4's trigger-placement action joins and retained
 resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its

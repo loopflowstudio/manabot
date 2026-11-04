@@ -179,10 +179,14 @@ def test_regime_records_its_source_and_rejects_bad_decks_before_training(
         validate_regime(bad)
 
 
+@pytest.mark.parametrize("sampling", ["uniform-distinct-v1", "uniform-independent-v1"])
 @pytest.mark.parametrize("recovery", ["exact", "current"])
 def test_collector_resets_recovers_seats_seeds_and_exposure(
-    decks: UniformDecks, recovery: Literal["exact", "current"]
+    decks: UniformDecks,
+    recovery: Literal["exact", "current"],
+    sampling: Literal["uniform-distinct-v1", "uniform-independent-v1"],
 ) -> None:
+    decks = decks.model_copy(update={"sampling": sampling})
     agent = _agent()
     first = _collector(decks, recovery)
     restored = _collector(decks, recovery)
@@ -198,7 +202,10 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
             sum(row["learner_transitions"] for row in exposure.values())
             == batch.actions.size
         )
-        assert all(key.split("/")[0] != key.split("/")[1] for key in exposure)
+        mirrors = [key.split("/")[0] == key.split("/")[1] for key in exposure]
+        assert (
+            any(mirrors) if sampling == "uniform-independent-v1" else not any(mirrors)
+        )
         restored.restore(first.snapshot(), lambda: None)
         left, right = first.collect(agent, 1), restored.collect(agent, 1)
         for key in left.obs:
@@ -423,3 +430,30 @@ def test_deck_run_identities_name_the_source_not_a_pair(
     assert {k: recorded[k] for k in fingerprints} == fingerprints
     assert "deck_source_sha256" not in recorded
     assert authored_matchup_sha256(recorded, "monitoring") == recorded["matchup_sha256"]
+
+
+def test_independent_population_retains_event_ids_and_mirrors() -> None:
+    deck = Deck({"Plains": 10})
+    source = UniformDecks(
+        decks=(deck, deck),
+        sampling="uniform-independent-v1",
+        entry_ids=("event-a", "event-b"),
+    )
+    assert [player.name for player in source.players()] == ["event-a", "event-b"]
+    source.check()
+    collector = _collector(source)
+    try:
+        batch = collector.collect(_agent(), 1)
+        assert batch is not None and collector.stats.games == 4
+        for pair in collector._env.current_player_configs():
+            assert all(player.name in source.entry_ids for player in pair)
+            assert pair[0].deck == pair[1].deck == deck
+        identity = collector._env.identities["deck_source"]
+        assert identity["sampling_policy"] == "uniform-independent-v1"
+        assert identity["deck_ids"] == ["event-a", "event-b"]
+    finally:
+        collector.close()
+    with pytest.raises(ValueError, match="entry IDs"):
+        UniformDecks(
+            decks=(deck,), sampling="uniform-independent-v1", entry_ids=("same", "same")
+        )
