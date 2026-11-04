@@ -120,12 +120,13 @@ def _input_binding(observation_space: Any) -> dict:
         "policy_input_version": observation_space.encoder.config.policy_input_version,
         **(
             {
+                "naming_representation": "public-identity-v1",
                 "naming_vocabulary": _digest(
                     [
                         {"name": candidate.name, "definition": candidate.definition}
                         for candidate in managym.naming_catalog()
                     ]
-                )
+                ),
             }
             if observation_space.encoder.config.policy_input_version >= 8
             else {}

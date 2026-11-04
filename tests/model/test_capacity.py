@@ -48,7 +48,9 @@ def test_capacity_export_and_real_legal_policy(
         seed=102,
     )
     batch = collector.collect(agent, 2)
-    obs = {k: torch.from_numpy(v[0]) for k, v in batch.obs.items()}
+    obs = {
+        k: torch.from_numpy(v[0]) for k, v in batch.observations().observation.items()
+    }
     policy, value = agent(obs)
     assert policy.shape == obs["actions_valid"].shape
     assert value.shape == (2,)

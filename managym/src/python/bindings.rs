@@ -4447,23 +4447,44 @@ fn parse_continuation_frames_json(
 }
 
 #[cfg(feature = "python")]
-#[pyfunction]
-fn validate_observation_json(text: &str) -> PyResult<()> {
+#[pyfunction(signature = (text, *, schema_version=crate::decision::SEMANTIC_DECISION_VERSION))]
+fn validate_observation_json(text: &str, schema_version: u16) -> PyResult<()> {
+    // Historical capture readers explicitly select 7. Live readers keep the
+    // current default; validation grants no origin or execution authority.
+    if !matches!(
+        schema_version,
+        7 | crate::decision::SEMANTIC_DECISION_VERSION
+    ) {
+        return Err(PyValueError::new_err(
+            "unsupported semantic observation schema",
+        ));
+    }
     let value: serde_json::Value =
         serde_json::from_str(text).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let observation: crate::decision::Observation =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if serde_json::to_value(&observation).unwrap() != value
-        || observation.identity.schema_version != crate::decision::SEMANTIC_DECISION_VERSION
+        || observation.identity.schema_version != schema_version
         || observation
             .decision
             .as_ref()
-            .is_some_and(|frame| frame.schema_version != crate::decision::SEMANTIC_DECISION_VERSION)
+            .is_some_and(|frame| frame.schema_version != schema_version)
     {
         return Err(PyValueError::new_err("noncanonical semantic observation"));
     }
-    crate::agent::observation_json::parse(&observation.viewer_state.to_string())
+    let viewer = crate::agent::observation_json::parse(&observation.viewer_state.to_string())
         .map_err(PyValueError::new_err)?;
+    if schema_version == 7
+        && viewer
+            .action_space
+            .actions
+            .iter()
+            .any(|action| action.name_index.is_some() || action.name_definition.is_some())
+    {
+        return Err(PyValueError::new_err(
+            "schema 7 has no public name references",
+        ));
+    }
     Ok(())
 }
 

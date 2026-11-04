@@ -25,6 +25,7 @@ from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder
 from manabot.model.inference import PreparedObservation
 from manabot.model.name_candidates import NameCandidateEncoder
+from manabot.model.policy_distribution import legal_mask
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
 from manabot.model.shared_effects import SharedEffectEncoder
@@ -301,12 +302,18 @@ class ActorCritic(nn.Module):
         )
 
         self.name_candidates = (
-            NameCandidateEncoder(managym.naming_catalog(), embed_dim)
+            NameCandidateEncoder(
+                managym.naming_catalog(),
+                embed_dim,
+                self.semantic_cards.definition_rows
+                if self.semantic_cards is not None
+                else None,
+            )
             if enc.config.policy_input_version >= 8
             else None
         )
 
-        # When True, forward() stashes raw pre-mask logits on
+        # When True, forward() stashes legal logits at original coordinates on
         # self.last_raw_logits for offline diagnosis. Off by default: the
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
@@ -354,46 +361,25 @@ class ActorCritic(nn.Module):
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
 
-        action_count = obs["actions"].shape[1]
-        if self.name_candidates is not None:
-            # Padding grows with the vocabulary, but ordinary policy computation
-            # scales with the actual support. Retain sparse positions, not just
-            # a count: permutation proofs may put padding between legal rows.
-            used = obs["actions_valid"].bool().any(0).nonzero()
-            action_count = int(used[-1].item()) + 1 if used.numel() else 1
+        batches, slots = legal_mask(obs["actions_valid"]).nonzero(as_tuple=True)
         informed_actions = self._gather_informed_actions(
-            obs, post_attention_objects, state, action_count=action_count
+            obs, post_attention_objects, state, batches, slots
         )
         if self.policy_film is not None:
-            informed_actions = self._condition_actions(
-                informed_actions, post_attention_objects, state.validity
+            valid = state.validity.unsqueeze(-1)
+            pooled = (post_attention_objects * valid).sum(1) / valid.sum(1).clamp_min(1)
+            informed_actions = informed_actions * (
+                1 + self.policy_film(pooled)[batches]
             )
-
-        logits_before_mask = self.policy_head(informed_actions).squeeze(-1)
+        scores = self.policy_head(informed_actions).squeeze(-1)
+        # Public logits retain original coordinates, including interior padding.
+        # Only the legal rows entered the action networks; objects/programs were
+        # encoded once for the batch, independent of each row's support size.
+        logits = scores.new_full(obs["actions_valid"].shape, -1e8)
+        logits = logits.index_put((batches, slots), scores)
         if self.debug:
-            # Save raw logits for offline diagnosis (scripts/diagnose_*).
-            self.last_raw_logits = logits_before_mask.detach().cpu()
-        logits = logits_before_mask.masked_fill(
-            obs["actions_valid"][:, :action_count] == 0, -1e8
-        )
-        if action_count < obs["actions"].shape[1]:
-            logits = torch.nn.functional.pad(
-                logits, (0, obs["actions"].shape[1] - action_count), value=-1e8
-            )
+            self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
-
-    def _condition_actions(
-        self, actions: torch.Tensor, objects: torch.Tensor, validity: torch.Tensor
-    ) -> torch.Tensor:
-        """Scale actions [B,A,D] by a state code from valid objects [B,N,D].
-
-        The mean is invariant to object and offer order, so the policy's
-        permutation contracts are unchanged.
-        """
-        assert self.policy_film is not None
-        valid = validity.unsqueeze(-1)
-        state = (objects * valid).sum(1) / valid.sum(1).clamp_min(1)
-        return actions * (1 + self.policy_film(state).unsqueeze(1))
 
     def _attend_objects(
         self,
@@ -473,9 +459,11 @@ class ActorCritic(nn.Module):
             offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
             for offer in batch.offers
         ):
-            features = self._gather_informed_actions(obs, objects, state)[
-                0, : len(batch.offers)
-            ]
+            slots = torch.arange(len(batch.offers), device=objects.device)
+            batches = torch.zeros_like(slots)
+            features = self._gather_informed_actions(
+                obs, objects, state, batches, slots
+            )
         return self.compound_decoder(
             context[0],
             batch,
@@ -486,81 +474,57 @@ class ActorCritic(nn.Module):
             deterministic=deterministic,
         )
 
-    def _add_focus(
-        self,
-        actions: torch.Tensor,
-        post_attention_objects: torch.Tensor,
-        action_focus: torch.Tensor,
-    ) -> torch.Tensor:
-        B, max_actions, embed_dim = actions.shape
-
-        valid_mask = (action_focus != -1).unsqueeze(-1).float()
-        action_focus = action_focus.clamp(min=0)
-
-        focus_indices = (
-            action_focus.unsqueeze(-1)
-            .expand(B, max_actions, self.max_focus_objects, embed_dim)
-            .long()
-        )
-        post_attention_focus_objects = post_attention_objects.unsqueeze(1).expand(
-            -1, max_actions, -1, -1
-        )
-        focus_embeds = torch.gather(post_attention_focus_objects, 2, focus_indices)
-        focus_embeds = focus_embeds * valid_mask
-        focus_flat = focus_embeds.reshape(B, max_actions, -1)
-        return torch.cat([actions, focus_flat], dim=-1)
-
     def _gather_informed_actions(
         self,
-        obs: Dict[str, torch.Tensor],
+        obs: dict[str, torch.Tensor],
         post_attention_objects: torch.Tensor,
         state: EmbeddedObservation,
-        *,
-        action_count: int | None = None,
+        batches: torch.Tensor,
+        slots: torch.Tensor,
     ) -> torch.Tensor:
-        action_rows = obs["actions"][:, :action_count]
-        valid = obs["actions_valid"][:, :action_count]
-        # The continuation selector is a join, never a numeric strategic feature.
+        """Embed selected legal rows [K,D], preserving their original joins.
+
+        Flat and compound policies share this owner. Coordinates select actions,
+        continuation frames and focus objects from the same observation row.
+        """
+        action_rows = obs["actions"][batches, slots]
         actions = self.action_embedding(action_rows[..., :-2])
-        indexes = torch.where(valid.bool(), action_rows[..., -2], 0)
+        indexes = action_rows[..., -2]
         if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
             raise ValueError("invalid action continuation reference")
         if state.frame_context is not None:
             rows = obs["relations"]
+            # Select the two join columns before gathering legal action rows;
+            # duplicating complete relation payloads would undo the saving.
             present = (
-                (indexes.unsqueeze(-1) == rows[:, None, :, 1])
-                & (rows[:, None, :, RELATION_VALID_INDEX] == 1)
+                (indexes[:, None] == rows[..., 1][batches])
+                & (rows[..., RELATION_VALID_INDEX][batches] == 1)
             ).any(-1)
             if ((indexes != 0) & ~present).any():
                 raise ValueError("action continuation reference has no frame")
-            linked = state.frame_context.gather(
-                1,
-                (indexes.long() - 1)
-                .clamp_min(0)
-                .unsqueeze(-1)
-                .expand(-1, -1, actions.shape[-1]),
-            )
+            linked = state.frame_context[batches, (indexes.long() - 1).clamp_min(0)]
             actions = actions + linked.masked_fill((indexes == 0).unsqueeze(-1), 0)
         elif (indexes != 0).any():
             raise ValueError("trigger ordering requires continuation policy input")
         if self.name_candidates is not None:
-            candidates = torch.where(
-                valid.bool().unsqueeze(-1), obs["name_candidates"][:, :action_count], 0
-            )
+            candidates = obs["name_candidates"][batches, slots]
             actions = actions + self.name_candidates(candidates)
-            ids = candidates[..., 1]
             if self.semantic_cards is not None and state.definitions is not None:
                 actions = actions + self.semantic_cards.embed_definitions(
-                    ids, state.definitions
+                    candidates[..., 1], state.definitions
                 )
         if state.shared_context is not None:
-            # Focus-free actions also receive the same context without attention.
-            actions = actions + state.shared_context.unsqueeze(1)
-        actions = actions * valid.unsqueeze(-1)
-        actions_with_focus = self._add_focus(
-            actions, post_attention_objects, obs["action_focus"][:, :action_count]
-        )
-        return self.action_layer(actions_with_focus)
+            actions = actions + state.shared_context[batches]
+        focus = obs["action_focus"][batches, slots]
+        if not (
+            (focus == focus.floor())
+            & (focus >= -1)
+            & (focus < post_attention_objects.shape[1])
+        ).all():
+            raise ValueError("invalid action focus reference")
+        focused = post_attention_objects[batches[:, None], focus.clamp_min(0).long()]
+        focused = focused * (focus != -1).unsqueeze(-1)
+        return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
@@ -576,6 +540,7 @@ class ActorCritic(nn.Module):
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
         definitions = None
+        programs = None
         references = obs.references if isinstance(obs, PreparedObservation) else None
         permanent_ids = torch.stack(
             [
@@ -597,6 +562,9 @@ class ActorCritic(nn.Module):
             else:
                 definitions = self.semantic_cards.definitions()
             assert definitions is not None
+            programs = definitions
+            if self.name_candidates is not None:
+                definitions = self.name_candidates.public_definitions(programs)
             cards, known = self.semantic_cards(obs, definitions, references)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
@@ -720,7 +688,7 @@ class ActorCritic(nn.Module):
 
         validity = torch.cat(validity_parts, dim=1)
         return EmbeddedObservation(
-            objects, is_agent, validity, shared_context, frame_context, definitions
+            objects, is_agent, validity, shared_context, frame_context, programs
         )
 
     def _join_permanent_links(

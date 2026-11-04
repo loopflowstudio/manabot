@@ -840,13 +840,23 @@ The policy adds a trainable name vector and, where present, the definition's
 existing learning-program embedding from the same table used by game objects.
 Each referenced program is encoded once per learner forward; inference reuses
 its policy-scoped catalog cache. Distinct names with equivalent rules
-remain distinguishable. Only naming decisions request all candidate programs;
-ordinary learner steps retain referenced-definition encoding. Action scoring
-trims trailing unused rows before the action network and restores padding in the
-returned logits. Buffer storage still grows linearly with the vocabulary.
+remain distinguishable. V8 joins those same name vectors to viewer-visible
+program references before card, known-hand and decklist pooling. Equal-rule
+cards with different public names can therefore support different preferences;
+closed native decklist rows still contribute no identities.
+Only naming decisions request all candidate programs; ordinary learner steps
+retain referenced-definition encoding. Action networks score only legal rows,
+including in mixed naming/ordinary batches, and restore original logit slots.
+Pending transitions and rollouts pack all legal action fields and full behavior
+probabilities/log probabilities with original coordinates. Both learner rules
+materialize and transfer only selected minibatches; private numerical incidents
+retain the packed offsets and slots. Native live buffers and each minibatch's
+policy ABI still have the configured dense action axis.
 
 The checkpoint binding includes the ordered naming vocabulary and optional
-definition joins, in addition to tensor shapes and the content manifest.
+definition joins and `naming_representation="public-identity-v1"`, in addition
+to tensor shapes and the content manifest. Earlier unreleased v8 bindings fail
+admission; there is no automatic warm start or name remapping.
 V1–v7 arrays, missing-checkpoint defaults and fresh v6 defaults are unchanged;
 using v8 is explicit. A historical fixed-capacity input rejects an oversized
 naming decision under the default overflow policy. Explicit `first-legal` can

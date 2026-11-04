@@ -99,7 +99,7 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
             key: torch.from_numpy(value[-8:, 0]).float()
             if key == "action_focus"
             else torch.from_numpy(value[-8:, 0])
-            for key, value in batch.obs.items()
+            for key, value in batch.observations().observation.items()
         }
     semantic = case.agent.semantic_cards
     assert semantic is not None

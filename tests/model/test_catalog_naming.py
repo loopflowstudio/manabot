@@ -6,6 +6,7 @@ from pathlib import Path
 from time import perf_counter
 from unittest.mock import patch
 
+from naming_reference import DenseActionReference
 import numpy as np
 import pytest
 import torch
@@ -17,6 +18,7 @@ from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
+from manabot.sim.action.structured import flatten_projection
 import managym
 
 
@@ -236,7 +238,7 @@ def test_catalog_naming_programs_affect_scores(
     )
 
 
-@pytest.mark.parametrize("change", ["name", "order", "definition"])
+@pytest.mark.parametrize("change", ["name", "order", "definition", "representation"])
 def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
     naming_root: managym.Env,
     tmp_path: Path,
@@ -264,9 +266,13 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
         candidates[0] = managym.NameCandidate("Changed name", first.definition)
     elif change == "order":
         candidates[0], candidates[1] = candidates[1], candidates[0]
-    else:
+    elif change == "definition":
         assert first.definition is not None
         candidates[0] = managym.NameCandidate(first.name, None)
+    else:
+        checkpoint = torch.load(path, weights_only=False)
+        del checkpoint["world_binding"]["naming_representation"]
+        torch.save(checkpoint, path)
     monkeypatch.setattr(managym, "naming_catalog", lambda: candidates)
     with patch.object(ActorCritic, "load_state_dict") as load_weights:
         with pytest.raises(ValueError, match="world/setup/input binding differs"):
@@ -354,3 +360,232 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     assert not buffers["name_candidates"].any()
     for key, expected in space.encode(raw).items():
         np.testing.assert_allclose(buffers[key][0], expected, atol=1e-6, err_msg=key)
+
+
+def _mixed_naming_batch(
+    naming_root: managym.Env,
+) -> tuple[ObservationSpace, dict[str, torch.Tensor]]:
+    space = ObservationSpace(ObservationConfig(policy_input_version=8))
+    search = naming_root.clone_env()
+    raw = search.observation_for_player(search.current_agent_index())
+    search.step(
+        next(
+            i
+            for i, a in enumerate(raw.action_space.actions)
+            if a.description == "Name Gray Ogre"
+        )
+    )
+    ordinary = managym.Env(seed=243)
+    ordinary.reset(
+        [
+            managym.PlayerConfig("A", {"Forest": 20, "Llanowar Elves": 20}),
+            managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
+        ]
+    )
+    arrays = [
+        space.encode(env.observation_for_player(env.current_agent_index()))
+        for env in (naming_root, search, ordinary, ordinary)
+    ]
+    return space, {
+        key: torch.from_numpy(np.stack([row[key] for row in arrays]))
+        for key in arrays[0]
+    }
+
+
+@pytest.mark.parametrize("film", [False, True])
+@pytest.mark.parametrize("attention", [False, True])
+def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
+    naming_root: managym.Env,
+    film: bool,
+    attention: bool,
+) -> None:
+    torch.set_num_threads(1)
+    torch.manual_seed(243)
+    space, obs = _mixed_naming_batch(naming_root)
+    config = ModelConfig(
+        hidden_dim=16,
+        world=managym.WORLD_SETUP,
+        policy_film=film,
+        attention_on=attention,
+    )
+    model = ActorCritic(space, config).eval()
+    if model.policy_film is not None:
+        with torch.no_grad():
+            model.policy_film.weight.fill_(0.01)
+    reference = DenseActionReference(space, config).eval()
+    reference.load_state_dict(model.state_dict())
+    # Move a legal offer beyond padding, with all joins kept at its new slot.
+    order = torch.arange(obs["actions"].shape[1])
+    order[0], order[-1] = order[-1].item(), order[0].item()
+    for key in ("actions", "actions_valid", "action_focus", "name_candidates"):
+        obs[key] = obs[key][:, order]
+    targets = obs["actions_valid"].argmax(-1)
+    actual, values = model.forward_distribution(obs)
+    expected, expected_values = reference.forward_distribution(obs)
+    torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
+    torch.testing.assert_close(values, expected_values, atol=2e-6, rtol=2e-5)
+    for net, logits, critic in (
+        (model, actual, values),
+        (reference, expected, expected_values),
+    ):
+        (
+            torch.nn.functional.cross_entropy(logits, targets) + critic.square().mean()
+        ).backward()
+    for (name, value), (refname, refvalue) in zip(
+        model.named_parameters(), reference.named_parameters(), strict=True
+    ):
+        assert name == refname
+        if value.grad is None:
+            assert refvalue.grad is None
+        else:
+            torch.testing.assert_close(
+                value.grad, refvalue.grad, atol=2e-6, rtol=3e-4, msg=name
+            )
+    with torch.no_grad(), PolicyInference(model) as scope:
+        prepared = scope.prepare(obs)
+        direct = model(obs)
+        cached = model(prepared)
+        for left, right in zip(direct, cached, strict=True):
+            torch.testing.assert_close(left, right, atol=0, rtol=0)
+
+
+def test_legal_row_scoring_rejects_malformed_joins(naming_root: managym.Env) -> None:
+    space, obs = _mixed_naming_batch(naming_root)
+    model = ActorCritic(space, ModelConfig(hidden_dim=8))
+    for key, column, value, message in (
+        ("actions", -2, 0.5, "continuation reference"),
+        ("action_focus", 0, -2, "focus reference"),
+        ("name_candidates", 1, 0, "disagrees with vocabulary"),
+    ):
+        changed = {k: v.clone() for k, v in obs.items()}
+        changed[key][0, 0, column] = value
+        with pytest.raises(ValueError, match=message):
+            model(changed)
+
+
+def test_equal_rule_names_learn_opposite_public_preferences(
+    naming_root: managym.Env,
+) -> None:
+    """A bounded model fixture, not new card definitions or a strength experiment.
+
+    Supervised targets name the publicly disclosed card. Equalize two installed
+    programs at the encoder boundary: the names, native admission and real game
+    definitions are untouched. A program-only state cannot solve this pair.
+    """
+    torch.set_num_threads(1)
+    torch.manual_seed(243)
+    space, batch = _mixed_naming_batch(naming_root)
+    model = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=16,
+            world=managym.WORLD_SETUP,
+            attention_on=False,
+            policy_film=True,
+        ),
+    ).eval()
+    catalog = list(managym.naming_catalog())
+    choices = [
+        next(i for i, candidate in enumerate(catalog) if candidate.name == name)
+        for name in ("Gray Ogre", "Hill Giant")
+    ]
+    definitions: list[int] = []
+    for choice in choices:
+        definition = catalog[choice].definition
+        assert definition is not None
+        definitions.append(definition + 1)
+    encoder = model.semantic_cards
+    assert encoder is not None
+    program_rows = encoder.definition_rows[torch.tensor(definitions)] - 1
+    with torch.no_grad():
+        encoder.tokens[program_rows[1]] = encoder.tokens[program_rows[0]]
+        encoder.lengths[program_rows[1]] = encoder.lengths[program_rows[0]]
+    paired = {
+        key: value[:1].repeat(2, *([1] * (value.ndim - 1)))
+        for key, value in batch.items()
+    }
+    paired["decklists"].zero_()
+    for row, definition in enumerate(definitions):
+        paired["decklists"][row, 1, 0] = torch.tensor([definition, 4, 4, 0, 0])
+    # Fit a two-example linear probe through the policy's existing final head.
+    # This is a deterministic representability check, not SGD convergence or
+    # sample-efficiency evidence. Nonzero FiLM exposes public context to actions.
+    assert model.policy_film is not None
+    with torch.no_grad():
+        model.policy_film.weight.normal_(0, 0.5)
+    assert model.name_candidates is not None
+    with patch.object(
+        model.name_candidates,
+        "public_definitions",
+        side_effect=lambda programs: programs,
+    ):
+        indistinguishable, _ = model(paired)
+        torch.testing.assert_close(
+            indistinguishable[0], indistinguishable[1], atol=0, rtol=0
+        )
+    features: list[torch.Tensor] = []
+
+    def retain_features(
+        module: torch.nn.Module, args: tuple[torch.Tensor, ...]
+    ) -> None:
+        features.append(args[0].detach())
+
+    hook = model.policy_head[-1].register_forward_pre_hook(retain_features)
+    before, _ = model(paired)
+    hook.remove()
+    count = len(catalog)
+    encoded = features[0].reshape(2, count, -1)
+    differences = encoded[:, choices[0]] - encoded[:, choices[1]]
+    assert torch.linalg.matrix_rank(differences.double()) == 2
+    target_margins = torch.tensor([0.001, -0.001], dtype=torch.float64)
+    fitted = torch.linalg.lstsq(differences.double(), target_margins).solution
+    # Gradients also reach both public identity and executable program inputs.
+    loss = torch.nn.functional.cross_entropy(before[:, choices], torch.arange(2))
+    loss.backward()
+    assert model.name_candidates is not None
+    assert model.name_candidates.embedding.weight.grad is not None
+    assert model.name_candidates.embedding.weight.grad.abs().sum() > 0
+    assert encoder.token_embedding.weight.grad is not None
+    assert encoder.token_embedding.weight.grad.abs().sum() > 0
+    with torch.no_grad():
+        model.policy_head[-1].weight.copy_(fitted[None].float())
+    logits, _ = model(paired)
+    assert torch.equal(logits[:, choices].argmax(-1), torch.arange(2))
+    assert (logits.softmax(-1)[:, : len(catalog)] > 0).all()
+    # Moving choices retains learned identity, not ordinal preferences.
+    order = torch.arange(logits.shape[1] - 1, -1, -1)
+    reordered = dict(paired)
+    for key in ("actions", "actions_valid", "action_focus", "name_candidates"):
+        reordered[key] = paired[key][:, order]
+    moved, _ = model(reordered)
+    torch.testing.assert_close(moved, logits[:, order], atol=2e-6, rtol=1e-5)
+    # Closed information is the native zero decklist projection; both states
+    # then have exactly the same observable evidence and must score identically.
+    closed = {key: value.clone() for key, value in paired.items()}
+    closed["decklists"][:, 1].zero_()
+    hidden, _ = model(closed)
+    torch.testing.assert_close(hidden[0], hidden[1], atol=0, rtol=0)
+
+
+def test_compound_naming_keeps_complete_atomic_offer_support(
+    naming_root: managym.Env,
+) -> None:
+    space = ObservationSpace(ObservationConfig(policy_input_version=8))
+    raw = naming_root.observation_for_player(naming_root.current_agent_index())
+    obs = _tensor(space.encode(raw))
+    offers = flatten_projection(
+        json.loads(naming_root.compound_offers().projection_json())
+    )
+    model = ActorCritic(
+        space,
+        ModelConfig(hidden_dim=8, world=managym.WORLD_SETUP, compound_decisions=True),
+    ).eval()
+    index = next(
+        i
+        for i, candidate in enumerate(managym.naming_catalog())
+        if candidate.name == "Gray Ogre"
+    )
+    output = model.compound(obs, offers, tokens=(index,))
+    assert len(output.probabilities[0]) == len(managym.naming_catalog())
+    assert (output.probabilities[0] > 0).all()
+    assert torch.isfinite(output.log_prob)

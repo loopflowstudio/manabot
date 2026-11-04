@@ -13,7 +13,7 @@ identity stays Academy-owned; possible-world semantics (RUL-8) are not here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 import json
 from typing import Any, Mapping
 
@@ -40,11 +40,14 @@ class SemanticContractError(Exception):
         self.code = code
 
 
-def _validate_version(version: int) -> None:
-    if type(version) is not int or version != SEMANTIC_DECISION_VERSION:
+def _validate_version(version: int, expected: int = SEMANTIC_DECISION_VERSION) -> None:
+    if (
+        expected not in (7, SEMANTIC_DECISION_VERSION)
+        or type(version) is not int
+        or version != expected
+    ):
         raise SemanticContractError(
-            f"unsupported semantic decision schema {version!r}; "
-            f"expected {SEMANTIC_DECISION_VERSION}",
+            f"unsupported semantic decision schema {version!r}; expected {expected}",
             code="unsupported_schema",
         )
 
@@ -106,17 +109,22 @@ class DecisionFrame:
     offers: tuple[Mapping[str, Any], ...]
     object_candidates: tuple[Mapping[str, Any], ...]
 
-    def __post_init__(self) -> None:
-        _validate_version(self.schema_version)
+    _expected_version: InitVar[int] = SEMANTIC_DECISION_VERSION
+
+    def __post_init__(self, _expected_version: int) -> None:
+        _validate_version(self.schema_version, _expected_version)
         for offer in self.offers:
             commitment = offer.get("public_commitment")
             if commitment is not None:
                 PublicCommitment.from_payload(commitment)
 
     @classmethod
-    def from_json(cls, text: str) -> "DecisionFrame":
+    def from_json(
+        cls, text: str, *, _expected_version: int = SEMANTIC_DECISION_VERSION
+    ) -> "DecisionFrame":
         payload = json.loads(text)
         return cls(
+            _expected_version=_expected_version,
             schema_version=payload["schema_version"],
             revision=int(payload["revision"]),
             actor=int(payload["actor"]),
@@ -206,17 +214,24 @@ class Observation:
     events: tuple[str, ...]
     decision: DecisionFrame | None
 
-    def __post_init__(self) -> None:
-        _validate_version(self.schema_version)
+    _expected_version: InitVar[int] = SEMANTIC_DECISION_VERSION
+
+    def __post_init__(self, _expected_version: int) -> None:
+        _validate_version(self.schema_version, _expected_version)
 
     @classmethod
-    def from_json(cls, text: str) -> "Observation":
+    def from_json(
+        cls, text: str, *, _expected_version: int = SEMANTIC_DECISION_VERSION
+    ) -> "Observation":
         payload = json.loads(text)
         identity = payload["identity"]
         decision = None
         if payload["decision"] is not None:
-            decision = DecisionFrame.from_json(json.dumps(payload["decision"]))
+            decision = DecisionFrame.from_json(
+                json.dumps(payload["decision"]), _expected_version=_expected_version
+            )
         return cls(
+            _expected_version=_expected_version,
             schema_version=identity["schema_version"],
             revision=int(identity["revision"]),
             viewer=int(identity["viewer"]),

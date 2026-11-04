@@ -1,235 +1,182 @@
-# MTG-243 — catalog naming (2026-11-04)
+# MTG-243 — complete catalog naming
 
-Jack Heart authorized this outcome on 2026-11-04: complete, learnable catalog-wide
-naming beyond 512 names, one reviewable PR, no merge or training experiments.
-The Task directive is accepted scope. The atomic candidate design below is the
-implemented approach selected under that directive; interactive review is pending.
-The inherited T7 note is historical. This Task has no Wave.
+## Accepted direction — 2026-11-04
 
-## Design
+Jack Heart authorized complete, learnable catalog-wide naming beyond 512 names
+as one reviewable PR, with no merge or training experiments. After publication
+of `9db184b9aa3df9286b07abdafa2d41db0d93e651` in PR #424, Jack Heart requested:
+“Let's make sure to both measure those risks and attempt to ameliorate them.”
+That accepted pass covers legal-row scoring, compact pending/rollout storage
+through both learners and incidents, bounded same-host costs, paired public-state
+competency, actual executable-program attribution, and the five CI compatibility
+failures. The code Graph is at implementation; publication and interactive review
+remain later steps. No auto-merge, paid execution or strength experiment is authorized.
 
-The catalog's immutable, sorted name candidates and one `Decision::NameCard`
-replace per-resolution `BTreeSet<String>` and `Vec<Vec<Effect>>` construction.
-Only the selected name constructs `ExileNamed`; private search and its permission
-lifetime stay at that existing continuation authority. The published modal
-Command ordering and labels remain, so humans, LLMs, replay and search choose the same
-complete name in one step. Candidates are vocabulary entries, never fake objects.
+The original implementation and publication evidence are retained at
+`9db184b9:scratch/mtg-243-naming.md`; the uncommitted research/accepted-pass text
+was preserved at `.lf/logs/naming-risk/plan-before-reduction.md` before curation.
+This pass follows the accepted Task directive; no Wave files were edited.
+Earlier T7 direction is historical at
+`4463e57f5:scratch/questions.md`.
 
-Explicit policy input v8 has a public name row and optional candidate-definition join per action and
-catalog-derived action capacity. This is linear scoring of the complete support;
-it avoids sequential rejection or extra game decisions. Candidate identity and
-its existing learning definition both reach scoring. Only naming steps request
-all candidate programs. Existing v1–v7 widths and omitted checkpoint defaults stay
-frozen; fresh default remains v6 pending explicit adoption. Complete naming has
-no truncation or random fallback. The action axis is the larger of configured capacity and vocabulary size; scoring
-trims unused rows so ordinary decisions do not run the larger action network.
+## Design and implemented ownership
 
-Current naming universe is exactly the existing non-token real catalog,
-including back faces. Names outside supported definitions remain an unresolved
-rules coverage question: this work does not claim all legal Magic names or
-expand deck admission. `NameVocabulary` can hold validated names without executable definitions; its
-digest enters state identity, and v8 checkpoints bind its ordered names and
-optional definition joins. Only the test fixture extends it today.
+`ContentPack::name_candidates` owns immutable sorted public names and a digest.
+`Decision::NameCard` shares that vocabulary; only the accepted choice constructs
+one `ExileNamed` and resumes the existing suspended frame. Commands retain the
+same modal order and labels. `SearchNamed` retains private inspection, remaining
+selections and fail-to-find semantics. Search, replay, forks, LLMs and Academy
+all retain the complete atomic choice; filtering never commits a choice.
 
-## Reconciliation — 2026-11-04
+Explicit input v8 carries `name_candidates[A,2]`: a categorical public name and
+optional one-based definition join. A is max(configured actions, vocabulary).
+Names never consume card slots. Fresh defaults remain v6; v1–v7 shapes and
+omitted checkpoint defaults remain frozen. Default overflow rejects; explicit
+first-legal may truncate legacy inputs and is not complete naming support.
+V8 still reserves the installed naming vocabulary under that policy.
 
-The completed simplification removed owned modal branches, duplicate sorting and
-program encoding, and separate action traversals for candidate joins. Name and
-object definitions share `EmbeddedObservation`; retaining the original prepared
-observation preserves its inference cache. Scalar/vector parity replays one
-recorded trace because cloned observations have already drained per-step events.
-The obsolete deletion checklist is retained at `5ac29cc12:scratch/mtg-243-naming.md`.
+The action networks now gather only legal rows, share object/program computation,
+and scatter logits to original coordinates, including holes and reorderings.
+Flat and compound policies use one action-embedding owner. Continuation checks
+select join columns before gathering rows, avoiding repeated full payload copies.
+Prepared inference retains its policy-scoped program cache.
 
-Main remains `8e8d702f8` (remote checked during reconciliation). Its supplied-axis
-binding and explicit `first-legal` overflow policy are incorporated. Default
-overflow still rejects. V8 reserves the entire installed naming vocabulary even
-with a smaller configured `max_actions`; a legacy input with explicit cutoff can
-truncate names and is not complete naming support. Documentation now states
-that exception. Native validation and encoding use the same retained prefix.
+`PackedActions` owns offsets, original slots, complete legal action fields and
+full behavior probabilities/log probabilities. `_Pending` retains those rows;
+`RolloutBatch` concatenates them in time/trajectory order and keeps object fields
+on CPU. Both learners validate all behavior in bounded CPU chunks and materialize
+only selected minibatches. Returns, references, selected indices and numerical
+invariants remain unchanged. Numerical incidents (schema 2) keep compact offsets,
+slots, capacity and distributions plus failing minibatch evidence. Recovery
+snapshots still occur only with empty pending/transition storage.
 
-The merged capacity regression test incorrectly required a schema-7 retained
-frame to equal schema 8 byte-for-byte. The receipt remains untouched; the test
-now requires the declared schema transition, changed fingerprint, exact remaining
-decision fields/offer identities, and exact current scalar/vector frame equality.
-Nondefault-buffer parity now includes v8 with both history layouts.
+The equal-rule fixture reproduced identical logits for two differently named
+public decklists before identity reached the object encoder. V8 now adds the
+same name vectors to public definition references before card/known-hand/decklist,
+continuation and history pooling. Raw program embeddings remain the candidate
+scorer's semantic input, avoiding a duplicate name addition. No hidden membership
+is inferred; native closed decklists remain zero. Definition-free names add no
+object identities. The finalized unreleased v8 checkpoint binding includes
+`naming_representation=public-identity-v1`; earlier v8 previews and changed
+names/order/definition joins fail before weights load. No warm-start migration.
 
-MTG-241's Task comment at 2026-11-04 20:45 UTC reports a new `FrameCompletion`
-owner and top-ordering obligation 27, with no policy version reservation yet.
-That work is not on main or incorporated here. Naming resumes the existing
-suspended frame and retains modal obligation 10, so no obligation-code collision
-is evident. Compatibility with the new completion owner remains unverified
-until ordinary Task sync; no parallel continuation implementation is needed.
+Schema 8 / capture 5 / state hash 16 remain the original Task transition.
+Historical capture 3/4 explicitly select schema 7 for read-only validation and
+preserve their original identity/digest. Schema 7 rejects new name references;
+live readers still require schema 8. Retained schema-7 replay fixtures now assert
+exact current scalar/vector frames and unchanged offers/decision fields, with
+only the declared schema/fingerprint transition excluded. Frozen files are intact.
 
-## Implemented behavior and evidence limits
+## Delete — do not maintain
 
-Implemented shared candidates/decision; v8 native scalar/vector/Python parity;
-complete name identity and learning-definition scoring; typed immutable
-`NameCandidate` exports; catalog-derived capacity;
-LLM/Academy stage presentation and reconnect; explicit checkpoint vocabulary
-binding. The controlled fixture combines the installed universe with 600
-Scryfall-identified names (928 distinct choices), without adding definitions.
-Native proofs cover rows 511/512, back faces, legality, exact forks, replay,
-stale rejection and fail-to-find. The policy proof gives every candidate positive
-support, distinguishes identities and improves the selected log probability in
-one bounded supervised gradient step. This is not a strength experiment.
+Completed: owned per-name effect branches and per-resolution sorting; batch-wide
+padded action networks; dense retained action/distribution padding; whole-rollout
+learning device expansion; stale tests demanding schema-7 bytes from schema 8.
+Removed `RolloutBatch.from_dense`: its two test fixtures now use the production
+`PackedActions.pack` entry point directly. Boolean/integer indexing already owns
+its NumPy output, so packing and pending object slices need no second copy.
+Inspection tests reuse one materialization or read retained object fields directly;
+the history fixture materializes only its selected row. No further deletion target
+remains in this design.
 
-Semantic Observation is schema 8, capture 5, state hash 16: public input joins
-and a shared vocabulary digest replace owned effect branches. Current w17
-conformance, authority, both parity receipts and Academy fixtures were refreshed;
-the authority's 135 Commands are byte-for-byte unchanged. Frozen evidence was
-untouched; the RUL-9 dependency was read from its artifact cache. Old semantic
-world bindings fail explicitly; historical tensor shapes/omissions remain fixed.
+The only dense scoring reference is `tests/model/naming_reference.py`, frozen
+from the published action computation for numerical checks. No production fallback
+or alternate learner was added. The scratch packing prototype is retained only
+in `.lf/logs/naming-risk/prototype-probe.py`.
 
-Prior focused model/client, native debug and rebuild results remain recorded at
-`5ac29cc12:scratch/mtg-243-naming.md` and `1e7dc47d4:scratch/mtg-243-naming.md`.
-The large-vocabulary native test injects a shared vocabulary into a real naming
-decision; Python scoring uses its corresponding observation projection. Vector
-stepping and Academy reconnect exercise the installed catalog. These are
-complementary checks, not an end-to-end 928-name Academy or vector-game proof.
+## Evidence and limitations
 
-Pre-reduction debug allocation attribution (not a speed threshold): catalog setup
-5,232 allocations / 1,863,512 bytes; naming decision 0 / 0; 928-action vector
-1 / 37,120; observation projection 1,880 / 154,583; encode into existing buffers
-5 / 792; naming fork 15 / 47,012; ordinary fork 15 / 10,404; ordinary fork+step
-393 / 41,980. One current-catalog CPU semantic forward (344 candidates, hidden
-width 8) took 19.5 ms before sharing its program table. Setup, projection, encoding, scoring and ordinary work are
-reported separately; no cross-runner performance claim. The focused
-`catalog_naming_cost_attribution` test with `benchmark` and one test thread
-provides bounded attribution. Final attribution is recorded under publication
-verification below; the same-runner CI comparison remains pending.
+Directed checks cover mixed naming/search/ordinary observations, sparse action
+coordinates, attention/FiLM on and off, values and parameter gradients, prepared
+inference, malformed joins, full compound naming support, exact storage/copy
+ownership, both loss gradients, bounded minibatch materialization, numerical
+incidents and native collector recovery. CI now selects the packed-action and
+hand-calculated credit tests explicitly. The original 928-name legality and
+policy-reachability fixtures remain; vector and Academy coverage use the installed
+catalog. There is still no single 928-name vector/Academy end-to-end proof: the
+large vocabulary is injected at the native test/model-fixture boundaries, not
+admitted as a production world.
 
-## Remaining work and review
+The equal-rule competency check changes only two installed encoder token rows,
+not native definitions or deck admission. Without the public identity join the
+paired logits are identical. With it, a two-example least-squares fit of the
+existing final linear head yields opposite preferences; gradients reach names
+and program tokens, reordering preserves preferences, and closing the differing
+decklists makes logits identical. A preceding 16-step Adam probe did not converge.
+This demonstrates representability, not SGD convergence, useful exploration,
+transfer, sample efficiency or game strength. The action-type-uniform reference
+still offers no relevance prior within a single naming action type.
 
-Publication verification below covers the complete debug Rust suite, Clippy/format
-checks, affected Python model/checkpoint and active-training suites, current-world
-arena admission and monitoring, Academy world/fixture checks and focused headless
-browser coverage. The full checkpoint path now rejects changed names, ordering
-and definition joins before loading weights. Engine Budget still requires the
-published PR's same-runner CI comparison; the changed hash contract needs an
-explained CI digest adoption while unchanged Commands stay exact. MTG-241
-continuation compatibility becomes relevant when its code is synced.
+### Bounded cost observations
 
-No product decision blocks the current catalog scope. Production admission of
-validated names without definitions and default adoption of v8 remain unaccepted
-future choices; neither is required to deliver this explicit-version implementation.
+`uv run --extra dev python scratch/naming-risk-probe.py` compares the published
+Python model against this implementation on the same four real observations,
+one CPU thread, width 16, attention + FiLM, one warmup and three measured passes.
+No optimizer, stress workload, oversized allocation or training experiment.
+Results are in `scratch/naming-risk-results.json`. Native paths affected only by
+the historical reader change are reported as current attribution, not a speedup.
 
-Check: `uv run --extra dev pytest tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py tests/model/test_catalog_naming.py -q` — 71 passed; Ruff and `git diff --check` passed. Full gate/CI validation remains pending.
+Legal supports are [344, 21, 4, 4]: action networks process 373 rows rather than
+1,376 (2,048 with interior padding). Action/distribution storage is 237,568 →
+43,308 bytes (81.8% less); including unchanged object fields, 620,480 → 426,220
+bytes (31.3% less). Live observation buffers still occupy 604,096 bytes for these
+four rows. Dense output logits and minibatch axes still scale with vocabulary.
 
-Publication remains pending at the Graph's delivery step, followed by interactive
-review. No merge, auto-merge or training experiment was performed.
+Elapsed milliseconds, median [min, max] of three observations:
 
-## Concept review — 2026-11-04
-
-Outcome: nothing to change in the design and no open product choice within the
-accepted Task scope. This is a headless review against Jack Heart's supplied
-directive, not new approval or a delivery decision. No next implementation
-direction is required. The review page is `scratch/concept-review.html`.
-
-The experience is one deliberate name selection followed by the existing private
-search. For The Rise of Sozin, choose `Name Gray Ogre`, select matching cards as
-offered, then use `Stop searching and shuffle` if stopping early. Academy's
-existing `Find an action` filter narrows the displayed offers and can be cleared;
-it neither submits a name nor changes the legal support. The LLM and policy
-choose from that same native support. A name denotes public vocabulary, not an
-opponent card, a deck entry, or evidence that the opponent owns that card.
-
-The consequential former mismatch was a simple name choice represented as a
-separate owned effect program for every candidate, with fixed policy capacity.
-The implemented shared vocabulary and explicit v8 resolve that mismatch without
-adding a search/confirmation protocol to the game. Retain `ChooseMode` as the
-compatible Command representation; the native `NameCard` decision and visible
-`Name a card` stage already give it the specific meaning people need. Replacing
-the wire verb would create migration work without improving this interaction.
-
-Across layers, `ContentPack::name_candidates` owns the immutable sorted names;
-`Decision::NameCard` retains their shared vocabulary, chooser and count. A bound
-Command selects a candidate and resumes the suspended frame with one
-`ExileNamed`. `SearchNamed` continues to own remaining selections and inspection
-permission. V8 carries categorical name identity plus an optional learning
-definition join; neither consumes a physical card slot. State identity records
-the vocabulary digest, and checkpoint admission binds its ordering and joins.
-The existing server session and Command recovery own reconnect; no browser name
-draft or second recovery lifecycle is needed. Public catalog knowledge must
-remain distinct from private zone membership under closed disclosure.
-
-Failure and recovery preserve the committed boundary: disconnect before naming
-returns the pending naming offers; disconnect during search returns its remaining
-choices and authorized inspection. Retrying an accepted Command is idempotent;
-a newly identified stale submission is rejected without changing state. Stopping
-search ends inspection but retains already exiled cards. It is not undo or a
-return to naming. A mismatched vocabulary checkpoint must fail admission; it
-cannot silently reinterpret row identities. Explicit v8 adoption supplies complete
-policy support; keeping fresh v6 defaults is an accepted compatibility boundary,
-not an assertion that v6 supplies complete naming beyond its capacity.
-
-Counterexamples that would invalidate this conclusion: a candidate beyond row
-511 has no legal policy score; filtering/reconnect loses its original Command
-binding; public candidate definitions reveal hidden card membership; stop/retry
-reverses an exile or repeats it; or a changed vocabulary loads an old name-vector
-mapping. The existing directed tests cover parts of these contracts, not a
-single end-to-end large-catalog proof. Keep the already-listed gate obligations,
-especially full checkpoint vocabulary-mismatch admission, headless Academy
-coverage, final allocation attribution and same-runner Engine Budget. This review
-read code and tests; it did not rerun them or establish final performance.
-
-Existing usage guidance in `docs/training.md#catalog-naming-input` and the package
-READMEs already describes the selected experience and compatibility boundaries;
-no usage or skill rewrite is needed. No proposed behavior is being promoted to
-implemented behavior. Future questions remain outside this Task: which validated
-names without definitions should production admit, and when should v8 become
-the fresh default? Neither choice is needed for the authorized explicit-version,
-real-catalog outcome. No publication, merge or training authorization is added.
-
-## Publication verification — 2026-11-04
-
-`lf sync` completed cleanly against `8e8d702f8`, checkpointing the preceding
-review/reconciliation edits as `c755e7e1c`. Publication review added full portable
-v8 checkpoint coverage: exact restored scores and rejection of changed names,
-ordering or definition joins before weights load, even with identical shapes.
-It also formatted the changed Python action helper.
-
-The affected Python run covered all `tests/model/`, observation/cutoff/buffer
-parity, active training, current-world arena admission and monitoring, Academy
-named-search reconnect, choice navigation, Learn setup and both parity receipts.
-It produced 428 passes, one skip and one stale authored-source receipt failure.
-Both parity receipts were then rebuilt with an assertion that every non-source
-field remained exact; only `identity.relevant_source` changed. Both source
-manifests now match this checkout. The original authority's 135 Commands remain
-byte-for-byte unchanged against main; frozen evidence was not rewritten.
-
-Other completed checks: full optimized-debug Cargo suite (970 passed, two
-ignored), Cargo fmt and all-target/all-feature Clippy, Ruff check/format on all
-17 changed Python files, all nine focused naming/checkpoint tests, four Academy
-decision-label unit tests, Svelte check (zero errors/warnings), production build,
-and eight isolated headless choice-navigation/trigger-order tests. Browser
-servers were reaped and their ports have no listeners. Logs remain local under
-`.lf/logs/naming-publish/`.
-
-Final bounded optimized-debug allocation attribution (allocations / bytes):
-
-| Operation | Allocations | Bytes |
+| Phase | Published 9db184b9 | Retained |
 | --- | ---: | ---: |
-| Catalog setup | 5,197 | 1,830,552 |
-| 928-name validated vocabulary setup | 5,286 | 799,455 |
-| Shared naming decision | 0 | 0 |
-| Naming action space | 1 | 37,120 |
-| Naming observation | 1,880 | 154,583 |
-| Encode into existing buffers | 5 | 792 |
-| Naming search fork | 15 | 47,012 |
-| Ordinary search fork | 15 | 10,404 |
-| Ordinary fork and step | 393 | 41,980 |
+| Full forward | 96.754 [24.060, 133.317] | 28.311 [20.172, 41.945] |
+| Backward only | 793.138 [690.672, 886.133] | 554.426 [417.337, 656.149] |
+| Forward + backward | 843.185 [539.592, 983.388] | 810.091 [771.600, 887.931] |
+| Action networks | 0.796 [0.639, 1.210] | 0.389 [0.370, 0.390] |
 
-The focused semantic scoring check measured 30.5 ms for one CPU forward with
-344 installed candidates and width 8; its test also verifies gradients reach
-the definition program. These are single bounded observations, with other
-validation running, not speed thresholds or before/after performance claims.
-The full same-runner Engine Budget and any explained digest adoption require
-published CI and remain pending. Full release browser coverage also remains
-for CI; the local browser proof covered eight affected interactions. Large
-vocabulary native legality and policy scoring remain complementary fixtures,
-not a single 928-name vector/Academy end-to-end proof. MTG-241 has not landed on
-main and its completion interface is still outside this synchronized change.
+These timings are variable and establish no end-to-end throughput improvement.
+Before the relation-copy refinement, the first pass observed forward 23.368 →
+21.835 ms and forward+backward 305.510 → 307.333 ms; action networks were then
+0.561 → 0.661 ms. Preserve that contrary evidence rather than treating the later
+samples as an established speedup. Full program encoding/backprop remains the
+principal measured cost. Model setup medians are 34.081 → 31.682 ms after warmup.
 
-After the fingerprint refresh, `tests/academy/test_authored_match_parity.py`
-passed all three tests. Local publication checks are complete. Publication is
-for interactive review only; it does not authorize merge or auto-merge.
+The installed catalog has 356 executable definitions, 41,892 expanded tokens
+and a 713-token maximum program. Ordinary/naming subsets request 4 / 344
+programs (190 / 41,159 tokens). The final program-encoding medians are
+0.999 / 39.977 ms before and 1.079 / 70.980 ms after, with wide sample variation
+and unchanged program computation. The 928-name fixture adds mostly names
+without programs; it is not a 928-program measurement. CPU is the configured
+probe target; CUDA is unavailable and available MPS was not exercised. GPU
+correctness, peak memory and intended-size learner throughput remain unmeasured.
+Current native projection, encoding, fork and decision-projection samples, and
+packing/materialization times, are recorded separately in the JSON.
+
+Published CI run `41914195610` passed Engine Budget with unchanged digests:
+search 116.194 → 121.779 s (+4.8%), worst reply 3.417 → 3.621 s (+6.0%),
+steps 18,749.7 → 17,511.8/s (−6.6%). Its reference is `ea316ff14`, not this PR's
+immediate base `8e8d702f8`; do not attribute its whole delta to naming. The new
+head still requires CI. Prior native allocation attribution remains at the
+published design reference above; no naming-engine algorithm changed this pass.
+
+## Remaining Graph work
+
+No product decision blocks the installed-catalog scope. Gate owns affected
+model/training/recovery suites, package boundaries, current-world admission,
+full debug Rust/Clippy, Academy/browser coverage and any current-source receipt
+refresh. Frozen evidence must remain untouched. Release extension rebuilt and
+atomically installed; the focused native decoder test passes with debug guards.
+All five published CI failure cases pass locally in focused checks.
+
+Check: `uv run --extra dev pytest tests/training/test_packed_action_rollouts.py tests/training/test_rl_objectives.py tests/training/test_regimes.py::test_named_treatments_execute_real_optimizer_batches tests/training/test_collection.py tests/training/test_two_seat_learning.py tests/training/test_action_cutoff.py tests/training/test_credit_assignment.py tests/training/test_game_errors.py tests/training/test_numerical_health.py::test_extreme_real_collector_to_learner tests/training/test_numerical_health.py::test_failed_update_retains_state_and_excludes_prior_overhead tests/model/test_recent_events.py -q` — 110 passed, 1 skipped; Ruff and diff checks passed. Full affected suites and acceptance checks remain with gate.
+
+Publication should update PR #424 with compact storage/scoring, the reproduced
+identity gap and its fix, these measured costs and limitations, then stop at
+interactive review. `scratch/naming-risks.html` holds the current risk assessment;
+`pr-review.html` retains the prior source walkthrough with an update notice.
+No merge, auto-merge or experiment occurred. Local HTML/screenshots remain review
+artifacts rather than product source; updated pages have no new rendering proof.
+
+MTG-241 remains a separate continuation owner. Its reported FrameCompletion,
+top ordering code 27 and SelectCards code 28 do not collide with naming's modal
+obligation 10. That code is not synced here; compatibility awaits ordinary sync.
+Production admission of extra validated names and default adoption of v8 remain
+separate future decisions. The current universe includes real back-face names
+but does not claim all legal Magic names or change deck admission.

@@ -77,7 +77,10 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
     batch = collector.collect(agent, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
+    obs = {
+        key: torch.from_numpy(value[0])
+        for key, value in batch.observations().observation.items()
+    }
     state = agent._gather_object_embeddings(obs)
     objects, owners, valid = state.objects, state.is_agent, state.validity
     encoded = agent._attend_objects(objects, owners, valid)
@@ -143,7 +146,10 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
         agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
     batch = collector.collect(agent, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
+    obs = {
+        key: torch.from_numpy(value[0])
+        for key, value in batch.observations().observation.items()
+    }
     expected = agent.forward_distribution(obs)
     changed = {key: value.clone() for key, value in obs.items()}
     for key in (
@@ -166,10 +172,12 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
         objects, owners, valid = state.objects, state.is_agent, state.validity
         post = agent.attention(objects, owners, valid == 0)
         value = agent.value_head(post)
-        logits = agent.policy_head(
-            agent._gather_informed_actions(obs, post, state)
+        batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
+        scores = agent.policy_head(
+            agent._gather_informed_actions(obs, post, state, batches, slots)
         ).squeeze(-1)
-        logits = logits.masked_fill(obs["actions_valid"] == 0, -1e8)
+        logits = scores.new_full(obs["actions_valid"].shape, -1e8)
+        logits[batches, slots] = scores
         torch.testing.assert_close(expected[0], logits, rtol=0, atol=0)
         torch.testing.assert_close(expected[1], value, rtol=0, atol=0)
     else:

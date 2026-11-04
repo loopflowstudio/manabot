@@ -55,7 +55,10 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
         "ordinary semantic collection must retain past public events"
     )
     step = int(nonempty[-1])
-    return {key: torch.from_numpy(value[step]) for key, value in batch.obs.items()}
+    return {
+        key: torch.from_numpy(value)
+        for key, value in batch.observations(np.array([step])).observation.items()
+    }
 
 
 @pytest.mark.parametrize("attention", [False, True])
