@@ -174,3 +174,31 @@ acceptance boundary; this review changes no implementation direction.
 ## Wave memory
 
 The code Graph's realign step records the accepted one-catalog direction and reusable payment/search, retained-state and sync-ordinal lessons in `.lf/wave/engine/MEMORY.md`. T6 remains pending review; focused evidence does not establish final acceptance. Engine has no immediate child memory directories in this checkout.
+
+## Publication verification — 2026-11-03
+
+`lf sync` completed cleanly against main `c823c9c8f`, checkpointing the supplied
+reconciliation/concept-review edits as `d6e7ec078`. The accepted production
+implementation is unchanged from `a82a963aa`; no native rebuild or receipt
+refresh was needed in this pass.
+
+The previously outstanding retained-session search proof now passes in
+`tests/academy/test_named_search_recovery.py`, included in Academy Integration.
+It reaches Sozin chapter II through ordinary WebSocket Commands, exiles one
+card, reconnects with the same frame and remaining three-card budget, and
+checks chooser-only inspection. Duplicate retry and a stale new Command leave
+the state and event count unchanged. Stopping early keeps the selected card
+exiled and ends inspection visibility. This proves retained live-session
+recovery, not process-crash persistence.
+
+Validation: 77 tests passed across named-search recovery, optional-payment
+recovery, choice navigation, Elemental launcher, forced-step automation, CI
+selection and release configuration. Ruff formatting/checks and
+`git diff --check` passed. Logs: `.runs/t6-publication/search-recovery-suite.log`.
+Earlier native, learner, protocol, receipt and UI results remain applicable to
+their unchanged inputs. CI `41747957440` at `a82a963aa` was cancelled after
+Python unit, semantic and clean-machine successes; it was not a full-head pass.
+The sync started `41748514307`, still in progress during this verification;
+publication will start a new run for the test/CI-wiring change. Final-head CI
+remains pending and must not be described as green. Publish one ready PR for
+Jack Heart's review; no auto-merge, landing or Task completion is authorized.
