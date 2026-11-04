@@ -40,7 +40,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "elemental",
         "mtg183-elemental-eval",
         "seat_comparison",
-        "tla_pilot_v7",
+        "tla_pilot_v8",
         "two_seat",
     }
 

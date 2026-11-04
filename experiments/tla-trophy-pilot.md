@@ -46,8 +46,8 @@ matches; native scalar, vector and Python encoders all reject the same 256
 offered actions at capacity 64. A diagnostic 512 configuration retains all 256
 in Python, but the frozen native buffer path still enforces 64. This is evidence
 that a configuration-only retry is insufficient, not a new pilot selection.
-A new prospective action-capacity contract is needed before further paid
-training; executed v5 evidence remains frozen. Compared with Elemental, this
+The prospective v7 contract below binds both the buffer repair and the later
+X-cost rules repair; executed v5 evidence remains frozen. Compared with Elemental, this
 pilot now establishes GPU execution on trophy pairs, but supplies no trained policy for a
 learning-gain or cost-to-strength comparison. Different hardware, input size and
 population also prevent interpreting raw throughput as a controlled comparison.
@@ -377,3 +377,18 @@ configured RunPod L4 alternative reported no available machines. No new cost,
 initialization result or trained-policy result exists. Continuation needs
 compatible capacity under the unchanged <=$1/$10 limits; the scientific
 acceptance remains unfinished.
+
+## Prospective v8: explicit legal-action cutoff (2026-11-04)
+
+Jack Heart selected 64 action slots with deterministic first 64 legal actions and
+logging (comment 3b0f8826). The [v8 protocol](protocols/tla-trophy-213-v8.md) binds
+that approximation for training and learned-policy evaluation, preserving input-v7
+shared effects, 128 cards, 134 decks, recipe and budgets. Prepared v7 Run
+`af3661790ac5` remains unsubmitted and is superseded. No v8 training or evaluation
+result is claimed by this implementation update.
+
+Directed native checks establish that ordinary Wan Shi Tong with seven untapped
+basics offers/payments match X=0..5, while direct X=6/255 submissions reject with
+the complete rules-state witness unchanged. Airbend and any-type-mana casts
+also reject unavailable X. Prefix tests preserve original native Command mapping,
+scalar/vector/Python parity, masks, collection and bounded replay diagnostics.

@@ -162,8 +162,10 @@ impl PyVectorEnv {
             .collect())
     }
 
-    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>) -> PyResult<()> {
-        let config = input_buffer_config(&buffers)?;
+    #[pyo3(signature = (buffers, action_overflow="error"))]
+    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, action_overflow: &str) -> PyResult<()> {
+        let mut config = input_buffer_config(&buffers)?;
+        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
         let buffers = read_observation_buffers(&buffers, self.num_envs, &config)?;
         self.config = config;
         self.buffers = Some(buffers);
@@ -275,6 +277,10 @@ impl PyVectorEnv {
 
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
+    }
+
+    fn current_action_summaries(&self) -> Vec<(usize, String)> {
+        self.inner.current_action_summaries()
     }
 
     #[pyo3(signature = (active=None))]

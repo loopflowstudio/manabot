@@ -4169,19 +4169,31 @@ impl PyEnv {
         Ok(out.into_any().unbind())
     }
 
+    #[pyo3(signature = (obs, out, action_overflow="error"))]
     fn encode_observation_into(
         &self,
         py: Python<'_>,
         obs: PyObservation,
         out: Bound<'_, PyDict>,
+        action_overflow: &str,
     ) -> PyResult<()> {
         let rust_obs = Observation::from(obs);
-        let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
+        let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
+        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(signature = (count, capacity, action_overflow="error"))]
+fn policy_action_count(count: usize, capacity: usize, action_overflow: &str) -> PyResult<usize> {
+    let overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+    crate::agent::observation_encoder::policy_action_count(count, capacity, overflow)
+        .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 #[cfg(feature = "python")]
@@ -4443,6 +4455,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
+    m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<crate::agent::continuation::VisibleReference>()?;

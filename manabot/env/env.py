@@ -20,17 +20,22 @@ import managym
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
 from .match import Match, Reward
-from .observation import ObservationSpace
+from .observation import ObservationEncoder, ObservationSpace
 
 
 def add_truncation_flags(
     raw_obs: managym.Observation,
     info: dict[str, Any],
-    encoder: Any,
+    encoder: ObservationEncoder,
 ) -> None:
     info["action_space_truncated"] = (
         len(raw_obs.action_space.actions) > encoder.max_actions
+        and encoder.config.action_overflow == "error"
     )
+    if encoder.config.action_overflow == "first-legal":
+        info["policy_action_cutoff"] = max(
+            0, len(raw_obs.action_space.actions) - encoder.max_actions
+        )
     info["card_space_truncated"] = (
         len(raw_obs.agent_cards) > encoder.cards_per_player
         or len(raw_obs.opponent_cards) > encoder.cards_per_player
@@ -147,6 +152,7 @@ class Env(gym.Env):
             info: Additional debug info from managym, e.g. partial game logs.
         """
         log = getLogger(__name__).getChild("step")
+        self._record_policy_actions()
         raw_obs, raw_reward, terminated, truncated, info = self._capture.step(
             self._engine, action
         )
@@ -179,6 +185,7 @@ class Env(gym.Env):
         next-actor observation and canonical transition receipt.
         """
 
+        self._record_policy_actions()
         try:
             transition_json, raw_obs, raw_reward, terminated, truncated, info = (
                 self._capture.command(
@@ -255,8 +262,19 @@ class Env(gym.Env):
         """Trivial decision points auto-collapsed since the current game began."""
         return self._engine.skip_trivial_count()
 
-    def close(self):
-        pass
+    def _record_policy_actions(self) -> None:
+        config = self.obs_space.encoder.config
+        if config.action_overflow == "first-legal":
+            self._capture.inputs.frame = self._engine.semantic_decision_frame_json()
+            self._capture.record_policy_actions(
+                len(self._last_obs.action_space.actions),
+                str(self._last_obs.action_space.action_space_type),
+                config.max_actions,
+                self._capture.inputs,
+            )
+
+    def close(self) -> None:
+        self._capture.flush_policy_actions()
 
     @property
     def last_raw_obs(self):

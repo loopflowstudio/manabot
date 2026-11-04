@@ -133,7 +133,11 @@ checkpoints or experiment evidence.
   Companion shapes must agree before writes. Event width selects legacy events
   or public history; only public history has the 32-row bound. Relation and
   shared-effect axes stay version-fixed. Never replace a supplied capacity with
-  a native default or truncate legal choices to make it fit.
+  a native default. Overflow rejects by default. Jack Heart's 2026-11-04 TLA
+  pilot exception explicitly selects `action_overflow=first-legal` with 64
+  policy slots and aggregate replay-linked diagnostics; native legality and
+  Academy retain all choices. Preserve prefix indices/Commands and frozen
+  configurations; an omitted overflow policy still means error.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.

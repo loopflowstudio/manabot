@@ -135,3 +135,17 @@ the configured L4 alternative refused actual capacity. No new spending or
 scoring occurred. The continuation note owns dated inventory/cost receipts and
 remaining acceptance. Do not re-freeze the prepared Run onto later documentation
 commits or reuse the unsubmitted, pre-rules-repair v6 Run.
+
+## Explicit first-64 pilot — 2026-11-04 UTC
+
+Jack Heart's steer 3b0f8826 supersedes 512-action v7: use deterministic first 64
+legal native actions with replay-linked overflow diagnostics in training and
+evaluation. This is an explicit policy approximation, preserving complete native
+and Academy authority and original index/Command identities. V8's serialized
+configuration and protocol bind it; prepared v7 must not launch. Earlier
+exploratory steers d5dfad91/d47cb28b did not select a method; 3b0f8826 does.
+
+Reversible interpretation: the fixed heuristic baseline retains its established
+full native policy. Learned candidate and initialization-anchor policies both
+use the declared 64-slot cutoff. Evaluation reports measure observation cutoff
+frequency and retain the full game trace; no baseline redesign was requested.
