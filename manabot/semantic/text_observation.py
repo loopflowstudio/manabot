@@ -195,6 +195,9 @@ _OBLIGATIONS = (
     "retarget",
     "surveil",
     "order library bottom",
+    "choose optional payment X",
+    "search named cards",
+    "choose a permanent to exile",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -209,8 +212,10 @@ _DELAYED_EVENTS = (
     "the watched object to die",
     "the watched object to die or be exiled",
     "a creature to die",
-    "the next end step",
-    "its controller's next matching spell",
+    "the end step",
+    "its controller's matching spell",
+    "the upkeep",
+    "its controller's end step",
 )
 
 
@@ -255,6 +260,12 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
         parts.append("had a land enter under their control")
     if count := history.cards_drawn:
         parts.append(f"drew {count} card{'' if count == 1 else 's'}")
+    if history.bent:
+        kinds = ("water", "earth", "fire", "air")
+        bent = ", ".join(
+            kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
+        )
+        parts.append(f"bent {bent}")
     return "; ".join(parts)
 
 
@@ -340,6 +351,9 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "NoMaximumHandSize": "no maximum hand size",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
+        "HasAbilitiesOfSource": (
+            f"has the activated and triggered abilities of {effect.source_name}"
+        ),
     }
     try:
         return phrases[modification]
@@ -513,21 +527,44 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
         if relation.parent is not None:
             details.append(f"parent R{relation.parent + 1}")
-        details += _selectors(relation.mode, relation.ability)
+        if relation.kind == 6 and relation.decision == 25:
+            details.append(f"may exile up to {relation.mode} more cards")
+        elif relation.kind == 11:
+            details.append(f"scheduled turn {(relation.mode or 0) + 1}")
+        elif relation.kind == 12:
+            details.append(
+                "current combat"
+                if relation.mode == 0
+                else f"queued combat {relation.mode}"
+            )
+        else:
+            details += _selectors(relation.mode, relation.ability)
+        if relation.x:
+            details.append(f"X = {relation.x}")
         if relation.kicked:
             details.append("kicker included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision:
             details.append(_frame_decision(relation.kind, relation.decision))
-        if relation.kind == 10 and relation.this_turn:
-            details.append("ends at this turn's cleanup if it has not triggered")
+        if relation.kind == 10:
+            if relation.delayed_frequency is not None:
+                details.append(
+                    "fires once; consumed on matching event"
+                    if relation.delayed_frequency == 1
+                    else "fires on each matching event"
+                )
+            details.append(
+                "waiting ends at this turn's cleanup"
+                if relation.this_turn
+                else "no stated expiry"
+            )
         if relation.cost is not None:
             details.append(
                 "remaining cost "
@@ -553,9 +590,21 @@ class _Renderer:
         if relation.context is not None:
             label = "watching" if relation.kind == 10 else "trigger context"
             details.append(f"{label} {self.fact_reference(relation.context)}")
+        for reference in relation.remembered:
+            details.append(f"remembered {self.fact_reference(reference)}")
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)
+            )
+        if relation.inherited_from is not None:
+            details.append(
+                f"source inherits abilities from {self.fact_reference(relation.inherited_from)}"
+            )
+        if relation.attackers is not None:
+            details.append(f"only {relation.attackers} may attack")
+        if relation.source_transforms:
+            details.append(
+                f"source transform count at activation/trigger {relation.source_transforms}"
             )
         if relation.resolutions_this_turn:
             details.append(
@@ -627,6 +676,15 @@ class _Renderer:
                 lines.append("Keeps unspent red mana until end of turn.")
             if history := _turn_history(player.turn_history):
                 lines.append(f"This turn: {history}.")
+            if player.extra_turns:
+                lines.append(
+                    f"Will take {player.extra_turns} extra turn(s) after this one."
+                )
+            if player.additional_combats:
+                lines.append(
+                    f"Has {player.additional_combats} additional combat phase(s) "
+                    "still to come this turn."
+                )
             if state.shared_effects is None:
                 for effect in player.effects:
                     lines.append(f"Effect: {self._effect(effect)}.")
@@ -705,6 +763,8 @@ class _Renderer:
         ]
         if permission.this_turn:
             terms.append("this turn only")
+        if permission.through_next_turn:
+            terms.append("until the end of their next turn")
         if permission.own_turn_only:
             terms.append("during their own turn only")
         if permission.after_turn is not None:
@@ -776,6 +836,8 @@ class _Renderer:
             parts.append(f"blocking {self.name(permanent.blocking)}")
         if permanent.abilities_lost:
             parts.append("has lost all abilities")
+        if permanent.transforms:
+            parts.append(f"transformed {permanent.transforms} times")
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
@@ -895,7 +957,17 @@ class _Renderer:
             raise TextEncodingError("incomplete action/offer binding")
         if len({offer["id"] for offer in frame.offers}) != len(frame.offers):
             raise TextEncodingError("duplicate offer identity")
-        if any(card.zone == 1 for card in state.opponent_cards):
+        searching_opponent = any(
+            relation.kind == 6
+            and relation.decision == 25
+            and relation.controller == state.agent.player_index
+            and relation.context is not None
+            and relation.context.player == state.opponent.player_index
+            for relation in capture.frames
+        )
+        if not searching_opponent and any(
+            card.zone == 1 for card in state.opponent_cards
+        ):
             raise TextEncodingError("opponent hand identity in capture")
         lines = [
             "You are choosing one legal action in the current game.",

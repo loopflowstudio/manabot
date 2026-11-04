@@ -38,12 +38,9 @@ class AuthoredMatchup(StrictModel):
         return _deck_pair((self.role_a, self.role_b), leg)
 
     def match(self, leg: int = 0) -> MatchConfig:
-        setup = MatchConfig.authored(
+        return MatchConfig.authored(
             self.pack_key, *self.decks(leg), hero="arena-seat-0", villain="arena-seat-1"
         )
-        # Research packs can register more than two decks, so the cross pair
-        # also needs explicit selection. Native membership checks still apply.
-        return setup.model_copy(update={"world": self.pack_key})
 
 
 class DeckMatchup(StrictModel):

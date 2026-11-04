@@ -72,7 +72,7 @@ pub struct SharedEffectData {
 pub fn project(game: &Game) -> Vec<SharedEffectData> {
     let mut shared: Vec<SharedEffectData> = Vec::new();
     for (order, record) in game.state.effects.iter().enumerate() {
-        let effect = ContinuousEffectData::new(game, record);
+        let effect = ContinuousEffectData::new(record);
         let controller_id = game.state.players[record.controller.0].id.0 as i32;
         let source = record
             .source_object

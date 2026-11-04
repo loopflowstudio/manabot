@@ -74,9 +74,10 @@ it met the competence thresholds on both seeds within 7 minutes on an RTX 5090, 
 full run takes about 13 minutes versus about 110 at four streams; larger models showed no advantage at this
 horizon. The regime is that study's exact tested recipe; it requires CUDA.
 
-Build named curated matches with `MatchConfig.authored(pack_key, hero_deck,
-villain_deck)` so both main decks and sideboards come from managym's compiled
-setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
+Build named curated matches with `MatchConfig.authored(setup, hero_deck,
+villain_deck)` (a preset or its `pack_key`) so both main decks and sideboards
+come from managym's authored setup; like every match, it runs on the world's one
+catalog. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `MatchConfig.decklists` is `"open"` (default:
 both players know each other's main deck and sideboard) or `"closed"`; search
 players cannot play closed matches. `Match.swapped()` moves both lists together;
@@ -134,8 +135,8 @@ weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
-For the compiled Allies/Lessons matchup, use
-`ModelConfig(world="ur-lessons-vs-gw-allies")`. The ordinary model joins
+For the semantic card model, use `ModelConfig(world="world")`. The ordinary
+model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots, and v5 `decklists` rows hold
@@ -299,7 +300,7 @@ artifacts. CPU correctness does not imply CUDA validation or improved play.
 
 For exploratory same-deck checkpoint play, the [head-to-head runner](../experiments/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
 accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
-roster decks/sideboards and carries their compiled content pack through replay;
+roster decks/sideboards and carries them through replay;
 it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
@@ -342,12 +343,13 @@ padded token count. Referenced definitions are expanded into the parent sequence
 The embedding runs over the padded array; the packed GRU skips padding. These
 counts describe representation cost, not observed learning difficulty.
 
-`manabot.semantic.policy_catalog` owns explicit native/IR admission. Policy
-construction checks compiled pack, IR and source hashes and complete native
-coverage before joining transport IDs. The selected product catalog remains the
-only registered policy catalog; research catalogs need their own checked IR and
-schema admission. In particular, the native Jeong increment alone is not policy
-admission: its `Rebel` subtype is absent from the current learning schema.
+`manabot.semantic.policy_catalog` owns explicit native admission. Policy
+construction checks the engine's learning catalog against the world pool's
+content digest and complete native coverage before joining transport IDs. A
+policy has one vocabulary, the world's catalog: fresh recipes write
+`ModelConfig(world="world")`, and the older labels in
+`FROZEN_VOCABULARY_LABELS` are accepted on read, unchanged, because frozen
+recipes and architecture receipts record them.
 
 ### Explicit research evaluation matrices
 
@@ -358,7 +360,7 @@ seat assignments. The training match must equal `matrix.match()`; arbitrary
 renaming or substituting a different setup fails admission. Simple roles retain
 their own names, never Allies/Lessons labels.
 
-The simulator records the actual decks, explicit content pack and Commands;
+The simulator records the actual decks and Commands;
 its ordinary replay checks still apply. The matrix identity is separate from
 the historical selected-world suite. Omitting it preserves existing selected
 protocol serialization. A native authored roster does not itself admit a neural

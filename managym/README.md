@@ -45,8 +45,9 @@ structured offers and proposed events; conformance fixtures live under
 superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
 and the w2-182/198/199 benchmark reports under `experiments/`).
 
-Authored setups come from `AuthoredPack::player_config` (Python:
-`managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
+Authored setups come from `AuthoredSetup::player_config` (Python:
+`managym.authored_deck_setup(setup, deck_key)`, naming the setup by preset or
+by the `pack_key` frozen evidence records). Carry that complete config
 when swapping seats or rebuilding roots: deck and sideboard together identify
 an authored setup. `PlayerConfig::new` intentionally gives custom setups an
 empty sideboard; it does not infer one from card names or a matching main deck.
@@ -81,6 +82,24 @@ Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
+
+Delayed abilities compose event matching, frequency, expiry, captured subjects
+and effects. `CreateDelayedTrigger.event` only matches the event;
+`DelayedFrequency::Once` consumes its watcher on the first match, even if the
+occurrence is countered or later does nothing. `EachMatch` keeps waiting until
+`DelayedExpiry::ThisTurn` removes the watcher at cleanup, or `Never` supplies no
+stated expiry. Exact-object death watchers retire when the watched incarnation
+leaves, regardless of frequency. Expiry removes waiting watchers, never queued
+or stacked occurrences. No printed trigger vocabulary is migrated.
+`CreateDelayedTrigger.remember` resolves an ordinary `ObjectSelector` when the
+ability is created. Its exact incarnations travel through placement, stack and
+suspended resolution; `ObjectSelector::Remembered` never follows a departed
+object into a new incarnation. Event context (such as the spell just cast) stays
+separate. End-step timing can wait for either player's step or the controller's,
+independently of what was captured. Viewer-safe v5/v6 relations and text expose
+the remembered references, expiry and frequency. Relation row kind 9 carries
+frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
+Missing historical frequency is unknown. Widths and existing meanings stay fixed; earlier input versions retain their exclusions.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
 not a set of revealed physical cards. Search forks by full clone: clone the
@@ -147,7 +166,7 @@ Prefer explicit types and focused modules. Keep game behavior in enums +
 Bounded observation encoders reserve card rows after the owner's visible cards
 for outside candidates. Their seven zone bits stay zero and the explicit outside
 bit is set; action focus uses the same padded object table as the model. The
-current default has 64 action rows. Card, permanent, action and focus capacity
+current default has 512 action rows. Card, permanent, action and focus capacity
 excesses raise encoding errors; they must not be treated as a random-policy
 fallback. Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
@@ -156,15 +175,15 @@ The optional [policy-history v1 projection](../docs/training.md#policy-inputs) i
 derived suffix updated at the native event append. Observation reads share it;
 clone and diagnostic injection must preserve its documented lifecycle.
 
-`PlayerConfig.world` explicitly selects what a match runs on. Both seats
-must name the same value. An authored pack key runs only that pack's own
-setups. `"world"` (`managym.WORLD_SETUP`, set by `Deck.player()`) submits the
-decks to the installed world: each must pass `development-v1` admission against
-the world's supported cards (see [decklist import](../docs/decklist-import.md)).
-Unknown packs or partial bindings fail reset. Omitting it preserves exact-pair
-selection.
-Python `MatchHypers.authored` carries this binding for same-deck matches so replay
-cannot silently use generic card definitions.
+Every match, authored or not, runs on the world's one catalog
+(`cards::content_pack::default_content_pack`): every set-file definition in name
+order, so authored setups are decklists over the world pool, not packs.
+`PlayerConfig.submitted` (Python: `world="world"`, `managym.WORLD_SETUP`, set by
+`Deck.player()`) submits a deck to the installed world: it must pass
+`development-v1` admission against the world's supported cards (see [decklist
+import](../docs/decklist-import.md)) or reset fails. Fixed setups and tests leave
+it unset and run as given without submitted-deck construction checks.
+Any other `world` value is rejected: authored content packs are retired.
 
 Mana feasibility and production share typed costs and pools. `Mana.lesson`
 retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
@@ -188,6 +207,11 @@ legendary status in observations; canonical hashing includes their copied data.
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/rules/optional-payments.md)
 covers both ordinary mana and waterbend without a card-specific decision.
+`OptionalManaPaymentX` first chooses an affordable X, then uses the same payment
+progress. Its `WhenYouDo` branch creates a distinct occurrence retaining X;
+`TargetRequirement.total_mana_value_x` bounds the whole chosen clause, including
+retargeting. Named searches retain native permission to inspect the searched
+zones only during the instruction; semantic capture uses that permission too.
 
 Mana offers, waterbend affordability and automatic production use executable
 witnesses from `flow/mana.rs`. A mana source is reserved while its printed

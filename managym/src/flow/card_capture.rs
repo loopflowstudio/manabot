@@ -2,6 +2,7 @@
 // Private evaluation facts at setup and committed zone moves; no rule events or RNG.
 
 use crate::{
+    cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
         game_object::{CardId, PlayerId},
@@ -72,7 +73,7 @@ impl CardCapture {
     pub(crate) fn new(game: &Game) -> Self {
         Self {
             version: 1,
-            content_digest: game.state.content.content_digest(),
+            content_digest: default_content_pack().content_digest(),
             initial: snapshots(game),
             opening: std::array::from_fn(|seat| {
                 game.state

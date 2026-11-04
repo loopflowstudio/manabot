@@ -5,14 +5,12 @@ use std::{
     cell::RefCell,
     collections::BTreeMap,
     ops::{Deref, DerefMut},
-    sync::Arc,
 };
 
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
-    cards::content_pack::ContentPack,
     decision::ObjectCandidateAddress,
     flow::{
         cast_permission::CastPermissions,
@@ -73,7 +71,6 @@ pub struct GameState {
     pub trigger_enqueue_counter: u64,
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
-    pub content: Arc<ContentPack>,
 }
 
 /// The object whose activated ability is being activated: a battlefield

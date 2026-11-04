@@ -30,13 +30,17 @@ pub const PLAYER_ATTACKED_INDEX: usize = PLAYER_KEEPS_RED_MANA_INDEX + 1;
 pub const PLAYER_SACRIFICED_INDEX: usize = PLAYER_ATTACKED_INDEX + 1;
 pub const PLAYER_LAND_ENTERED_INDEX: usize = PLAYER_SACRIFICED_INDEX + 1;
 pub const PLAYER_CARDS_DRAWN_INDEX: usize = PLAYER_LAND_ENTERED_INDEX + 1;
-pub const PLAYER_DIM: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
+/// Bending done this turn: water, earth, fire, air.
+pub const PLAYER_BENT_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
+pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_BENT_INDEX + 4;
+pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
+pub const PLAYER_DIM: usize = PLAYER_ADDITIONAL_COMBATS_INDEX + 1;
 pub const LEGACY_CARD_DIM: usize = 41;
 /// v5 card columns replace v4's trailing validity flag, which moves to the
-/// new last column: 12 cast-permission terms, then announced X. A face-down
+/// new last column: 13 cast-permission terms, then announced X. A face-down
 /// card is foretold, so its permission's foretold term marks it.
 pub const CARD_PERMISSION_INDEX: usize = LEGACY_CARD_DIM - 1;
-pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 12;
+pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 13;
 pub const CARD_DIM: usize = CARD_X_INDEX + 2 + 1;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
 pub const LEGACY_PERMANENT_DIM: usize = 29;
@@ -107,10 +111,14 @@ pub enum FactKind {
     /// An exception that is part of a copy's copiable values (CR 707.9b),
     /// encoded like an `Effect` row of the same `Modification`.
     CopyException = 8,
+    /// Transform count: id 0 for a permanent, frame index + 1 for a continuation.
+    Transforms = 9,
+    /// Attacker predicate token for a combat continuation (id: frame index).
+    CombatRestriction = 10,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 8] = [
+    pub const ALL: [FactKind; 10] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -119,6 +127,8 @@ impl FactKind {
         FactKind::Effect,
         FactKind::Copy,
         FactKind::CopyException,
+        FactKind::Transforms,
+        FactKind::CombatRestriction,
     ];
 }
 
@@ -157,7 +167,7 @@ impl Default for ObservationEncoderConfig {
         Self {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
-            max_actions: 64,
+            max_actions: 512,
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
@@ -926,6 +936,11 @@ fn encode_player_features(
         out[PLAYER_SACRIFICED_INDEX] = history.permanents_sacrificed as f32 / 10.0;
         out[PLAYER_LAND_ENTERED_INDEX] = bool_to_f32(history.land_entered);
         out[PLAYER_CARDS_DRAWN_INDEX] = history.cards_drawn as f32 / 10.0;
+        for (index, kind) in crate::flow::turn::Bending::ALL.into_iter().enumerate() {
+            out[PLAYER_BENT_INDEX + index] = bool_to_f32(history.bent & kind as u8 != 0);
+        }
+        out[PLAYER_EXTRA_TURNS_INDEX] = player.extra_turns as f32;
+        out[PLAYER_ADDITIONAL_COMBATS_INDEX] = player.additional_combats as f32;
     }
 
     object_to_index.insert(player.id, *current_object_index);
@@ -1025,6 +1040,7 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
             out[base + 9] = bool_to_f32(permission.any_mana);
             out[base + 10] = bool_to_f32(permission.waterbend);
             out[base + 11] = bool_to_f32(permission.foretold);
+            out[base + 12] = bool_to_f32(permission.through_next_turn);
         }
         if let Some(x) = card.x {
             out[CARD_X_INDEX] = 1.0;
@@ -1163,8 +1179,43 @@ fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
                 1.0,
             );
         }
+        if permanent.transforms > 0 {
+            push(object, FactKind::Transforms, 0, permanent.transforms as f32);
+        }
         for index in &permanent.used_abilities {
             push(object, FactKind::UsedAbility, *index as i32, 1.0);
+        }
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        if frame.source_transforms > 0 {
+            push(
+                frame.source.object.unwrap_or(
+                    if frame.controller == obs.agent.player_index as usize {
+                        obs.agent.id
+                    } else {
+                        obs.opponent.id
+                    },
+                ),
+                FactKind::Transforms,
+                (index + 1) as i32,
+                frame.source_transforms as f32,
+            );
+        }
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        if let Some(attackers) = &frame.attackers {
+            out.push(Fact {
+                object: if frame.controller == obs.agent.player_index as usize {
+                    obs.agent.id
+                } else {
+                    obs.opponent.id
+                },
+                kind: FactKind::CombatRestriction,
+                id: (index + 1) as i32,
+                detail: name_value(attackers),
+                values: [0.0, 0.0],
+                effect: None,
+            });
         }
     }
     for permanent in permanents() {
@@ -1565,6 +1616,8 @@ mod tests {
                 remaining_sideboard_counts: Default::default(),
                 keeps_red_mana: false,
                 turn_history: Default::default(),
+                extra_turns: 0,
+                additional_combats: 0,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
@@ -1595,6 +1648,8 @@ mod tests {
                 remaining_sideboard_counts: Default::default(),
                 keeps_red_mana: false,
                 turn_history: Default::default(),
+                extra_turns: 0,
+                additional_combats: 0,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],

@@ -2,6 +2,7 @@
 // Zone management, card movement, and utility methods on Game.
 
 use crate::{
+    cards::content_pack::default_content_pack,
     flow::{
         decision::Decision,
         event::GameEvent,
@@ -162,14 +163,23 @@ impl Game {
     /// `player` reveals their hand: every card in it becomes public
     /// definition knowledge, as with a card revealed into hand.
     pub(crate) fn reveal_hand(&mut self, player: PlayerId) {
-        let mut counts = std::collections::BTreeMap::new();
         for card in self.state.zones.zone_cards(ZoneType::Hand, player).to_vec() {
-            let definition = self.state.cards[card].definition_id;
             self.emit(GameEvent::CardRevealed {
                 owner: player,
-                definition,
+                definition: self.state.cards[card].definition_id,
             });
-            *counts.entry(definition).or_insert(0_u32) += 1;
+        }
+        self.remember_hand(player);
+    }
+
+    /// In a two-player game, inspecting the opponent's hand establishes the
+    /// same definition minima as revealing it, without a reveal event.
+    pub(crate) fn remember_hand(&mut self, player: PlayerId) {
+        let mut counts = std::collections::BTreeMap::new();
+        for card in self.state.zones.zone_cards(ZoneType::Hand, player) {
+            *counts
+                .entry(self.state.cards[*card].definition_id)
+                .or_insert(0_u32) += 1;
         }
         for (definition, count) in counts {
             self.set_known_hand_count(player, definition, count);
@@ -216,6 +226,27 @@ impl Game {
             self.state.untap(permanent_id);
         }
         self.invalidate_mana_cache(player);
+    }
+
+    /// Untap the other players' permanents that untap during each other
+    /// player's untap step (Bender's Waterskin), unless they've lost that
+    /// ability.
+    pub(crate) fn untap_during_other_untap_steps(&mut self, active: PlayerId) {
+        let other = PlayerId(1 - active.0);
+        for permanent_id in self.battlefield_permanents(other) {
+            let card = self.state.permanents[permanent_id].as_ref().map(|p| p.card);
+            let Some(card) = card else { continue };
+            let untaps = self.state.cards[card]
+                .statics
+                .iter()
+                .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
+            if untaps && !self.characteristics(permanent_id).abilities_lost {
+                if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                    permanent.untap();
+                }
+                self.invalidate_mana_cache(other);
+            }
+        }
     }
 
     pub(crate) fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
@@ -318,7 +349,7 @@ impl Game {
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
         let object_id = self.state.id_gen_mut().next_id();
-        let Some(card) = self.state.content.instantiate(name, controller, object_id) else {
+        let Some(card) = default_content_pack().instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
             return None;
         };
@@ -364,7 +395,7 @@ impl Game {
         source: CardId,
         controller: PlayerId,
         exceptions: Vec<Modification>,
-    ) {
+    ) -> Option<PermanentId> {
         let mut copy = self.state.cards[source].clone();
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
@@ -386,6 +417,7 @@ impl Game {
         let card_id = self.add_card(copy);
         self.move_card(card_id, ZoneType::Battlefield);
         self.invalidate_mana_cache(controller);
+        self.state.card_to_permanent[card_id]
     }
 
     /// Add a card created during play to the game, outside every zone.
@@ -561,6 +593,9 @@ impl Game {
                 }
                 self.state.permanents[permanent_id] = None;
             }
+            // CR 712.8a: a double-faced card is front face up outside the
+            // battlefield.
+            self.state.cards[card].turn_front_face_up();
         }
 
         if let Some(lki) = departing_lki {
@@ -583,6 +618,9 @@ impl Game {
         self.state.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
+            if entry.transformed {
+                self.show_back_face(card);
+            }
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent = Permanent::new(
                 self.state.id_gen_mut().next_id(),
@@ -619,6 +657,13 @@ impl Game {
             face_down: entry.face_down,
         };
         self.emit(event);
+        // CR 714.3a: a Saga enters with a lore counter, which triggers its
+        // first chapter (CR 714.2b).
+        if to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga() {
+            if let Some(saga) = self.state.card_to_permanent[card] {
+                self.put_counters(saga, CounterKind::Lore, 1, holder);
+            }
+        }
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_ref, to_zone);
         }
@@ -636,6 +681,45 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));
         }
+        true
+    }
+
+    /// `player` bent: record the kind in their turn history and emit the
+    /// event "whenever you waterbend, earthbend, firebend, or airbend" reads.
+    pub(crate) fn record_bending(&mut self, player: PlayerId, kind: crate::flow::turn::Bending) {
+        self.state.turn.history[player.0].bent |= kind as u8;
+        self.emit(GameEvent::Bent { player, kind });
+    }
+
+    /// Transform a double-faced permanent (CR 701.27a): it turns over and
+    /// stays the same object, keeping its counters, damage, attachments and
+    /// combat status (CR 701.27a). Anything else can't transform and stays as
+    /// it is (CR 701.27c).
+    pub fn transform_permanent(&mut self, permanent: PermanentId) {
+        let Some(card) = self.state.permanents[permanent].as_ref().map(|p| p.card) else {
+            return;
+        };
+        if self.state.cards[card].is_transformed() {
+            self.state.cards[card].turn_front_face_up();
+        } else if !self.show_back_face(card) {
+            return;
+        }
+        self.state.permanents[permanent]
+            .as_mut()
+            .unwrap()
+            .transforms += 1;
+        // Its mana abilities and static grants may change for either player.
+        self.invalidate_mana_cache(PlayerId(0));
+        self.invalidate_mana_cache(PlayerId(1));
+    }
+
+    /// Show a card's back face; false when it has none.
+    fn show_back_face(&mut self, card: CardId) -> bool {
+        let definition = self.state.cards[card].definition_id;
+        let Some(back) = default_content_pack().back_face(definition) else {
+            return false;
+        };
+        self.state.cards[card].turn_back_face_up(back);
         true
     }
 

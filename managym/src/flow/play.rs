@@ -202,6 +202,10 @@ impl Game {
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
             for ability in &self.state.cards[permanent.card].statics {
+                if let StaticAbility::SpellsCostLessMana(reduction) = ability {
+                    cost = cost.reduced_by(reduction);
+                    continue;
+                }
                 let StaticAbility::SpellsCostLess(reduction) = ability else {
                     continue;
                 };
@@ -371,6 +375,13 @@ impl Game {
         values.extend(payable_x_values(1, |x| {
             self.can_pay_cast(player, card, CastChoices { x, ..cast })
         }));
+        // "X targets" (CR 601.2c): X can't exceed the legal candidates.
+        for requirement in self.state.cards[card].target_requirements() {
+            if requirement.exact_x() {
+                let legal = self.legal_targets_for_requirement(player, card, &requirement);
+                values.retain(|x| usize::from(*x) <= legal.len());
+            }
+        }
         values
     }
 
@@ -557,9 +568,13 @@ impl Game {
                     player,
                     card,
                     requirement,
-                    requirement_index,
-                    &chosen,
-                    &chosen_req_indices,
+                    &chosen
+                        .iter()
+                        .zip(&chosen_req_indices)
+                        .filter(|(_, index)| **index == requirement_index)
+                        .map(|(target, _)| *target)
+                        .collect::<Vec<_>>(),
+                    cast.x,
                 )
                 .into_iter()
                 .filter(|target| {
@@ -567,7 +582,7 @@ impl Game {
                 })
                 .collect::<Vec<_>>();
             if legal.is_empty() || requirement.max_for(cast.x) == 0 {
-                if requirement.min == 0 {
+                if requirement.min_for(cast.x) == 0 {
                     requirement_index += 1;
                     continue;
                 }
@@ -609,19 +624,16 @@ impl Game {
         player: PlayerId,
         card: CardId,
         requirement: &TargetRequirement,
-        requirement_index: usize,
         chosen: &[Target],
-        chosen_req_indices: &[usize],
+        x: u8,
     ) -> Vec<Target> {
         self.legal_targets_for_requirement(player, card, requirement)
             .into_iter()
-            // Distinctness is local to the clause; other clauses may reuse a target.
             .filter(|target| {
-                !chosen
-                    .iter()
-                    .zip(chosen_req_indices)
-                    .any(|(chosen, index)| *index == requirement_index && chosen == target)
+                self.within_target_mana_budget(requirement, x, chosen.iter().copied(), *target)
             })
+            // Distinctness and the budget are local to this clause.
+            .filter(|target| !chosen.contains(target))
             .collect()
     }
 
@@ -702,9 +714,13 @@ impl Game {
             player,
             card,
             requirement,
-            requirement_index,
-            &chosen,
-            &chosen_req_indices,
+            &chosen
+                .iter()
+                .zip(&chosen_req_indices)
+                .filter(|(_, index)| **index == requirement_index)
+                .map(|(target, _)| *target)
+                .collect::<Vec<_>>(),
+            cast.x,
         );
         if legal.is_empty() {
             return self.advance_target_selection(
@@ -768,7 +784,7 @@ impl Game {
             .iter()
             .filter(|i| **i == requirement_index)
             .count();
-        if chosen_in_req < requirement.min {
+        if chosen_in_req < requirement.min_for(cast.x) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 card,
@@ -1574,6 +1590,7 @@ impl Game {
         alternative: Option<ManaCost>,
         waterbent: u8,
     ) -> Result<(), AgentError> {
+        let waterbend = self.payment_waterbend_generic(player, &payment) > 0;
         let cost = self
             .payment_mana_cost(player, &payment, alternative.as_ref())
             .reduced_generic(waterbent);
@@ -1583,6 +1600,9 @@ impl Game {
         self.spend_mana(player, &cost)?;
         if let Some(selected) = sacrifice {
             self.sacrifice_permanent(selected);
+        }
+        if waterbend {
+            self.record_bending(player, crate::flow::turn::Bending::Water);
         }
         self.pending_choice = None;
         match payment {
@@ -1887,7 +1907,9 @@ impl Game {
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let source_card = permanent.card;
         let attached = permanent.attached_to;
+        let source_transforms = permanent.transforms;
         let source_definition_id = self.state.cards[source_card].definition_id;
+        let inherited_from = self.inherited_definition_id(permanent_id);
         let Some(ability) = self
             .characteristics(permanent_id)
             .activated_abilities
@@ -1913,6 +1935,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            source_transforms,
+            inherited_from,
             id,
             controller: player,
             source_definition_id,
@@ -1952,6 +1976,8 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            source_transforms: 0,
+            inherited_from: None,
             id,
             controller: player,
             source_definition_id: self.state.cards[card].definition_id,

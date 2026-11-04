@@ -157,7 +157,7 @@ json_record!(Deck {
         PyPlayerConfig {
             name: self.identity(),
             deck: self.clone(),
-            world: Some(crate::world::WORLD_POOL.into()),
+            submitted: true,
             disclosure: Default::default(),
         }
     }
@@ -284,9 +284,7 @@ json_record!(DeckImport {
 });
 
 fn decklist_error(py: Python<'_>, error: DecklistError) -> PyErr {
-    let DecklistError::Rejected(rejected) = &error else {
-        return value_error(&error);
-    };
+    let DecklistError(rejected) = &error;
     let err = DeckImportError::new_err(error.to_string());
     let decklists = PyDict::new_bound(py);
     let attached = rejected
@@ -302,8 +300,8 @@ fn decklist_error(py: Python<'_>, error: DecklistError) -> PyErr {
 /// Each deck's construction and eligibility issues in this world, in order,
 /// without allocating a game.
 #[pyfunction]
-fn check_decks(decks: Vec<Deck>) -> PyResult<Vec<Vec<DeckIssue>>> {
-    native_check_decks(&decks).map_err(value_error)
+fn check_decks(decks: Vec<Deck>) -> Vec<Vec<DeckIssue>> {
+    native_check_decks(&decks)
 }
 
 /// Admit labelled decklists, rejecting all of them with `DeckImportError`

@@ -1544,6 +1544,34 @@
       "title": "CodeSourceArtifact",
       "type": "object"
     },
+    "CombatView": {
+      "additionalProperties": false,
+      "properties": {
+        "attackers": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attackers"
+        },
+        "player_index": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Player Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "player_index"
+      ],
+      "title": "CombatView",
+      "type": "object"
+    },
     "ContinuousEffectView": {
       "additionalProperties": false,
       "description": "One continuous-effect record on a permanent or player (CR 611, 613).",
@@ -2431,6 +2459,11 @@
           "title": "This Turn",
           "type": "boolean"
         },
+        "through_next_turn": {
+          "default": false,
+          "title": "Through Next Turn",
+          "type": "boolean"
+        },
         "waterbend": {
           "default": false,
           "title": "Waterbend",
@@ -2473,6 +2506,17 @@
         },
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "stack_objects": {
           "anyOf": [
@@ -2745,6 +2789,13 @@
           ],
           "title": "Toughness"
         },
+        "transforms": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Transforms",
+          "type": "integer"
+        },
         "types": {
           "anyOf": [
             {
@@ -2785,6 +2836,13 @@
     "LegacyPlayerView": {
       "additionalProperties": false,
       "properties": {
+        "additional_combats": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Additional Combats",
+          "type": "integer"
+        },
         "battlefield": {
           "items": {
             "$ref": "#/$defs/LegacyPermanentView"
@@ -2819,6 +2877,13 @@
           },
           "title": "Exile",
           "type": "array"
+        },
+        "extra_turns": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Extra Turns",
+          "type": "integer"
         },
         "graveyard": {
           "items": {
@@ -3575,6 +3640,13 @@
           "title": "Attacked",
           "type": "boolean"
         },
+        "bent": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Bent",
+          "type": "integer"
+        },
         "cards_drawn": {
           "default": 0,
           "maximum": 4294967295,
@@ -3681,6 +3753,59 @@
         "sampled_worlds"
       ],
       "title": "SampledWorldRobustness",
+      "type": "object"
+    },
+    "ScheduleView": {
+      "additionalProperties": false,
+      "description": "Committed native scheduling, in execution order within each domain.",
+      "properties": {
+        "additional_combats": {
+          "items": {
+            "$ref": "#/$defs/CombatView"
+          },
+          "title": "Additional Combats",
+          "type": "array"
+        },
+        "current_combat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CombatView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extra_turns": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Extra Turns",
+          "type": "array"
+        },
+        "resume_with": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resume With"
+        }
+      },
+      "required": [
+        "extra_turns",
+        "additional_combats"
+      ],
+      "title": "ScheduleView",
       "type": "object"
     },
     "SearchValue": {

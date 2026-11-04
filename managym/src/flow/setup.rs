@@ -6,8 +6,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
-    cards::content_pack::{default_content_pack, ContentPack},
-    cards::content_pack_for_match,
+    cards::{content_pack::default_content_pack, deck_admission::admit_submitted},
     flow::{
         game::{Game, GameState, TrackedState},
         priority::PriorityState,
@@ -20,23 +19,11 @@ use crate::{
     },
 };
 
-use std::sync::Arc;
-
 impl Game {
+    /// A match on the catalog. Panics when a deck submitted to the world fails
+    /// admission; [`crate::agent::env::Env::reset`] checks that first.
     pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
-        let content = content_pack_for_match(&player_configs)
-            .unwrap_or_else(|error| panic!("compiled match content is invalid: {error}"))
-            .unwrap_or_else(default_content_pack);
-        Self::new_with_content(player_configs, seed, skip_trivial, content)
-    }
-
-    pub fn new_with_content(
-        player_configs: Vec<PlayerConfig>,
-        seed: u64,
-        skip_trivial: bool,
-        content: Arc<ContentPack>,
-    ) -> Self {
-        Self::construct(player_configs, seed, skip_trivial, content, false)
+        Self::construct(player_configs, seed, skip_trivial, false)
     }
 
     pub(crate) fn new_capturing(
@@ -44,19 +31,18 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        let content = content_pack_for_match(&player_configs)
-            .expect("validated match content")
-            .unwrap_or_else(default_content_pack);
-        Self::construct(player_configs, seed, skip_trivial, content, true)
+        Self::construct(player_configs, seed, skip_trivial, true)
     }
 
     fn construct(
         player_configs: Vec<PlayerConfig>,
         seed: u64,
         skip_trivial: bool,
-        content: Arc<ContentPack>,
         capture: bool,
     ) -> Self {
+        admit_submitted(&player_configs)
+            .unwrap_or_else(|error| panic!("submitted deck is not admitted: {error}"));
+        let content = default_content_pack();
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
         let mut id_gen = IdGenerator::default();
@@ -159,7 +145,6 @@ impl Game {
                 trigger_enqueue_counter: 0,
                 rng,
                 id_gen,
-                content,
             }),
             policy_history: Default::default(),
             skip_trivial,

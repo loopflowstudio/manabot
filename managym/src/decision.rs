@@ -306,11 +306,10 @@ impl Game {
             return Err(SemanticError::ViewerOutOfBounds(viewer.0));
         }
         let agent_obs = AgentObservation::for_player(self, viewer);
-        if !agent_obs
-            .opponent_cards
-            .iter()
-            .all(|card| card.zone != ZoneType::Hand)
-        {
+        if !agent_obs.opponent_cards.iter().all(|card| {
+            card.zone != ZoneType::Hand
+                || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
+        }) {
             return Err(SemanticError::ViewerSafetyViolation);
         }
         let viewer_state_json = agent_obs.to_json();

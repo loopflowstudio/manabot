@@ -142,7 +142,10 @@ def test_invalid_expansion(fields: dict[str, object]) -> None:
 
 
 def test_world_selector_reads_and_hashes_its_frozen_key() -> None:
-    space = ObservationSpace(ObservationConfig(policy_input_version=5))
+    # The retained receipt used v5 with the historical 64-action capacity.
+    space = ObservationSpace(
+        ObservationConfig.from_checkpoint({"policy_input_version": 5})
+    )
     current = ModelConfig(world="elemental-world-v2", policy_film=True)
     frozen = ModelConfig.model_validate(
         {"semantic_pack": "elemental-world-v2", "policy_film": True}

@@ -7,6 +7,7 @@ use crate::agent::ability_description::{
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
+    cards::content_pack::default_content_pack,
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
         ability::Effect,
@@ -43,9 +44,7 @@ impl Game {
                     if let Some(seat) = reference.player {
                         label.push_str(&format!(" — event: Seat {}", seat + 1));
                     } else if let Some(definition) = reference.definition.and_then(|id| {
-                        self.state
-                            .content
-                            .definition(crate::state::card::CardDefId(id))
+                        default_content_pack().definition(crate::state::card::CardDefId(id))
                     }) {
                         label.push_str(&format!(" — event: {}", definition.name));
                         if let Some(object) = reference.object {
@@ -75,6 +74,7 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
+                    Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))
                     }
@@ -93,6 +93,7 @@ impl Game {
                                 "On the bottom".into()
                             })
                         }
+                        [Effect::ExileNamed { name, .. }] => Some(format!("Name {name}")),
                         [Effect::SearchBasicLand { .. }] => {
                             Some("Search your library for a basic land".into())
                         }
@@ -158,6 +159,14 @@ impl Game {
                             "Put {} into your graveyard",
                             self.state.cards[*card].name
                         )),
+                        Decision::SearchNamed { .. } => Some(format!(
+                            "Exile {} from {}",
+                            self.state.cards[*card].name,
+                            self.state
+                                .zones
+                                .zone_of(*card)
+                                .map_or("unknown zone".to_string(), |zone| format!("{zone:?}"))
+                        )),
                         Decision::SearchLibraryToHand { .. } => Some(format!(
                             "Put {} into your hand",
                             self.state.cards[*card].name
@@ -174,6 +183,7 @@ impl Game {
                 }
             }
             Action::Decline { .. } => match &self.state.suspended_decision.as_ref()?.decision {
+                Decision::SearchNamed { .. } => Some("Stop searching and shuffle".into()),
                 Decision::Surveil { .. } => Some("Keep on top".into()),
                 _ => None,
             },
@@ -632,9 +642,10 @@ impl Game {
                     .iter()
                     .filter(|i| **i == *requirement_index)
                     .count();
-                let min_met = requirements
-                    .get(*requirement_index)
-                    .is_some_and(|req| chosen_in_req >= req.min && req.max_for(cast.x) > req.min);
+                let min_met = requirements.get(*requirement_index).is_some_and(|req| {
+                    chosen_in_req >= req.min_for(cast.x)
+                        && req.max_for(cast.x) > req.min_for(cast.x)
+                });
                 if min_met {
                     actions.push(Action::Decline { player: *player });
                 }

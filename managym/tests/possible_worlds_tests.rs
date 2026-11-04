@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use managym::{
-    cards::setups::authored_pack,
+    cards::setups::authored_setup,
     possible_worlds::{
         viewer_observation, CanonicalWorldQuery, ConditioningError, CountQuery, MaterializeError,
         MaterializeMode, PossibleWorldSpace, WorldQuery,
@@ -34,7 +34,7 @@ fn local_binom(n: u32, k: u32) -> u128 {
 }
 
 fn authored_match() -> Game {
-    let semantic = authored_pack("two_deck").unwrap();
+    let semantic = authored_setup("two_deck").unwrap();
     let configs = vec![
         PlayerConfig::new(
             "UR Lessons",

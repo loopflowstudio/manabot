@@ -16,13 +16,14 @@
 
 use std::collections::BTreeSet;
 
-use crate::cards::{content_pool, ContentError, Eligibility, PoolDefinition};
+use crate::cards::{content_pack::default_content_pack, world_pool, Eligibility, PoolDefinition};
 
 /// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
 pub const WORLD_VERSION: &str = "w17";
 
-/// The pool describing the default pack: every card this world defines, from
-/// every set, with the default pack's `CardDefId`s and digest.
+/// The public name of the world pool ([`world_pool`]) and of a deck submitted
+/// to the world for admission (`PlayerConfig::submitted`); frozen evidence
+/// and the Python API (`WORLD_SETUP`, `content_pool("world")`) read it.
 pub const WORLD_POOL: &str = "world";
 
 /// What decks and checkpoints bind: the rules world and the digest of its
@@ -33,57 +34,54 @@ pub struct WorldIdentity {
     pub card_digest: String,
 }
 
-/// The installed world's identity.
-pub fn world_identity() -> Result<WorldIdentity, ContentError> {
-    let pool = content_pool(WORLD_POOL)?;
-    Ok(WorldIdentity {
-        world_version: pool.world_version,
-        card_digest: pool.content_digest,
-    })
+/// The installed world's identity: its version and the catalog's digest.
+pub fn world_identity() -> WorldIdentity {
+    WorldIdentity {
+        world_version: WORLD_VERSION.to_owned(),
+        card_digest: default_content_pack().content_digest(),
+    }
 }
 
 /// Whether this world supports `name` for deck entry. Unknown names are
 /// unsupported rather than errors.
-pub fn supports_card(name: &str) -> Result<bool, ContentError> {
-    Ok(unsupported_cards([name])?.is_empty())
+pub fn supports_card(name: &str) -> bool {
+    unsupported_cards([name]).is_empty()
 }
 
 /// The distinct card names in `names` this world does not support, sorted.
 /// A deck is supported exactly when this is empty; the pool row of an
 /// unsupported definition gives the reason.
-pub fn unsupported_cards<'a>(
-    names: impl IntoIterator<Item = &'a str>,
-) -> Result<Vec<String>, ContentError> {
-    let pool = content_pool(WORLD_POOL)?;
-    let supported = pool
+pub fn unsupported_cards<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let supported = world_pool()
         .definitions
         .iter()
         .filter(|row| row.eligibility == Eligibility::Eligible)
         .map(|row| row.registry_name.as_str())
         .collect::<BTreeSet<_>>();
-    Ok(names
+    names
         .into_iter()
         .filter(|name| !supported.contains(name))
         .map(str::to_owned)
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .collect())
+        .collect()
 }
 
 /// This world's descriptor rows for cards from `sets` (key prefixes such
 /// as `"tla"`), sorted by name. Deck generators and validators apply this
 /// filter; the pool itself spans every set.
-pub fn set_cards(sets: &[&str]) -> Result<Vec<PoolDefinition>, ContentError> {
-    Ok(content_pool(WORLD_POOL)?
+pub fn set_cards(sets: &[&str]) -> Vec<PoolDefinition> {
+    world_pool()
         .definitions
-        .into_iter()
+        .iter()
         .filter(|row| {
             row.key.as_deref().is_some_and(|key| {
                 key.split_once('.')
                     .is_some_and(|(set, _)| sets.contains(&set))
             })
         })
-        .collect())
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]
@@ -92,35 +90,37 @@ mod tests {
 
     #[test]
     fn defined_cards_are_supported_and_decks_report_the_rest() {
-        assert!(supports_card("Avatar Enthusiasts").unwrap());
-        assert!(supports_card("Forest").unwrap());
-        assert!(supports_card("Lightning Bolt").unwrap());
-        assert!(supports_card("Water Tribe Rallier").unwrap());
-        assert!(supports_card("Counterspell").unwrap());
-        assert!(!supports_card("Crossroads of Destiny").unwrap());
-        assert!(!supports_card("Not A Card").unwrap());
+        assert!(supports_card("Avatar Enthusiasts"));
+        assert!(supports_card("Forest"));
+        assert!(supports_card("Lightning Bolt"));
+        assert!(supports_card("Water Tribe Rallier"));
+        assert!(supports_card("Counterspell"));
+        assert!(!supports_card("Crossroads of Destiny"));
+        assert!(!supports_card("Not A Card"));
         let deck = [
             "Forest",
             "Avatar Enthusiasts",
             "Water Tribe Rallier",
             "Forest",
         ];
-        assert!(unsupported_cards(deck).unwrap().is_empty());
+        assert!(unsupported_cards(deck).is_empty());
     }
 
     #[test]
     fn world_identity_names_the_version_and_card_digest() {
-        let identity = world_identity().unwrap();
+        let identity = world_identity();
         assert_eq!(identity.world_version, WORLD_VERSION);
-        let content = crate::cards::pool_content(WORLD_POOL).unwrap();
-        assert_eq!(identity.card_digest, content.content_digest());
+        assert_eq!(
+            identity.card_digest,
+            default_content_pack().content_digest()
+        );
+        assert_eq!(identity.card_digest, world_pool().content_digest);
     }
 
     #[test]
     fn set_filter_selects_cards_by_key_prefix() {
         let names = |sets: &[&str]| {
             set_cards(sets)
-                .unwrap()
                 .into_iter()
                 .map(|row| row.registry_name)
                 .collect::<Vec<_>>()

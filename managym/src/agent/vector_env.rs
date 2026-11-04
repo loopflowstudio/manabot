@@ -99,23 +99,17 @@ impl VectorEnv {
         if !self.player_configs.is_empty() {
             return Err(AgentError("uniform roster must be set before reset".into()));
         }
-        let pack = crate::cards::setups::authored_pack("optional_payments")
+        let setup = crate::cards::setups::authored_setup("optional_payments")
             .map_err(|e| AgentError(e.to_string()))?;
-        let expected: Vec<PlayerConfig> = pack
+        let expected: Vec<PlayerConfig> = setup
             .decks
             .iter()
-            .map(|deck| pack.player_config(&deck.key, &deck.key).unwrap())
+            .map(|deck| setup.player_config(&deck.key, &deck.key).unwrap())
             .collect();
         if roster.len() != expected.len()
-            || expected.iter().any(|e| {
-                roster
-                    .iter()
-                    .filter(|r| {
-                        r.deck == e.deck && r.world.as_deref() == Some("elemental-world-v2")
-                    })
-                    .count()
-                    != 1
-            })
+            || expected
+                .iter()
+                .any(|e| roster.iter().filter(|r| r.deck == e.deck).count() != 1)
         {
             return Err(AgentError(
                 "uniform roster requires every exact Elemental setup once".into(),
@@ -154,14 +148,12 @@ impl VectorEnv {
         }
         let mut distinct = std::collections::BTreeSet::new();
         for player in &decks {
-            if player.world.as_deref() != Some(crate::world::WORLD_POOL) {
+            if !player.submitted {
                 return Err(AgentError(
                     "training decks must be submitted to the world".into(),
                 ));
             }
-            if let Some(message) = crate::cards::deck_admission::development_rejection(player)
-                .map_err(|error| AgentError(error.to_string()))?
-            {
+            if let Some(message) = crate::cards::deck_admission::development_rejection(player) {
                 return Err(AgentError(format!(
                     "training deck {}: {message}",
                     player.name
@@ -777,9 +769,7 @@ mod tests {
     #[test]
     fn training_decks_are_admitted_distinct_replayable_and_replaceable() {
         let deck = |name: &str| {
-            let mut player = PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]));
-            player.world = Some("world".into());
-            player
+            PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)])).submit_to_world()
         };
         let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
         let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
@@ -839,7 +829,7 @@ mod tests {
     #[test]
     fn independent_training_decks_preserve_mirrors_entries_and_seed_recovery() {
         let mut first = PlayerConfig::new("event-a", BTreeMap::from([("Plains".into(), 12)]));
-        first.world = Some("world".into());
+        first.submitted = true;
         let mut second = first.clone();
         second.name = "event-b".into();
         let decks = vec![first.clone(), second];
@@ -894,14 +884,11 @@ mod tests {
     }
 
     fn elemental_roster() -> Vec<PlayerConfig> {
-        let pack = crate::cards::setups::authored_pack("optional_payments").unwrap();
-        pack.decks
+        let setup = crate::cards::setups::authored_setup("optional_payments").unwrap();
+        setup
+            .decks
             .iter()
-            .map(|d| {
-                let mut p = pack.player_config(&d.key, &d.key).unwrap();
-                p.world = Some(pack.pack_key.clone());
-                p
-            })
+            .map(|d| setup.player_config(&d.key, &d.key).unwrap())
             .collect()
     }
 

@@ -26,7 +26,7 @@ def test_temur_learning_catalog_closes_the_registered_cards() -> None:
     binding = BoundSemanticPack.bind(env.content_pack_manifest())
     assert binding.schema.raw == LearningSchema.load().raw
     assert binding.pad_catalog()
-    assert len(binding.definition_row_by_card_def_id) == 9
+    assert len(binding.definition_row_by_card_def_id) == managym.CARD_DEFINITION_COUNT
 
 
 def test_temur_finishes_through_the_production_training_observation_path() -> None:

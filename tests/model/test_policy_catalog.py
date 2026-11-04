@@ -46,21 +46,20 @@ def test_unknown_catalog_is_not_a_name_alias() -> None:
 def test_native_pool_digest_must_match_the_catalog(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pool = managym.content_pool("ur-lessons-vs-gw-allies")
+    pool = managym.content_pool("world")
     pool["content_digest"] = "0" * 64
     monkeypatch.setattr(managym, "content_pool", lambda key: pool)
     with pytest.raises(ContentPackBindingError, match="differs from the live pack"):
         SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
 
 
-def test_policy_catalog_requires_its_registered_pack(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pool = managym.content_pool("ur-lessons-vs-gw-allies")
-    pool["pack_key"] = "world"
-    monkeypatch.setattr(managym, "content_pool", lambda key: pool)
-    with pytest.raises(ContentPackBindingError, match="registered pack"):
-        bind_policy_catalog("ur-lessons-vs-gw-allies")
+def test_every_registered_name_binds_the_one_world_catalog() -> None:
+    world = bind_policy_catalog("world")
+    assert world.definition_count == managym.CARD_DEFINITION_COUNT
+    for key in ("ur-lessons-vs-gw-allies", "elemental-world-v2"):
+        pack = bind_policy_catalog(key)
+        assert pack.content_pack_hash == world.content_pack_hash
+        assert pack.binding_hash == world.binding_hash
 
 
 @pytest.mark.parametrize(

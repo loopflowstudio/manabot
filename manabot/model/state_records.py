@@ -140,8 +140,11 @@ class TypedContinuationEncoder(nn.Module):
             frames = table.new_zeros((RELATION_ROWS, table.shape[-1]))
             handles = record_indexes(active[:, 1], RELATION_ROWS, "frame")
             parents = record_indexes(active[:, 2], RELATION_ROWS, "parent")
-            kinds = record_indexes(active[:, 3], 10, "frame kind")
-            row_kinds = record_indexes(active[:, 0], 6, "relation kind")
+            # Scheduled turns/combats are frames 11/12. Inheritance, exact
+            # remembered subjects and delayed frequency are edges 7/8/9;
+            # their existing payload columns and joins use the same reducers.
+            kinds = record_indexes(active[:, 3], 12, "frame kind")
+            row_kinds = record_indexes(active[:, 0], 9, "relation kind")
             if (handles == 0).any() or (kinds == 0).any() or (row_kinds == 0).any():
                 raise ValueError("live relation lacks frame or kind")
             sources = record_indexes(active[:, 6], len(table), "source object")
