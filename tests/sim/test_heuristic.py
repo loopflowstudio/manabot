@@ -21,6 +21,7 @@ from manabot.sim.heuristic import (
     heuristic_source_paths,
     targeted_spells,
 )
+from manabot.sim.players import build_code_player
 from tests.eval.arena_fixture import arena_fixture
 
 OWN, OPPONENT = 10, 20
@@ -153,6 +154,71 @@ def offer(
 
 
 # Card knowledge -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("count", [2, 64])
+def test_explicit_prefix_preserves_choices_within_capacity(count: int) -> None:
+    actions = [offer(ActionEnum.PRIORITY_CAST_SPELL, cid) for cid in range(count)]
+    cards = [hand(cid, "Gray Ogre", cid + 1) for cid in range(count)]
+    assert act(ActionSpaceEnum.PRIORITY, actions, cards=cards) == count - 1
+    assert (
+        act(
+            ActionSpaceEnum.PRIORITY,
+            actions,
+            cards=cards,
+            player=HeuristicPlayer(max_actions=64),
+        )
+        == count - 1
+    )
+
+
+def test_prefix_also_restricts_greedy_fallback() -> None:
+    actions = [offer(ActionEnum.DECLINE_CHOICE) for _ in range(64)]
+    actions.append(offer(ActionEnum.PAY_COST))
+    # This choice has no heuristic-specific rule, so it uses the frozen greedy fallback.
+    assert act(ActionSpaceEnum.MODAL, actions) == 64
+    assert (
+        act(ActionSpaceEnum.MODAL, actions, player=HeuristicPlayer(max_actions=64))
+        == 63
+    )
+
+
+def test_registered_heuristic_keeps_explicit_prefix() -> None:
+    registration = register_anchor(
+        arena_fixture().anchors[0], "heuristic", player_id="bounded"
+    )
+    registration = registration.model_copy(
+        update={
+            "player_spec": {
+                "kind": "heuristic",
+                "max_actions": 64,
+                "action_overflow": "first-legal",
+            }
+        }
+    )
+    player = build_code_player(registration, seed=213)
+    assert isinstance(player, HeuristicPlayer)
+    actions = [offer(ActionEnum.DECLINE_CHOICE) for _ in range(64)]
+    actions.append(offer(ActionEnum.PAY_COST))
+    assert act(ActionSpaceEnum.MODAL, actions, player=player) == 63
+
+
+@pytest.mark.parametrize("capacity", [None, True, 0, -1, "64"])
+def test_registered_heuristic_rejects_invalid_capacity(capacity: object) -> None:
+    registration = register_anchor(
+        arena_fixture().anchors[0], "heuristic", player_id="bounded"
+    )
+    registration = registration.model_copy(
+        update={
+            "player_spec": {
+                "kind": "heuristic",
+                "max_actions": capacity,
+                "action_overflow": "first-legal",
+            }
+        }
+    )
+    with pytest.raises(ValueError, match="explicit first-legal support"):
+        build_code_player(registration, seed=213)
 
 
 def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:

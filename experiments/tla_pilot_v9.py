@@ -1,4 +1,4 @@
-"""MTG-213 prospective v7 fixed-corpus TLA self-play and paired checkpoint evaluation.
+"""MTG-213 prospective v9 fixed-corpus TLA self-play and paired checkpoint evaluation.
 
 17Lands supplies the CC BY 4.0 trophy source; see the frozen protocol and corpus
 receipt. `runs` uses TrainingJob/execute_regime, while `eval` uses Etude and the
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 from etude.eval.match import Row, Tables
 from etude.eval.records import (
@@ -30,7 +30,7 @@ from etude.report import Curve, Matches, Report, Score
 from pydantic import Field
 import torch
 
-from experiments import tla_pilot_v5
+from experiments import tla_pilot_v9
 from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -45,12 +45,26 @@ from manabot.training.regime import TrainingRegime
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENT = "tla_pilot_v5"
-REGIME = ROOT / "experiments/regimes/tla-trophy-213-v5.json"
-PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v5.json"
+EXPERIMENT = "tla_pilot_v9"
+REGIME = ROOT / "experiments/regimes/tla-trophy-213-v9.json"
+PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v9.json"
 GAMES_PER_PAIR = 4
 
 type Anchor = Literal["heuristic", "initial"]
+
+
+class HeuristicSpec(TypedDict):
+    kind: Literal["heuristic"]
+    max_actions: int
+    action_overflow: Literal["first-legal"]
+
+
+def _heuristic_spec(max_actions: int) -> HeuristicSpec:
+    return {
+        "kind": "heuristic",
+        "max_actions": max_actions,
+        "action_overflow": "first-legal",
+    }
 
 
 class Pair(StrictModel):
@@ -67,7 +81,11 @@ class RuntimeWorld(StrictModel):
 class Protocol(StrictModel):
     schema_version: Literal[3] = 3
     observation_shapes: dict[str, tuple[int, ...]]
+    action_overflow: Literal["error", "first-legal"] = Field(
+        default="error", exclude_if=lambda value: value == "error"
+    )
     runtime_world: RuntimeWorld
+    heuristic_action_support: Literal["full", "policy-prefix"] = "full"
     source_base: str
     predecessor_protocol_sha256: str
     corpus_sha256: str
@@ -97,6 +115,13 @@ def frozen() -> tuple[TrainingRegime, Protocol]:
     # shapes so an encoder change cannot silently alter its allocation.
     if ObservationSpace(regime.observation).shapes != protocol.observation_shapes:
         raise ValueError("pilot tensor capacities differ from frozen protocol")
+    if regime.observation.action_overflow != protocol.action_overflow:
+        raise ValueError("pilot action overflow policy differs from frozen protocol")
+    if (
+        protocol.heuristic_action_support != "policy-prefix"
+        or protocol.action_overflow != "first-legal"
+    ):
+        raise ValueError("v9 requires matched policy-prefix heuristic support")
     if regime.deck_source is None or regime.deck_source.entry_ids is None:
         raise ValueError("pilot requires a frozen population with event IDs")
     if regime.deck_source.sampling != "uniform-independent-v1":
@@ -141,7 +166,7 @@ def _source() -> list[Path]:
 
 def environment(protocol: Protocol) -> Environment:
     return Environment(
-        name="tla-trophy-213-v5",
+        name="tla-trophy-213-v9",
         files=canonical_sha256(
             {
                 "world": managym.world_identity(),
@@ -174,10 +199,14 @@ def comparison_schedule(
     required checkpoints can be played, but all slots count in the analysis.
     """
     if run.experiment != EXPERIMENT:
-        raise ValueError("v5 comparisons require a fresh v5 initialization")
+        raise ValueError("v9 comparisons require a fresh v9 initialization")
     source = _source()
     inference = Inference(source=source)
-    heuristic = Code(name="heuristic", source=source, config={"kind": "heuristic"})
+    heuristic = Code(
+        name="heuristic",
+        source=source,
+        config=_heuristic_spec(protocol.observation_shapes["actions"][0]),
+    )
     conditions = tuple(pair.model_dump(mode="json") for pair in protocol.pairs)
     checkpoints = {int(c.clocks["updates"]): c for c in run.checkpoints}
     endpoint = int(run.final.clocks["updates"]) if run.final else None
@@ -222,7 +251,7 @@ def comparison_schedule(
 def eval(state: ExperimentState) -> list[Job]:
     """Play available comparisons; Etude owns already-delivered matches."""
     if state.experiment != EXPERIMENT:
-        raise ValueError("v5 evaluation requires fresh v5 training runs")
+        raise ValueError("v9 evaluation requires fresh v9 training runs")
     _, protocol = frozen()
     matchups = tuple(
         comparison.matchup
@@ -235,13 +264,13 @@ def eval(state: ExperimentState) -> list[Job]:
     return [
         evaluation(
             Benchmark(
-                name="tla-trophy-paired-v5",
+                name="tla-trophy-paired-v9",
                 environment=environment(protocol),
                 matchups=matchups,
             ),
             # Etude discovers this file with runpy; callbacks need an importable
             # module identity even when eval itself came from <run_path>.
-            play=tla_pilot_v5.play,
+            play=tla_pilot_v9.play,
             workers=1,
             max_hours=4,
         )
@@ -270,10 +299,13 @@ def _registration(
         compute_class_id="policy-cpu-one-thread-one-pass",
     )
     if isinstance(player, Code):
+        spec = _heuristic_spec(observation.max_actions)
+        if player.config != spec:
+            raise ValueError("heuristic support differs from pilot")
         return PlayerRegistration(
             **common,
             runner_kind="code",
-            player_spec={"kind": "heuristic"},
+            player_spec=dict(spec),
             source_sha256=canonical_sha256(
                 {str(p.relative_to(ROOT)): file_sha256(p) for p in _source()}
             ),
@@ -329,7 +361,7 @@ def play(match: Match) -> Tables:
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="tla-trophy-213-v5",
+        arena_version="tla-trophy-213-v9",
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),

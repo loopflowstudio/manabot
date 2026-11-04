@@ -94,6 +94,11 @@ Observation-input or model-cost changes add
 `uv run --extra dev pytest tests/training/test_active_training.py -q`; its
 endpoint checks use injected durations, so never mix host elapsed time into an
 exact-update-count assertion.
+Changes to observation encoding or action selection also require
+`uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
+Run the existing encoder tests alongside cutoff/parity fixtures so callers of
+changed private helpers are checked too. Action overflow is checked at the
+public encoder boundary, before the retained action list reaches row encoding.
 
 **Tracking and offline reports.** Checkpoint imports or managed evaluation
 adapters:

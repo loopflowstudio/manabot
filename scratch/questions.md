@@ -63,3 +63,22 @@ sources remain at
 The completed task-local SDK repair's checkout/delivery details and prior full
 decisions are retained at
 `075378dd87600428ad3efa60b7288b327c32cee7:scratch/questions.md`.
+
+
+## Inherited MTG-213 context from main
+
+The sync onto `8e8d702f807d61675fc1bca46417eee69316daa0` retains the pilot's
+prospective v9 declaration, configurable native capacities and explicit
+`action_overflow=first-legal` policy. Jack Heart selected the same first-64
+native-action prefix for the pilot heuristic, candidate and initialization
+anchor. Native legality and Academy still expose every choice; omitted policy
+settings still reject overflow. These pilot choices do not change this study's
+frozen recipes, evidence, budget or acceptance criteria.
+
+MTG-213 v5 completed three GPU learner updates before action-capacity failure;
+that establishes execution, not learning gain or a trained evaluation endpoint.
+The pilot's complete decisions, concept review and validation remain at
+`8e8d702f807d61675fc1bca46417eee69316daa0:scratch/questions.md` and its retained
+report `experiments/tla-trophy-pilot.md`. Its $10 authorization is separate from
+this study's original $25 allowance. Sync scope is conflict reconciliation only;
+no new training or evidence refresh is selected here.

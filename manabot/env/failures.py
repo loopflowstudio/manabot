@@ -25,6 +25,7 @@ from uuid import uuid4
 import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from manabot.infra.log import getLogger
 import managym
 
 
@@ -66,6 +67,20 @@ class GameInputs(BaseModel):
         self.actions = []
         self.actor = None
         self.frame = None
+
+
+class ActionCutoffCounts(BaseModel):
+    decisions: int = 0
+    overflows: int = 0
+    dropped_actions: int = 0
+
+
+class ActionCutoffSample(BaseModel):
+    original_count: int
+    retained_count: int
+    dropped_count: int
+    decision_kind: str
+    game: GameInputs
 
 
 class BufferSpec(BaseModel):
@@ -165,6 +180,85 @@ class _Capture:
         self.started = time.perf_counter()
         self.identities = runtime_identities().copy()
         self.context: dict[str, object] = {}
+        self._policy_counts: dict[str, ActionCutoffCounts] = {}
+        self._policy_samples: list[ActionCutoffSample] = []
+        self._policy_path: Path | None = None
+
+    def record_policy_actions(
+        self, count: int, kind: str, capacity: int, game: GameInputs
+    ) -> None:
+        """Count decisions consumed under the explicit first-legal policy.
+
+        Keep at most four exact replay prefixes and log at powers of two, then
+        flush exact aggregate frequencies at collector/game close. The complete
+        native action set is never changed here.
+        """
+        if kind not in self._policy_counts:
+            self._policy_counts[kind] = ActionCutoffCounts()
+        counts = self._policy_counts[kind]
+        counts.decisions += 1
+        retained = managym.policy_action_count(count, capacity, "first-legal")
+        if retained == count:
+            return
+        counts.overflows += 1
+        counts.dropped_actions += count - retained
+        if len(self._policy_samples) < 4:
+            self._policy_samples.append(
+                ActionCutoffSample(
+                    original_count=count,
+                    retained_count=retained,
+                    dropped_count=count - retained,
+                    decision_kind=kind,
+                    game=game.model_copy(deep=True),
+                )
+            )
+        overflows = sum(counts.overflows for counts in self._policy_counts.values())
+        if overflows & (overflows - 1) == 0:
+            self.flush_policy_actions()
+            getLogger(__name__).info(
+                "policy_action_cutoff %s",
+                json.dumps(
+                    {
+                        "overflows": overflows,
+                        "original_count": count,
+                        "retained_count": retained,
+                        "dropped_count": count - retained,
+                        "decision_kind": kind,
+                        "seed": game.seed,
+                        "stream": game.stream,
+                        "replay_path": str(self._policy_path),
+                    }
+                ),
+            )
+
+    def policy_action_report(self) -> dict[str, object]:
+        return {
+            "schema": "policy-action-cutoff-v1",
+            "policy": "first-legal",
+            "counts_by_kind": {
+                kind: counts.model_dump()
+                for kind, counts in self._policy_counts.items()
+            },
+            "samples": [
+                sample.model_dump(mode="json") for sample in self._policy_samples
+            ],
+            "identities": self.identities,
+            **self._coordinates(),
+        }
+
+    def flush_policy_actions(self) -> None:
+        if not self._policy_counts:
+            return
+        if self._policy_path is None:
+            scope = _scope.get() or self.scope
+            directory = scope.directory if scope else Path(".runs/action-cutoffs")
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self._policy_path = directory / f"action-cutoff-{uuid4().hex}.json"
+        temporary = self._policy_path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(self.policy_action_report(), sort_keys=True) + "\n"
+        )
+        temporary.replace(self._policy_path)
 
     def _retain(self, evidence: FailureEvidence) -> Path:
         """Create and register private evidence only after its bytes are durable."""
@@ -212,6 +306,7 @@ class _Capture:
     ) -> None:
         # Capture failures must never disguise the original native failure.
         try:
+            self.flush_policy_actions()
             retained = evidence()
             retained.execution_outcome = "failed"
             retained.error_class = type(error).__name__
@@ -347,18 +442,29 @@ class CapturedVector(_Capture):
         self.next_seeds = [game.seed for game in self.games]
         # Sampled roots pick setups natively at reset; evidence reads them back.
         self._sampled_roots = False
+        self._action_cutoff: int | None = None
 
     def __getattr__(self, name: str) -> Any:
         # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
         return getattr(self.native, name)
 
-    def set_buffers(self, buffers: dict[str, Any]) -> None:
+    def set_buffers(
+        self, buffers: dict[str, Any], action_overflow: str = "error"
+    ) -> None:
         # NumPy owns these buffers; preserve their native encoding ABI as evidence.
         self.identities["input_buffers"] = {
             key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
             for key, value in buffers.items()
         }
-        self.native.set_buffers(buffers)
+        self.native.set_buffers(buffers, action_overflow)
+        self._action_cutoff = (
+            buffers["actions"].shape[1] if action_overflow == "first-legal" else None
+        )
+        if self._action_cutoff is not None:
+            self.identities["action_overflow"] = action_overflow
+
+    def close(self) -> None:
+        self.flush_policy_actions()
 
     def capture_failure(self, error: BaseException) -> None:
         self._failure(error, lambda: self._evidence_for(self.games, "step"))
@@ -456,14 +562,20 @@ class CapturedVector(_Capture):
         enabled = active if active is not None else [True] * len(self.games)
         actors = self.native.current_agent_indices()
         frames = self.native.semantic_decision_frames_json(active)
+        summaries = (
+            self.native.current_action_summaries() if self._action_cutoff else []
+        )
         attempted = []
-        for game, action, selected, actor, frame in zip(
-            self.games, actions, enabled, actors, frames, strict=True
+        for index, (game, action, selected, actor, frame) in enumerate(
+            zip(self.games, actions, enabled, actors, frames, strict=True)
         ):
             if selected:
-                game.actions.append(int(action))
                 game.actor = actor
                 game.frame = frame
+                if self._action_cutoff is not None:
+                    count, kind = summaries[index]
+                    self.record_policy_actions(count, kind, self._action_cutoff, game)
+                game.actions.append(int(action))
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
             if isolated:

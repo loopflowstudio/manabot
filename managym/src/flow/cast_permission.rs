@@ -396,7 +396,11 @@ impl Game {
         };
         // Any type of mana pays every pip, as generic (CR 609.4b-style).
         Some(if grant.any_mana {
-            ManaCost::default().with_generic(cost.mana_value)
+            // Spending permission changes colors, not the announced X cost.
+            ManaCost {
+                x: cost.x,
+                ..ManaCost::default().with_generic(cost.mana_value)
+            }
         } else {
             cost
         })

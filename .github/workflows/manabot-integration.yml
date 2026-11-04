@@ -64,7 +64,7 @@ jobs:
             tests/academy/test_trigger_order.py \
             tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py tests/training/test_scenario_validation.py \
-            tests/verify/test_shared_effect_transport.py tests/training/test_state_representation_study.py \
+            tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py tests/training/test_state_representation_study.py \
             tests/verify/test_observation_parity.py::test_v5_encodes_every_observed_permanent_and_card_field_in_parity \
             tests/verify/test_observation_parity.py::test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow \
             tests/verify/test_observation_parity.py::test_v6_vector_buffers_derive_fact_capacity \
@@ -73,6 +73,7 @@ jobs:
             tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
+            tests/training/test_action_cutoff.py \
             tests/training/test_monitoring.py \
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
