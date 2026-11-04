@@ -42,6 +42,7 @@ test = true
 [[example]]
 name = "bench_layers"
 required-features = ["benchmark"]
+test = true
 
 [dependencies]
 managym-cards = { path = "cards" }

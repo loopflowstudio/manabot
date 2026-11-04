@@ -560,13 +560,20 @@ managym/target/release/examples/bench_layers --allocations
 
 It asserts Moon/Urborg's dependency before 16 bounded games and eight Search-64
 replies. `--probe-only` limits execution to eight isolated pool writes and eight
-taps on cloned warmed boards. These probes use the production typed accessors;
-whole payment/action costs remain in the game traces. `benchmark` enables
+taps on cloned warmed boards. `--payment-only --allocations` instead measures
+eight complete legal Cadets activations from a floating pool and eight using
+two land sources on the dependency board. Receipts retain the complete legal
+action sets, selected actions, mana/life/tap resources, stack and semantic digests
+before and after each action. Setup, forking and receipt serialization are outside
+the measured step; native step/observation work is included. `benchmark` enables
 inclusive board/dependency/clone timers and counts; allocation traffic is measured
 in the separate `--allocations` run. Never sum overlapping timers or compare a
 counting run with an ordinary timing run. The fixture changes two physical cards
 locally, not the public catalog or frozen worlds. Older engines that fail the
 asserted dependency are not correctness-equivalent timing comparators.
+`bench_steps --tail-samples` and the dependency fixture retain the first 128 step
+durations in execution order. These bounded prefixes support sample maxima,
+not population percentiles; the default Engine Budget path is unchanged.
 
 Full-policy input cost uses the actual baseline recipe's width-64, depth-2 model
 on CPU float32, one thread, batch 16, two warmups and eight measured calls:
@@ -592,3 +599,43 @@ neither accelerator performance nor learning efficacy. Clean comparative latency
 and the existing 10% Engine Budget remain required for performance acceptance.
 Use `--inventory` for parity, occupancy and storage counts without policy execution
 or timings when the host is busy; its process RSS covers construction only.
+
+**Isolated MTG-244 comparison.** Publishing the measurement workflow/script/patch
+as a PR automatically runs `layer-risk.yml`; download its `layer-risk` artifact.
+Once the workflow exists on the default branch, it also supports
+`gh workflow run layer-risk.yml --ref <candidate-branch>`. This dedicated workflow runs all builds and measurements
+sequentially on one GitHub-hosted VM. It executes the original TLA workloads at
+the Engine Budget reference, pre-mitigation `fb3555ffb` and the candidate;
+dependency workloads, complete payments and seven model cases run at the latter
+two revisions. The pinned historical engine receives only the reviewed
+`managym/perf/layers-attribution.patch` counters/fixture access and current
+benchmark fixtures. It receives no cache or model mitigation. Source archives
+are disposable measurement inputs; existing Task checkouts are untouched.
+
+`scripts/measure_layer_risk.py` owns preparation, sequential native/model runs
+and receipt comparison. It records exact revisions, harness hashes, dirty source
+diff, CPU/dependency metadata, raw samples, full digests/counts and memory. A
+resource/action/digest mismatch between pre-mitigation and candidate fails the
+comparison; a reference-world mismatch is recorded explicitly, never labeled a
+speedup. The same seven policy cases drive measurement and comparison; each must
+retain eight finite positive samples after two warmups for every operation, with
+matching input, model, environment and storage settings. Missing/mislabeled cases
+and inventory-only receipts cannot satisfy timing comparison. Failed runs upload
+completed evidence. The workflow does not update a
+baseline or accept a regression; Gate still owns the unchanged 10% Engine Budget.
+The measurement run must complete before claiming clean comparative risk evidence;
+adding this workflow alone supplies no performance result.
+
+For payment attribution on a busy host, omit timing workloads:
+
+```bash
+uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-payment
+uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg before --payment-only
+uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg after --payment-only
+uv run --no-sync python scripts/measure_layer_risk.py compare --out .cache/layer-payment --payment-only
+```
+
+Use a fresh output directory for each comparison. Allocation traffic and operation
+counts remain interpretable under contention; elapsed values do not establish
+comparative performance. `model --inventory` builds each revision's wheel and
+checks all seven cases without inference, and cannot satisfy timing comparison.

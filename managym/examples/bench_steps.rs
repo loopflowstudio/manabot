@@ -21,6 +21,8 @@ fn main() {
     // Keep the original 512-game budget independently comparable. The added
     // board is an explicitly selected workload with its own count and digest.
     let layers = std::env::args().any(|arg| arg == "--layers");
+    let tail_samples = std::env::args().any(|arg| arg == "--tail-samples");
+    let mut samples = Vec::new();
     let seeds = if layers { 512..528 } else { 0..512 };
     let games = seeds.end - seeds.start;
     #[cfg(feature = "benchmark")]
@@ -40,7 +42,11 @@ fn main() {
         while !env.is_game_over() && game_steps < MAX_STEPS {
             let count = env.action_count().unwrap();
             let action = rng.gen_range(0..count);
+            let step_start = (tail_samples && samples.len() < 128).then(Instant::now);
             env.step(action as i64).unwrap();
+            if let Some(start) = step_start {
+                samples.push(start.elapsed().as_secs_f64());
+            }
             game_steps += 1;
             digest = digest
                 .wrapping_mul(31)
@@ -59,6 +65,9 @@ fn main() {
         "{{\"games\":{games},\"capped\":{capped},\"steps\":{steps},\"elapsed_s\":{elapsed:.6},\"steps_per_s\":{:.1},\"digest\":{digest}}}",
         steps as f64 / elapsed
     );
+    if tail_samples {
+        println!("{}", serde_json::json!({"step_prefix_samples_s":samples}));
+    }
     #[cfg(feature = "benchmark")]
     println!(
         "{}",

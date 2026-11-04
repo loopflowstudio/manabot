@@ -8,7 +8,9 @@ positions. Warmups and individual samples are retained, not inferred tails.
 import argparse
 from collections.abc import Callable
 import hashlib
+import inspect
 import json
+import os
 import platform
 import resource
 import statistics
@@ -19,13 +21,16 @@ import torch
 
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
+import manabot.managym._managym as native_engine
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline
 from manabot.verify.representation import kellan_trigger_root, shared_effect_root
 from manabot.verify.text_observation import priority_root
 
 
-def measure(operation: Callable[[], object], samples: int) -> dict[str, object]:
+def measure(
+    operation: Callable[[], object], samples: int, observations_per_call: int = 1
+) -> dict[str, object]:
     for _ in range(2):
         operation()
     timings = []
@@ -35,8 +40,12 @@ def measure(operation: Callable[[], object], samples: int) -> dict[str, object]:
         timings.append(time.perf_counter() - start)
     return {
         "samples_s": timings,
+        "sample_count": samples,
+        "warmups": 2,
+        "total_s": sum(timings),
         "median_s": statistics.median(timings),
         "max_s": max(timings),
+        "observations_per_s": samples * observations_per_call / sum(timings),
     }
 
 
@@ -57,6 +66,8 @@ def main() -> None:
     if args.batch < 1 or args.samples < 1:
         parser.error("batch and samples must be positive")
     torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+    load_before = os.getloadavg()
     torch.manual_seed(244)
     if args.state == "program":
         env = kellan_trigger_root()
@@ -76,8 +87,14 @@ def main() -> None:
     for name in reference:
         np.testing.assert_array_equal(reference[name], buffers[name])
 
-    def sample(operation: Callable[[], object]) -> dict[str, object]:
-        return {} if args.inventory else measure(operation, args.samples)
+    def sample(
+        operation: Callable[[], object], observations_per_call: int = 1
+    ) -> dict[str, object]:
+        return (
+            {}
+            if args.inventory
+            else measure(operation, args.samples, observations_per_call)
+        )
 
     native = sample(lambda: env.encode_observation_into(obs, buffers))
     python = sample(lambda: space.encode(obs))
@@ -92,7 +109,7 @@ def main() -> None:
     }
     model.eval()
     with torch.inference_mode():
-        inference = sample(lambda: model(values))
+        inference = sample(lambda: model(values), args.batch)
     model.train()
 
     def backward() -> None:
@@ -104,7 +121,7 @@ def main() -> None:
         )
         loss.backward()
 
-    learning = sample(backward)
+    learning = sample(backward, args.batch)
     details = buffers.get("effect_details")
     facts = buffers.get("facts")
     print(
@@ -117,8 +134,13 @@ def main() -> None:
                 "device": "cpu",
                 "dtype": "float32",
                 "threads": torch.get_num_threads(),
+                "interop_threads": torch.get_num_interop_threads(),
+                "load_before": load_before,
+                "load_after": os.getloadavg(),
                 "platform": platform.platform(),
                 "torch": torch.__version__,
+                "model_module": inspect.getfile(ActorCritic),
+                "native_module": native_engine.__file__,
                 "observation_config": space.encoder.config.model_dump(),
                 "model_config": config.model_dump(),
                 "observation_sha256": hashlib.sha256(obs.toJSON().encode()).hexdigest(),
@@ -142,6 +164,7 @@ def main() -> None:
                 "forward_backward": learning,
                 "peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
                 * (1 if platform.system() == "Darwin" else 1024),
+                "memory_scope": "process high-water RSS including imports, model, warmups, inference and backward; no optimizer",
             }
         )
     )

@@ -83,162 +83,170 @@ Mitigate concrete findings, rerun the affected checks and measurements, and show
 the residual tradeoffs in the demo/PR. Preserve frozen world and experiment
 evidence; changed rules do not make old and new learning curves interchangeable.
 
-## Measured local-fact mitigation (2026-11-04)
+## Evidence and mitigations — 2026-11-04
 
-A concrete representation defect was reproduced: the first program influenced
-another holder's program through a GRU spanning all 512 fact rows. The new
-isolation assertion fails on the pre-mitigation code (5/16 output elements,
-max absolute difference 0.3391394). FactEncoder now validates ordinal boundaries
-and owner/provenance consistency, batches each live program as an independent
-packed sequence, and bypasses recurrence when no program is present. Independent
-program order, remapped holders, duplicate multiplicity and inserted NaN padding
-are invariant; token order and signed numeric values remain distinguishable.
-Tests exercise gradients and rows/typed_pool/typed_gru inference with captured
-programs after source departure. This is representation evidence, not learning
-efficacy.
+The complete preceding note is preserved as git blob
+`1aa5fd5c96f4c5ba822dedb223207ea7639da8f2` (`git show <blob>`), including original
+command lines, tables and contrary evidence. Exact executable evidence bundles:
 
-Bounded component measurement, same Apple M4 Max, macOS 26.0.1, Torch 2.10.0,
-CPU float32, one thread, batch 16, width 64, 32 objects, **512 facts in both
-versions** (explicitly matching capacity, not v7's default). Two warmups then ten
-samples per row; processes run sequentially with no concurrent task-owned build
-or benchmark. Ordinary fixture has one counter fact; program fixture has two
-six-integer programs per observation. No optimizer step, game or training run.
-Numbers are median milliseconds; raw receipts also retain total, maximum and
-observations/second. These small samples do not establish percentiles.
+| Evidence | Exact source/receipt reference |
+| --- | --- |
+| Local-fact isolation and CPU component measurements | Implemented at `043705783efe6aefb843a520681e841effef0e09`; FactEncoder before/after blobs `dadc7a116893b56ae1f5b1d138356581cc0135df` / `8d85444cc2779d9f5866d529c80e5f35a2bea1ec`; harness `abaf2ee834bbf95c79dc0fe6878ceccbd3faf01e`; receipts `674acb711334adeea9dc3d308f42d4e1304d66cb` / `5dfed2c9a18d82b981d5d87b8bec1cbb856ad54f`; failing assertion `d7693829ae671e5f6ba4f570a5de83a6a7a2faff`. |
+| Dependency benchmark, cache/model fixes, numeric and profiler probes | Bundle `b273985619373fe6c86996eae2e27b5fb440fd14` retains raw JSON/text, exact harnesses, binary hashes and patch over `fb3555ffb`. Committed mitigation: `b2fb06cbadb8978d1f2373c9b2490551c358c907`. |
+| Complete legal payments and paired inventories | Bundle `88d6abd34d8b56a9606c3ec58696063955d08226` (245,225 B): harnesses, raw receipts, engine/model/binary/wheel hashes, instrumentation-only historical patch and command/result scope. Before: `fb3555ffbd36bb797908110fc549999fe8e1a381`; after: `85cb1ceab87e75712265e6a4c9f26351c68d4add` plus measurement edits. Production cache/model match `b2fb06cba`; subsequent main sync changed Wave organization only. |
+| Consolidated program fixture parity | `81fa8070f9ff772ff01b2eab6c210e2ac72e362b` retains the matching observation SHA256/configuration, 208,368 input bytes and 21/11 live detail/fact rows. |
 
-| Risk / workload | Retained v7 comparator | Original v8 | Mitigation | Remeasured v8 | Remaining limitation |
-| --- | ---: | ---: | --- | ---: | --- |
-| Ordinary inference | 3.94 | 15.36 | Skip absent programs | 3.94 | Full policy/encoding still unmeasured |
-| Ordinary forward/backward | 6.42 | 52.04 | Skip absent programs | 6.42 | No update or learning claim |
-| Two-program inference | N/A: unrepresentable | 15.61 | Pack live independent programs | 4.76 | CPU component fixture only |
-| Two-program forward/backward | N/A | 47.84 | Same | 10.29 | Ten-sample max was 18.32 ms |
-| Process peak RSS, whole harness | Included in each process | 308,150,272 B | Same | 273,973,248 B | Includes imports and all cases; not per-operation allocator peak |
+### Representation and component cost
 
-The unchanged v7 control remeasured at 3.62 / 6.06 ms (inference / fwd+bwd),
-illustrating ordinary host variation. Matched input tensors use 524,288 bytes;
-v8 fact parameters remain 3,268,096 bytes versus v7's 3,166,720. Packing does not
-reduce tensor capacity. At that stage full-model cost, shared-detail occupancy
-and engine/search attribution were missing; the current pass below adds evidence
-and records the remaining clean-timing limitation. Gate retains full suites and
-same-runner Engine Budget.
-Default allocated observation arrays total 133,616 B (v6), 146,928 B
-(v7/128 facts), and 208,368 B (v8/512 facts): v8 adds 61,440 B over v7,
-43,008 B from shared details and 18,432 B from local facts. This is measured by
-summing `array.nbytes` from `ObservationSpace(ObservationConfig(policy_input_version=v)).encoder.allocate()`;
-a rollout storing N such observations uses N times this payload, before other
-rollout fields/allocator overhead. No capacity was reduced or truncated.
-That revision’s anthem-only added benchmark did not satisfy the requested
-dependency workload, and mana-pool invalidation was unoptimized. The current
-pass below supersedes those implementation limitations.
+A whole-buffer GRU let one holder's program influence another: the new isolation
+assertion failed on the predecessor (5/16 elements, maximum difference 0.3391394).
+FactEncoder now validates ordinals and owner/provenance, packs independent live
+programs, preserves duplicate occurrences and skips recurrence when no program
+exists. Independent program order, remapped holders and inserted NaN padding are
+invariant; token order and signed numeric values remain distinguishable. Captured
+programs reach rows/typed_pool/typed_gru after their source departs.
 
-Reproduce: `PYTHONPATH=. uv run --no-sync python .cache/mtg-244-risk/measure_facts.py before`
-and the same command with `after`; the harness and raw receipts are retained
-locally and as exact git blobs (`git show <blob>` restores their bytes):
+Component measurements: Apple M4 Max, macOS 26.0.1, Torch 2.10.0, CPU float32,
+one thread, B16/D64, 32 objects, **512 facts for both versions**, two warmups/ten
+samples, sequential processes without task-owned competing builds. Ordinary
+fixture: one counter fact; program fixture: two six-integer programs. Median ms:
 
-- Before FactEncoder: `dadc7a116893b56ae1f5b1d138356581cc0135df`.
-- After FactEncoder: `8d85444cc2779d9f5866d529c80e5f35a2bea1ec`.
-- Harness: `abaf2ee834bbf95c79dc0fe6878ceccbd3faf01e`.
-- Before/after receipts: `674acb711334adeea9dc3d308f42d4e1304d66cb` /
-  `5dfed2c9a18d82b981d5d87b8bec1cbb856ad54f`.
-- Failing pre-mitigation assertion: `d7693829ae671e5f6ba4f570a5de83a6a7a2faff`.
+| Workload | Retained v7 | Original v8 | Independent-program v8 | Limitation |
+| --- | ---: | ---: | ---: | --- |
+| Ordinary inference | 3.94 | 15.36 | 3.94 | Component only |
+| Ordinary forward/backward | 6.42 | 52.04 | 6.42 | No optimizer or learning claim |
+| Two-program inference | Unrepresentable | 15.61 | 4.76 | CPU fixture only |
+| Two-program forward/backward | Unrepresentable | 47.84 | 10.29 | Ten-sample max 18.32 ms; no population percentile |
+| Whole-harness process peak RSS | Included in each process | 308,150,272 B | 273,973,248 B | Imports/all cases included; not an operation allocator peak |
 
-These sources were measured as uncommitted work above
-`9486ff3b4be15002c6423ef6cf633ba536752033`; blobs identify the exact measured
-implementations. The mitigation is now committed in `043705783efe6aefb843a520681e841effef0e09`
-and its FactEncoder blob is unchanged at reconciled head `fb3555ffb`.
-No performance remeasurement of the combined head is implied. Program
-recurrence still uses Python packing/validation and scans the fact buffer;
-accelerator synchronization and representative end-to-end measurements remain
-open. All full learning outcomes remain unmeasured.
+The unchanged v7 control remeasured at 3.62/6.06 ms, showing ordinary variation.
+Matched tensors use 524,288 B; fact parameters remain 3,268,096 B (v8) versus
+3,166,720 B (v7). Packing does not reduce capacity. These measurements precede
+combined-head acceptance; they establish neither full-policy cost nor learning
+quality. The original sources were uncommitted above `9486ff3b4be15002c6423ef6cf633ba536752033`;
+the exact blobs above identify them.
 
-## Current implementation pass — 2026-11-04
+Further deterministic findings:
 
-The independent TLA benchmark is restored to 512 games / seeds 1,2,3; added
-anthem runs require `--layers`. `bench_layers` constructs Moon/Urborg in the
-existing decks, asserts Mountain without Swamp before execution, and reports
-16 bounded games and eight Search-64 decisions independently. Opt-in `benchmark`
-metrics attribute board evaluations, context clones, dependency comparisons/edges,
-and mana invalidations. Allocation-counting runs are separate from timing runs;
-timers overlap (board includes dependency time, which includes clone time).
+| Risk | Before | Mitigation / result | Limitation |
+| --- | --- | --- | --- |
+| Numeric meaning | Integers 4096/8192 collide in the embedding bucket and saturated raw projection; max output difference 0 | V8-only signed `log1p(abs(x))/10` in both reducers; difference 0.0576074, gradients/separation pass | Transport unchanged; learned compression is not injective |
+| Shared dispatch, B16/D64, 21 live details each | 16 GRU/pack/index-add calls, 416 linear calls | Batch independent programs: 1 GRU/pack/index-add, 71 linear calls | CPU profiler counts; contended timings discarded |
+| Warmed pool write, each of 8 clones | 471 allocations / 133,918 B; 1 board / 2 clones / 2 comparisons / 1 edge | Retain mana-independent raw board: 10 allocations / 2,054 B; zero boards/clones/comparisons | Finalized activation outputs and trigger indexes refresh; conditional layers still rebuild |
+| Tap-dependent layers, each of 8 clones | 471 allocations / 133,918 B; 1 board / 2 comparisons | Required invalidation retained: 471 allocations / 133,926 B; same board/comparisons | 8 B extra metadata; no tap speedup claimed |
 
-Two reproduced findings now have verified mitigations:
-- A warmed independent board rebuilt after one pool write: 471 allocations /
-  133,918 requested bytes, two context clones, two dependency comparisons, one
-  real dependency edge. Cache entries now retain the raw board across mana
-  revisions unless a discovered layer node reads `UnspentManaAtLeast` (including
-  nested conditions and granted statics). Activation finalization still refreshes.
-  Tapping retains characteristic invalidation.
-- Local-program integer tokens 4096 and 8192 produced identical outputs because
-  raw numeric projections saturated tanh. V8 program numbers now use signed
-  `log1p(abs(x))/10` in both encoders; transport is unchanged. Shared v8 program
-  reduction also batches independent programs across observations instead of
-  dispatching one GRU per observation. Frozen versions retain their paths.
+Mana dependency discovery includes nested conditions and granted statics. Debug
+recomputation covers dynamic outputs, mana-dependent statics and clone isolation.
+Shared/local tests cover source/target joins, meaningful timestamp/token order,
+duplicate multiplicity, irrelevant record order/padding, object remapping and
+gradients. Twenty-two focused Python cases pass (two optimizer smoke cases
+excluded), including all v8 model arms, checkpoint reload, one production
+collector transition and arena checkpoint admission. No optimizer/experiment ran.
 
-Measurement limitation discovered during the run: this shared Mac reported load
-averages 522.29 / 461.04 / 351.76 with unrelated compilation. The long original
-Search-64 run was stopped (no complete seed receipt). The completed pre-mitigation
-step count/digest remains useful: 101,650 decisions, no caps, digest
-15843333459759757527, matching the existing 512-game reference. Its 35.470791 s
-and the first full-policy timings are exploratory, **not** evidence of regression
-or speedup under this contention. Do not compare them against CI wall times.
-The executable/harness receipts under `.cache/mtg-244-risk` will be retained as
-blobs with the final focused results. Clean parent/change latency comparison and
-10% Engine Budget acceptance remain unavailable locally; Gate owns the isolated
-runner. No background benchmark remains from the interrupted run.
+### Complete legal-payment attribution
 
+On the same Apple M4 Max/macOS host, sequential release runs pay Cadets' real {2}
+activation on Moon/Urborg boards: eight exact forks each from floating RR and
+from two land sources. Four sources keep another activation payable, so native
+trivial skipping remains enabled without resolving the measured stacked ability.
+Each payment uses two external actions. Setup, forks and receipt serialization
+are unmeasured; native step-return observation is included. Roots stay unchanged.
 
-The completed evidence bundle is git blob
-`b273985619373fe6c86996eae2e27b5fb440fd14` (`git show <blob>`): exact raw JSON/text
-receipts, profiler/numeric probe sources, measured benchmark binary SHA256 values,
-current benchmark/policy harnesses and the cache/model patch above `fb3555ffb`.
-Before engine measurements used that revision's layer/cache implementation with
-opt-in instrumentation and the same dependency fixture. The before whole-workload
-rows incorrectly repeat the last probe's allocation counters when
-`counting_allocations=false`; ignore those fields. The final harness reports zero
-there. The eight allocation-enabled individual probes are valid.
+All complete legal-action sets, selected actions, mana/life/tap resources,
+captured programs and semantic digests agree before/after. Counts repeat exactly
+within each revision:
 
-| Risk | Baseline / before | Mitigation | Remeasurement | Limitation |
-| --- | --- | --- | --- | --- |
-| Pool-write rebuild (8 cloned warmed boards) | Each: 471 allocations, 133,918 requested bytes, 1 board, 2 context clones, 2 comparisons | Retain mana-independent raw board | Each: 10 allocations, 2,054 bytes, 0 boards/clones/comparisons | Typed pool-write attribution, not an entire payment; conditional layers still rebuild |
-| Tap-dependent layers | Each: 471 allocations, 133,918 B, 1 board, 2 comparisons | Preserve invalidation | Each: 471 allocations, 133,926 B, 1 board, 2 comparisons | Extra board metadata costs 8 B in this fixture; no tap speedup claimed |
-| Numeric program separation | Local outputs for 4096/8192 identical (maximum difference 0) | Signed log scaling, v8 only | Maximum difference 0.0576074; directed gradients/separation pass | Learned embeddings still compress; not an injectivity or learning-strength claim |
-| Shared-program dispatch, B16/D64, 21 live detail rows each | 16 GRU/pack/index-add calls; 416 linear calls | Batch independent live sequences | 1 GRU/pack/index-add; 71 linear calls | CPU profiler counts, timings discarded; per-record Python validation remains |
-| Default TLA workload | 512 games, 101,650 steps, no caps; digest 15843333459759757527 | Separate added workload | Same reference count/digest in pre-mitigation implementation | 35.471 s was on contended host; final clean timing and complete search comparison unavailable |
-| Dependency-bearing workload | 16 games, 689 steps; 8 search decisions, 1,600 simulations, no search caps | Genuine Moon/Urborg dependency; counters retained | Pre-mitigation steps: 2,284 boards / 4,536 clones / 4,536 comparisons / 2,268 dependency edges | Full final workload remeasurement awaits isolated runner; no old-engine correctness equivalence |
-| Full v8 policy program cost | 208.46 ms inference / 428.76 ms forward+backward medians; 8 samples each; peak RSS 1,048,084,480 B | Batched shared reduction and log magnitudes | Operation/storage counts below; clean latency/RSS comparison unavailable | These pre-mitigation timings are exploratory under contention, not acceptance or projected throughput |
+| Payment | Before | Mitigated | Limitation |
+| --- | --- | --- | --- |
+| Floating RR allocations / requested bytes | 1,176 / 295,613 B | 510 / 101,175 B | Allocation traffic, not peak live heap |
+| Floating RR boards / clones / comparisons / edges | 1 / 2 / 2 / 1 | 0 / 0 / 0 / 0 | One mana finalization remains |
+| Land-funded allocations / requested bytes | 2,882 / 830,700 B | 1,668 / 458,929 B | Includes native step observation |
+| Land-funded boards / clones / comparisons / edges | 4 / 8 / 8 / 4 | 2 / 4 / 4 / 2 | Both necessary tap rebuilds and two mana invalidations remain |
 
-The full-policy harness uses Apple M4 Max, macOS 26.0.1, Torch 2.10.0, CPU float32,
-one thread, batch 16, and the ordinary baseline recipe's width-64/depth-2/four-head
-FiLM model with world catalog. Two warmups/eight samples precede the retained
-before receipt. `--inventory` now provides parity/storage evidence without running
-or timing the policy on a busy host. Matched capacities include **512 facts in
-v6, v7 and v8**, 512 actions, 60 cards/40 permanents per seat:
+This closes payment-specific attribution for the existing mitigation. No further
+runtime optimization or reduced legal action space was needed. The comparator
+now requires every funding/sample identity, not merely sixteen equal rows.
 
-| Explicit input/state | Observation bytes | Batch-16 observation bytes | Parameter bytes | Live detail / fact rows |
+### Full input storage and remaining timing limits
+
+Default arrays: v6 133,616 B; v7/128 facts 146,928 B; v8/512 facts 208,368 B.
+V8 adds 61,440 B over v7: 43,008 B shared details plus 18,432 B local facts.
+A rollout storing N observations uses N times the payload before other fields
+and allocator overhead. No capacity was reduced or silently truncated.
+
+The full-policy harness uses the baseline recipe's width-64/depth-2/four-head
+FiLM model with world catalog, CPU float32, one thread, B16, two warmups/eight
+samples. Compared capacities: **512 facts in v6/v7/v8**, 512 actions, 60 cards/
+40 permanents per seat. Before/after inventory wheels matched all seven cases
+(native/Python arrays, observation hashes/configurations, storage, occupancy).
+Historical imports resolved inside the archive; inventory does no policy calls.
+
+| Input/state | Observation B | B16 observation B | Parameter B | Live details/facts |
 | --- | ---: | ---: | ---: | ---: |
-| v6 ordinary | 133,616 | 2,137,856 | 4,357,128 | 0 / 0 |
-| v7 ordinary | 165,360 | 2,645,760 | 7,555,592 | 0 / 0 |
-| v8 ordinary | 208,368 | 3,333,888 | 7,761,416 | 0 / 0 |
-| v8 Kellan grant + stacked trigger | 208,368 | 3,333,888 | 7,761,416 | 21 / 11 |
+| v6 ordinary | 133,616 | 2,137,856 | 4,357,128 | 0/0 |
+| v7 ordinary | 165,360 | 2,645,760 | 7,555,592 | 0/0 |
+| v8 ordinary | 208,368 | 3,333,888 | 7,761,416 | 0/0 |
+| v8 grant + captured trigger | 208,368 | 3,333,888 | 7,761,416 | 21/11 |
 
-All seven inventories assert native/Python parity. The additional shared fixture
-resolves one Drill activation: v6 uses 20 local fact rows; v7/v8 use two detail
-rows and ten explicit memberships with no local facts. Byte capacities and
-parameter counts are unchanged from their ordinary rows. These comparable
-representable states are available to the same timing harness. Model/rollout storage increases
-are real: a rollout with N observations uses N times the observation payload,
-before actions, rewards and allocator overhead. The 21-row fixture is not a
-universal occupancy bound; 4,096 detail capacity and explicit overflow are retained.
-No scan of all padded detail embeddings is introduced: the shared reducer reads
-only header-owned slices. Padding, record order and object-remapping assertions
-cover the new batched reduction. There is still per-observation/per-record Python
-validation and accelerator synchronization risk; accelerators were not measured.
+The representable shared fixture resolves one Drill activation: v6 has 20 local
+facts; v7/v8 have two details, ten explicit memberships and no local facts.
+Storage equals each version's ordinary row. The 21-detail program fixture is
+not a universal occupancy bound. Retain 4,096 capacity and explicit overflow.
+Shared reduction visits header-owned slices; per-record Python validation,
+fact-buffer scans and accelerator synchronization remain costs/risks.
+Accelerators, sample efficiency, win rate and generalization are unmeasured.
 
-Reproduction commands are in `docs/development.md#bounded-layerinput-attribution`.
-Focused proof: 22 layer/shared-input Python cases passed (two optimizer smoke
-cases excluded), including all model arms, checkpoint reload, one actual collector
-transition, arena checkpoint admission, joins/order/duplicates/padding and gradients.
-Debug cache proof covers mana-dependent static grants and dynamic mana outputs
-across clones. Full suites, full-workload final digests and clean same-run timing
-remain Gate work. Learning/sample efficiency/win rate remain unmeasured, and no
-training experiment or merge was launched.
+Contrary timing evidence must remain visible: the shared host reported load
+522.29/461.04/351.76 during earlier unrelated compilation and 614.75 during later
+inventory work. Its original Search-64 run was stopped without a complete seed;
+no background benchmark remains. Completed measurements under contention:
+
+- Original TLA: 512 games, 101,650 steps, zero caps, digest
+  15843333459759757527; pre-mitigation elapsed 35.470791 s.
+- Dependency: 16 games/689 steps, eight search decisions/1,600 simulations,
+  no search caps; pre-mitigation step attribution 2,284 boards, 4,536 clones/
+  comparisons and 2,268 edges.
+- Pre-mitigation full v8 program: inference 208.46 ms and forward/backward
+  428.76 ms medians (eight samples); process peak RSS 1,048,084,480 B.
+
+These timings establish neither regression nor speedup and cannot be compared
+with CI times. Before whole-workload rows incorrectly repeat the last probe's
+allocation counters when `counting_allocations=false`; ignore those fields.
+Allocation-enabled individual probes are valid; the final harness emits zero
+for non-counting runs. No clean final step/search/full-policy comparison exists
+yet. Earlier anthem-only benchmarks did not exercise dependency ordering.
+
+## Isolated producer and remaining acceptance
+
+Reproduction commands: `docs/development.md#bounded-layerinput-attribution`.
+`layer-risk.yml` runs all builds/measurements sequentially on one GitHub-hosted
+VM. Its first PR publication triggers it; manual dispatch becomes available
+once it exists on the default branch. Publication belongs to the later Graph
+step. The workflow supplies an execution path, not a performance result.
+
+`scripts/measure_layer_risk.py` archives the Engine Budget reference and pinned
+pre-mitigation source, applies instrumentation/fixture access only, and uses
+identical fixtures. It retains revision/harness/binary identities, environment,
+full-score digests, counts and samples, even if a later phase fails. It runs:
+
+- Original TLA step/search at baseline, before and after. Reference-world
+  differences are explicit, never equivalent-workload speedup claims.
+- Dependency step/search timing and separate allocation runs before/after;
+  complete-payment attribution; search samples and first 128 step durations.
+  Prefix maxima are not population percentiles; overlapping timers cannot sum.
+- Seven matched v6/v7/v8 model cases per revision, rebuilding each wheel and
+  using fresh case processes. Native/Python encoding, inference/backward
+  throughput and process peak RSS (imports/warmups included) are retained.
+
+One exact policy-case list drives production and comparison. The comparator
+rejects incomplete seeds, changed payment/actions/digests/counts, missing or
+mislabeled policy cases, inventory masquerading as timing, nonfinite/incomplete
+samples, missing memory and unmatched warmups/configuration/storage. Seventeen injected-receipt
+checks pass without running games or training; slower but comparable timings
+remain in the output for inspection, never automatically accepted.
+
+Still required: collect the first isolated artifact, inspect matched results,
+mitigate demonstrated findings and remeasure before review readiness. Gate owns
+full suites and the unchanged 10% same-runner Engine Budget; a green budget alone
+does not close dependency/model risk evidence. No baseline adoption, merge,
+training experiment or learning-quality claim is authorized by these checks.

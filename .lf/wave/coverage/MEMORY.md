@@ -376,11 +376,27 @@ preserves accepted decisions, dated proof limits and source history.
   ordering, and combining added games with the old step total conceals the
   ordinary-workload comparison. Separate workload results, retain complete
   action/score digests and counts, and attribute rebuild/dependency costs before
-  choosing optimizations. Tap-state predicates now require characteristic
-  invalidation; mana revisions still invalidate the whole derived board.
+  choosing optimizations. Tap-state predicates require characteristic
+  invalidation. The subsequent implementation (`b2fb06cba`) retains the raw board
+  across mana writes unless a discovered layer condition reads mana, including
+  nested conditions and newly granted statics. Finalized activation outputs and
+  trigger indexes still refresh; debug recomputation remains the correctness
+  oracle. Eight warmed-board pool-write probes fell from 471 to 10 allocations
+  each, but this does not measure a complete payment or whole-game throughput.
   Neither a digest refresh nor a component speedup waives the 10% Engine Budget.
-  Full-model and engine/search evidence remain open for this implementation;
-  training outcomes need separately authorized experiments.
+  The standard CI budget runs only the original TLA workloads; added dependency
+  and policy harnesses require explicit execution and retained receipts.
+- Exact numeric transport does not guarantee meaningful model separation.
+  V8 integers 4096/8192 shared an embedding bucket and saturated the raw numeric
+  projection to identical local-program outputs. Signed log magnitudes repair
+  that counterexample in local/shared v8 reducers while retained versions keep
+  their paths. Independent shared programs are batched without sharing recurrent
+  state. Join/order/padding/gradient and real collector/checkpoint-selection
+  checks support these mechanisms, not general injectivity or learning quality.
+  Exact receipts and limitations are at
+  `b2fb06cba:scratch/mtg-244-risk-validation.md`. Full-model comparative latency,
+  final engine/search remeasurement and complete-payment attribution remain
+  open; training outcomes need separately authorized experiments.
 
 ## Architecture convergence (accepted 2026-07-17)
 

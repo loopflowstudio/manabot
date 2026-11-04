@@ -6,8 +6,12 @@ one PR for review; no merge or experiment launch. On 2026-11-04 Jack Heart
 approved a new input version: "new input version is totally fine". The prior
 input-version blocker is resolved. The implementation started from
 `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`; reconciliation on 2026-11-04
-uses `fb3555ffbd36bb797908110fc549999fe8e1a381`, which integrates main
-`1546aae3fa7b207b2c5e8ac92a6571af036ddf83`.
+uses `85cb1ceab87e75712265e6a4c9f26351c68d4add`, including the risk
+implementation checkpoint `b2fb06cbadb8978d1f2373c9b2490551c358c907` and main
+`19bdee9444fb185ba6cf290de61a0d64e4e40d37`. The latest sync only removes the
+eval Wave and renames training to experiments; it changes no runtime code.
+Coverage's objective and memory still govern this Task. No immediate child
+directories containing memory exist under `.lf/wave/coverage/` at this head.
 
 Implementation 2026-11-04: recovered the archived draft and replaced the old
 staged evaluator with a complete board context. The branch now contains the
@@ -16,13 +20,17 @@ explicit v8 encoders/model support. No merge, world freeze
 or experiment launch is selected.
 
 Status: implemented with focused correctness evidence; not yet ready for review.
-Jack Heart's 2026-11-04 risk-measurement direction remains accepted work before
-demo/PR, detailed in [mtg-244-risk-validation.md](mtg-244-risk-validation.md).
+Jack Heart's 2026-11-04 risk-measurement direction remains required before
+review readiness, detailed in [mtg-244-risk-validation.md](mtg-244-risk-validation.md).
 Local-fact isolation, numeric saturation and unnecessary mana-board rebuilding
 are repaired. Shared-program and real configuration-selection checks pass;
-allocation, operation and buffer costs are measured. Clean comparative engine/
-full-policy timings remain unavailable on the contended local host, and combined-
-head Gate checks remain outstanding. No further product decision is needed.
+allocation, operation and buffer costs are measured. Complete legal-payment
+attribution now agrees before/after on every action, resource and digest. The new
+Layer Risk Measurements workflow supplies the missing isolated execution path;
+its clean comparative engine/full-policy receipts remain outstanding until the
+measurement change is published. The standard Engine Budget alone does not
+execute those harnesses. Review readiness still needs those receipts and
+combined-head Gate checks. No further product decision is needed.
 
 Accepted outcome: one `Game::characteristics` authority composes types, colors,
 abilities and power/toughness for rules and policy consumers, preserving a cheap
@@ -135,23 +143,6 @@ facts (kind 14, frame index plus one, token kind/value and ordinal). Existing
 catalog programs keep their retained input representation. This is the necessary
 layer-consumer interface, not a redesign of the adjacent execution Task.
 
-## Completed simplifications
-
-The explicit board context replaces `LayerBasis`, `ScopeView`, recursive stage
-readers and final-loss-filtered candidate discovery. Evaluated characteristics
-replace printed battlefield colors, redundant `CardDefinition` queries and the
-separate lost-keyword/attached-ability paths. Keyword counters retain timestamps.
-Stacked activations resolve their captured programs rather than looking them up
-again on the printed definition. Event snapshots directly supply granted triggers.
-The redundant node flag and `ContinuousEffect::follows` are removed.
-
-V8 local-fact recurrence now batches independent live programs, validates ordinal
-and provenance boundaries, preserves duplicate occurrences and skips recurrence
-when no program exists. This fixes cross-program contamination and reduces the
-measured component cost; it does not establish full-policy performance or learning
-quality. Required scopes, attachments, activation pricing and source-independent
-resolution remain on the surviving authorities.
-
 ## Implemented witnesses and evidence limits
 
 Directed witnesses cover all eleven supplied pairs: Beorn/Kellan; Moon/Urborg;
@@ -212,73 +203,64 @@ Completed cuts; no remaining deletion targets identified:
 - Whole-buffer v8 program recurrence and raw saturating integer projection are
   replaced by packed independent programs and signed log magnitudes. Shared
   membership routing has one implementation; v7 retains its original reduction.
+- Glob-discovered policy cases and count-only receipt completeness are removed;
+  the producer/comparator share exact case identities. No exclusive fixtures remain.
 - Duplicate Kellan walkers in tests and the policy benchmark are replaced by
   `verify.representation::{kellan_upgrade_root,kellan_trigger_root}`. Commands,
   bounded prefixes, retained inputs, program ownership and gradients are preserved.
 
-## Remaining work after risk implementation — 2026-11-04
+## Remaining work
 
-- Clean performance evidence: the default TLA benchmark is separate again;
-  `bench_layers` supplies a true Moon/Urborg dependency with complete per-decision
-  score digests, counts and cache/dependency instrumentation. One original step
-  run retained 101,650 steps and the reference digest. Original search was stopped
-  after severe external host contention was discovered (load average >500).
-  Completed local latencies are exploratory, not comparative acceptance. Clean
-  parent/change step/search total/tail, full-policy inference/backward/encoding
-  latency and peak-memory comparisons remain unavailable here. Gate's isolated
-  runner owns the 10% budget; no reference refresh is authorized to hide a cost.
-- Implemented risk evidence: pool-write allocations 471→10 and requested bytes
-  133,918→2,054; shared GRU dispatches 16→1 at batch 16. Buffer/model bytes and
-  shared/local occupancy are measured for explicit v6/v7/v8. The numeric collision
-  (4096 versus 8192) is repaired. Shared program order, timestamps, source/target
-  joins, duplicates, independent record order, remapped objects, padding and
-  gradients pass, alongside all three v8 model paths. A production collector
-  obtains one v8 transition; saved-checkpoint evaluation admission selects v8.
-  No optimizer or experiment launch. Raw receipts, commands, hardware, code
-  provenance and limitations live in the risk note's evidence blob.
-- Integration: main's explicit `action_overflow=first-legal` pilot exception is
-  separate from input admission; both encoder boundaries validate the selected
-  input before prefix selection, while default overflow stays error and fresh
-  input stays v6. Existing pilot protocols/evidence do not authorize a launch here.
-  MTG-241's Task comments identify future retained frame/result/replacement-batch
-  payloads. Current v8 carries layer and captured-program payloads only; it does
-  not claim to encode those unpublished execution structures. Ordinary sync and
-  schema coordination remain necessary before combined publication, preserving
-  already frozen versions. No second execution authority is part of this Task.
+1. Obtain and inspect the first isolated `layer-risk.yml` artifact after the
+   caller's publication step. It runs original TLA baseline/before/after,
+   dependency before/after, complete payments and seven full-policy cases per
+   revision. Require full score digests/counts, search samples, bounded 128-step
+   prefixes, native/Python encoding, inference/backward throughput and process
+   RSS. Mitigate demonstrated regressions and remeasure before review readiness.
+   Standard Engine Budget does not execute the dependency/model harnesses.
+   Local timings remain exploratory under host load above 600; no further
+   product decision is needed. [Risk evidence](mtg-244-risk-validation.md) owns
+   measured results, exact sources, configurations and limitations.
+2. Gate owns affected suites and current-world admission: full debug Rust,
+   clippy, model/checkpoint/active-training checks, and current Academy receipt/
+   fixture refreshes required by the catalog/state hash. Preserve historical
+   evidence. The unchanged 10% same-runner Engine Budget remains separate.
+   A necessary digest/reference refresh uses the candidate's own CI artifact,
+   a documented reason and the seeded-search assertion in
+   `tests/infra/test_engine_budget.py`; it cannot hide a regression. Fewer
+   choices are not speedup evidence.
+3. Preserve integration boundaries. Main's `action_overflow=first-legal` pilot
+   exception follows input admission; default overflow stays error and fresh
+   input stays v6. MTG-241's future retained frame/result/replacement-batch
+   payloads are not claimed by current v8. Coordinate schemas through ordinary
+   sync before combined publication without adding a second execution authority.
 
-Gate owns affected suites and current-world admission, including current Academy
-receipt/fixture digest refreshes required by the new catalog and state hash.
-Preserve historical evidence; current-world corpora/consumers must agree before
-publication. Gate also owns the full debug Rust suite, clippy, model/checkpoint
-and active-training checks in `docs/development.md`. Engine Budget retains its
-10% limit. Changed digests or workload definitions require the normal reference
-procedure using the candidate's own CI artifact and a documented reason,
-including the baseline's seeded-search assertion in `tests/infra/test_engine_budget.py`.
-A refresh cannot erase an unaccepted measured regression; old/new timings remain
-visible even when corrected semantics prevent digest equality. Captured stack
-programs and added roots can change digests; fewer choices are not speedup evidence.
-Learning efficacy remains unmeasured without a separately authorized experiment.
+Complete-payment attribution is closed: eight pool-funded and eight land-funded
+Cadets activations preserve every action, resource, stacked program and digest.
+Allocations fall 1,176→510 / 2,882→1,668; the two necessary tap rebuilds remain.
+Historical/candidate wheels match all seven native/Python inventory cases each.
+These are deterministic counts/parity, not timing or learning acceptance.
 
-The post-sync overflow fixture correction uses real observations and checks
-input admission before action-prefix selection on both encoder boundaries.
-Earlier focused results and their exact scope are preserved in the pre-compression
-plan, blob `813f319d781339abaee7dfe47cdfc74db6a99b8d`; the risk note retains raw
-measurement evidence. They do not certify subsequent edits or combined-head Gate.
+The measurement producer and comparator now use one exact policy-case list;
+file globbing/counts are no longer completion authority. Complete payment
+identities and eight finite policy samples/two warmups per operation are checked
+before a comparison is written. Frozen runtime/input behavior is unchanged.
 
-Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml`
-with `--lib mana_revision_reuses_independent_board_but_reprices_dynamic_outputs`,
-`--test rules_tests cr_613_continuous_effects` and `--example bench_search` — 27 passed;
-`uv run --no-sync --extra dev --extra artifacts pytest tests/model/test_layer_input.py tests/model/test_shared_effects.py -k 'not ordinary_learner' -q`
-— 22 passed, two optimizer smoke cases deselected. The optional dependency benchmark
-compiles, the root wheel was rebuilt/installed atomically, and format/Ruff/diff
-checks pass. Gate retains full suites and clean comparative performance acceptance.
-
-The consolidated fixture's `bench_layer_input.py --version 8 --state program --inventory`
-receipt (blob `81fa8070f9ff772ff01b2eab6c210e2ac72e362b`) matches the retained
-observation SHA256, configurations, 208,368 input bytes and 21/11 live detail/fact
-rows. No new timing claim follows from immutable-view reuse or these reductions.
+Validation: `uv run --no-sync pytest tests/infra/test_layer_risk_receipts.py -q`
+— 17 passed; infrastructure collection and Ruff/diff checks passed. Reapplying the comparator to the retained payment JSON
+matched all 16 cases and the recorded allocation reductions. Reuse the
+unchanged engine/model evidence: `b2fb06cba:scratch/mtg-244-layers.md` retains
+27 debug Rust / 22 Python passes (two optimizer cases excluded), and payment
+bundle `88d6abd34d8b56a9606c3ec58696063955d08226` retains the debug payment proof,
+14 inventories, atomic wheel installs, rustfmt/actionlint and prior receipt tests.
+Full suites and isolated timing remain with the producers above. No merge,
+training launch or clean-performance acceptance is implied.
 
 ## Preserved evidence
+
+The complete pre-compression plan, including detailed validation scope and source
+history, is blob `7b17e207b67ed3d9785e9915a69439a1e6eb44a1` (`git show <blob>`).
+
 
 Pre-compression plan and exact earlier test filters:
 `929d8324becbb243bdb88809d9670dada8ef11f3`; decision note:
