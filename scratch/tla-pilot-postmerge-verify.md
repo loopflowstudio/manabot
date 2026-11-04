@@ -50,9 +50,10 @@ ledger and sampler; no parallel recovery authority is needed.
 
 ## Remaining acceptance
 
-Gate still owns the affected recovery, encoding, current-world admission and
-debug-native checks required by docs/development.md and AGENTS.md. Delivery
-and final-source freezing remain unfinished. Execution then requires fresh
+Gate reviewed the affected recovery, encoding, current-world admission and
+debug-native results required by docs/development.md and AGENTS.md; see
+`scratch/tla-resource-recovery-gate.md`. Publication is complete; merge, remaining
+CI checks and final-source freezing remain unfinished. Execution then requires fresh
 inventory/budget reconciliation, CUDA admission, bounded GPU training from a
 fresh initialization, trained checkpoint exports, the paired schedule, confirmed
 teardown and a qualified report. No v10 paid execution or trained endpoint is
