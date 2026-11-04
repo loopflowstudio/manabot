@@ -91,6 +91,12 @@ collection stalled during the broad suite. Select the existing one-seat quota
 and a fixed Torch seed for this fixture only. Production two-seat training and
 the pilot's frozen recipe remain unchanged.
 
+The failed-update accounting fixture likewise needs two bounded updates, not
+whole-game completion; it now explicitly uses one-seat quotas. For recovery,
+one-seat decision quotas do not guarantee any completed games after the merged
+rules change. Preserve exact state/metrics equality for both modes and require
+positive completed games only for the two-seat mode that guarantees them.
+
 ## Inherited MTG-239 context from main c823c9c8f
 
 # Questions and assumptions — MTG-239, 2026-11-03

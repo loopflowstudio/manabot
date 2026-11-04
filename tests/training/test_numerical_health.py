@@ -344,6 +344,9 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert isinstance(stage, TrainSelfPlay)
     stage.transitions = 2
     stage.updates = 2
+    # Fault accounting needs two tiny updates, not completion of sampled games.
+    # Keep the workload bounded as well as the injected accounting clock.
+    stage.learning_seats = "one"
     stage.execution.device = DEVICE
     stage.learning.min_advantage = 0
     # Charge only injected durations in the executor. Keep watchdogs and the

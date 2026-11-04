@@ -3,6 +3,8 @@
 The paid pilot reached CUDA collection but **completed no learner update**.
 A legal state needs 140 fact rows; frozen policy input v5 has 128. Initialization
 is admitted and evaluated, but there is no trained endpoint or learning-pace claim.
+The A6000 allocation failed its timing fixture; the later L4 allocation exposed
+the fact-capacity overflow.
 The retained 2026-11-03 20:48 UTC settlement confirms both GPU rentals torn
 down, with no provider pods or unsettled sessions at that read.
 
@@ -177,13 +179,31 @@ rejects 258 facts at the 256 bound. The new local receipt is
 This allocation does not establish capacity for every legal state or a measured
 end-to-end speedup.
 
-Local publication validation covers 510 distinct passing Python tests (2 skipped),
+Pre-sync v2 publication validation covered 510 distinct passing Python tests (2 skipped),
 895 passing debug Rust tests (2 ignored), Ruff, Rust fmt/clippy and a rebuilt
 native extension. The numerical fixture now uses a deterministic four-decision
 quota instead of waiting for complete games under its extreme policy. Two
 recovery checks rejected a commit change during validation and passed when
 rerun with HEAD fixed; recovery admission remains unchanged. These are local
 implementation checks, not GPU or strength results.
+
+After integrating PR #415, v3 validation covers **532 distinct passing Python
+tests (2 skipped)** and **905 passing debug Rust tests (2 ignored)**, with Ruff,
+fmt/clippy and a rebuilt native extension. These are grouped runs and successful
+rechecks, not one uninterrupted green process. The combined Python process hit
+collection deadlines in the numerical-accounting fixtures; those now explicitly
+bound their requested decision quotas. A later complete-game timing fixture
+was slow in that combined process, which was stopped; the remaining 212 cases
+ran in a fresh process. Two recovery cases restored all state exactly but assumed
+a game would finish within a one-seat quota. The completion assertion now applies
+to two-seat batches, where completion is guaranteed; all four seat/learner cases
+pass. Production collection and recovery admission are unchanged. CI remains
+the check of the configured combined workflow.
+
+The new runtime also replays the retained 87-action prefix to the same frame:
+all 140 facts agree through scalar/vector/Python encoding at 256, and v5 still
+overflows. The separate local receipt is `.runs/mtg213/v3-capacity-replay.json`;
+earlier replay receipts remain unchanged. This is capacity-repair evidence only.
 
 CI and an exact source freeze remain before the next capped attempt.
 That attempt requires fresh reconciliation of both $0.7375

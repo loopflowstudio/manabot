@@ -35,3 +35,10 @@ joint paired-bootstrap criterion. Reconcile both prior $0.7375 reservations
 and actual billing before any new paid allocation. A new protocol identity
 does not replenish the budget. No GPU learner update or v3 result is claimed
 by preparing this protocol. Report training only after observed GPU updates.
+
+The combined-runtime replay separately reached the retained frame after the
+same 87 actions and encoded all 140 facts identically through native scalar,
+native vector and Python paths at capacity 256. Both v5 encoders retained their
+overflow. Receipt: `.runs/mtg213/v3-capacity-replay.json`, binding this runtime
+and the original failure bundle. This proves the counterexample is repaired
+on v3; it establishes neither universal capacity nor GPU learning.
