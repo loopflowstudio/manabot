@@ -610,3 +610,11 @@ collection+learning times below their first canary; no numerical or export
 regression. Retain all results even if the prediction fails. This is a distinct
 implementation calibration, not a retry or replacement of first-canary evidence.
 The source-preparation failure `b65b1912e41a` remains recorded separately at $0.
+
+Second-canary prelaunch amendment (2026-11-04): L4 availability is now zero;
+the quote allocated nothing. RTX 4000 Ada is available at $0.28/hour. Create
+`representation-5da5f4-ada` with the same 6-vCPU/48-GB host minimum, 50-GB disk,
+pinned image, 900-second startup and 300-second delivery, ceiling $0.30/hour,
+max one. Keep the same excluded recipe and $0.60 cohort cap. The hardware
+change confounds before/after speed attribution; use the result only to
+calibrate the final hardware/horizon, not to claim the sparse-routing speedup.

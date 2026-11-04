@@ -58,3 +58,9 @@
   checks pass. A second excluded canary is predeclared in the design at $0.60,
   keeping cumulative canary reservations below $0.90. Scientific horizon/seed
   allocation still awaits that result; no learning scores were inspected.
+- Second-canary quote at source 7f54fca04 found no available L4 (no launch or
+  rental). Current provider quotes: L4 $0.59 unavailable, A5000 $0.27 unavailable,
+  RTX 4000 Ada $0.28 available, A4000 $0.25 unavailable. Use a new isolated
+  RTX 4000 Ada template at $0.30/hour ceiling with the same host/disk/image and
+  safeguards. Hardware differs, so between-canary timings cannot isolate the
+  optimization. The second canary retains its $0.60 cap and excluded seed.
