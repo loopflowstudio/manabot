@@ -294,7 +294,9 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
             assert_eq!(
                 encoded
                     .effects
-                    .chunks_exact(18)
+                    .as_chunks::<18>()
+                    .0
+                    .iter()
                     .filter(|row| row[17] == 1.0)
                     .count(),
                 activations
@@ -302,7 +304,9 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
             assert_eq!(
                 encoded
                     .effect_members
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .filter(|row| row[0] > 0.0)
                     .count(),
                 activations * targets

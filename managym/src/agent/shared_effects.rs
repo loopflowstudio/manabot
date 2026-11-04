@@ -162,7 +162,12 @@ pub fn encode(
     members.fill(0.0);
     let (mut d, mut m) = (0, 0);
     let mut orders = std::collections::BTreeSet::new();
-    for (row, record) in headers.chunks_exact_mut(EFFECT_DIM).zip(records) {
+    for (row, record) in headers
+        .as_chunks_mut::<EFFECT_DIM>()
+        .0
+        .iter_mut()
+        .zip(records)
+    {
         let effect = &record.effect;
         row[..2].copy_from_slice(&split_id(name_value(&format!(
             "Modification::{}",

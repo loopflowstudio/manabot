@@ -23,7 +23,6 @@ use crate::support::{
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
-        shared_effects::{EffectObject, EffectMembership, SharedEffectData},
         continuation::{
             delayed_event_code, ClauseTarget, ContinuationFrame, ManaOutput, VisibleReference,
             RELATION_DIM_V5, RELATION_KEYWORDS_INDEX, RELATION_THIS_TURN_INDEX, RELATION_X_INDEX,
@@ -47,6 +46,7 @@ use managym::{
             PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
             PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
         },
+        shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
     flow::{
         trigger::DelayedTriggerEvent,

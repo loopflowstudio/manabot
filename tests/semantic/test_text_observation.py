@@ -341,13 +341,13 @@ def test_effect_derived_characteristics_appear_only_when_present() -> None:
     assert len(before) == len(after) and len(changed) == 2
     (mountain_before, mountain_after), (ogre_before, ogre_after) = changed
     assert mountain_after == mountain_before.replace(
-        "; unlisted effective keywords false.",
+        "; timestamp rank",
         "; attached to C2 (Gray Ogre); name set to Citizen; creature types set to"
-        " Citizen; land through an effect; unlisted effective keywords false.",
+        " Citizen; land through an effect; timestamp rank",
     )
     assert ogre_after == ogre_before.replace(
-        "; unlisted effective keywords false.",
-        "; stun counters 2; unlisted effective keywords false.",
+        "; timestamp rank",
+        "; stun counters 2; timestamp rank",
     )
 
 
@@ -842,7 +842,10 @@ def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
     assert "This turn:" not in decision.text
 
 
-def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects() -> None:
+@pytest.mark.parametrize("historical", (False, True))
+def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects(
+    historical: bool,
+) -> None:
     """Conflicting injected data proves the renderer reads the engine's flag.
 
     Rust observability tests prove real Nonlegendary effects clear that flag;
@@ -856,6 +859,27 @@ def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects() -
     ogre["effects"] = [
         {"modification": "Nonlegendary", "duration": "EndOfTurn", "timestamp": 90}
     ]
+    if historical:
+        state.pop("shared_effects")
+    else:
+        incarnation = next(
+            link["incarnation"]
+            for link in payload["objects"].values()
+            if link.get("permanent_id") == ogre["id"]
+        )
+        state["shared_effects"] = [
+            {
+                "effect": ogre["effects"][0],
+                "controller_id": state["agent"]["id"],
+                "source": None,
+                "members": [
+                    {
+                        "target": {"object_id": ogre["id"], "incarnation": incarnation},
+                        "order": 0,
+                    }
+                ],
+            }
+        ]
     ogre_card = next(
         card
         for card in state["agent_cards"]
@@ -870,7 +894,8 @@ def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects() -
         if "[D" in line and "Gray Ogre" in line and "owner" in line
     )
     assert "legendary yes" in card_line
-    assert "; effect until end of turn: isn't legendary" in text
+    prefix = "; effect" if historical else "Effect 1:"
+    assert f"{prefix} until end of turn: isn't legendary" in text
 
 
 def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
