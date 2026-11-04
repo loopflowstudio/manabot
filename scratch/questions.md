@@ -68,3 +68,14 @@ optional frequency code, unknown in historical captures, gets relation row
 kind 9 in v5/v6; existing columns and v1–v4 exclusions remain fixed. Canonical
 hashing moves to contract 15 because the waiting record serialization changed.
 Gate owns the resulting mutable-w17 refresh.
+
+## Main v7 sync and pilot isolation — 2026-11-03
+
+Main `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` adds the explicit v7
+shared-effect projection; fresh inputs remain v6. Retain its public native
+provenance and T6's catalog, schedule and delayed-lifetime semantics together.
+Its experiment decisions and full notes remain at that commit's
+`scratch/questions.md`; no experiment or resource allocation is inherited.
+The frozen v3 pilot's controlled scheduling/analysis fixtures use its declared
+world identity; real runtime rejection remains separate. Pin its expected
+64-action input instead of inheriting the fresh 512-action default.

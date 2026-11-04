@@ -9,5 +9,6 @@ pub mod observation_json;
 pub mod opponent;
 pub mod policy_history;
 pub mod rollout_pool;
+pub mod shared_effects;
 pub mod structured_offer;
 pub mod vector_env;

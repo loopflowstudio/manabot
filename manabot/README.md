@@ -3,6 +3,26 @@
 The trainable agent of Manabot: environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
 
+## Shared effect inputs
+
+`ObservationConfig(policy_input_version=7)` admits complete resolved effects
+before per-holder fact expansion. `env/shared_effects.py` mirrors the native
+128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
+subtypes, names, used abilities and copy exceptions still use `facts` (default
+128 rows). The model encodes each payload once and routes its contribution into
+named objects before attention; action focus remains addressable. Sum reduction
+preserves edge multiplicity and shared gradients; it is learned compression,
+not a proof of injective embeddings or improved play. See the
+[architecture walkthrough](../docs/observation-architecture.html).
+
+The version is explicit in saved observation/configuration identities. Fresh
+construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
+retain their meanings. Historical captures without shared provenance cannot be
+promoted to v7 by guessing a source/controller. Text representation
+`manabot-text-6` renders each native payload once with exact public source and
+member labels and timestamp ranks. Its within-observation token reducer is not
+persistent game memory.
+
 ## Quickstart
 
 ```bash

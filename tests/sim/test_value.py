@@ -11,7 +11,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim.rollout import OBS_KEYS, _allocate_buffers
+from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.search.flat_mc import make_player, spec_name
 from manabot.sim.search.value import (
     ValueScorer,
@@ -45,7 +45,7 @@ class TestValueScorer:
             key: np.asarray(obs[key])[None].astype(
                 np.int32 if key == "action_focus" else np.float32
             )
-            for key in OBS_KEYS
+            for key in scorer.agent.observation_space.shapes
         }
         probs = scorer.score(batch, np.array([0]))
         assert probs.shape == (1,)

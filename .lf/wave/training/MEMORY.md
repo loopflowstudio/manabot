@@ -3,6 +3,59 @@
 Evaluation memory (hosted LLM comparisons, inference receipts and evidence
 reuse) lives in `.lf/wave/eval/MEMORY.md`.
 
+## Shared effect inputs (5da5f4, 2026-11-04 UTC)
+
+Jack Heart's 02:49 UTC direction followed MTG-213 v3's second capacity failure,
+270 fragments exceeding v6/256. This supersedes treating the larger table as
+the final representation repair; v1–v6 and executed pilot identities remain
+frozen. At 03:01 UTC he approved shipping complete shared effects routed into
+affected object embeddings before attention. The bounded approval does not
+promote a production default or establish learning quality. PR416's v6 repair
+is integrated; 5da5f4's v7 implementation has focused verification but is not
+yet published or merged at this reconciliation.
+
+Complete native payloads factor before capacity admission. V7 uses fixed
+128 × 18 headers, 512 × 3 typed details and 2,048 × 2 membership edges;
+header offsets/counts partition the latter arrays. Every original record keeps
+an ordered edge, including duplicate targets. Controller, exact current source
+incarnation, duration, timestamp and optional-value presence remain distinct.
+The 270-fragment case becomes 9 complete payloads and 135 memberships; no rules
+record or timestamp is deleted. Frozen v1–v6 keep effect fragments, while v7's
+local facts retain counters, subtypes, copies and other non-effect facts.
+All blocks come from the selected ObservationSpace. Fresh defaults stay v6.
+Bounds remain engineering allocations, with explicit overflow, not guarantees
+over all reachable games. Old projected captures cannot invent missing native
+provenance; replayed Command fixtures supply that authority.
+
+Explicit joins route each encoded payload before object attention and preserve
+action addressability and shared gradients. Sum retains duplicate membership
+contributions; mean alone would erase them. Lossless transport is not an
+injective neural encoding: hashed/summed embeddings can alias or saturate.
+V7 `rows` and `typed_pool` select the same reducer; `typed_gru` reduces tokens
+within one observation and carries no game memory. Original v5 three-arm
+calibration remains v5 evidence. No scientific replicate or new v7 CUDA result
+exists. Active-byte reduction does not imply padded-memory savings: default v7
+effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
+
+Native source-A/B positions equal under v6 differ under v7 and diverge after
+one source leaves. Final characteristics alone therefore cannot replace active
+provenance. A separate observed keyword grant/removal timestamp defect remains
+in 5da5f4's questions: fixed-layer keyword subtraction can ignore grant order.
+It predates transport and does not justify semantic coalescing. Such merging
+requires identical future behavior across expiry, sources, intervening effects,
+affected sets and multiplicity, as Jack Heart explicitly required.
+
+The separate $25 representation allowance covers all attempts and ancillary
+costs; retained paid calibration estimates $0.07083924 with the rental deleted,
+not a settled invoice. Engineering runs do not satisfy replicated learning.
+A revised v7 study needs a prospective common-input protocol. Persistent memory
+and relation-table redesign remain proposals; native current effects/knowledge
+cannot depend on a bounded history window. Any later recurrent design needs
+viewer/seat ownership, reset, replay/fork and exact restoration contracts.
+Evidence is published under `experiments/data/state-representation-5da5f4/`;
+the Task plan owns remaining acceptance and delivery. Filesystem inspection
+found no immediate Training child memory directories on 2026-11-04.
+
 ## Fixed-corpus TLA pilot (MTG-213, 2026-11-03)
 
 Jack Heart replaced the deferred full-TLA plan with a preliminary trophy-deck
