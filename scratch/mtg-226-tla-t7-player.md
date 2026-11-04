@@ -253,3 +253,11 @@ stacked on T6, with no merge, auto-merge or Task completion.
 
 Command logs are local `/tmp/mtg226-*.log`; the committed receipt writers and
 tests reproduce the durable evidence. No servers or watchers were started.
+
+Publication created PR #418 at `efef751ff`. T6 concurrently published its own
+receipt refresh at `d21fae20d`, producing conflicts in the same mutable evidence.
+The follow-up sync retains T7's already-validated combined-world receipts and
+its explicit event/frequency text assertion; T6-only bindings cannot describe
+the additional card. The resulting merge changes only inherited scratch notes
+relative to the tested T7 commit: runtime, tests and evidence bytes are identical.
+Republish the resolved head and verify clean mergeability, without landing.
