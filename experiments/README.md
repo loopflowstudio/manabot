@@ -182,7 +182,9 @@ retains four paired CUDA seeds, initialization and periodic evaluation, a
 sustained-plateau criterion, and separate held-out scoring. Its first cohort
 was cancelled before scoring when measured concurrent GPU throughput invalidated
 the allocation budget. `state_representation_gpu.py` now launches only a capped,
-excluded throughput admission for one and two concurrent ordinary learners;
-the failed eight-context launcher is removed. Measured whole-cohort affordability
+excluded throughput admission for sequential 256-stream learners, following an
+incomplete 32-stream admission. Wider batches change optimization and require a
+prospective recipe; the candidate retains the original complete-game horizon.
+The failed eight-context launcher is removed. Measured whole-cohort affordability
 must precede a replacement scientific allocation. No plateau or architecture
 advantage is established; the completed CPU study remains frozen.

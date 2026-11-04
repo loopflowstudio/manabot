@@ -169,7 +169,7 @@ game length. Only an affordable measured arrangement can select a prospectively
 frozen replacement. If neither fits, preserve the evidence and report the
 budget/throughput block rather than replaying eight concurrent learners.
 
-Admission run `332a954fd935` at source `978bf3eae` acquired instance59148889
+Admission run `332a954fd935` at source `978bf3eae` acquired instance 59148889
 at $0.2207407407/hour but never booted a worker. Etude ended it at its startup
 limit as `machine_lost_before_start`; provider absence was confirmed at
 19:12:11 UTC. No learner or score ran. Billing is unavailable; retain its $0.50
@@ -183,30 +183,41 @@ the invalidated scientific launcher has been removed, not retained as a fallback
 
 Japan run `1fca2d156e65` at `f0669347e` passed CUDA numerics but its first
 pooled learner paused at the 600-second watchdog's finalization boundary:
-7 updates,224 games,40,241 learner decisions; collection204.40s and learning
+7 updates, 224 games, 40,241 learner decisions; collection 204.40s and learning
 143.74s. No GRU or concurrent pair ran. The incomplete admission cannot qualify
-an arrangement. Instance59149701 was deleted and confirmed absent at19:30:36UTC.
+an arrangement. Instance 59149701 was deleted and confirmed absent at 19:30:36 UTC.
 The existing eight-seed scientific attempt and both admissions stay in the ledger.
 
-The next bounded candidate uses the repository's existing256-stream batching
+The next bounded candidate uses the repository's existing 256-stream batching
 approach, sequentially, four ordinary complete-game updates per arm on excluded
-seed74200. Each learner has24GiB host allowance,80% CUDA allocator allowance,
-and600seconds; one job has30minutes plus15-minute setup, capped at$0.20. Require
-at least32GB host RAM on a compatible3090; the quote must include disk and free
+seed 74200. Each learner has 24 GiB host allowance, 80% CUDA allocator allowance,
+and 600 seconds; one job has 30 minutes plus 15-minute setup, capped at $0.20. Require
+at least 32 GB host RAM on a compatible 3090; the quote must include disk and free
 provider transfer. The conservative reservation, retaining every previous cap,
-is now$24.9725825939. No further rental fits those unreconciled reservations.
+is now $24.9725825939. No further rental fits those unreconciled reservations.
 
 This is a NEW optimization regime, not numerically equivalent execution of the
 32-stream recipe. Larger learner minibatches change the gradient estimates and
 optimizer-update count. It is the supported-batching option in Jack Heart's
 restart direction, applied identically to both reducers before any score. If it
-admits, a scientific comparison would require fresh paired seeds74211–74214 and
-256updates ×256complete games =65,536games per learner, preserving the original
+admits, a scientific comparison would require fresh paired seeds 74211–74214 and
+256 updates × 256 complete games = 65,536 games per learner, preserving the original
 substantive game horizon (16× the CPU cohort). Map the learning schedule with
 IterationSchedule(steps=256, reference_steps=2048) to retain its progress per
-complete-game exposure; retain nonzero rates. Curves would be every32updates,
+complete-game exposure; retain nonzero rates. Curves would be every 32 updates,
 with the same initialization, separate held-out deals and final three-interval
 plateau criterion. Decisions and optimizer exposure still require reporting.
 Current code declares this candidate but launches only admission. Its actual
 throughput, resource use and full-cohort affordability must precede any scientific
 allocation; no candidate is selected by an admission score or partial success.
+
+Batched admission outcome: run `52617ef80df1` at source `1ca17ed12` entered
+its first pooled learner, then ended `lost / machine_lost` at 19:41:03 UTC.
+No final exit status or output inventory was received. Its failure cause and
+completed learner exposure are unknown, not zero. Neither reducer completed an
+admitted endpoint. Deletion is confirmed; the final provider read finds all
+five relevant Vast instances absent. Billed-plus-estimated provider cost across
+this Task is $0.4487194142, with Vast bills and the $6 ancillary reserve pending.
+Conservative reservations remain $24.9725825939; this is not money spent.
+Receipts are manifest-backed under `state-representation-gpu-5da5f4/restart/`.
+The replacement study remains unlaunched and the plateau objective unmet.

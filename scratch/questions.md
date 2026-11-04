@@ -1,5 +1,13 @@
 # Decisions and open questions — 5da5f4
 
+- Restart result, 2026-11-04: three bounded admissions are unsuccessful: one
+  startup loss, one seven-update pooled run stopped short, and one lost machine
+  during the wider-batch candidate. No GRU endpoint or new scientific cohort.
+  All rentals are confirmed absent; provider billed-plus-estimated total is
+  $0.4487194142, with unsettled bills and the $6 ancillary reserve. The plan and
+  manifest-backed restart receipts retain the exact denominator. Plateau remains
+  unmet; no further rental is selected without viable admission and accounting.
+
 - Restart authorization, Jack Heart, 2026-11-04: "start it when you can" and
   "seems fine" after the GPU allocation failure. Resume repair and a viable
   prospective GPU attempt under the existing cumulative $25 cap; no additional
@@ -107,11 +115,11 @@ remain deferred, not prerequisites or approved follow-up work. No unresolved
 product choice blocks this step. The existing working plan records the review,
 counterexamples and future questions; results acceptance remains with demo/review.
 
-- Restart batching assumption, 2026-11-04: use the repository's existing256-stream
-  approach as the next bounded candidate after32-stream admission stopped short.
+- Restart batching assumption, 2026-11-04: use the repository's existing 256-stream
+  approach as the next bounded candidate after 32-stream admission stopped short.
   Jack Heart explicitly permitted supported batching. This changes optimization,
   so it requires a new prospective recipe and fresh paired seeds, with equal
   game exposure and schedules mapped by that exposure; it is not equivalent
   execution or a continuation of old weights. No scores informed the choice.
   The candidate's $0.20 admission keeps even unreconciled full reservations
-  below$25. Scientific execution still requires measured affordability.
+  below $25. Scientific execution still requires measured affordability.

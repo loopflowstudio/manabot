@@ -360,23 +360,53 @@ local file size and SHA256, and every prior manifest entry remained unchanged.
 The existing artifact publication log records those 823 published entries.
 No new scientific cohort, rental, model promotion or merge was performed.
 
-## Restart implementation — 2026-11-04
+## Restart result — 2026-11-04
 
-Prospective admission is appended to the GPU protocol. Measure both arms at
-one and two concurrent learners, eight updates each on excluded seed 74200,
-without scores; project total cohort cost with 50% allowance and separate
-setup/evaluation. Latest read confirms both prior Vast instances absent and
-both bills unavailable. The cheapest compatible fresh offer was a 3090 at
-$0.2474074074/hour; keep old reservations and $6 ancillary pending settlement.
-The additional $0.50 admission reservation gives $24.2725825939 reserved.
+Three bounded admissions ran under the original $25 ceiling. No replacement
+scientific cohort launched, no score selected a treatment, and the plateau
+objective remains unmet. The next step needs reliable completed admission and
+accounting reconciliation, not another launch of the failed eight-context plan.
 
-Delete — do not maintain: the invalidated eight-context scientific allocation
-in `worker`, its 10% CUDA allocator cap and the 20-hour assumption. Preserve
-scientific recipes, independent seeds, curve/held-out definitions, uncertainty,
-ordinary execute_regime/monitor authorities and archived failed evidence. The
-replacement execution arrangement depends on measured admission; no scientific
-launch has been selected or authorized by a score.
+- `332a954fd935` / `978bf3eae`: RTX 3090 instance 59148889 failed to boot before
+  its startup deadline; no learning. Provider deletion confirmed.
+- `1fca2d156e65` / `f0669347e`: Japan RTX 3090 instance 59149701 passed CUDA
+  numerics. The first sequential pooled learner completed 7 of 8 updates,
+  224 games and 40,241 learner decisions, then paused for its wall/finalization
+  budget. Collection 204.40s plus learning 143.74s (49.73s/update); peak host
+  RSS 4.03 GB and CUDA reserved 2.95 GB. GRU and concurrent-pair passes never ran;
+  no complete throughput admission exists. Provider deletion confirmed.
+- `52617ef80df1` / `1ca17ed12`: the prospectively frozen 256-stream candidate
+  entered its first pooled learner, then Etude reported `machine_lost`, without
+  a final exit status or output inventory. The cause is unknown; neither OOM
+  nor a native/model failure is established. It is not evidence that batching
+  is faster, slower or affordable. Deletion confirmed at 19:41:03 UTC.
 
-Check: nine focused study tests, Ruff and whitespace passed. Gate retains
-broader suites. Remaining: execute admission, reconcile billing/reservations,
-then freeze and launch only an affordable measured replacement.
+All five relevant Vast instances, including the prior admission and failed
+scientific cohort, are absent in the final provider read. Known provider bill
+plus retained whole-rental estimates totals $0.4487194142; the three new rental
+estimates are $0.0187264764, $0.0581526294 and $0.0285087767. All Vast bills remain
+unsettled. The $6 ancillary reserve remains, and conservative reservations
+(including prior unspent caps) total $24.9725825939. This is not $24.97 spent or
+an assertion that the remaining scientific budget has been consumed. No further
+allocation is selected pending reconciliation and a viable execution path.
+
+Compact receipts, complete attempt inventories, quotes and final accounting
+are under `experiments/data/state-representation-gpu-5da5f4/restart/`, published
+through the artifact manifest. Full operational logs remain under
+`.runs/representation/gpu-restart/`; lost worker outputs are missing, not zeros.
+The previous CPU cohort and failed eight-seed GPU evidence remain unchanged.
+
+Delete — do not maintain: completed removal of the eight-context launcher,
+10% per-process CUDA cap, 20-hour allocation and its exclusive evaluation
+orchestration. Original source is 27a126422. The current declaration launches
+only sequential 256-stream admission, using execute_regime and a whole-cohort
+cost projection. It preserves 65,536 prospective games/learner through 256 updates
+and maps the optimizer schedule to game exposure. Wider minibatches change
+optimization; fresh paired seeds 74211–74214 are declared for any later science.
+No scientific execution path or automatic promotion is enabled by admission.
+
+Check: nine focused study tests and the artifact-tracking test passed; Ruff,
+whitespace and context budgets passed. All 19 published receipts match their
+manifest size/SHA256, and every previous manifest entry is unchanged. Gate owns
+broader suites. Remaining: completed two-arm admission, affordable supervised
+scientific execution, replicated curves/held-out evaluation and results review.
