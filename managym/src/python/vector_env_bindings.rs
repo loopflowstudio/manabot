@@ -328,6 +328,7 @@ impl PyVectorEnv {
     }
 }
 
+/// Card capacity follows the supplied ObservationSpace on scalar/vector paths.
 /// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
 /// capacity from the fact axis. At 128 rows their encoding is identical; the
 /// Python configuration/checkpoint still owns the declared version identity.
@@ -336,13 +337,18 @@ pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
     mut config: ObservationEncoderConfig,
 ) -> PyResult<ObservationEncoderConfig> {
-    let shared_count = ["effects", "effect_details", "effect_members"]
-        .into_iter()
-        .map(|name| buffers.contains(name))
-        .collect::<PyResult<Vec<_>>>()?
-        .into_iter()
-        .filter(|present| *present)
-        .count();
+    let cards = buffers
+        .get_item("agent_cards")?
+        .ok_or_else(|| PyValueError::new_err("missing agent_cards"))?;
+    let card_shape: Vec<usize> = cards.getattr("shape")?.extract()?;
+    config.max_cards_per_player = match card_shape.as_slice() {
+        &[rows, _] | &[_, rows, _] if rows > 0 => rows,
+        _ => return Err(PyValueError::new_err("invalid card buffer shape")),
+    };
+    let mut shared_count = 0;
+    for name in ["effects", "effect_details", "effect_members"] {
+        shared_count += usize::from(buffers.contains(name)?);
+    }
     if shared_count != 0 && shared_count != 3 {
         return Err(PyValueError::new_err(
             "v7 requires all shared-effect buffers",

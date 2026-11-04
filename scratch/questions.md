@@ -79,3 +79,7 @@ Its experiment decisions and full notes remain at that commit's
 The frozen v3 pilot's controlled scheduling/analysis fixtures use its declared
 world identity; real runtime rejection remains separate. Pin its expected
 64-action input instead of inheriting the fresh 512-action default.
+
+## Required integration repair — 2026-11-04
+
+The recorded head `8ed124a8d5704446a99fc00a5ac064fe5a075927` conflicts with main `0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. Preserve main’s v5 pilot rename and frozen shape contract, and adapt T6’s synthetic-world fixture to v5. Native replay uses the real runtime and the recorded allocation directly; it never uses the synthetic-world fixture. Main’s MTG-213 decisions remain at that commit’s `scratch/questions.md`; they authorize no experiment execution here. The current ci-fix request authorizes publication and auto-merge on PR #417.

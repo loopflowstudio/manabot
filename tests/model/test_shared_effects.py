@@ -114,10 +114,15 @@ def test_v7_policy_routes_shared_effects_and_reloads(
             torch.testing.assert_close(expected, actual)
 
 
-def test_shared_effect_policy_uses_ordinary_learner_and_export(tmp_path: Path) -> None:
+@pytest.mark.parametrize("card_capacity", (60, 128))
+def test_shared_effect_policy_uses_ordinary_learner_and_export(
+    tmp_path: Path, card_capacity: int
+) -> None:
     regime = local_smoke(steps=1, seconds=120)
     regime.id = "shared-effects-v7-engineering-smoke"
-    regime.observation = ObservationConfig(policy_input_version=7)
+    regime.observation = ObservationConfig(
+        policy_input_version=7, max_cards_per_player=card_capacity
+    )
     regime = TrainingRegime.model_validate(regime.model_dump())
     with VerifyStore(tmp_path / "verify.sqlite") as store:
         run = execute_regime(regime, 73200, tmp_path / "training", store)
@@ -127,6 +132,7 @@ def test_shared_effect_policy_uses_ordinary_learner_and_export(tmp_path: Path) -
     assert (
         model.shared_effects is not None
         and space.encoder.config.policy_input_version == 7
+        and space.encoder.config.max_cards_per_player == card_capacity
     )
 
 

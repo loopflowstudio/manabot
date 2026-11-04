@@ -1,4 +1,86 @@
-# TLA trophy pilot: collection capacity failure before learning
+# TLA trophy pilot: capacity failures before learning
+
+V5 source is frozen as `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, prepared
+run `e8c76bc2c06f`. Its A6000 quote was refused; the latest retained availability
+read at 06:46:27 UTC on 2026-11-04 reports A6000, L4, A4000 and A4500 unavailable.
+**V5 has not been submitted or rented**. No GPU learner update is yet established.
+The 06:46:13 UTC inventory confirms all earlier rentals ended and no provider pods. The
+[v5 contract](protocols/tla-trophy-213-v5.md) retains v7, the 134 entries, learner
+and evaluation schedule, with a 128-card axis and corrected native buffer sizing.
+It requires fresh initialization.
+
+## V4 result (2026-11-04 UTC)
+
+Run **baa8671d6480**, source `0b6c2bb854ba`, passed CUDA numerical admission
+on an RTX A6000 but failed before learning at **61 card and sideboard objects
+against capacity 60**. Exact replay identifies stream 22 after 300 actions:
+40 original cards, five generated tokens and 16 sideboard cards. Its 238
+completed games supplied no optimizer update. The rental ended; estimated full
+rental cost is $0.04314150, cumulative billed plus estimated cost **$0.21368981**,
+using the later planned-to-ended estimate in
+`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
+This supersedes the earlier $0.04314118 estimate; v4 billing remains unsettled.
+All four reservations total $2.95 conservatively held against the same $10 cap.
+
+V4 initialization evaluation completed 32 valid games (**2 wins / 30 losses**),
+with 256 scheduled games still missing: complete=false, success=null. All
+receipts remain under [v4 evidence](data/mtg213/gpu-v4-20261104/summary.json).
+
+The [v4 contract](protocols/tla-trophy-213-v4.md) consumed PR #419's delivered
+v7 shared-effect inputs and bound all tensor capacities. Retained 140/270-fact
+positions pass native scalar/vector/Python parity, compatibility and overflow
+checks. At the 05:59 UTC pre-launch settlement, the three earlier rentals had
+ended and bills totaled **$0.17054831** (v3: $0.09962018). The cumulative cost
+and four reservations above include the subsequent v4 rental.
+
+## V3 continuation (2026-11-04 UTC)
+
+Run `c216c6be7037` used merged PR #416 commit
+`3b122de9078c985f846a0f3c5a3a42ebca3b1182`, world w17, the v3 card digest,
+the unchanged 134-entry corpus and v6/256. Etude **0.2.13** restored launcher
+inventory decoding in an isolated client; the frozen worker retained **0.2.12**.
+Fresh provider inventory and bills preceded launch. The L4 quote was $0.59/hour,
+$0.7375 maximum reservation and a $1 cohort ceiling within the existing $10 cap.
+
+The L4 passed 32 CUDA numerical checks and its optimizer probe. Collection then
+failed with `facts 270 > 256`; the attempt ledger retained **171 completed games**,
+but **zero learner updates** incorporated their samples. A bounded replay of
+stream 251, seed 31552, action 208 matches the retained pre-command frame and the
+same error through native scalar, native vector and Python encoders. Nine
+timestamped `LoseKeywords` records per opposing permanent each name hexproof and
+indestructible: **9 × 15 × 2 = 270** distinct rows. A diagnostic 512-row buffer
+preserves all rows identically in native/Python encoding. That diagnostic neither
+changes the frozen pilot capacity nor establishes sufficient capacity for training.
+See the [replay receipt](data/mtg213/gpu-v3-20261104/capacity-replay.json) and
+[retained stream](data/mtg213/gpu-v3-20261104/capacity-stream.jsonl).
+
+The fresh initialization checkpoint completed eight paired matches / 32 games:
+**3 wins, 29 losses**, all valid, with no failures or truncations. Its numerical
+result happens to match v1; these are separate v3 executions and evidence.
+The [analysis](data/mtg213/gpu-v3-20261104/analysis.json) retains all 288 scheduled
+games, **256 missing**, no trained endpoint, `complete=false`, `success=null`.
+Cloud discovery stalled during a network outage before playing any match;
+evaluation then used a byte copy of this run's tracking prefix and the canonical
+CLI on the verified source. No failed match was retried.
+
+The outage also delayed cleanup. The launcher confirms this rental ended at
+**02:26:33 UTC**. Its full estimated rental cost, including idle cleanup time,
+is **$0.09958535**; the smaller per-run allocation estimate is not the whole bill.
+Fresh provider bills for the two earlier rentals total **$0.07092813**, making
+cumulative billed-plus-estimated compute **$0.17051348**. Conservatively retain
+all three reservations (**$2.2125**) against $10 until final provider settlement.
+The final inventory contained one differently named pod absent from this
+launcher's database; it was left untouched. The advertised `etude-result.json`
+object was again missing; every other listed output was downloaded and
+hash-verified. [Summary and cost accounting](data/mtg213/gpu-v3-20261104/summary.json),
+[settlement](data/mtg213/gpu-v3-20261104/settlement.json) and
+[missing-output receipt](data/mtg213/gpu-v3-20261104/missing-outputs.json) retain
+these limits.
+
+The 256-row assumption is invalidated. V3 source, inputs, attempts and evidence remain
+frozen; no unchanged retry, truncation or deck exclusion is justified.
+
+## Historical v1 result (2026-11-03)
 
 The paid pilot reached CUDA collection but **completed no learner update**.
 A legal state needs 140 fact rows; frozen policy input v5 has 128. Initialization
@@ -8,21 +90,15 @@ the fact-capacity overflow.
 The retained 2026-11-03 20:48 UTC settlement confirms both GPU rentals torn
 down, with no provider pods or unsettled sessions at that read.
 
-The subsequently accepted [prospective v2 repair](protocols/tla-trophy-213-v2.md)
-selects policy input v6 and an explicit 256 fact rows for the pilot; generic
-fresh v6 configuration defaults to 512. It preserves v5 and all
-results below. Local publication checks passed; CI, source freeze and a new
-capped training/evaluation attempt remain outstanding. No GPU learner update
-has yet been observed.
+The [v2 repair](protocols/tla-trophy-213-v2.md) introduced v6/256; generic
+fresh v6 defaults to 512 and frozen v5 stays at 128. Publication then integrated
+[PR #415](https://github.com/loopflowstudio/manabot/pull/415), whose five-card
+repairs changed the native digest. [V3](protocols/tla-trophy-213-v3.md) bound that
+runtime while preserving the 134 decks, input capacity, recipe and budget.
+Its executed result is above. V2 source remains at
+`d655d37996d2702cd5fee6ac37db11d855e87640`.
 
-Publication then integrated [PR #415](https://github.com/loopflowstudio/manabot/pull/415),
-whose five-card repairs change the native digest. The active prospective runner
-is now [v3](protocols/tla-trophy-213-v3.md), preserving the same 134 decks,
-v6/256 input and scientific/budget settings. V2 protocol bytes and its validated
-source remain unchanged. The local validation counts below describe the
-pre-sync v2 source; combined-runtime validation is recorded separately.
-
-## Paid attempts (2026-11-03)
+### Paid attempts
 
 | Run | Hardware | Result | Estimated cost |
 |---|---|---|---:|
@@ -30,13 +106,12 @@ pre-sync v2 source; combined-runtime validation is recorded separately.
 | `40709cd93f90` | L4 | 32 CUDA tests and optimizer probe passed; first collection failed | $0.03233182 |
 
 Both quoted $0.59/hour with a $0.7375 maximum reservation and $1 allocation cap.
-**Total estimated paid compute: $0.06508817.** Provider billing is not settled;
-conservatively retain both reservations ($1.475) against Jack Heart's $10 total
-cap. The second operational cohort is `mtg213-pilot-v1-correction1`, capped at
+**Estimated compute at that read: $0.06508817**, with $1.475 reserved pending
+billing. The v3 accounting above supersedes these estimates against the $10 cap.
+The second operational cohort is `mtg213-pilot-v1-correction1`, capped at
 $1, because Etude cannot append to an existing cohort. This did not create a new
 scientific population or change the schedule. [Settlement](data/mtg213/gpu-corrected-20261103/settlement.json)
-confirms teardown at 20:48:27 UTC. V1 ended without another retry; a prospective
-v2 allocation requires fresh billing reconciliation within the same total cap.
+confirms teardown at 20:48:27 UTC. V1 ended without another retry.
 
 The original prepared source `b8835f63b4e7132ae6fd3f86cc73cefa6716e57f` was
 verified against all 1,327 bundled files and rebuilt in an isolated archive.
@@ -55,7 +130,7 @@ in both the Task and historical archive, then the full CUDA gate on the L4.
 The [source correction](data/mtg213/gpu-corrected-20261103/source-correction.json)
 was selected before retry or scoring; original requests and evidence are unchanged.
 
-## Retained capacity counterexample
+### Retained capacity counterexample
 
 L4 collection failed after 6.343 seconds, before an optimizer update. The attempt
 ledger records 13 completed games before the batch failure; none of their samples
@@ -81,7 +156,7 @@ the accepted prospective v6 contract is described above. The launcher listed
 object was absent; [the missing-output receipt](data/mtg213/gpu-corrected-20261103/missing-outputs.json)
 retains that gap. Other outputs were downloaded and hash-verified.
 
-## Scheduled initialization evaluation
+### Scheduled initialization evaluation
 
 The retained initialization is [self-play-initial-raw.pt](data/mtg213/gpu-corrected-20261103/training/self-play-initial-raw.pt),
 SHA256 `456a9a225fceb72034b5d5a244378244f18592b42f77b88f655ae7d281f72f7b`.
@@ -129,7 +204,7 @@ uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg213
 ## Local implementation proof
 
 This separate CPU proof used the production regime executor, full 64×2 model,
-current v5 input and the whole eligible population, reduced to two streams and
+policy input v5 and the whole eligible population, reduced to two streams and
 one update. It is not a GPU pilot result or learning-rate comparison.
 
 | Measurement | Observed |
@@ -166,58 +241,48 @@ one correlated deal provide no credible improvement or pace estimate. The
 periodic and endpoint GPU comparisons remain unplayed; initialization results
 are reported above.
 
-## Remaining acceptance
+## Implementation validation and remaining acceptance
 
-Operator comment 78f4c226 selects 256 rows for the pilot, following Jack Heart's
-question about 256, under the existing authorization. The earlier 512 was also
-an operator engineering choice; comment 0c17ad58 was an operator-issued run
-reason, not separate human confirmation. The retained failure replay now encodes
-all 140 distinct facts in parity at 256 through native scalar/vector and Python
-paths, while both v5 encoders retain the original overflow. A controlled fixture
-rejects 258 facts at the 256 bound. The new local receipt is
-`.runs/mtg213/v6-256-capacity-replay.json`; the earlier 512 receipt is unchanged.
-This allocation does not establish capacity for every legal state or a measured
-end-to-end speedup.
+[PR #416](https://github.com/loopflowstudio/manabot/pull/416) merged at
+`3b122de9078c985f846a0f3c5a3a42ebca3b1182` with green
+[CI](https://github.com/loopflowstudio/manabot/actions/runs/41752523278).
+The subsequent focused corpus, pilot and discovery verification passed 38 tests;
+that exact merged source was frozen for v3. Earlier validation, including failed
+combined runs and their bounded-fixture repairs, remains at
+`7b8bb32731205981b6be09097eb4ca4b39b3864f:experiments/tla-trophy-pilot.md`.
+Those implementation checks establish neither GPU learning nor strength.
 
-Pre-sync v2 publication validation covered 510 distinct passing Python tests (2 skipped),
-895 passing debug Rust tests (2 ignored), Ruff, Rust fmt/clippy and a rebuilt
-native extension. The numerical fixture now uses a deterministic four-decision
-quota instead of waiting for complete games under its extreme policy. Two
-recovery checks rejected a commit change during validation and passed when
-rerun with HEAD fixed; recovery admission remains unchanged. These are local
-implementation checks, not GPU or strength results.
+Operator comment 78f4c226 selected 256 after Jack Heart's question about that
+capacity; be5b1394 relays his confirmation of the immediate larger-capacity
+hotfix. The earlier 512 choice was also the operator's, and 0c17ad58 was an
+operator-issued run reason. The 140-row replay passed at 256 and a controlled
+258-row fixture failed as intended; v3's later 270-row failure demonstrates
+why those checks did not establish sufficient capacity for training.
 
-After integrating PR #415, v3 validation covers **532 distinct passing Python
-tests (2 skipped)** and **905 passing debug Rust tests (2 ignored)**, with Ruff,
-fmt/clippy and a rebuilt native extension. These are grouped runs and successful
-rechecks, not one uninterrupted green process. The combined Python process hit
-collection deadlines in the numerical-accounting fixtures; those now explicitly
-bound their requested decision quotas. A later complete-game timing fixture
-was slow in that combined process, which was stopped; the remaining 212 cases
-ran in a fresh process. Two recovery cases restored all state exactly but assumed
-a game would finish within a one-seat quota. The completion assertion now applies
-to two-seat batches, where completion is guaranteed; all four seat/learner cases
-pass. Production collection and recovery admission are unchanged. CI remains
-the check of the configured combined workflow.
+Jack Heart approved the shared-effect fixed-tensor repair (comment 42a12145):
+encode effects once and route them to affected object embeddings before attention.
+Task 5da5f4 delivered it in PR #419, merged as
+`fb5ad2c1372f9c967b550f0b8ae0f84883f75563`; v4 consumed it and v5 retains it.
+Resume the prepared v5 identity only after fresh inventory, billing and quote
+reconciliation within the cumulative $10 cap. Preserve all earlier inputs and
+evidence; new games cannot fill their missing evaluation slots.
 
-The new runtime also replays the retained 87-action prefix to the same frame:
-all 140 facts agree through scalar/vector/Python encoding at 256, and v5 still
-overflows. The separate local receipt is `.runs/mtg213/v3-capacity-replay.json`;
-earlier replay receipts remain unchanged. This is capacity-repair evidence only.
+GPU learner updates and trained checkpoints remain missing. No paid-training
+milestone or learning/Elemental-pace claim is supported; MTG-213 is incomplete.
 
-CI and an exact source freeze remain before the next capped attempt.
-That attempt requires fresh reconciliation of both $0.7375
-reservations and provider billing, new v3 initialization and the unchanged
-evaluation schedule. Actual GPU learner updates, periodic/endpoint checkpoints
-and learning/Elemental-pace evidence remain unmet. No paid-training milestone
-was sent; the Task is not complete.
+### Card-capacity repair publication checks (2026-11-04 UTC)
 
-Gate review of PR #416 found one CI fixture mismatch: Python's fresh v6/512
-configuration was compared to explicit native v5/128. The corrected text proof
-now checks matching configurations at v5/128, pilot v6/256 and the fresh default;
-production encoding is unchanged. Focused validation passed **237 tests**, with
-one CUDA-only check skipped, plus Ruff and Python/Rust formatting. The original
-CI main group completed 900 other tests with one skip; debug Rust, engine budget,
-long integration, package/install and Academy checks passed at `feab62822`.
-CI on the fixture correction remains required before landing. These checks
-establish implementation behavior, not GPU progress or learning gain.
+On the synced repair branch, Rust formatting, all-target/all-feature Clippy and
+the complete debug workspace tests pass (`CARGO_PROFILE_DEV_OPT_LEVEL=1`, two
+build jobs). Python validation passes **391 tests, one skipped**: the complete
+model suite, active training, current-world arena admission and monitoring,
+pilot/discovery/regime checks, retained shared-effect and card-capacity replays,
+and artifact tracking/CI selection/release checks. Changed Python files pass
+Ruff lint and formatting; the diff has no whitespace errors. All 230 added
+artifact manifest entries match retained local bytes, with existing entries
+unchanged. The earlier release rebuild and atomic extension replacement remain
+the native runtime used for these Python checks.
+
+These checks establish the retained 61-card repair and CPU learner/export/reload
+behavior at 128 cards. They do not execute the prepared v5 GPU Run, establish a
+universal capacity bound, or supply missing trained-checkpoint evaluations.
