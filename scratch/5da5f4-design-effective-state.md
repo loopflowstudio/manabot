@@ -626,3 +626,16 @@ new Task-local `representation-5da5f4-3090` with the same safeguards and a
 $0.50/hour ceiling. Same excluded calibration and $0.60 cohort maximum; no
 scientific protocol change or run. If this offer also disappears, preserve the
 availability failures without claiming training results.
+
+RTX 3090 launch admission `4b8bfb5fef1e` also found no capacity after preparation;
+no rental/run was created. Stop cycling paid offers. Local CPU calibration is
+excluded seed 73200, three arms, one update each with the same 64 streams and
+both-seat complete games. Starting from `recipe(arm)`, set the id suffix to
+`-cpu-canary`, device CPU, threads 1, memory 4 GiB, update count 1 and both wall
+limits 300 seconds. Call the existing `execute_regime` with a separate VerifyStore
+per arm and a fresh output directory; no other trainer or new remote allocation.
+Prediction: finite exports for all arms, each update within 120 seconds. The
+whole calibration stops within 18 minutes under an outer process deadline.
+Local incremental provider charge is $0. This calibrates CPU feasibility only;
+it is excluded from learning scores. The prior CUDA GRU checkpoint also passed
+8 ordinary CPU evaluation games on excluded deals 83901–83902 in 6.29 seconds.
