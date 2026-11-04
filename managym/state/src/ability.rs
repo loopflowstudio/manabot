@@ -159,8 +159,10 @@ pub enum TriggerCondition {
         kind: CounterKind,
     },
     /// "Whenever you scry" (CR 701.22): once per scry instruction with a
-    /// count above zero. (No current effect surveils.)
+    /// count above zero.
     YouScry,
+    /// "Whenever you scry or surveil": after that keyword operation completes.
+    YouScryOrSurveil,
     /// "Whenever an opponent draws their Nth card each turn."
     OpponentDrawsNthCardThisTurn {
         n: u32,
@@ -249,9 +251,9 @@ pub enum Condition {
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
     TriggeringHadCounters,
-    /// Resolution only: a card the resolution's latest discard moved matches
+    /// Resolution only: a card the scope's latest mill or discard moved matches
     /// [predicate] ("When you discard a nonland card this way").
-    DiscardedThisWay(CardPredicate),
+    CardsThisWayMatch(CardPredicate),
     /// Resolution only: the spell whose casting triggered the ability
     /// matches [predicate] ("If that spell is a Lesson").
     TriggeringSpellMatches(CardPredicate),
@@ -301,7 +303,7 @@ impl Condition {
             | Condition::TargetMatches(_)
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
-            | Condition::DiscardedThisWay(_)
+            | Condition::CardsThisWayMatch(_)
             | Condition::TriggeringSpellMatches(_)
             | Condition::Moved
             | Condition::TargetControlledByYou => true,
@@ -466,6 +468,11 @@ pub enum ObjectSelector {
     /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
     /// they now exist ("then return it to the battlefield").
     Moved,
+    /// Cards moved by the latest mill or discard in this scope. Later Move
+    /// instructions do not replace this distinct instruction result.
+    CardsThisWay,
+    /// Exact objects chosen by the enclosing SelectCards operation.
+    Selected,
     /// The resolving player ("you"), as whom a continuous effect affects
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
@@ -572,6 +579,8 @@ impl ObjectSelector {
             | Self::Remembered
             | Self::Grantor
             | Self::Moved
+            | Self::CardsThisWay
+            | Self::Selected
             | Self::You
             | Self::Chosen { .. }
             | Self::Each { .. } => None,
@@ -709,21 +718,21 @@ pub enum Effect {
     },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife { amount: EffectValue },
-    /// "Return up to one [predicate] card milled this way to the
-    /// battlefield under your control": a choice among the cards the
-    /// resolution's latest mill moved, still in the graveyard.
-    ReturnMilledThisWay { predicate: CardPredicate },
     MillCards {
         count: EffectValue,
         /// The target player mills instead of the controller.
         target: Option<TargetSpec>,
     },
-    MillAndSelect {
-        count: usize,
+    /// Choose a subset of exact objects from `from`, then run `effects` in
+    /// a child scope where `Selected` names them. An empty selection runs
+    /// `if_declined`; the caller retains its earlier results and suffix.
+    SelectCards {
+        from: ObjectSelector,
         predicate: CardPredicate,
+        min: usize,
+        max: EffectValue,
+        effects: Vec<Effect>,
         if_declined: Vec<Effect>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        if_milled: Option<MilledBonus>,
     },
     /// A distinct targeting clause. Effects within it refer to the same
     /// chosen objects; different clauses may choose the same object.
@@ -1109,13 +1118,6 @@ pub enum DelayedExpiry {
     Never,
 }
 
-/// Effects that run when any card milled by the same instruction matches.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct MilledBonus {
-    pub predicate: CardPredicate,
-    pub effects: Vec<Effect>,
-}
-
 impl Modification<EffectValue> {
     /// "+power/+toughness".
     pub fn pump(power: i32, toughness: i32) -> Self {
@@ -1310,6 +1312,7 @@ impl Effect {
     pub fn selectors(&self) -> Vec<&ObjectSelector> {
         match self {
             Effect::CreateDelayedTrigger { remember, .. } => remember.iter().collect(),
+            Effect::SelectCards { from, .. } => vec![from],
             Effect::PutCounters { on, .. } => vec![on],
             Effect::PutCountersFrom { from, on } => vec![from, on],
             Effect::ApplyContinuous { affected: what, .. }
@@ -1437,6 +1440,8 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
+            Effect::SelectCards { effects, if_declined, .. } => effects.iter()
+                .chain(if_declined).find_map(Effect::target_spec),
             Effect::MayDiscard { then }
             | Effect::ForPlayer { effects: then, .. }
             | Effect::MayOnceEachTurn { effects: then } => {
@@ -1461,7 +1466,6 @@ impl Effect {
             | Effect::Discard { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
-            | Effect::MillAndSelect { .. }
             | Effect::ApplyContinuous { .. }
             | Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
@@ -1490,7 +1494,6 @@ impl Effect {
             | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
-            | Effect::ReturnMilledThisWay { .. }
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }

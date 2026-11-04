@@ -213,19 +213,21 @@ impl Game {
         let Some(suspended) = &self.state.suspended_decision else {
             return;
         };
-        let revealed = suspended.decision.revealed_cards().to_vec();
-        let Some(player) = revealed.first().map(|card| self.state.cards[*card].owner) else {
-            return;
-        };
-        for card in &revealed {
-            self.state.zones.move_card(*card, player, ZoneType::Library);
-        }
-        let revealed_set = revealed.iter().copied().collect::<BTreeSet<_>>();
-        let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-        library.retain(|card| !revealed_set.contains(card));
-        // revealed[0] is the top of the library = last element.
-        for card in revealed.iter().rev() {
-            library.push(*card);
+        let inspections: Vec<_> = suspended
+            .decisions()
+            .map(|decision| decision.revealed_cards().to_vec())
+            .filter(|cards| !cards.is_empty())
+            .collect();
+        for revealed in inspections {
+            let player = self.state.cards[revealed[0]].owner;
+            for card in &revealed {
+                self.state.zones.move_card(*card, player, ZoneType::Library);
+            }
+            let revealed_set = revealed.iter().copied().collect::<BTreeSet<_>>();
+            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
+            library.retain(|card| !revealed_set.contains(card));
+            // revealed[0] is the top of the library = last element.
+            library.extend(revealed.iter().rev());
         }
     }
 

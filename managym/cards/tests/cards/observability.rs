@@ -355,13 +355,15 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
+        ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
+        ObjectSelector::Selected => "ObjectSelector::Selected",
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 11] {
+fn selector_witnesses() -> [ObjectSelector; 13] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -371,6 +373,8 @@ fn selector_witnesses() -> [ObjectSelector; 11] {
         ObjectSelector::Remembered,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
+        ObjectSelector::CardsThisWay,
+        ObjectSelector::Selected,
         ObjectSelector::You,
         ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {
@@ -547,7 +551,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::DealDamageToPlayer { .. } => "Effect::DealDamageToPlayer",
         Effect::DrainLife { .. } => "Effect::DrainLife",
         Effect::MillCards { .. } => "Effect::MillCards",
-        Effect::MillAndSelect { .. } => "Effect::MillAndSelect",
+        Effect::SelectCards { .. } => "Effect::SelectCards",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
         Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
@@ -604,7 +608,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::ReturnMilledThisWay { .. } => "Effect::ReturnMilledThisWay",
         Effect::MayDiscard { .. } => "Effect::MayDiscard",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
@@ -619,7 +622,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 82;
+const EFFECT_VARIANTS: usize = 81;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -670,11 +673,13 @@ fn effect_witnesses() -> Vec<Effect> {
             count: EffectValue::Fixed(2),
             target: None,
         },
-        Effect::MillAndSelect {
-            count: 2,
+        Effect::SelectCards {
+            from: ObjectSelector::CardsThisWay,
             predicate: creature(),
+            min: 0,
+            max: EffectValue::Fixed(2),
+            effects: draw(),
             if_declined: draw(),
-            if_milled: None,
         },
         Effect::DrainLife { amount: value() },
         Effect::TargetClause {
@@ -837,9 +842,6 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::ReturnMilledThisWay {
-            predicate: CardPredicate::creature(),
-        },
         Effect::MayDiscard {
             then: vec![Effect::discard()],
         },
@@ -933,6 +935,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::YouPutCountersOnCreature"
         }
         TriggerCondition::YouScry => "TriggerCondition::YouScry",
+        TriggerCondition::YouScryOrSurveil => "TriggerCondition::YouScryOrSurveil",
         TriggerCondition::LeavesTheBattlefield { .. } => "TriggerCondition::LeavesTheBattlefield",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
@@ -986,6 +989,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             kind: CounterKind::PlusOnePlusOne,
         },
         TriggerCondition::YouScry,
+        TriggerCondition::YouScryOrSurveil,
         TriggerCondition::LeavesTheBattlefield {
             subject: TriggerSubject::This,
         },
@@ -1059,7 +1063,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
-        Condition::DiscardedThisWay(_) => "Condition::DiscardedThisWay",
+        Condition::CardsThisWayMatch(_) => "Condition::CardsThisWayMatch",
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
         Condition::Moved => "Condition::Moved",
         Condition::TargetControlledByYou => "Condition::TargetControlledByYou",
@@ -1096,7 +1100,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::SourceTapped,
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
-        Condition::DiscardedThisWay(CardPredicate::creature()),
+        Condition::CardsThisWayMatch(CardPredicate::creature()),
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
         Condition::Moved,
         Condition::TargetControlledByYou,

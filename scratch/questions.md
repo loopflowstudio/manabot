@@ -14,9 +14,15 @@ top keeps its inspected prefix visible while bottom retains remaining-only
 visibility. Existing bottom code 23 stays fixed; top code 27 is appended.
 No real current definition prints Surveil above 1, so a constructed rules program
 proves arbitrary kept order while Joo Dee verifies existing real-card behavior.
-This does not claim atomic Surveil movement or its full keyword-event contract.
+Surveil now commits the graveyard partition together and emits its keyword
+event after kept ordering, including empty-library completion. Planetarium
+matches both Scry and Surveil.
 
 Full event/result and policy-input version choices remain implementation work.
+Shared public-result selection appends obligation code 28 (retiring legacy 5);
+MTG-243 received that reservation through its Task comments. MTG-244 received
+the concrete schema-coordination question; no numeric successor reservation
+has been supplied in the shared Task comments yet.
 
 ## Sync with main — 2026-11-04
 
@@ -25,3 +31,8 @@ Incoming MTG-213 pilot decisions, concept review and CI evidence remain at
 `8e8d702f807d61675fc1bca46417eee69316daa0:scratch/questions.md`.
 That Task's experiment and delivery authorization does not extend this Task's
 interactive-review boundary. Main's implementation changes are retained.
+
+Shared selection currently migrates public mill results. Hidden hand/search
+migration must update retained commitments during sampling, not only the active
+action space; the plan records that concrete ownership constraint. No new human
+judgment is needed.

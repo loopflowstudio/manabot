@@ -15491,3 +15491,31 @@ fn cruel_administrator_entry_raid_reads_the_entering_controller() {
         assert_eq!(counters(&s, permanent), i32::from(attacked == PlayerId(1)));
     }
 }
+
+/// Surveil is a separate keyword event; Planetarium waits for Joo Dee's
+/// inspection to finish before offering the resulting top card.
+#[test]
+fn planetarium_casts_after_joo_dee_surveillance_finishes() {
+    let mut s = five_color_setup(&[
+        "Planetarium of Wan Shi Tong", "Joo Dee, One of Many", "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
+    let joo_dee = s.force_permanent_on_battlefield(0, "Joo Dee, One of Many");
+    clear_summoning_sickness(&mut s, joo_dee);
+    let top = pin_top(&mut s, &["Forest", "Gray Ogre"]);
+    activate(&mut s, joo_dee, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(offered_cards(&s), vec![top[0]]);
+    assert!(s.game().state.pending_triggers.is_empty());
+    select_card(&mut s, top[0]);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Graveyard));
+    // Joo Dee's remaining instructions still finish before Planetarium's
+    // queued trigger can resolve and inspect the new top.
+    let original = card_of(&s, joo_dee);
+    select_card(&mut s, original);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(offered_cards(&s), vec![top[1]]);
+    select_card(&mut s, top[1]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Battlefield));
+}

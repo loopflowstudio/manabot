@@ -822,59 +822,49 @@ impl Game {
                     None => frame.controller,
                 };
                 let count = self.effect_value(count, frame).max(0) as usize;
-                frame.this_way = self.library_top(player, count);
-                for card in frame.this_way.clone() {
-                    self.move_card(card, ZoneType::Graveyard);
+                frame.this_way.clear();
+                let cards = self.library_top(player, count);
+                let sources = self.snapshot_trigger_sources();
+                for card in cards {
+                    let Some(previous) = self.current_object_ref(card) else {
+                        continue;
+                    };
+                    self.move_object_to_zone(previous, ZoneType::Graveyard);
+                    if let Some(moved) = self.moved_object(card, Some(previous)) {
+                        frame.this_way.push(moved);
+                    }
                 }
+                self.process_game_events_with_sources(&sources);
                 None
             }
-            Effect::ReturnMilledThisWay { predicate } => {
-                let cards: Vec<_> = frame
-                    .this_way
-                    .iter()
-                    .copied()
-                    .filter(|card| {
-                        self.state.zones.zone_of(*card) == Some(ZoneType::Graveyard)
-                            && self.card_matches_predicate(*card, predicate)
+            Effect::SelectCards {
+                from,
+                predicate,
+                min,
+                max,
+                effects,
+                if_declined,
+            } => {
+                let candidates: Vec<_> = self
+                    .select(from, frame)
+                    .into_iter()
+                    .filter(|object| {
+                        self.card_matches_predicate(CardId::from(object.entity), predicate)
                     })
                     .collect();
-                (!cards.is_empty()).then_some(Decision::SelectMilled {
-                    player: frame.controller,
-                    cards,
-                    if_declined: Vec::new(),
-                    to_battlefield: true,
-                })
-            }
-            Effect::MillAndSelect {
-                count,
-                predicate,
-                if_declined,
-                if_milled,
-            } => {
-                let cards = self.library_top(frame.controller, *count);
-                for card in &cards {
-                    self.move_card(*card, ZoneType::Graveyard);
-                }
-                if let Some(bonus) = if_milled.as_ref().filter(|bonus| {
-                    cards
-                        .iter()
-                        .any(|card| self.card_matches_predicate(*card, &bonus.predicate))
-                }) {
-                    frame.prepend_effects(bonus.effects.iter().cloned());
-                }
-                let cards: Vec<_> = cards
-                    .into_iter()
-                    .filter(|card| self.card_matches_predicate(*card, predicate))
-                    .collect();
-                if cards.is_empty() {
-                    frame.prepend_effects(if_declined.iter().cloned());
+                let max = (self.effect_value(max, frame).max(0) as usize).min(candidates.len());
+                if max == 0 {
+                    frame.select_scope(Vec::new(), if_declined.clone());
                     None
                 } else {
-                    Some(Decision::SelectMilled {
+                    Some(Decision::SelectCards {
                         player: frame.controller,
-                        cards,
+                        candidates,
+                        selected: Vec::new(),
+                        min: (*min).min(max),
+                        max,
+                        effects: effects.clone(),
                         if_declined: if_declined.clone(),
-                        to_battlefield: false,
                     })
                 }
             }
@@ -1625,7 +1615,7 @@ impl Game {
             }
             Effect::Scry { count } => {
                 if *count > 0 {
-                    self.emit(GameEvent::Scried {
+                    frame.complete_with_event(GameEvent::Scried {
                         player: frame.controller,
                     });
                 }
@@ -1642,10 +1632,16 @@ impl Game {
                 })
             }
             Effect::Surveil { count } => {
+                if *count > 0 {
+                    frame.complete_with_event(GameEvent::Surveilled {
+                        player: frame.controller,
+                    });
+                }
                 let looked = self.library_top(frame.controller, *count);
                 (!looked.is_empty()).then_some(Decision::Surveil {
                     player: frame.controller,
                     looked,
+                    graveyard: Vec::new(),
                 })
             }
             Effect::LookAndSelect {
@@ -1867,19 +1863,20 @@ impl Game {
                 .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())
                 .into_iter()
                 .collect(),
-            ObjectSelector::Moved | ObjectSelector::Remembered => {
-                (if matches!(what, ObjectSelector::Moved) {
-                    &frame.moved
-                } else {
-                    &frame.remembered
-                })
-                .iter()
-                .copied()
-                .filter(|object| {
-                    self.current_object_ref(CardId::from(object.entity)) == Some(*object)
-                })
-                .collect()
-            }
+            ObjectSelector::Moved
+            | ObjectSelector::Remembered
+            | ObjectSelector::CardsThisWay
+            | ObjectSelector::Selected => (match what {
+                ObjectSelector::Moved => &frame.moved,
+                ObjectSelector::Remembered => &frame.remembered,
+                ObjectSelector::CardsThisWay => &frame.this_way,
+                ObjectSelector::Selected => &frame.selected,
+                _ => unreachable!(),
+            })
+            .iter()
+            .copied()
+            .filter(|object| self.current_object_ref(CardId::from(object.entity)) == Some(*object))
+            .collect(),
             ObjectSelector::You => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");

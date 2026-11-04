@@ -164,6 +164,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             format!("When you draw card {n} this turn")
         }
         TriggerCondition::YouScry => "When you scry".into(),
+        TriggerCondition::YouScryOrSurveil => "When you scry or surveil".into(),
         TriggerCondition::LeavesTheBattlefield { subject } => {
             format!(
                 "When {} leaves the battlefield",
@@ -249,8 +250,8 @@ fn condition_text(condition: &Condition) -> String {
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
         Condition::SourceTapped => "this is tapped".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
-        Condition::DiscardedThisWay(predicate) => format!(
-            "a {} was discarded this way",
+        Condition::CardsThisWayMatch(predicate) => format!(
+            "a {} was milled or discarded this way",
             predicate_description(predicate, "card")
         ),
         Condition::TriggeringSpellMatches(predicate) => format!(
@@ -468,6 +469,8 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::Remembered => "the remembered objects".into(),
         ObjectSelector::Grantor => "the permanent granting this ability".into(),
         ObjectSelector::Moved => "it".into(),
+        ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
+        ObjectSelector::Selected => "the selected cards".into(),
         ObjectSelector::You => "you".into(),
         ObjectSelector::Chosen { predicate, except } => format!(
             "{}{}",
@@ -697,16 +700,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         },
         DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(amount),player_description(player)),
         DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(amount)),
-        ReturnMilledThisWay { predicate } => format!("Return up to one {} milled this way to the battlefield under your control", predicate_description(predicate, "card")),
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
         MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
-        MillAndSelect { count, predicate, if_declined, if_milled } => {
-            let mut text = format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined));
-            if let Some(bonus) = if_milled {
-                text.push_str(&format!(". If a {} is milled this way: {}", predicate_description(&bonus.predicate, "card"), effects_description(&bonus.effects)));
-            }
-            text
-        }
+        SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(max), predicate_description(predicate, "cards"), selector_description(from), effects_description(effects), effects_description(if_declined)),
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),effects_description(effects)),
         SearchBasicLand { subtype, to_hand: true, .. } => format!("Search your library for a {} card, reveal it, put it into your hand, then shuffle",subtype.as_deref().unwrap_or("land")),
         SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source, .. } => {

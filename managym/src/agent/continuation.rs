@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
-        decision::{Decision, FrameCompletion, LibraryEnd, SuspendedResolution},
+        decision::{Decision, EffectFrame, LibraryEnd, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
@@ -668,144 +668,129 @@ impl Game {
         viewer: PlayerId,
         frames: &mut Vec<ContinuationFrame>,
     ) {
-        // Walk outward, then project root first so every parent precedes its child.
-        let scopes: Vec<_> =
-            std::iter::successors(Some(&suspended.frame), |effect| match &effect.completion {
-                FrameCompletion::Frame(parent) => Some(parent.as_ref()),
-                _ => None,
-            })
-            .collect();
         let mut parent = self.pending_choice.as_ref().map(|_| frames.len() - 1);
-        if let Some(root) = scopes.last() {
-            if let FrameCompletion::Decision(caller) = &root.completion {
-                self.append_suspended_frames(caller, viewer, frames);
-                parent = frames.len().checked_sub(1);
-            }
-        }
-        for effect in scopes.into_iter().rev() {
-            let frame = ContinuationFrame {
-                kind: 5,
-                parent,
-                controller: effect.controller.0,
-                source: effect
-                    .source_ref
-                    .map(|r| self.visible_reference(r, viewer))
-                    .unwrap_or_else(|| {
-                        effect
-                            .source
-                            .map(|card| self.card_reference(card, viewer))
-                            .unwrap_or_default()
-                    }),
-                kicked: effect.kicked,
-                inherited_from: effect.inherited_from.map(|id| VisibleReference {
-                    definition: Some(id.0),
-                    ..Default::default()
-                }),
-                x: effect.x,
-                source_transforms: effect.source_transforms,
-                resolutions_this_turn: effect.resolutions_this_turn,
-                active_clause: Some(effect.active_requirement),
-                targets: effect
-                    .targets
-                    .iter()
-                    .map(|slot| ClauseTarget {
-                        reference: self.target_reference(slot.target, viewer),
-                        clause: slot.requirement,
-                        legal_at_resolution_start: Some(slot.legal),
-                    })
-                    .collect(),
-                remembered: self.remembered_references(&effect.remembered, viewer),
-                context: effect
-                    .context_target
-                    .map(|t| self.target_reference(t, viewer)),
-                ..ContinuationFrame::default()
+        for part in suspended.continuation() {
+            let mut frame = match part {
+                ResolutionRef::Frame(effect) => self.effect_frame(effect, viewer),
+                ResolutionRef::Decision(decision) => {
+                    self.resolution_decision_frame(decision, viewer)
+                }
             };
+            frame.parent = parent;
             frames.push(frame);
             parent = Some(frames.len() - 1);
         }
-        // Interrupted obligations precede the current decision.
-        let first_decision = frames.len();
-        let mut decision = &suspended.decision;
-        loop {
-            let mut frame = ContinuationFrame {
-                kind: 6,
-                controller: decision.player().0,
-                ..ContinuationFrame::default()
-            };
-            frame.decision = decision_code(decision);
-            let resume = match decision {
-                Decision::ChoosePaymentX { .. } => {
-                    frame.can_decline = true;
-                    None
-                }
-                Decision::SearchNamed {
-                    owner, remaining, ..
-                } => {
-                    frame.can_decline = true;
-                    frame.mode = Some(*remaining);
-                    frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
-                    None
-                }
-                Decision::Payment(progress) => {
-                    frame.cost(&progress.remaining.mana_cost());
-                    frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
-                    frame.can_decline = progress.can_decline();
-                    None
-                }
-                Decision::ManaUpfront {
-                    permanent,
-                    ability_index,
-                    resume,
-                    ..
-                } => {
-                    frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
-                    frame.ability = Some(*ability_index);
-                    frame.cost(
-                        &self.characteristics(*permanent).activated_abilities[*ability_index]
-                            .mana_cost,
-                    );
-                    resume.as_deref()
-                }
-                Decision::ManaChoice {
-                    choices, resume, ..
-                } => {
-                    frame.mana_outputs = choices
-                        .iter()
-                        .enumerate()
-                        .map(|(mode, output)| ManaOutput {
-                            mode,
-                            mana: output.mana,
-                            lesson: output.restricted_colors(),
-                        })
-                        .collect();
-                    resume.as_deref()
-                }
-                Decision::OrderLibrary {
-                    next,
-                    end: LibraryEnd::Top,
-                    ..
-                } => {
-                    // The visible library segment is top-first. Its first
-                    // `next` cards have already been ordered by the player.
-                    frame.mode = Some(*next);
-                    None
-                }
-                Decision::ChooseObject { optional, .. } => {
-                    frame.can_decline = *optional;
-                    None
-                }
-                _ => None,
-            };
-            frames.push(frame);
-            let Some(next) = resume else {
-                break;
-            };
-            decision = next;
+    }
+
+    fn effect_frame(&self, effect: &EffectFrame, viewer: PlayerId) -> ContinuationFrame {
+        ContinuationFrame {
+            kind: 5,
+            controller: effect.controller.0,
+            source: effect
+                .source_ref
+                .map(|r| self.visible_reference(r, viewer))
+                .unwrap_or_else(|| {
+                    effect
+                        .source
+                        .map(|card| self.card_reference(card, viewer))
+                        .unwrap_or_default()
+                }),
+            kicked: effect.kicked,
+            inherited_from: effect.inherited_from.map(|id| VisibleReference {
+                definition: Some(id.0),
+                ..Default::default()
+            }),
+            x: effect.x,
+            source_transforms: effect.source_transforms,
+            resolutions_this_turn: effect.resolutions_this_turn,
+            active_clause: Some(effect.active_requirement),
+            targets: effect
+                .targets
+                .iter()
+                .map(|slot| ClauseTarget {
+                    reference: self.target_reference(slot.target, viewer),
+                    clause: slot.requirement,
+                    legal_at_resolution_start: Some(slot.legal),
+                })
+                .collect(),
+            remembered: self.remembered_references(&effect.remembered, viewer),
+            context: effect
+                .context_target
+                .map(|t| self.target_reference(t, viewer)),
+            ..ContinuationFrame::default()
         }
-        frames[first_decision..].reverse();
-        for (index, frame) in frames.iter_mut().enumerate().skip(first_decision) {
-            frame.parent = Some(index - 1);
-        }
+    }
+
+    fn resolution_decision_frame(
+        &self,
+        decision: &Decision,
+        viewer: PlayerId,
+    ) -> ContinuationFrame {
+        let mut frame = ContinuationFrame {
+            kind: 6,
+            controller: decision.player().0,
+            ..ContinuationFrame::default()
+        };
+        frame.decision = decision_code(decision);
+        match decision {
+            Decision::ChoosePaymentX { .. } => {
+                frame.can_decline = true;
+            }
+            Decision::SearchNamed {
+                owner, remaining, ..
+            } => {
+                frame.can_decline = true;
+                frame.mode = Some(*remaining);
+                frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
+            }
+            Decision::Payment(progress) => {
+                frame.cost(&progress.remaining.mana_cost());
+                frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
+                frame.can_decline = progress.can_decline();
+            }
+            Decision::ManaUpfront {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.ability = Some(*ability_index);
+                frame.cost(
+                    &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
+                );
+            }
+            Decision::ManaChoice { choices, .. } => {
+                frame.mana_outputs = choices
+                    .iter()
+                    .enumerate()
+                    .map(|(mode, output)| ManaOutput {
+                        mode,
+                        mana: output.mana,
+                        lesson: output.restricted_colors(),
+                    })
+                    .collect();
+            }
+            Decision::OrderLibrary {
+                next,
+                end: LibraryEnd::Top,
+                ..
+            } => {
+                // The visible library segment is top-first. Its first
+                // `next` cards have already been ordered by the player.
+                frame.mode = Some(*next);
+            }
+            Decision::SelectCards {
+                selected, min, max, ..
+            } => {
+                frame.can_decline = selected.len() >= *min;
+                frame.mode = Some(max.saturating_sub(selected.len()));
+            }
+            Decision::ChooseObject { optional, .. } => {
+                frame.can_decline = *optional;
+            }
+            _ => {}
+        };
+        frame
     }
 
     fn payment_frame(&self, payment: &Payment, viewer: PlayerId, frame: &mut ContinuationFrame) {
@@ -841,7 +826,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 27;
+pub const MAX_DECISION_CODE: u8 = 28;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -854,7 +839,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::ManaUpfront { .. } => 2,
         Decision::ManaChoice { .. } => 3,
         Decision::ChooseObject { .. } => 4,
-        Decision::SelectMilled { .. } => 5,
+        Decision::SelectCards { .. } => 28,
         Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => 6,
         Decision::OptionalDiscardDraw { .. } => 7,
         Decision::Scry { .. } => 8,
@@ -1181,11 +1166,14 @@ mod tests {
                 kind: CounterKind::PlusOnePlusOne,
                 remaining: 1,
             },
-            Decision::SelectMilled {
+            Decision::SelectCards {
                 player,
-                cards: vec![],
+                candidates: vec![],
+                selected: vec![],
+                min: 0,
+                max: 1,
+                effects: vec![],
                 if_declined: vec![],
-                to_battlefield: false,
             },
             Decision::SearchBasicLand {
                 player,
@@ -1217,6 +1205,7 @@ mod tests {
             Decision::Surveil {
                 player,
                 looked: vec![],
+                graveyard: vec![],
             },
             Decision::OrderLibrary {
                 player,

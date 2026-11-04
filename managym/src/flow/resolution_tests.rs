@@ -1386,9 +1386,14 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
         );
         assert_eq!(
             root.state.zones.zone_of(looked[0]),
-            Some(ZoneType::Graveyard)
+            Some(ZoneType::Library),
+            "selection is private until the partition commits"
         );
         checked_command(&mut root, Action::Decline { player });
+        assert_eq!(
+            root.state.zones.zone_of(looked[0]),
+            Some(ZoneType::Graveyard)
+        );
         let before = root.state.deterministic_hash();
         let hand = root.state.zones.size(ZoneType::Hand, player);
         let inspected = |game: &Game, viewer: PlayerId| {
@@ -1570,4 +1575,421 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
     );
     assert_eq!(fork.state.events.iter().filter(|event| matches!(event, GameEvent::PermanentSacrificed { card: sacrificed, .. } if *sacrificed == card)).count(), 1);
     assert_eq!(game.state.deterministic_hash(), after_sacrifice);
+}
+
+#[test]
+fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
+    use crate::agent::observation::Observation;
+    use crate::flow::decision::{
+        Decision, EffectFrame, FrameCompletion, LibraryEnd, SuspendedResolution,
+    };
+
+    for player in [PlayerId(0), PlayerId(1)] {
+        let opponent = PlayerId(1 - player.0);
+        let (mut game, _, _) = fixture(player);
+        let looked = game.library_top(player, 3);
+        let caller = SuspendedResolution {
+            frame: EffectFrame::new(player, vec![Effect::gain_life(2)]),
+            decision: Decision::OrderLibrary {
+                player,
+                cards: looked.clone(),
+                next: 0,
+                end: LibraryEnd::Top,
+            },
+        };
+        let mut parent = EffectFrame::new(opponent, vec![]);
+        parent.completion = FrameCompletion::Decision(Box::new(caller.clone()));
+        let mut child = EffectFrame::new(opponent, vec![pause()]);
+        child.completion = FrameCompletion::Frame(Box::new(parent));
+        game.run_frame(child);
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let visible_library = |game: &Game, viewer| {
+            let obs = Observation::for_player(game, viewer);
+            obs.agent_cards
+                .into_iter()
+                .chain(obs.opponent_cards)
+                .filter(|card| card.zone == ZoneType::Library)
+                .map(|card| card.id)
+                .collect::<Vec<_>>()
+        };
+        let expected = looked
+            .iter()
+            .map(|card| game.state.cards[*card].id.0 as i32)
+            .collect::<Vec<_>>();
+        assert_eq!(visible_library(&game, player), expected);
+        assert!(visible_library(&game, opponent).is_empty());
+        let original = game.state.deterministic_hash();
+        let mut sampled = game.clone();
+        sampled.determinize(player, 241);
+        assert_eq!(sampled.library_top(player, 3), looked);
+        assert_eq!(visible_library(&sampled, player), expected);
+        checked_command(
+            &mut sampled,
+            Action::ChooseMode {
+                player: opponent,
+                mode: 0,
+            },
+        );
+        assert_eq!(sampled.state.suspended_decision, Some(caller));
+        for card in looked.iter().rev() {
+            checked_command(
+                &mut sampled,
+                Action::SelectCard {
+                    player,
+                    card: *card,
+                },
+            );
+        }
+        assert_eq!(
+            sampled.library_top(player, 3),
+            looked.into_iter().rev().collect::<Vec<_>>()
+        );
+        assert_eq!(sampled.state.players[player.0].life, 22);
+        assert!(sampled.state.suspended_decision.is_none());
+        assert!(
+            visible_library(&sampled, player).is_empty(),
+            "permission ends with its owner"
+        );
+        assert_eq!(game.state.deterministic_hash(), original);
+    }
+}
+
+#[test]
+fn retained_search_permission_preserves_opponent_membership_until_caller_finishes() {
+    use crate::agent::observation::Observation;
+    use crate::flow::decision::{Decision, EffectFrame, SuspendedResolution};
+
+    for player in [PlayerId(0), PlayerId(1)] {
+        let opponent = PlayerId(1 - player.0);
+        let (mut game, _, _) = fixture(player);
+        let hand = game
+            .state
+            .zones
+            .zone_cards(ZoneType::Hand, opponent)
+            .to_vec();
+        let library = game
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, opponent)
+            .to_vec();
+        let caller = SuspendedResolution {
+            frame: EffectFrame::new(player, vec![]),
+            decision: Decision::SearchNamed {
+                player,
+                owner: opponent,
+                name: "Mountain".into(),
+                remaining: 1,
+            },
+        };
+        game.run_before_decision(EffectFrame::new(opponent, vec![pause()]), caller);
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        assert!(game.searches_private_zones(player, opponent));
+        let obs = Observation::for_player(&game, player);
+        assert_eq!(
+            obs.opponent_cards
+                .iter()
+                .filter(|card| card.zone == ZoneType::Hand)
+                .count(),
+            hand.len()
+        );
+        assert_eq!(
+            obs.opponent_cards
+                .iter()
+                .filter(|card| card.zone == ZoneType::Library)
+                .count(),
+            library.len()
+        );
+        game.determinize(player, 242);
+        assert_eq!(game.state.zones.zone_cards(ZoneType::Hand, opponent), &hand);
+        assert_eq!(
+            game.state.zones.zone_cards(ZoneType::Library, opponent),
+            &library
+        );
+        checked_command(
+            &mut game,
+            Action::ChooseMode {
+                player: opponent,
+                mode: 0,
+            },
+        );
+        assert!(game.searches_private_zones(player, opponent));
+        checked_command(&mut game, Action::Decline { player });
+        assert!(!game.searches_private_zones(player, opponent));
+        let obs = Observation::for_player(&game, player);
+        assert!(obs
+            .opponent_cards
+            .iter()
+            .all(|card| card.zone != ZoneType::Hand && card.zone != ZoneType::Library));
+    }
+}
+
+#[test]
+fn surveil_commits_the_partition_once_and_announces_only_after_kept_order() {
+    for player in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(player);
+        let cards = game.library_top(player, 4);
+        stack(
+            &mut game,
+            Entry::Spell,
+            player,
+            vec![Effect::Surveil { count: 4 }, Effect::gain_life(3)],
+            vec![],
+            vec![],
+        );
+        game.resolve_top_of_stack();
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let surveils = |game: &Game| {
+            game.state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::Surveilled { .. }))
+                .count()
+        };
+        for card in &cards[..2] {
+            checked_command(
+                &mut game,
+                Action::SelectCard {
+                    player,
+                    card: *card,
+                },
+            );
+            assert_eq!(game.library_top(player, 4), cards);
+            assert_eq!(surveils(&game), 0);
+            assert_eq!(game.state.players[player.0].life, 20);
+        }
+        checked_command(&mut game, Action::Decline { player });
+        assert!(cards[..2]
+            .iter()
+            .all(|card| game.state.zones.zone_of(*card) == Some(ZoneType::Graveyard)));
+        assert_eq!(surveils(&game), 0, "ordering is still part of surveil");
+        let events_before = game.state.events.len();
+        for card in cards[2..].iter().rev() {
+            checked_command(
+                &mut game,
+                Action::SelectCard {
+                    player,
+                    card: *card,
+                },
+            );
+        }
+        assert_eq!(surveils(&game), 1);
+        assert_eq!(game.state.players[player.0].life, 23);
+        assert!(
+            matches!(game.state.events[events_before], GameEvent::Surveilled { player: who } if who == player)
+        );
+        for card in &cards[..2] {
+            assert_eq!(
+                game.state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event,
+                GameEvent::CardMoved { card: moved, to: ZoneType::Graveyard, .. } if moved == card))
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn library_keyword_completion_handles_empty_libraries_and_zero_counts() {
+    for scry in [false, true] {
+        for count in [0, 2] {
+            let (mut game, _, _) = fixture(PlayerId(0));
+            for card in game.library_top(PlayerId(0), usize::MAX) {
+                game.move_card(card, ZoneType::Graveyard);
+            }
+            stack(
+                &mut game,
+                Entry::Spell,
+                PlayerId(0),
+                vec![if scry {
+                    Effect::Scry { count }
+                } else {
+                    Effect::Surveil { count }
+                }],
+                vec![],
+                vec![],
+            );
+            game.resolve_top_of_stack();
+            assert!(game.state.suspended_decision.is_none());
+            assert_eq!(
+                game.state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(
+                        event,
+                        GameEvent::Scried { .. } | GameEvent::Surveilled { .. }
+                    ))
+                    .count(),
+                usize::from(count > 0)
+            );
+        }
+    }
+}
+
+#[test]
+fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
+    for player in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _) = fixture(player);
+        let milled = game.library_top(player, 3);
+        let select = |min, max, effects| Effect::SelectCards {
+            from: ObjectSelector::CardsThisWay,
+            predicate: CardPredicate::default(),
+            min,
+            max: EffectValue::Fixed(max),
+            effects,
+            if_declined: vec![],
+        };
+        stack(
+            &mut game,
+            Entry::Spell,
+            player,
+            vec![
+                Effect::MillCards {
+                    count: EffectValue::Fixed(3),
+                    target: None,
+                },
+                select(
+                    1,
+                    2,
+                    vec![
+                        Effect::return_to_hand(ObjectSelector::Selected),
+                        pause(),
+                        // The selected graveyard incarnation has departed. This
+                        // must not move the same physical card out of its hand.
+                        Effect::exile(ObjectSelector::Selected),
+                    ],
+                ),
+                select(0, 1, vec![Effect::return_to_hand(ObjectSelector::Selected)]),
+                Effect::gain_life(3),
+            ],
+            vec![],
+            vec![],
+        );
+        game.resolve_top_of_stack();
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        assert!(!game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::Decline { .. })));
+        checked_command(
+            &mut game,
+            Action::SelectCard {
+                player,
+                card: milled[0],
+            },
+        );
+        assert_eq!(
+            game.state.zones.zone_of(milled[0]),
+            Some(ZoneType::Graveyard),
+            "selection has not moved anything"
+        );
+        let root = game.state.deterministic_hash();
+        for second in [None, Some(milled[1])] {
+            let mut fork = game.clone();
+            checked_command(
+                &mut fork,
+                second.map_or(Action::Decline { player }, |card| Action::SelectCard {
+                    player,
+                    card,
+                }),
+            );
+            assert_eq!(fork.state.zones.zone_of(milled[0]), Some(ZoneType::Hand));
+            assert_eq!(fork.state.players[player.0].life, 20, "parent suffix waits");
+            checked_command(&mut fork, Action::ChooseMode { player, mode: 0 });
+            assert_eq!(
+                fork.state.zones.zone_of(milled[0]),
+                Some(ZoneType::Hand),
+                "selected refs never follow a moved incarnation"
+            );
+            let offered: Vec<_> = fork
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .filter_map(|action| match action {
+                    Action::SelectCard { card, .. } => Some(*card),
+                    _ => None,
+                })
+                .collect();
+            assert!(!offered.contains(&milled[0]));
+            assert_eq!(offered.contains(&milled[1]), second.is_none());
+            assert!(
+                offered.contains(&milled[2]),
+                "parent still owns its original mill result"
+            );
+            checked_command(
+                &mut fork,
+                Action::SelectCard {
+                    player,
+                    card: milled[2],
+                },
+            );
+            assert_eq!(fork.state.zones.zone_of(milled[2]), Some(ZoneType::Hand));
+            assert_eq!(fork.state.players[player.0].life, 23);
+            assert!(fork.state.suspended_decision.is_none());
+            assert_eq!(
+                fork.state
+                    .events
+                    .iter()
+                    .filter(|e| matches!(e, GameEvent::SpellResolved { .. }))
+                    .count(),
+                1
+            );
+            assert_eq!(game.state.deterministic_hash(), root);
+        }
+    }
+}
+
+#[test]
+fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_sources() {
+    use crate::state::ability::{Ability, TriggerCondition};
+
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    stack(
+        &mut game,
+        Entry::Triggered,
+        player,
+        vec![Effect::Surveil { count: 1 }, Effect::sacrifice_this()],
+        vec![],
+        vec![],
+    );
+    let source = match game.state.stack_objects.last().unwrap() {
+        StackObject::TriggeredAbility(ability) => ability.source_card,
+        _ => unreachable!(),
+    };
+    game.state.cards[source].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::YouScryOrSurveil,
+        intervening_if: None,
+        effects: vec![Effect::gain_life(1)],
+    }];
+    game.resolve_top_of_stack();
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert!(game.state.pending_triggers.is_empty());
+    checked_command(&mut game, Action::Decline { player });
+    assert_eq!(game.state.zones.zone_of(source), Some(ZoneType::Graveyard));
+    let occurrences = game
+        .state
+        .pending_triggers
+        .iter()
+        .filter(|t| t.source_card == source)
+        .count()
+        + game
+            .state
+            .stack_objects
+            .iter()
+            .filter(|object| {
+                matches!(object,
+            StackObject::TriggeredAbility(ability) if ability.source_card == source)
+            })
+            .count();
+    assert_eq!(occurrences, 1, "completion matched before source departure");
+    assert_eq!(
+        game.state.players[0].life, 20,
+        "queued occurrence has not resolved"
+    );
 }

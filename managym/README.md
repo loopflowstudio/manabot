@@ -274,10 +274,27 @@ the same owner to order kept cards on top, retaining the chosen prefix privately
 until ordering finishes. Top ordering has obligation code 27 (mode is the
 committed prefix length); code 23 retains its bottom-order meaning.
 
-`EffectFrame::completion` owns the return destination: the interrupted iteration
-frame, a retained caller decision, root spell cleanup, or root priority. Mana
-activation sacrifice effects retain their output and parent payment there after
-upfront mana, tap and life costs commit. Returning from that child restores the
-saved decision without paying those costs again or opening priority. Zone/event
+`EffectFrame::completion` owns the return destination: the interrupted scope,
+a retained caller decision, a completed-operation event, root spell cleanup,
+or root priority. Mana activation sacrifice effects retain their output and
+parent payment there after upfront mana, tap and life costs commit. Returning
+from that child restores the saved decision without paying those costs again
+or opening priority. Zone/event
 replacement completion is still synchronous; this interface does not yet make
 those operations suspendable.
+
+`SelectCards` snapshots eligible exact objects from its selector, retains min/max
+cardinality across choices, and runs the chosen effects in a child scope with
+`ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
+result independently of a later `Move`; the caller keeps those results while
+selection effects run. Current mill consumers use ordinary `MillCards`, `If`,
+`SelectCards` and `Move` composition. Shared selection has obligation code 28;
+retired code 5 keeps its historical meaning.
+
+`FrameCompletion::Event` announces a completed operation before its caller
+resumes. Scry and Surveil use it so keyword events wait for every choice;
+Surveil retains its private partition before moving the selected graveyard cards
+as a batch, then finishes kept ordering. `SuspendedResolution::continuation`
+walks the retained frames and decisions root first; observation projection and
+hidden-world sampling share that chain for caller ancestry and inspection
+permissions.

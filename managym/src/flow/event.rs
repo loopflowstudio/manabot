@@ -148,6 +148,10 @@ pub enum GameEvent {
     Scried {
         player: PlayerId,
     },
+    /// A player finished surveilling, even with an empty library (CR 701.25).
+    Surveilled {
+        player: PlayerId,
+    },
     /// A player searched their library (CR 701.23), whatever it found.
     LibrarySearched {
         player: PlayerId,
@@ -199,6 +203,7 @@ pub enum EventKind {
     PermanentsDied,
     TurnStarted,
     StepStarted,
+    Surveilled,
 }
 
 impl GameEvent {
@@ -224,6 +229,7 @@ impl GameEvent {
             GameEvent::CountersPut { .. } => EventKind::CountersPut,
             GameEvent::Bent { .. } => EventKind::Bent,
             GameEvent::Scried { .. } => EventKind::Scried,
+            GameEvent::Surveilled { .. } => EventKind::Surveilled,
             GameEvent::LibrarySearched { .. } => EventKind::LibrarySearched,
             GameEvent::CombatDamageToPlayers { .. } => EventKind::CombatDamageToPlayers,
             GameEvent::PermanentsDied { .. } => EventKind::PermanentsDied,

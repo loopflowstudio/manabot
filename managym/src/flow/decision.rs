@@ -34,6 +34,12 @@ pub enum FrameCompletion {
     Priority,
     /// An iteration child returns to its interrupted scope.
     Frame(Box<EffectFrame>),
+    /// Announce a completed rules operation before resuming its caller.
+    /// Keyword events happen after every selection and ordering choice.
+    Event {
+        event: GameEvent,
+        frame: Box<EffectFrame>,
+    },
     /// Cost effects finish before the saved caller decision becomes available.
     /// Its frame, output and parent payment remain owned here across choices.
     Decision(Box<SuspendedResolution>),
@@ -93,7 +99,10 @@ pub struct EffectFrame {
     pub excess_damage: i32,
     /// The cards the resolution's latest discard or mill moved ("this way").
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub this_way: Vec<CardId>,
+    pub this_way: Vec<ObjectRef>,
+    /// Exact objects selected by the enclosing selection operation.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub selected: Vec<ObjectRef>,
     /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
     /// they now exist ("it", "if you do").
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -136,6 +145,17 @@ pub struct TargetIteration {
 }
 
 impl EffectFrame {
+    /// Give the current instruction an isolated scope and retain its suffix.
+    /// Completing the scope emits its fact exactly once through `run_frame`.
+    pub(crate) fn complete_with_event(&mut self, event: GameEvent) {
+        let child = self.child_scope(Vec::new());
+        let parent = std::mem::replace(self, child);
+        self.completion = FrameCompletion::Event {
+            event,
+            frame: Box::new(parent),
+        };
+    }
+
     /// A fresh scope with no source, results or stack cleanup. Callers bind
     /// their source and targets; only a root spell supplies finalization.
     pub(crate) fn new(controller: PlayerId, effects: Vec<Effect>) -> Self {
@@ -152,6 +172,7 @@ impl EffectFrame {
             x: 0,
             excess_damage: 0,
             this_way: Vec::new(),
+            selected: Vec::new(),
             moved: Vec::new(),
             chosen: None,
             created: None,
@@ -166,15 +187,9 @@ impl EffectFrame {
         }
     }
 
-    /// Start the next child with an isolated result scope. The interrupted
-    /// scope keeps its targets, results, suffix and finalization unchanged.
-    fn next_iteration(mut self) -> Self {
-        let iteration = self.iteration.as_mut().expect("pending iteration");
-        let Some(target) = iteration.remaining.pop_front() else {
-            self.iteration = None;
-            return self;
-        };
-        let mut child = Self {
+    fn child_scope(&self, effects: Vec<Effect>) -> Self {
+        Self {
+            selected: self.selected.clone(),
             remembered: self.remembered.clone(),
             inherited_from: self.inherited_from,
             source_transforms: self.source_transforms,
@@ -183,15 +198,39 @@ impl EffectFrame {
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
             x: self.x,
-            targets: vec![ResolutionTarget {
-                requirement: 0,
-                ..target
-            }],
+            targets: self.targets.clone(),
+            active_requirement: self.active_requirement,
+            context_target: self.context_target,
             triggering_player: self.triggering_player,
             grantor: self.grantor,
             ability: self.ability,
-            ..Self::new(self.controller, iteration.effects.clone())
+            ..Self::new(self.controller, effects)
+        }
+    }
+
+    pub(crate) fn select_scope(&mut self, selected: Vec<ObjectRef>, effects: Vec<Effect>) {
+        let mut child = self.child_scope(effects);
+        child.selected = selected;
+        let parent = std::mem::replace(self, child);
+        self.completion = FrameCompletion::Frame(Box::new(parent));
+    }
+
+    /// Start the next child with an isolated result scope. The interrupted
+    /// scope keeps its targets, results, suffix and finalization unchanged.
+    fn next_iteration(mut self) -> Self {
+        let iteration = self.iteration.as_mut().expect("pending iteration");
+        let Some(target) = iteration.remaining.pop_front() else {
+            self.iteration = None;
+            return self;
         };
+        let effects = iteration.effects.clone();
+        let mut child = self.child_scope(effects);
+        child.targets = vec![ResolutionTarget {
+            requirement: 0,
+            ..target
+        }];
+        child.active_requirement = 0;
+        child.context_target = None;
         child.completion = FrameCompletion::Frame(Box::new(self));
         child
     }
@@ -346,14 +385,15 @@ pub enum Decision {
         kind: CounterKind,
         remaining: usize,
     },
-    SelectMilled {
+    /// Select exact objects without moving them until the subset is complete.
+    SelectCards {
         player: PlayerId,
-        cards: Vec<CardId>,
+        candidates: Vec<ObjectRef>,
+        selected: Vec<ObjectRef>,
+        min: usize,
+        max: usize,
+        effects: Vec<Effect>,
         if_declined: Vec<Effect>,
-        /// The chosen card goes to the battlefield under `player`'s control
-        /// rather than to their hand.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        to_battlefield: bool,
     },
     /// Candidates come from the current library, not stored or pinned cards.
     SearchBasicLand {
@@ -400,8 +440,10 @@ pub enum Decision {
     /// the kept cards on top through the shared library-order decision.
     Surveil {
         player: PlayerId,
-        /// Inspected cards still on top of the library, top first.
+        /// All inspected cards remain private and in the library until the
+        /// partition is complete. Choosing one does not commit a zone move.
         looked: Vec<CardId>,
+        graveyard: Vec<CardId>,
     },
     /// Look at top N, select up to K matching cards to hand, rest to the
     /// bottom of the library in the specified order.
@@ -557,7 +599,7 @@ impl Decision {
             | Decision::ChooseToExile { player, .. }
             | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
-            Decision::SelectMilled { player, .. }
+            Decision::SelectCards { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::SearchLibraryToHand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
@@ -606,7 +648,7 @@ impl Decision {
                 offer: ResolutionCastOffer::LibraryTop { card },
                 ..
             } => std::slice::from_ref(card),
-            Decision::SelectMilled { .. }
+            Decision::SelectCards { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::SearchLibraryToHand { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -639,6 +681,60 @@ fn select_cards(
 pub struct SuspendedResolution {
     pub frame: EffectFrame,
     pub decision: Decision,
+}
+
+/// A borrowed part of the retained caller chain, not a separate rules program.
+pub(crate) enum ResolutionRef<'a> {
+    Frame(&'a EffectFrame),
+    Decision(&'a Decision),
+}
+
+impl SuspendedResolution {
+    /// Walk the complete caller chain, outermost first. Projection and private
+    /// inspection use this same order across both child scopes and mana costs.
+    pub(crate) fn continuation(&self) -> Vec<ResolutionRef<'_>> {
+        fn frame_chain<'a>(frame: &'a EffectFrame, out: &mut Vec<ResolutionRef<'a>>) {
+            match &frame.completion {
+                FrameCompletion::Frame(parent) | FrameCompletion::Event { frame: parent, .. } => {
+                    frame_chain(parent, out)
+                }
+                FrameCompletion::Decision(caller) => {
+                    frame_chain(&caller.frame, out);
+                    decision_chain(&caller.decision, out);
+                }
+                FrameCompletion::Priority | FrameCompletion::Spell { .. } => {}
+            }
+            out.push(ResolutionRef::Frame(frame));
+        }
+        fn decision_chain<'a>(decision: &'a Decision, out: &mut Vec<ResolutionRef<'a>>) {
+            if let Decision::ManaUpfront {
+                resume: Some(parent),
+                ..
+            }
+            | Decision::ManaChoice {
+                resume: Some(parent),
+                ..
+            } = decision
+            {
+                decision_chain(parent, out);
+            }
+            out.push(ResolutionRef::Decision(decision));
+        }
+        let mut chain = Vec::new();
+        frame_chain(&self.frame, &mut chain);
+        decision_chain(&self.decision, &mut chain);
+        chain
+    }
+
+    /// A child's chooser does not end the retained caller's inspection rights.
+    pub(crate) fn decisions(&self) -> impl Iterator<Item = &Decision> {
+        self.continuation()
+            .into_iter()
+            .filter_map(|part| match part {
+                ResolutionRef::Decision(decision) => Some(decision),
+                ResolutionRef::Frame(_) => None,
+            })
+    }
 }
 
 impl Game {
@@ -816,8 +912,10 @@ impl Game {
             .suspended_decision
             .as_ref()
             .is_some_and(|suspended| {
-                matches!(suspended.decision, Decision::SearchNamed { player, owner: searched, .. }
-                if self.shares_information(viewer, player) && searched == owner)
+                suspended.decisions().any(|decision| {
+                    matches!(decision, Decision::SearchNamed { player, owner: searched, .. }
+                    if self.shares_information(viewer, *player) && *searched == owner)
+                })
             })
     }
 
@@ -877,6 +975,18 @@ impl Game {
             }
             let Some(effect) = frame.queue.pop_front() else {
                 match frame.completion {
+                    FrameCompletion::Event {
+                        event,
+                        frame: parent,
+                    } => {
+                        self.emit(event);
+                        // Capture eligible sources at completion, before a
+                        // caller's next instruction can remove them. Matching
+                        // enqueues occurrences; it does not grant priority.
+                        self.process_game_events();
+                        frame = *parent;
+                        continue;
+                    }
                     FrameCompletion::Frame(parent) => {
                         frame = *parent;
                         continue;
@@ -1211,16 +1321,45 @@ impl Game {
                 }
             }
 
-            Decision::SelectMilled { player, cards, .. }
-            | Decision::Surveil {
+            Decision::SelectCards {
                 player,
-                looked: cards,
-            } => ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, cards.iter().copied(), true),
-                focus: self.card_focus(cards),
-            },
+                candidates,
+                selected,
+                min,
+                ..
+            } => {
+                let cards: Vec<_> = candidates
+                    .iter()
+                    .filter(|object| !selected.contains(object))
+                    .filter(|object| {
+                        self.current_object_ref(CardId::from(object.entity)) == Some(**object)
+                    })
+                    .map(|object| CardId::from(object.entity))
+                    .collect();
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    actions: select_cards(*player, cards.iter().copied(), selected.len() >= *min),
+                    focus: self.card_focus(&cards),
+                }
+            }
+            Decision::Surveil {
+                player,
+                looked,
+                graveyard,
+            } => {
+                let remaining: Vec<_> = looked
+                    .iter()
+                    .copied()
+                    .filter(|card| !graveyard.contains(card))
+                    .collect();
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    actions: select_cards(*player, remaining.iter().copied(), true),
+                    focus: self.card_focus(&remaining),
+                }
+            }
             Decision::Scry {
                 player, remaining, ..
             } => ActionSpace {
@@ -1766,7 +1905,9 @@ impl Game {
                     return Err(AgentError("discard must be from hand".into()));
                 }
                 self.move_card(*card, ZoneType::Graveyard);
-                suspended.frame.this_way.push(*card);
+                if let Some(object) = self.current_object_ref(*card) {
+                    suspended.frame.this_way.push(object);
+                }
                 if let Some(then) = then.take() {
                     suspended.frame.prepend_effects(then.into_iter());
                 }
@@ -2071,55 +2212,56 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::Surveil { looked, .. }, Action::SelectCard { card, .. })
-                if looked.contains(card) =>
-            {
-                looked.retain(|candidate| candidate != card);
-                self.move_card(*card, ZoneType::Graveyard);
-                if looked.is_empty() {
-                    self.run_frame(suspended.frame);
+            (
+                Decision::Surveil {
+                    looked, graveyard, ..
+                },
+                Action::SelectCard { card, .. },
+            ) if looked.contains(card) && !graveyard.contains(card) => {
+                graveyard.push(*card);
+                if graveyard.len() == looked.len() {
+                    self.finish_surveil_selection(suspended);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                 }
                 Ok(())
             }
-            (Decision::Surveil { player, looked }, Action::Decline { .. }) => {
-                let decision = self.library_order_decision(
-                    *player,
-                    std::mem::take(looked),
-                    LibraryEnd::Top,
-                    false,
-                );
-                self.continue_resolution(suspended, decision);
+            (Decision::Surveil { .. }, Action::Decline { .. }) => {
+                self.finish_surveil_selection(suspended);
                 Ok(())
             }
             (
-                Decision::SelectMilled {
-                    player,
-                    cards,
-                    to_battlefield,
+                Decision::SelectCards {
+                    candidates,
+                    selected,
+                    min,
+                    max,
                     ..
                 },
                 Action::SelectCard { card, .. },
-            ) if cards.contains(card) => {
-                if *to_battlefield {
-                    self.move_card_with_entry(
-                        *card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            controller: Some(*player),
-                            ..Default::default()
-                        },
-                    );
+            ) => {
+                let current = self.current_object_ref(*card);
+                let choice = candidates
+                    .iter()
+                    .copied()
+                    .find(|object| Some(*object) == current && !selected.contains(object));
+                let Some(choice) = choice.filter(|_| selected.len() < *max) else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("not an available selection candidate".into()));
+                };
+                selected.push(choice);
+                if selected.len() == *max {
+                    debug_assert!(selected.len() >= *min);
+                    self.finish_card_selection(suspended);
                 } else {
-                    self.reveal_card_to_hand(*card, *player);
+                    *self.state.suspended_decision_mut() = Some(suspended);
                 }
-                self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::SelectMilled { if_declined, .. }, Action::Decline { .. }) => {
-                suspended.frame.prepend_effects(if_declined.iter().cloned());
-                self.run_frame(suspended.frame);
+            (Decision::SelectCards { selected, min, .. }, Action::Decline { .. })
+                if selected.len() >= *min =>
+            {
+                self.finish_card_selection(suspended);
                 Ok(())
             }
             (Decision::Modal { modes, .. }, Action::ChooseMode { mode, .. }) => {
@@ -2433,6 +2575,50 @@ impl Game {
             LibraryEnd::Top => self.put_on_top_of_library(player, &cards),
         }
         None
+    }
+
+    fn finish_card_selection(&mut self, suspended: SuspendedResolution) {
+        let Decision::SelectCards {
+            selected,
+            effects,
+            if_declined,
+            ..
+        } = suspended.decision
+        else {
+            unreachable!("card selection");
+        };
+        let effects = if selected.is_empty() {
+            if_declined
+        } else {
+            effects
+        };
+        let mut frame = suspended.frame;
+        frame.select_scope(selected, effects);
+        self.run_frame(frame);
+    }
+
+    /// Commit the chosen graveyard cards as one batch, then order the kept
+    /// cards. The frame's completion announces Surveilled only after ordering.
+    fn finish_surveil_selection(&mut self, mut suspended: SuspendedResolution) {
+        let Decision::Surveil {
+            player,
+            looked,
+            graveyard,
+        } = &mut suspended.decision
+        else {
+            unreachable!("surveil selection");
+        };
+        let sources = self.snapshot_trigger_sources();
+        for card in graveyard.iter() {
+            if let Some(object) = self.current_object_ref(*card) {
+                self.move_object_to_zone(object, ZoneType::Graveyard);
+            }
+        }
+        self.process_game_events_with_sources(&sources);
+        looked.retain(|card| !graveyard.contains(card));
+        let next =
+            self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);
+        self.continue_resolution(suspended, next);
     }
 
     /// Reorder inspected library cards, first to draw first. Their exact

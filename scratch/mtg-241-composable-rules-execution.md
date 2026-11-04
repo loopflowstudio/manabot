@@ -3,11 +3,12 @@
 ## Outcome and status
 
 Accepted directive: Jack Heart, 2026-11-04. One PR using the code Graph, stopping
-at interactive review. Base `4463e57f5`; checkpoint `37928095d` contains nested
-iteration and both contextual-read fixes. The working tree adds common frame
-completion and shared library ordering. The full Task is **incomplete**, with
+at interactive review. Original base `4463e57f5`; checkpoint `37928095d` contains
+nested iteration and both contextual-read fixes. Checkpoint `e6b268956` adds
+common frame completion and shared library ordering; `58535f9f2` integrates
+main `8e8d702f8`. The full Task is **incomplete**, with
 replacement/event completion the largest remaining cut. No human decision is
-missing. No publication, merge, training or retained-evidence rewriting occurred.
+missing. No PR publication, PR merge, training or retained-evidence rewriting occurred.
 This Task has no Wave.
 
 Effect execution retains nested operations, exact objects, scoped results and
@@ -21,7 +22,7 @@ cardinality, visibility, order, shuffle, reveal and result binding.
 `EffectFrame`/`run_frame` own execution; `Decision` owns the current question.
 Native `Effect` remains the sole authored program. `FrameCompletion` now owns
 one return destination: `Priority`, `Spell`, `Frame(Box<EffectFrame>)`, or
-`Decision(Box<SuspendedResolution>)`. It replaces the independent `parent` and
+`Decision(Box<SuspendedResolution>)`, or a completion `Event` with its caller. It replaces the independent `parent` and
 `finalize` fields. Iteration keeps its remaining targets and creates a fresh
 child scope; branches share their scope. Parent results and stack cleanup wait
 until every child completes. `EffectFrame::new` initializes fresh result state.
@@ -57,6 +58,12 @@ rotates it into the committed prefix, preserving the remaining offer order
 without removing and reinserting it. Nested iteration, payment and ordering
 witnesses share the same bound Command/replay/stale-rejection check.
 
+`SuspendedResolution::continuation` owns the root-first walk through frames and
+saved decisions. Observation projection, inspection permissions and search read
+that borrowed chain; they no longer reconstruct separate frame/mana ancestry.
+Projection maps each retained part and links it to its predecessor. This changes
+neither serialized runtime state nor continuation codes.
+
 ## Delete — do not maintain
 
 Removed in checkpoint `37928095d`:
@@ -66,7 +73,7 @@ Removed in checkpoint `37928095d`:
   prospective entry control and exact-source current/LKI power.
 - Repeated fresh-frame literals and the one-use `with_parent` helper.
 
-Removed in the working tree:
+Removed in checkpoint `e6b268956`:
 - Independent `EffectFrame.parent` and `FrameFinalize` ownership; completion
   names the interrupted scope or caller in one place.
 - Mana sacrifice's post-call `ManaUpfront` mutation; its output is retained
@@ -77,8 +84,42 @@ Removed in the working tree:
   shared top/bottom ordering. Surveil no longer resumes immediately on keeping
   multiple cards.
 
+Current cut (2026-11-04): retained inspection now walks all caller/iteration
+frames and saved mana decisions, shared by observation and determinization.
+`FrameCompletion::Event` retains a keyword completion fact until child choices
+finish. Surveil retains its graveyard partition before one movement batch,
+then orders kept cards; Scry and Surveil announce completion after their choices.
+Planetarium now matches both keyword events. Completion immediately matches
+trigger sources before the caller can remove them, without placing triggers or
+granting priority; a directed departure witness verifies that boundary. These
+changes do not yet make replacement or zone entry suspendable.
+
+Removed in the current cut: `MillAndSelect`, `ReturnMilledThisWay`, `MilledBonus`
+and `Decision::SelectMilled`. Native `SelectCards` chooses exact selector results
+with min/max cardinality, then binds `Selected` in a child scope. Mill/discard
+results now retain exact objects in `this_way`, independently of later `Move`.
+`CardsThisWayMatch` replaces the discard-specific condition. Avatar Destiny
+preserves its source-return between milling and selection; Ostrich-Horse keeps
+its decline counter and Sparring Dummy its Lesson condition. Mill movement uses
+one pre-batch trigger snapshot. Shared selection appends obligation code 28;
+legacy code 5 remains retired. Text and Academy name the new stage. The native
+Command witness covers partial selection, two forks, exact incarnation rejection,
+a child pause, preserved caller mill results and one finalization.
+Sparring Dummy now reads that retained mill result after selection, removing the
+duplicated selection in its Lesson/non-Lesson branches. Selection completion
+uses its already-clamped maximum rather than checking candidate count again.
+
+The current selector migration covers public-zone results. Extending it to hand
+search/discard needs explicit hidden-world handling: a retained exact hand
+candidate can be reassigned to the library by determinization. Rebuilding only
+the active action list cannot repair a saved caller or its partially selected
+subset. The migration must preserve viewer-known exact memberships and refresh
+unknown commitments coherently through every retained frame, using the same
+source/visibility contract as possible-world materialization. Do not extend
+snapshot candidates into hidden-zone consumers before that cut is implemented.
+
 Still slated for removal in the same PR:
-- MillAndSelect, ReturnMilledThisWay, OptionalDiscardDraw, MayDiscard,
+- OptionalDiscardDraw, MayDiscard,
   SearchBasicLand and overlapping search/move handlers and dedicated decisions,
   after moving real-card consumers to shared selection. Preserve distinct
   keyword events, private inspection, decline and ordered remainders.
@@ -107,20 +148,45 @@ Still slated for removal in the same PR:
    Neither the constructed completion test nor existing Prism/Treasure tests
    proves this integration yet.
 4. Complete shared candidate/move/result selection migration and delete the
-   listed composite handlers. Surveil kept ordering is implemented; its
-   graveyard selections still move one at a time, so simultaneous selection
-   movement and the complete keyword-event contract remain open.
+   remaining discard/search composites. Surveil now retains its full private
+   partition, commits graveyard movement together, orders kept cards and emits
+   its keyword completion. Retained caller inspection is shared across readers.
+   Hidden-zone selection/materialization and full event replacement suspension
+   remain the next ownership cuts.
 5. Complete versioned native/Python inputs, learning, LLM, Academy and reconnect
-   coverage for nested iteration/results and future batches. Retained caller
-   inspection across nested decisions also needs auditing: current observation
-   and determinization inspected-card readers primarily use the active Decision.
-   Current root/caller frame projection alone does not establish full observability.
+   coverage for nested iteration/results and future batches. Selection bindings,
+   captured mill/discard results and completion events still need that explicit
+   projection; current root/caller frames and legal offers do not establish full
+   observability. Retained inspection now has directed observation/determinization
+   proofs, including an opponent's private-zone search behind a child choice.
    World/hash and capture version boundaries and a new conformance corpus remain
    part of the completed change; frozen receipts must not be rewritten.
+   MTG-244 now has Jack Heart's approval for an explicit successor input, while
+   keeping fresh v6 and frozen saved versions. Its concrete schema/version is
+   not reserved in the shared comments; integration must reconcile that schema
+   with this Task's continuation payload rather than independently assign the
+   same version to incompatible layouts.
 6. Gate owns full debug Rust/Clippy, affected Python and headless Academy checks,
    world admission and same-runner Engine Budget under `docs/development.md`.
    No speed claim follows from focused checks. A rules-driven digest change
    requires its own explanation and accepted baseline handling.
+
+## Integrated upstream contracts — 2026-11-04
+
+Main `8e8d702f8` derives native scalar/vector capacities from supplied arrays,
+validates companion shapes, and adds explicit `action_overflow=first-legal`.
+Continuation projection must retain those capacities and original prefix
+indices/Commands; omitted overflow remains an error. Academy and native legality
+still expose all actions. The MTG-213 pilot exception is not permission to cap
+new replacement or selection choices implicitly. Main also shares the selected
+casting cost between X announcement and payment and preserves X under any-type
+mana permissions; payment integration must retain those fixes.
+
+The updated validation guide adds observation, cutoff and buffer-capacity tests
+for encoding/action changes, and active-training tests for input/model changes.
+These are gate obligations alongside the existing world-admission checks.
+The current implementation's focused checks run after this merge; earlier
+checkpoint results remain historical evidence.
 
 ## Completion-boundary evidence and next interface
 
@@ -150,11 +216,17 @@ completion interface above is working code, not a claim that this wider cut is d
 ## Coordination and evidence
 
 MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. On
-2026-11-04 their shared Task status showed ongoing implementation (242/243).
+2026-11-04 shared Task status showed 242/244 implementing and 243 syncing.
 Task comments now carry FrameCompletion and the paid-output child protocol;
-MTG-243 also has the code-27 reservation. No response has reserved an input or
-world version. Their checkouts were not modified or copied. Ordinary Task sync
+MTG-243 also has the code-27 reservation. MTG-244's dated comment records Jack
+Heart's successor-input approval and rejection before inference for older inputs
+that cannot represent its payload. No shared comment reserves a concrete input
+or world version. Their checkouts were not modified or copied. Ordinary Task sync
 remains integration; the layers algorithm is untouched.
+
+Wizards' [Guilds of Ravnica release notes](https://magic.wizards.com/en/news/feature/guilds-ravnica-release-notes-2018-09-20)
+confirm that surveil triggers after its operation completes, including an empty
+library. The Planetarium/Joo Dee witness covers the real keyword interaction.
 
 Wizards' Aetherdrift release notes (Caradora) give counter replacement order to
 the affected permanent's controller, including entry. Foundations release notes
@@ -175,4 +247,5 @@ Approved `managym/PRINCIPLES.md` and its README link remain. Its final evidence
 paragraph follows Jack Heart's steer: public PRs #42, #348, #353, #289 and #412
 plus the speed investigation, without relying on the uncommitted retrospective.
 
-Validation (2026-11-04): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 -p managym --lib -- resolution_tests payment_tests` — 27 passed; the cards target with filters `audit_prism_treasure_empty_pool_activation`, `prism_payment_offers_execute_and_restore_without_mutating_sibling_forks`, `accumulate_wisdom_look_three_pick_one_rest_to_bottom`, `joo_dee_` — 7 passed. Required release wheel rebuilt and extension atomically installed; `uv run --extra dev pytest tests/semantic/test_text_observation.py::test_accumulate_wisdom_ordering_reaches_text_commands_and_both_encoders -q` — 1 passed. Earlier decision-code bound and text-label checks passed and remain applicable. Formatting, diff whitespace and context-budget checks passed. Gate owns broader checks after implementation; top-order native/Python parity and full reconnect proofs remain unclaimed.
+Previous check details remain at `e6b268956:scratch/mtg-241-composable-rules-execution.md`.
+Validation (2026-11-04): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2` with `--lib` filters `flow::resolution::resolution_tests` and `agent::continuation::tests`, plus `-p managym-cards --test cards` filters `sparring_dummy`, `every_effect_variant_reaches_the_learning_tokens`, `every_condition_reaches_the_learning_tokens`, and `every_object_and_player_selector_reaches_the_learning_tokens` — 38 passed. Inherited post-sync card checks also passed for Avatar Destiny, Ostrich-Horse, Joo Dee, Planetarium and trigger learning. Root release wheel rebuilt and cp312 extension atomically installed; `uv run --extra dev pytest` on the four `tests/semantic/test_text_observation.py` cases for decision labels, shared mill selection/encoder parity, Joo Dee Surveil/copy and T6 payment/search/timing — 4 passed. `cargo fmt --check`, `git diff --check` and `lf context` pass. Gate owns affected suites, successor-input admission, reconnect/browser coverage and Engine Budget after the remaining implementation cuts.

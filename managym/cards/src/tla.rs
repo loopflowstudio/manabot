@@ -4,9 +4,8 @@ use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
         Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        Except, LinkedChooser, LinkedExile, LinkedGrant, MilledBonus, ObjectSelector, PaymentCost,
-        PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayWindow,
+        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -1189,8 +1188,21 @@ fn avatar_destiny() -> CardDefinition {
                     target: None,
                 },
                 Effect::move_to(ObjectSelector::This, ZoneType::Hand),
-                Effect::ReturnMilledThisWay {
+                Effect::SelectCards {
+                    from: ObjectSelector::CardsThisWay,
                     predicate: CardPredicate::creature(),
+                    min: 0,
+                    max: EffectValue::Fixed(1),
+                    effects: vec![Effect::Move {
+                        what: ObjectSelector::Selected,
+                        to: ZoneType::Battlefield,
+                        tapped: false,
+                        transformed: false,
+                        under: Some(PlayerSelector::You),
+                        with_counter: None,
+                        linked: None,
+                    }],
+                    if_declined: vec![],
                 },
             ],
         }],
@@ -6597,19 +6609,27 @@ fn ostrich_horse() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::MillAndSelect {
-                count: 3,
-                predicate: CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
+            effects: vec![
+                Effect::MillCards {
+                    count: EffectValue::Fixed(3),
+                    target: None,
                 },
-                if_declined: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-                if_milled: None,
-            }],
+                Effect::SelectCards {
+                    from: ObjectSelector::CardsThisWay,
+                    min: 0,
+                    max: EffectValue::Fixed(1),
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                    if_declined: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6854,7 +6874,7 @@ fn planetarium_of_wan_shi_tong() -> CardDefinition {
             ..Default::default()
         }],
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::YouScry,
+            condition: TriggerCondition::YouScryOrSurveil,
             intervening_if: None,
             effects: vec![Effect::MayOnceEachTurn {
                 effects: vec![Effect::CastLibraryTopFree],
@@ -8143,21 +8163,28 @@ fn sparring_dummy() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Defender]),
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
-            effects: vec![Effect::MillAndSelect {
-                count: 1,
-                predicate: CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
+            effects: vec![
+                Effect::MillCards {
+                    count: EffectValue::Fixed(1),
+                    target: None,
                 },
-                if_declined: vec![],
-                if_milled: Some(MilledBonus {
+                Effect::SelectCards {
+                    from: ObjectSelector::CardsThisWay,
                     predicate: CardPredicate {
-                        subtype: Some("Lesson".into()),
+                        card_type: Some(CardType::Land),
                         ..Default::default()
                     },
-                    effects: vec![Effect::gain_life(2)],
-                }),
-            }],
+                    min: 0,
+                    max: EffectValue::Fixed(1),
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    if_declined: vec![],
+                },
+                Effect::If {
+                    condition: Condition::CardsThisWayMatch(CardPredicate::subtype("Lesson")),
+                    then: vec![Effect::gain_life(2)],
+                    otherwise: vec![],
+                },
+            ],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -8454,7 +8481,7 @@ fn teo_spirited_glider() -> CardDefinition {
                 },
                 Effect::discard(),
                 Effect::If {
-                    condition: Condition::DiscardedThisWay(CardPredicate {
+                    condition: Condition::CardsThisWayMatch(CardPredicate {
                         not_card_types: vec![CardType::Land],
                         ..Default::default()
                     }),

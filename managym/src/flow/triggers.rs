@@ -121,6 +121,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         }
         TriggerCondition::YouBend => EventKinds::of(EventKind::Bent),
         TriggerCondition::YouScry => EventKinds::of(EventKind::Scried),
+        TriggerCondition::YouScryOrSurveil => {
+            EventKinds::of(EventKind::Scried) | EventKinds::of(EventKind::Surveilled)
+        }
     }
 }
 
@@ -1799,7 +1802,11 @@ impl Game {
                         .as_ref()
                         .is_some_and(|permanent| permanent.controller == source_controller)
             }
-            (TriggerCondition::YouScry, GameEvent::Scried { player }) => {
+            (
+                TriggerCondition::YouScry | TriggerCondition::YouScryOrSurveil,
+                GameEvent::Scried { player },
+            )
+            | (TriggerCondition::YouScryOrSurveil, GameEvent::Surveilled { player }) => {
                 *player == source_controller
             }
             (

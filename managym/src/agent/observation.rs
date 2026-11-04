@@ -1094,45 +1094,42 @@ impl Observation {
             // decision. Search candidates are derived from the current library;
             // scry/look choices retain their exact cards. Native information
             // sharing admits the deciding player and their controller.
-            let Some(suspended) = game
-                .state
-                .suspended_decision
-                .as_ref()
-                .filter(|suspended| suspended.decision.player() == perspective)
-            else {
+            let Some(suspended) = game.state.suspended_decision.as_ref() else {
                 continue;
             };
-            let cards = match &suspended.decision {
-                Decision::SearchNamed { owner, .. } => game
-                    .named_search_cards(*owner)
-                    .filter(|card| {
-                        game.state.zones.zone_of(*card) == Some(ZoneType::Library)
-                            || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
-                                && game.state.cards[*card].owner != perspective)
-                    })
-                    .collect(),
-                Decision::SearchBasicLand {
-                    player,
-                    subtype,
-                    to_hand,
-                    ..
-                } => game.basic_land_search_candidates(*player, subtype, *to_hand),
-                Decision::SearchLibraryToHand { player, predicate } => {
-                    game.library_search_candidates(*player, predicate)
+            for decision in suspended.decisions().filter(|d| d.player() == perspective) {
+                let cards = match decision {
+                    Decision::SearchNamed { owner, .. } => game
+                        .named_search_cards(*owner)
+                        .filter(|card| {
+                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
+                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
+                                    && game.state.cards[*card].owner != perspective)
+                        })
+                        .collect(),
+                    Decision::SearchBasicLand {
+                        player,
+                        subtype,
+                        to_hand,
+                        ..
+                    } => game.basic_land_search_candidates(*player, subtype, *to_hand),
+                    Decision::SearchLibraryToHand { player, predicate } => {
+                        game.library_search_candidates(*player, predicate)
+                    }
+                    decision @ Decision::DiscardFromRevealedHand { .. } => {
+                        game.revealed_hand_candidates(decision)
+                    }
+                    decision @ Decision::SearchDistinctLands { selected, .. } => {
+                        let mut cards = selected.clone();
+                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards
+                    }
+                    decision => decision.revealed_cards().to_vec(),
+                };
+                for card in cards {
+                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
+                    add_card(card, zone);
                 }
-                decision @ Decision::DiscardFromRevealedHand { .. } => {
-                    game.revealed_hand_candidates(decision)
-                }
-                decision @ Decision::SearchDistinctLands { selected, .. } => {
-                    let mut cards = selected.clone();
-                    cards.extend(game.distinct_land_search_candidates(decision));
-                    cards
-                }
-                decision => decision.revealed_cards().to_vec(),
-            };
-            for card in cards {
-                let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
-                add_card(card, zone);
             }
         }
 
@@ -1674,6 +1671,7 @@ impl Observation {
             | GameEvent::LibrarySearched { .. }
             | GameEvent::CountersPut { .. }
             | GameEvent::Scried { .. }
+            | GameEvent::Surveilled { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }
