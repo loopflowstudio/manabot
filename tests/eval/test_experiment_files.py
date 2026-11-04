@@ -38,6 +38,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
         "elemental",
+        "growing_pool",
         "mtg183-elemental-eval",
         "seat_comparison",
         "tla_pilot_v9",

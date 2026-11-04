@@ -245,6 +245,13 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+The prospective [growing-pool reference league](../experiments/protocols/growing-pool-245-v1.md)
+freezes authored decks, sampling tickets and held-out experience splits through
+the existing deck source, training job and replay evaluator. Its read-only
+`uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
+admits the manifest without playing games. Task 04 owns actual pilot results;
+the protocol and its current-world proxy are not evidence of learning.
+
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection
