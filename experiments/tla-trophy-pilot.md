@@ -207,7 +207,17 @@ earlier replay receipts remain unchanged. This is capacity-repair evidence only.
 
 CI and an exact source freeze remain before the next capped attempt.
 That attempt requires fresh reconciliation of both $0.7375
-reservations and provider billing, new v2 initialization and the unchanged
+reservations and provider billing, new v3 initialization and the unchanged
 evaluation schedule. Actual GPU learner updates, periodic/endpoint checkpoints
 and learning/Elemental-pace evidence remain unmet. No paid-training milestone
 was sent; the Task is not complete.
+
+Gate review of PR #416 found one CI fixture mismatch: Python's fresh v6/512
+configuration was compared to explicit native v5/128. The corrected text proof
+now checks matching configurations at v5/128, pilot v6/256 and the fresh default;
+production encoding is unchanged. Focused validation passed **237 tests**, with
+one CUDA-only check skipped, plus Ruff and Python/Rust formatting. The original
+CI main group completed 900 other tests with one skip; debug Rust, engine budget,
+long integration, package/install and Academy checks passed at `feab62822`.
+CI on the fixture correction remains required before landing. These checks
+establish implementation behavior, not GPU progress or learning gain.
