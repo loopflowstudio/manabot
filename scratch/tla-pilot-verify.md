@@ -4,9 +4,10 @@
 `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` contains PR #419's shared-effect
 contract but lacks the card-capacity repair. PR #416 merged at
 `3b122de9078c985f846a0f3c5a3a42ebca3b1182`; this Task has no later PR.
-The existing repair and prospective v5 runner have passed publication checks
-and are ready for a new PR in this Task. GPU execution and learning acceptance
-remain outstanding.
+The existing repair and prospective v5 runner passed publication checks and
+are published in PR #420, open and ready for review. GPU execution and learning
+acceptance remain outstanding; this publication step neither merges nor arms
+auto-merge.
 
 ## Accepted outcome and constraints
 
@@ -105,9 +106,9 @@ deadline and teardown. No automatic retry or unowned inventory cleanup.
 
 ## Remaining work
 
-1. Publish the checked repair in a new PR, then deliver through the selected
-   delivery step. Publication validation below discharges the local checks;
-   publication alone neither merges the PR nor completes the Task.
+1. Deliver the checked repair in PR #420 through the selected delivery step.
+   Publication validation below discharges the local checks; publication alone
+   neither merges the PR nor completes the Task.
 2. After delivery, obtain fresh capacity, inventory, billing and bounded quote
    checks, then resume the prepared v5 Run through ordinary CUDA admission within
    $10. Capacity is the external prerequisite; no human choice is missing.
@@ -192,3 +193,7 @@ Ruff lint/format and diff checks passed. All 230 added artifact entries match
 local bytes and existing manifest entries are unchanged. Logs are
 `.runs/mtg213/publish-cargo-test.log` and `publish-python-tests.log`.
 No paid work or GPU availability read occurred in this publication step.
+PR: https://github.com/loopflowstudio/manabot/pull/420. The generated copy was
+reviewed against the actual main diff and correctly preserves all proof limits.
+The publisher automatically staged a concurrent provider follow-up note; it was
+removed from the diff while retained locally and locally excluded from staging.
