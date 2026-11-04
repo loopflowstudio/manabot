@@ -4,9 +4,9 @@
 
 use crate::state::{
     ability::{
-        Ability, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser, LinkedExile,
-        LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector, Scope, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
+        LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector,
+        Scope, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
@@ -767,21 +767,19 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CastExiledWithSource { predicate } => format!("You may cast a {} from among cards you own exiled with this", predicate_description(predicate, "spell")),
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),
-        CreateDelayedTrigger { event, remember, effects } => format!(
-            "{}{}, {}",
+        CreateDelayedTrigger { event, frequency, expiry, remember, effects } => format!(
+            "{}When {}{} ({}), {}",
             remember.as_ref().map_or_else(String::new, |what| format!("Remember {}. ", selector_description(what))),
             match event {
-                DelayedEvent::DiesThisTurn => "When that creature dies this turn".into(),
-                DelayedEvent::CreatureDiesThisTurn => "Whenever a creature dies this turn".into(),
-                DelayedEvent::NextEndStep { your_turn: false } =>
-                    "At the beginning of the next end step".into(),
-                DelayedEvent::NextEndStep { your_turn: true } => "At the beginning of your next end step".into(),
-                DelayedEvent::NextUpkeep => "At the beginning of the next upkeep".into(),
-                DelayedEvent::YouNextCastThisTurn(predicate) => format!(
-                    "When you next cast a {} this turn",
-                    predicate_description(predicate, "spell")
-                ),
+                DelayedEvent::Dies => "that creature dies".into(),
+                DelayedEvent::CreatureDies => "a creature dies".into(),
+                DelayedEvent::EndStep { your_turn: false } => "the end step begins".into(),
+                DelayedEvent::EndStep { your_turn: true } => "your end step begins".into(),
+                DelayedEvent::Upkeep => "upkeep begins".into(),
+                DelayedEvent::YouCastSpell(predicate) => format!("you cast a {}", predicate_description(predicate, "spell")),
             },
+            match expiry { DelayedExpiry::ThisTurn => " this turn", DelayedExpiry::Never => "" },
+            match frequency { DelayedFrequency::Once => "once", DelayedFrequency::EachMatch => "each time" },
             effects_description(effects)
         ),
         MayDiscard { then } => format!(

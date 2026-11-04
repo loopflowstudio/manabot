@@ -37,9 +37,9 @@ schema-1 pair manifests and their exact treatments remain unchanged.
 
 Both browser deck selectors include all ten names. The server preserves their
 Lesson pools through new games and recorded root rebuilds.
-A named Elemental setup paired with an outside setup is rejected, so it cannot
-silently run the generic registry. Human and bot Commands still use the same
-native legal offers, revision checks and information boundary.
+Academy requires both named decks to belong to the Elemental roster when either
+one does. Human and bot Commands use the same native legal offers, revision
+checks and information boundary.
 
 Training uses the ordinary APIs, for example:
 

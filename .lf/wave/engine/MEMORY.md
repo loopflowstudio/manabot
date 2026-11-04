@@ -447,8 +447,37 @@ preserves accepted decisions, dated proof limits and source history.
   their lending definition across source departure or replacement; departure
   triggers use LKI. Ordered extra turns/combats and their restrictions need
   both deterministic identity and shared policy/text observation. T6 represents
-  them in hash contract 13, v5 frames/facts and definition-derived tokens,
-  preserving v1–v4 widths and exclusions.
+  them in v5/v6 frames/facts and definition-derived tokens, preserving v1–v4
+  widths and exclusions. Their initial hash contract 13 is superseded by 14
+  for retained delayed-object captures; mutable receipts must follow that change.
+- Jack Heart accepted Academy's public schedule completion in T6 on
+  2026-11-03 (option 1a). Equal per-player counts can conceal opposite turn
+  orders, and zero pending combats can conceal an active restriction. Native
+  `TurnState.public_schedule` supplies ordered turns/resume and current/pending
+  combats directly; policy continuation frames are a parallel projection, not
+  a client scheduling API. Missing historical data is unknown. Current combat
+  includes ordinary combat without a new persisted extra-combat flag. Native,
+  Svelte and retained-session WebSocket proofs cover these distinctions; they
+  establish neither browser geometry nor process-crash durability.
+- Jack Heart's 2026-11-03 delayed-trigger correction separates event timing,
+  captured subjects and effects. `CreateDelayedTrigger` resolves an optional
+  selector immediately; exact `ObjectRef`s travel through the waiting trigger,
+  occurrence, stack and suspended resolution as `Remembered`, separately from
+  event context. Later incarnation changes cannot redirect the effect. Generic
+  end-step timing retains controller-only versus any-player behavior; captured
+  death watchers share the same path. Focused debug proofs cover independent
+  captures, source departure/control change, reentry, forks and hidden subjects.
+  Definition-derived tokens and viewer-safe native/Python/text projection carry
+  the state. This changes content/hash identity, so old green receipts are not
+  evidence for the corrected engine; frozen evidence remains untouched.
+- Main's v6 integration (`3b122de90`, merged into T6 at `bf7631c6a`) makes fact
+  capacity configurable, fresh default 512, independently of T6's 512-action
+  capacity. Frozen v5 remains 128 facts; omitted saved action capacity stays
+  64. Timestamp rank normalization remains /128 for either fact capacity.
+  Training's retained 140-fact failure demonstrates why deck admission and
+  encoder capacity are separate questions; a larger capacity repairs that
+  counterexample, not every reachable position. T6's focused v6 parity and
+  retained-session proofs do not certify training results or combined-head CI.
 - Concurrent vocabulary additions need explicit ordinal reconciliation.
   Main's library ordering keeps decision code 23 and loyalty/defense keep
   counter ordinals 7/8; unpublished T6 payment/search use 24/25, choose-to-exile

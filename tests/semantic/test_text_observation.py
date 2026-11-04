@@ -709,7 +709,11 @@ def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
         assert absent not in decision.text
 
 
-def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None:
+@pytest.mark.parametrize("frequency", [None, 1, 2])
+@pytest.mark.parametrize("this_turn", [False, True])
+def test_waiting_delayed_trigger_relation_names_its_event_and_duration(
+    frequency: int | None, this_turn: bool
+) -> None:
     env = priority_root((), ("Mountain", "Gray Ogre"))
     payload = json.loads(capture_text_decision(env).capture_json)
     mountain, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
@@ -743,7 +747,8 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
             "can_decline": False,
             "mana_outputs": [],
             "resolutions_this_turn": 0,
-            "this_turn": True,
+            "this_turn": this_turn,
+            "delayed_frequency": frequency,
             "remembered": [
                 {
                     "object": mountain["id"],
@@ -753,6 +758,10 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
             ],
         }
     )
+    if frequency is None:
+        del payload["frames"][-1]["delayed_frequency"]
+    if not this_turn:
+        del payload["frames"][-1]["this_turn"]
     text = render_decision(_redigest(payload)).text
     relation = next(
         line for line in text.splitlines() if "waiting delayed trigger" in line
@@ -760,7 +769,48 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
     assert "waits for the watched object to die" in relation
     assert "watching C" in relation and "(Gray Ogre)" in relation
     assert "remembered C" in relation and "(Mountain)" in relation
-    assert "ends at this turn's cleanup if it has not triggered" in relation
+    assert (
+        "waiting ends at this turn's cleanup" if this_turn else "no stated expiry"
+    ) in relation
+    if frequency is None:
+        assert "fires once" not in relation and "fires on each" not in relation
+    else:
+        assert (
+            "fires once" if frequency == 1 else "fires on each matching event"
+        ) in relation
+
+
+@pytest.mark.parametrize("frequency,kind", [(0, 10), (3, 10), (1, 3)])
+def test_delayed_frequency_rejects_invalid_capture_codes(
+    frequency: int, kind: int
+) -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    frame = {
+        "kind": kind,
+        "decision": 1 if kind == 10 else 0,
+        "parent": None,
+        "controller": 0,
+        "source": {"object": None, "definition": None, "player": None},
+        "mode": None,
+        "ability": None,
+        "kicked": False,
+        "active_clause": None,
+        "targets": [],
+        "context": None,
+        "sacrifice": None,
+        "cost": None,
+        "hybrid": [],
+        "lesson": False,
+        "waterbend": False,
+        "can_decline": False,
+        "mana_outputs": [],
+        "resolutions_this_turn": 0,
+        "delayed_frequency": frequency,
+    }
+    payload["frames"].append(frame)
+    with pytest.raises(ValueError, match="invalid continuation frame relationship"):
+        managym.parse_continuation_frames_json(json.dumps(payload["frames"]))
 
 
 def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:

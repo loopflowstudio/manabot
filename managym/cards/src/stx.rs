@@ -38,15 +38,9 @@ fn divide_by_zero() -> CardDefinition {
             })),
             Effect::Learn,
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::SpellOrPermanent { min_mana_value: 1 },
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::SpellOrPermanent {
+            min_mana_value: 1,
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -165,15 +159,7 @@ fn igneous_inspiration() -> CardDefinition {
             Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::AnyTarget)),
             Effect::Learn,
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::AnyTarget,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
         text_box: text_box.into(),
         ..Default::default()
     }

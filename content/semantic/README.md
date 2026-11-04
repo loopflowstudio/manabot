@@ -40,7 +40,7 @@ it to chosen sets.
 ## Learning projection
 
 Current execution uses world **w17** and `current/learning_schema.json` (schema
-**9**). `managym.learning_catalog()` walks every catalog definition
+**10**). `managym.learning_catalog()` walks every catalog definition
 with a `serde` serializer ([`cards/tokens.rs`](../../managym/src/cards/tokens.rs)):
 struct and variant boundaries, field names, `Effect::…` variants, integers,
 booleans and printed categories become tokens, so a new rules variant reaches

@@ -31,7 +31,7 @@ use managym::{
         observation::{EventEntityKind, KeywordData, Observation, PermanentData},
         policy_history::HistoryReference,
     },
-    cards::{content_pack::default_content_pack, setups::authored_setup},
+    cards::setups::authored_setup,
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
@@ -13526,7 +13526,7 @@ fn benders_waterskin_untaps_during_the_other_players_untap_step() {
 }
 
 /// Aang, Swift Savior airbends a spell off the stack as he enters (its owner
-/// may recast it for {2}),, and Waterbend {8} transforms the same permanent:
+/// may recast it for {2}), and Waterbend {8} transforms the same permanent:
 /// Aang and La keep the counters and put one on each tapped creature as
 /// they attack.
 #[test]
@@ -13696,10 +13696,18 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
     assert_eq!(zone_of(&s, theirs), Some(ZoneType::Exile));
     assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
     assert_eq!(s.battlefield_permanents_named(0, "Craw Wurm").len(), 1);
-    let remembered: Vec<_> = s.game().state.delayed_triggers.iter()
-        .flat_map(|trigger| trigger.remembered.iter().copied()).collect();
+    let remembered: Vec<_> = s
+        .game()
+        .state
+        .delayed_triggers
+        .iter()
+        .flat_map(|trigger| trigger.remembered.iter().copied())
+        .collect();
     assert_eq!(remembered.len(), 2);
-    assert_ne!(remembered[0], remembered[1], "each target iteration captured its own token");
+    assert_ne!(
+        remembered[0], remembered[1],
+        "each target iteration captured its own token"
+    );
     for name in ["Gray Ogre", "Craw Wurm"] {
         let token = s.battlefield_permanents_named(0, name)[0];
         assert!(remembered.contains(&s.game().permanent_object_ref(token).unwrap()));
@@ -13745,7 +13753,10 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
     );
     let schedule = s.game().state.turn.public_schedule();
     assert!(schedule.additional_combats.is_empty());
-    assert_eq!(schedule.current_combat.unwrap().attackers.as_deref(), Some("land creatures"));
+    assert_eq!(
+        schedule.current_combat.unwrap().attackers.as_deref(),
+        Some("land creatures")
+    );
     assert_eq!(s.active_player(), 0);
     let offered: Vec<PermanentId> = s
         .action_space()
@@ -13959,17 +13970,7 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     pass_until(&mut s, ActionSpaceKind::Modal);
     let names = s.action_space().actions.len();
     assert!(names > 200, "every card name in the world: {names}");
-    let ogre_mode = default_content_pack()
-        .definition_entries()
-        .filter(|(id, d)| {
-            !d.is_token && (!d.key.is_empty() || default_content_pack().front_face(*id).is_some())
-        })
-        .map(|(_, d)| d.name.clone())
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .position(|name| name == "Gray Ogre")
-        .unwrap();
-    choose_mode(&mut s, ogre_mode);
+    sozin_name(&mut s, "Gray Ogre");
     for _ in 0..4 {
         choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
     }
@@ -14107,7 +14108,7 @@ fn koh_the_face_stealer_takes_the_abilities_of_the_last_chosen_card() {
 
     assert!(!offers_ability(&mut s, koh, 1), "nothing chosen yet");
     activate(&mut s, koh, 0);
-    settle_until_modal(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
     assert_eq!(s.action_space().actions.len(), 2, "both exiled cards");
     // Modes follow the exile links: Turtle-Duck first.
     choose_mode(&mut s, 0);
@@ -14121,24 +14122,13 @@ fn koh_the_face_stealer_takes_the_abilities_of_the_last_chosen_card() {
     assert!(view.keywords.has(Keyword::Trample));
 
     activate(&mut s, koh, 0);
-    settle_until_modal(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
     choose_mode(&mut s, 1);
     settle(&mut s);
     assert!(
         !offers_ability(&mut s, koh, 1),
         "the last chosen card has none"
     );
-}
-
-/// Pass priority until a mode choice is offered.
-fn settle_until_modal(s: &mut Scenario) {
-    for _ in 0..10 {
-        if s.action_space().kind == ActionSpaceKind::Modal {
-            return;
-        }
-        s.pass_priority();
-    }
-    panic!("no mode choice: {:?}", s.action_space());
 }
 
 /// Koh's chosen card's triggered abilities trigger from Koh: with Fire Lord
@@ -14153,7 +14143,7 @@ fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
     settle(&mut s);
     let koh = s.game().state.card_to_permanent[koh_card].unwrap();
     activate(&mut s, koh, 0);
-    settle_until_modal(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
     choose_mode(&mut s, 0);
     settle(&mut s);
     clear_summoning_sickness(&mut s, koh);
@@ -14569,7 +14559,7 @@ fn koh_inherits(s: &mut Scenario, name: &str) -> PermanentId {
     settle(s);
     let koh = s.game().state.card_to_permanent[card].unwrap();
     activate(s, koh, 0);
-    settle_until_modal(s);
+    pass_until(s, ActionSpaceKind::Modal);
     choose_mode(s, 0);
     settle(s);
     koh
@@ -14763,7 +14753,6 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     assert_eq!(s.game().card_power(card), 1);
 }
 
-
 #[test]
 fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step() {
     let mut s = five_color_setup(&["Fire Navy Trebuchet", "Gray Ogre"]);
@@ -14772,8 +14761,10 @@ fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step()
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     attack_and_settle(&mut s, &[ogre], None);
     let boulder = s.battlefield_permanents_named(0, "Ballistic Boulder")[0];
-    assert_eq!(s.game().state.delayed_triggers[0].remembered,
-        vec![s.game().permanent_object_ref(boulder).unwrap()]);
+    assert_eq!(
+        s.game().state.delayed_triggers[0].remembered,
+        vec![s.game().permanent_object_ref(boulder).unwrap()]
+    );
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().move_card(source, ZoneType::Graveyard);
     // Controlled clock isolates any-player timing from the usual own-turn attack.

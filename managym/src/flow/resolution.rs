@@ -20,8 +20,9 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, DelayedEvent, Effect, EffectValue, Except, LinkedChooser, LinkedExile,
-            ObjectSelector, PaymentCost, PlayerSelector, Scope, TargetRequirement, TargetSpec,
+            Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
+            LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
+            TargetRequirement, TargetSpec,
         },
         card::{ActivatedAbilityDefinition, CardDefId, CardDefinition},
         effect::{Affected, EffectDuration, Modification},
@@ -1584,39 +1585,32 @@ impl Game {
             }
             Effect::CreateDelayedTrigger {
                 event,
+                frequency,
+                expiry,
                 remember,
                 effects,
             } => {
                 let remembered = remember
                     .as_ref()
                     .map_or_else(Vec::new, |what| self.select(what, frame));
-                let (events, this_turn) = match event {
-                    DelayedEvent::DiesThisTurn => (
-                        remembered
-                            .iter()
-                            .copied()
-                            .filter(|object| self.lookup_current_permanent(*object).is_ok())
-                            .map(|watched| DelayedTriggerEvent::Leaves {
-                                watched,
-                                or_exiled: false,
-                            })
-                            .collect(),
-                        true,
-                    ),
-                    DelayedEvent::CreatureDiesThisTurn => {
-                        (vec![DelayedTriggerEvent::CreatureDies], true)
+                let events = match event {
+                    DelayedEvent::Dies => remembered
+                        .iter()
+                        .copied()
+                        .filter(|object| self.lookup_current_permanent(*object).is_ok())
+                        .map(|watched| DelayedTriggerEvent::Leaves {
+                            watched,
+                            or_exiled: false,
+                        })
+                        .collect(),
+                    DelayedEvent::CreatureDies => vec![DelayedTriggerEvent::CreatureDies],
+                    DelayedEvent::EndStep { your_turn } => vec![DelayedTriggerEvent::EndStep {
+                        your_turn: *your_turn,
+                    }],
+                    DelayedEvent::YouCastSpell(predicate) => {
+                        vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())]
                     }
-                    DelayedEvent::NextEndStep { your_turn } => (
-                        vec![DelayedTriggerEvent::NextEndStep {
-                            your_turn: *your_turn,
-                        }],
-                        false,
-                    ),
-                    DelayedEvent::YouNextCastThisTurn(predicate) => (
-                        vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())],
-                        true,
-                    ),
-                    DelayedEvent::NextUpkeep => (vec![DelayedTriggerEvent::NextUpkeep], false),
+                    DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
                 };
                 for event in events {
                     self.add_delayed_trigger(DelayedTrigger {
@@ -1626,7 +1620,8 @@ impl Game {
                         source_card: frame.source?,
                         source_ref: frame.source_ref,
                         effects: effects.clone(),
-                        this_turn,
+                        frequency: *frequency,
+                        expiry: *expiry,
                     });
                 }
                 None
@@ -1798,7 +1793,8 @@ impl Game {
                             with_counter: None,
                             linked: None,
                         }],
-                        this_turn: false,
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::Never,
                     });
                 }
                 if bent {

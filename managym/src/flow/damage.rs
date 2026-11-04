@@ -9,6 +9,7 @@ use crate::{
         proposed_event::{ProposedDamageTarget, ProposedEvent},
     },
     state::{
+        ability::DelayedExpiry,
         card::StaticAbility,
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         permanent::CounterKind,
@@ -296,11 +297,11 @@ impl Game {
             .state
             .delayed_triggers
             .iter()
-            .any(|trigger| trigger.this_turn)
+            .any(|trigger| trigger.expiry == DelayedExpiry::ThisTurn)
         {
             self.state
                 .delayed_triggers_mut()
-                .retain(|trigger| !trigger.this_turn);
+                .retain(|trigger| trigger.expiry != DelayedExpiry::ThisTurn);
         }
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);

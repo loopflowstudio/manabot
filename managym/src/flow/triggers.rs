@@ -16,7 +16,10 @@ use crate::{
         turn::StepKind,
     },
     state::{
-        ability::{Ability, Effect, EffectValue, TargetSpec, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, DelayedFrequency, Effect, EffectValue, TargetSpec, TriggerCondition,
+            TriggerSubject,
+        },
         card::CardType,
         effect::{EffectDuration, Modification},
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
@@ -1151,8 +1154,8 @@ impl Game {
         self.state.delayed_triggers_mut().push(trigger);
     }
 
-    /// The delayed triggers `event` fires: the dying-creature, end-step and
-    /// cast events. (`Leaves` fires as its object leaves the battlefield.)
+    /// Match ordinary events against waiting watchers. `Leaves` matches at
+    /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
         let creature_died = match event {
@@ -1180,40 +1183,34 @@ impl Game {
                         .map(|lki| Target::Permanent(lki.permanent))
                 }
                 (
-                    DelayedTriggerEvent::NextEndStep { your_turn },
+                    DelayedTriggerEvent::EndStep { your_turn },
                     GameEvent::StepStarted {
                         step: StepKind::End,
                     },
-                ) if !your_turn || self.active_player() == trigger.controller => {
-                    spent.push(index);
-                    None
-                }
+                ) if !your_turn || self.active_player() == trigger.controller => None,
                 (
-                    DelayedTriggerEvent::NextUpkeep,
+                    DelayedTriggerEvent::Upkeep,
                     GameEvent::StepStarted {
                         step: StepKind::Upkeep,
                     },
-                ) => {
-                    spent.push(index);
-                    None
-                }
+                ) => None,
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast { card, .. },
                 ) if self.spell_caster(*card) == trigger.controller
                     && self.card_matches_predicate(*card, predicate) =>
                 {
-                    spent.push(index);
                     Some(Target::StackSpell(*card))
                 }
                 _ => continue,
             };
+            if trigger.frequency == DelayedFrequency::Once {
+                spent.push(index);
+            }
             fired.push((trigger.clone(), context));
         }
-        if !spent.is_empty() {
-            for index in spent.into_iter().rev() {
-                self.state.delayed_triggers_mut().remove(index);
-            }
+        for index in spent.into_iter().rev() {
+            self.state.delayed_triggers_mut().remove(index);
         }
         for (trigger, context) in fired {
             self.fire_delayed_trigger(&trigger, context);

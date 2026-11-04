@@ -212,10 +212,10 @@ _DELAYED_EVENTS = (
     "the watched object to die",
     "the watched object to die or be exiled",
     "a creature to die",
-    "the next end step",
-    "its controller's next matching spell",
-    "the next upkeep",
-    "its controller's next end step",
+    "the end step",
+    "its controller's matching spell",
+    "the upkeep",
+    "its controller's end step",
 )
 
 
@@ -545,8 +545,18 @@ class _Renderer:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision:
             details.append(_frame_decision(relation.kind, relation.decision))
-        if relation.kind == 10 and relation.this_turn:
-            details.append("ends at this turn's cleanup if it has not triggered")
+        if relation.kind == 10:
+            if relation.delayed_frequency is not None:
+                details.append(
+                    "fires once; consumed on matching event"
+                    if relation.delayed_frequency == 1
+                    else "fires on each matching event"
+                )
+            details.append(
+                "waiting ends at this turn's cleanup"
+                if relation.this_turn
+                else "no stated expiry"
+            )
         if relation.cost is not None:
             details.append(
                 "remaining cost "

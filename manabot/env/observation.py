@@ -675,6 +675,10 @@ class ObservationEncoder:
                     remembered[0], remembered[22], remembered[29] = 8, 1, ordinal
                     _reference(remembered, reference)
                     rows.append(remembered)
+            if self.shows_everything and frame.delayed_frequency is not None:
+                frequency = row.copy()
+                frequency[0], frequency[28] = 9, frame.delayed_frequency
+                rows.append(frequency)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1

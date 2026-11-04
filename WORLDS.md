@@ -250,11 +250,13 @@ inherited ability definitions, ordered extra turns and combat restrictions
 reach v5 facts/continuations, Python and text without widening frozen rows.
 Fresh action tables hold 512 alternatives for unrestricted catalog names;
 checkpoint readers retain an omitted historical action capacity of 64.
-Match-state hash contract 14 includes pending scheduling, retained ability
-meaning and exact delayed-trigger subjects. Delayed timing is independent of
+Match-state hash contract 15 includes pending scheduling, retained ability
+meaning, exact delayed-trigger subjects, and explicit firing frequency/expiry. Delayed timing is independent of
 selector capture; remembered incarnations remain distinct from event context
 through placement, stack and resolution. V5 carries them in reference rows of
-kind 8 (unchanged 49-column width); v1–v4 exclude them. Retargeting and resolution both read the ability's captured face,
+kind 8; a kind-9 relation row carries frequency (1 once, 2 each match), while
+column 48 keeps cleanup expiry. V5/v6 retain their 49-column width; v1–v4 exclude
+these delayed facts. Retargeting and resolution both read the ability's captured face,
 including when its source has transformed. Only mutable current-w17 evidence
 is refreshed; earlier worlds stay fixed.
 

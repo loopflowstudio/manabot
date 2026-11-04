@@ -16,7 +16,7 @@ Private searching reveals the searched zones only to the chooser. Temporary phys
 - Bending events retain their domain meaning: waterbend once per paid cost, firebend once per resolved combat-mana instruction, earthbend/airbend once per resolved instruction. Four-kind turn history is shared state.
 - One catalog preserves frozen vocabulary labels on read. The referenced-row learner optimization remains intact; full-table no-grad serving remains bitwise aligned. Old authored-pack checkpoint weights/bindings are not migrated and no retained binary was loaded. This is a review-visible compatibility limit, not an implicit promise to add a shim.
 - Authored presets retain their bypass of submitted-deck construction checks. Main now admits every defined non-token, non-fixture front face; incomplete-card exclusions no longer exist.
-- Current w17 is mutable: definition/token changes and hash contract 13 require affected receipt refresh, not a world bump. Earlier worlds, frozen advice/experiments and retained checkpoints are never regenerated to make checks green. Engine Budget uses same-runner CI evidence; no synthetic load or local speed claim.
+- Current w17 is mutable: definition/token changes and hash contract 15 require affected receipt refresh, not a world bump. Earlier worlds, frozen advice/experiments and retained checkpoints are never regenerated to make checks green. Engine Budget uses same-runner CI evidence; no synthetic load or local speed claim.
 - MTG-238 and MTG-235 are already integrated. Their historical blockers/delivery orders are no longer outstanding T6 work. The unrelated printed-P/T protocol choice remains outside T6.
 
 ## Historical evidence
@@ -50,7 +50,7 @@ choices preserve Jack Heart's accepted 1a direction.
 
 ## Main v6 sync — 2026-11-03
 
-Reconcile main `3b122de9078c985f846a0f3c5a3a42ebca3b1182` with T6 by retaining
+Merged main `3b122de9078c985f846a0f3c5a3a42ebca3b1182` at `bf7631c6a`, retaining
 v6's configurable fact capacity (fresh default 512), T6's fresh 512-action
 capacity, and the checkpoint reader's historical v1/64-action defaults. V5
 remains fixed at 128 facts; explicit saved values remain authoritative. Preserve
@@ -58,3 +58,13 @@ both branches' parity tests, extending T6 scheduling/transform coverage to v6.
 Main's MTG-213 experiment decisions remain historical context at
 `3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md`; they do not
 replace T6's scope or authorize experiment work in this sync.
+
+## Delayed lifetime projection — 2026-11-03
+
+The small typed API uses `DelayedFrequency::{Once, EachMatch}` and
+`DelayedExpiry::{ThisTurn, Never}`; no continuous-effect duration is reused.
+The existing `this_turn` observation field remains a derived expiry fact. An
+optional frequency code, unknown in historical captures, gets relation row
+kind 9 in v5/v6; existing columns and v1–v4 exclusions remain fixed. Canonical
+hashing moves to contract 15 because the waiting record serialization changed.
+Gate owns the resulting mutable-w17 refresh.

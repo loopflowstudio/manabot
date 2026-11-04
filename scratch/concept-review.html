@@ -1,70 +1,75 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>T6 · Know what comes next</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T6 · A delayed ability is a record</title>
 <style>
-:root{color-scheme:light dark;--paper:#faf8f3;--ink:#242e2c;--muted:#606b67;--line:#c7cdc3;--accent:#285e4d;--wash:#ecf0e9;font-family:system-ui,sans-serif;line-height:1.55;background:var(--paper);color:var(--ink)}
-@media(prefers-color-scheme:dark){:root{--paper:#18201e;--ink:#edf0e8;--muted:#b0bdb5;--line:#47564d;--accent:#aad4ba;--wash:#24312a}}
-*{box-sizing:border-box}body{max-width:780px;margin:auto;padding:32px 22px 56px}h1{font-family:Georgia,serif;font-size:clamp(2rem,6vw,3rem);font-weight:400;line-height:1.12;margin:18px 0}h2{font-size:1.1rem;margin:28px 0 10px}p{margin:12px 0}small,.muted{color:var(--muted)}code{font-size:.86em;overflow-wrap:anywhere}a{color:var(--accent)}.example{margin:20px 0;padding:18px 22px;border-left:3px solid var(--accent);background:var(--wash)}.example p:first-child{margin-top:0}.example p:last-child{margin-bottom:0}.steps{padding-left:24px}.steps li{padding:4px 0}table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}details{margin:20px 0}summary{cursor:pointer;color:var(--accent)}button{font:inherit;background:transparent;border:1px solid var(--line);border-radius:4px;padding:7px 12px;color:var(--ink);cursor:pointer}button[aria-pressed=true]{background:var(--accent);color:var(--paper)}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.questions li{margin:12px 0}footer{border-top:1px solid var(--line);margin-top:28px;padding-top:8px}@media(max-width:480px){body{padding:24px 16px}table{font-size:.8rem}td,th{padding:8px 4px}}
-</style>
-</head>
+:root{color-scheme:light dark;--bg:#faf8f2;--fg:#26312d;--muted:#64716a;--line:#c8d0c7;--accent:#285e49;--wash:#eef1e9;font:16px/1.6 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+@media(prefers-color-scheme:dark){:root{--bg:#19211e;--fg:#ecf0e7;--muted:#afbeb3;--line:#44574b;--accent:#add8bb;--wash:#24332a}}
+*{box-sizing:border-box}body{max-width:780px;margin:auto;padding:32px 22px 56px}h1{font:400 clamp(2rem,6vw,3rem)/1.12 Georgia,serif;margin:20px 0}h2{font-size:1.1rem;margin:28px 0 10px}p{margin:12px 0}small,.muted{color:var(--muted)}a{color:var(--accent)}code{font-size:.85em;overflow-wrap:anywhere}pre{padding:18px;background:var(--wash);white-space:pre-wrap;line-height:1.45}blockquote{margin:18px 0;padding-left:18px;border-left:3px solid var(--accent)}table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}details{margin:22px 0}summary{cursor:pointer;color:var(--accent)}button{font:inherit;color:var(--fg);background:var(--wash);border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin:4px 3px 4px 0;cursor:pointer}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}li{margin:10px 0}.proof{padding:14px 18px;background:var(--wash)}footer{border-top:1px solid var(--line);margin-top:28px;padding-top:8px}@media(max-width:480px){body{padding:24px 16px}table{font-size:.8rem}td,th{padding:8px 4px}}
+</style></head>
 <body>
 <header>
-<small>MTG-225 · Concept review with Jack Heart · 3 November 2026 · source 01ed2fbcb</small>
-<h1>Know what comes next.</h1>
-<p><strong>Accepted by Jack Heart: finish the schedule projection in T6 (1a).</strong> The engine knows the order of extra turns and the restrictions on extra combats. The earlier Academy view showed counts. A person should be able to understand the same public state before choosing an action. The schedule projection is implemented locally; focused native, WebSocket and Svelte checks pass. The examples below remain illustrative copy, not browser captures.</p>
-<small>Built from the <a href="mtg-225-tla-t6.md">working design</a>, <a href="t6-direction.md">accepted direction</a>, <code>flow/turn.rs</code>, <code>agent/continuation.rs</code>, <code>experience_projection.py</code>, <code>PlayerArea.svelte</code> and <code>test_named_search_recovery.py</code>. Source inspection; these examples are proposed copy, not browser captures.</small>
+<small>MTG-225 · Concept review · 3 November 2026 · bf7631c6a + implemented lifetime composition</small>
+<h1>A delayed ability is a record.</h1>
+<p><strong>Accepted: T6 separates event matching, firing frequency and expiry.</strong> Jack Heart selected 1a on 3 November 2026. The token-specific event is already gone; the existing delayed abilities no longer encode “once” and “this turn” inside event names. Implementation and focused proofs are complete; combined gate validation and mutable receipt refresh remain pending.</p>
+<small>Built from <a href="mtg-225-tla-t6.md">the working design</a>, <code>state/src/ability.rs</code>, <code>flow/{resolution,trigger,triggers,damage,zones}.rs</code>, <code>flow/resolution_tests.rs</code>, <code>cards/src/tla.rs</code>, and <code>managym/README.md</code>. Focused debug and native/Python/text/reconnect proofs are recorded in the working design; this page is not a browser capture.</small>
 </header>
 <main>
-<h2>One distinction the counts lose</h2>
-<p>Both players have one extra turn queued. The counts are identical even when the execution order is reversed.</p>
-<div role="group" aria-label="Compare two illustrative native schedules">
-<button type="button" id="you" aria-pressed="true">Your extra turn first</button>
-<button type="button" id="opponent" aria-pressed="false">Opponent’s first</button>
-</div>
-<div class="example">
-<p><strong>Earlier Academy copy — identical for both positions</strong><br>You will take an extra turn after this one.<br>Opponent will take an extra turn after this one.</p>
-<p><strong>Implemented — read the committed order</strong><br>After the current turn: <span id="order" aria-live="polite">your extra turn → opponent’s extra turn</span>.</p>
-<small>Illustrative queued turns only. Show the normal turn to resume when the native state supplies it; never guess it from the counts.</small>
-</div>
-<p><strong>Bumi exposes the same gap:</strong> “an additional combat phase” omits “only land creatures can attack.” During that combat the pending count is zero, but the restriction still matters.</p>
-<table>
-<thead><tr><th>Your action</th><th>Concept</th><th>Authority → projection</th></tr></thead>
-<tbody>
-<tr><td>Plan your next move</td><td>Ordered scheduled turns</td><td><code>TurnState.extra_turns / resume_with</code> → public continuation kind 11 → typed Academy schedule</td></tr>
-<tr><td>Prepare for Bumi’s combat</td><td>Pending or current combat, with its restriction</td><td><code>additional_combats / combat_attackers</code> → kind 12 → “Only land creatures can attack”</td></tr>
-<tr><td>Reconnect and continue</td><td>The same authoritative state</td><td>Recovered <code>ExperienceFrame</code> → schedule and current legal offers; no browser-owned queue</td></tr>
+<h2>Your correction is implemented</h2>
+<p><strong>Before:</strong> <code>NextEndStepForCreatedToken</code> silently chose an object as part of choosing an event.</p>
+<pre><code>// Current Foggy Swamp Visions shape
+CreateDelayedTrigger {
+    event: EndStep { your_turn: true },
+    frequency: Once,
+    expiry: Never,
+    remember: Some(CreatedThisWay),
+    effects: [Sacrifice { what: Remembered, optional: false }],
+}</code></pre>
+<p>The token is captured <em>now</em>; the sacrifice resolves later. A different token or a returned incarnation cannot take its place. <code>Triggering</code> still names the event’s subject; <code>Remembered</code> names the captured subjects.</p>
+<h2>One owner for each fact</h2>
+<p>The former <code>YouNextCastThisTurn</code> and <code>CreatureDiesThisTurn</code> variants are removed. Event matching supplies context; the independent frequency field decides consumption, and expiry decides cleanup. Exact-object death watchers still retire when their captured incarnation leaves.</p>
+<table><thead><tr><th>Author’s action</th><th>Concept</th><th>Implemented responsibility</th></tr></thead><tbody>
+<tr><td>“When you cast a Lesson…”</td><td>Event predicate</td><td>Match the event and supply its subject</td></tr>
+<tr><td>“…the next time, this turn”</td><td>Firing policy + expiry</td><td>Consume once; otherwise expire at cleanup</td></tr>
+<tr><td>“…do this to that token”</td><td>Captured objects + effects</td><td>Snapshot <code>CreatedThisWay</code>; run ordinary effects on <code>Remembered</code></td></tr>
 </tbody></table>
-<details>
-<summary>Walk it through: normal play, failure, recovery</summary>
-<ol class="steps"><li>Bumi’s ability resolves. Before your next choice, the view shows the scheduled combat and its land-creature restriction.</li><li>Enter that combat. The restriction remains visible as <em>current</em>, even though the pending count is now zero. Native attack offers remain authoritative.</li><li>Disconnect. Reconnect to the retained session: recover that same restriction, remaining schedule and pending decision. Reject a stale Command without changing them.</li></ol>
-<p>A later effect can change the schedule. Show committed events only; do not predict unresolved abilities. Keep turn order and combat order separate rather than inventing one future-game timeline.</p>
-<p><strong>Focused proof passed:</strong> opposite turn orders with equal counts; current versus pending combat; unrestricted combat after a restricted one; both viewers; retained-session reconnect and stale rejection. Browser layout and final combined CI remain gate-owned. Historical captures without schedule data mean “not recorded,” not “nothing scheduled.” This needs no new persistence service.</p>
+<details open><summary>Implemented authoring shape</summary>
+<pre><code>CreateDelayedTrigger {
+    event: EndStep { your_turn: true },
+    frequency: Once,
+    expiry: Never,
+    remember: Some(CreatedThisWay),
+    effects: [Sacrifice { what: Remembered, optional: false }],
+}</code></pre>
+<p>“Next” comes from <code>Once</code>. “This turn” comes from expiry. A repeating death watcher uses <code>EachMatch</code> and cleanup expiry. This change covers existing delayed abilities; it does not migrate every printed trigger or introduce another card language.</p>
 </details>
-<details>
-<summary>Usage guidance and what already works</summary>
-<blockquote><strong>Academy usage guidance:</strong> Before choosing an action, read the scheduled turns and extra combats. The list shows events already scheduled, in execution order; later effects can change it. Restricted combats state which creatures may attack. After reconnecting, the list comes from the recovered game state.</blockquote>
-<p><strong>Existing, implemented:</strong> one catalog supplies card definitions; decklists choose cards. Learning encodes referenced definitions without restoring per-deck catalogs. Face state is separate from permanent identity. Checkpoints restore their saved input configuration; old authored-pack weights are not migrated.</p>
-<p><strong>Sozin now preserves the interaction:</strong> choose X or decline → pay → choose reflexive-trigger targets → allow responses. Chapter II names a card, privately inspects searched zones, and commits each selected exile or stops and shuffles. There is no draft or undo.</p>
-<p>The retained-session WebSocket test covers one exile, reconnect, duplicate retry, stale rejection and early stop with inspection ending. It does not prove recovery from a server process crash. Existing catalog documentation and skill instructions remain unchanged.</p>
+<details><summary>Challenge the lifetime: same event, different contract</summary>
+<p>This illustration compares a once-only and a repeating watcher, both expiring this turn. It is not a running game or a proposed card.</p>
+<button id="event" type="button">Matching event</button><button id="cleanup" type="button">Cleanup</button><button id="reset" type="button">Reset</button>
+<p id="result" class="proof" aria-live="polite">Once: 0 occurrences · Repeating: 0 occurrences · Both waiting</p>
+<p>Consuming a once-only watcher happens when it fires, not when its effect succeeds. Countering that occurrence does not re-arm it. Cleanup expires waiting watchers; an occurrence already on the stack survives.</p>
 </details>
-<h2>Remember the object, schedule the event</h2>
-<p><strong>Accepted correction from Jack Heart, 3 November:</strong> delayed timing must compose with object selectors. A token-specific end-step event mixed two responsibilities. The implementation now captures exact objects when the ability is created; the later event supplies timing and its own context.</p>
-<div class="example"><p><strong>Foggy Swamp Visions and Fire Navy Trebuchet</strong></p>
-<ol class="steps"><li>Create a token and remember <code>CreatedThisWay</code> immediately.</li><li>Wait for the next end step—your own for Visions, either player's for Trebuchet.</li><li>Resolve ordinary <code>Sacrifice(Remembered)</code>, acting only on those exact incarnations.</li></ol>
-<p>Two copies have two independent captures. A departed object cannot be replaced by its later incarnation. Removing or gaining control of the source does not change who controls the delayed ability.</p></div>
-<p>Fatal Fissure uses the same capture path to watch its chosen creature's death. Spell-cast and creature-death context remain separate from remembered subjects. Upkeep timing, one-shot removal and this-turn expiry retain their existing rules. Native and Python tensors and text carry viewer-safe remembered references separately; learning tokens derive from the same selectors.</p>
-<p>Directed debug proofs cover reentry before and after firing, capture through placement and a suspended-choice fork, source departure/control change, separate event context and hidden hand projection. Current-world receipt refresh and final combined acceptance remain gate work; historical evidence is unchanged.</p>
-<footer>
-<h2>Decision recorded</h2>
-<ol class="questions"><li><strong>1a — Complete it in T6.</strong> Jack Heart selected this on 3 November 2026. Carry existing public order and restrictions into Academy, then prove recovery. Deferral (1b) was not selected.</li></ol>
-<p class="muted">The existing Task resumes implementation on PR #417 and returns to review after publication. No merge or auto-merge is authorized. No open product question remains from this review.</p>
+<details><summary>Normal play, failure and recovery</summary>
+<ol><li>Visions creates two tokens. Each iteration captures its own exact object in its delayed record.</li><li>One token leaves. At your next end step, both once-only watchers fire, but only the surviving original token can be sacrificed. Nothing follows a replacement incarnation.</li><li>Disconnect while a resulting decision is pending. Recovery must retain the original controller, captured subjects and actual pending choice; it must not recreate an already-consumed watcher.</li></ol>
+<p><strong>Already represented in inspected tests:</strong> separate captures, source departure/control change, reentry before and after firing, remembered versus event context, viewer redaction, hashing and suspended-choice forks.</p>
+<p><strong>Focused proofs now pass:</strong> once versus repeat across two events; expiry without a match; countered first occurrence; expiry after occurrence creation; retained-session recovery. Reuse existing native state and recovery. No process-crash persistence claim.</p>
+</details>
+<details><summary>Documentation and consequences</summary>
+<blockquote><strong>Authoring guidance:</strong> Choose the event independently of how often the ability fires and when it stops waiting. Capture selectors at creation. The first matching event consumes a once-only watcher even if its effects later do nothing. Expiry removes waiting watchers, not occurrences already on the stack.</blockquote>
+<p>One native record owns event, firing policy, expiry, capture, controller and effects. Event matching and cleanup consume that record; Academy and policy project it without reconstructing its lifecycle. Preserve exact-object death-watch retirement and viewer privacy. Changed identity and tokens require affected mutable-world evidence to be refreshed; frozen evidence remains fixed.</p>
+<p>Existing capture documentation, shared-authority skill instructions, accepted Academy schedule work and all T6 card obligations remain unchanged. Jack Heart selected <strong>1a on 3 November 2026: lifetime decomposition is implemented, with combined gate validation pending</strong>. The API names above match the implementation.</p>
+</details>
+<footer><h2>Decision recorded</h2>
+<ol><li><strong>1a — Separate lifetime and occurrence for existing delayed abilities too.</strong> Accepted by Jack Heart on 3 November 2026. Deferral (1b) was not selected.</li></ol>
+<p class="muted">This resolves the headless open-choice outcome. The existing T6 Graph receives the accepted direction and returns PR #417 for review after gate validation and mutable receipt refresh. The earlier schedule decision also remains accepted. No merge or auto-merge is authorized.</p>
 </footer>
 </main>
 <script>
-const you=document.getElementById('you'),opponent=document.getElementById('opponent'),order=document.getElementById('order');
-function choose(first){const own=first==='you';you.setAttribute('aria-pressed',String(own));opponent.setAttribute('aria-pressed',String(!own));order.textContent=own?'your extra turn → opponent’s extra turn':'opponent’s extra turn → your extra turn';}
-you.addEventListener('click',()=>choose('you'));opponent.addEventListener('click',()=>choose('opponent'));
+let once=0,repeated=0,expired=false;
+const result=document.getElementById('result');
+function show(){result.textContent=`Once: ${once} occurrence${once===1?'':'s'} · Repeating: ${repeated} occurrence${repeated===1?'':'s'} · ${expired?'No watchers waiting':once?'Only repeating watcher waiting':'Both waiting'}`;}
+document.getElementById('event').onclick=()=>{if(!expired){once=1;repeated++;}show();};
+document.getElementById('cleanup').onclick=()=>{expired=true;show();};
+document.getElementById('reset').onclick=()=>{once=0;repeated=0;expired=false;show();};
 </script>
 </body></html>

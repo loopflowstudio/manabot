@@ -13,8 +13,8 @@ or auto-merge is authorized.
 
 - Original stacking decision: develop T6 on T5 (PR #405, Task a7234f / MTG-224),
   using its synced head rather than pre-sync `24b335fe0`. Fulfilled: T5 and the
-  later MTG-235/238/239 work are integrated in T6 head `64b79d895` on main
-  `c823c9c8f` (2026-11-03).
+  later MTG-235/238/239 work are integrated in T6 head `bf7631c6a` on main
+  `3b122de90` (2026-11-03).
 - Follow the TLA PR brief: one cohesive PR covering all 16 T6 cards, then stop
   for Jack Heart's review. No merge without that review.
 
@@ -46,7 +46,7 @@ Decision: the content-pack simplification is part of T6, not a separate Task.
 - A world has one card list. `ContentPack` keeps its two essential jobs,
   stable `CardDefId` rows (name order, so w17's manifest and `registry_key`
   values do not move) and `content_digest`, and loses multiplicity: one
-  process-wide catalog, built from `cardsets::catalog()`, which `WorldIdentity`
+  process-wide catalog, built from `managym_cards::catalog()` after MTG-238, which `WorldIdentity`
   reads directly.
 - Remove the per-game pack plumbing that exists only for authored preset packs:
   `ContentPack::from_definitions` with a `pack_key`, `pack_key` on player
@@ -73,5 +73,19 @@ on 2026-11-02, targeting main. Their code is now integrated; MTG-238
 precedence is fulfilled. MTG-239 (#415) also landed and supplies the corrected
 admission, library ordering and Rallier traces. These integrations do not
 settle the related Tasks' independent empirical acceptance. T6's PR #417
-is open at `a82a963aa`, including the audit and checkpoint-fixture repairs and simplification;
-its remaining validation and review are tracked in the current plan.
+is open at `bf7631c6a`, including the audit/checkpoint repairs, schedule projection,
+composable delayed capture and main's v6 fact-capacity integration. Mutable w17
+receipt refresh and combined validation remain outstanding in the current plan;
+old pending-CI and missing-recovery notes are superseded.
+
+## Accepted delayed-lifetime composition (Jack Heart, 2026-11-03)
+
+Jack Heart selected 1a in the subsequent delayed-ability concept review:
+within T6, independently compose event matching, firing frequency and expiry
+for the existing delayed abilities. Keep exact creation-time selector capture,
+separate event context, existing card semantics and exact death-watch retirement.
+Do not migrate all printed triggers or add a second DSL/hypothetical cards.
+Use the accepted contract and proof cases in the working design. This resolves
+the headless review's open choice. The composition and focused proofs are now
+implemented; gate owns combined validation and mutable receipt refresh, followed
+by publication of PR #417 and review, without merge authorization.

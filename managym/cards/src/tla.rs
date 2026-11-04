@@ -3,9 +3,10 @@
 use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
-        Ability, Condition, DelayedEvent, Effect, EffectValue, Except, LinkedChooser, LinkedExile,
-        LinkedGrant, MilledBonus, ObjectSelector, PaymentCost, PlayWindow, PlayerSelector, Scope,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
+        Except, LinkedChooser, LinkedExile, LinkedGrant, MilledBonus, ObjectSelector, PaymentCost,
+        PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -345,7 +346,9 @@ fn aang_at_the_crossroads() -> CardDefinition {
                 },
                 effects: vec![Effect::CreateDelayedTrigger {
                     remember: None,
-                    event: DelayedEvent::NextUpkeep,
+                    event: DelayedEvent::Upkeep,
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::Never,
                     effects: vec![Effect::TransformSource],
                 }],
             },
@@ -400,18 +403,14 @@ fn aang_s_iceberg() -> CardDefinition {
             },
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Permanent {
+                    min: 0,
+                    another: true,
+                    ..TargetRequirement::one(TargetSpec::Permanent {
                         predicate: CardPredicate {
                             not_card_types: vec![CardType::Land],
                             ..Default::default()
                         },
-                    },
-                    min: 0,
-                    max: 1,
-                    another: true,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    })
                 },
                 effects: vec![Effect::exile_linked(
                     ObjectSelector::Target(TargetSpec::Permanent {
@@ -576,18 +575,14 @@ fn aang_the_last_airbender() -> CardDefinition {
                 },
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: TargetSpec::Permanent {
+                        min: 0,
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::Permanent {
                             predicate: CardPredicate {
                                 not_card_types: vec![CardType::Land],
                                 ..Default::default()
                             },
-                        },
-                        min: 0,
-                        max: 1,
-                        another: true,
-                        max_x: false,
-                        total_mana_value_x: false,
+                        })
                     },
                     effects: vec![Effect::Airbend {
                         what: ObjectSelector::Target(TargetSpec::Permanent {
@@ -934,23 +929,11 @@ fn allies_at_last() -> CardDefinition {
         spell_effects: vec![Effect::TargetCreaturesDealPowerDamageToLastTarget],
         targeting: vec![
             TargetRequirement {
-                shares_creature_type: false,
-                spec: TargetSpec::CreatureYouControl,
                 min: 0,
                 max: 2,
-                another: false,
-                max_x: false,
-                total_mana_value_x: false,
+                ..TargetRequirement::one(TargetSpec::CreatureYouControl)
             },
-            TargetRequirement {
-                shares_creature_type: false,
-                spec: TargetSpec::CreatureOpponentControls,
-                min: 1,
-                max: 1,
-                another: false,
-                max_x: false,
-                total_mana_value_x: false,
-            },
+            TargetRequirement::one(TargetSpec::CreatureOpponentControls),
         ],
         statics: vec![StaticAbility::CostsLessPerPermanent(CardPredicate {
             subtype: Some("Ally".into()),
@@ -1053,13 +1036,10 @@ fn appa_steadfast_guardian() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: nonland_you_control.clone(),
                         min: 0,
                         max: TargetRequirement::ANY_NUMBER,
                         another: true,
-                        max_x: false,
-                        total_mana_value_x: false,
+                        ..TargetRequirement::one(nonland_you_control.clone())
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::Airbend {
@@ -1266,13 +1246,8 @@ fn avatar_s_wrath() -> CardDefinition {
         spell_effects: vec![
             Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Creature,
                     min: 0,
-                    max: 1,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    ..TargetRequirement::one(TargetSpec::Creature)
                 },
                 effects: vec![Effect::Airbend {
                     what: ObjectSelector::Each {
@@ -1290,13 +1265,8 @@ fn avatar_s_wrath() -> CardDefinition {
             Effect::exile(ObjectSelector::This),
         ],
         targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
             min: 0,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
+            ..TargetRequirement::one(TargetSpec::Creature)
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1316,30 +1286,14 @@ fn azula_always_lies() -> CardDefinition {
         spell_effects: vec![Effect::Modal {
             modes: vec![
                 vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: TargetSpec::Creature,
-                        min: 1,
-                        max: 1,
-                        another: false,
-                        max_x: false,
-                        total_mana_value_x: false,
-                    },
+                    requirement: TargetRequirement::one(TargetSpec::Creature),
                     effects: vec![Effect::until_end_of_turn(
                         ObjectSelector::Target(TargetSpec::Creature),
                         Modification::pump(-1, -1),
                     )],
                 }],
                 vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: TargetSpec::Creature,
-                        min: 1,
-                        max: 1,
-                        another: false,
-                        max_x: false,
-                        total_mana_value_x: false,
-                    },
+                    requirement: TargetRequirement::one(TargetSpec::Creature),
                     effects: vec![Effect::put_counters(
                         ObjectSelector::Target(TargetSpec::Creature),
                         CounterKind::PlusOnePlusOne,
@@ -1348,30 +1302,14 @@ fn azula_always_lies() -> CardDefinition {
                 }],
                 vec![
                     Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            shares_creature_type: false,
-                            spec: TargetSpec::Creature,
-                            min: 1,
-                            max: 1,
-                            another: false,
-                            max_x: false,
-                            total_mana_value_x: false,
-                        },
+                        requirement: TargetRequirement::one(TargetSpec::Creature),
                         effects: vec![Effect::until_end_of_turn(
                             ObjectSelector::Target(TargetSpec::Creature),
                             Modification::pump(-1, -1),
                         )],
                     },
                     Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            shares_creature_type: false,
-                            spec: TargetSpec::Creature,
-                            min: 1,
-                            max: 1,
-                            another: false,
-                            max_x: false,
-                            total_mana_value_x: false,
-                        },
+                        requirement: TargetRequirement::one(TargetSpec::Creature),
                         effects: vec![Effect::put_counters(
                             ObjectSelector::Target(TargetSpec::Creature),
                             CounterKind::PlusOnePlusOne,
@@ -2317,15 +2255,7 @@ fn combustion_technique() -> CardDefinition {
                 Modification::ExileIfWouldDie,
             ),
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2374,13 +2304,10 @@ fn crashing_wave() -> CardDefinition {
             },
         ],
         targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
             min: 0,
             max: 0,
-            another: false,
             max_x: true,
-            total_mana_value_x: false,
+            ..TargetRequirement::one(TargetSpec::Creature)
         }],
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
         text_box: text_box.into(),
@@ -2475,15 +2402,7 @@ fn cunning_maneuver() -> CardDefinition {
             ),
             Effect::create_tokens("Clue", 1),
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2513,18 +2432,13 @@ fn curious_farm_animals() -> CardDefinition {
             sacrifice_source: true,
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Permanent {
+                    min: 0,
+                    ..TargetRequirement::one(TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_types_any: vec![CardType::Artifact, CardType::Enchantment],
                             ..Default::default()
                         },
-                    },
-                    min: 0,
-                    max: 1,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    })
                 },
                 effects: vec![Effect::destroy(ObjectSelector::Target(
                     TargetSpec::Permanent {
@@ -2591,30 +2505,14 @@ fn dai_li_agents() -> CardDefinition {
                 },
                 effects: vec![
                     Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            shares_creature_type: false,
-                            spec: TargetSpec::LandYouControl,
-                            min: 1,
-                            max: 1,
-                            another: false,
-                            max_x: false,
-                            total_mana_value_x: false,
-                        },
+                        requirement: TargetRequirement::one(TargetSpec::LandYouControl),
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
                             what: ObjectSelector::Target(TargetSpec::LandYouControl),
                         }],
                     },
                     Effect::TargetClause {
-                        requirement: TargetRequirement {
-                            shares_creature_type: false,
-                            spec: TargetSpec::LandYouControl,
-                            min: 1,
-                            max: 1,
-                            another: false,
-                            max_x: false,
-                            total_mana_value_x: false,
-                        },
+                        requirement: TargetRequirement::one(TargetSpec::LandYouControl),
                         effects: vec![Effect::Earthbend {
                             count: EffectValue::Fixed(1),
                             what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -2964,13 +2862,9 @@ fn earth_kingdom_soldier() -> CardDefinition {
             },
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::CreatureYouControl,
                     min: 0,
                     max: 2,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    ..TargetRequirement::one(TargetSpec::CreatureYouControl)
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::put_counters(
@@ -3373,15 +3267,7 @@ fn enter_the_avatar_state() -> CardDefinition {
                 ])),
             ),
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::CreatureYouControl,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -3407,13 +3293,8 @@ fn fancy_footwork() -> CardDefinition {
             ],
         }],
         targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
             max: 2,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
+            ..TargetRequirement::one(TargetSpec::Creature)
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3432,7 +3313,9 @@ fn fatal_fissure() -> CardDefinition {
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         spell_effects: vec![Effect::CreateDelayedTrigger {
             remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
-            event: DelayedEvent::DiesThisTurn,
+            event: DelayedEvent::Dies,
+            frequency: DelayedFrequency::Once,
+            expiry: DelayedExpiry::ThisTurn,
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(4),
                 what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -3651,15 +3534,10 @@ fn fire_nation_engineer() -> CardDefinition {
             intervening_if: Some(Condition::AttackedThisTurn),
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::PermanentYouControl {
-                        predicate: creature_or_vehicle.clone(),
-                    },
-                    min: 1,
-                    max: 1,
                     another: true,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    ..TargetRequirement::one(TargetSpec::PermanentYouControl {
+                        predicate: creature_or_vehicle.clone(),
+                    })
                 },
                 effects: vec![Effect::put_counters(
                     ObjectSelector::Target(TargetSpec::PermanentYouControl {
@@ -3793,7 +3671,9 @@ fn fire_navy_trebuchet() -> CardDefinition {
                 },
                 Effect::CreateDelayedTrigger {
                     remember: Some(ObjectSelector::CreatedThisWay),
-                    event: DelayedEvent::NextEndStep { your_turn: false },
+                    event: DelayedEvent::EndStep { your_turn: false },
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::Never,
                     effects: vec![Effect::Sacrifice {
                         what: ObjectSelector::Remembered,
                         optional: false,
@@ -3906,15 +3786,7 @@ fn firebending_lesson() -> CardDefinition {
                 ObjectSelector::Target(TargetSpec::Creature),
             )],
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
         ..Default::default()
@@ -4193,7 +4065,6 @@ fn foggy_swamp_visions() -> CardDefinition {
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
         targeting: vec![TargetRequirement {
             max_x: true,
-            total_mana_value_x: false,
             ..TargetRequirement::one(creature_card())
         }],
         spell_effects: vec![Effect::ForEachTarget {
@@ -4205,7 +4076,9 @@ fn foggy_swamp_visions() -> CardDefinition {
                 },
                 Effect::CreateDelayedTrigger {
                     remember: Some(ObjectSelector::CreatedThisWay),
-                    event: DelayedEvent::NextEndStep { your_turn: true },
+                    event: DelayedEvent::EndStep { your_turn: true },
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::Never,
                     effects: vec![Effect::Sacrifice {
                         what: ObjectSelector::Remembered,
                         optional: false,
@@ -4381,13 +4254,8 @@ fn glider_staff() -> CardDefinition {
             },
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Creature,
                     min: 0,
-                    max: 1,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    ..TargetRequirement::one(TargetSpec::Creature)
                 },
                 effects: vec![Effect::Airbend {
                     what: ObjectSelector::Target(TargetSpec::Creature),
@@ -4681,21 +4549,13 @@ fn heartless_act() -> CardDefinition {
         spell_effects: vec![Effect::Modal {
             modes: vec![
                 vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: TargetSpec::Permanent {
-                            predicate: CardPredicate {
-                                no_counters: true,
-                                card_type: Some(CardType::Creature),
-                                ..Default::default()
-                            },
+                    requirement: TargetRequirement::one(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            no_counters: true,
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
                         },
-                        min: 1,
-                        max: 1,
-                        another: false,
-                        max_x: false,
-                        total_mana_value_x: false,
-                    },
+                    }),
                     effects: vec![Effect::destroy(ObjectSelector::Target(
                         TargetSpec::Permanent {
                             predicate: CardPredicate {
@@ -4707,15 +4567,7 @@ fn heartless_act() -> CardDefinition {
                     ))],
                 }],
                 vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: TargetSpec::Creature,
-                        min: 1,
-                        max: 1,
-                        another: false,
-                        max_x: false,
-                        total_mana_value_x: false,
-                    },
+                    requirement: TargetRequirement::one(TargetSpec::Creature),
                     effects: vec![Effect::RemoveCounters {
                         from: ObjectSelector::Target(TargetSpec::Creature),
                         up_to: 3,
@@ -4897,15 +4749,7 @@ fn honest_work() -> CardDefinition {
         spell_effects: vec![Effect::AttachSourceTo {
             target: TargetSpec::CreatureOpponentControls,
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::CreatureOpponentControls,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::CreatureOpponentControls)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5017,18 +4861,14 @@ fn invasion_submersible() -> CardDefinition {
             },
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Permanent {
+                    min: 0,
+                    another: true,
+                    ..TargetRequirement::one(TargetSpec::Permanent {
                         predicate: CardPredicate {
                             not_card_types: vec![CardType::Land],
                             ..Default::default()
                         },
-                    },
-                    min: 0,
-                    max: 1,
-                    another: true,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    })
                 },
                 effects: vec![Effect::return_to_hand(ObjectSelector::Target(
                     TargetSpec::Permanent {
@@ -5228,15 +5068,7 @@ fn itll_quench_ya() -> CardDefinition {
         spell_effects: vec![Effect::CounterUnlessPays {
             cost: PaymentCost::Mana(ManaCost::parse("{2}")),
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Spell,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Spell)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5305,7 +5137,9 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
                 Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
                 Effect::CreateDelayedTrigger {
                     remember: None,
-                    event: DelayedEvent::YouNextCastThisTurn(CardPredicate::subtype("Lesson")),
+                    event: DelayedEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::ThisTurn,
                     effects: vec![Effect::CopyTriggeringObject],
                 },
             ],
@@ -5380,13 +5214,9 @@ fn jet_freedom_fighter() -> CardDefinition {
                 },
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {
-                        shares_creature_type: false,
-                        spec: TargetSpec::Creature,
                         min: 0,
                         max: 2,
-                        another: false,
-                        max_x: false,
-                        total_mana_value_x: false,
+                        ..TargetRequirement::one(TargetSpec::Creature)
                     },
                     effects: vec![Effect::ForEachTarget {
                         effects: vec![Effect::put_counters(
@@ -5673,15 +5503,10 @@ fn koh_the_face_stealer() -> CardDefinition {
                         another: true,
                         ..TargetRequirement::one(TargetSpec::Creature)
                     },
-                    effects: vec![Effect::Move {
-                        what: ObjectSelector::Target(TargetSpec::Creature),
-                        to: ZoneType::Exile,
-                        tapped: false,
-                        transformed: false,
-                        under: None,
-                        with_counter: None,
-                        linked: Some(LinkedExile::WithSource),
-                    }],
+                    effects: vec![Effect::exile_linked(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        LinkedExile::WithSource,
+                    )],
                 }],
             },
             Ability::Triggered {
@@ -5878,12 +5703,7 @@ fn leaves_from_the_vine() -> CardDefinition {
                         count: EffectValue::Fixed(3),
                         target: None,
                     },
-                    Effect::CreateToken {
-                        token_name: "Food".into(),
-                        count: EffectValue::Fixed(1),
-                        tapped_and_attacking: false,
-                        attach_source: false,
-                    },
+                    Effect::create_tokens("Food", 1),
                 ],
             ),
             chapter(
@@ -6032,20 +5852,12 @@ fn lost_days() -> CardDefinition {
             },
             Effect::create_tokens("Clue", 1),
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    card_types_any: vec![CardType::Creature, CardType::Enchantment],
-                    ..Default::default()
-                },
+        targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Enchantment],
+                ..Default::default()
             },
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -6910,15 +6722,7 @@ fn path_to_redemption() -> CardDefinition {
         spell_effects: vec![Effect::AttachSourceTo {
             target: TargetSpec::Creature,
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::Attached,
             kind: Restriction::CantAttackOrBlock,
@@ -6995,15 +6799,7 @@ fn pillar_launch() -> CardDefinition {
             ),
             Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7437,21 +7233,13 @@ fn razor_rings() -> CardDefinition {
                 amount: EffectValue::ExcessDamage,
             },
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    in_combat: true,
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                },
+        targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                in_combat: true,
+                card_type: Some(CardType::Creature),
+                ..Default::default()
             },
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7671,7 +7459,9 @@ fn ruinous_waterbending() -> CardDefinition {
                 condition: Condition::Kicked,
                 then: vec![Effect::CreateDelayedTrigger {
                     remember: None,
-                    event: DelayedEvent::CreatureDiesThisTurn,
+                    event: DelayedEvent::CreatureDies,
+                    frequency: DelayedFrequency::EachMatch,
+                    expiry: DelayedExpiry::ThisTurn,
                     effects: vec![Effect::gain_life(1)],
                 }],
                 otherwise: vec![],
@@ -7849,12 +7639,9 @@ fn secret_tunnel() -> CardDefinition {
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
                     shares_creature_type: true,
-                    spec: TargetSpec::CreatureYouControl,
                     min: 2,
                     max: 2,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    ..TargetRequirement::one(TargetSpec::CreatureYouControl)
                 },
                 effects: vec![Effect::ForEachTarget {
                     effects: vec![Effect::until_end_of_turn(
@@ -8150,15 +7937,7 @@ fn sokka_s_haiku() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::TargetClause {
-                requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Spell,
-                    min: 1,
-                    max: 1,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
-                },
+                requirement: TargetRequirement::one(TargetSpec::Spell),
                 effects: vec![Effect::CounterSpell {
                     what: ObjectSelector::Target(TargetSpec::Spell),
                 }],
@@ -8171,20 +7950,12 @@ fn sokka_s_haiku() -> CardDefinition {
                 target: None,
             },
             Effect::TargetClause {
-                requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Land),
-                            ..Default::default()
-                        },
+                requirement: TargetRequirement::one(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
                     },
-                    min: 1,
-                    max: 1,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
-                },
+                }),
                 effects: vec![Effect::untap(ObjectSelector::Target(
                     TargetSpec::Permanent {
                         predicate: CardPredicate {
@@ -8543,15 +8314,7 @@ fn swampsnare_trap() -> CardDefinition {
         spell_effects: vec![Effect::AttachSourceTo {
             target: TargetSpec::Creature,
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         statics: vec![
             StaticAbility::CostsLessIfTargets(TargetCostReduction {
                 predicate: CardPredicate {
@@ -8725,15 +8488,7 @@ fn the_cave_of_two_lovers() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         subtypes: vec!["Saga".into()],
         abilities: vec![
-            chapter(
-                1,
-                vec![Effect::CreateToken {
-                    token_name: "Ally".into(),
-                    count: EffectValue::Fixed(2),
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
-            ),
+            chapter(1, vec![Effect::create_tokens("Ally", 2)]),
             chapter(
                 2,
                 vec![Effect::SearchLibraryToHand {
@@ -8893,24 +8648,8 @@ fn the_last_agni_kai() -> CardDefinition {
             ),
         ],
         targeting: vec![
-            TargetRequirement {
-                shares_creature_type: false,
-                spec: TargetSpec::CreatureYouControl,
-                min: 1,
-                max: 1,
-                another: false,
-                max_x: false,
-                total_mana_value_x: false,
-            },
-            TargetRequirement {
-                shares_creature_type: false,
-                spec: TargetSpec::CreatureOpponentControls,
-                min: 1,
-                max: 1,
-                another: false,
-                max_x: false,
-                total_mana_value_x: false,
-            },
+            TargetRequirement::one(TargetSpec::CreatureYouControl),
+            TargetRequirement::one(TargetSpec::CreatureOpponentControls),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -8954,12 +8693,7 @@ fn the_legend_of_kuruk() -> CardDefinition {
                 condition: TriggerCondition::YouCastSpell {
                     predicate: CardPredicate::default(),
                 },
-                effects: vec![Effect::CreateToken {
-                    token_name: "Spirit".into(),
-                    count: EffectValue::Fixed(1),
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Spirit", 1)],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 exhaust: true,
@@ -9082,12 +8816,7 @@ fn the_legend_of_roku() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{8}"),
-                effects: vec![Effect::CreateToken {
-                    token_name: "Dragon".into(),
-                    count: EffectValue::Fixed(1),
-                    tapped_and_attacking: false,
-                    attach_source: false,
-                }],
+                effects: vec![Effect::create_tokens("Dragon", 1)],
                 ..Default::default()
             }],
             text_box: back_text.into(),
@@ -9739,8 +9468,8 @@ fn true_ancestry() -> CardDefinition {
         spell_effects: vec![
             Effect::TargetClause {
                 requirement: TargetRequirement {
-                    shares_creature_type: false,
-                    spec: TargetSpec::GraveyardCardYouOwn {
+                    min: 0,
+                    ..TargetRequirement::one(TargetSpec::GraveyardCardYouOwn {
                         predicate: CardPredicate {
                             card_types_any: vec![
                                 CardType::Artifact,
@@ -9752,12 +9481,7 @@ fn true_ancestry() -> CardDefinition {
                             ],
                             ..Default::default()
                         },
-                    },
-                    min: 0,
-                    max: 1,
-                    another: false,
-                    max_x: false,
-                    total_mana_value_x: false,
+                    })
                 },
                 effects: vec![Effect::return_to_hand(ObjectSelector::Target(
                     TargetSpec::GraveyardCardYouOwn {
@@ -10596,15 +10320,7 @@ fn watery_grasp() -> CardDefinition {
         spell_effects: vec![Effect::AttachSourceTo {
             target: TargetSpec::Creature,
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::Creature,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
             scope: StaticScope::Attached,
             kind: Restriction::DoesntUntap,
@@ -10762,15 +10478,7 @@ fn yip_yip() -> CardDefinition {
                 otherwise: vec![],
             },
         ],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::CreatureYouControl,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -11043,20 +10751,12 @@ fn zuko_s_conviction() -> CardDefinition {
                 },
             ))],
         }],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::GraveyardCardYouOwn {
-                predicate: CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                },
+        targeting: vec![TargetRequirement::one(TargetSpec::GraveyardCardYouOwn {
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
             },
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        })],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
         ..Default::default()
