@@ -546,6 +546,7 @@ class Protocol(StrictModel):
             finalization_seconds=120,
             stop_reserve_seconds=120,
             validate_numerics=True,
+            training_exposure=True,
         )
 
 

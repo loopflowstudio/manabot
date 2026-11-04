@@ -29,6 +29,11 @@ from experiments.growing_pool import (
     policy_source,
     policy_source_sha256,
 )
+from experiments.growing_pool_exposure import (
+    TrainingExposure,
+    read_training_exposure,
+    training_exposure,
+)
 from experiments.growing_pool_protocol import (
     EXPERIMENT,
     PROTOCOL,
@@ -36,6 +41,7 @@ from experiments.growing_pool_protocol import (
     Panel,
     Protocol,
 )
+from manabot.env.failures import TrainingExposureReceipt
 from manabot.eval.evaluation import EvaluationResult
 from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
@@ -103,6 +109,7 @@ class SeedAnalysis(StrictModel):
     state: str
     exports: dict[int, str | None]
     health: Health
+    exposure: TrainingExposure
     counts: Counts
     contrasts: list[Contrast]
     complete: bool
@@ -118,11 +125,11 @@ class AnalysisResult(StrictModel):
     seeds: list[SeedAnalysis]
     complete: bool
     modest_check: bool | None
-    # A favorable modest check never resolves this separate authored-review boundary.
-    training_exposure: str = "unavailable; acceptance unresolved"
+    training_exposure_complete: bool
 
 
 class _TrainingConfig(BaseModel):
+    run_id: str | None = None
     regime: dict[str, JsonValue]
     identities: dict[str, JsonValue]
 
@@ -483,6 +490,7 @@ def analyze(
     db: duckdb.DuckDBPyConnection,
     source: str | Path,
     protocol: Protocol,
+    exposure_receipts: Sequence[TrainingExposureReceipt] = (),
 ) -> AnalysisResult:
     """Reconcile declared seeds first; missing evidence never shrinks the exam.
 
@@ -492,6 +500,10 @@ def analyze(
     """
     if state.experiment != EXPERIMENT:
         raise ValueError("analysis requires the growing-pool experiment")
+    if any(
+        r.context.get("seed") not in protocol.budget.seeds for r in exposure_receipts
+    ):
+        raise ValueError("unexpected training exposure seed")
     by_seed: dict[int, RunData] = {}
     for data in training:
         if (
@@ -521,6 +533,18 @@ def analyze(
         ):
             raise ValueError("checkpoint is not from this fresh learner")
         health = _health(data, protocol, training_source)
+        config = (
+            _Config.model_validate_json(data.file.declaration.config_json or "{}")
+            if data is not None and data.file is not None
+            else None
+        )
+        exposure = training_exposure(
+            exposure_receipts,
+            seed=seed,
+            run_id=config.training.run_id if config else None,
+            identities=config.training.identities if config else {},
+            protocol=protocol,
+        )
         contrasts = []
         exports: dict[int, str | None] = {
             update: None for update in protocol.budget.export_updates
@@ -558,7 +582,7 @@ def analyze(
                 )
             )
         _estimate(contrasts, protocol)
-        issues = list(health.issues)
+        issues = [*health.issues, *exposure.issues]
         if data is None:
             issues.append("Declared training seed is wholly absent.")
         if run_state != "finished":
@@ -588,6 +612,7 @@ def analyze(
                 state=run_state,
                 exports=exports,
                 health=health,
+                exposure=exposure,
                 counts=_total([c.counts for c in contrasts]),
                 contrasts=contrasts,
                 complete=not issues,
@@ -601,6 +626,7 @@ def analyze(
         bootstrap_resamples=protocol.analysis.bootstrap_resamples,
         counts=_total([r.counts for r in reports]),
         seeds=reports,
+        training_exposure_complete=all(r.exposure.complete for r in reports),
         complete=all(r.complete for r in reports),
         modest_check=all(r.modest_check for r in reports)
         if all(r.modest_check is not None for r in reports)
@@ -612,6 +638,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True)
     parser.add_argument("--protocol", type=Path, default=PROTOCOL)
+    parser.add_argument("--training-evidence", action="append", type=Path, default=[])
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     protocol = Protocol.model_validate_json(args.protocol.read_bytes())
@@ -622,6 +649,7 @@ def main() -> None:
             db,
             args.source,
             protocol,
+            read_training_exposure(args.training_evidence),
         )
     atomic_json(args.out, result.model_dump(mode="json"))
 

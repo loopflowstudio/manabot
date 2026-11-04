@@ -845,5 +845,260 @@
     "controlled_fixtures": "Duplicate delivery, noninteractive demo and incorrect verify return target rejected.",
     "preservation": "Protected Task/PR IDs, compiled graph hashes and checkout paths match; all four prior Wave memory byte strings and 76 frozen files match. MTG-243 had independently started another code process before its membership move.",
     "execution": "No agents, games, training, allocations or spending launched by this implementation."
+  },
+  "consolidation": {
+    "authority": "Jack Heart, comment f58757b6-3fd4-4178-92ee-0fee5d680e37, 2026-11-04",
+    "surviving_wave": "54bc9162-c883-4574-bab1-af589526c1ad",
+    "rename": {
+      "from": "training",
+      "to": "experiments",
+      "commit": "9f42e4e58a88efab347814e6f0c7d83d9bf98a0b"
+    },
+    "moves": [
+      {
+        "task": "task_1d7884cfc23443e488b0a07d69928b9d",
+        "identifier": "MTG-175",
+        "before_wave": "eval",
+        "after_wave": "experiments",
+        "pr": {
+          "number": 383,
+          "url": "https://github.com/loopflowstudio/manabot/pull/383",
+          "phase": "open"
+        },
+        "default_before": {
+          "name": "code",
+          "step": null
+        },
+        "default_after": {
+          "name": "iterate",
+          "step": null
+        },
+        "graph_process_ids": [
+          "d83c938c-be3d-4596-b093-5cd35cd84771",
+          "b9fa1bb7-3333-4e45-8dc6-a0b111f06219"
+        ],
+        "task_pr_and_graph_process_identity_preserved": true
+      },
+      {
+        "task": "task_513158b1874d4d16a9a7a82ca9935fa5",
+        "identifier": "513158",
+        "before_wave": "eval",
+        "after_wave": "experiments",
+        "pr": null,
+        "default_before": {
+          "name": "code",
+          "step": null
+        },
+        "default_after": {
+          "name": "iterate",
+          "step": null
+        },
+        "graph_process_ids": [],
+        "task_pr_and_graph_process_identity_preserved": true
+      }
+    ],
+    "retirement": {
+      "id": "6b12128f-ecde-4982-ab80-04210e4108f1",
+      "name": "eval",
+      "preview": false,
+      "already_removed": false,
+      "destination": null,
+      "waves": [
+        "eval"
+      ],
+      "moved": [],
+      "deleted": [],
+      "completed_tasks": 1,
+      "chapters": 1,
+      "sessions": 0,
+      "initiatives": [],
+      "has_files": true,
+      "uncommitted": [],
+      "files": {
+        "state": "committed",
+        "commit": "19bdee9444fb185ba6cf290de61a0d64e4e40d37"
+      },
+      "summary": [
+        "1 completed Task and 1 chapter stay readable in history.",
+        ".lf/wave/eval removed on the main checkout."
+      ]
+    },
+    "retired_history": {
+      "generated_at": "2026-11-04T22:33:19.341163Z",
+      "waves": [
+        {
+          "wave": {
+            "id": "6b12128f-ecde-4982-ab80-04210e4108f1",
+            "name": "eval",
+            "status": "abandoned",
+            "retired_at": "2026-11-04T22:33:11Z"
+          },
+          "chapters": [
+            {
+              "id": "proj_0fcdcfd35437405db620b05e62337f83",
+              "name": "eval",
+              "slug": "eval",
+              "status": "started",
+              "current": true
+            }
+          ]
+        }
+      ]
+    },
+    "training_memory": {
+      "path": ".lf/wave/experiments/MEMORY.md",
+      "sha256": "00d2781d20d0bcde40c0a0ea4d55f8b6c9ac95573489cfaa682938a799778af1",
+      "unchanged": true
+    },
+    "eval_memory": {
+      "git": "9f42e4e58a88efab347814e6f0c7d83d9bf98a0b:.lf/wave/eval/MEMORY.md",
+      "sha256": "b4ccd67aca2f43f44c36d06f1915bfcadd1d6f3788bd8fb207fa6d9e74d503cd"
+    },
+    "pr421": {
+      "state": "OPEN",
+      "head": "bb88b783129e610eead7b52377e2397835790bb2",
+      "uncommitted_memory_sha256": "e627a673a7f769592a31c6a7527564893b896eb5db3c7a552304c9595c8005c8",
+      "preservation": "Original checkout bytes unchanged. On integration Git must carry modifications from .lf/wave/training/MEMORY.md into .lf/wave/experiments/MEMORY.md; do not restore the retired path or replace the reserved empirical decisions."
+    },
+    "defaults_note": "Status still resolves main checkout defaults (iterate); the authored experiment config in this branch awaits delivery. Captured graphs are unchanged.",
+    "pending_provider": "Task project/creation synchronization remains pending; MTG-175 title confirmation timed out. Local membership reads confirm Experiments. No auth repair or backlog execution attempted.",
+    "scope": "Accepted four core Wave identities now active, Academy separate; abandoned study history retained. MTG-210/211/230/231 cross-boundary reassignment remains unselected. Authored defaults await delivery; existing captured graphs were not replaced.",
+    "concurrent_training": {
+      "authority": "Jack Heart, steer e6c3e03c-65a1-4b6a-8ec2-abed2aa9964f",
+      "wave_id": "c051f807-7fc2-472d-ad82-eb3c9ab89d25",
+      "created_at": "2026-11-04T22:42:01Z",
+      "creation_commit": "115f88165",
+      "provenance": "New Wave was created with generic goal and empty memory when the newly authorized fc6ffb Task selected the old training name. Its outcome is an experiment under the accepted boundaries; its separate $25 authority is preserved, not exercised or transferred.",
+      "before": {
+        "id": "task_fc6ffbb825cb41be9bdc36566142e10c",
+        "identifier": "fc6ffb",
+        "title": "Separate learning seats from batch closure; compare closure and lambda",
+        "wave": "training",
+        "project": "training",
+        "state": "moving",
+        "reason": "Step Process d1eba6b2-fb7b-408e-a269-6da36941cad1 is running implement",
+        "graph": {
+          "name": "code",
+          "step": null
+        },
+        "pr": null,
+        "next": null
+      },
+      "after": {
+        "id": "task_fc6ffbb825cb41be9bdc36566142e10c",
+        "identifier": "fc6ffb",
+        "title": "Separate learning seats from batch closure; compare closure and lambda",
+        "wave": "experiments",
+        "project": "Training \u2014 Chapter 20260924T233419Z-042de726",
+        "state": "moving",
+        "reason": "Step Process d1eba6b2-fb7b-408e-a269-6da36941cad1 is running implement",
+        "graph": {
+          "name": "code",
+          "step": null
+        },
+        "pr": null,
+        "next": null
+      },
+      "unchanged_graph_processes": [
+        {
+          "id": "72582889-37ba-4642-b170-53edea4ae62a",
+          "name": "code",
+          "state": "current",
+          "step": "implement",
+          "updated_at": "2026-11-04T22:42:23Z"
+        }
+      ],
+      "preserved_comment_ids": [
+        "87b36233-07a9-44e5-8ba2-64faba28a31a",
+        "796ba40f-d8d4-4ef2-9266-1a69eb166768"
+      ],
+      "retirement": {
+        "id": "c051f807-7fc2-472d-ad82-eb3c9ab89d25",
+        "name": "training",
+        "preview": false,
+        "already_removed": false,
+        "destination": null,
+        "waves": [
+          "training"
+        ],
+        "moved": [],
+        "deleted": [],
+        "completed_tasks": 0,
+        "chapters": 1,
+        "sessions": 0,
+        "initiatives": [],
+        "has_files": true,
+        "uncommitted": [],
+        "files": {
+          "state": "committed",
+          "commit": "510b5ec35646c3b36e61868a939df48c625f0927"
+        },
+        "summary": [
+          "training has no Tasks or Sessions.",
+          "1 chapter stays readable in history.",
+          ".lf/wave/training removed on the main checkout."
+        ]
+      },
+      "history": {
+        "generated_at": "2026-11-04T22:44:34.441043Z",
+        "waves": [
+          {
+            "wave": {
+              "id": "c051f807-7fc2-472d-ad82-eb3c9ab89d25",
+              "name": "training",
+              "status": "ready",
+              "retired_at": null
+            },
+            "chapters": [
+              {
+                "id": "proj_f1de1cb08e814f7aa2f020957e128d80",
+                "name": "training",
+                "slug": "training",
+                "status": "started",
+                "current": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "waves_after": [
+      {
+        "id": "d97e0563-141d-4053-a174-953642dcfe0e",
+        "name": "academy",
+        "status": "ready",
+        "active_tasks": 0
+      },
+      {
+        "id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+        "name": "coverage",
+        "status": "ready",
+        "active_tasks": 8
+      },
+      {
+        "id": "fd9d235e-20f5-4870-ba2e-bbf1c2138510",
+        "name": "engine-performance",
+        "status": "ready",
+        "active_tasks": 0
+      },
+      {
+        "id": "54bc9162-c883-4574-bab1-af589526c1ad",
+        "name": "experiments",
+        "status": "ready",
+        "active_tasks": 8
+      },
+      {
+        "id": "8c4a50d4-a51e-4ceb-8944-446f9175c6fd",
+        "name": "infrastructure",
+        "status": "ready",
+        "active_tasks": 0
+      },
+      {
+        "id": "b1d0fc9d-8ada-4ec8-9a9c-bd5df0142bc6",
+        "name": "study",
+        "status": "abandoned",
+        "active_tasks": 0
+      }
+    ]
   }
 }

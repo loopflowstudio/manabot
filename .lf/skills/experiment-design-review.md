@@ -6,7 +6,7 @@ Review whether the proposed experiment can support its intended claim.
 
 Check controls, intervention axes, matching compute, seeds, splits, deck function,
 world/input admission, evidence completeness and the declared analysis. Inspect
-unresolved exposure acceptance: evaluation draws/actions cannot silently substitute
+required exposure evidence: evaluation draws/actions cannot silently substitute
 for training opportunities or resolutions. Distinguish proposed numbers and lists
 from accepted settings. A software check is not empirical validation.
 

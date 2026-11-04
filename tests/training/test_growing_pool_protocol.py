@@ -190,6 +190,11 @@ def test_compilation_uses_existing_bounded_owners(compatible_world: Protocol) ->
     assert protocol.budget.training_games == 512
     assert protocol.evaluation_games == 800
     assert job.milestones == (8, 16)
+    assert job.training_exposure
+    assert job.model_dump(mode="json")["training_exposure"] is True
+    assert "training_exposure" not in job.model_copy(
+        update={"training_exposure": False}
+    ).model_dump(mode="json")
     assert job.regime.deck_source == protocol.manifest.source()
 
 

@@ -67,9 +67,11 @@ The first growing-pool instance uses [the MTG-245 protocol](../experiments/proto
 A's reference league, authored functional decks, frozen tickets, stable anchors
 and explicit splits. Lists, shares and budgets remain proposals until accepted.
 Training exposure is separate from evaluation draws and committed action counts;
-the latter do not settle its unresolved acceptance. Task 04 owns actual first-pilot
-execution/results and Task 08 the later full-FDN campaign. Tiny runs may prove
-execution while leaving learning inconclusive.
+the latter never substitute for training capture. Task 04 owns actual first-pilot
+execution/results and Task 08 Validation B on the expanded mechanism cohort.
+The [Standard milestone](research/standard-2026-11/milestone.md) keeps the deeper
+strength/generalization track separate, first after full FDN. Tiny runs may
+prove execution while leaving learning inconclusive.
 
 ## Installation and migration
 
@@ -90,14 +92,29 @@ never edit Loopflow's database or create replacement Tasks/PRs. Lifecycle comman
 write/commit Wave files on the main checkout, so inspect their receipts and carry
 those exact moves into the delivery branch without altering other work.
 
-The [dated migration receipt](workflows/2026-11-04-migration.json) distinguishes
-applied operations from unresolved consolidation and membership choices. Training
-and Eval's surviving identity for Experiments is unresolved. Both memories and
-chapters stay at their current paths, including PR #421's Training-memory
-contributions and reserved empirical decisions. Both legacy memberships can use
-the shared experiment default. This transitional arrangement is not a claim that
-four-Wave consolidation is finished; it avoids choosing a consequential identity
-mapping without the selected judgment. Academy remains separate.
+The [dated migration receipt](workflows/2026-11-04-migration.json) retains both
+migration phases. Jack Heart selected Training as Experiments' surviving identity
+on 2026-11-04. Supported operations renamed it, moved Eval's two open Tasks, then
+retired Eval. Task/PR identities and captured Graph process identities are
+unchanged. Eval's chapter and completed Task remain readable with
+`lf wave show 6b12128f-ecde-4982-ab80-04210e4108f1 --json`; its memory is retained at
+`9f42e4e58a88efab347814e6f0c7d83d9bf98a0b:.lf/wave/eval/MEMORY.md`.
+
+Experiments' memory bytes are unchanged. PR #421 still edits the old Training
+memory path in its own checkout: integrate those contributions into the renamed
+path, preserving its reserved empirical decisions. The receipt binds both its
+published head and untouched local memory bytes. Provider project/creation sync
+remains pending; local membership is verified. MTG-210/211/230/231 retain their
+existing memberships pending a separate outcome-based mapping. Academy remains
+separate, and no moved Task was executed by this migration.
+
+A concurrent Task created a new, empty Training Wave while this migration ran.
+After inspecting its provenance and Jack Heart's reconciliation steer, fc6ffb
+(the closure/lambda comparison) moved to Experiments with its live Graph,
+comments and separate $25 authority intact. The empty replacement Wave was then
+retired through `lf`; its chapter remains historical. The final shared read has
+Experiments, Coverage, Engine performance, Infrastructure and Academy active;
+the older abandoned Study Wave remains historical.
 
 Validate discovery, all skill references, distinct backward edges, single delivery
 and the optional software/experiment boundaries without launching agents or games:

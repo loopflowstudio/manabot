@@ -34,6 +34,7 @@ from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
 from tests.eval.test_card_evaluation import card_fixture
 from tests.eval.test_local_evaluation import _replayed_rows
+from tests.training.test_training_exposure import receipt as training_receipt
 
 
 @dataclass
@@ -62,6 +63,7 @@ def league(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SealedLeague]:
         paths = sorted((ROOT / "manabot").rglob("*.py"))
         identities = {
             "world": protocol.world.world_version,
+            "engine_extension_sha256": "e" * 64,
             "engine_source_sha256": protocol.world.engine_source_sha256,
             "content_digest": protocol.world.card_digest,
             "deck_source_sha256": protocol.manifest.source().digest,
@@ -81,6 +83,7 @@ def league(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SealedLeague]:
                 directory=source,
                 config={
                     "training": {
+                        "run_id": f"learner-{index}",
                         "regime": protocol.regime().model_dump(mode="json"),
                         "identities": identities,
                     }
@@ -254,7 +257,7 @@ def test_complete_sealed_league_uses_paired_whole_deals_per_seed(
     league: SealedLeague, db: duckdb.DuckDBPyConnection
 ) -> None:
     result = report(league, db)
-    assert result.complete and result.modest_check is True
+    assert not result.complete and result.modest_check is True
     assert result.counts.expected == result.counts.valid == 800
     assert result.counts.expected_matches == 200
     assert [r.seed for r in result.seeds] == list(league.protocol.budget.seeds)
@@ -273,7 +276,11 @@ def test_complete_sealed_league_uses_paired_whole_deals_per_seed(
         )
         assert endpoint.gain == bootstrap_mean_interval(blocks, indices)
     assert sorted(gains) == [0.0625, 0.125]
-    assert result.training_exposure == "unavailable; acceptance unresolved"
+    assert not result.training_exposure_complete
+    assert all(
+        r.exposure.terminal_games == 0 and r.exposure.expected_games == 256
+        for r in result.seeds
+    )
 
 
 def test_wholly_absent_seed_does_not_shrink_exam(
@@ -436,7 +443,8 @@ def test_health_requires_declared_coordinates_and_actual_changes(
     result = report(league, db)
     assert result.counts.valid == 800
     assert result.modest_check is (None if change == "missing" else False)
-    assert result.complete is (change != "missing")
+    assert not result.complete
+    assert all(r.health.complete is (change != "missing") for r in result.seeds)
     assert all(r.health.metrics_sha256 for r in result.seeds)
     if change != "missing":
         assert all(r.health.failures for r in result.seeds)
@@ -481,3 +489,41 @@ def test_analysis_cli_reports_empty_store_without_playing(
     result = AnalysisResult.model_validate_json(out.read_bytes())
     assert len(result.seeds) == 2 and result.counts.missing == 800
     assert result.modest_check is None
+
+
+def test_analysis_includes_complete_training_exposure(
+    league: SealedLeague, db: duckdb.DuckDBPyConnection
+) -> None:
+    # Sealed synthetic training and evaluation are matched by declaration IDs.
+    receipts = []
+    prototype = training_receipt(league.protocol)
+    expected = league.protocol.budget.training_games // len(
+        league.protocol.budget.seeds
+    )
+    for data in league.training:
+        if data.file is None or data.file.declaration.kind == "evaluation":
+            continue
+        assert data.file.declaration.config_json is not None
+        config = json.loads(data.file.declaration.config_json)["training"]
+        for game_seed in range(expected):
+            context = {
+                **prototype.context,
+                "run": config["run_id"],
+                "seed": data.file.declaration.seed,
+                "identities": config["identities"],
+            }
+            receipts.append(
+                prototype.model_copy(
+                    update={
+                        "game": prototype.game.model_copy(update={"seed": game_seed}),
+                        "stream": game_seed % league.protocol.budget.streams,
+                        "context": context,
+                    }
+                )
+            )
+    result = analyze(
+        league.state, league.training, db, league.source, league.protocol, receipts
+    )
+    assert result.complete and result.training_exposure_complete
+    assert all(r.exposure.terminal_games == expected for r in result.seeds)
+    assert result.modest_check is True

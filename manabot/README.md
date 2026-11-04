@@ -252,6 +252,16 @@ the existing deck source, training job and replay evaluator. Its read-only
 admits the manifest without playing games. Task 04 owns actual pilot results;
 the protocol and its current-world proxy are not evidence of learning.
 
+The reference league's TrainingJob enables private exposure capture through the
+ordinary native vector collector. Digest-bound game receipts preserve actual
+sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
+card draws and completed effect frames. They live under `training/exposure`,
+separate from checkpoints and evaluation evidence. The offline analysis accepts
+these downloaded directories with `--training-evidence`; missing or interrupted
+capture leaves the report incomplete. Focus opportunities and completed frames
+are measurements of decisions/program completion, not strategic benefit. Other
+jobs keep capture disabled unless they explicitly select it.
+
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection

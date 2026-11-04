@@ -1,75 +1,34 @@
-# MTG-245 — exploration, 2026-11-04
+# MTG-245 — accepted design, 2026-11-04
 
-## Accepted execution scope — 2026-11-04
+Jack Heart selected A (“i agree A is the place to start”), accepted the workflow
+work inside MTG-245 (“nah i think jsut leave that in this”), and resolved the Wave
+identity (“training is the main one and the evals tasks get moved into it”).
+Training's original identity survives as Experiments. Training-exposure capture
+remains required. No scientific execution, spending or shipping was authorized.
 
-Jack Heart said “ok, lets do that” to the four-Wave/workflow proposal, then
-corrected the proposed separate Task with “nah i think jsut leave that in this”.
-Implement this work inside MTG-245 alongside its original protocol deliverable.
-No separate Task was created. The existing live Graph owns implementation;
-do not start a competing Graph or replay completed steps solely for this steer.
-This supersedes earlier statements below that workflow installation and Wave
-reorganization were only proposals.
+The accepted outcome is four core responsibilities: Experiments, Coverage,
+Engine performance and Infrastructure, with Academy separate. Coverage has
+independent working, scalable and performance loops before one delivery boundary.
+One experiment lifecycle spans training/evaluation, with optional software work
+that cannot complete its parent scientific outcome. Architecture, regime and
+card-pool questions are design lenses, not mandatory campaigns or parallel agents.
+Validation authors decks and a bounded experiment on the integrated snapshot;
+card authors supply interactions and behavior evidence.
 
-Accepted outcome:
+`docs/workflows.md` owns graph composition and responsibility boundaries;
+`docs/workflows/2026-11-04-migration.json` preserves the supported operations,
+Task/PR/graph identities, memory provenance and pending provider synchronization.
+The migration includes retiring the concurrent replacement Training Wave after
+moving its live Task intact. No moved backlog was executed. PR #421's original
+memory contributions and empirical reservations must survive integration into
+the Experiments path. MTG-210/211/230/231 mappings remain unselected.
 
-- Four core Waves: Experiments, Coverage, Engine performance, Infrastructure.
-  Keep Academy separate. Infrastructure owns shared systems, tooling and
-  reliability. Route Tasks by outcome, not the files they change.
-- Compose builtin code graphs where suitable. Use narrowly named forks only
-  where domain-specific placement requires them. Preserve review, delivery and
-  verification boundaries; do not shadow generic builtin code.
-- Coverage has three independent code loops: working behavior → scalable
-  decomposition for growing the card file → measured performance optimization.
-  Each owns implementation, checks, review and revision until its criterion is
-  satisfied. Three PRs/merges were not requested. Preserve shared semantics,
-  debug invariants and the prohibition on artificial load.
-- One experiment graph encompasses training and evaluation. Architecture, regime
-  and new-card coverage are design/analysis lenses, not three mandatory flows
-  or automatically launched campaigns. Specialist branches can reconcile into
-  one protocol when useful. Existing checkpoints need no placeholder fitting.
-- Validation owns authored decks and a bounded experiment on the integrated
-  snapshot. Card authors provide interactions and behavior evidence. Preserve
-  A's reference league and the versioned protocol/splits. Tiny runs may prove
-  execution while leaving learning inconclusive.
-
-Use supported lf operations for Wave identities and membership. Preserve Task
-IDs, PRs, histories, frozen evidence, captured graphs and live runs. Do not claim
-or execute other backlog Tasks to reorganize them. Refresh state before effects;
-bring consequential ambiguous mappings here. Prefer identity-preserving rename/
-move operations to duplicates. Preserve Wave memory/provenance through the
-selected migration procedure.
-
-Refresh these observed integration facts: training selects missing `iterate`;
-eval's goal is empty; legacy `.lf/flows/` are not discovered by the installed
-graph catalog. PR #421, Task 5da5f4, modifies `.lf/wave/training/MEMORY.md`;
-preserve that work and its reserved empirical decisions. MTG-241/244 and this
-Task have live work; MTG-243 is at demo. MTG-213 has separate paid-run authority.
-
-Acceptance adds discoverable/validated graphs and skills, three Coverage loops,
-one experiment lifecycle, documented Wave boundaries/defaults, supported migration
-receipts, unresolved mappings where necessary, and proof live work/frozen identities
-were preserved. Validate compilation/discovery and safe fixtures; do not launch a
-scientific campaign as a setup test. No new games/training campaigns, rental,
-spending or automatic shipping authority is supplied. Task 04 still owns actual
-training/results and Task 08 the later campaign. Use MTG-245's existing review.
-
-## Implementation state — 2026-11-04
-
-Seven repository graphs and domain skills are installed in this checkout and
-compile through the real `lf` catalog. Coverage has three separate implementation/
-review loops and one delivery boundary; experiment has one design/execution/
-analysis lifecycle with an optional software branch and explicit reviews.
-`docs/workflows.md` records ownership, defaults and the dated migration receipt.
-Engine → Coverage uses the same identity and unchanged memory; Engine performance
-and Infrastructure were added through supported lifecycle operations. Shared
-defaults are authored here for delivery, replacing Training's missing `iterate`.
-
-Consolidating Training/Eval into Experiments still requires a surviving-identity
-judgment, especially while PR #421 modifies Training memory. No duplicate
-Experiments Wave is created. Provider synchronization is separately pending under
-Linear's rate limit. Existing Task graphs, PR identities and frozen evidence are
-preserved; no campaign or spending was launched. Training-exposure acceptance and
-proposed numeric settings remain for authored review as recorded in questions.
+`scratch/questions.md` owns current implementation, assumptions, remaining
+ownership and validation. The historical review is retained in
+`scratch/concept-review.html`; its two questions are resolved by Jack Heart's
+2026-11-04 continuation, not open scope-waiver decisions. Its counterexample still
+matters: favorable evaluation and a complete exam cannot establish what the
+learner encountered. Training exposure must remain independent evidence.
 
 ## Selected protocol and alternatives
 
@@ -126,44 +85,26 @@ training exposure or require B's generator to obtain it.
   accepts settings and actually runs/measures the first pilot. The planeswalker
   revision retains anchors and old-family tests with a prospective binding.
   These future authoring specifications are not delivered executable manifests.
-  Task 08 owns the deeper campaign after full FDN.
-
-## Workflow design and migration
-
-Jack Heart requested independent working → scalable → performant code loops,
-then unified training/evaluation under one experiment lifecycle. Architecture,
-regime and card-pool questions are design/analysis lenses; they are not three
-mandatory flows or automatically launched campaigns. Specialist review can
-reconcile into one protocol if useful. No parallel agents are implied.
-
-`docs/workflows.md` owns the implemented boundaries and graph composition;
-`docs/workflows/2026-11-04-migration.json` retains before/after identities,
-supported operations, protected graph hashes, memory provenance and pending sync.
-Infrastructure uses builtin code. Coverage optimizes its own implementation;
-Engine performance owns cross-cutting bottlenecks. Validation owns authored
-decks and bounded scientific execution on the integrated snapshot. Card authors
-supply interaction/behavior evidence; a validation Task may consume several
-integrated card Tasks. Passing the engine's 10% regression allowance is not
-proof that optimization is finished.
-
-The migration deliberately retains Training/Eval identities and paths pending
-consequential consolidation review, especially PR #421's Training memory and
-reserved empirical decisions. MTG-210/211/230/231 ownership remains unresolved.
-No backlog Task was claimed/executed to reorganize it. Existing captured graphs
-and live work remain their owners. Current unresolved work and validation are
-kept in `scratch/questions.md`, rather than another implementation ledger.
+  Task 08 owns Validation B after the expanded mechanism cohort. The separate
+  deeper track starts after full FDN; its owning Task is not yet assigned.
 
 ## Delete — do not maintain
 
-Completed: replace Training's missing `workflow: iterate` with `graph: experiment`;
-remove the Engine directory through the supported identity-preserving rename
-while retaining memory bytes. Remove superseded installation sketches from
-ambient scratch; durable workflows now own the procedure. The historical
-exploration is retained at the git reference above. No exclusive tests/fixtures
-were removed; the protocol and workflow checks exercise the surviving paths.
+Completed: missing `workflow: iterate` replaced by the shared experiment default;
+Engine renamed Coverage; Training renamed Experiments; redundant Eval and the
+concurrently recreated Training retired through lf after preserving work/history.
+Eval's leftover authored config and the exposure-unavailable report placeholder
+are removed. Native card models moved from sim/card_evidence to env/card_capture
+with consumers, leaving one shared model owner. Frozen JSON, historical capture
+bytes, existing evaluation evidence and captured Task Graphs are preserved.
 
-Keep legacy `.lf/flows/` as historical Task-specific definitions; they are not
-predecessors of these new graphs. Keep builtin code/pursue/deliver and captured
-Task graphs unchanged. The experiment software verification fork must not invoke
-builtin verify's parent-Task completion. No remaining code deletion target was
-identified; consolidating Training/Eval awaits authored judgment.
+No new generator, mechanics taxonomy, campaign manager, rules state or checkpoint
+namespace was introduced. Legacy .lf/flows are historical definitions, not a
+parallel implementation to repair. Keep builtin graphs unchanged.
+
+
+The exposure aggregation owns only admitted terminal-game counts; the reader
+owns run/source/deck admission and frozen budgets. This keeps interrupted/missing
+records separate from observed zero without rebuilding counters inside each game.
+Receipt hashing and durable writes share one JSONL serialization, and native
+training/evaluation exports share the card projection without a JSON text roundtrip.

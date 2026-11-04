@@ -252,6 +252,7 @@ def execute_regime(
     stop_path: Path | None = None,
     stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
+    training_exposure: bool = False,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -389,6 +390,7 @@ def execute_regime(
             stop_reserve_seconds=stop_reserve_seconds,
             initial_admission=initial_admission,
             experiment=experiment,
+            training_exposure=training_exposure,
         )
 
 
@@ -409,6 +411,7 @@ def _execute_regime(
     stop_reserve_seconds: float | None = None,
     initial_admission: Path | None = None,
     experiment: str | None = None,
+    training_exposure: bool = False,
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -694,6 +697,8 @@ def _execute_regime(
             out / "failures",
             lambda: {
                 "run": run.id,
+                "seed": seed,
+                "regime_digest": run.regime_digest,
                 "stage": run.stages[-1].id if run.stages else None,
                 "identities": run.identities,
                 "coordinates": coordinates(),
@@ -702,6 +707,7 @@ def _execute_regime(
                 "parent_run_id": run.parent_run_id,
             },
         )
+        failures.training_exposure = training_exposure
         resources.enter_context(capture_scope(failures))
         # Set when stop_reserve_seconds ends the (single) stage before its target.
         wall_bounded = False
@@ -1741,4 +1747,8 @@ def _execute_regime(
         raise
     finally:
         resources.close()
+        if training_exposure and run.stages:
+            for path in sorted((out / "exposure").glob("*.jsonl")):
+                run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)
+            persist()
     return run

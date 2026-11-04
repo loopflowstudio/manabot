@@ -20,12 +20,14 @@ Design one experiment encompassing the training and evaluation needed to answer 
    Proxy lists and illustrative shares are proposals, not the integrated batch.
 4. Declare games, updates, wall/compute/cost bounds, stop criteria, failure and
    recovery evidence, and what counts as inconclusive. Define training exposure
-   separately from evaluation draws/actions; preserve unresolved exposure
-   acceptance for review. A tiny run can prove execution without learning.
+   separately from evaluation draws/actions; name the required capture and any
+   missing instruments for review. A tiny run can prove execution without learning.
 5. Update one design in scratch and the protocol's owning artifact. Identify
    software actually needed before final freeze, with deletions and acceptance
    checks; do not require a PR when the admitted software already suffices.
    Record the source of execution authority separately from proposed budgets.
 
 No experiment is launched by this design. Task 04 owns the first growing-pool
-campaign's measured results; Task 08 owns the later full-FDN campaign.
+campaign's measured results; Task 08 owns Validation B on the expanded mechanism
+cohort. The deeper strength/generalization track begins after full FDN under a
+separately frozen protocol and execution authority.

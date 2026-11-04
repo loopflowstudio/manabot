@@ -4,7 +4,9 @@
 Jack Heart selected exploration A: authored functional decks, frozen sampling
 mixtures and stable evaluation anchors. The exact lists, shares and budgets
 below are proposed engineering parameters. Task 04 owns measured validation;
-Task 08 owns the later campaign. This document grants no allocation.
+Task 08 owns Validation B on the expanded mechanism cohort. The deeper track
+begins after full FDN, separately from those two operational validations. This
+document grants no allocation.
 
 The executable current-world example is
 [growing-pool-245-v1.json](growing-pool-245-v1.json), consumed by
@@ -148,8 +150,10 @@ Report counts separately, with missing quantities explicitly unavailable:
 | Opening and actual drawn copies in evaluation | `card_counts`, via replay-backed native capture; returns/tutors are not draws |
 | Committed choices by acting participant, decision kind and action type | New `decisions` table from retained traces, with evidence blob digest and explicit zero-choice participant totals |
 | Cast/activation decisions | Subsets of committed action-type counts, not proof of resolution, strategic benefit or opportunity frequency |
-| Per-card legal offers, mechanic resolutions, dead-draw reasons | Not available in the retained v1 trace; never inferred from presence or written as zero |
-| Training per-card draws/offers/resolutions | Not supplied by this minimal protocol; evaluation exposure is labelled evaluation, not extrapolated into training totals |
+| Training opening/drawn copies and hand at terminal | Private native card capture; remaining in hand is not a dead-draw reason |
+| Training legal focus opportunities and selected choices | Once per definition/acting seat/nontrivial decision using the complete native action focus; multiple legal variants do not multiply opportunities |
+| Training completed effect frames | Native frame finalization, separately from action selection; source copy/incarnation and controller retained. Completion is not a claim of state change or strategic benefit |
+| Mechanic-specific success, dead-draw reasons | Not measured by these generic instruments; inspect retained choices/resolutions and directed probes |
 
 `games` retains all four leg slots, validity and attempted flags. Card blobs are
 sealed alongside match tables, not in checkpoint storage. Use
@@ -160,18 +164,32 @@ The `decisions` table counts committed choices only; forced native choices are
 skipped. A high count of priority passes is not evidence of meaningful mechanic
 practice. Separate those action types and inspect examples before a family claim.
 
-Tasks 01/03 own broader history/receipt work. The useful next instrument is
-per-family/per-participant **legal opportunity → selected Command → resolved
-effect** counts, keyed by native object incarnation and world. Its decision value
-is to distinguish rare opportunity from refusal/misplay. The cheapest credible
-producer is an extension of existing native capture/replay, shared by training
-and evaluation; no label parsing or parallel mechanics taxonomy. The current
-tables permit a narrower ordinary learnability check, but do not close the
-Task's requirement to measure training exposure and meaningful decisions.
-Whether replay-linked evaluation draws and action-type counts suffice for the
-first handoff remains a review decision; Jack Heart's selection of A did not
-accept that reduction. Broader capture remains unimplemented, and its ownership
-must be coordinated with Tasks 01/03 before claiming that requirement complete.
+Training capture extends the existing `CardCapture`, native vector reset boundary
+and `CaptureScope`; Tasks 01/03 remain owners of broader public history and crash
+receipts. The reference-league `TrainingJob` explicitly enables this instrument;
+other jobs keep their omitted/default configuration. Capture records all ordinary
+flat-policy choices from both seats without changing legality, trivial skipping,
+RNG, rules state or policy inputs. Search forks keep capture disabled.
+
+Private `training/exposure/<digest>.jsonl` receipts retain actual sampled decks,
+seed, committed replay actions, source/native/input identities, learner/run and
+update coordinates, card movements and complete choice options. Terminal games
+and interrupted prefixes are separate. The TrainingRun names their file digests
+outside checkpoint storage. Download these retained job outputs for offline
+analysis; `--training-evidence` accepts each seed's exposure directory. Missing
+files never become observed zero. Replay inputs are retained, not replay-verified;
+`TrainingExposureReceipt.replay_inputs()` uses the existing failure-replay owner.
+Counts concern observed collection, not proof that every transition contributed
+to a successful optimizer update.
+
+Resolution rows attribute completed effect frames to the source physical copy's
+initial captured definition and exact source incarnation. They are not a new
+mechanics taxonomy or counts of successful instructions; dynamic copied/granted
+programs require inspection of native state and the directed probes. Evaluation
+counts remain independently labelled evaluation. Native instrumentation changes
+the source binding: the preserved v1 JSON must reject a different engine source.
+Task 04 freezes its integrated prospective protocol after this software lands;
+no frozen protocol or historical evidence is rebound here.
 
 Rare families get authored decks and separate directed probes, not inverse-
 frequency loss weights. A repeatedly dominant card is capped by list counts and
@@ -268,8 +286,9 @@ establish healthy optimizer activity.
 `modest_check` applies the primary criterion below: missing primary or health
 evidence gives null; sufficient evidence gives true/false. Missing secondary
 panels still make the report incomplete, but their scores do not redefine that
-criterion. A favorable modest check does not close the separate unresolved
-training-exposure acceptance boundary. Controlled sealed fixtures establish the
+criterion. Training capture completeness is separate and appears per seed;
+missing or interrupted captures also make `complete` false. A favorable modest
+check does not establish mechanic coverage. Controlled sealed fixtures establish the
 reader's behavior only; they are not empirical evidence of learning.
 
 ## First pilot for Task 04
@@ -366,6 +385,13 @@ control. Resetting streams/RNG is a new segment, not exact recovery. Weights-onl
 warm starts and new vocabularies are distinct transfer interventions. No new
 continuation route is implemented here.
 
+In the integrated [Standard milestone](../../docs/research/standard-2026-11/milestone.md),
+Task 04 owns Validation A after the casting/history foundations; Task 08 owns
+Validation B after the battlefield, planeswalker and procedure cohorts. Each
+authors its actual integrated lists and probes. These bounded checks precede
+the separate deeper study after full FDN; the two-batch example supplies neither
+that study's execution authority nor a requirement to wait for set closure.
+
 ## Deeper track after full FDN
 
 First deep milestone: freeze the full-FDN integrated catalog and reviewed league.
@@ -384,7 +410,9 @@ calibration cannot fit the fixed design, revise prospectively. Report cross-seed
 uncertainty on paired improvements, old-family retention, held-out panel
 contrasts and per-family probe scores. Compare a different curriculum only with
 matched total training **and selection/search** compute and its own frozen test.
-This is a milestone specification for Task 08, not executable permission today.
+This is a proposal for the later deep-study milestone, not Task 08's operational
+Validation B or executable permission today. Its owning Task remains unassigned
+in the near-term sequence.
 
 ## Runnable handoff and acceptance boundary
 
@@ -409,7 +437,7 @@ uses the ordinary Etude discovery/callback path and an explicit output directory
 ```sh
 ETUDE_OUTPUT_DIR="$PWD/.runs/growing-pool-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/growing_pool.py --source r2://manabot/jobs
 uv run --extra artifacts --extra evaluation etude report experiments/growing_pool.py --source r2://manabot/jobs
-uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_analysis --source r2://manabot/jobs --out .runs/growing-pool-analysis.json
+uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_analysis --source r2://manabot/jobs --training-evidence .runs/seed-one/training/exposure --training-evidence .runs/seed-two/training/exposure --out .runs/growing-pool-analysis.json
 ```
 
 The evaluation command plays games and needs Task 04's authorization and budget;
@@ -420,12 +448,13 @@ execution must use a new experiment identity/source; never overwrite v1's JSON
 or recycle its experiment name to blend populations.
 
 MTG-245 supplies code, manifest, interpretation and the two-batch authoring plan.
-The paired reader is implemented; the training-exposure acceptance boundary
-remains unresolved for authored review. Neither discovery nor controlled fixtures
+The paired reader and typed training-exposure instrument are implemented.
+Actual exposure, learning and throughput remain unmeasured. Neither discovery nor controlled fixtures
 establish experimental acceptance or measured learning. The future batch table is not two executable manifests or
-delivered policy probes. Task 04 owns authoring those lists and scenario IDs on
+delivered policy probes. Task 04 owns the first batch's lists and scenario IDs on
 its declared integrated snapshot, accepting numeric bounds, and obtaining
-execution authorization. Its measured validation outcome then requires actual
+execution authorization; Task 08 owns the corresponding expanded-batch revision.
+Each measured validation outcome then requires actual
 update/throughput/exposure/crash receipts. MTG-245's protocol handoff and Task 04's
 experimental completion are separate outcomes. No design audit or successful
 discovery test is evidence of learning.

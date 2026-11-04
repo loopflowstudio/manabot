@@ -7,9 +7,8 @@ Check that the frozen experiment is both runnable and authorized before executio
 Verify the integrated source, native/input admission, manifests, expected schedule,
 resource bounds and stop criteria. Read actual authority and confirm it covers this
 experiment and spending; proposed lists/shares/budgets or a Graph launch do not.
-Do not re-request an existing valid authorization. Preserve unresolved training
-exposure acceptance and experimental-setting judgments as explicit blockers when
-required by the accepted outcome.
+Do not re-request an existing valid authorization. Missing required training
+capture or unresolved experimental settings remain explicit blockers.
 
 Use the bound loop protocol. Advance only when all required inputs and authority
 exist, iterate for correctable freeze/admission defects, or block naming missing
