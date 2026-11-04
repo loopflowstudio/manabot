@@ -163,3 +163,24 @@ Next proof remains gate and results demo: show all endpoints, the failed
 advantage criterion, uncertainty, accounting limits and frozen identities.
 Concept review changed no implementation and ran no training. Its page is
 `scratch/concept-review.html`; source inspection is not a browser-rendering proof.
+
+## Publication verification — 2026-11-04
+
+`lf sync` completed cleanly against main `5dd11cec4`. Full diff inspection
+removed an exact duplicate source-duration parity test left by reconciliation.
+The publication checks found that pinning the scientific 64-action axis also
+made the unscored smoke incompatible with today's native 512-action buffer.
+The smoke now inherits the current action capacity; scientific recipes keep
+both retained digests. The report explicitly distinguishes current integration
+checks from reproduction under the archived scientific runtime.
+
+The bounded validation set passed 147 checks initially; its two learner-smoke
+failures were repaired and both then passed together with eight recipe/discovery
+checks (10 passes). Coverage includes model/state transport, checkpoint reload,
+experiment report/runner, recipe discovery, CI/release selection and untracked
+artifact policy. Ruff and diff whitespace checks passed. A read-only receipt
+audit admitted all eight endpoints and reproduced the contrast/timing exactly;
+all 1,024 retained replay flags passed. All 823 added manifest entries matched
+local file size and SHA256, and every prior manifest entry remained unchanged.
+The existing artifact publication log records those 823 published entries.
+No new scientific cohort, rental, model promotion or merge was performed.

@@ -95,6 +95,11 @@ v7 tracking namespace. Its previous filename at the scientific source commit
 remains in the frozen source archive. This post-run move and report declaration
 do not alter the experiment inputs or retained receipts.
 
+The scientific recipes pin their executed 64-action capacity so retained results
+remain admissible after fresh defaults change. Re-execution requires the archived
+source and native runtime. The unscored engineering smoke uses the current native
+action capacity (512); it checks learner integration and is not a replication.
+
 ```sh
 uv run --extra artifacts python -m manabot.data fetch experiments/data/state-representation-v7-5da5f4
 uv run --extra reports etude report experiments/state_representation_v7.py --source experiments/data/state-representation-v7-5da5f4/cohort --out .runs/representation-report

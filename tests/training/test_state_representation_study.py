@@ -13,6 +13,7 @@ from experiments.state_representation_v7 import (
     paired_interval,
     recipe,
 )
+from manabot.env.observation import ObservationConfig
 from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
 from manabot.training.regime import TrainSelfPlay
@@ -43,7 +44,11 @@ def test_science_and_smoke_have_distinct_endpoints() -> None:
         assert stage.updates == 128 and smoke.stages[0].updates == 1
         assert stage.streams == 32
         assert scientific.observation.policy_input_version == 7
-        assert scientific.observation == smoke.observation
+        assert scientific.observation.max_actions == 64
+        assert smoke.observation.max_actions == ObservationConfig().max_actions
+        assert scientific.observation.model_dump(exclude={"max_actions"}) == (
+            smoke.observation.model_dump(exclude={"max_actions"})
+        )
         assert scientific.id != smoke.id
     protocol = evaluation_protocol()
     assert protocol.legs == 4 and len(protocol.deal_seeds) == 32

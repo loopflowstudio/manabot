@@ -53,12 +53,13 @@ def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
     regime.agent.policy_film = True
     regime.agent.recent_events = False
     # Executed recipes retain their axes when fresh observation defaults grow.
+    # The unscored smoke follows the current native action-buffer contract.
     regime.observation = ObservationConfig(
         policy_input_version=7,
         max_facts=128,
         max_cards_per_player=60,
         max_permanents_per_player=40,
-        max_actions=64,
+        max_actions=regime.observation.max_actions if smoke else 64,
         max_focus_objects=2,
         max_events=32,
     )
