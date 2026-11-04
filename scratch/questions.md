@@ -123,12 +123,10 @@ cast path asks for X from the printed {X}{U}{U}, while payment uses fixed {2},
 so it admits 0..255 and can draw into a deck-out. CR 107.3b fixes X to zero for
 that alternative cost. The independent buffer contract remains needed.
 
-Delete — do not maintain: the printed-cost-only X announcement predicate.
-Use the same selected base cost for announcement and payment; preserve X when
-any-type mana converts colored pips. Add directed Wan Shi Tong payment/counter/
-draw coverage, preserve the historical 256-offer observation as transport-only
-data, and check the repaired live prefix separately. w17 remains open per
-WORLDS.md; bind repaired executable source prospectively before training.
+The shared selected-cost repair and directed payment/counter/draw tests are
+implemented. The [current implementation cut](tla-pilot-verify.md#current-implementation-cut)
+owns deletions and validation; the historical 256-offer observation remains
+transport-only data. W17 remains open per WORLDS.md.
 
 
 V7 continuation is now source-bound but unsubmitted: Run `af3661790ac5` at

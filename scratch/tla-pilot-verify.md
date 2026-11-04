@@ -39,15 +39,11 @@ scalar, vector and Python encoders all reject 256 offered actions at capacity 64
 Diagnostic Python configuration at 512 retains all 256; frozen native buffers
 still enforce 64. A configuration-only retry on that source is insufficient.
 
-The 2026-11-04 source inspection confirms that current main's native default is
-512, but `input_buffer_config` in
-`managym/src/python/vector_env_bindings.rs` still derives only card and fact
-capacities. Scalar `encode_observation_into` and vector binding share that
-helper; neither derives action, permanent or focus capacities from supplied
-buffers. Vector event rows follow configuration only for public history; other
-events use the default, while scalar input does not infer event rows. Shared-effect
-and relation axes are version-fixed, not configurable capacities. Merely using
-512 actions would agree with today's default without fixing that contract.
+Main `5dd11cec` used a native default of 512, but its shared
+`input_buffer_config` derived only card/fact capacities and handled events
+differently between scalar/vector paths. The repair now reads all configurable
+axes from supplied arrays. Shared-effect and relation axes remain version-fixed.
+Non-default fixtures establish this contract independently of today's defaults.
 
 Primary operator comment bbc34e15 (2026-11-04 17:49 UTC) selects the routine
 buffer repair under Jack Heart's existing enabling-fix and $10 authorization;
@@ -113,8 +109,6 @@ the extracted archive and allowed the retained initialization evaluation.
 
 ## Evidence and validation boundary
 
-The unchanged executable source retains the 09:58 UTC result of 43 passing
-pilot/discovery tests. That result does not cover the unfinished buffer repair.
 The selected Training Wave memory now includes the v5 learning/failure result;
 there are no immediate child memories. Earlier notes remain at
 `9e19d83a0da7a3abe3fc47b22ec1d6e6e665f4ea:scratch/tla-pilot-verify.md` and the
@@ -122,22 +116,28 @@ release completion receipt at the same commit's `scratch/etude-release-status.md
 Uncommitted pre-compression evidence is preserved in
 `.runs/mtg213/context-before-compress-20261104-1745/`.
 
-Check: release extension rebuilt/atomically installed; initial 50 buffer checks passed, then seven changed historical/live-prefix checks and seven prospective identity/discovery checks passed after the X repair; directed debug Wan Shi Tong and free-cast additional-X tests pass. Ruff passes. Gate owns affected suites, full debug/Clippy, current-world admission, training checks and CI collection.
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/verify/test_native_buffer_capacities.py tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py -q` — 96 passed with the rebuilt, atomically installed release extension; Rust formatting and Ruff pass. Earlier directed debug X-cost checks remain at `3424e0543:scratch/tla-pilot-verify.md`. Gate owns affected suites, full debug/Clippy, current-world admission, training checks and CI collection.
 
 ## Current implementation cut
 
-Delete — do not maintain: remove `event_buffer_config` and its vector-only
-capacity/default selection. `input_buffer_config` remains the single native
-owner of configurable axes for scalar/vector buffers; relation/shared-effect
-widths and historical input semantics remain fixed. Validate all companions
-before scalar copies, preserving explicit overflow and public-history bounds.
-Keep controlled non-default capacity parity, a historical 256-offer transport fixture and repaired live-prefix parity. Remove the printed-cost-only X announcement predicate in favor of shared casting_mana_cost.
+Delete — do not maintain (completed): `event_buffer_config`, incoming/default
+configuration overrides in `input_buffer_config`, the printed-cost-only X
+announcement predicate, and predecessor `tla_pilot_v5.py`/`tla_pilot_v6.py`
+launchers. No remaining deletion targets.
+
+`input_buffer_config` derives configuration solely from supplied arrays, using
+one row/width reader for ordinary, relation and fact buffers. Callers validate
+complete companion shapes before writes. `casting_mana_cost` owns the selected
+cost for announcement and payment. Tests retain non-default parity, overflow,
+historical 256-offer transport and repaired live-prefix parity. Protocol tests
+share the historical contract fixture and assert all preserved recipe fields
+together; real replay uses the explicit pilot allocation without a default override.
 The prospective pilot keeps v7, 128 cards, 40 permanents, 128 facts, 512 actions,
 2 focus objects and 32 legacy events; no population or recipe change beyond
 current runtime binding and the repaired action capacity. Publication and
 landing remain the caller Graph's delivery steps.
 
-The active experiment entry moves from `tla_pilot_v5.py` through unsubmitted v6 to `tla_pilot_v7.py`
-with its analysis/discovery consumers. Delete both predecessor entries rather than keep a
-second live launcher; frozen v5 protocols, regimes, data and source
-`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd` remain the historical execution path.
+Only `tla_pilot_v7.py` is active, with its analysis/discovery consumers. Frozen
+v5 protocols, regimes, data and source `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`
+remain the historical execution path. Simplification does not rebind prepared
+v7 Run `af3661790ac5` from its frozen `b5406bb33` source.

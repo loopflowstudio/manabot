@@ -163,7 +163,7 @@ impl PyVectorEnv {
     }
 
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>) -> PyResult<()> {
-        let config = input_buffer_config(&buffers, self.config)?;
+        let config = input_buffer_config(&buffers)?;
         let buffers = read_observation_buffers(&buffers, self.num_envs, &config)?;
         self.config = config;
         self.buffers = Some(buffers);
@@ -336,45 +336,42 @@ impl PyVectorEnv {
 #[cfg(feature = "python")]
 pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
-    mut config: ObservationEncoderConfig,
 ) -> PyResult<ObservationEncoderConfig> {
-    let cards = buffers
-        .get_item("agent_cards")?
-        .ok_or_else(|| PyValueError::new_err("missing agent_cards"))?;
-    let card_shape: Vec<usize> = cards.getattr("shape")?.extract()?;
-    if !matches!(card_shape.len(), 2 | 3) {
-        return Err(PyValueError::new_err("invalid card buffer shape"));
-    }
-    let shape = |name: &str| -> PyResult<Vec<usize>> {
+    // Strip only the optional batch axis. Full companion and batch shapes are
+    // validated by the caller before any writes.
+    let shape = |name: &str| -> PyResult<[usize; 2]> {
         let dimensions: Vec<usize> = buffers
             .get_item(name)?
             .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?
             .getattr("shape")?
             .extract()?;
-        if dimensions.len() != card_shape.len() || dimensions.contains(&0) {
-            return Err(PyValueError::new_err(format!(
+        match dimensions.as_slice() {
+            &[rows, width] | &[_, rows, width] if !dimensions.contains(&0) => Ok([rows, width]),
+            _ => Err(PyValueError::new_err(format!(
                 "invalid {name} buffer shape"
-            )));
+            ))),
         }
-        Ok(dimensions)
     };
-    let row_axis = card_shape.len() - 2;
-    config.max_cards_per_player = shape("agent_cards")?[row_axis];
-    config.max_permanents_per_player = shape("agent_permanents")?[row_axis];
-    config.max_actions = shape("actions")?[row_axis];
-    config.max_focus_objects = shape("action_focus")?[row_axis + 1];
-    let events = shape("events")?;
-    config.max_events = events[row_axis];
-    config.policy_history = match events[row_axis + 1] {
+    let [max_events, event_width] = shape("events")?;
+    let policy_history = match event_width {
         crate::agent::observation_encoder::EVENT_DIM => false,
         crate::agent::policy_history::HISTORY_DIM => true,
         _ => return Err(PyValueError::new_err("unsupported event buffer width")),
     };
-    if config.policy_history && config.max_events > crate::agent::policy_history::HISTORY_LIMIT {
+    if policy_history && max_events > crate::agent::policy_history::HISTORY_LIMIT {
         return Err(PyValueError::new_err(
             "public history v1 requires 1..32 rows",
         ));
     }
+    let mut config = ObservationEncoderConfig {
+        max_cards_per_player: shape("agent_cards")?[0],
+        max_permanents_per_player: shape("agent_permanents")?[0],
+        max_actions: shape("actions")?[0],
+        max_focus_objects: shape("action_focus")?[1],
+        max_events,
+        policy_history,
+        ..ObservationEncoderConfig::default()
+    };
     let mut shared_count = 0;
     for name in ["effects", "effect_details", "effect_members"] {
         shared_count += usize::from(buffers.contains(name)?);
@@ -384,30 +381,22 @@ pub(super) fn input_buffer_config(
             "v7 requires all shared-effect buffers",
         ));
     }
-    let Some(relations) = buffers.get_item("relations")? else {
+    if !buffers.contains("relations")? {
         if shared_count != 0 {
             return Err(PyValueError::new_err("v7 requires relations"));
         }
         config.policy_input_version = 1;
         return Ok(config);
-    };
-    let shape: Vec<usize> = relations.getattr("shape")?.extract()?;
-    config.policy_input_version = match shape.last() {
-        Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => 3,
-        Some(&crate::agent::continuation::RELATION_DIM) => 4,
-        Some(&crate::agent::continuation::RELATION_DIM_V5) => {
-            let facts = buffers
-                .get_item("facts")?
-                .ok_or_else(|| PyValueError::new_err("missing facts"))?;
-            let fact_shape: Vec<usize> = facts.getattr("shape")?.extract()?;
-            if fact_shape.len() != shape.len()
-                || !matches!(fact_shape.len(), 2 | 3)
-                || fact_shape.last() != Some(&crate::agent::observation_encoder::FACT_DIM)
-                || fact_shape[fact_shape.len() - 2] == 0
-            {
+    }
+    config.policy_input_version = match shape("relations")?[1] {
+        crate::agent::continuation::LEGACY_RELATION_DIM => 3,
+        crate::agent::continuation::RELATION_DIM => 4,
+        crate::agent::continuation::RELATION_DIM_V5 => {
+            let [rows, width] = shape("facts")?;
+            if width != crate::agent::observation_encoder::FACT_DIM {
                 return Err(PyValueError::new_err("invalid fact buffer shape"));
             }
-            config.max_facts = fact_shape[fact_shape.len() - 2];
+            config.max_facts = rows;
             if shared_count == 3 {
                 7
             } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
@@ -760,7 +749,7 @@ impl PyRolloutPool {
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
-        let config = input_buffer_config(&buffers, self.config)?;
+        let config = input_buffer_config(&buffers)?;
         if capacity < self.inner.num_slots() {
             return Err(PyValueError::new_err(format!(
                 "buffer capacity {capacity} < num_slots {}",

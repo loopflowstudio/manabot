@@ -4176,10 +4176,7 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
     ) -> PyResult<()> {
         let rust_obs = Observation::from(obs);
-        let config = crate::python::vector_env_bindings::input_buffer_config(
-            &out,
-            ObservationEncoderConfig::default(),
-        )?;
+        let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
