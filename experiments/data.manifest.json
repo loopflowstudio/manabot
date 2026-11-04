@@ -37066,6 +37066,46 @@
    "sha256": "ba0391e73411efcc358b34e047dde73abb4c2d125cc54dcff5f8ecbcbaec52a3",
    "bytes": 360
   },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/inventory-after.json": {
+   "sha256": "f6c91952b1dc6038d9757190d5cc0678d67ca75bdae1eebdf8dcf305f05930f0",
+   "bytes": 5814
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/inventory-before.json": {
+   "sha256": "0e513bfe24aea1be2ddfebe2f3ae21e03247f0a004d472c997e9837aaf63504a",
+   "bytes": 5962
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/launch-a6000.log": {
+   "sha256": "33d4a1425e9569594e87661bfe47971885fa9411ba96ed0a431e1566873cd12c",
+   "bytes": 1561
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/launch-a6000.py": {
+   "sha256": "eac6a44726a23983584bcdfb98529824c3e1cfab70ac1327f2ac9ba766460d1a",
+   "bytes": 2908
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/launch-l4.log": {
+   "sha256": "f453d8b47cf2e8e730e50638a7a7acd15d524a446627ec099cd6a39e5e8c28bc",
+   "bytes": 1559
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/launch-l4.py": {
+   "sha256": "0706c533c3f8a7953f56c2edb4ef5092767a252d641b43bec7ae87db4bf62551",
+   "bytes": 2876
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/outcome.json": {
+   "sha256": "d5e5ea534efd8760a395eb7ae93ff133ba8e32e2645e2c3d44d178426605cf6f",
+   "bytes": 1293
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/quote-remaining.py": {
+   "sha256": "b0ed4aa0a6e22813df9067a194ba62ef534b2cdbf49369edcb1f27decb5d20aa",
+   "bytes": 2053
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/quote.py": {
+   "sha256": "697ef8bcc02cb1f27f6986c13b32812ac2129d242600fa5b1da859fb4ce33553",
+   "bytes": 2058
+  },
+  "experiments/data/mtg213/gpu-v9-recheck-20261104/quotes.json": {
+   "sha256": "98789b6bb53558f9547be4bd07534e835c15370c1070938b9da65215310538e2",
+   "bytes": 3629
+  },
   "experiments/data/mtg213/launch-audit-20261103-resume/prepared-run.json": {
    "sha256": "6ba7fc74eb2c061d7e428625593965d14045c731cc1e53bfe000807cf89c0a8e",
    "bytes": 276414

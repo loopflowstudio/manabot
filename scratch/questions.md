@@ -27,8 +27,8 @@ explicit deterministic first-64 legal-action cutoff with replay-linked diagnosti
 Comment ffd29028 records Jack Heart's concept-review answer **1b**: apply the
 same prefix to heuristic, learned candidate and initialization anchor. V9 and
 merged PR #423 implement it, superseding v8's full-support heuristic interpretation
-and v6/v7's 512-action plans. Historical Wave memory describing that heuristic
-is superseded by this decision. Prepared v6/v7/v8 Runs must not launch.
+and v6/v7's 512-action plans. Training Wave memory now records this matched-support
+decision. Prepared v6/v7/v8 Runs must not launch.
 
 The engine and Academy retain all legal choices. Retained row i executes original
 native Command i; heuristic restriction precedes scoring/fallback. Padding is
@@ -55,13 +55,11 @@ is not a failed game; a rules error remains a rules error.
   128 cards per seat and the original recipe, seeds and schedule.
 - Compatibility: executed protocols/configurations/evidence are immutable.
   Source/world/shape changes need prospective identities and fresh initialization
-  and evaluation; a common w17 label does not establish compatibility. V1's 140
-  facts motivated v6/256 (512 was the operator's initial choice, 256 followed
-  Jack Heart's confirmation); v3's 270 facts invalidated that capacity. Shared
-  effects repaired that case, then v4 needed 61 card rows and v5 exposed illegal
-  X offers. None of these repairs guarantees universal reachable-state capacity.
-  Frozen input v5 stays at 128 facts; fresh v6 defaults to 512, with rank / 128
-  timestamp scaling. Synthetic world fixtures never authorize real execution.
+  and evaluation; a common w17 label does not establish compatibility. The report
+  retains the 140/270-fact, 61-card and illegal-X failures and repair decisions;
+  these repairs do not guarantee universal reachable-state capacity. Frozen input
+  v5 stays at 128 facts; fresh v6 defaults to 512, with rank / 128 timestamp scaling.
+  Synthetic world fixtures never authorize real execution.
 - Analysis: retain milestones after early endpoints and both comparison slots
   for unknown endpoints. Failed callbacks count as failed matches; unknown games
   remain missing and attempted games are a lower bound. The companion analysis
@@ -87,22 +85,19 @@ another Task's rental. VAST_API_KEY remains in `etude/prd`; the SSH public key w
 registered. Prior Vast placement used >=6 vCPUs, >=48GB RAM, 80GB disk,
 <=USD0.81/hour and 840 seconds setup plus the unchanged one-hour job.
 
-At 20:49 UTC the operator selected configured RunPod A4000 after RTX5090 price
-and RTX3090/L4/A6000 supply refusals. Its availability read quoted USD0.25/hour,
->=16 vCPUs/48GB RAM and 50GB disk; the one-hour job plus 900s setup must still
-quote <=USD1. Its subsequent quote refused capacity, so no submission occurred.
-This was a placement assumption, not a protocol change or additional allowance.
-Evidence remains in `experiments/data/mtg213/gpu-v9-preflight-20261104/`;
-independently owned Vast rental 59159114 / representation Run 886233843d34 was
-untouched. GPU memory and throughput equivalence are not assumed.
+The operator selected configured RunPod A4000 (20:49 UTC) and A6000 (21:00 UTC)
+as reversible placement alternatives after other supplies refused. These choices
+did not change the protocol or caps; GPU memory/throughput equivalence is not
+assumed. Their quotes, refusals and accounting live in the report's v9 preflight
+and recheck receipts. The plan owns the capacity stop and remaining acceptance.
 
 ## Historical context
 
 Completed review drafts, proof requests and CI repair narration no longer direct
 work. Their full pre-compression text is retained at
-`6da60684cb628ec9b431dbbb9d7dc91348743622:scratch/questions.md`; the uncommitted
-20:49 placement addition is preserved above and in preflight artifacts. The
-pre-compression local blob is `b1f764aa2b078aa4a28b8d607cba6f505d685b07`.
+`6da60684cb628ec9b431dbbb9d7dc91348743622:scratch/questions.md`.
+The complete local notes before this reduction, including both placement
+assumptions, are preserved as git blob `0b77c45bf972280f57b4a9bb882e945afc27120d`.
 Older decisions/source pins remain at
 `af4227616ef2cf46bb1f0b05e690feebb28ac2e8:scratch/questions.md`.
 Inherited T6/T7 notes remain at

@@ -3,21 +3,26 @@
 V9 Run **2171156493ca** freezes merged source
 `6da60684cb628ec9b431dbbb9d7dc91348743622`, the original 134 decks and matched
 first-64 legal support for all participants. It remains **unsubmitted**.
-On 2026-11-04 at 20:48–20:49 UTC, Vast RTX 5090 exceeded the USD0.81/hour
-ceiling; RTX 3090 and RunPod L4 quotes refused capacity. RunPod A6000 was
-unavailable. A4000 availability initially returned USD0.25/hour, but its
-subsequent quote also refused capacity. Availability alone did not authorize
-or establish an allocation. [Preflight evidence](data/mtg213/gpu-v9-preflight-20261104/outcome.json)
-retains the frozen Run, launch scripts, refusals and fresh accounting.
+The fresh 20:59–21:00 UTC recheck on 2026-11-04 briefly obtained compatible
+L4 and A6000 whole-rental quotes of USD0.7375 each. Both launch-time rechecks
+then refused capacity **before submission**. RTX 5090 quoted
+USD1.1481481481481481/hour, above the USD0.81 ceiling; RTX 3090 and A4000
+also refused capacity. The attempt stopped blocked instead of repeating
+unchanged requests. [Recheck evidence](data/mtg213/gpu-v9-recheck-20261104/outcome.json)
+retains the quotes, launch refusals and accounting. The
+[earlier preflight](data/mtg213/gpu-v9-preflight-20261104/outcome.json)
+retains the prepared Run and initial refusals; no source was prepared again.
 
-The final 20:49:51 UTC inventory confirms no active pilot rental, no RunPod
-pods and no unsettled launcher hardware. The independently owned Vast
-representation experiment remains untouched. Accounted prior full-rental cost
-is **USD0.32710677365251912**, with **USD3.9139916049382716** conservatively
-reserved against USD10; **new paid compute is USD0**. Provider billing for the
-earlier Vast rental remains unavailable, so its full-rental estimate is retained.
-The USD1 allocation cap is unchanged. V9 still needs GPU execution, an admitted
-trained checkpoint, paired evaluation and the qualified Elemental comparison.
+The final 21:00:52 UTC inventory confirms no Vast instances, RunPod pods or
+unsettled launcher hardware. The independently owned representation rental
+was untouched and disappeared independently between reads. Accounted prior
+full-rental cost remains **USD0.32710677365251912**, with
+**USD3.9139916049382716** conservatively reserved against USD10;
+**new paid compute is USD0**. Provider billing for the earlier Vast rental
+remains unavailable, so its full-rental estimate is retained. The USD1 allocation
+cap is unchanged. V9 still needs GPU execution, an admitted trained checkpoint,
+paired evaluation and the qualified Elemental comparison. A new capacity signal
+is needed before another unchanged launch attempt.
 
 ## Last executed pilot: v5
 

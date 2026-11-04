@@ -259,7 +259,7 @@ including inspection of the other configurable native axes. That operator's
 no-truncation restriction was superseded by Jack Heart's explicit first-64
 pilot decision below; deck exclusions remain unchanged. A prospective identity and fresh initialization
 and evaluation are required; executed v5 and missing evaluation slots stay
-frozen. Remaining acceptance lives in scratch/tla-pilot-verify.md.
+frozen. Remaining acceptance lives in scratch/tla-pilot-postmerge-verify.md.
 
 T6 main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` subsequently widened
 player/card inputs to 73/56 and fresh action capacity to 512; the executed v5
@@ -314,23 +314,40 @@ no pagination. Later legal actions receive zero probability on overflow, so
 ordering can affect outcomes; this is an accepted pilot approximation, not
 evidence that the omitted choices are strategically redundant.
 
-Training and learned-policy evaluation share the cutoff. The fixed heuristic
-anchor retains its existing full-native policy, an explicit engineering
-interpretation. Diagnostics aggregate consumed decisions, overflow frequency
-by kind and dropped counts, with up to four replay-linked seed/deck/prefix
+Jack Heart subsequently selected concept-review choice **1b** on 2026-11-04
+(comment ffd29028): heuristic, learned candidate and initialization anchor all
+use the same first-64 legal prefix. V9 supersedes v8's asymmetric full-support
+heuristic interpretation. Restriction precedes heuristic scoring and greedy
+fallback; an excluded choice is never clamped or remapped. The protocol,
+heuristic Code identity and player registration bind the matched support.
+Diagnostics aggregate consumed decisions across all participating policies,
+overflow frequency by kind and dropped counts, with up to four replay-linked seed/deck/prefix
 samples; powers-of-two console summaries avoid floods and close flushes exact
 totals, including zero overflow. Evaluation receipts retain these reports.
 Cutoff diagnostics are distinct from fatal observation or game truncation.
+They are not learner-only or actor-specific rates; bounded replay samples
+cannot reconstruct exact actor totals. Abrupt termination can lose counts since
+the last flush.
 
-Prepared v6/v7 Runs remain unsubmitted and superseded. V8 Run `f47be2d3c0d8`
-binds source `900c207502bd28757d7cf66196bd464458e39402`; later collector/capture
-simplification requires a successor source freeze, never rebinding that Run.
-The 19:10–19:12 UTC v8 quotes refused RTX5090 price and L4/RTX3090 capacity;
-the final 19:11:43 inventory found no rentals or unsettled hardware. No new
-spending, checkpoint or evaluation followed. These dated refusals establish
-no future availability. The plan owns remaining source selection, fresh
-inventory/billing/quote reconciliation, bounded execution and checkpoint/
-evaluation acceptance within the unchanged $1 allocation/$10 total.
+Prepared v6/v7/v8 Runs remain unsubmitted and superseded, including v8
+`f47be2d3c0d8` at source `900c207502bd28757d7cf66196bd464458e39402`.
+PR #423 merged the legality, configurable-axis and matched-support repairs at
+`8e8d702f807d61675fc1bca46417eee69316daa0` on 2026-11-04. The identical source
+tree passed 196 focused checks, including runtime admission and the native case
+where the unrestricted heuristic prefers an excluded action. These establish
+software behavior, not trained-checkpoint acceptance.
+
+V9 Run `2171156493ca` freezes source `6da60684cb628ec9b431dbbb9d7dc91348743622`,
+whose tree equals that merge. The 20:48–20:49 UTC quotes refused RTX5090 price
+and RTX3090/L4/A4000 capacity; A6000 availability was false. The final inventory
+found no active pilot rental or unsettled hardware. A separate representation
+rental was identified by its Run ownership and left untouched. No new spending,
+trained export or evaluation followed; all 15 preflight files are published
+under `experiments/data/mtg213/gpu-v9-preflight-20261104/`. These dated refusals
+establish no future availability. The plan owns fresh inventory/billing/quote
+reconciliation and execution of that prepared Run within the unchanged
+$1 allocation/$10 total. A new freeze is needed only for a source amendment;
+repeating preparation does not reserve provider capacity.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
