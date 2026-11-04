@@ -1,15 +1,19 @@
 """Scientific summaries treat seeds as units and refuse incomplete comparisons."""
 
 import math
+from pathlib import Path
 
+from etude.launch.job_file import read_job_file
 import pytest
 
-from experiments.state_representation import (
+from experiments import state_representation_v7
+from experiments.state_representation_v7 import (
     compare,
     evaluation_protocol,
     paired_interval,
     recipe,
 )
+from manabot.experiment.job import TrainingJob
 from manabot.training.regime import TrainSelfPlay
 
 
@@ -44,3 +48,12 @@ def test_science_and_smoke_have_distinct_endpoints() -> None:
     assert protocol.legs == 4 and len(protocol.deal_seeds) == 32
     assert protocol.study_protocol_sha256 is not None
     assert protocol.purpose == "frozen-study-evaluation"
+
+
+def test_declared_runs_are_visible_to_the_experiment_report() -> None:
+    path = Path(state_representation_v7.__file__)
+    runs = read_job_file(path, ["--revision", "HEAD"])
+    jobs = [TrainingJob.model_validate_json(run.job.config or "") for run in runs]
+    assert len(runs) == 8
+    assert {job.experiment for job in jobs} == {path.stem}
+    assert sorted(run.seed for run in runs) == sorted([73201, 73202, 73203, 73204] * 2)

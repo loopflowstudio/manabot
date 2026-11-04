@@ -142,7 +142,7 @@ def prove(out: Path) -> int:
     # Committed source is the retrievable archive; dirty runs stay exploratory.
     sources = [
         *root.joinpath("manabot").rglob("*.py"),
-        root / "experiments/state_representation.py",
+        root / "experiments/state_representation_v7.py",
     ]
     for directory in ("managym/src", "managym/state/src", "managym/cards/src"):
         sources.extend(root.joinpath(directory).rglob("*.rs"))

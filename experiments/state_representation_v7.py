@@ -16,6 +16,7 @@ import time
 from typing import Literal
 
 from etude.launch.records import Run
+from etude.report import Report
 from pydantic import BaseModel, ConfigDict
 
 from experiments.batched_baseline import batched_baseline
@@ -29,6 +30,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.recipes.local import local_smoke
 from manabot.sim.execution import EvalExecution
 from manabot.training.execution import execute_regime
+from manabot.training.panels import ML, PERF
 from manabot.training.records import TrainingRun
 from manabot.training.regime import ArtifactReference, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
@@ -254,6 +256,11 @@ def train_arm(arm: Arm, seed: int, out: Path) -> TrainingRun:
             checkpoint_updates=(),
             stop_path=out.parent / "stop",
         )
+
+
+def report() -> Report:
+    """Ordinary learning diagnostics; the frozen seed comparison is separate."""
+    return Report(clock="learner_transitions", perf=PERF, ml=ML)
 
 
 def main() -> int:

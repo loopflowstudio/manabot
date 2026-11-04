@@ -97,6 +97,10 @@ history.
 
 ## Index
 
+[V7 state reduction](state-representation-v7.md): **completed 2026-11-04** —
+four seeds, 32,768 training games and 1,024 replayed evaluation games. GRU minus
+pooling: −0.98 points [−10.13, +8.18], at 1.06× training time; no promotion.
+
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
 62.0% (300 held-out games), and from 10.8% to 34.3% across all ten decks, with

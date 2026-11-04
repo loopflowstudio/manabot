@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.state_representation import recipe
+from experiments.state_representation_v7 import recipe
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic

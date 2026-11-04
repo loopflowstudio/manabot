@@ -1,44 +1,42 @@
-# V7 learning comparison — accepted continuation
+# V7 learning comparison — completed implementation
 
-2026-11-04: Jack Heart requests actual replicated training after PR419, with
-$25 total including earlier attempts. Results stop at demo; no model promotion.
-The supplied continuation and questions retain prior decisions and evidence.
+2026-11-04 · Task5da5f4 · results stop at demo/review; no model promotion.
 
-## Implementation
+All eight fixed replicates completed on92becff609:128updates and4,096games each,
+4,056,651learner decisions total. All1,024held-out games completed and replayed.
+GRU minus pooled score=-0.98points;95%paired-seed interval[-10.13,+8.18]. The
+training-time ratio is1.06. The declared advantage criterion failed; this is
+inconclusive, not proof of equivalence or a winner. The readable report is
+experiments/state-representation-v7.md; full receipts live under
+experiments/data/state-representation-v7-5da5f4/ and are published by manifest.
 
-Replace the unexecuted v5 scientific declaration with explicitly named v7 pooled
-and GRU treatments. Four independent seeds, 128 updates, 32 complete games per
-update, same inputs/learner/curriculum; each seed trains 4,096 games. Both effect
-and continuation reducers change together. Frozen canaries retain their source.
-Use existing TrainingJob, execute_regime, checkpoint evaluator and monitor rows.
-Commit the protocol before scientific execution. An excluded CUDA canary checks
-practical admission and timing; its score cannot select horizon or architecture.
+The fixed v7 comparison jointly changes effect and continuation token reduction.
+No temporal memory, ABI/default, native rules or frozen pilot evidence changed.
+The exact scientific source archive is retained. Post-run code only moves the
+experiment to its v7 tracking name and adds the ordinary Etude diagnostic page.
 
 ## Delete — do not maintain
 
-- `experiments/state_representation.py` stale v5 scientific declaration and
-  unexecuted three-arm schedule. Preserve excluded receipts and the old recipe
-  through git at `4b4656d33`; retain seed-level inference and strict admission.
-- No production model or ABI deletion: this study uses the delivered v7 owner.
+- Stale v5 scientific declaration and unexecuted three-arm schedule: replaced by
+  explicitly named v7 pooled/GRU recipes. Excluded canaries retain their source.
+- experiments/state_representation.py: moved to the single maintained owner
+  experiments/state_representation_v7.py, matching retained experiment names.
+  Model tests and the source-audit consumer now reference that owner. The frozen
+  scientific commit still contains its original filename; no receipts rewritten.
 
-## Allocation and remaining work
+## Cost and remaining boundary
 
-Provider billing now reports $0.07258259388618171 for the deleted old L4 pod
-(superseding $0.07083924 estimate). L40 is unavailable; RTX4090 available at
-$0.89/hour at 07:20 UTC. Budget $1 for excluded CUDA admission, $16 for the
-scientific cohort, $6 ancillary reserve, $0.073 prior billing rounded up;
-$1.927 remains unallocated. No MTG-213 money or machines. Read-only admission
-receipt `.runs/representation/resume-admission.json`.
+L40/L40S unavailable;4090 launch8dd337797e0a refused capacity without acquisition.
+Whole-cohort CPU fallback was frozen before training: two balanced four-process
+batches, one thread and16GiB per run. Evaluation followed training, with four
+endpoints at once and the same two-game envelope per endpoint. No retries.
+Prior L4 bill=$0.07258259388618171; no new rental charges; reserve$6 for ancillary
+costs within$25 total. Correct provider-name lookup confirms both relevant pods
+absent. Etude's refused-session metadata persists without a provider receipt;
+its terminate operation deliberately skips refused sessions. No task-owned
+training/evaluation process remains. MTG-213 allocations are untouched.
 
-V7 CPU GRU admission completed one32-game update in19.04seconds. RunPod
-refused4090 launch8dd337797e0a after source preparation, acquiring no machine.
-Protocol now freezes whole-cohort CPU execution in two four-process batches
-(two seeds × both arms each), one thread/process,16GiB watchdog each.
-
-Remaining: execute cohort and retain raw endpoints/receipts,
-evaluate fixed deals, report independent-seed uncertainty and costs, verify
-teardown, publish evidence. Stop on capacity/data/numerical errors; no scientific
-seed retries or score-dependent extensions. CPU fallback requires prospectively
-freezing a whole-cohort device choice, never mixing device-selected survivors.
-
-Check: `uv run --extra dev --extra artifacts pytest tests/training/test_state_representation_study.py -q` — 2 passed. Gate owns broader affected checks.
+Check: study/declaration/report-discovery tests4passed, untracked-data check1passed;
+Ruff passed; real Etude report CLI admitted all8runs and784metrics. Local `uv run
+--extra dev ty check` could not start because ty is absent. Gate owns broader checks;
+demo/review owns the result judgment. No further training or score-based extension.

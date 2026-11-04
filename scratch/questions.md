@@ -1,5 +1,12 @@
 # Decisions and open questions — 5da5f4
 
+- Latest outcome: the v7 comparison completed on source92becff609. Eight
+  replicates trained32,768games/4,056,651decisions; all1,024held-out games replayed.
+  GRU minus pool=-0.98percentage points,95%cross-seed interval[-10.13,+8.18];
+  elapsed training ratio1.06. The declared advantage criterion failed; no winner
+  or default is promoted. See experiments/state-representation-v7.md and its
+  published receipts. Graph boundary remains results demo/review.
+
 - Jack Heart's 2026-11-04 02:49 UTC direction prioritizes pre-encoding complete
   effect consolidation after MTG-213 v3 reached270facts. Same-input v5 neural
   factoring is insufficient. The plan now implements an explicit v7 cut; merged
@@ -15,12 +22,14 @@
   memberships; local fact table excludes active effects. Fresh defaults stayv6.
   These capacities are not a guarantee over all legal games. Tensor/model/text
   and native scalar/vector/Python paths must move together.
-- No scientific seed has run. Freeze a revised common-input comparison after
+- Historical repair boundary (superseded by the completed v7 study): no scientific
+  seed had run. The prior direction was to freeze a common-input comparison after
   the transport passes; previous canaries are excluded. Persistent game memory
   remains separate. Jack Heart’s 03:01 UTC ship approval authorizes delivery of the bounded repair
   after gate; fresh defaults and scientific experiments remain unchanged.
 - Task budget is$25total, separate from MTG-213's$10. Only paid rental is deleted;
-  estimate$0.07083924 plus ancillary storage. Three later availability/admission
+  prior estimate$0.07083924, now provider-billed$0.07258259388618171.
+  This continuation acquired no rental; the$6ancillary reserve remains. Three later availability/admission
   failures created no rental. CPU canary passed all3arms at22–27seconds/update;
   no training process remains. Preserve all evidence under.runs/representation.
 - RunPod credentials are Doppler etude/prd, artifacts manabot/prd. Inject through
