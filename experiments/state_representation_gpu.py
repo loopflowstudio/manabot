@@ -1,20 +1,26 @@
 """Prospective GPU horizon study, separate from the frozen v7 CPU cohort.
 
-TrainingJob owns training, checkpoints and watchdogs; the ordinary monitor owns
+One Etude allocation owns eight independent TrainingRuns. execute_regime owns
+learning and checkpoints; the ordinary monitor owns
 complete games, viewer admission and replay. Curves use one deal set, and final
 held-out scoring uses another. No score changes a replicate's declared horizon.
 """
 
-from dataclasses import dataclass
+import argparse
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
+import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import time
 
 from etude.launch.records import Job, Run
 from etude.report import Report
 from pydantic import BaseModel, ConfigDict
+import torch
 
 from experiments.batched_baseline import batched_baseline
 from experiments.state_representation_v7 import (
@@ -30,14 +36,17 @@ from manabot.experiment.checkpoint_evaluation import (
     evaluate_checkpoint,
     stage_checkpoint,
 )
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup, run_worker
+from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.recipes.builders import move_learning
 from manabot.sim.execution import EvalExecution
+from manabot.training.execution import execute_regime
 from manabot.training.panels import ML, PERF
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.verify.store import VerifyStore
 
 EXPERIMENT = "state_representation_gpu"
 SEEDS = (74201, 74202, 74203, 74204)
@@ -85,42 +94,38 @@ def recipe(arm: Arm) -> TrainingRegime:
     stage.updates = UPDATES
     stage.learning = move_learning()
     stage.execution.device = "cuda"
-    stage.execution.memory_bytes = 32 * 1024**3
-    stage.execution.wall_seconds = 6000
-    regime.wall_seconds = 6000
+    stage.execution.memory_bytes = 8 * 1024**3
+    stage.execution.wall_seconds = 42000
+    regime.wall_seconds = 42000
     return TrainingRegime.model_validate(regime.model_dump())
 
 
+class StudyJob(BaseModel):
+    """One paid allocation for the complete independent-seed cohort."""
+
+    model_config = ConfigDict(extra="forbid")
+    source_bundle: SourceBundle
+
+
 def runs(revision: str) -> list[Run]:
-    """Declare eight attempts; allocation includes setup, evaluation and delivery."""
-    jobs: dict[Arm, Job] = {}
-    for arm in ARMS:
-        job = TrainingJob(
-            regime=recipe(arm),
-            experiment=EXPERIMENT,
-            milestones=POINTS[1:-1],
-            finalization_seconds=1200,
-            validate_numerics=True,
-        ).job(
-            repo=Path(__file__).resolve().parents[1],
-            revision=revision,
-            max_hours=2.0,
-            max_usd=Decimal("2.15"),
-        )
-        jobs[arm] = job.model_copy(
-            update={
-                "setup": machine_setup(
-                    " --extra dev --extra artifacts --extra evaluation"
-                ),
-                "command": f"{TOOLCHAIN_ENV}\nuv run --locked --extra dev --extra artifacts --extra evaluation python -m experiments.state_representation_gpu",
-            }
-        )
-    return [
-        run
-        for index, seed in enumerate(SEEDS)
-        for arm in (ARMS if index % 2 == 0 else tuple(reversed(ARMS)))
-        for run in jobs[arm].runs(seed)
-    ]
+    """One supervised rental; child TrainingRuns retain independent identities."""
+    root = Path(__file__).resolve().parents[1]
+    spec = StudyJob(source_bundle=bundle_at(root, revision))
+    job = Job(
+        name=EXPERIMENT,
+        experiment=EXPERIMENT,
+        setup=machine_setup(" --extra dev --extra artifacts --extra evaluation"),
+        command=f"{TOOLCHAIN_ENV}\nuv run --locked --extra dev --extra artifacts --extra evaluation python -m experiments.state_representation_gpu",
+        repo=str(root),
+        revision=revision,
+        config=spec.model_dump_json(),
+        until=f"updates={UPDATES}",
+        max_hours=14,
+        max_usd=Decimal("17.20"),
+        max_attempts=1,
+    )
+    # This is an allocation identity, never a scientific training seed.
+    return job.runs(0)
 
 
 def evaluation_protocol(*, heldout: bool = False) -> MonitorProtocol:
@@ -166,20 +171,48 @@ def checkpoints(run: TrainingRun) -> list[Checkpoint]:
     return sorted(points, key=lambda point: point.coordinates.updates)
 
 
-def worker() -> None:
-    """Train and evaluate through existing owners inside the rental deadline."""
-    run = run_worker()
-    arm = run.regime.agent.state_encoder
-    if run.seed not in SEEDS or run.regime_digest != canonical_sha256(
+def train_arm(arm: Arm, seed: int, out: Path, stop: Path) -> None:
+    """An independent ordinary learner; no shared weights, optimizer or RNG."""
+    if seed not in SEEDS:
+        raise ValueError("undeclared training seed")
+    if not torch.cuda.is_available():
+        raise RuntimeError("this study requires CUDA")
+    # Eight contexts share one GPU. Leave 20% outside their caching allocators
+    # for driver/cuDNN overhead; capacity failure remains a recorded failure.
+    torch.cuda.set_per_process_memory_fraction(0.10)
+    out.mkdir(parents=True, exist_ok=False)
+    with VerifyStore(out / "training.sqlite") as store:
+        run = execute_regime(
+            recipe(arm),
+            seed,
+            out / "training",
+            store,
+            experiment=EXPERIMENT,
+            checkpoint_updates=POINTS[1:-1],
+            stop_path=stop,
+            stop_reserve_seconds=120,
+        )
+    atomic_json(
+        out / "device.json",
+        {
+            "device": torch.cuda.get_device_name(0),
+            "torch": torch.__version__,
+            "cuda": torch.version.cuda,
+            "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
+        },
+    )
+    if run.status != "completed" or run.updates_through() != UPDATES:
+        raise RuntimeError(f"incomplete training: {run.status}: {run.error}")
+
+
+def evaluate_arm(arm: Arm, seed: int, out: Path, deadline: float) -> None:
+    run = TrainingRun.model_validate_json((out / "training/run.json").read_bytes())
+    if run.seed != seed or run.regime_digest != canonical_sha256(
         recipe(arm).model_dump(mode="json")
     ):
         raise ValueError("run is outside the declared GPU cohort")
-    out = Path(os.environ["ETUDE_OUTPUT_DIR"])
-    deadline = min(
-        datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp() - 120,
-        time.time() + 1200,
-    )
-    results = []
+    deadline = min(deadline - 120, time.time() + 1200)
+    results: list[MonitorResult] = []
     for point in checkpoints(run):
         update = point.coordinates.updates
         for heldout in (False, True) if update == UPDATES else (False,):
@@ -189,7 +222,7 @@ def worker() -> None:
                 point.coordinates,
                 out / ("heldout" if heldout else f"curve-{update:04d}"),
                 protocol=evaluation_protocol(heldout=heldout),
-                concurrent_activity="this replicate finished training; other declared GPU replicates may be active",
+                concurrent_activity="all training finished; at most two cohort evaluators active",
                 execution=EvalExecution(
                     device="cpu",
                     max_active_games=4,
@@ -198,14 +231,134 @@ def worker() -> None:
                     deadline_unix=deadline,
                 ),
             )
-            results.append(result.model_dump(mode="json"))
+            results.append(result)
             atomic_json(
-                out / "curve.json", {"arm": arm, "seed": run.seed, "results": results}
+                out / "curve.json",
+                {
+                    "arm": arm,
+                    "seed": seed,
+                    "results": [item.model_dump(mode="json") for item in results],
+                },
             )
             if result.status != "completed":
                 raise RuntimeError(
                     "evaluation failed; retained in the study denominator"
                 )
+
+
+def _batch(commands: list[list[str]], out: Path, stop: Path, deadline: float) -> None:
+    """Bound child lifetimes by the shared rental, and reap every child on exit."""
+    children: list[subprocess.Popen[bytes]] = []
+    # Each child creates its own local tracking run under its retained output.
+    # Passing the parent's launcher identity would attach all eight to one run.
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("ETUDE_")
+    }
+    try:
+        for index, command in enumerate(commands):
+            with (out / f"child-{index}.log").open("ab") as log:
+                children.append(
+                    subprocess.Popen(
+                        command, env=environment, stdout=log, stderr=subprocess.STDOUT
+                    )
+                )
+        while any(child.poll() is None for child in children):
+            if (
+                stop.exists()
+                or time.time() >= deadline
+                or any(child.returncode not in (None, 0) for child in children)
+            ):
+                raise RuntimeError(
+                    "cohort child failed, cancellation requested or allocation expired"
+                )
+            time.sleep(1)
+        if any(child.returncode != 0 for child in children):
+            raise RuntimeError("cohort child failed")
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.terminate()
+        for child in children:
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+        atomic_json(
+            out / "processes.json",
+            {"exit_codes": [child.returncode for child in children]},
+        )
+
+
+def worker() -> None:
+    """The Etude allocation owns all children and stops on any failed replicate."""
+    bind_etude_source()
+    out = Path(os.environ["ETUDE_OUTPUT_DIR"])
+    stop = Path(os.environ["ETUDE_STOP_FILE"])
+    deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
+    if deadline - time.time() < 48000:
+        raise ValueError("remaining allocation cannot cover training and evaluation")
+    out.mkdir(parents=True, exist_ok=True)
+    assignments = [
+        (arm, seed)
+        for index, seed in enumerate(SEEDS)
+        for arm in (ARMS if index % 2 == 0 else tuple(reversed(ARMS)))
+    ]
+    base = [sys.executable, "-m", "experiments.state_representation_gpu"]
+    training = [
+        base
+        + [
+            "--train-arm",
+            arm,
+            "--seed",
+            str(seed),
+            "--out",
+            str(out / f"{arm}-{seed}"),
+            "--stop",
+            str(stop),
+        ]
+        for arm, seed in assignments
+    ]
+    _batch(training, out, stop, min(deadline - 6000, time.time() + 42400))
+    for index in range(0, len(assignments), 2):
+        evaluation = [
+            base
+            + [
+                "--evaluate-arm",
+                arm,
+                "--seed",
+                str(seed),
+                "--out",
+                str(out / f"{arm}-{seed}"),
+                "--deadline",
+                str(deadline),
+            ]
+            for arm, seed in assignments[index : index + 2]
+        ]
+        phase = out / f"evaluation-{index // 2}"
+        phase.mkdir()
+        _batch(evaluation, phase, stop, deadline - 120)
+    curves: list[CurvePoint] = []
+    final: dict[tuple[Arm, int], float] = {}
+    for arm, seed in assignments:
+        document = json.loads((out / f"{arm}-{seed}" / "curve.json").read_text())
+        for raw in document["results"]:
+            result = MonitorResult.model_validate(raw)
+            if result.protocol == evaluation_protocol(heldout=True):
+                result.validate_cohort()
+                if result.status != "completed" or result.score is None:
+                    raise ValueError("incomplete held-out scoring")
+                final[arm, seed] = result.score.mean
+            else:
+                curves.append(CurvePoint(arm=arm, result=result))
+    estimate = paired_interval(
+        tuple(final["typed_gru", seed] - final["typed_pool", seed] for seed in SEEDS)
+    )
+    atomic_json(
+        out / "comparison.json",
+        {"plateau": asdict(plateau(curves)), "heldout": asdict(estimate)},
+    )
+    atomic_json(out / "etude-result.json", {"clocks": {"updates": UPDATES}})
 
 
 class CurvePoint(BaseModel):
@@ -285,5 +438,27 @@ def report() -> Report:
     return Report(clock="learner_transitions", perf=PERF, ml=ML)
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--train-arm", choices=ARMS)
+    mode.add_argument("--evaluate-arm", choices=ARMS)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--stop", type=Path)
+    parser.add_argument("--deadline", type=float)
+    args = parser.parse_args()
+    if args.train_arm:
+        if args.seed is None or args.out is None or args.stop is None:
+            parser.error("training needs seed, output and stop path")
+        train_arm(args.train_arm, args.seed, args.out, args.stop)
+    elif args.evaluate_arm:
+        if args.seed is None or args.out is None or args.deadline is None:
+            parser.error("evaluation needs seed, output and deadline")
+        evaluate_arm(args.evaluate_arm, args.seed, args.out, args.deadline)
+    else:
+        worker()
+
+
 if __name__ == "__main__":
-    worker()
+    main()

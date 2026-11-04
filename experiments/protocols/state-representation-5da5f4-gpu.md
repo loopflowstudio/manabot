@@ -20,14 +20,18 @@ Four fresh paired seeds 74201–74204, alternating treatment order within seed.
 32 streams, one complete game per stream per update, both seats, cross-balanced
 curriculum. Target 2,048 updates: 65,536 games per replicate, sixteen times the
 previous horizon. Record actual decisions, optimizer exposure and completion.
-CUDA float32 training only, 32 GiB process memory watchdog. No CPU substitution.
+CUDA float32 training only, 8 GiB host-memory watchdog per learner. Eight independent
+processes share one RTX5090 with at least128 GB host RAM and16 CPUs. Each CUDA
+caching allocator is capped at10% of device memory, leaving20% for contexts and
+external workspaces. No CPU substitution. The same sharing applies to both arms;
+wall-time contrasts are concurrent-use measurements, not isolated speed claims.
 Use the existing absolute damped-policy schedule, identical between arms, with
 no exhausted 128-update horizon mapping. Its learning rate is clipped between
 5e-6 and 1e-4 and remains 1e-4 through this horizon; tau follows absolute updates.
 A flat curve therefore cannot be attributed to a zero learning rate.
 
 Export initialization and every 256 updates, plus final raw weights. Evaluate
-these checkpoints after each replicate's training, on deals 85001–85032 with
+these checkpoints after ALL training finishes (two evaluators at a time), on deals 85001–85032 with
 both deck assignments and both seats (128 games/checkpoint), against the
 source-pinned heuristic. This measures a predeclared curve; it does not select a
 checkpoint or alter training. Final update 2,048 alone additionally scores
@@ -61,16 +65,24 @@ a prospective amendment before new scoring, within the same unspent allowance.
 ## Allocation and failure accounting
 
 Prior known provider bill $0.07258259388618171; keep the existing $6 ancillary
-reserve pending settlement. Maximum new scientific rental reservation $17.20 total
-(eight attempts, two job hours plus the launcher's 15-minute setup reserve,
-and $2.15 each), plus at most $0.50 excluded
-CUDA admission: cumulative reservation $23.77258259388618171, leaving $1.2274.
-A quote above the scientific envelope is refused. Provider disk and transfer
-must be included; Vast offers must have free upload/download under the supported
-SDK selection. No network volumes. Jobs get a 6,000-second training watchdog,
-1,200-second evaluation/finalization reserve and remaining setup/cleanup time
-inside their 2.25-hour leases. Wall stops export learner state and are explicitly
-incomplete for this comparison. No failed-seed retries or survivor selection.
+reserve pending settlement. Maximum new scientific rental reservation $17.20 for one whole-cohort allocation,
+plus at most $0.50 excluded CUDA admission: cumulative reservation
+$23.77258259388618171, leaving $1.2274. The allocation has14 job hours plus the
+launcher's15-minute setup reserve. At the observed$0.948148/hour this is$13.51;
+quotes above$17.20 are refused. Provider disk and transfer must be included;
+Vast offers must have free upload/download under the supported SDK selection.
+No network volumes. Each independent learner has42,000 training seconds; the
+parent reaps all children by its rental deadline and stops on any failed seed.
+After the training barrier, four pairs of evaluators each have1,200 seconds.
+No failed-seed retries, survivor selection or raw/EMA substitution.
+
+The excluded four-update5090 admission at35770e55b passed CUDA numerics and128
+complete games, taking77.19seconds in collection/learning and4.32GB sampled peak
+RSS. It disproved the earlier two-hour-per-replicate allocation for2,048updates.
+Before scoring, the execution arrangement was amended to colocate independent
+learners on one GPU; source, recipes, observations, seeds and all results are
+prospectively bound to this amendment. No scores chose the change. The earlier
+per-replicate Job allocation is removed, not maintained as a fallback.
 
 Use task-local provider/storage configuration and the released Etude launcher;
 retain its version separately from the worker's locked SDK/runtime. Supported

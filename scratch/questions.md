@@ -6,6 +6,11 @@
   Reuse existing Etude provider/release work; preserve runtime identity and
   rental cleanup. This does not approve merging the representation-study PR.
 
+- Execution assumption, 2026-11-04: colocate eight independent learners on one
+  sufficiently provisioned GPU to afford the measured longer horizon; train
+  before evaluating, preserve each RNG/optimizer and report concurrent-use
+  timing. This is an operator allocation choice, not an architecture selection.
+
 - Latest direction, Jack Heart, 2026-11-04: the 128-update CPU comparison is too
   short for decision making; actual GPU training must at least reach the part
   of the learning curve starting to plateau. Continue under the existing $25

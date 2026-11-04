@@ -1,7 +1,11 @@
 """Scientific summaries treat seeds as units and refuse incomplete comparisons."""
 
+from decimal import Decimal
+import json
 import math
 from pathlib import Path
+import sys
+import time
 
 from etude.launch.job_file import read_job_file
 import pytest
@@ -90,16 +94,14 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
         assert stage.learning.iteration_schedule is None
         assert stage.learning.rates(1)[0] == stage.learning.rates(2048)[0] == 1e-4
     runs = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
-    assert len(runs) == 8
-    assert sorted(run.seed for run in runs) == sorted(list(gpu.SEEDS) * 2)
-    for run in runs:
-        job = TrainingJob.model_validate_json(run.job.config or "")
-        assert job.experiment == gpu.EXPERIMENT
-        assert job.milestones == gpu.POINTS[1:-1]
-        assert (
-            job.regime.wall_seconds + job.finalization_seconds
-            <= run.job.max_hours * 3600
-        )
+    assert len(runs) == 1
+    run = runs[0]
+    config = gpu.StudyJob.model_validate_json(run.job.config or "")
+    assert config.source_bundle.commit
+    assert run.job.experiment == gpu.EXPERIMENT
+    assert run.job.max_attempts == 1
+    assert run.job.max_usd == Decimal("17.20")
+    assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
 
 
 def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None:
@@ -116,3 +118,15 @@ def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None
     assert not improving.bounded
     assert uncertain.estimate.lower < 0 < uncertain.estimate.upper
     assert not uncertain.bounded
+
+
+def test_gpu_cohort_reaps_siblings_after_failure(tmp_path: Path) -> None:
+    commands = [
+        [sys.executable, "-c", "raise SystemExit(7)"],
+        [sys.executable, "-c", "import time; time.sleep(20)"],
+    ]
+    with pytest.raises(RuntimeError, match="child failed"):
+        gpu._batch(commands, tmp_path, tmp_path / "stop", time.time() + 10)
+    receipt = json.loads((tmp_path / "processes.json").read_text())
+    assert receipt["exit_codes"][0] == 7
+    assert all(code is not None for code in receipt["exit_codes"])
