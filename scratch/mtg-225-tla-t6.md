@@ -1,14 +1,12 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (implemented 2026-11-03): all 16 cards, one catalog, Academy's accepted
-schedule projection, exact delayed capture and Jack Heart's accepted 1a lifetime
-composition are implemented at `7c790f78e`, including the subsequent compression.
-This head retains main `3b122de90` through merge `bf7631c6a` and is published
-on existing PR #417, which remains the delivery boundary.
-No scope choice remains. Hash contract 15 and changed definition tokens require
-mutable-w17 receipt refresh and combined validation by gate. Final-head CI acceptance and the refreshed review handoff remain outstanding;
-no auto-merge or landing is authorized.
-One cohesive PR returns to Jack Heart for review.
+Status (publication gate, 2026-11-03): all 16 cards, one catalog, Academy's
+accepted schedule projection, exact delayed capture and independent lifetime
+composition are implemented. Sync retained main `3b122de90` without conflicts;
+`16336f2a0` preserves the local review/reconciliation edits. Mutable w17 receipts
+are refreshed to hash contract 15 and combined validation is complete below.
+PR #417 remains the one cohesive delivery boundary. Final publication-head CI
+must still be checked; no auto-merge or landing is authorized.
 
 The accepted outcome is correct play for humans and bots through the shared native rules authority, with directed debug tests for every obligation, complete viewer-safe choices and policy/text observations. `scratch/t6-direction.md` retains Jack Heart's 2026-11-02 scope decisions. Full earlier implementation, integration and publication history is retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/mtg-225-tla-t6.md` and `:scratch/questions.md`.
 
@@ -208,30 +206,12 @@ Negative reproductions and detailed historical results remain in
 `5c254fd5732a42da0966e1f5badf490f3307b4f3:scratch/mtg-225-tla-t6.md`.
 They do not certify the subsequent schedule, capture and v6 changes.
 
-Remaining acceptance work:
-
-1. Gate owns the mutable w17 receipt refresh affected by delayed-trigger content
-   and hash contract 15: semantic kernel, authored match and parity corpora,
-   Academy demos/navigation/trigger-order captures, and dependent belief pins.
-   The checked-in kernel still has v13 hashes. The prior 135-Command / 66-public-
-   commitment trace, explicit library ordering and duplicate-label offer ids
-   are the baseline; differences require explanation, not silent replacement.
-   Frozen worlds, advice, experiment evidence and retained checkpoints stay fixed.
-2. Gate owns affected combined-head debug Rust, learner/model, world admission
-   and monitoring, protocol/semantic and Academy suites under
-   `docs/development.md#validation-by-change-area`. Focused successes are reused
-   where inputs are unchanged. Browser layout/interaction proof remains with
-   gate/CI; native, WebSocket and Svelte rendering evidence is not that proof.
-3. On 2026-11-03, GitHub reports PR #417 at `7c790f78e`, open with no
-   auto-merge. Detect Changes and preflight passed; Rust, Python, integration,
-   packaging, protocol, UI, clean-machine play and Engine Budget checks are
-   in progress. This is a dated status observation, not acceptance. Final-head acceptance and accurate PR validation copy remain
-   outstanding. Engine Budget uses this PR's own same-runner artifact and an
-   explicit reason for any reference adoption, never a local speed claim.
-4. Publication and Jack Heart's review remain the delivery boundary. There is
-   no newly identified substantial implementation gap or product choice in this
-   reconciliation. Old authored-pack checkpoint compatibility remains unproven;
-   no migration or retained-binary admission is claimed.
+Publication gate completed locally; remaining acceptance is final publication-head
+CI and Jack Heart's review. No implementation or product choice is deferred.
+Old authored-pack checkpoint migration/retained-binary compatibility remains
+unproven, and no process-crash durability or playing-strength claim is made.
+The dated verification below supersedes the earlier pending refresh/combined
+validation notes.
 
 ## Wave memory
 
@@ -347,3 +327,46 @@ receipts, validate the combined head and return PR #417 for Jack Heart's review.
 This review inspected source, recovery tests and recorded focused logs; it did
 not rerun suites, render the page, establish crash durability, or certify CI.
 The following loop-or-next receives this outcome and selects navigation.
+
+## Publication verification — 2026-11-03
+
+`lf sync` completed without conflicts and preserved all review edits. The
+accepted scope and diff were inspected against actual PR base main. No Rust or
+production-rule change was needed in this pass; the installed release extension
+from compression matches content digest
+`d44e9319815ff8724c2ed901a64976942be88b4a8c278a5170f0fc4db6b572d6`.
+
+Refreshed only mutable w17 kernel, authored/parity, Academy and belief receipts.
+The kernel's 14 cases keep their command counts/outcomes (3,473 Commands).
+The authored receipt keeps all 135 Commands, semantic and presentation events;
+only state and command-receipt identities change. Live/headless/replay parity
+has 816 viewer checks and no divergence; public parity retains 66 commitments,
+the same command tape and zero provider gaps. Navigation adds native schedule
+projection and runtime identities; every retained offer id and label replays.
+Frozen worlds, advice, experiment evidence and checkpoints were not rewritten.
+
+Evidence is in `.runs/t6-publication/final-*.log`:
+
+- Complete debug Rust workspace: 948 passed, two ignored. Clippy all targets/
+  features and rustfmt passed.
+- Combined Python model, semantic, native/Python parity, belief, arena admission,
+  monitoring, active training, compound checkpoint/replay and package boundaries:
+  474 passed, one skipped, one stale text assertion failed. The assertion assumed
+  timing implied "next" despite historical frequency being unknown; updated it
+  to the event-only "controller's end step" contract. The complete text module
+  then passed all 54 checks. No behavior was weakened or production code changed.
+- Academy recovery/protocol/navigation/parity and CI configuration: 118 passed.
+  Server protocol: three passed. Launcher/clean-machine verifier unit checks:
+  41 passed.
+- Svelte checking: zero errors/warnings; 122 UI unit tests passed; build passed.
+  Isolated release Playwright: 25 passed, two skipped, including combat layout,
+  choice navigation, deck entry and trigger-order recovery. Its servers exited.
+  Schedule-specific evidence remains native progression, real WebSocket recovery
+  and Svelte rendering; no separate Bumi browser walkthrough was performed.
+- Changed-file Ruff and diff checks passed.
+
+Publication updates PR #417's description to include schedule, delayed capture,
+independent lifetime composition, v6 integration and these proof limits. Final-head
+CI, including same-runner Engine Budget, remains separate from local evidence.
+The existing performance reference and 10% tolerance are unchanged; no local
+speed claim or reference adoption is made. Stop for Jack Heart's review.

@@ -947,7 +947,7 @@ def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
         "source inherits abilities from",
         "choose optional payment X",
         "may exile up to 2 more cards",
-        "controller's next end step",
+        "controller's end step",
         "scheduled turn 1",
         "only land creatures may attack",
     ):

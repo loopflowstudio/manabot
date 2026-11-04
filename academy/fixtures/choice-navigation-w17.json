@@ -111,12 +111,12 @@
           "label": "Decline"
         }
       ],
-      "digest": "2acd941dc4b1c2fc6e887e3a657b968135e6710a4608fd501371f0906a0dc1b1",
+      "digest": "93a0a544f4c6a859a77d7ab1322a4be3aa8ca04ab701249be06a90dcef7df288",
       "frame": {
         "protocol": 1,
-        "match_id": "sUNaew_C_TML0hAn5qRkYQ",
+        "match_id": "D5u1T8BywFDEqU_2EJck9g",
         "revision": 75,
-        "frame_hash": "853f18ab8a7e724ed5e6ab597ab7b5d73a930a1e13c36355f69ae838ede09373",
+        "frame_hash": "4204e86accd9c772d43aab1f1e99eafc6ec1e5b1a6c4415334c99f8a83cb817b",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -128,6 +128,10 @@
           "instruction": "Choose a target for the current clause. Previously selected targets remain bound to their clauses."
         },
         "projection": {
+          "schedule": {
+            "extra_turns": [],
+            "additional_combats": []
+          },
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
@@ -2099,12 +2103,12 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "3fd0e74fb4f132b0d2dd265d7190cca13e3200fb6cb4666d418839fcc852e8fc",
+      "digest": "082cc728e5239a06666e63bf9ebaa6a442d66c1dc70c39579cfb25313b6c10f9",
       "frame": {
         "protocol": 1,
-        "match_id": "0RrRv1aYO16QcjdqsmCkrQ",
+        "match_id": "S896XP9iJoJubN9Fz-PLWw",
         "revision": 65,
-        "frame_hash": "b2424a8134dda4d91a415f2f03d7f442cfa4974654417e104d62bfc240e8fcbe",
+        "frame_hash": "c1aadab09b074d1cae8f32ca4118673bd05a373b3b490febabe03a6ea4a38e9b",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2116,6 +2120,10 @@
           "instruction": "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."
         },
         "projection": {
+          "schedule": {
+            "extra_turns": [],
+            "additional_combats": []
+          },
           "stack_objects": [
             {
               "id": 135,
@@ -3704,12 +3712,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "66f904def2d73e28deff8568354bd3b45fda210869bcd618eef1d4d80b664aea",
+      "digest": "00dc2b867ee884a0f246f2f62699a79711eba31e3ea69d2867dd5e81a3281697",
       "frame": {
         "protocol": 1,
-        "match_id": "HwnVV1dHu8eY_4iSwvAn0g",
+        "match_id": "Z5HMiLh8urgFVHGkz0o5WQ",
         "revision": 90,
-        "frame_hash": "6a18814202568f16a3acd0ff8c536bd38b82d89928f62cb3dca72046c04c569c",
+        "frame_hash": "440d0c57be64941f63163a26bd75be9763470a2ecfbfbc779bfbbafb7ce8ca65",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3721,6 +3729,10 @@
           "instruction": "Choose a card to discard, or decline when offered."
         },
         "projection": {
+          "schedule": {
+            "extra_turns": [],
+            "additional_combats": []
+          },
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
@@ -5400,12 +5412,12 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "6ff0744eaf5736e655676ab57520081c04ecb1f1cf300475ce791e17a6294b91",
+      "digest": "12a62de0c671f5b66edb9cf7b81a51dcaf0451dc273aadb5c8ec02a2f8f0fd25",
       "frame": {
         "protocol": 1,
-        "match_id": "_8DyLaYYy2bWyLRvnVaqxA",
+        "match_id": "RyJ0815VXQBB-x3YdXZoCQ",
         "revision": 37,
-        "frame_hash": "2b3747d900b61a780ddc623735061c9ae544b68e599a2258bcd4b15dcc878e18",
+        "frame_hash": "1f174ef690e7b5b5fd66edfd6fdf0984ff7223e80608d83d84e0168e89fe395a",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5417,6 +5429,13 @@
           "instruction": "Choose each block declaration, including the legal nonparticipation offers. Submitted declarations are committed."
         },
         "projection": {
+          "schedule": {
+            "extra_turns": [],
+            "current_combat": {
+              "player_index": 1
+            },
+            "additional_combats": []
+          },
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
@@ -6655,12 +6674,12 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "4baf2160530fdb6e1758555e7b21001a3052510bc0e7b6d8485a82fe702b4d16",
+      "digest": "7c4017f4bfc723e238b47ff56376fee4bfbfc2c6fb8ff86092eac6d5b6789c6d",
       "frame": {
         "protocol": 1,
-        "match_id": "ag91weMvHyds-0QX2UEXsw",
+        "match_id": "SdXLRLD4R17Nl0BG4fLj3A",
         "revision": 57,
-        "frame_hash": "23d8600c503129180c3f20f3024a6ea204714e4bff0ab99e0366e23b9bc3973e",
+        "frame_hash": "d02962832b3ca8ac964d9b2761e4b81a2766352296bd87320714227104ba100b",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6672,6 +6691,10 @@
           "instruction": "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."
         },
         "projection": {
+          "schedule": {
+            "extra_turns": [],
+            "additional_combats": []
+          },
           "stack_objects": [
             {
               "id": 130,

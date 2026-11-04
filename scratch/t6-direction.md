@@ -76,7 +76,7 @@ settle the related Tasks' independent empirical acceptance. T6's PR #417
 is open at `7c790f78e`, including the audit/checkpoint repairs, schedule projection,
 composable delayed capture, independent lifetime composition and main's v6
 fact-capacity integration. Mutable w17 receipt refresh and combined validation
-remain outstanding in the current plan;
+are complete in the publication verification section of the current plan;
 old pending-CI and missing-recovery notes are superseded.
 
 ## Accepted delayed-lifetime composition (Jack Heart, 2026-11-03)
@@ -88,5 +88,5 @@ separate event context, existing card semantics and exact death-watch retirement
 Do not migrate all printed triggers or add a second DSL/hypothetical cards.
 Use the accepted contract and proof cases in the working design. This resolves
 the headless review's open choice. The composition and focused proofs are now
-implemented; gate owns combined validation and mutable receipt refresh, followed
+implemented; combined validation and mutable receipt refresh are complete, followed
 by publication of PR #417 and review, without merge authorization.
