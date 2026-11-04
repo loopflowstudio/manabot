@@ -1,0 +1,42 @@
+# Bloomburrow (BLB): provenance, shared costs, and persistent progression
+
+Research dated 2026-11-04. Reviewed all **279 Oracle identities, all single-faced**, in `.cache/standard-research/blb.json`; the adjacent [ledger](blb.jsonl) preserves every input identity, name and face. This includes the starter-deck cards and five basic lands. BLB is in the working next-rotation-out group: its value now is identifying reusable requirements and consequential counterexamples. These are candidate batches, not newly selected Tasks, legality certification, or an implementation claim.
+
+The source inventory records two Scryfall responses, retrieval timestamps and SHA256 digests. Independent checks used Wizards' [Bloomburrow release notes](https://magic.wizards.com/en/news/feature/bloomburrow-release-notes). In particular: instant/sorcery gifts happen during resolution, permanent gifts through entry triggers; a copied spell retains its gift promise, a copied permanent does not. Offspring can copy a departed source through LKI. Expend measures actual mana spent casting spells and cannot trigger retroactively after its threshold passed. Season modes may repeat or be omitted; their choices and targets have different timing. These rulings inform the witnesses below. BLC and SPG are outside this inventory.
+
+## Current reuse and proposed batches
+
+Only Savor is defined in `cards/src/blb.rs`. Exact-name inspection also finds Fabled Passage and the five basics in their first-printing modules: **7 existing identities**, not seven independent BLB implementations. Relevant existing vocabulary is in `state/src/ability.rs`, `card.rs`, `predicate.rs`, `mana.rs`, `permanent.rs`, and `cards/src/tokens.rs`.
+
+| Batch | Cards | Boundary |
+|---|---:|---|
+| BLB-00 existing definitions | 7 | Reuse and reconcile printing identities |
+| BLB-01 definition composition | 79 | Existing verbs, predicates, triggers and ordinary costs; add definitions/tokens and directed coverage |
+| BLB-02 events, history, values | 47 | New shared event predicates, historical facts and contextual quantities |
+| BLB-03 gift/offspring | 39 | Cast provenance, conditional targeting and copy/entry contracts |
+| BLB-04 costs, mana, forage | 30 | General payment obligations and executable mana witnesses |
+| BLB-05 Classes/Seasons | 15 | Persistent levels and repeated weighted modal choices |
+| BLB-06 execution/selection | 39 | Resumable selection, scoped results, permissions and contextual targeting |
+| BLB-07 characteristics/replacements | 23 | Layered type/ability/CDA support, replacements and persistent player effects |
+
+Counts assign each card one primary home; dependencies overlap. Composition is an authoring assessment, not an assertion that every combination is tested. Reuse includes hybrid payments, threshold via `GraveyardAtLeast`, flashback, `WhenYouDo`, delayed remembered objects, target clauses, stun/finality counters, copied-token exceptions, `OnNthResolutionThisTurn` for Harvestrite Host, and triggered grants for Bria. Do not rebuild these mechanisms under BLB-specific handlers.
+
+## Largest challenges and implementation order
+
+**Costs and provenance come first.** Gift changes target legality/cardinality before payment (Into the Flood Maw, Dewdrop Cure, Wear Down), yet its benefit is not delivered when promised. Offspring reuses optional additional mana payment and copy machinery but requires entry-visible paid-cost provenance; Kicker's resolution-only condition is insufficient. Forage is one reusable successful action with two payment methods, usable during casting, activation, or resolution. Curious Forager chooses its graveyard target only after foraging through a reflexive trigger. Rottenmouth Viper adds arbitrary sacrifices feeding cost reduction and repeated opponent choices.
+
+BLB sharply exposes the mana registry's current one-tap-source assumption. Baylen consumes selected tokens instead of tapping itself; Three Tree Mascot is a once-per-turn, non-tap filter; Thornvault Forager pays forage before producing a mixed-color pair. Helga requires creature/mana-value/X spending restrictions beyond the current Lesson/Shrine/Ally bit masks. Heirloom Epic's creature-only tap substitution must not inherit waterbend's artifact eligibility. Feed these witnesses into **MTG-242**, coordinating shared costs with **MTG-241** rather than adding another payment path.
+
+**History must describe events, not the final board.** Valiant needs first friendly targeting, including retargeted/copied spells, rather than the existing opponent-only targeting trigger. Expend needs cumulative actual spell-mana spending. Bats distinguish gaining and losing life from net life change. Dour Port-Mage groups nondeath departures; Camellia groups Food sacrifices; Harvestrite counts resolutions. Alania needs three overlapping first-cast categories. Keep each distinct fact at its event authority and use trigger indexes only for candidate discovery.
+
+**Classes and Seasons require persistent choices.** The ten Classes retain level and cumulatively unlock abilities, including level-change triggers and static replacements. Level advancement is an ordinary sorcery-speed activated ability, not an automatic upgrade or Saga chapter. Five Seasons require repeated modes under a weight budget, per-occurrence targeting, and execution in printed order. Season of Gathering chooses creatures/types during resolution; Season of Loss repeats simultaneous sacrifice batches. Neither should become a flat Cartesian menu that omits legal combinations. General execution and replacement ownership belongs with **MTG-241**; level/weighted-mode vocabulary remains follow-on coverage.
+
+**Characteristics and scoped results are the hardest semantic tail.** Ygra combines prospective entry, granted sacrifice abilities, Food death LKI and ward payment; Sugar Coat replaces types, color and abilities; Maha changes only base toughness. Eluge adds counter-dependent land typing and contextual first-spell reductions. Mockingbird uses actual mana spent, not X or mana value. Coordinate Ygra's already assigned fixture with **MTG-244**. Portent of Calamity, Dragonhawk and Starfall Invocation need exact selected/moved/exiled sets across child choices. Ral's storm emblem introduces a persistent player ability and potentially wide copy/retarget work. MTG-243's open naming vocabulary is relevant to chosen creature types, without assuming it already implements them.
+
+## Token closure, evidence and performance
+
+Food and Treasure already exist. Add authentic white Rabbit, blue Fish, white defender Wall, blue/red prowess Otter, green Squirrel, black Snail, black flying Bat, scaling black Rat, Sword and legendary Cragflame definitions. Offspring and other copied tokens retain copiable exceptions rather than requiring a static token per source. Tapped Fish/Treasure entry must be independent from attacking entry. Preserve first-printing identity and debug token-definition checks.
+
+Focused adversarial witnesses should include: counter a gifted spell and give nothing; order Scrapshooter's two entry triggers differently; remove an offspring parent before copy resolution; forage away a formerly eligible return target; distinguish fourth mana from fourth spell; remove Heartfire Hero before its death trigger resolves; pause/fork inside a Season sacrifice choice without premature priority; compare Ygra entry/death behavior with ability loss; and pay Helga/Baylen/Forager costs without reusing reserved resources. Surveil two must preserve kept-card ordering, Glarb must reveal the top card only to its permitted viewer, and returned objects must never inherit old-incarnation eligibility accidentally.
+
+Expose promises, expenditure, life/entry history, level, selected subtype, payment progress, copied exceptions and remembered sets through native observations, Python parity, text, learning tokens, replay and Academy. Frozen input meanings remain fixed; declare a new boundary where needed. Test distinguishable choices, exact fork resumption and source-independent LKI before broad cohorts. Performance risks are replacement/layer recomputation, repeated type-union scans, weighted target combinations and Stormsplitter/Ral copy growth. Use bounded representative ordinary-step and search workloads, existing same-runner Engine Budget digests and cumulative cost accounting; no benchmarks or games were run for this research.
