@@ -31,7 +31,11 @@ impl Game {
 
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.
-            if self.perform_state_based_actions() {
+            let progress = self.perform_state_based_actions();
+            if progress == crate::flow::sba::SbaProgress::Pending {
+                return self.suspended_decision_action_space();
+            }
+            if progress == crate::flow::sba::SbaProgress::Changed {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
                     self.state.set_cleanup_priority(true);
                 }

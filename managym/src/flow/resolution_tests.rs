@@ -1993,3 +1993,383 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
         "queued occurrence has not resolved"
     );
 }
+
+fn counter_replacement_drivers(game: &mut Game, player: PlayerId) {
+    use crate::state::card::ReplacementEffect;
+    for (multiplier, additional) in [(1, 1), (2, 0)] {
+        let id = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        let card = game.state.permanents[id].as_ref().unwrap().card;
+        game.state.cards[card].replacement_effects = vec![ReplacementEffect::ModifyCounters {
+            kind: Some(CounterKind::PlusOnePlusOne),
+            predicate: CardPredicate::default(),
+            multiplier,
+            additional,
+        }];
+    }
+}
+
+#[test]
+fn retained_batch_counter_order_is_affected_players_choice_and_commits_once() {
+    for caster in [PlayerId(0), PlayerId(1)] {
+        let affected = PlayerId(1 - caster.0);
+        let (mut root, first, second) = fixture(caster);
+        counter_replacement_drivers(&mut root, affected);
+        stack(
+            &mut root,
+            Entry::Spell,
+            caster,
+            vec![
+                Effect::put_counters(
+                    ObjectSelector::Each {
+                        of: crate::state::ability::Scope::OpponentsControl,
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                        except: None,
+                        max_mana_value: None,
+                    },
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                ),
+                Effect::gain_life(7),
+            ],
+            vec![],
+            vec![],
+        );
+        root.resolve_top_of_stack();
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        let before = root.state.deterministic_hash();
+        for (mode, expected) in [(0, 4), (1, 3)] {
+            let mut game = root.clone();
+            assert_eq!(game.action_space().unwrap().player, Some(affected));
+            checked_command(
+                &mut game,
+                Action::ChooseMode {
+                    player: affected,
+                    mode,
+                },
+            );
+            for id in [first, second] {
+                assert_eq!(
+                    game.state.permanents[id]
+                        .as_ref()
+                        .unwrap()
+                        .counter_count(CounterKind::PlusOnePlusOne),
+                    0,
+                    "all proposals wait until the whole batch is ready"
+                );
+            }
+            assert_eq!(game.state.players[caster.0].life, 20);
+            checked_command(
+                &mut game,
+                Action::ChooseMode {
+                    player: affected,
+                    mode,
+                },
+            );
+            for id in [first, second] {
+                assert_eq!(
+                    game.state.permanents[id]
+                        .as_ref()
+                        .unwrap()
+                        .counter_count(CounterKind::PlusOnePlusOne),
+                    expected
+                );
+                assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CountersPut { permanent, count, .. } if *permanent == id && *count == expected)).count(), 1);
+            }
+            assert_eq!(game.state.players[caster.0].life, 27);
+            assert_eq!(
+                game.state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event, GameEvent::SpellResolved { .. }))
+                    .count(),
+                1
+            );
+        }
+        assert_eq!(root.state.deterministic_hash(), before);
+    }
+}
+
+#[test]
+fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    use crate::state::card::ReplacementEffect;
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    counter_replacement_drivers(&mut game, player);
+    let card = CardId(
+        game.state
+            .cards
+            .iter()
+            .enumerate()
+            .find(|(index, card)| {
+                card.owner == player
+                    && card.name == "Gray Ogre"
+                    && game.state.zones.zone_of(CardId(*index)) != Some(ZoneType::Battlefield)
+            })
+            .unwrap()
+            .0,
+    );
+    game.move_card(card, ZoneType::Exile);
+    game.state.cards[card].replacement_effects =
+        vec![ReplacementEffect::EntersWithPlusOneCounters {
+            count: 1,
+            condition: None,
+        }];
+    let mut frame = EffectFrame::new(
+        player,
+        vec![Effect::Move {
+            what: ObjectSelector::This,
+            to: ZoneType::Battlefield,
+            tapped: false,
+            transformed: false,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }],
+    );
+    frame.source = Some(card);
+    frame.source_ref = game.current_object_ref(card);
+    frame.completion = FrameCompletion::Continue;
+    game.run_frame(frame);
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert_eq!(game.state.zones.zone_of(card), Some(ZoneType::Exile));
+    assert_eq!(
+        game.action_space().unwrap().actions.len(),
+        2,
+        "own entry created counters, making both battlefield replacements applicable"
+    );
+    checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+    let id = game.state.card_to_permanent[card].unwrap();
+    assert_eq!(
+        game.state.permanents[id]
+            .as_ref()
+            .unwrap()
+            .counter_count(CounterKind::PlusOnePlusOne),
+        4
+    );
+    assert!(
+        game.state.suspended_decision.is_none(),
+        "each identity applies once"
+    );
+}
+
+#[test]
+fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
+    use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
+    use crate::flow::trigger::ExileLink;
+    use crate::state::ability::PaymentCost;
+    use crate::state::card::ReplacementEffect;
+    use crate::state::mana::{Mana, ManaCost};
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    counter_replacement_drivers(&mut game, player);
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let source_card = game.state.permanents[source].as_ref().unwrap().card;
+    let source_ref = game.permanent_object_ref(source).unwrap();
+    game.state.cards[source_card].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("{1}"),
+        life_cost: 2,
+        tap_source: true,
+        sacrifice_source: true,
+        effects: vec![Effect::Modal {
+            modes: vec![
+                vec![Effect::add_mana(Mana::parse("U"))],
+                vec![Effect::add_mana(Mana::parse("B"))],
+            ],
+        }],
+        ..Default::default()
+    }];
+    game.state.cards[source_card].abilities = vec![crate::state::ability::Ability::Triggered {
+        condition: crate::state::ability::TriggerCondition::BecomesTapped {
+            subject: crate::state::ability::TriggerSubject::This,
+        },
+        effects: vec![Effect::gain_life(9)],
+        intervening_if: None,
+    }];
+    let returned = CardId(
+        game.state
+            .cards
+            .iter()
+            .enumerate()
+            .find(|(index, card)| {
+                card.owner == player
+                    && card.name == "Gray Ogre"
+                    && game.state.zones.zone_of(CardId(*index)) != Some(ZoneType::Battlefield)
+            })
+            .unwrap()
+            .0,
+    );
+    game.move_card(returned, ZoneType::Exile);
+    game.state.cards[returned].replacement_effects =
+        vec![ReplacementEffect::EntersWithPlusOneCounters {
+            count: 1,
+            condition: None,
+        }];
+    game.state.exile_links.push(ExileLink {
+        source: source_ref,
+        exiled_card: returned,
+        returns: true,
+    });
+    game.state.players[player.0].mana_pool = Mana::parse("R");
+    game.state.suspended_decision = Some(SuspendedResolution {
+        frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
+        decision: Decision::Payment(PaymentProgress::new(
+            player,
+            PaymentCost::Mana(ManaCost::parse("{U}")),
+            vec![Effect::gain_life(2)],
+            vec![],
+        )),
+    });
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    checked_command(
+        &mut game,
+        Action::ActivateAbility {
+            player,
+            permanent: source,
+            ability_index: 0,
+        },
+    );
+    assert_eq!(
+        game.state.zones.zone_of(source_card),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));
+    assert_eq!(game.state.players[player.0].life, 18);
+    assert_eq!(
+        game.state.pending_triggers.len(),
+        1,
+        "the paid tap's trigger is retained before its source leaves"
+    );
+    assert!(
+        game.state.stack_objects.is_empty(),
+        "replacement choice does not place triggers"
+    );
+
+    assert_eq!(game.state.players[player.0].mana_pool.total(), 0);
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().unwrap().decision,
+        Decision::OrderReplacement { .. }
+    ));
+    checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().unwrap().decision,
+        Decision::ManaChoice { .. }
+    ));
+    assert_eq!(
+        game.state.players[player.0].mana_pool.total(),
+        0,
+        "output still needs its ordinary choice"
+    );
+    checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+    checked_command(&mut game, Action::PayCost { player });
+    assert_eq!(game.state.players[player.0].life, 23);
+    assert_eq!(game.state.players[player.0].mana_pool.total(), 0);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::PermanentSacrificed { card, .. } if *card == source_card)).count(), 1);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { card, to: ZoneType::Battlefield, .. } if *card == returned)).count(), 1);
+}
+
+#[test]
+fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
+    use crate::flow::combat::CombatState;
+    use crate::state::card::ReplacementEffect;
+    let defender = PlayerId(1);
+    let (mut root, first, second) = fixture(defender);
+    for effect in [
+        ReplacementEffect::PreventDamageToController { amount: 1 },
+        ReplacementEffect::DoubleDamageToController,
+    ] {
+        let id = root
+            .scenario_force_battlefield(defender, "Mountain", true)
+            .unwrap();
+        let card = root.state.permanents[id].as_ref().unwrap().card;
+        root.state.cards[card].replacement_effects = vec![effect];
+    }
+    root.state.combat = Some(CombatState {
+        attackers: vec![first, second],
+        ..Default::default()
+    });
+    root.resolve_combat_damage();
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    for (mode, life) in [(0, 16), (1, 14)] {
+        let mut game = root.clone();
+        checked_command(
+            &mut game,
+            Action::ChooseMode {
+                player: defender,
+                mode,
+            },
+        );
+        assert_eq!(game.state.players[defender.0].life, 20);
+        checked_command(
+            &mut game,
+            Action::ChooseMode {
+                player: defender,
+                mode,
+            },
+        );
+        assert_eq!(game.state.players[defender.0].life, life);
+        assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CombatDamageToPlayers { creatures } if creatures == &[first, second])).count(), 1);
+    }
+}
+
+#[test]
+fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
+    use crate::flow::{sba::SbaProgress, trigger::ExileLink};
+    use crate::state::card::ReplacementEffect;
+    let player = PlayerId(0);
+    let (mut game, source, _) = fixture(player);
+    counter_replacement_drivers(&mut game, player);
+    let source_card = game.state.permanents[source].as_ref().unwrap().card;
+    let source_ref = game.permanent_object_ref(source).unwrap();
+    let returned = CardId(
+        game.state
+            .cards
+            .iter()
+            .enumerate()
+            .find(|(index, card)| {
+                card.owner == player
+                    && card.name == "Gray Ogre"
+                    && game.state.zones.zone_of(CardId(*index)) != Some(ZoneType::Battlefield)
+            })
+            .unwrap()
+            .0,
+    );
+    game.move_card(returned, ZoneType::Exile);
+    game.state.cards[returned].replacement_effects =
+        vec![ReplacementEffect::EntersWithPlusOneCounters {
+            count: 1,
+            condition: None,
+        }];
+    game.state.exile_links.push(ExileLink {
+        source: source_ref,
+        exiled_card: returned,
+        returns: true,
+    });
+    game.state.permanents[source].as_mut().unwrap().damage = 2;
+    assert_eq!(game.perform_state_based_actions(), SbaProgress::Pending);
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert_eq!(
+        game.state.zones.zone_of(source_card),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(game.object_lki(source_ref).unwrap().power, 2);
+    assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));
+    checked_command(&mut game, Action::ChooseMode { player, mode: 1 });
+    let id = game.state.card_to_permanent[returned].unwrap();
+    assert_eq!(
+        game.state.permanents[id]
+            .as_ref()
+            .unwrap()
+            .counter_count(CounterKind::PlusOnePlusOne),
+        3
+    );
+    assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
+    assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { card, from: Some(ZoneType::Battlefield), .. } if *card == source_card)).count(), 1);
+}

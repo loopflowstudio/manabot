@@ -81,6 +81,10 @@ frame retains its active clause and each chosen slot's resolution-start eligibil
 across suspended decisions (CR 608.2b). Effects use those retained results; live
 presence checks separately prevent following departed objects (CR 400.7).
 Illegal slots remain positional, and zero optional targets still resolve.
+`ObjectSelector::Targets` applies one verb to all eligible slots of that clause
+in one event batch. `ForEachTarget` instead runs a separate child program per
+slot, retaining its position across choices. Leaves from the Vine's simultaneous
+counter placement uses the former.
 Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Mutate permanents at their event authority;
@@ -276,12 +280,23 @@ committed prefix length); code 23 retains its bottom-order meaning.
 
 `EffectFrame::completion` owns the return destination: the interrupted scope,
 a retained caller decision, a completed-operation event, root spell cleanup,
-or root priority. Mana activation sacrifice effects retain their output and
-parent payment there after upfront mana, tap and life costs commit. Returning
-from that child restores the saved decision without paying those costs again
-or opening priority. Zone/event
-replacement completion is still synchronous; this interface does not yet make
-those operations suspendable.
+or root priority. An `EventBatch` on the active frame retains every proposal,
+applied replacement identity, pre-departure facts and result until replacement
+choices and consequent linked returns finish. The affected player chooses each
+replacement; applicability is recomputed after every transformation. No member
+commits until the complete batch is ready. Native obligation code 29 names this
+choice, with source-specific labels and focus.
+
+Mana activation sacrifice effects retain their output and parent payment there
+after upfront mana, tap and life costs commit. Returning from a linked-entry
+replacement restores the saved decision without paying costs again or opening
+priority. Combat, SBA departures, spell finalization, activated costs, token
+entry and Surveil movement use this owner. SBA progress distinguishes stable,
+changed and pending; a pending turn action cannot enter priority stabilization.
+Immediate fixture/arithmetic helpers require completion without a question and
+fail explicitly if used for a choice-bearing event. Remaining hidden-zone
+selection and complete versioned pending-payload projection are still under
+implementation; obligation codes alone do not represent those payloads.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with

@@ -125,6 +125,9 @@ impl Game {
                 return Some(space);
             }
             self.state.set_turn_based_actions_complete(true);
+            if let Some(space) = self.suspended_decision_action_space() {
+                return Some(space);
+            }
         }
 
         if step == StepKind::Cleanup {
@@ -245,16 +248,25 @@ impl Game {
                 // CR 714.3b — As the precombat main phase begins, the active
                 // player puts a lore counter on each Saga they control.
                 let active = self.active_player();
-                for saga in self.battlefield_permanents(active) {
-                    let card = self.state.permanents[saga]
-                        .as_ref()
-                        .expect("battlefield")
-                        .card;
-                    if self.state.cards[card].is_saga() {
-                        self.put_counters(saga, CounterKind::Lore, 1, active);
-                    }
-                }
-                self.process_game_events();
+                let events = self
+                    .battlefield_permanents(active)
+                    .into_iter()
+                    .filter_map(|id| {
+                        let permanent = self.state.permanents[id].as_ref()?;
+                        self.state.cards[permanent.card].is_saga().then(|| {
+                            crate::flow::proposed_event::ProposedEvent::CounterChange {
+                                target: self.permanent_object_ref(id).expect("battlefield"),
+                                kind: CounterKind::Lore,
+                                delta: 1,
+                                by: Some(active),
+                            }
+                        })
+                    })
+                    .collect();
+                let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
+                frame.batch = Some(self.event_batch(events));
+                frame.completion = crate::flow::decision::FrameCompletion::Continue;
+                self.run_frame(frame);
                 None
             }
             StepKind::Draw => {

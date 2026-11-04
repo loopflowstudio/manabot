@@ -12,7 +12,8 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, Game},
+        game::{CastChoices, Game, Payment},
+        proposed_event::{BatchProgress, EventBatch, EventBinding, ReplacementCandidate},
         turn::OnceEachTurnKey,
     },
     state::{
@@ -32,6 +33,25 @@ use crate::{
 pub enum FrameCompletion {
     /// A completed root ability restarts the priority round.
     Priority,
+    /// A turn action or rule batch returns to the existing tick/priority state.
+    Continue,
+    StateBased {
+        next: Box<FrameCompletion>,
+    },
+    CombatNormal,
+    Paid {
+        player: PlayerId,
+        payment: Payment,
+    },
+    Activated {
+        ability: crate::state::stack_object::ActivatedAbilityOnStack,
+        source_after_cost: Option<CardId>,
+    },
+    /// Spell zone movement has completed, including any child entry choices.
+    SpellResolved {
+        card: CardId,
+        attach_to: Option<ObjectRef>,
+    },
     /// An iteration child returns to its interrupted scope.
     Frame(Box<EffectFrame>),
     /// Announce a completed rules operation before resuming its caller.
@@ -54,6 +74,18 @@ pub enum FrameCompletion {
     },
 }
 
+impl FrameCompletion {
+    fn then(&mut self, completion: FrameCompletion) {
+        match self {
+            Self::Continue => *self = completion,
+            Self::StateBased { next } => next.then(completion),
+            Self::Frame(frame) | Self::Event { frame, .. } => frame.completion.then(completion),
+            Self::Decision(caller) => caller.frame.completion.then(completion),
+            _ => panic!("rule continuation must return to its caller"),
+        }
+    }
+}
+
 /// A chosen target's clause and eligibility at resolution start (CR 608.2b).
 /// Keep illegal slots: positional instructions must not reinterpret another
 /// chosen object as the final target. Presence is checked separately on use.
@@ -68,6 +100,9 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    /// The current instruction owns this batch through replacement and child choices.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) batch: Option<EventBatch>,
     /// An iteration owns its remaining subjects while one child scope runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iteration: Option<TargetIteration>,
@@ -160,6 +195,7 @@ impl EffectFrame {
     /// their source and targets; only a root spell supplies finalization.
     pub(crate) fn new(controller: PlayerId, effects: Vec<Effect>) -> Self {
         Self {
+            batch: None,
             iteration: None,
             remembered: Vec::new(),
             inherited_from: None,
@@ -335,6 +371,10 @@ pub enum LibraryEnd {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    OrderReplacement {
+        player: PlayerId,
+        candidates: Vec<ReplacementCandidate>,
+    },
     /// Select the generic X of an optional resolution payment, or decline.
     ChoosePaymentX {
         player: PlayerId,
@@ -590,7 +630,8 @@ impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::ChoosePaymentX { player, .. }
+            Decision::OrderReplacement { player, .. }
+            | Decision::ChoosePaymentX { player, .. }
             | Decision::SearchNamed { player, .. }
             | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
@@ -648,7 +689,8 @@ impl Decision {
                 offer: ResolutionCastOffer::LibraryTop { card },
                 ..
             } => std::slice::from_ref(card),
-            Decision::SelectCards { .. }
+            Decision::OrderReplacement { .. }
+            | Decision::SelectCards { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::SearchLibraryToHand { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -702,7 +744,14 @@ impl SuspendedResolution {
                     frame_chain(&caller.frame, out);
                     decision_chain(&caller.decision, out);
                 }
-                FrameCompletion::Priority | FrameCompletion::Spell { .. } => {}
+                FrameCompletion::Paid { .. }
+                | FrameCompletion::Activated { .. }
+                | FrameCompletion::StateBased { .. }
+                | FrameCompletion::CombatNormal
+                | FrameCompletion::Priority
+                | FrameCompletion::Continue
+                | FrameCompletion::SpellResolved { .. }
+                | FrameCompletion::Spell { .. } => {}
             }
             out.push(ResolutionRef::Frame(frame));
         }
@@ -786,6 +835,7 @@ impl Game {
         player: PlayerId,
         max_total_power: i32,
         kept: Vec<PermanentId>,
+        frame: &mut EffectFrame,
     ) -> Option<Decision> {
         let decision = Decision::KeepCreatures {
             player,
@@ -798,7 +848,7 @@ impl Game {
         let Decision::KeepCreatures { kept, .. } = decision else {
             unreachable!()
         };
-        self.stop_keeping_creatures(player, max_total_power, kept)
+        self.stop_keeping_creatures(player, max_total_power, kept, frame)
     }
 
     /// The permanents a `Decision::ChooseToExile` may add: matching, controlled
@@ -823,12 +873,13 @@ impl Game {
         controller: PlayerId,
         predicate: CardPredicate,
         chosen: Vec<PermanentId>,
+        frame: &mut EffectFrame,
     ) -> Option<Decision> {
         if self
             .exile_choice_candidates(controller, &predicate, &chosen)
             .is_empty()
         {
-            return self.next_exile_chooser(player, controller, predicate, chosen);
+            return self.next_exile_chooser(player, controller, predicate, chosen, frame);
         }
         Some(Decision::ChooseToExile {
             player,
@@ -844,18 +895,35 @@ impl Game {
         controller: PlayerId,
         predicate: CardPredicate,
         chosen: Vec<PermanentId>,
+        frame: &mut EffectFrame,
     ) -> Option<Decision> {
         if player == controller {
-            return self.choose_to_exile(PlayerId(1 - controller.0), controller, predicate, chosen);
+            return self.choose_to_exile(
+                PlayerId(1 - controller.0),
+                controller,
+                predicate,
+                chosen,
+                frame,
+            );
         }
         let objects: Vec<_> = chosen
             .iter()
             .filter_map(|id| self.permanent_object_ref(*id))
             .collect();
-        for object in objects {
-            self.move_object_to_zone(object, ZoneType::Exile);
-        }
-        self.process_game_events();
+        frame.batch = Some(
+            self.event_batch(
+                objects
+                    .into_iter()
+                    .map(|object| {
+                        self.zone_move_proposal(
+                            CardId::from(object.entity),
+                            ZoneType::Exile,
+                            Default::default(),
+                        )
+                    })
+                    .collect(),
+            ),
+        );
         None
     }
 
@@ -866,24 +934,28 @@ impl Game {
         player: PlayerId,
         max_total_power: i32,
         kept: Vec<PermanentId>,
+        frame: &mut EffectFrame,
     ) -> Option<Decision> {
         if player == self.active_player() {
-            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept);
+            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept, frame);
         }
-        self.sacrifice_unkept_creatures(&kept);
+        let events = self
+            .unkept_creatures(&kept)
+            .into_iter()
+            .filter_map(|id| self.permanent_object_ref(id))
+            .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target })
+            .collect();
+        frame.batch = Some(self.event_batch(events));
         None
     }
 
     /// Sacrifice every creature not in `kept`, as one event.
-    fn sacrifice_unkept_creatures(&mut self, kept: &[PermanentId]) {
-        let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
+    fn unkept_creatures(&self, kept: &[PermanentId]) -> Vec<PermanentId> {
+        [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
             .flat_map(|player| self.battlefield_permanents(player))
             .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
-            .collect();
-        for id in doomed {
-            self.sacrifice_permanent(id);
-        }
+            .collect()
     }
 
     /// The permanents a pending `Decision::ChooseObject` may select: those
@@ -936,9 +1008,29 @@ impl Game {
 
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
-            frame: EffectFrame::new(decision.player(), Vec::new()),
+            frame: EffectFrame {
+                completion: FrameCompletion::Continue,
+                ..EffectFrame::new(decision.player(), Vec::new())
+            },
             decision,
         });
+    }
+
+    fn run_batch_before_decision(
+        &mut self,
+        batch: EventBatch,
+        mut caller: SuspendedResolution,
+        next: Option<Decision>,
+    ) {
+        if let Some(decision) = next {
+            let mut child = EffectFrame::new(caller.frame.controller, Vec::new());
+            child.batch = Some(batch);
+            caller.decision = decision;
+            self.run_before_decision(child, caller);
+        } else {
+            caller.frame.batch = Some(batch);
+            self.run_frame(caller.frame);
+        }
     }
 
     /// Suspend the resolution on `next`, or resume its frame when there is
@@ -969,6 +1061,97 @@ impl Game {
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         loop {
+            if let Some(mut batch) = frame.batch.take() {
+                if let BatchProgress::Choice { player, candidates } =
+                    self.advance_event_batch(&mut batch)
+                {
+                    frame.batch = Some(batch);
+                    *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                        frame,
+                        decision: Decision::OrderReplacement { player, candidates },
+                    });
+                    return;
+                }
+                let measured = match batch.binding {
+                    EventBinding::Damage { result } => result,
+                    _ => None,
+                };
+                let excess_damage = batch
+                    .results
+                    .iter()
+                    .filter(|result| measured.is_none_or(|index| index == result.ordinal))
+                    .filter_map(|result| result.excess_damage)
+                    .next_back();
+                let moved: Vec<ObjectRef> = batch
+                    .results
+                    .into_iter()
+                    .filter_map(|result| result.moved)
+                    .collect();
+                match batch.binding {
+                    EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
+                    EventBinding::Bending { player, kind } => self.record_bending(player, kind),
+                    EventBinding::Shuffle { player } => self.shuffle_library(player),
+                    EventBinding::PlaceInLibrary { second_from_top } => {
+                        for object in moved {
+                            let card = CardId::from(object.entity);
+                            if self.state.zones.zone_of(card) != Some(ZoneType::Library) {
+                                continue;
+                            }
+                            if second_from_top {
+                                let owner = self.state.cards[card].owner;
+                                let library =
+                                    self.state.zones.zone_cards_mut(ZoneType::Library, owner);
+                                library.retain(|candidate| *candidate != card);
+                                let below_top = library.len().saturating_sub(1);
+                                library.insert(below_top, card);
+                            } else {
+                                self.put_on_bottom_of_library(card);
+                            }
+                        }
+                    }
+                    EventBinding::Created {
+                        attacking,
+                        attach_source,
+                    } => {
+                        for object in moved {
+                            let card = CardId::from(object.entity);
+                            self.finish_created_token(card, attacking);
+                            if let Ok(id) = self.lookup_current_permanent(object) {
+                                frame.created = Some(id);
+                                if attach_source {
+                                    self.attach_source_to(&frame, id);
+                                }
+                            }
+                        }
+                    }
+                    EventBinding::Damage { .. } => {
+                        if let Some(excess) = excess_damage {
+                            frame.excess_damage = excess;
+                        }
+                    }
+                    EventBinding::Moved { shuffle, .. } => {
+                        frame.moved = moved;
+                        let mut owners = Vec::new();
+                        for object in &frame.moved {
+                            let card = CardId::from(object.entity);
+                            let owner = self.state.cards[card].owner;
+                            match self.state.zones.zone_of(card) {
+                                Some(ZoneType::Library) if shuffle => {
+                                    if !owners.contains(&owner) {
+                                        owners.push(owner);
+                                    }
+                                }
+                                Some(ZoneType::Hand) => self.invalidate_mana_cache(owner),
+                                _ => {}
+                            }
+                        }
+                        for owner in owners {
+                            self.shuffle_library(owner);
+                        }
+                    }
+                    EventBinding::ThisWay => frame.this_way = moved,
+                }
+            }
             if frame.iteration.is_some() {
                 frame = frame.next_iteration();
                 continue;
@@ -995,9 +1178,108 @@ impl Game {
                         *self.state.suspended_decision_mut() = Some(*caller);
                         return;
                     }
-                    FrameCompletion::Priority | FrameCompletion::Spell { .. } => {}
+                    FrameCompletion::StateBased { next } => {
+                        self.finish_state_based_batch();
+                        frame.completion = *next;
+                        continue;
+                    }
+                    FrameCompletion::CombatNormal => {
+                        match self.perform_state_based_actions() {
+                            crate::flow::sba::SbaProgress::Changed => continue,
+                            crate::flow::sba::SbaProgress::Pending => {
+                                self.state
+                                    .suspended_decision_mut()
+                                    .as_mut()
+                                    .expect("pending SBA")
+                                    .frame
+                                    .completion
+                                    .then(FrameCompletion::CombatNormal);
+                                return;
+                            }
+                            crate::flow::sba::SbaProgress::Stable => {}
+                        }
+                        if !self.is_game_over() {
+                            frame.batch = self.combat_damage_batch(
+                                crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
+                            );
+                        }
+                        frame.completion = FrameCompletion::Continue;
+                        continue;
+                    }
+                    FrameCompletion::Paid { player, payment } => {
+                        let Payment::Spell {
+                            card,
+                            cast,
+                            mode,
+                            targets,
+                            target_req_indices,
+                        } = payment
+                        else {
+                            unreachable!("activation prepared before costs")
+                        };
+                        self.cast_spell(player, card, targets, target_req_indices, cast)
+                            .expect("announced spell");
+                        if let Some(crate::state::stack_object::StackObject::Spell(spell)) =
+                            self.state.stack_objects_mut().last_mut()
+                        {
+                            spell.mode = mode;
+                        }
+                    }
+                    FrameCompletion::Activated {
+                        mut ability,
+                        source_after_cost,
+                    } => {
+                        if let Some(card) = source_after_cost {
+                            ability.source_ref =
+                                self.current_object_ref(card).expect("discarded source");
+                        }
+                        self.emit_permanents_targeted(
+                            &ability.targets,
+                            Target::StackAbility(ability.id),
+                            ability.controller,
+                        );
+                        self.push_to_stack(
+                            crate::state::stack_object::StackObject::ActivatedAbility(ability),
+                        );
+                    }
+                    FrameCompletion::Continue => return,
+                    FrameCompletion::Spell { card, attach_to } => {
+                        frame.completion = FrameCompletion::SpellResolved { card, attach_to };
+                        if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
+                            let (to, entry) = if self.state.cards[card].types.is_permanent() {
+                                (
+                                    ZoneType::Battlefield,
+                                    crate::flow::proposed_event::ZoneEntry {
+                                        controller: Some(frame.controller),
+                                        x: frame.x,
+                                        ..Default::default()
+                                    },
+                                )
+                            } else {
+                                (ZoneType::Graveyard, Default::default())
+                            };
+                            frame.batch = Some(
+                                self.event_batch(vec![self.zone_move_proposal(card, to, entry)]),
+                            );
+                        }
+                        continue;
+                    }
+                    FrameCompletion::SpellResolved { card, attach_to } => {
+                        if let Some(permanent_id) = self.state.card_to_permanent[card] {
+                            if attach_to.is_some() {
+                                self.state.permanents[permanent_id]
+                                    .as_mut()
+                                    .expect("entered")
+                                    .attached_to = attach_to;
+                                self.invalidate_mana_cache(PlayerId(0));
+                                self.invalidate_mana_cache(PlayerId(1));
+                            }
+                        }
+                        self.emit(GameEvent::SpellResolved { card });
+                    }
+                    FrameCompletion::Priority => {}
                 }
-                self.finalize_frame(frame);
+                self.restart_priority_round();
                 return;
             };
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
@@ -1010,45 +1292,6 @@ impl Game {
         }
     }
 
-    fn finalize_frame(&mut self, frame: EffectFrame) {
-        if let FrameCompletion::Spell { card, attach_to } = frame.completion {
-            // A spell that exiled itself ("Exile Avatar's Wrath") has
-            // already left the stack (CR 608.2n).
-            if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
-                if self.state.cards[card].types.is_permanent() {
-                    // A permanent spell enters under its controller's
-                    // control, even when another player owns the card
-                    // (CR 110.2).
-                    self.move_card_with_entry(
-                        card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            controller: Some(frame.controller),
-                            x: frame.x,
-                            ..Default::default()
-                        },
-                    );
-                    if let Some(permanent_id) = self.state.card_to_permanent[card] {
-                        if attach_to.is_some() {
-                            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                                permanent.attached_to = attach_to;
-                            }
-                            // The Aura's grants change the enchanted
-                            // creature's mana abilities, whoever controls it.
-                            self.invalidate_mana_cache(PlayerId(0));
-                            self.invalidate_mana_cache(PlayerId(1));
-                        }
-                    }
-                } else {
-                    self.move_card(card, ZoneType::Graveyard);
-                }
-            }
-            self.emit(GameEvent::SpellResolved { card });
-        }
-        // A resolution completed: restart the priority round (CR 117.3b).
-        self.restart_priority_round();
-    }
-
     /// The action space for the pending mid-resolution decision, if any.
     pub(crate) fn suspended_decision_action_space(&self) -> Option<ActionSpace> {
         let suspended = self.state.suspended_decision.as_ref()?;
@@ -1058,6 +1301,17 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::OrderReplacement { player, candidates } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: (0..candidates.len())
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
             Decision::ChoosePaymentX { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -1481,6 +1735,22 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
+                let Some(candidate) = candidates.get(*mode) else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("illegal replacement".into()));
+                };
+                self.choose_replacement(
+                    suspended
+                        .frame
+                        .batch
+                        .as_mut()
+                        .expect("retained event batch"),
+                    candidate,
+                );
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::ChoosePaymentX { player, if_paid }, Action::ChooseMode { mode, .. }) => {
                 let x = u8::try_from(*mode).ok();
                 let Some(x) = x.filter(|x| {
@@ -1663,6 +1933,7 @@ impl Game {
                     *controller,
                     predicate.clone(),
                     std::mem::take(chosen),
+                    &mut suspended.frame,
                 );
                 self.continue_resolution(suspended, next);
                 Ok(())
@@ -1686,7 +1957,7 @@ impl Game {
                 kept.push(selected);
                 let (player, max_total_power, kept) =
                     (*player, *max_total_power, std::mem::take(kept));
-                let next = self.keep_creatures(player, max_total_power, kept);
+                let next = self.keep_creatures(player, max_total_power, kept, &mut suspended.frame);
                 self.continue_resolution(suspended, next);
                 Ok(())
             }
@@ -1736,7 +2007,12 @@ impl Game {
                 Action::Decline { .. },
             ) => {
                 let kept = std::mem::take(kept);
-                let next = self.stop_keeping_creatures(*player, *max_total_power, kept);
+                let next = self.stop_keeping_creatures(
+                    *player,
+                    *max_total_power,
+                    kept,
+                    &mut suspended.frame,
+                );
                 self.continue_resolution(suspended, next);
                 Ok(())
             }
@@ -1754,9 +2030,18 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal counter recipient".into()));
                 };
-                self.put_counters(selected, *kind, 1, *player);
+                let batch = self.event_batch(vec![
+                    crate::flow::proposed_event::ProposedEvent::CounterChange {
+                        target: self
+                            .permanent_object_ref(selected)
+                            .expect("chosen permanent"),
+                        kind: *kind,
+                        delta: 1,
+                        by: Some(*player),
+                    },
+                ]);
                 let next = self.distribute_counters(*player, *kind, *remaining - 1);
-                self.continue_resolution(suspended, next);
+                self.run_batch_before_decision(batch, suspended, next);
                 Ok(())
             }
             (
@@ -1985,13 +2270,20 @@ impl Game {
                 let player = *player;
                 looked.retain(|c| c != card);
                 *selected += 1;
-                if *to_battlefield {
-                    self.move_card(*card, ZoneType::Battlefield);
-                } else if *reveal {
-                    self.reveal_card_to_hand(*card, player);
+                let batch = if *to_battlefield {
+                    Some(self.event_batch(vec![self.zone_move_proposal(
+                        *card,
+                        ZoneType::Battlefield,
+                        Default::default(),
+                    )]))
                 } else {
-                    self.move_card(*card, ZoneType::Hand);
-                }
+                    if *reveal {
+                        self.reveal_card_to_hand(*card, player);
+                    } else {
+                        self.move_card(*card, ZoneType::Hand);
+                    }
+                    None
+                };
                 self.invalidate_mana_cache(player);
 
                 let more_selectable = looked
@@ -1999,13 +2291,21 @@ impl Game {
                     .any(|c| self.card_matches_predicate(*c, predicate));
                 if *selected >= *max_select || !more_selectable {
                     let rest = std::mem::take(looked);
-                    let decision = self.library_order_decision(
+                    let next = self.library_order_decision(
                         player,
                         rest,
                         LibraryEnd::Bottom,
                         *random_order,
                     );
-                    self.continue_resolution(suspended, decision);
+                    if let Some(batch) = batch {
+                        self.run_batch_before_decision(batch, suspended, next);
+                    } else {
+                        self.continue_resolution(suspended, next);
+                    }
+                } else if let Some(batch) = batch {
+                    let mut child = EffectFrame::new(player, Vec::new());
+                    child.batch = Some(batch);
+                    self.run_before_decision(child, suspended);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                 }
@@ -2198,17 +2498,22 @@ impl Game {
                     return Ok(());
                 }
                 let owner = *owner;
-                for card in std::mem::take(revealed) {
-                    self.move_card_with_entry(
-                        card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::ZoneEntry {
-                            tapped: true,
-                            ..Default::default()
-                        },
-                    );
-                }
-                self.shuffle_library(owner);
+                let events = std::mem::take(revealed)
+                    .into_iter()
+                    .map(|card| {
+                        self.zone_move_proposal(
+                            card,
+                            ZoneType::Battlefield,
+                            crate::flow::proposed_event::ZoneEntry {
+                                tapped: true,
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect();
+                let mut batch = self.event_batch(events);
+                batch.binding = EventBinding::Shuffle { player: owner };
+                suspended.frame.batch = Some(batch);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -2302,7 +2607,16 @@ impl Game {
                         .controller;
                     *self.state.suspended_decision_mut() = Some(suspended);
                 } else {
+                    let completion = suspended.frame.completion;
                     self.perform_state_based_actions_with_legends(keep);
+                    if let Some(pending) = self.state.suspended_decision_mut().as_mut() {
+                        pending.frame.completion.then(completion);
+                    } else {
+                        self.run_frame(EffectFrame {
+                            completion,
+                            ..EffectFrame::new(*player, Vec::new())
+                        });
+                    }
                 }
                 Ok(())
             }
@@ -2608,17 +2922,23 @@ impl Game {
         else {
             unreachable!("surveil selection");
         };
-        let sources = self.snapshot_trigger_sources();
-        for card in graveyard.iter() {
-            if let Some(object) = self.current_object_ref(*card) {
-                self.move_object_to_zone(object, ZoneType::Graveyard);
-            }
-        }
-        self.process_game_events_with_sources(&sources);
+        let events = graveyard
+            .iter()
+            .map(|card| self.zone_move_proposal(*card, ZoneType::Graveyard, Default::default()))
+            .collect();
+        let batch = self.event_batch(events);
         looked.retain(|card| !graveyard.contains(card));
         let next =
             self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);
-        self.continue_resolution(suspended, next);
+        if let Some(decision) = next {
+            let mut child = EffectFrame::new(*player, Vec::new());
+            child.batch = Some(batch);
+            suspended.decision = decision;
+            self.run_before_decision(child, suspended);
+        } else {
+            suspended.frame.batch = Some(batch);
+            self.run_frame(suspended.frame);
+        }
     }
 
     /// Reorder inspected library cards, first to draw first. Their exact

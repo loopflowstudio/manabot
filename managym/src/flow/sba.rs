@@ -3,7 +3,11 @@
 
 use crate::state::card::Keyword;
 use crate::{
-    flow::{event::GameEvent, game::Game},
+    flow::{
+        decision::{EffectFrame, FrameCompletion},
+        game::Game,
+        proposed_event::{EventBinding, ProposedEvent},
+    },
     state::{
         ability::{Ability, TriggerCondition},
         game_object::{CardId, PermanentId, PlayerId},
@@ -12,6 +16,13 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SbaProgress {
+    Stable,
+    Changed,
+    Pending,
+}
 
 impl Game {
     /// Duplicate legendary names (layered `is_legendary` and `name`),
@@ -37,7 +48,7 @@ impl Game {
 
     /// Perform one simultaneous batch, or suspend for required legend choices.
     /// Stabilization repeats changed batches before granting priority (CR 704.3).
-    pub(crate) fn perform_state_based_actions(&mut self) -> bool {
+    pub(crate) fn perform_state_based_actions(&mut self) -> SbaProgress {
         // Choose all legends before applying any of this simultaneous batch.
         // Terminal SBAs take precedence over asking a player who already lost.
         if self
@@ -58,7 +69,7 @@ impl Game {
                     groups,
                     keep: Vec::new(),
                 });
-                return false;
+                return SbaProgress::Pending;
             }
             // No legend choice was needed, so this same simultaneous batch
             // has no legend losers. Do not discover the groups a second time.
@@ -67,7 +78,10 @@ impl Game {
         self.perform_state_based_actions_with_legends(&[])
     }
 
-    pub(crate) fn perform_state_based_actions_with_legends(&mut self, keep: &[CardId]) -> bool {
+    pub(crate) fn perform_state_based_actions_with_legends(
+        &mut self,
+        keep: &[CardId],
+    ) -> SbaProgress {
         let legend_losers: Vec<CardId> = self
             .legend_groups()
             .into_iter()
@@ -77,7 +91,7 @@ impl Game {
         self.perform_state_based_batch(&legend_losers)
     }
 
-    fn perform_state_based_batch(&mut self, legend_losers: &[CardId]) -> bool {
+    fn perform_state_based_batch(&mut self, legend_losers: &[CardId]) -> SbaProgress {
         let mut performed = false;
         for player in [PlayerId(0), PlayerId(1)] {
             // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
@@ -89,7 +103,11 @@ impl Game {
         }
 
         if self.is_game_over() {
-            return performed;
+            return if performed {
+                SbaProgress::Changed
+            } else {
+                SbaProgress::Stable
+            };
         }
 
         // Candidate discovery uses exact object identities. The mutable
@@ -137,34 +155,53 @@ impl Game {
         }
         candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
 
-        // CR 704.3 — all applicable SBAs are one simultaneous event. Commits
-        // have a deterministic ObjectRef order for replay, while every death
-        // event sees the same pre-batch trigger-source snapshot.
-        let trigger_sources = self.snapshot_trigger_sources();
-        let mut died = Vec::new();
-        for (object_ref, event_ref, controller, destroy) in candidates {
-            let committed = if destroy {
-                // CR 704.5g destruction has its own proposal before the
-                // consequent battlefield-to-graveyard move.
-                self.destroy_object(object_ref)
-            } else {
-                // CR 704.5f is a zone move, not destruction.
-                self.move_object_to_zone(object_ref, ZoneType::Graveyard)
-            };
-            if committed {
-                performed = true;
-                if self.state.zones.zone_of(CardId::from(object_ref.entity))
-                    == Some(ZoneType::Graveyard)
-                {
-                    died.push(event_ref);
+        let mut events: Vec<_> = candidates
+            .into_iter()
+            .map(|(target, _, _, destroy)| {
+                if destroy {
+                    ProposedEvent::Destroy { target }
+                } else {
+                    self.zone_move_proposal(
+                        CardId::from(target.entity),
+                        ZoneType::Graveyard,
+                        Default::default(),
+                    )
                 }
-                self.invalidate_mana_cache(controller);
-            }
+            })
+            .collect();
+        events.extend(
+            self.finished_sagas()
+                .into_iter()
+                .filter_map(|id| self.permanent_object_ref(id))
+                .map(|target| ProposedEvent::Sacrifice { target }),
+        );
+        if !events.is_empty() {
+            let mut batch = self.event_batch(events);
+            batch.binding = EventBinding::Deaths;
+            let mut frame = EffectFrame::new(self.active_player(), Vec::new());
+            frame.batch = Some(batch);
+            frame.completion = FrameCompletion::StateBased {
+                next: Box::new(FrameCompletion::Continue),
+            };
+            self.run_frame(frame);
+            return if self.state.suspended_decision.is_some() {
+                SbaProgress::Pending
+            } else {
+                SbaProgress::Changed
+            };
         }
-        if !died.is_empty() {
-            self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
+        if self.finish_state_based_batch() {
+            performed = true;
         }
+        if performed {
+            SbaProgress::Changed
+        } else {
+            SbaProgress::Stable
+        }
+    }
 
+    pub(crate) fn finish_state_based_batch(&mut self) -> bool {
+        let mut performed = false;
         // CR 704.5n — An Equipment attached to an object that is gone or is
         // no longer a creature becomes unattached and stays on the battlefield.
         let detached: Vec<PermanentId> = (0..self.state.permanents.len())
@@ -202,18 +239,6 @@ impl Game {
             let from = self.state.zones.zone_of(card_id);
             self.state.zones.remove_card(card_id);
             self.capture_card_move(card_id, from, None, owner);
-            performed = true;
-        }
-
-        if performed {
-            self.process_game_events_with_sources(&trigger_sources);
-        }
-
-        // CR 714.4 — A Saga whose lore counters reach its final chapter is
-        // sacrificed once none of its chapter abilities is waiting or on the
-        // stack.
-        for saga in self.finished_sagas() {
-            self.sacrifice_permanent(saga);
             performed = true;
         }
 

@@ -101,6 +101,7 @@ _STAGES = frozenset(
         "discard",
         "select_milled",
         "select_cards",
+        "order_replacement",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -202,6 +203,7 @@ _OBLIGATIONS = (
     "choose a permanent to exile",
     "order library top",
     "select cards",
+    "order replacements",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -543,6 +545,8 @@ class _Renderer:
             details.append(f"{relation.mode or 0} kept cards already ordered on top")
         elif relation.kind == 6 and relation.decision == 28:
             details.append(f"may select up to {relation.mode or 0} more cards")
+        elif relation.kind == 6 and relation.decision == 29:
+            details.append("choose the next event replacement")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):

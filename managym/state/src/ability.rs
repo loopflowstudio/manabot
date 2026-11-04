@@ -452,6 +452,10 @@ pub enum ObjectSelector {
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
+    /// All eligible targets of the active clause, acted on by one instruction
+    /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
+    /// run a separate instruction sequence or commit a separate event per slot.
+    Targets(TargetSpec),
     /// The permanent whose event fired the trigger ("that creature", "that
     /// token"), which the trigger keeps as its context.
     Triggering,
@@ -567,7 +571,7 @@ impl ObjectSelector {
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
-            Self::Target(spec) => Some(spec),
+            Self::Target(spec) | Self::Targets(spec) => Some(spec),
             Self::Each {
                 of: Scope::TargetPlayerControls,
                 ..

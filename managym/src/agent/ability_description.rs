@@ -463,6 +463,7 @@ fn selector_description(selector: &ObjectSelector) -> String {
     match selector {
         ObjectSelector::This => "this".into(),
         ObjectSelector::Target(target) => target_description(target),
+        ObjectSelector::Targets(target) => format!("each chosen {}", target_description(target)),
         ObjectSelector::Triggering => "that permanent".into(),
         ObjectSelector::Attached => "the permanent this is attached to".into(),
         ObjectSelector::CreatedThisWay => "that token".into(),

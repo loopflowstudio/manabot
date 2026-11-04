@@ -7,22 +7,25 @@ Inherited T7 history remains at `4463e57f5:scratch/questions.md`.
 
 The [plan](mtg-241-composable-rules-execution.md) owns the implementation decisions,
 coordination, evidence and remaining deletions. No product judgment or new
-permission is needed. Actual linked-entry replacement suspension remains unbuilt.
+permission is needed. Actual linked-entry replacement suspension is now implemented with a passing
+Command witness; complete hidden selection and versioned projection remain open.
 
 Reversible implementation choice: top and bottom ordering share `OrderLibrary`;
 top keeps its inspected prefix visible while bottom retains remaining-only
 visibility. Existing bottom code 23 stays fixed; top code 27 is appended.
 No real current definition prints Surveil above 1, so a constructed rules program
 proves arbitrary kept order while Joo Dee verifies existing real-card behavior.
-Surveil now commits the graveyard partition together and emits its keyword
-event after kept ordering, including empty-library completion. Planetarium
+Surveil now retains the graveyard partition until selection finishes, moves it
+through one retained event batch, and emits its keyword event after
+kept ordering, including empty-library completion. Planetarium
 matches both Scry and Surveil.
 
 Full event/result and policy-input version choices remain implementation work.
 Shared public-result selection appends obligation code 28 (retiring legacy 5);
 MTG-243 received that reservation through its Task comments. MTG-244 received
-the concrete schema-coordination question; no numeric successor reservation
-has been supplied in the shared Task comments yet.
+the concrete schema-coordination question; the latest shared MTG-244 risk directive names v8, but its concrete schema
+is not yet present in the shared Task comments. This Task has not assigned a
+competing v8. OrderReplacement appends obligation code 29.
 
 ## Sync with main — 2026-11-04
 

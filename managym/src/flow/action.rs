@@ -74,6 +74,16 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
+                    Decision::OrderReplacement { candidates, .. } => {
+                        let candidate = candidates.get(*mode)?;
+                        let card =
+                            crate::state::game_object::CardId::from(candidate.source().entity);
+                        Some(format!(
+                            "{}: {}",
+                            self.state.cards[card].name,
+                            candidate.description()
+                        ))
+                    }
                     Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))

@@ -346,6 +346,7 @@ impl Game {
                 Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
                 Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
                 Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
+                Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),

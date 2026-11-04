@@ -104,7 +104,7 @@ pub struct CastChoices {
 }
 
 /// A fully announced spell or activation waiting for selected costs.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Payment {
     Spell {
         card: CardId,

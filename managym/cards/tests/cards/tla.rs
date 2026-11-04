@@ -13446,6 +13446,84 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
     );
 }
 
+/// Chapter II is one placement event even when each target needs an ordering choice.
+#[test]
+fn leaves_from_the_vine_counter_choices_keep_both_targets_in_one_event() {
+    use managym::state::{card::ReplacementEffect, predicate::CardPredicate};
+
+    let mut s = five_color_setup(&["Leaves from the Vine", "Gray Ogre"]);
+    let creatures = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    enter_saga(&mut s, "Leaves from the Vine");
+    // Construct only the replacement drivers; the chapter, its targets and
+    // its counter instruction are the registered Saga's real definition.
+    for (name, multiplier, additional) in [("Mountain", 1, 1), ("Island", 2, 0)] {
+        let source = s.force_permanent_on_battlefield(0, name);
+        let card = card_of(&s, source);
+        s.game_mut().state.cards[card].replacement_effects =
+            vec![ReplacementEffect::ModifyCounters {
+                kind: Some(CounterKind::PlusOnePlusOne),
+                predicate: CardPredicate::creature(),
+                multiplier,
+                additional,
+            }];
+    }
+    next_main_phase(&mut s);
+    for creature in creatures {
+        assert!(s.choose_target(Target::Permanent(creature)));
+    }
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let root = s.game().clone();
+    for (mode, expected) in [(0, 4), (1, 3)] {
+        let mut game = root.clone();
+        for index in 0..2 {
+            for creature in creatures {
+                assert_eq!(
+                    game.state.permanents[creature]
+                        .as_ref()
+                        .unwrap()
+                        .counter_count(CounterKind::PlusOnePlusOne),
+                    0,
+                    "no placement commits before both objects' choices finish"
+                );
+            }
+            let frame = game.semantic_decision_frame().unwrap();
+            let action = game.action_space().unwrap().actions.iter().position(|action| {
+                matches!(action, Action::ChooseMode { mode: candidate, .. } if *candidate == mode)
+            }).unwrap();
+            let command = Command {
+                command_id: format!("leaves-counter-{mode}-{index}"),
+                expected_revision: frame.revision,
+                offer_id: frame.offers[action].id.0,
+                answers: vec![],
+                object_preconditions: vec![],
+            };
+            let mut replay = game.clone();
+            game.execute_semantic_command(&command).unwrap();
+            replay.execute_semantic_command(&command).unwrap();
+            assert_eq!(witness(&game), witness(&replay));
+            let after = witness(&game);
+            assert!(game.execute_semantic_command(&command).is_err());
+            assert_eq!(witness(&game), after);
+        }
+        for creature in creatures {
+            assert_eq!(
+                game.state.permanents[creature]
+                    .as_ref()
+                    .unwrap()
+                    .counter_count(CounterKind::PlusOnePlusOne),
+                expected
+            );
+            assert_eq!(game.state.events.iter().filter(|event| matches!(event,
+                GameEvent::CountersPut { permanent, kind: CounterKind::PlusOnePlusOne, count, .. }
+                if *permanent == creature && *count == expected
+            )).count(), 1);
+        }
+    }
+}
+
 /// With a creature card in the graveyard, chapter III draws.
 #[test]
 fn leaves_from_the_vine_draws_on_its_last_chapter_with_a_creature_card_in_the_graveyard() {

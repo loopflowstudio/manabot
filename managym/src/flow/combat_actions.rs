@@ -6,8 +6,9 @@ use crate::{
     agent::action::AgentError,
     flow::{
         combat::CombatState,
-        event::GameEvent,
+        decision::{EffectFrame, FrameCompletion},
         game::{CombatDamagePass, Game},
+        proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
     },
     state::{
         card::{BlockRestriction, Restriction, StaticAbility},
@@ -98,22 +99,23 @@ impl Game {
     }
 
     pub(crate) fn resolve_combat_damage(&mut self) {
-        let Some(combat) = self.state.combat.take() else {
+        let Some(combat) = &self.state.combat else {
             return;
         };
-
-        let has_first_or_double_strike = self.combat_has_first_or_double_strike(&combat);
-        if has_first_or_double_strike {
-            self.resolve_combat_damage_pass(&combat, CombatDamagePass::FirstStrike);
-            while self.perform_state_based_actions() {}
-            if !self.is_game_over() {
-                self.resolve_combat_damage_pass(&combat, CombatDamagePass::NormalWithFirstStrike);
-            }
+        let first_strike = self.combat_has_first_or_double_strike(combat);
+        let pass = if first_strike {
+            CombatDamagePass::FirstStrike
         } else {
-            self.resolve_combat_damage_pass(&combat, CombatDamagePass::Normal);
-        }
-
-        self.state.combat = Some(combat);
+            CombatDamagePass::Normal
+        };
+        let mut frame = EffectFrame::new(self.active_player(), Vec::new());
+        frame.batch = self.combat_damage_batch(pass);
+        frame.completion = if first_strike {
+            FrameCompletion::CombatNormal
+        } else {
+            FrameCompletion::Continue
+        };
+        self.run_frame(frame);
     }
 
     fn combat_has_first_or_double_strike(&self, combat: &CombatState) -> bool {
@@ -143,9 +145,10 @@ impl Game {
     /// One combat damage step (CR 510.2): every assignment is dealt, then
     /// the creatures that dealt damage to a player are announced together
     /// for "deals combat damage to a player" triggers.
-    fn resolve_combat_damage_pass(&mut self, combat: &CombatState, pass: CombatDamagePass) {
+    pub(crate) fn combat_damage_batch(&self, pass: CombatDamagePass) -> Option<EventBatch> {
+        let combat = self.state.combat.as_ref()?;
         let defender = self.non_active_player();
-        let mut hits = Vec::new();
+        let mut events = Vec::new();
 
         for attacker_id in combat.attackers.iter().copied() {
             if self.state.permanents[attacker_id].is_none() {
@@ -174,9 +177,12 @@ impl Game {
                 .collect();
 
             if !was_blocked {
-                if self.apply_combat_player_damage(attacker_ref, defender, attacker_power) {
-                    hits.push(attacker_id);
-                }
+                events.push(ProposedEvent::Damage {
+                    source: attacker_ref,
+                    target: ProposedDamageTarget::Player(defender),
+                    amount: attacker_power,
+                    combat: true,
+                });
                 continue;
             }
 
@@ -189,7 +195,14 @@ impl Game {
                     continue;
                 }
                 let blocker_power = self.characteristics(*blocker_id).power.max(0);
-                self.apply_combat_permanent_damage(blocker_ref, attacker_id, blocker_power);
+                if let Some(target) = attacker_ref {
+                    events.push(ProposedEvent::Damage {
+                        source: blocker_ref,
+                        target: ProposedDamageTarget::Object(target),
+                        amount: blocker_power,
+                        combat: true,
+                    });
+                }
             }
 
             let mut remaining_damage = attacker_power;
@@ -210,20 +223,29 @@ impl Game {
                     needed_damage
                 };
                 let assigned = remaining_damage.min(lethal);
-                self.apply_combat_permanent_damage(attacker_ref, blocker_id, assigned);
+                if let Some(target) = self.permanent_object_ref(blocker_id) {
+                    events.push(ProposedEvent::Damage {
+                        source: attacker_ref,
+                        target: ProposedDamageTarget::Object(target),
+                        amount: assigned,
+                        combat: true,
+                    });
+                }
                 remaining_damage -= assigned;
             }
 
-            if attacker_has_trample
-                && remaining_damage > 0
-                && self.apply_combat_player_damage(attacker_ref, defender, remaining_damage)
-            {
-                hits.push(attacker_id);
+            if attacker_has_trample && remaining_damage > 0 {
+                events.push(ProposedEvent::Damage {
+                    source: attacker_ref,
+                    target: ProposedDamageTarget::Player(defender),
+                    amount: remaining_damage,
+                    combat: true,
+                });
             }
         }
-        if !hits.is_empty() {
-            self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
-        }
+        let mut batch = self.event_batch(events);
+        batch.binding = EventBinding::Combat;
+        Some(batch)
     }
 
     fn creature_deals_damage_in_pass(

@@ -5727,13 +5727,11 @@ fn leaves_from_the_vine() -> CardDefinition {
                         max: 2,
                         ..TargetRequirement::one(TargetSpec::CreatureYouControl)
                     },
-                    effects: vec![Effect::ForEachTarget {
-                        effects: vec![Effect::put_counters(
-                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                            CounterKind::PlusOnePlusOne,
-                            1,
-                        )],
-                    }],
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Targets(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 }],
             ),
             chapter(

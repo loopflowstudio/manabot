@@ -826,13 +826,14 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 28;
+pub const MAX_DECISION_CODE: u8 = 29;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
 /// new ones, never renumber.
 pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
+        Decision::OrderReplacement { .. } => 29,
         Decision::ChoosePaymentX { .. } => 24,
         Decision::SearchNamed { .. } => 25,
         Decision::Payment(_) => 1,
@@ -1125,6 +1126,10 @@ mod tests {
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
         let decisions = [
+            Decision::OrderReplacement {
+                player: PlayerId(0),
+                candidates: Vec::new(),
+            },
             Decision::ChoosePaymentX {
                 player,
                 if_paid: Vec::new(),

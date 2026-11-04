@@ -349,6 +349,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
         ObjectSelector::This => "ObjectSelector::This",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
+        ObjectSelector::Targets(_) => "ObjectSelector::Targets",
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
@@ -363,10 +364,11 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 13] {
+fn selector_witnesses() -> [ObjectSelector; 14] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
+        ObjectSelector::Targets(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,

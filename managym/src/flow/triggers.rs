@@ -42,7 +42,7 @@ struct FiredTrigger {
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct TriggerSourceSnapshot {
     card: CardId,
     controller: PlayerId,
@@ -826,14 +826,24 @@ impl Game {
         }
     }
 
-    /// Process a simultaneous committed batch using the same pre-batch source
-    /// facts for every event. Matching only enqueues triggers, so the snapshot
-    /// remains immutable throughout collection.
-    pub(crate) fn process_game_events_with_sources(&mut self, sources: &[TriggerSourceSnapshot]) {
+    /// Departures look back to the whole pre-batch battlefield. Entry and
+    /// counter events see the completed battlefield, including every entrant.
+    pub(crate) fn process_event_batch(&mut self, before: &[TriggerSourceSnapshot]) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(self.state.pending_events_mut());
             for event in events {
-                self.check_triggers_for_event(&event, sources);
+                if matches!(
+                    event,
+                    GameEvent::CardMoved {
+                        from: Some(ZoneType::Battlefield),
+                        ..
+                    } | GameEvent::PermanentSacrificed { .. }
+                ) {
+                    self.check_triggers_for_event(&event, before);
+                } else {
+                    let sources = self.trigger_ability_sources(&event);
+                    self.check_triggers_for_event(&event, &sources);
+                }
             }
         }
     }

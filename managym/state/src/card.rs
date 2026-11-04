@@ -429,10 +429,8 @@ pub enum Restriction {
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
-/// This is intentionally not a general replacement language. The event
-/// pipeline applies matching definitions once in deterministic source order;
-/// unsupported affected-player ordering choices are documented alongside the
-/// pipeline.
+/// The event pipeline rechecks applicability after each replacement and retains
+/// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
     /// Prevent `amount` damage that would be dealt to this permanent's
@@ -465,6 +463,15 @@ pub enum ReplacementEffect {
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
     UnspentManaBecomesRed,
+    /// Replace a positive placement on a matching permanent you control with
+    /// `count * multiplier + additional` counters. Entry counters are placements
+    /// too (CR 122.6). `None` matches every counter kind.
+    ModifyCounters {
+        kind: Option<CounterKind>,
+        predicate: CardPredicate,
+        multiplier: i32,
+        additional: i32,
+    },
 }
 
 impl ActivatedAbilityDefinition {
