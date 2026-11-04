@@ -52,6 +52,8 @@ def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
         stage.games_per_stream = 1
         stage.updates = 128
         stage.streams = 32
+        stage.execution.device = "cpu"
+        stage.execution.memory_bytes = 16 * 1024**3
         # Setup and finalization must also fit the rental's bounded window.
         stage.execution.wall_seconds = 4200
         regime.wall_seconds = 4200

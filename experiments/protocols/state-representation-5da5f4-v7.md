@@ -33,9 +33,12 @@ are explicit; old canaries remain v5 evidence at their original sources.
   curriculum, width64/depth2, policy FiLM, no recent events or persistent memory,
   v7 with128local facts and the delivered effect capacities. Shared schedule and
   learning rule derive from batched_baseline, including its128-update schedule.
-- CUDA float32, one thread per job. Deadline4200seconds per training run; each job
-  allows1.25hours and120seconds finalization. At most two rented machines; use the
-  same GPU type throughout a scored cohort. Compare measured elapsed cost too.
+- CPU float32, one thread, sequential runs on the same local host;16GiB per-run
+  memory watchdog and4200seconds per training run. Compare measured elapsed time.
+  Before scientific execution, RunPod refused the available4090 offer (launch
+  8dd337797e0a; no rental acquired); L40/L40S reported unavailable. The entire
+  cohort therefore uses the supported local CPU fallback. No device-selected
+  survivors are combined. Earlier CUDA declarations remain in git atb73d97eeb.
 - Only final raw update128 is scored. Initial exports are retained but not used
   for selection. No-update controls are absent, so this is an endpoint architecture
   comparison, not proof of improvement over initialization.
