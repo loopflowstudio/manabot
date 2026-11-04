@@ -46,7 +46,10 @@ the same path; no policy mask or browser filter duplicates legality.
 Delete — do not maintain (completed): active `tla_pilot_v7.py` launcher and active
 analysis/discovery imports, replaced by `tla_pilot_v8.py`; earlier completed cuts
 removed `event_buffer_config`, buffer default overrides and printed-cost-only
-X announcement. Frozen v1–v7 protocols, regimes and evidence remain unchanged.
+X announcement. This pass also removes the separately maintained overflow total
+(derive it from per-kind counts), duplicate buffer-policy dispatch and repeated
+scalar/vector/Python parity loops. Frozen v1–v8 protocols, regimes and evidence
+remain unchanged. No remaining deletion target is identified.
 
 ## Frozen execution and spending
 
@@ -76,19 +79,23 @@ Published isolated control client is `etude-sdk[s3]==0.2.14`; worker dependency
 remains the recipe's 0.2.12. Credentials use nested Doppler `manabot/prd` then
 `etude/prd`. V8 operational scripts under `.runs/mtg213/v8-continuation/` derive
 from the retained v7 scripts; they preserve the prepared-run guard and budget
-checks. V8 needs its own exact source freeze before quote/submission.
+checks. The exact v8 source freeze and subsequent refusals are recorded below.
 
 ## Validation and remaining work
 
-Check: directed debug `wan_shi_tong` 5 tests and native
-`first_legal_policy_prefix` 1 test pass; rebuilt release extension; focused
-Python cutoff/replay/collector/protocol checks pass. Gate owns broader affected
-suites, full debug/Clippy, current-world admission and publication/delivery.
+Applicable native evidence: directed debug `wan_shi_tong` 5 tests and
+`first_legal_policy_prefix` 1 test pass; rebuilt release extension. No Rust changed
+in this simplification. Existing protocol/discovery checks remain applicable.
 
-Remaining: freeze v8 source, reconcile/quote, execute one bounded GPU allocation,
-retain actual learner/checkpoint evidence and teardown/billing, then complete the
-paired evaluation and qualified Elemental-relative report. Historical missing
-slots remain missing; no new result fills v5 denominators. No product or budget
+`uv run --extra dev --extra artifacts pytest tests/verify/test_native_buffer_capacities.py tests/training/test_action_cutoff.py -q` — 61 passed.
+`uv run --extra dev --extra artifacts pytest tests/training/test_collection.py tests/training/test_automatic_game_capture.py -q` — 41 passed.
+Ruff check/format and `git diff --check` pass for this diff. Gate owns broader
+affected suites, full debug/Clippy, current-world admission and publication/delivery.
+
+Remaining: reconcile/quote for the selected frozen source, execute one bounded
+GPU allocation, retain actual learner/checkpoint evidence and teardown/billing,
+then complete the paired evaluation and qualified Elemental-relative report.
+Historical missing slots remain missing; no new result fills v5 denominators. No product or budget
 approval is outstanding; compatible supply remains an external uncertainty.
 
 Earlier continuation detail is retained at
@@ -115,9 +122,8 @@ hardware. Accounted cost and conservative reservations remain unchanged.
 Receipts and the exact prepared Run are retained under
 `experiments/data/mtg213/gpu-v8-preflight-20261104/` with artifact publication.
 
-Check: 16 focused Python cutoff/replay/collector/protocol tests passed, then 9
-checks affected by typed diagnostic receipt refinement passed; current-experiment
-discovery 1 passed. The debug checks above and rebuilt extension remain applicable.
-The next dependent step needs a fresh compatible quote for this already-frozen
-Run; source must not be rebound to later documentation commits. Broader gate and
+The next dependent step needs a fresh compatible quote. Run `f47be2d3c0d8`
+remains bound to its original source; never rebind it to subsequent code or notes.
+To execute the simplified capture/collector code in this checkout, freeze a
+successor Run first and retain the prepared v8 Run unchanged. Broader gate and
 delivery remain outstanding, alongside the empirical pilot acceptance.

@@ -36,6 +36,23 @@ def _players() -> list[managym.PlayerConfig]:
     ]
 
 
+def _assert_encoding_parity(
+    encoder: ObservationEncoder,
+    scalar: managym.Env,
+    obs: managym.Observation,
+    vector_buffers: dict[str, np.ndarray] | None = None,
+) -> dict[str, np.ndarray]:
+    """Compare every configured input key, including optional versioned blocks."""
+    reference = encoder.encode(obs)
+    into = encoder.allocate()
+    scalar.encode_observation_into(obs, into, encoder.config.action_overflow)
+    for key, expected in reference.items():
+        np.testing.assert_array_equal(into[key], expected, err_msg=key)
+        if vector_buffers is not None:
+            np.testing.assert_array_equal(vector_buffers[key][0], expected, err_msg=key)
+    return reference
+
+
 @pytest.mark.parametrize("version", range(1, 8))
 @pytest.mark.parametrize("history", [0, 1])
 def test_nondefault_axes_match_scalar_vector_and_python(
@@ -59,12 +76,7 @@ def test_nondefault_axes_match_scalar_vector_and_python(
     obs, _ = scalar.reset(_players())
     vector.reset_all_into_buffers(_players())
     for _ in range(12):
-        reference = encoder.encode(obs)
-        into = encoder.allocate()
-        scalar.encode_observation_into(obs, into)
-        for key, expected in reference.items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
-            np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        _assert_encoding_parity(encoder, scalar, obs, buffers)
         obs, *_ = scalar.step(0)
         vector.step_into_buffers([0])
 
@@ -95,11 +107,8 @@ def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) 
         with pytest.raises(ValueError, match=f"actions 256 > {capacity}"):
             scalar.encode_observation_into(obs, into)
     else:
-        reference = encoder.encode(obs)
-        scalar.encode_observation_into(obs, into)
+        reference = _assert_encoding_parity(encoder, scalar, obs)
         assert reference["actions_valid"].sum() == 256
-        for key, expected in reference.items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
 
 
 @pytest.mark.parametrize("capacity,permanents", [(64, 40), (777, 40), (777, 1)])
@@ -155,12 +164,8 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
             with pytest.raises(Exception, match="permanents"):
                 encode()
     else:
-        reference = encoder.encode(obs)
-        scalar.encode_observation_into(obs, into)
         vector.step_into_buffers([last])
-        for key, expected in reference.items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
-            np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        _assert_encoding_parity(encoder, scalar, obs, buffers)
 
         # The historical X=255 submission is no longer legal. Both native
         # stepping paths reject it without consuming the current decision or
@@ -182,10 +187,7 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
                 np.testing.assert_array_equal(buffers[key], expected, err_msg=key)
         obs, *_ = scalar.step(0)
         vector.step_into_buffers([0])
-        scalar.encode_observation_into(obs, into)
-        for key, expected in encoder.encode(obs).items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
-            np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        _assert_encoding_parity(encoder, scalar, obs, buffers)
 
 
 @pytest.mark.parametrize(
@@ -272,13 +274,9 @@ def test_event_capacity_keeps_legacy_window_and_public_history_bound(
         with pytest.raises(ValueError, match="1..32"):
             vector.set_buffers(buffers)
     else:
-        into = encoder.allocate()
-        scalar.encode_observation_into(obs, into)
         vector.set_buffers(buffers)
         vector.reset_all_into_buffers(_players())
-        for key, expected in encoder.encode(obs).items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
-            np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        _assert_encoding_parity(encoder, scalar, obs, buffers)
 
 
 @pytest.mark.parametrize("capacity", [2, 3, 5])
@@ -300,12 +298,8 @@ def test_focus_capacity_preserves_complete_action(capacity: int) -> None:
         with pytest.raises(ValueError, match="action focus"):
             scalar.encode_observation_into(obs, encoder.allocate())
     else:
-        into = encoder.allocate()
-        scalar.encode_observation_into(obs, into)
-        reference = encoder.encode(obs)
+        reference = _assert_encoding_parity(encoder, scalar, obs)
         assert (reference["action_focus"][0, :3] >= 0).all()
-        for key, expected in reference.items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
 
 
 def test_card_capacity_overflow_rejected_by_all_paths() -> None:
@@ -338,13 +332,8 @@ def test_explicit_legal_prefix_matches_native_scalar_vector_and_python(
     vector.reset_all_into_buffers(_players())
     for _ in range(12):
         count = len(obs.action_space.actions)
-        reference = encoder.encode(obs)
+        reference = _assert_encoding_parity(encoder, scalar, obs, buffers)
         assert reference["actions_valid"].sum() == min(count, capacity)
-        into = encoder.allocate()
-        scalar.encode_observation_into(obs, into, "first-legal")
-        for key, expected in reference.items():
-            np.testing.assert_array_equal(into[key], expected, err_msg=key)
-            np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
         assert (
             vector.semantic_decision_frames_json()[0]
             == scalar.semantic_decision_frame_json()
@@ -372,11 +361,8 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
             max_cards_per_player=128, max_actions=64, action_overflow="first-legal"
         )
     )
-    reference = encoder.encode(obs)
-    into = encoder.allocate()
-    scalar.encode_observation_into(obs, into, "first-legal")
+    reference = _assert_encoding_parity(encoder, scalar, obs)
     for key, expected in reference.items():
-        np.testing.assert_array_equal(into[key], expected, err_msg=key)
         np.testing.assert_array_equal(
             expected,
             full[key][:64]

@@ -319,10 +319,10 @@ class SeatRoutedCollector:
             self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
         try:
             self._buffers = _allocate_buffers(observation_space, num_envs)
-            if observation_space.encoder.config.action_overflow == "first-legal":
-                self._env.set_buffers(self._buffers, action_overflow="first-legal")
-            else:
-                self._env.set_buffers(self._buffers)
+            self._env.set_buffers(
+                self._buffers,
+                action_overflow=observation_space.encoder.config.action_overflow,
+            )
             self.stream_matches = (
                 []
                 if self._uniform_roster

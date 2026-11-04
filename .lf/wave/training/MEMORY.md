@@ -232,8 +232,8 @@ and 128 rows while 60 fails. Generated cards and sideboards cannot be dropped to
 fit an allocation. Schema-3 protocol shapes and regime hashes bind every axis;
 fresh initialization is required when model object capacity changes. This repairs
 a counterexample, not every reachable-state capacity or a learning result.
-Analysis and discovery share the active v5 identity; historical executions use
-pinned sources. PR #420 delivered this repair on 2026-11-04 at 08:15:17 UTC as
+At that delivery, analysis and discovery shared the v5 identity; historical
+executions continue to use pinned sources. PR #420 delivered this repair on 2026-11-04 at 08:15:17 UTC as
 `0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. The merged implementation passed
 50 focused checks, including a CPU update and checkpoint export/reload; this
 does not establish GPU learning or complete evaluation.
@@ -241,7 +241,7 @@ V5 Run `e8c76bc2c06f` executed frozen source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd` on a Vast RTX 5090. It completed
 three rollout updates, 585 optimizer minibatch steps and 149,260 learner
 transitions; settled batches contain 771 completed games. The next collection
-failed with 256 legal actions against capacity 64, before the first scheduled
+failed with 256 offered actions against capacity 64, before the first scheduled
 trained export. This establishes GPU learner execution, not a usable trained
 checkpoint or learning gain. Initialization evaluation completed 32 valid games
 (5 wins / 27 losses); 256 scheduled games remain missing. A missing checkpoint
@@ -268,13 +268,35 @@ substitution. Synthetic schedule/analysis fixtures explicitly bind the historica
 world and widths, whereas retained-position replay uses the real runtime; neither
 supplies training evidence under the frozen identity. The Vast continuation used the
 prepared source, not a re-freeze onto main. A successor must explicitly bind its
-new runtime. Main's 512-action default alone does not repair configurable
-buffer authority: the shared native helper still infers only card/fact axes;
-action, permanent and focus capacities remain defaults, and event handling
-differs between scalar/vector paths. Configuration parity needs non-default
-boundary fixtures, not only a replay that happens to fit the new default.
+new runtime. That main revision's 512-action default alone did not repair
+configurable buffer authority: its helper inferred only card/fact axes, leaving
+action, permanent and focus capacities at defaults and inconsistent event
+handling. The subsequent repair derives every configurable axis from supplied
+arrays and validates companion shapes before writes. Relation/shared-effect
+axes remain version-fixed; event width selects legacy events or bounded public
+history. Non-default scalar/vector/Python parity and overflow fixtures establish
+the contract independently of current defaults.
 Related Tasks' scratch brought in by a merge is historical context, not
 replacement authority for this pilot.
+
+Operator comment a85a89e8 required investigating the 256 offers before another
+launch. They were illegal X=0..255 choices for airbent Wan Shi Tong's fixed {2}
+alternative cost, not 256 payable strategies. Announcement and payment now
+share the selected base cost; any-type mana preserves X, and waiving a non-X
+printed cost preserves additional waterbend X. The repaired prefix agrees
+across scalar/vector/Python paths. The historical observation remains a
+transport-only boundary fixture, never a requirement to generate illegal
+actions. A capacity failure can expose a rules defect as well as a buffer bug;
+larger allocations alone do not establish a correct action contract.
+
+Unsubmitted pilot v6 was superseded by prospective pilot v7, still using policy
+input v7, the same 134 decks, recipe and evaluation schedule. The prepared v7
+Run binds source `b5406bb33abd98870af6ca07c3beed63a92b7c1c`; later code
+simplification does not rebind it. The 18:44:18 UTC preflight found no rentals
+or unsettled hardware, but Vast refused the price ceiling and RunPod L4 refused
+actual capacity. No new spending or scoring followed. These dated refusals do
+not establish current availability. The plan owns launch, delivery and remaining
+checkpoint/evaluation acceptance within the unchanged $1 allocation/$10 total.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)

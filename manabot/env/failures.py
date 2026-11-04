@@ -183,7 +183,6 @@ class _Capture:
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
         self._policy_samples: list[ActionCutoffSample] = []
         self._policy_path: Path | None = None
-        self._policy_overflows = 0
 
     def record_policy_actions(
         self, count: int, kind: str, capacity: int, game: GameInputs
@@ -203,7 +202,6 @@ class _Capture:
             return
         counts.overflows += 1
         counts.dropped_actions += count - retained
-        self._policy_overflows += 1
         if len(self._policy_samples) < 4:
             self._policy_samples.append(
                 ActionCutoffSample(
@@ -214,13 +212,14 @@ class _Capture:
                     game=game.model_copy(deep=True),
                 )
             )
-        if self._policy_overflows & (self._policy_overflows - 1) == 0:
+        overflows = sum(counts.overflows for counts in self._policy_counts.values())
+        if overflows & (overflows - 1) == 0:
             self.flush_policy_actions()
             getLogger(__name__).info(
                 "policy_action_cutoff %s",
                 json.dumps(
                     {
-                        "overflows": self._policy_overflows,
+                        "overflows": overflows,
                         "original_count": count,
                         "retained_count": retained,
                         "dropped_count": count - retained,
