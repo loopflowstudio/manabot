@@ -89,10 +89,14 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
         stage = gpu.recipe(arm).stages[0]
         assert isinstance(stage, TrainSelfPlay)
         assert stage.execution.device == "cuda"
-        assert stage.updates == 2048 and stage.games_per_stream == 1
+        assert stage.updates * stage.streams == 65536
+        assert stage.games_per_stream == 1
+        assert stage.streams == 256
         assert isinstance(stage.learning, DampedPolicyLearning)
-        assert stage.learning.iteration_schedule is None
-        assert stage.learning.rates(1)[0] == stage.learning.rates(2048)[0] == 1e-4
+        assert stage.learning.iteration_schedule is not None
+        assert stage.learning.iteration_schedule.steps == 256
+        assert stage.learning.iteration_schedule.reference_steps == 2048
+        assert stage.learning.rates(1)[0] == stage.learning.rates(256)[0] == 1e-4
     runs = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
     assert len(runs) == 1
     run = runs[0]
@@ -100,7 +104,7 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
     assert config.source_bundle.commit
     assert run.job.experiment == gpu.EXPERIMENT
     assert run.job.max_attempts == 1
-    assert run.job.max_usd == Decimal("0.50")
+    assert run.job.max_usd == Decimal("0.20")
     assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
 
 
@@ -133,28 +137,27 @@ def test_gpu_cohort_reaps_siblings_after_failure(tmp_path: Path) -> None:
 
 
 def test_throughput_admission_projects_whole_cohort_cost() -> None:
-    # This time includes BOTH arms. Pairing affects measured time, not how many
-    # training updates the full cohort needs. Never divide by concurrency twice.
-    serial = gpu.ThroughputAdmission(
-        concurrency=1, elapsed_seconds=320, updates_per_arm=8
+    # Time includes BOTH arms. The full scientific workload remains 65,536
+    # complete games per learner despite batching into fewer, larger updates.
+    measured = gpu.ThroughputAdmission(
+        concurrency=1, elapsed_seconds=320, updates_per_arm=4
     )
-    paired = gpu.ThroughputAdmission(
-        concurrency=2, elapsed_seconds=320, updates_per_arm=8
+    expected_hours = (1.5 * 320 * 4 * 256 / 4 + 5400 + 900) / 3600
+    assert measured.cohort_hours() == expected_hours
+    assert measured.projected_usd(Decimal("0.25")) == pytest.approx(
+        Decimal(str(expected_hours)) * Decimal("0.25")
     )
-    expected_hours = (1.5 * 320 * 4 * 2048 / 8 + 5400 + 900) / 3600
-    assert serial.cohort_hours() == paired.cohort_hours() == expected_hours
-    assert paired.projected_usd(Decimal("0.25")) > Decimal("25")
     with pytest.raises(ValueError, match="finite and positive"):
-        paired.projected_usd(Decimal("NaN"))
+        measured.projected_usd(Decimal("NaN"))
     with pytest.raises(ValueError):
         gpu.ThroughputAdmission(
-            concurrency=1, elapsed_seconds=math.inf, updates_per_arm=8
+            concurrency=1, elapsed_seconds=math.inf, updates_per_arm=4
         )
 
 
 def test_throughput_admission_is_bounded_and_excludes_scientific_seeds() -> None:
     (run,) = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
-    assert run.job.max_usd == Decimal("0.50")
-    assert run.job.max_hours == 1
-    assert run.job.until == "updates=8"
+    assert run.job.max_usd == Decimal("0.20")
+    assert run.job.max_hours == 0.5
+    assert run.job.until == "updates=4"
     assert gpu.ADMISSION_SEED not in gpu.SEEDS

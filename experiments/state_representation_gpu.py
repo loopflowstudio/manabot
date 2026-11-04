@@ -1,8 +1,8 @@
 """GPU study contract and bounded admission for its replacement allocation.
 
 The failed eight-context runner is retained in source 27a126422. Current runs
-measure ordinary learning at one and two concurrent learners on an excluded
-seed, without scoring. Scientific recipes and plateau analysis remain here;
+measure ordinary 256-stream learning sequentially on an excluded seed, without
+scoring. Scientific recipes and plateau analysis remain here;
 a replacement scientific allocation requires measured affordability first.
 """
 
@@ -39,37 +39,38 @@ from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.recipes.builders import move_learning
 from manabot.training.execution import execute_regime
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import IterationSchedule, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 EXPERIMENT = "state_representation_gpu"
-SEEDS = (74201, 74202, 74203, 74204)
-UPDATES = 2048
-CADENCE = 256
+SEEDS = (74211, 74212, 74213, 74214)
+STREAMS = 256
+UPDATES = 256
+CADENCE = 32
 POINTS = tuple(range(0, UPDATES + 1, CADENCE))
-ADMISSION_UPDATES = 8
+ADMISSION_UPDATES = 4
 ADMISSION_SEED = 74200
 CURVE_DEALS = tuple(range(85001, 85033))
 HELDOUT_DEALS = tuple(range(86001, 86065))
 SCORING = {
-    "name": "state-representation-gpu-horizon-5da5f4",
+    "name": "state-representation-gpu-batched-5da5f4",
     "seeds": SEEDS,
     "arms": ARMS,
     "points": POINTS,
     "curve_deals": CURVE_DEALS,
     "heldout_deals": HELDOUT_DEALS,
-    "plateau": "last three successive 256-update gains: each arm's paired-seed 95% t interval entirely within +/-0.05; fixed final window",
-    "primary": "GRU minus pooled at common final update 2048 on untouched held-out deals",
+    "plateau": "last three successive 32-update gains: each arm's paired-seed 95% t interval entirely within +/-0.05; fixed final window",
+    "primary": "GRU minus pooled at common final update 256 on untouched held-out deals",
     "failure": "missing seeds/checkpoints/games prevent a qualified result; no retries or selection",
 }
 
 
 def recipe(arm: Arm) -> TrainingRegime:
-    """Fresh CUDA learning with absolute, nonzero LR/tau schedules in both arms."""
+    """Fresh CUDA learning with schedules indexed by equivalent game exposure."""
     if arm not in ARMS:
         raise ValueError("unknown study arm")
     regime = batched_baseline()
-    regime.id = f"state-representation-gpu-{arm}"
+    regime.id = f"state-representation-gpu-batched-{arm}"
     regime.agent.state_encoder = arm
     regime.agent.policy_film = True
     regime.agent.recent_events = False
@@ -86,11 +87,15 @@ def recipe(arm: Arm) -> TrainingRegime:
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"
     stage.games_per_stream = 1
-    stage.streams = 32
+    stage.streams = STREAMS
     stage.updates = UPDATES
-    stage.learning = move_learning()
+    # Keep schedule progress aligned to complete-game exposure. Larger learner
+    # minibatches still change optimization; this is a prospective recipe.
+    stage.learning = move_learning(
+        IterationSchedule(steps=UPDATES, reference_steps=2048)
+    )
     stage.execution.device = "cuda"
-    stage.execution.memory_bytes = 6 * 1024**3
+    stage.execution.memory_bytes = 24 * 1024**3
     stage.execution.wall_seconds = 66000
     regime.wall_seconds = 66000
     return TrainingRegime.model_validate(regime.model_dump())
@@ -116,8 +121,8 @@ def runs(revision: str) -> list[Run]:
         revision=revision,
         config=spec.model_dump_json(),
         until=f"updates={ADMISSION_UPDATES}",
-        max_hours=1,
-        max_usd=Decimal("0.50"),
+        max_hours=0.5,
+        max_usd=Decimal("0.20"),
         max_attempts=1,
     )
     # This is an allocation identity, never a scientific training seed.
@@ -141,9 +146,8 @@ def admit_arm(arm: Arm, out: Path, stop: Path) -> None:
     """Ordinary learning on one excluded seed, never an architecture score."""
     if not torch.cuda.is_available():
         raise RuntimeError("this admission requires CUDA")
-    # At most two learners: leave 20% outside their caching allocators for
-    # contexts and workspaces. Capacity failure remains a recorded failure.
-    torch.cuda.set_per_process_memory_fraction(0.40)
+    # One learner owns the device; leave room for contexts and workspaces.
+    torch.cuda.set_per_process_memory_fraction(0.80)
     regime = recipe(arm)
     regime.id = f"representation-gpu-admission-{arm}"
     stage = regime.stages[0]
@@ -185,7 +189,7 @@ class ThroughputAdmission(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    concurrency: Literal[1, 2]
+    concurrency: Literal[1]
     elapsed_seconds: float = Field(gt=0, allow_inf_nan=False)
     updates_per_arm: int = Field(ge=1)
 
@@ -201,40 +205,36 @@ class ThroughputAdmission(BaseModel):
 
 
 def admit_throughput(out: Path, stop: Path, deadline: float) -> None:
-    """Measure single and paired learners without scoring or scientific seeds."""
-    results: list[ThroughputAdmission] = []
-    for concurrency in (1, 2):
-        phase = out / f"admission-{concurrency}"
-        phase.mkdir()
-        started = time.monotonic()
-        for index in range(0, len(ARMS), concurrency):
-            batch = phase / f"batch-{index}"
-            batch.mkdir()
-            commands = [
-                [
-                    sys.executable,
-                    "-m",
-                    "experiments.state_representation_gpu",
-                    "--admit-arm",
-                    arm,
-                    "--out",
-                    str(phase / arm),
-                    "--stop",
-                    str(stop),
-                ]
-                for arm in ARMS[index : index + concurrency]
-            ]
-            _batch(commands, batch, stop, min(deadline - 120, time.time() + 720))
-        results.append(
-            ThroughputAdmission(
-                concurrency=concurrency,
-                elapsed_seconds=time.monotonic() - started,
-                updates_per_arm=ADMISSION_UPDATES,
-            )
+    """Measure a complete two-arm sequential batch without scoring."""
+    phase = out / "admission-1"
+    phase.mkdir()
+    started = time.monotonic()
+    for index, arm in enumerate(ARMS):
+        batch = phase / f"batch-{index}"
+        batch.mkdir()
+        print(
+            f"admission: {arm}, {STREAMS} streams, {ADMISSION_UPDATES} updates",
+            flush=True,
         )
-        atomic_json(
-            out / "throughput.json", [result.model_dump() for result in results]
-        )
+        command = [
+            sys.executable,
+            "-m",
+            "experiments.state_representation_gpu",
+            "--admit-arm",
+            arm,
+            "--out",
+            str(phase / arm),
+            "--stop",
+            str(stop),
+        ]
+        _batch([command], batch, stop, min(deadline - 120, time.time() + 720))
+        print(f"admission: {arm} completed", flush=True)
+    result = ThroughputAdmission(
+        concurrency=1,
+        elapsed_seconds=time.monotonic() - started,
+        updates_per_arm=ADMISSION_UPDATES,
+    )
+    atomic_json(out / "throughput.json", [result.model_dump()])
     atomic_json(out / "etude-result.json", {"clocks": {"updates": ADMISSION_UPDATES}})
 
 
@@ -289,7 +289,7 @@ def worker() -> None:
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     stop = Path(os.environ["ETUDE_STOP_FILE"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
-    if deadline - time.time() < 2400:
+    if deadline - time.time() < 1620:
         raise ValueError("remaining allocation cannot cover throughput admission")
     out.mkdir(parents=True, exist_ok=True)
     gate = check_numerics(out, min(time.time() + 300, deadline))

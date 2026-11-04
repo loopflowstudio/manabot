@@ -106,3 +106,12 @@ Jack Heart's latest continuation direction. Broader memory/relation proposals
 remain deferred, not prerequisites or approved follow-up work. No unresolved
 product choice blocks this step. The existing working plan records the review,
 counterexamples and future questions; results acceptance remains with demo/review.
+
+- Restart batching assumption, 2026-11-04: use the repository's existing256-stream
+  approach as the next bounded candidate after32-stream admission stopped short.
+  Jack Heart explicitly permitted supported batching. This changes optimization,
+  so it requires a new prospective recipe and fresh paired seeds, with equal
+  game exposure and schedules mapped by that exposure; it is not equivalent
+  execution or a continuation of old weights. No scores informed the choice.
+  The candidate's $0.20 admission keeps even unreconciled full reservations
+  below$25. Scientific execution still requires measured affordability.
