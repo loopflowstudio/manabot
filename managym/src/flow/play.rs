@@ -140,6 +140,24 @@ impl Game {
         }
     }
 
+    /// The selected mana or alternative cost, before announcing X or applying
+    /// additional costs and reductions. Announcement and payment share this
+    /// choice so a fixed alternative cost cannot grant a free value of X.
+    fn casting_mana_cost(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+    ) -> Option<ManaCost> {
+        if cast.free {
+            Some(ManaCost::default())
+        } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
+            self.state.cards[card].mana_cost.clone()
+        } else {
+            self.zone_cast_cost(player, card)
+        }
+    }
+
     /// The total cost to cast `card` right now with the announced `cast`
     /// choices: its mana cost (none when cast free) with X fixed, plus the
     /// kicker, less affinity-style reductions (CR 601.2f). `targets` are the
@@ -153,14 +171,7 @@ impl Game {
         targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
-        let mut cost = if cast.free {
-            ManaCost::default()
-        } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
-            card_ref.mana_cost.clone()?
-        } else {
-            self.zone_cast_cost(player, card)?
-        };
-        cost = cost.with_x(cast.x);
+        let mut cost = self.casting_mana_cost(player, card, cast)?.with_x(cast.x);
         cost.purpose = SpendingContext::Cast {
             characteristics: SpendingCharacteristics {
                 subtypes: card_ref.subtypes.iter().cloned().collect(),
@@ -315,7 +326,8 @@ impl Game {
     }
 
     /// CR 601.2b — announce X, then any optional additional cost, before
-    /// modes and targets. A free cast has X = 0 (CR 107.3b).
+    /// modes and targets. Replacing a printed X cost with a free cast or a
+    /// fixed alternative fixes X to zero (CR 107.3b).
     fn begin_cast(
         &mut self,
         player: PlayerId,
@@ -323,12 +335,14 @@ impl Game {
         cast: CastChoices,
     ) -> Result<(), AgentError> {
         let card_ref = &self.state.cards[card];
-        let has_x = card_ref
-            .mana_cost
-            .iter()
-            .chain(card_ref.required_waterbend())
-            .any(|cost| cost.x > 0);
-        if has_x && !cast.free {
+        let printed_x = card_ref.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
+        let selected_x = self
+            .casting_mana_cost(player, card, cast)
+            .is_some_and(|cost| cost.x > 0);
+        // CR 107.3a/b: additional X costs still apply to free casts when the
+        // printed mana cost has no X. A replaced printed X, however, is zero.
+        let additional_x = card_ref.required_waterbend().is_some_and(|cost| cost.x > 0);
+        if selected_x || (!printed_x && additional_x) {
             self.pending_choice = Some(PendingChoice::AnnounceX { player, card, cast });
             return Ok(());
         }

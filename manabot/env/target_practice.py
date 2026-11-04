@@ -98,7 +98,11 @@ class TargetPracticeVector:
         self.buffers: dict[str, np.ndarray] = {}
         self.infos: list[dict[str, Any]] = [{} for _ in range(count)]
 
-    def set_buffers(self, buffers: dict[str, np.ndarray]) -> None:
+    def set_buffers(
+        self, buffers: dict[str, np.ndarray], action_overflow: str = "error"
+    ) -> None:
+        if action_overflow != self.space.encoder.config.action_overflow:
+            raise ValueError("target practice action policy differs from its encoder")
         self.buffers = buffers
 
     def _reset(self, row: int) -> Env:

@@ -50,12 +50,12 @@ bytes as the v1 source identity; v1 stays frozen.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cache
 import json
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import numpy as np
@@ -625,6 +625,13 @@ def _outcome(ours_dies: bool, theirs_dies: bool) -> int:
 # Player
 
 
+@dataclass(frozen=True)
+class _FallbackView:
+    """The greedy fallback reads only this already restricted observation."""
+
+    last_raw_obs: _Observation
+
+
 class HeuristicPlayer(ScriptedGreedyPlayer):
     """Rule-of-thumb anchor; see the module docstring for its rules.
 
@@ -633,7 +640,12 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
     game, so reusing one instance across games is safe.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_actions: int | None = None) -> None:
+        if max_actions is not None and (
+            type(max_actions) is not int or max_actions < 1
+        ):
+            raise ValueError("heuristic max_actions must be a positive integer")
+        self._max_actions = max_actions
         self._kicked: dict[int, bool] = {}
         self._turn = -1
         self._attack_pool: set[int] | None = None
@@ -644,6 +656,13 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         board = _Board(env.last_raw_obs)
+        # Restrict candidates before every rule and fallback. Prefix indices
+        # remain original native indices; the authoritative observation is intact.
+        if self._max_actions is not None:
+            board.raw.action_space = replace(
+                board.raw.action_space,
+                actions=board.raw.action_space.actions[: self._max_actions],
+            )
         self._observe(board)
         kind = board.raw.action_space.action_space_type
         choice: int | None = None
@@ -663,7 +682,10 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             choice = self._discard(board)
         elif kind == ActionSpaceEnum.LOOK_AND_SELECT:
             choice = self._select(board)
-        return choice if choice is not None else super().act(env, obs)
+        if choice is not None:
+            return choice
+        # The frozen v1 fallback consumes only last_raw_obs, not Env behavior.
+        return super().act(cast(Env, _FallbackView(board.raw)), obs)
 
     def _observe(self, board: _Board) -> None:
         turn = int(board.raw.turn.turn_number)
