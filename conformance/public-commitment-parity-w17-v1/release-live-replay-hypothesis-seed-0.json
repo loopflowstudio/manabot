@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "001b7a8b4b580351c4dc7e58acc7cb3f712457148046fa22c18920101ccacac8",
+    "authority_receipt_sha256": "62265e5ef435eda4539a49b31228231a021078acc69e388b46ec6d8b181455ef",
     "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "001b7a8b4b580351c4dc7e58acc7cb3f712457148046fa22c18920101ccacac8"
+          "sha256": "62265e5ef435eda4539a49b31228231a021078acc69e388b46ec6d8b181455ef"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "4e8cb27320788a842f347cbf5a1aa413f9d992e353c2c392034db69c3f9da9f1"
+          "sha256": "eeb5ba7f10554b448ed876b8d410e02f88e197a27215f57c2b62af6e578970a6"
         },
         {
           "path": "academy/server.py",
@@ -57,7 +57,7 @@
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "842f9f6f14db1f4c8171159ce47ee98ac933e63c470974710aaa16811f6f28d4"
+          "sha256": "01122092855a751a5c82740538d59e3ea10d051faace0024325316c1bf8f10fc"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "355c2b33412429266e97e69a15dc23f495e1444e57c61a197602946e08a0104a"
+          "sha256": "f1e96abe935bcbe35cfa55f81cb709d545077632c4925c79efe453f2289efbc2"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -85,23 +85,23 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "936378071215ad26260f82d538aff037ade4544ed76c1b8711516c6bc964ea02"
+          "sha256": "00cb8669d9ad96226ffaeab1a0e15207700437efb437ff5cdd23a3c2e045b84d"
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "48bfdb020dcf41d0105aa9c2973851848348311efca156f25441c61e13bfdce2"
+          "sha256": "d84f49327c5fd7e720537d349c1aa4b34016f309a7ab4a6259189fd7d6e182bc"
         },
         {
           "path": "managym/src/decision.rs",
-          "sha256": "69ba00e43ecb563e9460251c63574e24b6cb2e8ec868bb8e7e4798c2c5903d64"
+          "sha256": "25a1d96ae16bb75b1b358cab7e24013495f4a539368ab1b2054fd1f1a83d38ea"
         },
         {
           "path": "managym/src/possible_worlds.rs",
-          "sha256": "b928f7a3678ad270be794fc7a49cd19d05729555286a60078b64331f6328b9ac"
+          "sha256": "02a121de53019d68fa1e1745818076b92af1e9ad6939c04e9acaffca2313535c"
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "5c272890de0a31e701c779a6af5a2703ccc1209940014b90a0f2c60930b033ad"
+          "sha256": "33b522db92c13f1d83753431a2fc2e597b71240722d84f0c0513dcfe9770aaec"
         },
         {
           "path": "managym/cards/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "f7a43a07f429f13a3b71d884935653336e02855a5793886026d4fb6f873122f1"
+      "sha256": "57c0b624c7a262a09ae2f4bea24836746adda711a2ec5e715ac22e59b0912752"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1423,16 +1423,16 @@
       "tracker_receipts": {
         "0": {
           "consumed_commitments": 21,
-          "history_digest": "64f898b1a5e24955396062113bee5722d13db148d0276cb6ade4ad8a25be4174",
-          "posterior_digest": "d74097e3d988e04df5e8f01162f55c3db20d8f870c72a03e6cbfb918800904ec",
-          "prior_digest": "a21bf1c6e8fc0e81633983647738fbb76249361e4e617e84b6280a095486a6e2",
+          "history_digest": "82fcf3b4303e70668a6d7c1b60a73060604056e8ecae3117294b0347a897fe51",
+          "posterior_digest": "dc0ac3de846dd104f751cf8e95857c569d1df5728a4ef629193e10077c08e586",
+          "prior_digest": "007e4ec6b0bb84fa167b8b8a318f68dab08c7fe64b17ba48e7338fd84907ed39",
           "records": 68
         },
         "1": {
           "consumed_commitments": 32,
-          "history_digest": "1faf5f89a140479e523de63a2ee61188c6b043332084878934dde7006fcb5e68",
-          "posterior_digest": "ecc95e05acb71f881a19107e9a6638149f0718a287c7b6c750c66f9065fde6a1",
-          "prior_digest": "b4641fac0b8cb497ed23d81619f54c3900a9203c9c1c228ea22646145587dee7",
+          "history_digest": "dd400c9bb7c73fd74bbfb04285ce8c6ad427403592b8ea2dd801d221296518ca",
+          "posterior_digest": "64262d21b5bb9a45d01f692a9b1e7e1f7a0e6d1c88422aa3c500f05b8b2b8ad4",
+          "prior_digest": "890ac163beffe54a5f40162ddfee9ace23d3f4a3b2f9531081d6c2195faaf866",
           "records": 135
         }
       }
@@ -1455,16 +1455,16 @@
   "trackers": {
     "0": {
       "consumed_commitments": 21,
-      "history_digest": "64f898b1a5e24955396062113bee5722d13db148d0276cb6ade4ad8a25be4174",
-      "posterior_digest": "d74097e3d988e04df5e8f01162f55c3db20d8f870c72a03e6cbfb918800904ec",
-      "prior_digest": "a21bf1c6e8fc0e81633983647738fbb76249361e4e617e84b6280a095486a6e2",
+      "history_digest": "82fcf3b4303e70668a6d7c1b60a73060604056e8ecae3117294b0347a897fe51",
+      "posterior_digest": "dc0ac3de846dd104f751cf8e95857c569d1df5728a4ef629193e10077c08e586",
+      "prior_digest": "007e4ec6b0bb84fa167b8b8a318f68dab08c7fe64b17ba48e7338fd84907ed39",
       "records": 68
     },
     "1": {
       "consumed_commitments": 32,
-      "history_digest": "1faf5f89a140479e523de63a2ee61188c6b043332084878934dde7006fcb5e68",
-      "posterior_digest": "ecc95e05acb71f881a19107e9a6638149f0718a287c7b6c750c66f9065fde6a1",
-      "prior_digest": "b4641fac0b8cb497ed23d81619f54c3900a9203c9c1c228ea22646145587dee7",
+      "history_digest": "dd400c9bb7c73fd74bbfb04285ce8c6ad427403592b8ea2dd801d221296518ca",
+      "posterior_digest": "64262d21b5bb9a45d01f692a9b1e7e1f7a0e6d1c88422aa3c500f05b8b2b8ad4",
+      "prior_digest": "890ac163beffe54a5f40162ddfee9ace23d3f4a3b2f9531081d6c2195faaf866",
       "records": 135
     }
   },

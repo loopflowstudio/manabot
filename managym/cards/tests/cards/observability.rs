@@ -4152,7 +4152,9 @@ fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
     assert_ne!(active.relations, whole_turn.relations);
     let headers: Vec<_> = active
         .relations
-        .chunks_exact(RELATION_DIM_V5)
+        .as_chunks::<RELATION_DIM_V5>()
+        .0
+        .iter()
         .filter(|r| r[0] == 1.0 && r[3] == 13.0)
         .collect();
     assert_eq!(headers.len(), 1);
@@ -4162,7 +4164,9 @@ fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
     );
     assert!(active
         .relations
-        .chunks_exact(RELATION_DIM_V5)
+        .as_chunks::<RELATION_DIM_V5>()
+        .0
+        .iter()
         .any(|r| r[0] == 3.0 && r[3] == 13.0 && r[25] == 2.0));
     let tokens = tokens_of(&card_definition("Secret of Bloodbending"));
     for variant in [

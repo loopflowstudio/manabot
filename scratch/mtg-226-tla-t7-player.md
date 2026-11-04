@@ -1,8 +1,9 @@
 # MTG-226 — TLA T7 implementation plan
 
 Status, 2026-11-03: T7 implementation is merged with published T6
-`bf7631c6a1d229c1405ea800bd57e493aa66c45c` at `20f42a09a`. Focused combined
-checks pass; broad acceptance and publication remain pending. Jack Heart
+`16336f2a0f9d0273d7bb9959b0a6b2b407fdea1e` at `cd098d8e4`, including delayed
+event/frequency/expiry separation. Local publication validation is complete;
+CI, browser evidence and review remain pending. Jack Heart
 authorized one cohesive PR for review, including stacked publication; landing
 remains parent-first and requires review. No merge or auto-merge is authorized.
 
@@ -46,12 +47,10 @@ One catalog, face/Saga state, scheduling, Sozin payment/search authority and
 referenced-row learning remain the shared foundations.
 
 T6 PR #417 remains open with its code Graph running. Jack Heart's later
-2026-11-03 decision (comment `55355aab-4b5f-47e6-bcaf-2cb3326a3d08`) also accepts
-separating delayed-event matching, once/repeat frequency and expiry. That
-completion is not in `bf7631c6a`: this checkout's `DelayedEvent` still fuses
-those meanings. It remains parent-owned work whose later published result
-needs integration before final combined acceptance. This is a resolved design
-choice, not a new T7 implementation task. Parent-first landing remains required.
+2026-11-03 decision (comment `55355aab-4b5f-47e6-bcaf-2cb3326a3d08`) separates
+delayed-event matching, once/repeat frequency and expiry. The publication sync
+integrates that completion from `7c790f78e`; no dirty parent changes were copied.
+Parent-first landing remains required.
 
 ## Design acceptance — 2026-11-03
 
@@ -113,7 +112,7 @@ widening rows. V6 is now the fresh default with configurable fact capacity
 (default 512); v5 stays at 128 facts and v1–v4 keep their exclusions. Saved
 configurations retain their version and capacity through `from_checkpoint`.
 Learning tokens derive from the rules enum; text and Academy retain the same native permissions. Hash
-contract 14 binds the new mutable state. No frozen evidence is regenerated.
+contract 15 binds the combined mutable state. No frozen evidence is regenerated.
 
 ### Consolidation completed
 
@@ -138,7 +137,7 @@ Implemented Secret of Bloodbending, both durations, optional additional waterben
 self-exile, native delegated authority and inspection, Learn/sideboard exclusions,
 ordered public control schedules and Academy presentation. The published chooser
 comes from existing Action.player; no second ActionSpace identity survives.
-The former partial action_player helper is removed. State hash contract is 14;
+The former partial action_player helper is removed. State hash contract is 15;
 new public relation kinds 13/14 retain v5/v6 widths and frozen v1–v4 exclusions.
 
 Full-file reconciliation lives in `docs/rules/tla/acceptance.md`: 286 identities,
@@ -161,11 +160,9 @@ The inherited T6 notes are historical evidence; their older pending statements
 do not override this plan. Engine memory now records the accepted chooser and
 shared-visibility contracts; no child memory directories exist in this checkout.
 
-Remaining work: integrate T6's later published delayed-lifetime completion;
-validate affected combined suites and refresh only mutable w17 receipts; verify
-arena admission/monitoring and final-head CI Engine Budget; complete presentation
-review/demo and Jack Heart's PR review. Gate/CI own broad checks, including browser
-layout/interaction evidence unavailable in this headless reconciliation. No paid
+Remaining work: final-head CI Engine Budget and other CI checks; complete
+presentation review/demo and Jack Heart's PR review. Browser layout/interaction
+evidence is unavailable in this headless run. No paid
 training or new experiment authorization is implied. No new product decision is
 needed; documented uncovered cross-card combinations remain coverage limits,
 not grounds to remove defined cards from play.
@@ -216,3 +213,43 @@ and adds no acceptance claim for the documented uncovered combinations.
 The review surface is `scratch/concept-review.html`; its inherited T6 predecessor
 is retained at `20f42a09a:scratch/concept-review.html`. No unresolved product
 question or new implementation direction was found.
+
+## Publication validation — 2026-11-03
+
+Synced T6's delayed-lifetime implementation at `cd412daa3`, then its notes-only
+update at `cd098d8e4`. The second merge retains T7's concept review; T6's review
+is preserved at `16336f2a0:scratch/concept-review.html`. No runtime source changed
+in that second sync.
+
+The full debug workspace run (`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2
+--no-fail-fast`) had 958 passes and one stale conformance-receipt failure.
+Refreshed only mutable w17 evidence; the failed conformance test then passed.
+All 14 cases retain command counts and outcomes (3,473 Commands). Fixed three
+test-only Clippy warnings; the 10 Bloodbending tests passed afterward, as did
+all-target/all-feature Clippy, formatting, changed-file Ruff and diff checks.
+The release cp312 extension was rebuilt and installed atomically.
+
+Combined consumer/admission validation: 86 passed across player control,
+schedule/named-search recovery, Experience protocol, Elemental admission,
+evaluation identities/mirrors, monitoring and choice separability. The broader
+model/semantic/Academy/belief/active-training/encoder/package-boundary run had
+444 passes, one skip and one stale T6 text assertion. That fixture now names
+event matching, once frequency and expiry separately; all 54 text tests pass.
+Nine authority/public-commitment/trigger-order checks pass. New test module names
+also collected with the combined suite (446 tests).
+
+Rebound the authored receipt, both parity corpora, Academy fixtures and current
+belief pins. All 135 authored Commands, semantic events (modulo catalog definition
+IDs), 66 public commitments and presentation hashes remain. Bloodbending inserts
+one name-ordered definition, shifting later IDs; kind-5 CARD_REVEALED sources
+are definition IDs too. Authored parity passed 816 viewer checks; public
+commitment parity reports zero gaps. Retrieved the unchanged RUL-9 input through
+the artifact manifest; no artifact publication or historical evidence mutation.
+
+Frontend: 122 tests, Svelte check and production build pass. No browser rendering
+proof was run. CI Engine Budget still needs this PR's same-runner measurement;
+no local speed claim or baseline adoption is made. Publication is for review,
+stacked on T6, with no merge, auto-merge or Task completion.
+
+Command logs are local `/tmp/mtg226-*.log`; the committed receipt writers and
+tests reproduce the durable evidence. No servers or watchers were started.

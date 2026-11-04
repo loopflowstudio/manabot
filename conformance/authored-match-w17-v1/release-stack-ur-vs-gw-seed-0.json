@@ -15,7 +15,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.0",
         "resulting_revision": 1,
-        "resulting_state_digest": "d28c1d9d6d217853e520420b664fdb1179163c58bbe25b9b7dd3c8896305d9fe"
+        "resulting_state_digest": "63dc46320a6e50302e2ae9a553bc56e43582b4b82eb7e30103caf026c2ef6e17"
       },
       "encountered_definition_ids": [
         161
@@ -92,8 +92,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "d28c1d9d6d217853e520420b664fdb1179163c58bbe25b9b7dd3c8896305d9fe",
-        "before": "4b95d0c02dd12e88e96260a4cdff7d98f229007bfcc73f920dee72fd65c8a82f"
+        "after": "63dc46320a6e50302e2ae9a553bc56e43582b4b82eb7e30103caf026c2ef6e17",
+        "before": "e8f66efa244ab39dc44accca2a241611ee8f0e2b0964f7b6d4b7e1b4d1dfaad5"
       },
       "to_revision": 1
     },
@@ -112,7 +112,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.1",
         "resulting_revision": 2,
-        "resulting_state_digest": "65b87a16fa1988a88c15f13c51aec01eb368fd7de88ab77338826695873f435b"
+        "resulting_state_digest": "7d95ba173d694a5877dccfa6983fe01eeab1ffce0c91f4cba1102a348af16edd"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -142,8 +142,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "65b87a16fa1988a88c15f13c51aec01eb368fd7de88ab77338826695873f435b",
-        "before": "d28c1d9d6d217853e520420b664fdb1179163c58bbe25b9b7dd3c8896305d9fe"
+        "after": "7d95ba173d694a5877dccfa6983fe01eeab1ffce0c91f4cba1102a348af16edd",
+        "before": "63dc46320a6e50302e2ae9a553bc56e43582b4b82eb7e30103caf026c2ef6e17"
       },
       "to_revision": 2
     },
@@ -162,11 +162,11 @@
         "actor": 0,
         "command_id": "authored-authority.hero.2",
         "resulting_revision": 3,
-        "resulting_state_digest": "5ed0b7b7bc6f01d54c3eb6880e60de7bebad19cc62062d9c1053dafa15bc4e5e"
+        "resulting_state_digest": "6a0f2bcb025cb8e30a2b5ed3243d5bc53bbd240154d9bd5728c35324a4a7f9ca"
       },
       "encountered_definition_ids": [
         161,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -364,8 +364,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "5ed0b7b7bc6f01d54c3eb6880e60de7bebad19cc62062d9c1053dafa15bc4e5e",
-        "before": "65b87a16fa1988a88c15f13c51aec01eb368fd7de88ab77338826695873f435b"
+        "after": "6a0f2bcb025cb8e30a2b5ed3243d5bc53bbd240154d9bd5728c35324a4a7f9ca",
+        "before": "7d95ba173d694a5877dccfa6983fe01eeab1ffce0c91f4cba1102a348af16edd"
       },
       "to_revision": 3
     },
@@ -384,11 +384,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.1",
         "resulting_revision": 4,
-        "resulting_state_digest": "2cb8dc988cb12f65ed3235218cbd47174da1effe416c78e894f79f79ac07fec3"
+        "resulting_state_digest": "58e4f6b9b7b0add3c646b94acad49d9baf987769ecea9c107ebb9ef9480e1058"
       },
       "encountered_definition_ids": [
         127,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -525,8 +525,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "2cb8dc988cb12f65ed3235218cbd47174da1effe416c78e894f79f79ac07fec3",
-        "before": "5ed0b7b7bc6f01d54c3eb6880e60de7bebad19cc62062d9c1053dafa15bc4e5e"
+        "after": "58e4f6b9b7b0add3c646b94acad49d9baf987769ecea9c107ebb9ef9480e1058",
+        "before": "6a0f2bcb025cb8e30a2b5ed3243d5bc53bbd240154d9bd5728c35324a4a7f9ca"
       },
       "to_revision": 4
     },
@@ -545,7 +545,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.3",
         "resulting_revision": 5,
-        "resulting_state_digest": "6f6e3b5513cdefe3e9397e43af2720a38cee04beac18829ba45de844f6e0a1f0"
+        "resulting_state_digest": "e17ee006f43b3de7b073f288c7d0482e32a87b9dce1327b1ce5b4bc659e2160f"
       },
       "encountered_definition_ids": [
         161
@@ -666,8 +666,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "6f6e3b5513cdefe3e9397e43af2720a38cee04beac18829ba45de844f6e0a1f0",
-        "before": "2cb8dc988cb12f65ed3235218cbd47174da1effe416c78e894f79f79ac07fec3"
+        "after": "e17ee006f43b3de7b073f288c7d0482e32a87b9dce1327b1ce5b4bc659e2160f",
+        "before": "58e4f6b9b7b0add3c646b94acad49d9baf987769ecea9c107ebb9ef9480e1058"
       },
       "to_revision": 5
     },
@@ -686,7 +686,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.2",
         "resulting_revision": 6,
-        "resulting_state_digest": "fb973005d72c67b3a0abde8adbe50d8c695f4bf91b57e11e78667cbd8921533a"
+        "resulting_state_digest": "42f4d4de849d2a8432bb6f5bda1e59ce01a2f61b03982952059e0f7326a836ef"
       },
       "encountered_definition_ids": [
         219
@@ -761,8 +761,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "fb973005d72c67b3a0abde8adbe50d8c695f4bf91b57e11e78667cbd8921533a",
-        "before": "6f6e3b5513cdefe3e9397e43af2720a38cee04beac18829ba45de844f6e0a1f0"
+        "after": "42f4d4de849d2a8432bb6f5bda1e59ce01a2f61b03982952059e0f7326a836ef",
+        "before": "e17ee006f43b3de7b073f288c7d0482e32a87b9dce1327b1ce5b4bc659e2160f"
       },
       "to_revision": 6
     },
@@ -781,7 +781,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.3",
         "resulting_revision": 7,
-        "resulting_state_digest": "4627dae1aea3438e449c20f5cd2728cf3bb7a5453a8d51fff2913dd107c359dd"
+        "resulting_state_digest": "7073ba930cdaf1d07fb82f5ee9b0568c4da402a5f9edfae800b41ca8de240398"
       },
       "encountered_definition_ids": [
         31,
@@ -940,8 +940,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "4627dae1aea3438e449c20f5cd2728cf3bb7a5453a8d51fff2913dd107c359dd",
-        "before": "fb973005d72c67b3a0abde8adbe50d8c695f4bf91b57e11e78667cbd8921533a"
+        "after": "7073ba930cdaf1d07fb82f5ee9b0568c4da402a5f9edfae800b41ca8de240398",
+        "before": "42f4d4de849d2a8432bb6f5bda1e59ce01a2f61b03982952059e0f7326a836ef"
       },
       "to_revision": 7
     },
@@ -960,7 +960,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.4",
         "resulting_revision": 8,
-        "resulting_state_digest": "a027a53210194a714f48f0730e300022b1c66a70e6909d80433eed0aa6afde25"
+        "resulting_state_digest": "6f3b6c6d2f6e54f00ea674f0073c38b295f13267ae1ccccad1a9855fcb83b7e5"
       },
       "encountered_definition_ids": [
         219
@@ -1090,8 +1090,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "a027a53210194a714f48f0730e300022b1c66a70e6909d80433eed0aa6afde25",
-        "before": "4627dae1aea3438e449c20f5cd2728cf3bb7a5453a8d51fff2913dd107c359dd"
+        "after": "6f3b6c6d2f6e54f00ea674f0073c38b295f13267ae1ccccad1a9855fcb83b7e5",
+        "before": "7073ba930cdaf1d07fb82f5ee9b0568c4da402a5f9edfae800b41ca8de240398"
       },
       "to_revision": 8
     },
@@ -1110,7 +1110,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.4",
         "resulting_revision": 9,
-        "resulting_state_digest": "505d6d7ddf1c879b21a133f20dc2bc4dff1796407158f7c91fa703112c89df3b"
+        "resulting_state_digest": "8f5ec16d2c123fdecf48cd9cf1330b3256010ce82e0f79bd1344f171dc0e031f"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1140,8 +1140,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "505d6d7ddf1c879b21a133f20dc2bc4dff1796407158f7c91fa703112c89df3b",
-        "before": "a027a53210194a714f48f0730e300022b1c66a70e6909d80433eed0aa6afde25"
+        "after": "8f5ec16d2c123fdecf48cd9cf1330b3256010ce82e0f79bd1344f171dc0e031f",
+        "before": "6f3b6c6d2f6e54f00ea674f0073c38b295f13267ae1ccccad1a9855fcb83b7e5"
       },
       "to_revision": 9
     },
@@ -1160,7 +1160,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.5",
         "resulting_revision": 10,
-        "resulting_state_digest": "64080d2fd66e56fefc2c59e9e2616aa74e1f0dc96a0d4e99a70b81bab6436d21"
+        "resulting_state_digest": "7af1ad8a8a955dc3e634f24cbfd710b1ae3b96761a5f2a5951921419df89f573"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1222,8 +1222,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "64080d2fd66e56fefc2c59e9e2616aa74e1f0dc96a0d4e99a70b81bab6436d21",
-        "before": "505d6d7ddf1c879b21a133f20dc2bc4dff1796407158f7c91fa703112c89df3b"
+        "after": "7af1ad8a8a955dc3e634f24cbfd710b1ae3b96761a5f2a5951921419df89f573",
+        "before": "8f5ec16d2c123fdecf48cd9cf1330b3256010ce82e0f79bd1344f171dc0e031f"
       },
       "to_revision": 10
     },
@@ -1242,7 +1242,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.5",
         "resulting_revision": 11,
-        "resulting_state_digest": "72385c8345ccb16a0d342e4d66aca09783b0cfbe4c2737df9f8f5830908f7318"
+        "resulting_state_digest": "e055888e76c1801eadb0254e4c447d9c3bf80c77f0c5f2682dc9d6607d8bae47"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1288,8 +1288,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "72385c8345ccb16a0d342e4d66aca09783b0cfbe4c2737df9f8f5830908f7318",
-        "before": "64080d2fd66e56fefc2c59e9e2616aa74e1f0dc96a0d4e99a70b81bab6436d21"
+        "after": "e055888e76c1801eadb0254e4c447d9c3bf80c77f0c5f2682dc9d6607d8bae47",
+        "before": "7af1ad8a8a955dc3e634f24cbfd710b1ae3b96761a5f2a5951921419df89f573"
       },
       "to_revision": 11
     },
@@ -1308,7 +1308,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.6",
         "resulting_revision": 12,
-        "resulting_state_digest": "8f833149a988df71faf13c08dfadced005fac18a043a38d4ebae6484623cb280"
+        "resulting_state_digest": "c909300a64e6ce1ecc48d363695cc49dbc0aa57bc6b2cf80b71a25e6e35c6a0c"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1338,8 +1338,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8f833149a988df71faf13c08dfadced005fac18a043a38d4ebae6484623cb280",
-        "before": "72385c8345ccb16a0d342e4d66aca09783b0cfbe4c2737df9f8f5830908f7318"
+        "after": "c909300a64e6ce1ecc48d363695cc49dbc0aa57bc6b2cf80b71a25e6e35c6a0c",
+        "before": "e055888e76c1801eadb0254e4c447d9c3bf80c77f0c5f2682dc9d6607d8bae47"
       },
       "to_revision": 12
     },
@@ -1358,7 +1358,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.7",
         "resulting_revision": 13,
-        "resulting_state_digest": "d6bf1959a693f30d81c7604b7d716cb3fbb184273639fa5309322f9d2a806fff"
+        "resulting_state_digest": "42124a108f50f98af3dc8148b367f01e4361900a30cee2a32fc6668cfa3ff34f"
       },
       "encountered_definition_ids": [
         127
@@ -1433,8 +1433,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "d6bf1959a693f30d81c7604b7d716cb3fbb184273639fa5309322f9d2a806fff",
-        "before": "8f833149a988df71faf13c08dfadced005fac18a043a38d4ebae6484623cb280"
+        "after": "42124a108f50f98af3dc8148b367f01e4361900a30cee2a32fc6668cfa3ff34f",
+        "before": "c909300a64e6ce1ecc48d363695cc49dbc0aa57bc6b2cf80b71a25e6e35c6a0c"
       },
       "to_revision": 13
     },
@@ -1453,7 +1453,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.8",
         "resulting_revision": 14,
-        "resulting_state_digest": "301455786e2e69b5b2fa837fc589139d246ac7f0da48628493209807cbd9c1e9"
+        "resulting_state_digest": "9daec38a8978ba8b4c4f854738a039d3051cd72bd3c9aa656c46d1979b699929"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1483,8 +1483,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "301455786e2e69b5b2fa837fc589139d246ac7f0da48628493209807cbd9c1e9",
-        "before": "d6bf1959a693f30d81c7604b7d716cb3fbb184273639fa5309322f9d2a806fff"
+        "after": "9daec38a8978ba8b4c4f854738a039d3051cd72bd3c9aa656c46d1979b699929",
+        "before": "42124a108f50f98af3dc8148b367f01e4361900a30cee2a32fc6668cfa3ff34f"
       },
       "to_revision": 14
     },
@@ -1503,7 +1503,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.9",
         "resulting_revision": 15,
-        "resulting_state_digest": "abec36f199d2e0d0c3a1c7f6d456473f54583e5313e41cd0afe97ccc78ee9495"
+        "resulting_state_digest": "7314533c9b7bff402c8763cc930f1663c6523f4873a705b81a588f6d655b8583"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -1533,8 +1533,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "abec36f199d2e0d0c3a1c7f6d456473f54583e5313e41cd0afe97ccc78ee9495",
-        "before": "301455786e2e69b5b2fa837fc589139d246ac7f0da48628493209807cbd9c1e9"
+        "after": "7314533c9b7bff402c8763cc930f1663c6523f4873a705b81a588f6d655b8583",
+        "before": "9daec38a8978ba8b4c4f854738a039d3051cd72bd3c9aa656c46d1979b699929"
       },
       "to_revision": 15
     },
@@ -1553,7 +1553,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.10",
         "resulting_revision": 16,
-        "resulting_state_digest": "55327ee9e7013be83887cbe0ce8cea952f21560861425a35dc92371d7a20988f"
+        "resulting_state_digest": "2b9cdb5259115128a0ac7ccd760cddaeb4438159937590485df616ba6ccaf24e"
       },
       "encountered_definition_ids": [
         31
@@ -1607,8 +1607,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "55327ee9e7013be83887cbe0ce8cea952f21560861425a35dc92371d7a20988f",
-        "before": "abec36f199d2e0d0c3a1c7f6d456473f54583e5313e41cd0afe97ccc78ee9495"
+        "after": "2b9cdb5259115128a0ac7ccd760cddaeb4438159937590485df616ba6ccaf24e",
+        "before": "7314533c9b7bff402c8763cc930f1663c6523f4873a705b81a588f6d655b8583"
       },
       "to_revision": 16
     },
@@ -1627,7 +1627,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.11",
         "resulting_revision": 17,
-        "resulting_state_digest": "88789dc98e64f1eb4b47d3f29631e8e78537c3cf5e2312619740163c8660afd4"
+        "resulting_state_digest": "d44b95850189bd4481140fc97ee399826b94e18fa08d240e87eb2a17ac26dbbe"
       },
       "encountered_definition_ids": [
         31,
@@ -1950,8 +1950,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "88789dc98e64f1eb4b47d3f29631e8e78537c3cf5e2312619740163c8660afd4",
-        "before": "55327ee9e7013be83887cbe0ce8cea952f21560861425a35dc92371d7a20988f"
+        "after": "d44b95850189bd4481140fc97ee399826b94e18fa08d240e87eb2a17ac26dbbe",
+        "before": "2b9cdb5259115128a0ac7ccd760cddaeb4438159937590485df616ba6ccaf24e"
       },
       "to_revision": 17
     },
@@ -1970,7 +1970,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.6",
         "resulting_revision": 18,
-        "resulting_state_digest": "0ecbd86bcc5c2a91e4f04de05c35307c4dbab8804b57df3d7d018cc405168e00"
+        "resulting_state_digest": "76fcb8667dff47d7766eb2ab259ed183fe199ecf39c255aa796f41c415631158"
       },
       "encountered_definition_ids": [
         203
@@ -2045,8 +2045,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "0ecbd86bcc5c2a91e4f04de05c35307c4dbab8804b57df3d7d018cc405168e00",
-        "before": "88789dc98e64f1eb4b47d3f29631e8e78537c3cf5e2312619740163c8660afd4"
+        "after": "76fcb8667dff47d7766eb2ab259ed183fe199ecf39c255aa796f41c415631158",
+        "before": "d44b95850189bd4481140fc97ee399826b94e18fa08d240e87eb2a17ac26dbbe"
       },
       "to_revision": 18
     },
@@ -2065,7 +2065,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.7",
         "resulting_revision": 19,
-        "resulting_state_digest": "fdc0247015fa3eed7b20fe3c735ae140c6b94cd16157d53340bd8fcd4c7c0cb7"
+        "resulting_state_digest": "a23e590bf22b71ac8c73639ebe47585c3184212237bf18505f08f4421d76f321"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -2095,8 +2095,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "fdc0247015fa3eed7b20fe3c735ae140c6b94cd16157d53340bd8fcd4c7c0cb7",
-        "before": "0ecbd86bcc5c2a91e4f04de05c35307c4dbab8804b57df3d7d018cc405168e00"
+        "after": "a23e590bf22b71ac8c73639ebe47585c3184212237bf18505f08f4421d76f321",
+        "before": "76fcb8667dff47d7766eb2ab259ed183fe199ecf39c255aa796f41c415631158"
       },
       "to_revision": 19
     },
@@ -2115,7 +2115,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.8",
         "resulting_revision": 20,
-        "resulting_state_digest": "304d6e22c9ee380cb60963ee43745382871c5fbce92bd8fb372e546afb046e53"
+        "resulting_state_digest": "c825c44b57c376615228af18f33d0464c83b178491ceadc2f7cc26209cf4334d"
       },
       "encountered_definition_ids": [
         114
@@ -2174,8 +2174,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "304d6e22c9ee380cb60963ee43745382871c5fbce92bd8fb372e546afb046e53",
-        "before": "fdc0247015fa3eed7b20fe3c735ae140c6b94cd16157d53340bd8fcd4c7c0cb7"
+        "after": "c825c44b57c376615228af18f33d0464c83b178491ceadc2f7cc26209cf4334d",
+        "before": "a23e590bf22b71ac8c73639ebe47585c3184212237bf18505f08f4421d76f321"
       },
       "to_revision": 20
     },
@@ -2194,7 +2194,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.9",
         "resulting_revision": 21,
-        "resulting_state_digest": "4a01a8672e24ce0bbe37a2ff7dbf4d36845b45d5e090e5da504245a47301a6bb"
+        "resulting_state_digest": "e454eae7511f87d00e55d1a646cc4f05033d4dc1663bab9f8c231901a68a9da0"
       },
       "encountered_definition_ids": [
         31,
@@ -2329,8 +2329,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "4a01a8672e24ce0bbe37a2ff7dbf4d36845b45d5e090e5da504245a47301a6bb",
-        "before": "304d6e22c9ee380cb60963ee43745382871c5fbce92bd8fb372e546afb046e53"
+        "after": "e454eae7511f87d00e55d1a646cc4f05033d4dc1663bab9f8c231901a68a9da0",
+        "before": "c825c44b57c376615228af18f33d0464c83b178491ceadc2f7cc26209cf4334d"
       },
       "to_revision": 21
     },
@@ -2349,7 +2349,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.10",
         "resulting_revision": 22,
-        "resulting_state_digest": "1d21f540751f9211ebf83ac64e5c83dd7d57381daafb6e48084dfb146901455e"
+        "resulting_state_digest": "339b13618d32e9e96f3acb1ccaf854725beb8490989ca67583539f411b4035d0"
       },
       "encountered_definition_ids": [
         114,
@@ -2565,8 +2565,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "1d21f540751f9211ebf83ac64e5c83dd7d57381daafb6e48084dfb146901455e",
-        "before": "4a01a8672e24ce0bbe37a2ff7dbf4d36845b45d5e090e5da504245a47301a6bb"
+        "after": "339b13618d32e9e96f3acb1ccaf854725beb8490989ca67583539f411b4035d0",
+        "before": "e454eae7511f87d00e55d1a646cc4f05033d4dc1663bab9f8c231901a68a9da0"
       },
       "to_revision": 22
     },
@@ -2585,7 +2585,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.12",
         "resulting_revision": 23,
-        "resulting_state_digest": "21f83294630d1ea330bfcbcaa056b1da5d34ff609f3a1a3562949fa0988c2cc8"
+        "resulting_state_digest": "25a6974da31a9b68709e2d08d840a3d6427b8a6d166fcbc8c2b5d7647f7bbae3"
       },
       "encountered_definition_ids": [
         127
@@ -2637,8 +2637,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "21f83294630d1ea330bfcbcaa056b1da5d34ff609f3a1a3562949fa0988c2cc8",
-        "before": "1d21f540751f9211ebf83ac64e5c83dd7d57381daafb6e48084dfb146901455e"
+        "after": "25a6974da31a9b68709e2d08d840a3d6427b8a6d166fcbc8c2b5d7647f7bbae3",
+        "before": "339b13618d32e9e96f3acb1ccaf854725beb8490989ca67583539f411b4035d0"
       },
       "to_revision": 23
     },
@@ -2657,10 +2657,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.13",
         "resulting_revision": 24,
-        "resulting_state_digest": "87f21a674bca3276bdfa08236e96b4d73cc14ffc3aa69adc5f30927267bed7d3"
+        "resulting_state_digest": "0be7a142d343c704a449f9cb965306a60b729b6636f0844173de565562bbfbed"
       },
       "encountered_definition_ids": [
-        345
+        346
       ],
       "encountered_programs": [
         "tla.yip_yip.spell.0"
@@ -2716,8 +2716,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "87f21a674bca3276bdfa08236e96b4d73cc14ffc3aa69adc5f30927267bed7d3",
-        "before": "21f83294630d1ea330bfcbcaa056b1da5d34ff609f3a1a3562949fa0988c2cc8"
+        "after": "0be7a142d343c704a449f9cb965306a60b729b6636f0844173de565562bbfbed",
+        "before": "25a6974da31a9b68709e2d08d840a3d6427b8a6d166fcbc8c2b5d7647f7bbae3"
       },
       "to_revision": 24
     },
@@ -2736,12 +2736,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.14",
         "resulting_revision": 25,
-        "resulting_state_digest": "b9fead0032a2b854bedbaf1fe4586768de5de0849d5212ae2fbfa30ad434f3a1"
+        "resulting_state_digest": "e529ca4e7ab8fb525dd996dc10d7702641940bddb7d0fbb8f76c4ad2a4360934"
       },
       "encountered_definition_ids": [
         127,
         219,
-        341
+        342
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -2852,7 +2852,7 @@
           "amount": 0,
           "controller_id": 1,
           "definition_ids": [
-            341
+            342
           ],
           "event_type": "CARD_MOVED",
           "from_zone": 1,
@@ -2869,7 +2869,7 @@
           "amount": 0,
           "controller_id": 0,
           "definition_ids": [
-            341
+            342
           ],
           "event_type": "SPELL_CAST",
           "from_zone": -1,
@@ -2886,7 +2886,7 @@
           "amount": 0,
           "controller_id": 1,
           "definition_ids": [
-            341
+            342
           ],
           "event_type": "CARD_MOVED",
           "from_zone": 4,
@@ -2903,7 +2903,7 @@
           "amount": 0,
           "controller_id": 0,
           "definition_ids": [
-            341
+            342
           ],
           "event_type": "SPELL_RESOLVED",
           "from_zone": -1,
@@ -2919,8 +2919,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "b9fead0032a2b854bedbaf1fe4586768de5de0849d5212ae2fbfa30ad434f3a1",
-        "before": "87f21a674bca3276bdfa08236e96b4d73cc14ffc3aa69adc5f30927267bed7d3"
+        "after": "e529ca4e7ab8fb525dd996dc10d7702641940bddb7d0fbb8f76c4ad2a4360934",
+        "before": "0be7a142d343c704a449f9cb965306a60b729b6636f0844173de565562bbfbed"
       },
       "to_revision": 25
     },
@@ -2939,7 +2939,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.15",
         "resulting_revision": 26,
-        "resulting_state_digest": "b3c771f90b9efbcdf1c817d37990a3ea105be935b4d45f77e76ce2bfe6e50348"
+        "resulting_state_digest": "a34bd2226b479a498ef3481e5ce37f8631c8946e051b10ed375e4f25db16ad21"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -2969,8 +2969,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "b3c771f90b9efbcdf1c817d37990a3ea105be935b4d45f77e76ce2bfe6e50348",
-        "before": "b9fead0032a2b854bedbaf1fe4586768de5de0849d5212ae2fbfa30ad434f3a1"
+        "after": "a34bd2226b479a498ef3481e5ce37f8631c8946e051b10ed375e4f25db16ad21",
+        "before": "e529ca4e7ab8fb525dd996dc10d7702641940bddb7d0fbb8f76c4ad2a4360934"
       },
       "to_revision": 26
     },
@@ -2989,7 +2989,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.16",
         "resulting_revision": 27,
-        "resulting_state_digest": "c6db4fd5abae9289590eca1a4afce22f95eb451c66861c3a18fe691075c7f748"
+        "resulting_state_digest": "cf0e6c283f71bc4756e1ecb795db15739641baaebfcf0b914c926ebe109037e2"
       },
       "encountered_definition_ids": [
         31
@@ -3043,8 +3043,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "c6db4fd5abae9289590eca1a4afce22f95eb451c66861c3a18fe691075c7f748",
-        "before": "b3c771f90b9efbcdf1c817d37990a3ea105be935b4d45f77e76ce2bfe6e50348"
+        "after": "cf0e6c283f71bc4756e1ecb795db15739641baaebfcf0b914c926ebe109037e2",
+        "before": "a34bd2226b479a498ef3481e5ce37f8631c8946e051b10ed375e4f25db16ad21"
       },
       "to_revision": 27
     },
@@ -3063,10 +3063,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.17",
         "resulting_revision": 28,
-        "resulting_state_digest": "2b1055500c68dd04ca46a6bf71ca1d9347c56f1c904a2a89a213e15f1f41d7de"
+        "resulting_state_digest": "a55c9f291d66a8451fec089496068bfec24860e5892e26a1195df43bfafe9bbe"
       },
       "encountered_definition_ids": [
-        303
+        304
       ],
       "encountered_programs": [
         "tla.tiger_seal.triggered.0",
@@ -3145,8 +3145,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "2b1055500c68dd04ca46a6bf71ca1d9347c56f1c904a2a89a213e15f1f41d7de",
-        "before": "c6db4fd5abae9289590eca1a4afce22f95eb451c66861c3a18fe691075c7f748"
+        "after": "a55c9f291d66a8451fec089496068bfec24860e5892e26a1195df43bfafe9bbe",
+        "before": "cf0e6c283f71bc4756e1ecb795db15739641baaebfcf0b914c926ebe109037e2"
       },
       "to_revision": 28
     },
@@ -3165,11 +3165,11 @@
         "actor": 0,
         "command_id": "authored-authority.hero.11",
         "resulting_revision": 29,
-        "resulting_state_digest": "f680b86ea8970a6d8a86cf4cfe3e369b67036de0a9bf451c3e6027c062948d1f"
+        "resulting_state_digest": "adefcc6a9127e8cb33bf63ff1d0ef4cd1c0ce498fc6d991da4a9e90ca70f3b2c"
       },
       "encountered_definition_ids": [
         76,
-        303
+        304
       ],
       "encountered_programs": [
         "stx.divide_by_zero.spell.0",
@@ -3227,8 +3227,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "f680b86ea8970a6d8a86cf4cfe3e369b67036de0a9bf451c3e6027c062948d1f",
-        "before": "2b1055500c68dd04ca46a6bf71ca1d9347c56f1c904a2a89a213e15f1f41d7de"
+        "after": "adefcc6a9127e8cb33bf63ff1d0ef4cd1c0ce498fc6d991da4a9e90ca70f3b2c",
+        "before": "a55c9f291d66a8451fec089496068bfec24860e5892e26a1195df43bfafe9bbe"
       },
       "to_revision": 29
     },
@@ -3247,14 +3247,14 @@
         "actor": 0,
         "command_id": "authored-authority.hero.12",
         "resulting_revision": 30,
-        "resulting_state_digest": "13891b0e02882b4f0be14d77152166c7b498483001bc385ca9622c0342ab04c9"
+        "resulting_state_digest": "b1a8a9c66ca61c7a038c7401428551a58a7f414839749b751d6dd317dc9837fb"
       },
       "encountered_definition_ids": [
         31,
         76,
         161,
         203,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -3400,8 +3400,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "13891b0e02882b4f0be14d77152166c7b498483001bc385ca9622c0342ab04c9",
-        "before": "f680b86ea8970a6d8a86cf4cfe3e369b67036de0a9bf451c3e6027c062948d1f"
+        "after": "b1a8a9c66ca61c7a038c7401428551a58a7f414839749b751d6dd317dc9837fb",
+        "before": "adefcc6a9127e8cb33bf63ff1d0ef4cd1c0ce498fc6d991da4a9e90ca70f3b2c"
       },
       "to_revision": 30
     },
@@ -3420,12 +3420,12 @@
         "actor": 0,
         "command_id": "authored-authority.hero.13",
         "resulting_revision": 31,
-        "resulting_state_digest": "ab52349de3a01a78626ed1b3236870f9ff9382a21e3b973a876a9d91a6459b16"
+        "resulting_state_digest": "48a8402ed245349d9cedbece202d803c3a1a1c977019f4efbb35514645a2e358"
       },
       "encountered_definition_ids": [
         76,
         161,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -3584,8 +3584,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "ab52349de3a01a78626ed1b3236870f9ff9382a21e3b973a876a9d91a6459b16",
-        "before": "13891b0e02882b4f0be14d77152166c7b498483001bc385ca9622c0342ab04c9"
+        "after": "48a8402ed245349d9cedbece202d803c3a1a1c977019f4efbb35514645a2e358",
+        "before": "b1a8a9c66ca61c7a038c7401428551a58a7f414839749b751d6dd317dc9837fb"
       },
       "to_revision": 31
     },
@@ -3604,7 +3604,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.14",
         "resulting_revision": 32,
-        "resulting_state_digest": "7e7f5e58d6ebf9b02b7a059b0c7e3fcd725a12f15465244598b20bebca1c7b7d"
+        "resulting_state_digest": "4ca75fc5057d8da478306f360ac9445534ebffd98ad3fb4193d927a416b86880"
       },
       "encountered_definition_ids": [
         203
@@ -3681,8 +3681,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "7e7f5e58d6ebf9b02b7a059b0c7e3fcd725a12f15465244598b20bebca1c7b7d",
-        "before": "ab52349de3a01a78626ed1b3236870f9ff9382a21e3b973a876a9d91a6459b16"
+        "after": "4ca75fc5057d8da478306f360ac9445534ebffd98ad3fb4193d927a416b86880",
+        "before": "48a8402ed245349d9cedbece202d803c3a1a1c977019f4efbb35514645a2e358"
       },
       "to_revision": 32
     },
@@ -3701,10 +3701,10 @@
         "actor": 0,
         "command_id": "authored-authority.hero.15",
         "resulting_revision": 33,
-        "resulting_state_digest": "bbacb491fe34fd4fd3483f0f0cc04117cf669628e74aca7ea63020a14b884231"
+        "resulting_state_digest": "71ff8273be8e5903db056667b911ddfc1e52f16b47f964d7b5faa8ea768609b9"
       },
       "encountered_definition_ids": [
-        303
+        304
       ],
       "encountered_programs": [
         "tla.tiger_seal.triggered.0",
@@ -3802,8 +3802,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "bbacb491fe34fd4fd3483f0f0cc04117cf669628e74aca7ea63020a14b884231",
-        "before": "7e7f5e58d6ebf9b02b7a059b0c7e3fcd725a12f15465244598b20bebca1c7b7d"
+        "after": "71ff8273be8e5903db056667b911ddfc1e52f16b47f964d7b5faa8ea768609b9",
+        "before": "4ca75fc5057d8da478306f360ac9445534ebffd98ad3fb4193d927a416b86880"
       },
       "to_revision": 33
     },
@@ -3822,13 +3822,13 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.18",
         "resulting_revision": 34,
-        "resulting_state_digest": "d1d289657973a4789ff74255bfe25e27ada3bef2944eb403b359dc0e588797e0"
+        "resulting_state_digest": "9d9bc45c60fcdb20c52a6c7fd6dca3d01a7483d1bf6fb24d912273d176bbcd64"
       },
       "encountered_definition_ids": [
         127,
         219,
-        333,
-        341
+        334,
+        342
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -3922,7 +3922,7 @@
           "amount": 0,
           "controller_id": 1,
           "definition_ids": [
-            333
+            334
           ],
           "event_type": "CARD_MOVED",
           "from_zone": 1,
@@ -3939,7 +3939,7 @@
           "amount": 0,
           "controller_id": 0,
           "definition_ids": [
-            333
+            334
           ],
           "event_type": "SPELL_CAST",
           "from_zone": -1,
@@ -3956,7 +3956,7 @@
           "amount": 0,
           "controller_id": 1,
           "definition_ids": [
-            333
+            334
           ],
           "event_type": "CARD_MOVED",
           "from_zone": 4,
@@ -3973,7 +3973,7 @@
           "amount": 0,
           "controller_id": 0,
           "definition_ids": [
-            333
+            334
           ],
           "event_type": "SPELL_RESOLVED",
           "from_zone": -1,
@@ -3989,8 +3989,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "d1d289657973a4789ff74255bfe25e27ada3bef2944eb403b359dc0e588797e0",
-        "before": "bbacb491fe34fd4fd3483f0f0cc04117cf669628e74aca7ea63020a14b884231"
+        "after": "9d9bc45c60fcdb20c52a6c7fd6dca3d01a7483d1bf6fb24d912273d176bbcd64",
+        "before": "71ff8273be8e5903db056667b911ddfc1e52f16b47f964d7b5faa8ea768609b9"
       },
       "to_revision": 34
     },
@@ -4009,12 +4009,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.19",
         "resulting_revision": 35,
-        "resulting_state_digest": "6ded144477dfe8002a44fa5a4468708f357f3e257b89273e8df0284e34d6eca1"
+        "resulting_state_digest": "8a71d1a1c651cbde0040256e75c010025a9d429bf2e6ce3f314afb83d474d857"
       },
       "encountered_definition_ids": [
         203,
         219,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.mountain.mana.0",
@@ -4152,8 +4152,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "6ded144477dfe8002a44fa5a4468708f357f3e257b89273e8df0284e34d6eca1",
-        "before": "d1d289657973a4789ff74255bfe25e27ada3bef2944eb403b359dc0e588797e0"
+        "after": "8a71d1a1c651cbde0040256e75c010025a9d429bf2e6ce3f314afb83d474d857",
+        "before": "9d9bc45c60fcdb20c52a6c7fd6dca3d01a7483d1bf6fb24d912273d176bbcd64"
       },
       "to_revision": 35
     },
@@ -4172,7 +4172,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.16",
         "resulting_revision": 36,
-        "resulting_state_digest": "f5a42d1b727866efce1672a8ab3de17636e4010ad21333cc98102afff15fa0e0"
+        "resulting_state_digest": "703f84c95d6905339866c1e9bfa1faf6afe0caff1dcfa7ff841fc9fc108adead"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -4202,8 +4202,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "f5a42d1b727866efce1672a8ab3de17636e4010ad21333cc98102afff15fa0e0",
-        "before": "6ded144477dfe8002a44fa5a4468708f357f3e257b89273e8df0284e34d6eca1"
+        "after": "703f84c95d6905339866c1e9bfa1faf6afe0caff1dcfa7ff841fc9fc108adead",
+        "before": "8a71d1a1c651cbde0040256e75c010025a9d429bf2e6ce3f314afb83d474d857"
       },
       "to_revision": 36
     },
@@ -4222,7 +4222,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.17",
         "resulting_revision": 37,
-        "resulting_state_digest": "7d57e5f347e00f8927bf6de4090a74a2f2da86ad9e20b8f67b505bf577920fbc"
+        "resulting_state_digest": "b04997b402d6d495f360f4913267c5a536de2b1509251b7287bb85f37e7eead2"
       },
       "encountered_definition_ids": [
         219
@@ -4305,8 +4305,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "7d57e5f347e00f8927bf6de4090a74a2f2da86ad9e20b8f67b505bf577920fbc",
-        "before": "f5a42d1b727866efce1672a8ab3de17636e4010ad21333cc98102afff15fa0e0"
+        "after": "b04997b402d6d495f360f4913267c5a536de2b1509251b7287bb85f37e7eead2",
+        "before": "703f84c95d6905339866c1e9bfa1faf6afe0caff1dcfa7ff841fc9fc108adead"
       },
       "to_revision": 37
     },
@@ -4325,7 +4325,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.20",
         "resulting_revision": 38,
-        "resulting_state_digest": "0d015a856f3d052d30199160954bf8b7614ccb40cf21d9a1ef4ed24e1b819ec0"
+        "resulting_state_digest": "3cdc4624fcf2ef94934812f8defc63f6d736ae4a669595b3a99d6c9225a5fe5b"
       },
       "encountered_definition_ids": [
         127
@@ -4400,8 +4400,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "0d015a856f3d052d30199160954bf8b7614ccb40cf21d9a1ef4ed24e1b819ec0",
-        "before": "7d57e5f347e00f8927bf6de4090a74a2f2da86ad9e20b8f67b505bf577920fbc"
+        "after": "3cdc4624fcf2ef94934812f8defc63f6d736ae4a669595b3a99d6c9225a5fe5b",
+        "before": "b04997b402d6d495f360f4913267c5a536de2b1509251b7287bb85f37e7eead2"
       },
       "to_revision": 38
     },
@@ -4420,7 +4420,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.21",
         "resulting_revision": 39,
-        "resulting_state_digest": "383c8dbfc02acedc05a807f864724d4085514481d5691c746e8107e0cc9f9bac"
+        "resulting_state_digest": "e5094d53d7710ca6389c99d2eadfbaabb334bd4427f702972a1451b42e8d2226"
       },
       "encountered_definition_ids": [
         57,
@@ -4578,8 +4578,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "383c8dbfc02acedc05a807f864724d4085514481d5691c746e8107e0cc9f9bac",
-        "before": "0d015a856f3d052d30199160954bf8b7614ccb40cf21d9a1ef4ed24e1b819ec0"
+        "after": "e5094d53d7710ca6389c99d2eadfbaabb334bd4427f702972a1451b42e8d2226",
+        "before": "3cdc4624fcf2ef94934812f8defc63f6d736ae4a669595b3a99d6c9225a5fe5b"
       },
       "to_revision": 39
     },
@@ -4598,7 +4598,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.22",
         "resulting_revision": 40,
-        "resulting_state_digest": "733f3cd9f2ba4a3447af45c75a07538977d62cddb57ce608c76ad0a6d61cad69"
+        "resulting_state_digest": "164755e233289d9541d723752fed419ffb3f2378ef54f1077c08209265c9c5ff"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -4628,8 +4628,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "733f3cd9f2ba4a3447af45c75a07538977d62cddb57ce608c76ad0a6d61cad69",
-        "before": "383c8dbfc02acedc05a807f864724d4085514481d5691c746e8107e0cc9f9bac"
+        "after": "164755e233289d9541d723752fed419ffb3f2378ef54f1077c08209265c9c5ff",
+        "before": "e5094d53d7710ca6389c99d2eadfbaabb334bd4427f702972a1451b42e8d2226"
       },
       "to_revision": 40
     },
@@ -4648,10 +4648,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.23",
         "resulting_revision": 41,
-        "resulting_state_digest": "2f759a112b0f66104f02b1c6ad87c07e961c13c7b4b684cff113571077755c29"
+        "resulting_state_digest": "d04099d614c6233fa5ff97870852910a9c564fa6ceb34f22ccd36ffb942b63d1"
       },
       "encountered_definition_ids": [
-        341
+        342
       ],
       "encountered_programs": [],
       "from_revision": 40,
@@ -4699,8 +4699,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "2f759a112b0f66104f02b1c6ad87c07e961c13c7b4b684cff113571077755c29",
-        "before": "733f3cd9f2ba4a3447af45c75a07538977d62cddb57ce608c76ad0a6d61cad69"
+        "after": "d04099d614c6233fa5ff97870852910a9c564fa6ceb34f22ccd36ffb942b63d1",
+        "before": "164755e233289d9541d723752fed419ffb3f2378ef54f1077c08209265c9c5ff"
       },
       "to_revision": 41
     },
@@ -4719,13 +4719,13 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.24",
         "resulting_revision": 42,
-        "resulting_state_digest": "5a3ea2d5f9e0fda4f84d4c3a7d79719419deb2443e4fa69336eb252c842f08e7"
+        "resulting_state_digest": "939d66df6ab4fd1603369ca309976fcb99e5861a0b6c7668badc8fc2b0aa69b6"
       },
       "encountered_definition_ids": [
         76,
         127,
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -4941,8 +4941,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "5a3ea2d5f9e0fda4f84d4c3a7d79719419deb2443e4fa69336eb252c842f08e7",
-        "before": "2f759a112b0f66104f02b1c6ad87c07e961c13c7b4b684cff113571077755c29"
+        "after": "939d66df6ab4fd1603369ca309976fcb99e5861a0b6c7668badc8fc2b0aa69b6",
+        "before": "d04099d614c6233fa5ff97870852910a9c564fa6ceb34f22ccd36ffb942b63d1"
       },
       "to_revision": 42
     },
@@ -4961,7 +4961,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.18",
         "resulting_revision": 43,
-        "resulting_state_digest": "4efaa342ff2209a554f84d5c5fc50353cd7d1e0416ca823b0c599e6e5ea546ff"
+        "resulting_state_digest": "a420c61373bf1fe4ae5d4b26d30512a0482406f487f1f0cec99977be0fde366d"
       },
       "encountered_definition_ids": [
         153
@@ -5020,8 +5020,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "4efaa342ff2209a554f84d5c5fc50353cd7d1e0416ca823b0c599e6e5ea546ff",
-        "before": "5a3ea2d5f9e0fda4f84d4c3a7d79719419deb2443e4fa69336eb252c842f08e7"
+        "after": "a420c61373bf1fe4ae5d4b26d30512a0482406f487f1f0cec99977be0fde366d",
+        "before": "939d66df6ab4fd1603369ca309976fcb99e5861a0b6c7668badc8fc2b0aa69b6"
       },
       "to_revision": 43
     },
@@ -5040,13 +5040,13 @@
         "actor": 0,
         "command_id": "authored-authority.hero.19",
         "resulting_revision": 44,
-        "resulting_state_digest": "5e2f7d733f7cff374ba5bc9b3d56584a0b01591369368b8c6b7fff300a9ad347"
+        "resulting_state_digest": "62b51451e629143309de5095df606848a014981f05394142359ae34689aa58d6"
       },
       "encountered_definition_ids": [
         153,
         161,
         203,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -5190,8 +5190,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "5e2f7d733f7cff374ba5bc9b3d56584a0b01591369368b8c6b7fff300a9ad347",
-        "before": "4efaa342ff2209a554f84d5c5fc50353cd7d1e0416ca823b0c599e6e5ea546ff"
+        "after": "62b51451e629143309de5095df606848a014981f05394142359ae34689aa58d6",
+        "before": "a420c61373bf1fe4ae5d4b26d30512a0482406f487f1f0cec99977be0fde366d"
       },
       "to_revision": 44
     },
@@ -5210,13 +5210,13 @@
         "actor": 0,
         "command_id": "authored-authority.hero.20",
         "resulting_revision": 45,
-        "resulting_state_digest": "06c5f7ba53193939bc50bad869caeafa9c44f7f9088f623c7caadee90991662c"
+        "resulting_state_digest": "16b5f870d79a3756a2cb52cdee8c57bd9be9023e08c9b1d91148578f0197f956"
       },
       "encountered_definition_ids": [
         126,
         153,
         161,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -5385,7 +5385,7 @@
           "amount": 1,
           "controller_id": -1,
           "definition_ids": [
-            303
+            304
           ],
           "event_type": "PERMANENTS_DIED",
           "from_zone": -1,
@@ -5416,8 +5416,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "06c5f7ba53193939bc50bad869caeafa9c44f7f9088f623c7caadee90991662c",
-        "before": "5e2f7d733f7cff374ba5bc9b3d56584a0b01591369368b8c6b7fff300a9ad347"
+        "after": "16b5f870d79a3756a2cb52cdee8c57bd9be9023e08c9b1d91148578f0197f956",
+        "before": "62b51451e629143309de5095df606848a014981f05394142359ae34689aa58d6"
       },
       "to_revision": 45
     },
@@ -5436,7 +5436,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.21",
         "resulting_revision": 46,
-        "resulting_state_digest": "1b38d67067cbc7eb8ccc164125af6af69669e4a05f6bc0505e75f3fd46c00986"
+        "resulting_state_digest": "8a705ae86404aaaeccb9b9a81752371548a20082b925fda7d7cd0acf2cf804c8"
       },
       "encountered_definition_ids": [
         203
@@ -5544,8 +5544,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "1b38d67067cbc7eb8ccc164125af6af69669e4a05f6bc0505e75f3fd46c00986",
-        "before": "06c5f7ba53193939bc50bad869caeafa9c44f7f9088f623c7caadee90991662c"
+        "after": "8a705ae86404aaaeccb9b9a81752371548a20082b925fda7d7cd0acf2cf804c8",
+        "before": "16b5f870d79a3756a2cb52cdee8c57bd9be9023e08c9b1d91148578f0197f956"
       },
       "to_revision": 46
     },
@@ -5564,10 +5564,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.25",
         "resulting_revision": 47,
-        "resulting_state_digest": "1dce7df57588d01318c66096bccd76554d8ebffb16c1fe44ae9443e774972d3e"
+        "resulting_state_digest": "b0fac8b795a692165d2bf5a18301db704fa14d8a29db842feab10117b61457f4"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -5623,8 +5623,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "1dce7df57588d01318c66096bccd76554d8ebffb16c1fe44ae9443e774972d3e",
-        "before": "1b38d67067cbc7eb8ccc164125af6af69669e4a05f6bc0505e75f3fd46c00986"
+        "after": "b0fac8b795a692165d2bf5a18301db704fa14d8a29db842feab10117b61457f4",
+        "before": "8a705ae86404aaaeccb9b9a81752371548a20082b925fda7d7cd0acf2cf804c8"
       },
       "to_revision": 47
     },
@@ -5643,10 +5643,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.26",
         "resulting_revision": 48,
-        "resulting_state_digest": "024ec17204b7bd994742c0fb1f1b029acd71df41eefdfcc705574fde65192d96"
+        "resulting_state_digest": "7b7fde793a3b3c84a91e7fcda9b2ee3df4b89daabd50c72ba83545f4180b9fa7"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -5696,8 +5696,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "024ec17204b7bd994742c0fb1f1b029acd71df41eefdfcc705574fde65192d96",
-        "before": "1dce7df57588d01318c66096bccd76554d8ebffb16c1fe44ae9443e774972d3e"
+        "after": "7b7fde793a3b3c84a91e7fcda9b2ee3df4b89daabd50c72ba83545f4180b9fa7",
+        "before": "b0fac8b795a692165d2bf5a18301db704fa14d8a29db842feab10117b61457f4"
       },
       "to_revision": 48
     },
@@ -5716,7 +5716,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.27",
         "resulting_revision": 49,
-        "resulting_state_digest": "37b1911e7b6c896f0a4fd36f21b0ec4ec6ae4f46604faf1ff112fda835812baa"
+        "resulting_state_digest": "e77fa8f6d2b993516c434a39042ac882c43a072e5824cd60febdb5151747979e"
       },
       "encountered_definition_ids": [
         57
@@ -5769,8 +5769,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "37b1911e7b6c896f0a4fd36f21b0ec4ec6ae4f46604faf1ff112fda835812baa",
-        "before": "024ec17204b7bd994742c0fb1f1b029acd71df41eefdfcc705574fde65192d96"
+        "after": "e77fa8f6d2b993516c434a39042ac882c43a072e5824cd60febdb5151747979e",
+        "before": "7b7fde793a3b3c84a91e7fcda9b2ee3df4b89daabd50c72ba83545f4180b9fa7"
       },
       "to_revision": 49
     },
@@ -5789,12 +5789,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.28",
         "resulting_revision": 50,
-        "resulting_state_digest": "e5ac0aaacb099776db2893d8c298dfcd1a2d81b356215230a757265a723d9a4a"
+        "resulting_state_digest": "74bc44c3a51c2db96fe3569f64143937784c96f67dbb23249a9d71145b84831e"
       },
       "encountered_definition_ids": [
         127,
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -5877,8 +5877,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "e5ac0aaacb099776db2893d8c298dfcd1a2d81b356215230a757265a723d9a4a",
-        "before": "37b1911e7b6c896f0a4fd36f21b0ec4ec6ae4f46604faf1ff112fda835812baa"
+        "after": "74bc44c3a51c2db96fe3569f64143937784c96f67dbb23249a9d71145b84831e",
+        "before": "e77fa8f6d2b993516c434a39042ac882c43a072e5824cd60febdb5151747979e"
       },
       "to_revision": 50
     },
@@ -5897,11 +5897,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.29",
         "resulting_revision": 51,
-        "resulting_state_digest": "942dd41f6368fc4c5d2e607980fab54457d0424d5d5c66a0d7d1256559e828be"
+        "resulting_state_digest": "911d8e07e6c5e0f4b2908b9dbcefd33ad7cb09f49695e27ac7af9976ddfceea9"
       },
       "encountered_definition_ids": [
         127,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -5952,8 +5952,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "942dd41f6368fc4c5d2e607980fab54457d0424d5d5c66a0d7d1256559e828be",
-        "before": "e5ac0aaacb099776db2893d8c298dfcd1a2d81b356215230a757265a723d9a4a"
+        "after": "911d8e07e6c5e0f4b2908b9dbcefd33ad7cb09f49695e27ac7af9976ddfceea9",
+        "before": "74bc44c3a51c2db96fe3569f64143937784c96f67dbb23249a9d71145b84831e"
       },
       "to_revision": 51
     },
@@ -5972,10 +5972,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.30",
         "resulting_revision": 52,
-        "resulting_state_digest": "9365d64b8caa630e4a8c93a05ca2ea4b3c2a63f7793d6b4450d0d9f46bb2419e"
+        "resulting_state_digest": "1116fe33cf8eda14be0d8c21af4ad26c6c478d733364f8d29cc9c30e4b59cd6c"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -6041,8 +6041,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "9365d64b8caa630e4a8c93a05ca2ea4b3c2a63f7793d6b4450d0d9f46bb2419e",
-        "before": "942dd41f6368fc4c5d2e607980fab54457d0424d5d5c66a0d7d1256559e828be"
+        "after": "1116fe33cf8eda14be0d8c21af4ad26c6c478d733364f8d29cc9c30e4b59cd6c",
+        "before": "911d8e07e6c5e0f4b2908b9dbcefd33ad7cb09f49695e27ac7af9976ddfceea9"
       },
       "to_revision": 52
     },
@@ -6061,7 +6061,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.31",
         "resulting_revision": 53,
-        "resulting_state_digest": "d19e1f2cf68840aa0a18074f682ab9a88519013d644b5759126350b05c42e9b5"
+        "resulting_state_digest": "556636ae9bcfbf90257ccb8c4596f8f9121b8e04420f60672a1f3e1db4f6e3d3"
       },
       "encountered_definition_ids": [
         219
@@ -6138,8 +6138,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "d19e1f2cf68840aa0a18074f682ab9a88519013d644b5759126350b05c42e9b5",
-        "before": "9365d64b8caa630e4a8c93a05ca2ea4b3c2a63f7793d6b4450d0d9f46bb2419e"
+        "after": "556636ae9bcfbf90257ccb8c4596f8f9121b8e04420f60672a1f3e1db4f6e3d3",
+        "before": "1116fe33cf8eda14be0d8c21af4ad26c6c478d733364f8d29cc9c30e4b59cd6c"
       },
       "to_revision": 53
     },
@@ -6158,7 +6158,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.32",
         "resulting_revision": 54,
-        "resulting_state_digest": "f7ea1ad493e654be3f2d48e243ee0121852b7db078cc2c7485c6160c917c8aef"
+        "resulting_state_digest": "9a65305e74e77a92dc4cbb7912f036ec2a8fccda9a9141111da39ed9049990c3"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -6188,8 +6188,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "f7ea1ad493e654be3f2d48e243ee0121852b7db078cc2c7485c6160c917c8aef",
-        "before": "d19e1f2cf68840aa0a18074f682ab9a88519013d644b5759126350b05c42e9b5"
+        "after": "9a65305e74e77a92dc4cbb7912f036ec2a8fccda9a9141111da39ed9049990c3",
+        "before": "556636ae9bcfbf90257ccb8c4596f8f9121b8e04420f60672a1f3e1db4f6e3d3"
       },
       "to_revision": 54
     },
@@ -6208,10 +6208,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.33",
         "resulting_revision": 55,
-        "resulting_state_digest": "bc21d8c53b9a3c37764c7347a5cab58fa4910a7f90af5bd8b1b739c79be58b73"
+        "resulting_state_digest": "44ab75aa3d65e4ccec96a68b50a643bf6a2fee6dbe60d60dfdee20df913b3276"
       },
       "encountered_definition_ids": [
-        341
+        342
       ],
       "encountered_programs": [],
       "from_revision": 54,
@@ -6259,8 +6259,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "bc21d8c53b9a3c37764c7347a5cab58fa4910a7f90af5bd8b1b739c79be58b73",
-        "before": "f7ea1ad493e654be3f2d48e243ee0121852b7db078cc2c7485c6160c917c8aef"
+        "after": "44ab75aa3d65e4ccec96a68b50a643bf6a2fee6dbe60d60dfdee20df913b3276",
+        "before": "9a65305e74e77a92dc4cbb7912f036ec2a8fccda9a9141111da39ed9049990c3"
       },
       "to_revision": 55
     },
@@ -6279,7 +6279,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.34",
         "resulting_revision": 56,
-        "resulting_state_digest": "1936b00d6eed19740d98ef75f735b14cd14cb43780e00cf1ee5a4d8fe30b7b3a"
+        "resulting_state_digest": "82b56f82110f7ae3a3b002fec4ce1542a28a9af692f35aa1cdc87b574b25efe6"
       },
       "encountered_definition_ids": [
         31,
@@ -6438,8 +6438,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "1936b00d6eed19740d98ef75f735b14cd14cb43780e00cf1ee5a4d8fe30b7b3a",
-        "before": "bc21d8c53b9a3c37764c7347a5cab58fa4910a7f90af5bd8b1b739c79be58b73"
+        "after": "82b56f82110f7ae3a3b002fec4ce1542a28a9af692f35aa1cdc87b574b25efe6",
+        "before": "44ab75aa3d65e4ccec96a68b50a643bf6a2fee6dbe60d60dfdee20df913b3276"
       },
       "to_revision": 56
     },
@@ -6458,7 +6458,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.35",
         "resulting_revision": 57,
-        "resulting_state_digest": "88c699e7c9614947e5486b0bb1ebca8f755bdf23f705a68af6b968a159daf70a"
+        "resulting_state_digest": "f50d0cdba8288869b8176d03ebc7a88d83f58a6c57f17de1e9f6e905134bae75"
       },
       "encountered_definition_ids": [
         127
@@ -6573,8 +6573,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "88c699e7c9614947e5486b0bb1ebca8f755bdf23f705a68af6b968a159daf70a",
-        "before": "1936b00d6eed19740d98ef75f735b14cd14cb43780e00cf1ee5a4d8fe30b7b3a"
+        "after": "f50d0cdba8288869b8176d03ebc7a88d83f58a6c57f17de1e9f6e905134bae75",
+        "before": "82b56f82110f7ae3a3b002fec4ce1542a28a9af692f35aa1cdc87b574b25efe6"
       },
       "to_revision": 57
     },
@@ -6593,7 +6593,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.22",
         "resulting_revision": 58,
-        "resulting_state_digest": "680b8a0ef8cf826dc3ac59959bec06852c399696de72bbc9627df7bc0dcd60da"
+        "resulting_state_digest": "9bcd7b0828c024967195f5a3f3d1be3885eb88e157209238b6f6ae91cd34ee1a"
       },
       "encountered_definition_ids": [
         126,
@@ -6779,8 +6779,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "680b8a0ef8cf826dc3ac59959bec06852c399696de72bbc9627df7bc0dcd60da",
-        "before": "88c699e7c9614947e5486b0bb1ebca8f755bdf23f705a68af6b968a159daf70a"
+        "after": "9bcd7b0828c024967195f5a3f3d1be3885eb88e157209238b6f6ae91cd34ee1a",
+        "before": "f50d0cdba8288869b8176d03ebc7a88d83f58a6c57f17de1e9f6e905134bae75"
       },
       "to_revision": 58
     },
@@ -6799,7 +6799,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.23",
         "resulting_revision": 59,
-        "resulting_state_digest": "e48f70fa981f8932e49ee7af1f665405613e127dad60957677c9d51184464ea5"
+        "resulting_state_digest": "81a0444f5584589e218cbaca8150211100676638927a49aae72f122ae33d986b"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -6829,8 +6829,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "e48f70fa981f8932e49ee7af1f665405613e127dad60957677c9d51184464ea5",
-        "before": "680b8a0ef8cf826dc3ac59959bec06852c399696de72bbc9627df7bc0dcd60da"
+        "after": "81a0444f5584589e218cbaca8150211100676638927a49aae72f122ae33d986b",
+        "before": "9bcd7b0828c024967195f5a3f3d1be3885eb88e157209238b6f6ae91cd34ee1a"
       },
       "to_revision": 59
     },
@@ -6849,7 +6849,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.24",
         "resulting_revision": 60,
-        "resulting_state_digest": "c1f3a0d94c05ccdfbb08ea969fb18dde7bb193e04b778deebea66f82a2ec9d6b"
+        "resulting_state_digest": "1b288f5a78e8f1660bef77a9987abe85ec0c16330347725780bc14e24d14d709"
       },
       "encountered_definition_ids": [
         54,
@@ -6941,8 +6941,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "c1f3a0d94c05ccdfbb08ea969fb18dde7bb193e04b778deebea66f82a2ec9d6b",
-        "before": "e48f70fa981f8932e49ee7af1f665405613e127dad60957677c9d51184464ea5"
+        "after": "1b288f5a78e8f1660bef77a9987abe85ec0c16330347725780bc14e24d14d709",
+        "before": "81a0444f5584589e218cbaca8150211100676638927a49aae72f122ae33d986b"
       },
       "to_revision": 60
     },
@@ -6961,7 +6961,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.25",
         "resulting_revision": 61,
-        "resulting_state_digest": "8ab32a7b072c42158c96a8e0e4c5cb429446e7123fe390677f1667377b4c8dfb"
+        "resulting_state_digest": "cbed4dbb8eec648ee091bb283cc6e19c70695aff17660b96250a6db6280d86ba"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -7023,8 +7023,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "8ab32a7b072c42158c96a8e0e4c5cb429446e7123fe390677f1667377b4c8dfb",
-        "before": "c1f3a0d94c05ccdfbb08ea969fb18dde7bb193e04b778deebea66f82a2ec9d6b"
+        "after": "cbed4dbb8eec648ee091bb283cc6e19c70695aff17660b96250a6db6280d86ba",
+        "before": "1b288f5a78e8f1660bef77a9987abe85ec0c16330347725780bc14e24d14d709"
       },
       "to_revision": 61
     },
@@ -7043,10 +7043,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.36",
         "resulting_revision": 62,
-        "resulting_state_digest": "65498119e523d2d7dd8e6044948ec7971664c056ea9fd79633a1e59766cb86e7"
+        "resulting_state_digest": "c9d2103a70c1f9221dceffce8d513a77a55bf5bc6555b1133c232f237ecd82d7"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -7102,8 +7102,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "65498119e523d2d7dd8e6044948ec7971664c056ea9fd79633a1e59766cb86e7",
-        "before": "8ab32a7b072c42158c96a8e0e4c5cb429446e7123fe390677f1667377b4c8dfb"
+        "after": "c9d2103a70c1f9221dceffce8d513a77a55bf5bc6555b1133c232f237ecd82d7",
+        "before": "cbed4dbb8eec648ee091bb283cc6e19c70695aff17660b96250a6db6280d86ba"
       },
       "to_revision": 62
     },
@@ -7122,10 +7122,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.37",
         "resulting_revision": 63,
-        "resulting_state_digest": "dea1fd7a0cd2f890f6139b1dd5ad7373803bae64e70ce3b8bc36dac1958abaac"
+        "resulting_state_digest": "feea4a572c56003c6c8c75d42d477b0ed823a530b2673146eea8944e4fe6ab39"
       },
       "encountered_definition_ids": [
-        341
+        342
       ],
       "encountered_programs": [],
       "from_revision": 62,
@@ -7173,8 +7173,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "dea1fd7a0cd2f890f6139b1dd5ad7373803bae64e70ce3b8bc36dac1958abaac",
-        "before": "65498119e523d2d7dd8e6044948ec7971664c056ea9fd79633a1e59766cb86e7"
+        "after": "feea4a572c56003c6c8c75d42d477b0ed823a530b2673146eea8944e4fe6ab39",
+        "before": "c9d2103a70c1f9221dceffce8d513a77a55bf5bc6555b1133c232f237ecd82d7"
       },
       "to_revision": 63
     },
@@ -7193,12 +7193,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.38",
         "resulting_revision": 64,
-        "resulting_state_digest": "53364053c7f4710831ce088f51076ab30701db181cfac6fcd95e0fc140c4a999"
+        "resulting_state_digest": "834dea38b91362d4b19f7a6bb4481b3ce618aedb1d34080788da01b95d8dba77"
       },
       "encountered_definition_ids": [
         127,
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -7250,8 +7250,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "53364053c7f4710831ce088f51076ab30701db181cfac6fcd95e0fc140c4a999",
-        "before": "dea1fd7a0cd2f890f6139b1dd5ad7373803bae64e70ce3b8bc36dac1958abaac"
+        "after": "834dea38b91362d4b19f7a6bb4481b3ce618aedb1d34080788da01b95d8dba77",
+        "before": "feea4a572c56003c6c8c75d42d477b0ed823a530b2673146eea8944e4fe6ab39"
       },
       "to_revision": 64
     },
@@ -7270,10 +7270,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.39",
         "resulting_revision": 65,
-        "resulting_state_digest": "df14241a10776da1201af5a9f57ad2b103a4d9e108806da0ec056b2a4812abfd"
+        "resulting_state_digest": "a041160544683fea221cf42c502e56e2da49e103e459bfc6a3a41d260950a774"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -7329,8 +7329,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "df14241a10776da1201af5a9f57ad2b103a4d9e108806da0ec056b2a4812abfd",
-        "before": "53364053c7f4710831ce088f51076ab30701db181cfac6fcd95e0fc140c4a999"
+        "after": "a041160544683fea221cf42c502e56e2da49e103e459bfc6a3a41d260950a774",
+        "before": "834dea38b91362d4b19f7a6bb4481b3ce618aedb1d34080788da01b95d8dba77"
       },
       "to_revision": 65
     },
@@ -7349,11 +7349,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.40",
         "resulting_revision": 66,
-        "resulting_state_digest": "087af44a3ec8f763e261d2005c01508fdc8cbecb6c92e8979b689a3cd57c7c3c"
+        "resulting_state_digest": "d6a90344dc02383eaf2e17873f839a4f9a3fed76d42687c283a47b9bc41032f1"
       },
       "encountered_definition_ids": [
         31,
-        333
+        334
       ],
       "encountered_programs": [
         "tla.badgermole_cub.triggered.0",
@@ -7405,8 +7405,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "087af44a3ec8f763e261d2005c01508fdc8cbecb6c92e8979b689a3cd57c7c3c",
-        "before": "df14241a10776da1201af5a9f57ad2b103a4d9e108806da0ec056b2a4812abfd"
+        "after": "d6a90344dc02383eaf2e17873f839a4f9a3fed76d42687c283a47b9bc41032f1",
+        "before": "a041160544683fea221cf42c502e56e2da49e103e459bfc6a3a41d260950a774"
       },
       "to_revision": 66
     },
@@ -7425,10 +7425,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.41",
         "resulting_revision": 67,
-        "resulting_state_digest": "9456c9cb0c330d4a8969b93fdfacdd59167712e6a94972c3350e9983a71a1e72"
+        "resulting_state_digest": "f01066d7d33c6c0d71d507d8098e7bd46cc2d37543e5a0aca900a3ae77e80848"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -7478,8 +7478,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "9456c9cb0c330d4a8969b93fdfacdd59167712e6a94972c3350e9983a71a1e72",
-        "before": "087af44a3ec8f763e261d2005c01508fdc8cbecb6c92e8979b689a3cd57c7c3c"
+        "after": "f01066d7d33c6c0d71d507d8098e7bd46cc2d37543e5a0aca900a3ae77e80848",
+        "before": "d6a90344dc02383eaf2e17873f839a4f9a3fed76d42687c283a47b9bc41032f1"
       },
       "to_revision": 67
     },
@@ -7498,12 +7498,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.42",
         "resulting_revision": 68,
-        "resulting_state_digest": "85873f4a283faaeaefb21f2cd09bf5d21b5ac26127c8a0ce49f76b45818548bb"
+        "resulting_state_digest": "db9d0b906d24581e0f92aabf6894fb6d2da31f30dc20dd79ec46323ca7b26a23"
       },
       "encountered_definition_ids": [
         127,
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -7555,8 +7555,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "85873f4a283faaeaefb21f2cd09bf5d21b5ac26127c8a0ce49f76b45818548bb",
-        "before": "9456c9cb0c330d4a8969b93fdfacdd59167712e6a94972c3350e9983a71a1e72"
+        "after": "db9d0b906d24581e0f92aabf6894fb6d2da31f30dc20dd79ec46323ca7b26a23",
+        "before": "f01066d7d33c6c0d71d507d8098e7bd46cc2d37543e5a0aca900a3ae77e80848"
       },
       "to_revision": 68
     },
@@ -7575,12 +7575,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.43",
         "resulting_revision": 69,
-        "resulting_state_digest": "569e2bc63fa62e2d2002d1f14d6ed79139f8d20582b69f94452cf8d2a5f2c466"
+        "resulting_state_digest": "bac45f690b1f0470b1a985a558e7203c2194de9c882423657940753844007a52"
       },
       "encountered_definition_ids": [
         219,
-        267,
-        333
+        268,
+        334
       ],
       "encountered_programs": [
         "lea.plains.mana.0",
@@ -7634,12 +7634,12 @@
           "amount": 0,
           "controller_id": 1,
           "definition_ids": [
-            267
+            268
           ],
           "event_type": "CARD_REVEALED",
           "from_zone": -1,
           "ordinal": 0,
-          "source_id": 267,
+          "source_id": 268,
           "source_incarnation": -1,
           "source_kind": 5,
           "target_id": -1,
@@ -7667,8 +7667,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "569e2bc63fa62e2d2002d1f14d6ed79139f8d20582b69f94452cf8d2a5f2c466",
-        "before": "85873f4a283faaeaefb21f2cd09bf5d21b5ac26127c8a0ce49f76b45818548bb"
+        "after": "bac45f690b1f0470b1a985a558e7203c2194de9c882423657940753844007a52",
+        "before": "db9d0b906d24581e0f92aabf6894fb6d2da31f30dc20dd79ec46323ca7b26a23"
       },
       "to_revision": 69
     },
@@ -7687,10 +7687,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.44",
         "resulting_revision": 70,
-        "resulting_state_digest": "089e94057acddd278ecc59fc7fee8bbea755166f313f251de169509b6c30181e"
+        "resulting_state_digest": "02af86b97493adc83de86601262df5f2d18ea85af03dd3ccba94baef0ef04f05"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -7756,8 +7756,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "089e94057acddd278ecc59fc7fee8bbea755166f313f251de169509b6c30181e",
-        "before": "569e2bc63fa62e2d2002d1f14d6ed79139f8d20582b69f94452cf8d2a5f2c466"
+        "after": "02af86b97493adc83de86601262df5f2d18ea85af03dd3ccba94baef0ef04f05",
+        "before": "bac45f690b1f0470b1a985a558e7203c2194de9c882423657940753844007a52"
       },
       "to_revision": 70
     },
@@ -7776,7 +7776,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.45",
         "resulting_revision": 71,
-        "resulting_state_digest": "95fa0a50b62a38d74d2afffd32715264882d7029888e74d10f7703fa3b666692"
+        "resulting_state_digest": "42a70f5addf88b2b421f2356d31e77b1921abbab7ab74ff33de6957c9f6e1c1a"
       },
       "encountered_definition_ids": [
         127
@@ -7853,8 +7853,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "95fa0a50b62a38d74d2afffd32715264882d7029888e74d10f7703fa3b666692",
-        "before": "089e94057acddd278ecc59fc7fee8bbea755166f313f251de169509b6c30181e"
+        "after": "42a70f5addf88b2b421f2356d31e77b1921abbab7ab74ff33de6957c9f6e1c1a",
+        "before": "02af86b97493adc83de86601262df5f2d18ea85af03dd3ccba94baef0ef04f05"
       },
       "to_revision": 71
     },
@@ -7873,7 +7873,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.46",
         "resulting_revision": 72,
-        "resulting_state_digest": "0ca8204d96885dc8c7270757842751c3ced05c33f256c7e5ac63b40d9dbfeea0"
+        "resulting_state_digest": "82b3998e03b2d09d42b4393ea7f8d4984ad1909acc4f5afbda4115e1aa353f48"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -7903,8 +7903,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "0ca8204d96885dc8c7270757842751c3ced05c33f256c7e5ac63b40d9dbfeea0",
-        "before": "95fa0a50b62a38d74d2afffd32715264882d7029888e74d10f7703fa3b666692"
+        "after": "82b3998e03b2d09d42b4393ea7f8d4984ad1909acc4f5afbda4115e1aa353f48",
+        "before": "42a70f5addf88b2b421f2356d31e77b1921abbab7ab74ff33de6957c9f6e1c1a"
       },
       "to_revision": 72
     },
@@ -7923,7 +7923,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.47",
         "resulting_revision": 73,
-        "resulting_state_digest": "c3928cab5d299b5ade084d7f896d6d34a20d1dd3fcb3b70085309905faf04acc"
+        "resulting_state_digest": "f2d1c4cac993403b3c368a33e79880d4194d869b82b5d57b066bce02c1b68817"
       },
       "encountered_definition_ids": [
         31,
@@ -8053,8 +8053,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "c3928cab5d299b5ade084d7f896d6d34a20d1dd3fcb3b70085309905faf04acc",
-        "before": "0ca8204d96885dc8c7270757842751c3ced05c33f256c7e5ac63b40d9dbfeea0"
+        "after": "f2d1c4cac993403b3c368a33e79880d4194d869b82b5d57b066bce02c1b68817",
+        "before": "82b3998e03b2d09d42b4393ea7f8d4984ad1909acc4f5afbda4115e1aa353f48"
       },
       "to_revision": 73
     },
@@ -8073,7 +8073,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.48",
         "resulting_revision": 74,
-        "resulting_state_digest": "db15cb5b8f6f260a82d286c834daf601e6853a6947b463b533bd5a391c8e0d4f"
+        "resulting_state_digest": "f324f0573d50b71197f90d7f0914fc0db371f5317576ebc74af2b18acd805a12"
       },
       "encountered_definition_ids": [
         219
@@ -8126,8 +8126,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "db15cb5b8f6f260a82d286c834daf601e6853a6947b463b533bd5a391c8e0d4f",
-        "before": "c3928cab5d299b5ade084d7f896d6d34a20d1dd3fcb3b70085309905faf04acc"
+        "after": "f324f0573d50b71197f90d7f0914fc0db371f5317576ebc74af2b18acd805a12",
+        "before": "f2d1c4cac993403b3c368a33e79880d4194d869b82b5d57b066bce02c1b68817"
       },
       "to_revision": 74
     },
@@ -8146,7 +8146,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.26",
         "resulting_revision": 75,
-        "resulting_state_digest": "e526389cb9be0cc1bd6a1e9f8f820a95288e8de48ea575040a84ebd2e15f309d"
+        "resulting_state_digest": "7cedfd17ba911f2b975597ae7a4a4ccc7b8b998cd5f2c8e97feff14f82bca556"
       },
       "encountered_definition_ids": [
         31,
@@ -8280,8 +8280,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e526389cb9be0cc1bd6a1e9f8f820a95288e8de48ea575040a84ebd2e15f309d",
-        "before": "db15cb5b8f6f260a82d286c834daf601e6853a6947b463b533bd5a391c8e0d4f"
+        "after": "7cedfd17ba911f2b975597ae7a4a4ccc7b8b998cd5f2c8e97feff14f82bca556",
+        "before": "f324f0573d50b71197f90d7f0914fc0db371f5317576ebc74af2b18acd805a12"
       },
       "to_revision": 75
     },
@@ -8300,7 +8300,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.49",
         "resulting_revision": 76,
-        "resulting_state_digest": "3656b4a41b79b3bb4cbaa57511d2f0d4f1914c934f1648dd0d28ac38457a037e"
+        "resulting_state_digest": "85381c601a984fd19d62cce4c0b1c84c973f9f8a8a5ed3af8cb381df0b41bed0"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -8377,8 +8377,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "3656b4a41b79b3bb4cbaa57511d2f0d4f1914c934f1648dd0d28ac38457a037e",
-        "before": "e526389cb9be0cc1bd6a1e9f8f820a95288e8de48ea575040a84ebd2e15f309d"
+        "after": "85381c601a984fd19d62cce4c0b1c84c973f9f8a8a5ed3af8cb381df0b41bed0",
+        "before": "7cedfd17ba911f2b975597ae7a4a4ccc7b8b998cd5f2c8e97feff14f82bca556"
       },
       "to_revision": 76
     },
@@ -8397,7 +8397,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.27",
         "resulting_revision": 77,
-        "resulting_state_digest": "17f1098af2f6307f41320af0974c3755b525aecb63b0d23ac81ee2b6b5cf66ec"
+        "resulting_state_digest": "8ef613f39fc5c87b02cd9ba7ed02f0979705250892efc75afaf870a306ccd74d"
       },
       "encountered_definition_ids": [
         203
@@ -8472,8 +8472,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "17f1098af2f6307f41320af0974c3755b525aecb63b0d23ac81ee2b6b5cf66ec",
-        "before": "3656b4a41b79b3bb4cbaa57511d2f0d4f1914c934f1648dd0d28ac38457a037e"
+        "after": "8ef613f39fc5c87b02cd9ba7ed02f0979705250892efc75afaf870a306ccd74d",
+        "before": "85381c601a984fd19d62cce4c0b1c84c973f9f8a8a5ed3af8cb381df0b41bed0"
       },
       "to_revision": 77
     },
@@ -8492,7 +8492,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.28",
         "resulting_revision": 78,
-        "resulting_state_digest": "ffaf8db7cb372e35138591f081fc02cd1938dada4dd5f74b4b339e06d992c8ab"
+        "resulting_state_digest": "83cc55ae29cd91bdb4352cfd98365e2b4dcac11a473f51739ff2d7a68c0989a6"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -8522,8 +8522,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "ffaf8db7cb372e35138591f081fc02cd1938dada4dd5f74b4b339e06d992c8ab",
-        "before": "17f1098af2f6307f41320af0974c3755b525aecb63b0d23ac81ee2b6b5cf66ec"
+        "after": "83cc55ae29cd91bdb4352cfd98365e2b4dcac11a473f51739ff2d7a68c0989a6",
+        "before": "8ef613f39fc5c87b02cd9ba7ed02f0979705250892efc75afaf870a306ccd74d"
       },
       "to_revision": 78
     },
@@ -8542,7 +8542,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.29",
         "resulting_revision": 79,
-        "resulting_state_digest": "b011373d40540018e1d0153432da7749e076a78717cd5006d8d718347d9a56ed"
+        "resulting_state_digest": "13b8a72e17cbf4e59083761f531c0b5e8e0d98925f9eeeb2f680148e590c93e2"
       },
       "encountered_definition_ids": [
         126
@@ -8709,8 +8709,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "b011373d40540018e1d0153432da7749e076a78717cd5006d8d718347d9a56ed",
-        "before": "ffaf8db7cb372e35138591f081fc02cd1938dada4dd5f74b4b339e06d992c8ab"
+        "after": "13b8a72e17cbf4e59083761f531c0b5e8e0d98925f9eeeb2f680148e590c93e2",
+        "before": "83cc55ae29cd91bdb4352cfd98365e2b4dcac11a473f51739ff2d7a68c0989a6"
       },
       "to_revision": 79
     },
@@ -8729,7 +8729,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.30",
         "resulting_revision": 80,
-        "resulting_state_digest": "315160fa56f714070a23d64e9aab94794c510dd334a8d1c2397d572b61aa60f9"
+        "resulting_state_digest": "b9945e7148a226ba40f0c9cd940f87989818b64caf3ceac84321b53cf7eabb62"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -8791,8 +8791,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "315160fa56f714070a23d64e9aab94794c510dd334a8d1c2397d572b61aa60f9",
-        "before": "b011373d40540018e1d0153432da7749e076a78717cd5006d8d718347d9a56ed"
+        "after": "b9945e7148a226ba40f0c9cd940f87989818b64caf3ceac84321b53cf7eabb62",
+        "before": "13b8a72e17cbf4e59083761f531c0b5e8e0d98925f9eeeb2f680148e590c93e2"
       },
       "to_revision": 80
     },
@@ -8811,10 +8811,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.50",
         "resulting_revision": 81,
-        "resulting_state_digest": "59add12714d6f3421822281a15583e4fc90c3d0039df3d3bf632dd1b483c70f8"
+        "resulting_state_digest": "2614a05c831c5ad05f210283235fff4d1624f76f9c4a26ea805f24e080f252b5"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -8870,8 +8870,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "59add12714d6f3421822281a15583e4fc90c3d0039df3d3bf632dd1b483c70f8",
-        "before": "315160fa56f714070a23d64e9aab94794c510dd334a8d1c2397d572b61aa60f9"
+        "after": "2614a05c831c5ad05f210283235fff4d1624f76f9c4a26ea805f24e080f252b5",
+        "before": "b9945e7148a226ba40f0c9cd940f87989818b64caf3ceac84321b53cf7eabb62"
       },
       "to_revision": 81
     },
@@ -8890,7 +8890,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.51",
         "resulting_revision": 82,
-        "resulting_state_digest": "7fb35f43663b571bceb1463b952c6c778fdd3cfa8f4d42e6ae20521f9b52bd3c"
+        "resulting_state_digest": "1c07a4c1215e11065bb00a60c5864910e5ac44edf4a2085f31e608a48a8f20f1"
       },
       "encountered_definition_ids": [
         57
@@ -8943,8 +8943,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "7fb35f43663b571bceb1463b952c6c778fdd3cfa8f4d42e6ae20521f9b52bd3c",
-        "before": "59add12714d6f3421822281a15583e4fc90c3d0039df3d3bf632dd1b483c70f8"
+        "after": "1c07a4c1215e11065bb00a60c5864910e5ac44edf4a2085f31e608a48a8f20f1",
+        "before": "2614a05c831c5ad05f210283235fff4d1624f76f9c4a26ea805f24e080f252b5"
       },
       "to_revision": 82
     },
@@ -8963,10 +8963,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.52",
         "resulting_revision": 83,
-        "resulting_state_digest": "bde25c5b7f265dc416e24f6a4a0122785314d48accc8341d3f6f3e8868fa5150"
+        "resulting_state_digest": "1e8cf7ed968dad8980552100dcead4ce376499b30b9895df27d14d0ca1c13587"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -9016,8 +9016,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "bde25c5b7f265dc416e24f6a4a0122785314d48accc8341d3f6f3e8868fa5150",
-        "before": "7fb35f43663b571bceb1463b952c6c778fdd3cfa8f4d42e6ae20521f9b52bd3c"
+        "after": "1e8cf7ed968dad8980552100dcead4ce376499b30b9895df27d14d0ca1c13587",
+        "before": "1c07a4c1215e11065bb00a60c5864910e5ac44edf4a2085f31e608a48a8f20f1"
       },
       "to_revision": 83
     },
@@ -9036,14 +9036,14 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.53",
         "resulting_revision": 84,
-        "resulting_state_digest": "4472f8b6135efb4fcc69dd9176c86b0cbfe588388b47f553d033530a0e1d79f3"
+        "resulting_state_digest": "4aa316b455c5813c64f9bbaed25ac50997547d1a09d4bf6e6dae1ca319b13688"
       },
       "encountered_definition_ids": [
         31,
         57,
         127,
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -9116,8 +9116,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "4472f8b6135efb4fcc69dd9176c86b0cbfe588388b47f553d033530a0e1d79f3",
-        "before": "bde25c5b7f265dc416e24f6a4a0122785314d48accc8341d3f6f3e8868fa5150"
+        "after": "4aa316b455c5813c64f9bbaed25ac50997547d1a09d4bf6e6dae1ca319b13688",
+        "before": "1e8cf7ed968dad8980552100dcead4ce376499b30b9895df27d14d0ca1c13587"
       },
       "to_revision": 84
     },
@@ -9136,11 +9136,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.54",
         "resulting_revision": 85,
-        "resulting_state_digest": "ba2bca2b0fb4037036f6f6bd49dff118de06bb2b346c016bce414e66cc5368e5"
+        "resulting_state_digest": "6cfcdc811bd596d26f58626c42f9e1d11ceaedabd945db56cea6862b52fa05af"
       },
       "encountered_definition_ids": [
         57,
-        333
+        334
       ],
       "encountered_programs": [
         "tla.compassionate_healer.triggered.0",
@@ -9188,8 +9188,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "ba2bca2b0fb4037036f6f6bd49dff118de06bb2b346c016bce414e66cc5368e5",
-        "before": "4472f8b6135efb4fcc69dd9176c86b0cbfe588388b47f553d033530a0e1d79f3"
+        "after": "6cfcdc811bd596d26f58626c42f9e1d11ceaedabd945db56cea6862b52fa05af",
+        "before": "4aa316b455c5813c64f9bbaed25ac50997547d1a09d4bf6e6dae1ca319b13688"
       },
       "to_revision": 85
     },
@@ -9208,11 +9208,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.55",
         "resulting_revision": 86,
-        "resulting_state_digest": "e00449a994f83033f818afb8ea6c9c4f93c382894cc38b291513e1c7fa059176"
+        "resulting_state_digest": "9841d125c7184a46b1391a963504bcdcff34b58a2e6225fd2fffd3a0d929aff3"
       },
       "encountered_definition_ids": [
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.plains.mana.0",
@@ -9263,8 +9263,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "e00449a994f83033f818afb8ea6c9c4f93c382894cc38b291513e1c7fa059176",
-        "before": "ba2bca2b0fb4037036f6f6bd49dff118de06bb2b346c016bce414e66cc5368e5"
+        "after": "9841d125c7184a46b1391a963504bcdcff34b58a2e6225fd2fffd3a0d929aff3",
+        "before": "6cfcdc811bd596d26f58626c42f9e1d11ceaedabd945db56cea6862b52fa05af"
       },
       "to_revision": 86
     },
@@ -9283,10 +9283,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.56",
         "resulting_revision": 87,
-        "resulting_state_digest": "0c03e9c6f30b0d78d5181f538a1790841392f88798cd9d22077ad4dbb21d05a1"
+        "resulting_state_digest": "1173481a57bf05637085311bc58a5979e387e8ba88cd942e938a4f90bbdcbb09"
       },
       "encountered_definition_ids": [
-        333
+        334
       ],
       "encountered_programs": [
         "tla.water_tribe_rallier.activated.0"
@@ -9342,8 +9342,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "0c03e9c6f30b0d78d5181f538a1790841392f88798cd9d22077ad4dbb21d05a1",
-        "before": "e00449a994f83033f818afb8ea6c9c4f93c382894cc38b291513e1c7fa059176"
+        "after": "1173481a57bf05637085311bc58a5979e387e8ba88cd942e938a4f90bbdcbb09",
+        "before": "9841d125c7184a46b1391a963504bcdcff34b58a2e6225fd2fffd3a0d929aff3"
       },
       "to_revision": 87
     },
@@ -9362,11 +9362,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.57",
         "resulting_revision": 88,
-        "resulting_state_digest": "40972ef714eeb2c8e255a4a6addc2da80335a83cc45971fe1f5cad88535d5380"
+        "resulting_state_digest": "3101d92efcf20d05912a80ad0a152d165f7801bac00fa625ae88840d82724b8d"
       },
       "encountered_definition_ids": [
         31,
-        333
+        334
       ],
       "encountered_programs": [
         "tla.badgermole_cub.triggered.0",
@@ -9418,8 +9418,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "40972ef714eeb2c8e255a4a6addc2da80335a83cc45971fe1f5cad88535d5380",
-        "before": "0c03e9c6f30b0d78d5181f538a1790841392f88798cd9d22077ad4dbb21d05a1"
+        "after": "3101d92efcf20d05912a80ad0a152d165f7801bac00fa625ae88840d82724b8d",
+        "before": "1173481a57bf05637085311bc58a5979e387e8ba88cd942e938a4f90bbdcbb09"
       },
       "to_revision": 88
     },
@@ -9438,12 +9438,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.58",
         "resulting_revision": 89,
-        "resulting_state_digest": "4eedae30d04945bce54119155ec0a8cda9a8f7624de85d1db956e2785d76c90b"
+        "resulting_state_digest": "f8273b6c16c4b8290b6d883fe61fb3477b8e8204191425b3f3df26892b72197f"
       },
       "encountered_definition_ids": [
         127,
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -9495,8 +9495,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "4eedae30d04945bce54119155ec0a8cda9a8f7624de85d1db956e2785d76c90b",
-        "before": "40972ef714eeb2c8e255a4a6addc2da80335a83cc45971fe1f5cad88535d5380"
+        "after": "f8273b6c16c4b8290b6d883fe61fb3477b8e8204191425b3f3df26892b72197f",
+        "before": "3101d92efcf20d05912a80ad0a152d165f7801bac00fa625ae88840d82724b8d"
       },
       "to_revision": 89
     },
@@ -9515,11 +9515,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.59",
         "resulting_revision": 90,
-        "resulting_state_digest": "5c0a54c06b8c3a40592b562dd7fd3f5654e262a8ca716159c41b84e44c0e0008"
+        "resulting_state_digest": "c54644ecb86519d35bf248f39f81c36118ab56f68cf6965f7412febdcabcc4da"
       },
       "encountered_definition_ids": [
         79,
-        333
+        334
       ],
       "encountered_programs": [
         "tla.earth_kings_lieutenant.triggered.0",
@@ -9604,8 +9604,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "5c0a54c06b8c3a40592b562dd7fd3f5654e262a8ca716159c41b84e44c0e0008",
-        "before": "4eedae30d04945bce54119155ec0a8cda9a8f7624de85d1db956e2785d76c90b"
+        "after": "c54644ecb86519d35bf248f39f81c36118ab56f68cf6965f7412febdcabcc4da",
+        "before": "f8273b6c16c4b8290b6d883fe61fb3477b8e8204191425b3f3df26892b72197f"
       },
       "to_revision": 90
     },
@@ -9624,11 +9624,11 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.60",
         "resulting_revision": 91,
-        "resulting_state_digest": "e8369e8647bd0741143bd2a648ef3da8cfe3d7e695efa3caf0690bcf38215a01"
+        "resulting_state_digest": "55e25ded82408964ee5c57e8bee7e32ad6fc4300d847dee958cfd90bd2cc8455"
       },
       "encountered_definition_ids": [
         219,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.plains.mana.0",
@@ -9697,8 +9697,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "e8369e8647bd0741143bd2a648ef3da8cfe3d7e695efa3caf0690bcf38215a01",
-        "before": "5c0a54c06b8c3a40592b562dd7fd3f5654e262a8ca716159c41b84e44c0e0008"
+        "after": "55e25ded82408964ee5c57e8bee7e32ad6fc4300d847dee958cfd90bd2cc8455",
+        "before": "c54644ecb86519d35bf248f39f81c36118ab56f68cf6965f7412febdcabcc4da"
       },
       "to_revision": 91
     },
@@ -9717,7 +9717,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.61",
         "resulting_revision": 92,
-        "resulting_state_digest": "304ead14dfc6cfc465dc6c542bcc859d520d39a76a2128181545d1a66aace3ba"
+        "resulting_state_digest": "20ea33743f87128fa9f15490855f943c4d26db708739c0828161c02e0012ebfc"
       },
       "encountered_definition_ids": [
         219
@@ -9794,8 +9794,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "304ead14dfc6cfc465dc6c542bcc859d520d39a76a2128181545d1a66aace3ba",
-        "before": "e8369e8647bd0741143bd2a648ef3da8cfe3d7e695efa3caf0690bcf38215a01"
+        "after": "20ea33743f87128fa9f15490855f943c4d26db708739c0828161c02e0012ebfc",
+        "before": "55e25ded82408964ee5c57e8bee7e32ad6fc4300d847dee958cfd90bd2cc8455"
       },
       "to_revision": 92
     },
@@ -9814,7 +9814,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.62",
         "resulting_revision": 93,
-        "resulting_state_digest": "cce52f6ce0979018f76e201b43fb2621dda17596854a0d8fdbb2395934b554dc"
+        "resulting_state_digest": "a162b80b530054bd84a715c76c65602214a903e3df32cdc383761ae2f2984cd3"
       },
       "encountered_definition_ids": [
         31,
@@ -9973,8 +9973,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "cce52f6ce0979018f76e201b43fb2621dda17596854a0d8fdbb2395934b554dc",
-        "before": "304ead14dfc6cfc465dc6c542bcc859d520d39a76a2128181545d1a66aace3ba"
+        "after": "a162b80b530054bd84a715c76c65602214a903e3df32cdc383761ae2f2984cd3",
+        "before": "20ea33743f87128fa9f15490855f943c4d26db708739c0828161c02e0012ebfc"
       },
       "to_revision": 93
     },
@@ -9993,7 +9993,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.63",
         "resulting_revision": 94,
-        "resulting_state_digest": "9b9f5c2766c754c65bf1f5b01382833a1b47a1010ccf0b429e5086c7ffac86ec"
+        "resulting_state_digest": "244cf25eee6f94bbeb2ef32af070b7ac864dc463b63268f3fd36b4386a849e25"
       },
       "encountered_definition_ids": [
         219
@@ -10062,8 +10062,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "9b9f5c2766c754c65bf1f5b01382833a1b47a1010ccf0b429e5086c7ffac86ec",
-        "before": "cce52f6ce0979018f76e201b43fb2621dda17596854a0d8fdbb2395934b554dc"
+        "after": "244cf25eee6f94bbeb2ef32af070b7ac864dc463b63268f3fd36b4386a849e25",
+        "before": "a162b80b530054bd84a715c76c65602214a903e3df32cdc383761ae2f2984cd3"
       },
       "to_revision": 94
     },
@@ -10082,10 +10082,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.64",
         "resulting_revision": 95,
-        "resulting_state_digest": "2f291a61189a67202b58ad708f28aa962267928f0117fb09ef1777fe06b6c1a8"
+        "resulting_state_digest": "9790e5d5f6211df08e9cd845ccf0f06717afc50f3c18d6a9b3378adaf96c2e99"
       },
       "encountered_definition_ids": [
-        341
+        342
       ],
       "encountered_programs": [],
       "from_revision": 94,
@@ -10180,8 +10180,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "2f291a61189a67202b58ad708f28aa962267928f0117fb09ef1777fe06b6c1a8",
-        "before": "9b9f5c2766c754c65bf1f5b01382833a1b47a1010ccf0b429e5086c7ffac86ec"
+        "after": "9790e5d5f6211df08e9cd845ccf0f06717afc50f3c18d6a9b3378adaf96c2e99",
+        "before": "244cf25eee6f94bbeb2ef32af070b7ac864dc463b63268f3fd36b4386a849e25"
       },
       "to_revision": 95
     },
@@ -10200,7 +10200,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.31",
         "resulting_revision": 96,
-        "resulting_state_digest": "ca2129dd92cecda0df15d12baed7310ed9e04d927cea803071e723fa2273089a"
+        "resulting_state_digest": "094ff777029d1b19ed509361aef463c13d73d114e3d9c4971b4e4b8223ff0041"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -10230,8 +10230,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "ca2129dd92cecda0df15d12baed7310ed9e04d927cea803071e723fa2273089a",
-        "before": "2f291a61189a67202b58ad708f28aa962267928f0117fb09ef1777fe06b6c1a8"
+        "after": "094ff777029d1b19ed509361aef463c13d73d114e3d9c4971b4e4b8223ff0041",
+        "before": "9790e5d5f6211df08e9cd845ccf0f06717afc50f3c18d6a9b3378adaf96c2e99"
       },
       "to_revision": 96
     },
@@ -10250,11 +10250,11 @@
         "actor": 0,
         "command_id": "authored-authority.hero.32",
         "resulting_revision": 97,
-        "resulting_state_digest": "f1cdf8e154b6b6fdab75c2a8e7053c8451c23e729f3629d51eb3d967b26bce72"
+        "resulting_state_digest": "68058164c4533cf6ca63d9fcab1d240841263e1f611642f1b815c06511489bc2"
       },
       "encountered_definition_ids": [
         161,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -10363,8 +10363,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "f1cdf8e154b6b6fdab75c2a8e7053c8451c23e729f3629d51eb3d967b26bce72",
-        "before": "ca2129dd92cecda0df15d12baed7310ed9e04d927cea803071e723fa2273089a"
+        "after": "68058164c4533cf6ca63d9fcab1d240841263e1f611642f1b815c06511489bc2",
+        "before": "094ff777029d1b19ed509361aef463c13d73d114e3d9c4971b4e4b8223ff0041"
       },
       "to_revision": 97
     },
@@ -10383,10 +10383,10 @@
         "actor": 0,
         "command_id": "authored-authority.hero.33",
         "resulting_revision": 98,
-        "resulting_state_digest": "140470cb2dfe8a30f4b9bcc01d2b32b251dd495b613e262fa20a9debc0b8b40e"
+        "resulting_state_digest": "582ed6fac2fed32a4091f16ab600b518160fe187e63b0e88eef752326499d3cd"
       },
       "encountered_definition_ids": [
-        303
+        304
       ],
       "encountered_programs": [
         "tla.tiger_seal.triggered.0",
@@ -10464,8 +10464,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "140470cb2dfe8a30f4b9bcc01d2b32b251dd495b613e262fa20a9debc0b8b40e",
-        "before": "f1cdf8e154b6b6fdab75c2a8e7053c8451c23e729f3629d51eb3d967b26bce72"
+        "after": "582ed6fac2fed32a4091f16ab600b518160fe187e63b0e88eef752326499d3cd",
+        "before": "68058164c4533cf6ca63d9fcab1d240841263e1f611642f1b815c06511489bc2"
       },
       "to_revision": 98
     },
@@ -10484,7 +10484,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.34",
         "resulting_revision": 99,
-        "resulting_state_digest": "037ce95326a2fdb549928dd698679c55d00d56beddbb03f437744e3e01e26f67"
+        "resulting_state_digest": "7ed228943dd5e279717d9539d077d2de5d699fc9c388d5df80b129c272984506"
       },
       "encountered_definition_ids": [
         153
@@ -10543,8 +10543,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "037ce95326a2fdb549928dd698679c55d00d56beddbb03f437744e3e01e26f67",
-        "before": "140470cb2dfe8a30f4b9bcc01d2b32b251dd495b613e262fa20a9debc0b8b40e"
+        "after": "7ed228943dd5e279717d9539d077d2de5d699fc9c388d5df80b129c272984506",
+        "before": "582ed6fac2fed32a4091f16ab600b518160fe187e63b0e88eef752326499d3cd"
       },
       "to_revision": 99
     },
@@ -10563,14 +10563,14 @@
         "actor": 0,
         "command_id": "authored-authority.hero.35",
         "resulting_revision": 100,
-        "resulting_state_digest": "bd1ade4200278fc23d0ac0cbbc6f77a6426693eca8241809e135731ca7f93dc7"
+        "resulting_state_digest": "65d9df9d78d1d41e49d484c952c9a537caf0c05bf445c778130af6449f3a7788"
       },
       "encountered_definition_ids": [
         116,
         153,
         161,
         203,
-        333
+        334
       ],
       "encountered_programs": [
         "lea.island.mana.0",
@@ -10702,8 +10702,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "bd1ade4200278fc23d0ac0cbbc6f77a6426693eca8241809e135731ca7f93dc7",
-        "before": "037ce95326a2fdb549928dd698679c55d00d56beddbb03f437744e3e01e26f67"
+        "after": "65d9df9d78d1d41e49d484c952c9a537caf0c05bf445c778130af6449f3a7788",
+        "before": "7ed228943dd5e279717d9539d077d2de5d699fc9c388d5df80b129c272984506"
       },
       "to_revision": 100
     },
@@ -10722,7 +10722,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.36",
         "resulting_revision": 101,
-        "resulting_state_digest": "5b89c4a76965c40e7ecf22d070b3f3c328075d82a3c14adb02722aaaf0732837"
+        "resulting_state_digest": "b73cf02c6f8ac40a790836c57a6c5af814e139f2f0626b46146775af0834abb1"
       },
       "encountered_definition_ids": [
         114,
@@ -10783,8 +10783,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "5b89c4a76965c40e7ecf22d070b3f3c328075d82a3c14adb02722aaaf0732837",
-        "before": "bd1ade4200278fc23d0ac0cbbc6f77a6426693eca8241809e135731ca7f93dc7"
+        "after": "b73cf02c6f8ac40a790836c57a6c5af814e139f2f0626b46146775af0834abb1",
+        "before": "65d9df9d78d1d41e49d484c952c9a537caf0c05bf445c778130af6449f3a7788"
       },
       "to_revision": 101
     },
@@ -10803,13 +10803,13 @@
         "actor": 0,
         "command_id": "authored-authority.hero.37",
         "resulting_revision": 102,
-        "resulting_state_digest": "e3cf65eeb1d3eeac039af88854f391fb770de75913ff83716f25897e8651cf53"
+        "resulting_state_digest": "ad8a6244f30de59af0e33b60ea73823aa20e42d1322b6626c765ed6b75d700a9"
       },
       "encountered_definition_ids": [
         116,
         153,
         203,
-        303
+        304
       ],
       "encountered_programs": [
         "lea.mountain.mana.0",
@@ -11038,8 +11038,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e3cf65eeb1d3eeac039af88854f391fb770de75913ff83716f25897e8651cf53",
-        "before": "5b89c4a76965c40e7ecf22d070b3f3c328075d82a3c14adb02722aaaf0732837"
+        "after": "ad8a6244f30de59af0e33b60ea73823aa20e42d1322b6626c765ed6b75d700a9",
+        "before": "b73cf02c6f8ac40a790836c57a6c5af814e139f2f0626b46146775af0834abb1"
       },
       "to_revision": 102
     },
@@ -11058,12 +11058,12 @@
         "actor": 0,
         "command_id": "authored-authority.hero.38",
         "resulting_revision": 103,
-        "resulting_state_digest": "9e40a2bbad517e48bd650325fff40e8ebd528e1cadbde54e39156047ae3ed11e"
+        "resulting_state_digest": "01bf805ce703440f062a43446f0ffe44c96d3993aa3a2c6e62ccc0346d9bfab0"
       },
       "encountered_definition_ids": [
         116,
         153,
-        333
+        334
       ],
       "encountered_programs": [
         "stx.igneous_inspiration.spell.0",
@@ -11199,7 +11199,7 @@
           "amount": 1,
           "controller_id": -1,
           "definition_ids": [
-            333
+            334
           ],
           "event_type": "PERMANENTS_DIED",
           "from_zone": -1,
@@ -11215,8 +11215,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "9e40a2bbad517e48bd650325fff40e8ebd528e1cadbde54e39156047ae3ed11e",
-        "before": "e3cf65eeb1d3eeac039af88854f391fb770de75913ff83716f25897e8651cf53"
+        "after": "01bf805ce703440f062a43446f0ffe44c96d3993aa3a2c6e62ccc0346d9bfab0",
+        "before": "ad8a6244f30de59af0e33b60ea73823aa20e42d1322b6626c765ed6b75d700a9"
       },
       "to_revision": 103
     },
@@ -11235,7 +11235,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.39",
         "resulting_revision": 104,
-        "resulting_state_digest": "1a9ec1b942dd6aec22ea95ea041a1023a6690408217231771e7276c97aaafd13"
+        "resulting_state_digest": "a51c51c81319ab135ddc471c20deed6ae6ca30d0ea5c9f588cb69eb715aba11c"
       },
       "encountered_definition_ids": [
         126,
@@ -11339,8 +11339,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "1a9ec1b942dd6aec22ea95ea041a1023a6690408217231771e7276c97aaafd13",
-        "before": "9e40a2bbad517e48bd650325fff40e8ebd528e1cadbde54e39156047ae3ed11e"
+        "after": "a51c51c81319ab135ddc471c20deed6ae6ca30d0ea5c9f588cb69eb715aba11c",
+        "before": "01bf805ce703440f062a43446f0ffe44c96d3993aa3a2c6e62ccc0346d9bfab0"
       },
       "to_revision": 104
     },
@@ -11359,7 +11359,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.65",
         "resulting_revision": 105,
-        "resulting_state_digest": "88357501ae11ea11f6444aa0ee4f840e9277f3ccf52c17189cb03f03b015a33c"
+        "resulting_state_digest": "585c912b756db5cb08681fd02a8ea6279c2c6450c61431f5fdc114f4b7400d57"
       },
       "encountered_definition_ids": [
         127
@@ -11436,8 +11436,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "88357501ae11ea11f6444aa0ee4f840e9277f3ccf52c17189cb03f03b015a33c",
-        "before": "1a9ec1b942dd6aec22ea95ea041a1023a6690408217231771e7276c97aaafd13"
+        "after": "585c912b756db5cb08681fd02a8ea6279c2c6450c61431f5fdc114f4b7400d57",
+        "before": "a51c51c81319ab135ddc471c20deed6ae6ca30d0ea5c9f588cb69eb715aba11c"
       },
       "to_revision": 105
     },
@@ -11456,12 +11456,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.66",
         "resulting_revision": 106,
-        "resulting_state_digest": "e691ffe302677ee620fd86c5b17b584c1a69083e7a69902320d285b4174d0242"
+        "resulting_state_digest": "1669290298fac36bfb999f9923a48baa7971ccf5f262c522da9e8f66d5066a65"
       },
       "encountered_definition_ids": [
         127,
         219,
-        267
+        268
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -11644,8 +11644,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "e691ffe302677ee620fd86c5b17b584c1a69083e7a69902320d285b4174d0242",
-        "before": "88357501ae11ea11f6444aa0ee4f840e9277f3ccf52c17189cb03f03b015a33c"
+        "after": "1669290298fac36bfb999f9923a48baa7971ccf5f262c522da9e8f66d5066a65",
+        "before": "585c912b756db5cb08681fd02a8ea6279c2c6450c61431f5fdc114f4b7400d57"
       },
       "to_revision": 106
     },
@@ -11664,7 +11664,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.67",
         "resulting_revision": 107,
-        "resulting_state_digest": "e12c44d8641a635e352d5fd4dcc992eed983aca6fc72773658cddd0f6000bd29"
+        "resulting_state_digest": "0c7fb9586cf4bf5ff9d1e07f2c2f3044e219654ff3186435ad984c4c17aa475a"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -11694,8 +11694,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "e12c44d8641a635e352d5fd4dcc992eed983aca6fc72773658cddd0f6000bd29",
-        "before": "e691ffe302677ee620fd86c5b17b584c1a69083e7a69902320d285b4174d0242"
+        "after": "0c7fb9586cf4bf5ff9d1e07f2c2f3044e219654ff3186435ad984c4c17aa475a",
+        "before": "1669290298fac36bfb999f9923a48baa7971ccf5f262c522da9e8f66d5066a65"
       },
       "to_revision": 107
     },
@@ -11714,7 +11714,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.68",
         "resulting_revision": 108,
-        "resulting_state_digest": "d16016a0385871b122c1176fb4838dfc3fa6d236f6c22f5818027379b2deb61f"
+        "resulting_state_digest": "1a5e3582766f95ec627be3a839fff678d667ef19e25b8d7463cc817c626a13cd"
       },
       "encountered_definition_ids": [
         31
@@ -11768,8 +11768,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "d16016a0385871b122c1176fb4838dfc3fa6d236f6c22f5818027379b2deb61f",
-        "before": "e12c44d8641a635e352d5fd4dcc992eed983aca6fc72773658cddd0f6000bd29"
+        "after": "1a5e3582766f95ec627be3a839fff678d667ef19e25b8d7463cc817c626a13cd",
+        "before": "0c7fb9586cf4bf5ff9d1e07f2c2f3044e219654ff3186435ad984c4c17aa475a"
       },
       "to_revision": 108
     },
@@ -11788,7 +11788,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.69",
         "resulting_revision": 109,
-        "resulting_state_digest": "749a6b9fe9168de94ecf27eefbc1206d5ed37c4dd596df28b8ba78aae83097e1"
+        "resulting_state_digest": "eee44f448d2d0308b0488bea594e47a13c096ef75eda1cbbab47823a6a104086"
       },
       "encountered_definition_ids": [
         31
@@ -11842,8 +11842,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "749a6b9fe9168de94ecf27eefbc1206d5ed37c4dd596df28b8ba78aae83097e1",
-        "before": "d16016a0385871b122c1176fb4838dfc3fa6d236f6c22f5818027379b2deb61f"
+        "after": "eee44f448d2d0308b0488bea594e47a13c096ef75eda1cbbab47823a6a104086",
+        "before": "1a5e3582766f95ec627be3a839fff678d667ef19e25b8d7463cc817c626a13cd"
       },
       "to_revision": 109
     },
@@ -11862,7 +11862,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.70",
         "resulting_revision": 110,
-        "resulting_state_digest": "9c9c335e41670b9a092dd7440f6531ba5149560cfb69f196237fe2201726ac5d"
+        "resulting_state_digest": "2ab9f4981fa828850927ddc892a108fb8f49bbd6772fe2220c74c7f9819d6eff"
       },
       "encountered_definition_ids": [
         57
@@ -11915,8 +11915,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "9c9c335e41670b9a092dd7440f6531ba5149560cfb69f196237fe2201726ac5d",
-        "before": "749a6b9fe9168de94ecf27eefbc1206d5ed37c4dd596df28b8ba78aae83097e1"
+        "after": "2ab9f4981fa828850927ddc892a108fb8f49bbd6772fe2220c74c7f9819d6eff",
+        "before": "eee44f448d2d0308b0488bea594e47a13c096ef75eda1cbbab47823a6a104086"
       },
       "to_revision": 110
     },
@@ -11935,7 +11935,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.71",
         "resulting_revision": 111,
-        "resulting_state_digest": "51e5fced2c5524b52210540313db668b0b4f722f6ad47f458a98eecd218d653d"
+        "resulting_state_digest": "0459b7ce139b9c28b5e19b7f762344bf7e61bc9b05a486615e953982451a9c5a"
       },
       "encountered_definition_ids": [
         127
@@ -11988,8 +11988,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "51e5fced2c5524b52210540313db668b0b4f722f6ad47f458a98eecd218d653d",
-        "before": "9c9c335e41670b9a092dd7440f6531ba5149560cfb69f196237fe2201726ac5d"
+        "after": "0459b7ce139b9c28b5e19b7f762344bf7e61bc9b05a486615e953982451a9c5a",
+        "before": "2ab9f4981fa828850927ddc892a108fb8f49bbd6772fe2220c74c7f9819d6eff"
       },
       "to_revision": 111
     },
@@ -12008,12 +12008,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.72",
         "resulting_revision": 112,
-        "resulting_state_digest": "244cf9b2f20fa38a6fb82770175338c4f6108609ce8274adfb6064f3d506024f"
+        "resulting_state_digest": "fa3a1fd53a40b45405c8d56a85f6b9fb60344dd760f0a245d8cf774183dd3652"
       },
       "encountered_definition_ids": [
         31,
         57,
-        341
+        342
       ],
       "encountered_programs": [
         "tla.badgermole_cub.triggered.0",
@@ -12139,8 +12139,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "244cf9b2f20fa38a6fb82770175338c4f6108609ce8274adfb6064f3d506024f",
-        "before": "51e5fced2c5524b52210540313db668b0b4f722f6ad47f458a98eecd218d653d"
+        "after": "fa3a1fd53a40b45405c8d56a85f6b9fb60344dd760f0a245d8cf774183dd3652",
+        "before": "0459b7ce139b9c28b5e19b7f762344bf7e61bc9b05a486615e953982451a9c5a"
       },
       "to_revision": 112
     },
@@ -12159,7 +12159,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.73",
         "resulting_revision": 113,
-        "resulting_state_digest": "a0f440eb5d4b2b7e4825eef0e4a46d1261420ead540601ff72bed57959e0edeb"
+        "resulting_state_digest": "855ba1181ac34d9abc9181ce43cbfb32358bf92fe38edd6908fabd192e9d537d"
       },
       "encountered_definition_ids": [
         219
@@ -12212,8 +12212,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "a0f440eb5d4b2b7e4825eef0e4a46d1261420ead540601ff72bed57959e0edeb",
-        "before": "244cf9b2f20fa38a6fb82770175338c4f6108609ce8274adfb6064f3d506024f"
+        "after": "855ba1181ac34d9abc9181ce43cbfb32358bf92fe38edd6908fabd192e9d537d",
+        "before": "fa3a1fd53a40b45405c8d56a85f6b9fb60344dd760f0a245d8cf774183dd3652"
       },
       "to_revision": 113
     },
@@ -12232,11 +12232,11 @@
         "actor": 0,
         "command_id": "authored-authority.hero.40",
         "resulting_revision": 114,
-        "resulting_state_digest": "7c18cd14bd317253ea212fd178cf55ce55c7a889e8fc17b2b37bc2e80eeb2be0"
+        "resulting_state_digest": "0224c8cb765579c24d85c3d9c6c9bed46f3bad80ed4c8470a237597d55981833"
       },
       "encountered_definition_ids": [
         57,
-        303
+        304
       ],
       "encountered_programs": [
         "tla.compassionate_healer.triggered.0",
@@ -12304,8 +12304,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "7c18cd14bd317253ea212fd178cf55ce55c7a889e8fc17b2b37bc2e80eeb2be0",
-        "before": "a0f440eb5d4b2b7e4825eef0e4a46d1261420ead540601ff72bed57959e0edeb"
+        "after": "0224c8cb765579c24d85c3d9c6c9bed46f3bad80ed4c8470a237597d55981833",
+        "before": "855ba1181ac34d9abc9181ce43cbfb32358bf92fe38edd6908fabd192e9d537d"
       },
       "to_revision": 114
     },
@@ -12324,13 +12324,13 @@
         "actor": 0,
         "command_id": "authored-authority.hero.41",
         "resulting_revision": 115,
-        "resulting_state_digest": "49a8f548d42b6f9d5e36ca562242e05671d832891c966210d0a19f526f942681"
+        "resulting_state_digest": "d5dc4fab6e5e74a49de26a07e537203fbdeb5370564124a4acc6380c41d11ff8"
       },
       "encountered_definition_ids": [
         31,
         57,
         126,
-        303
+        304
       ],
       "encountered_programs": [
         "tla.badgermole_cub.triggered.0",
@@ -12491,7 +12491,7 @@
           "controller_id": -1,
           "definition_ids": [
             57,
-            303
+            304
           ],
           "event_type": "BLOCKERS_DECLARED",
           "from_zone": -1,
@@ -12524,7 +12524,7 @@
           "controller_id": -1,
           "definition_ids": [
             57,
-            303
+            304
           ],
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
@@ -12559,7 +12559,7 @@
           "controller_id": -1,
           "definition_ids": [
             57,
-            303
+            304
           ],
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
@@ -12608,7 +12608,7 @@
           "amount": 2,
           "controller_id": -1,
           "definition_ids": [
-            303
+            304
           ],
           "event_type": "PERMANENTS_DIED",
           "from_zone": -1,
@@ -12641,8 +12641,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "49a8f548d42b6f9d5e36ca562242e05671d832891c966210d0a19f526f942681",
-        "before": "7c18cd14bd317253ea212fd178cf55ce55c7a889e8fc17b2b37bc2e80eeb2be0"
+        "after": "d5dc4fab6e5e74a49de26a07e537203fbdeb5370564124a4acc6380c41d11ff8",
+        "before": "0224c8cb765579c24d85c3d9c6c9bed46f3bad80ed4c8470a237597d55981833"
       },
       "to_revision": 115
     },
@@ -12661,7 +12661,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.74",
         "resulting_revision": 116,
-        "resulting_state_digest": "a2bde6f023a1689455ab33fd60003670c2f472be666919971b8dd3041a04a4d4"
+        "resulting_state_digest": "de5d3e89d8ee8b99676c13dfeab4fabaa5bddb4811ca42c4e0f0d1aeb8c6253b"
       },
       "encountered_definition_ids": [
         79,
@@ -12820,8 +12820,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "a2bde6f023a1689455ab33fd60003670c2f472be666919971b8dd3041a04a4d4",
-        "before": "49a8f548d42b6f9d5e36ca562242e05671d832891c966210d0a19f526f942681"
+        "after": "de5d3e89d8ee8b99676c13dfeab4fabaa5bddb4811ca42c4e0f0d1aeb8c6253b",
+        "before": "d5dc4fab6e5e74a49de26a07e537203fbdeb5370564124a4acc6380c41d11ff8"
       },
       "to_revision": 116
     },
@@ -12840,7 +12840,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.75",
         "resulting_revision": 117,
-        "resulting_state_digest": "0f326b71d3b9eeb854b95f7b9229e7b0de3728a4996a416d246c6ec42ee59c16"
+        "resulting_state_digest": "2770132d7e7af5c58558a6acd4a882c8a5ce7b529732aebf67276089ad331d02"
       },
       "encountered_definition_ids": [
         79
@@ -12955,8 +12955,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "0f326b71d3b9eeb854b95f7b9229e7b0de3728a4996a416d246c6ec42ee59c16",
-        "before": "a2bde6f023a1689455ab33fd60003670c2f472be666919971b8dd3041a04a4d4"
+        "after": "2770132d7e7af5c58558a6acd4a882c8a5ce7b529732aebf67276089ad331d02",
+        "before": "de5d3e89d8ee8b99676c13dfeab4fabaa5bddb4811ca42c4e0f0d1aeb8c6253b"
       },
       "to_revision": 117
     },
@@ -12975,7 +12975,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.76",
         "resulting_revision": 118,
-        "resulting_state_digest": "f9587f4d9795cdcb12903580da3ba289b7b64e88f07ad65e07d67e7f2d246a9a"
+        "resulting_state_digest": "24ef07ebf26bd27ed84473bb455963272010d7faaadb151acfe7212cfa4aaea9"
       },
       "encountered_definition_ids": [
         81,
@@ -13133,8 +13133,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "f9587f4d9795cdcb12903580da3ba289b7b64e88f07ad65e07d67e7f2d246a9a",
-        "before": "0f326b71d3b9eeb854b95f7b9229e7b0de3728a4996a416d246c6ec42ee59c16"
+        "after": "24ef07ebf26bd27ed84473bb455963272010d7faaadb151acfe7212cfa4aaea9",
+        "before": "2770132d7e7af5c58558a6acd4a882c8a5ce7b529732aebf67276089ad331d02"
       },
       "to_revision": 118
     },
@@ -13153,7 +13153,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.77",
         "resulting_revision": 119,
-        "resulting_state_digest": "5c4723c491fc729129a697230777815b8d32b8c9ab4097dece1f428ba68ce94c"
+        "resulting_state_digest": "c369ce8fe400be90fbfa82174dfe91011eb58e24f3984f15ada81554c12b6c8d"
       },
       "encountered_definition_ids": [
         79
@@ -13223,8 +13223,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "5c4723c491fc729129a697230777815b8d32b8c9ab4097dece1f428ba68ce94c",
-        "before": "f9587f4d9795cdcb12903580da3ba289b7b64e88f07ad65e07d67e7f2d246a9a"
+        "after": "c369ce8fe400be90fbfa82174dfe91011eb58e24f3984f15ada81554c12b6c8d",
+        "before": "24ef07ebf26bd27ed84473bb455963272010d7faaadb151acfe7212cfa4aaea9"
       },
       "to_revision": 119
     },
@@ -13243,7 +13243,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.78",
         "resulting_revision": 120,
-        "resulting_state_digest": "ef4bac7e3c977decd24ebc7cbe40c27896b3fdb541e9c037dd2a6db63165416d"
+        "resulting_state_digest": "97ada24ce25d202c39731fb6ffa4af2e8cf03321d34f52deb31e918fb0aacc88"
       },
       "encountered_definition_ids": [
         79,
@@ -13391,8 +13391,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "ef4bac7e3c977decd24ebc7cbe40c27896b3fdb541e9c037dd2a6db63165416d",
-        "before": "5c4723c491fc729129a697230777815b8d32b8c9ab4097dece1f428ba68ce94c"
+        "after": "97ada24ce25d202c39731fb6ffa4af2e8cf03321d34f52deb31e918fb0aacc88",
+        "before": "c369ce8fe400be90fbfa82174dfe91011eb58e24f3984f15ada81554c12b6c8d"
       },
       "to_revision": 120
     },
@@ -13411,7 +13411,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.42",
         "resulting_revision": 121,
-        "resulting_state_digest": "5da8b39b6eae45cb6b6df276cfca689250efb3fe7c20af64ef04b79d6e8b47b4"
+        "resulting_state_digest": "ee7a455e91f27b31ec88c84d862104105ab7677b84180e50d78485266c3a4ad2"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -13441,8 +13441,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "5da8b39b6eae45cb6b6df276cfca689250efb3fe7c20af64ef04b79d6e8b47b4",
-        "before": "ef4bac7e3c977decd24ebc7cbe40c27896b3fdb541e9c037dd2a6db63165416d"
+        "after": "ee7a455e91f27b31ec88c84d862104105ab7677b84180e50d78485266c3a4ad2",
+        "before": "97ada24ce25d202c39731fb6ffa4af2e8cf03321d34f52deb31e918fb0aacc88"
       },
       "to_revision": 121
     },
@@ -13461,7 +13461,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.43",
         "resulting_revision": 122,
-        "resulting_state_digest": "62f1fe944d261a9a5ced82bb1b27647ebf367233a9213472229b398195258021"
+        "resulting_state_digest": "a615a62bf7167e1ef213be70ab9bba5676c93988428f7e81c09078ee2760d802"
       },
       "encountered_definition_ids": [
         116,
@@ -13616,8 +13616,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "62f1fe944d261a9a5ced82bb1b27647ebf367233a9213472229b398195258021",
-        "before": "5da8b39b6eae45cb6b6df276cfca689250efb3fe7c20af64ef04b79d6e8b47b4"
+        "after": "a615a62bf7167e1ef213be70ab9bba5676c93988428f7e81c09078ee2760d802",
+        "before": "ee7a455e91f27b31ec88c84d862104105ab7677b84180e50d78485266c3a4ad2"
       },
       "to_revision": 122
     },
@@ -13636,7 +13636,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.44",
         "resulting_revision": 123,
-        "resulting_state_digest": "f18e8b6316431599ebf40789daebad7cb653a228591c7e899aec344e79940dc1"
+        "resulting_state_digest": "438c67a879a6d2671b746ead0ac13d8940986944356dc3ce97e792dfe8d62deb"
       },
       "encountered_definition_ids": [
         126
@@ -13736,8 +13736,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "f18e8b6316431599ebf40789daebad7cb653a228591c7e899aec344e79940dc1",
-        "before": "62f1fe944d261a9a5ced82bb1b27647ebf367233a9213472229b398195258021"
+        "after": "438c67a879a6d2671b746ead0ac13d8940986944356dc3ce97e792dfe8d62deb",
+        "before": "a615a62bf7167e1ef213be70ab9bba5676c93988428f7e81c09078ee2760d802"
       },
       "to_revision": 123
     },
@@ -13756,12 +13756,12 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.79",
         "resulting_revision": 124,
-        "resulting_state_digest": "7b1c79302c415b3f47e7f6ea4e4ced86811ec3422511156e32d492bcb32eb295"
+        "resulting_state_digest": "15b5e82d47a0fd3c5c4ad6c12d755063999366e41bba443ca9bd74ec9fbcb94d"
       },
       "encountered_definition_ids": [
         127,
         219,
-        341
+        342
       ],
       "encountered_programs": [
         "lea.forest.mana.0",
@@ -13913,8 +13913,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "7b1c79302c415b3f47e7f6ea4e4ced86811ec3422511156e32d492bcb32eb295",
-        "before": "f18e8b6316431599ebf40789daebad7cb653a228591c7e899aec344e79940dc1"
+        "after": "15b5e82d47a0fd3c5c4ad6c12d755063999366e41bba443ca9bd74ec9fbcb94d",
+        "before": "438c67a879a6d2671b746ead0ac13d8940986944356dc3ce97e792dfe8d62deb"
       },
       "to_revision": 124
     },
@@ -13933,10 +13933,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.80",
         "resulting_revision": 125,
-        "resulting_state_digest": "61c6b2d5b14961b60959c45e818c17321522ffc5f422dd2269b44a99e6e8936f"
+        "resulting_state_digest": "933890abd92d61329c27a7fabdc61e77c1d11b9ddff3d5ac3aa9c577f77be50d"
       },
       "encountered_definition_ids": [
-        267
+        268
       ],
       "encountered_programs": [
         "tla.south_pole_voyager.triggered.0"
@@ -14032,8 +14032,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "61c6b2d5b14961b60959c45e818c17321522ffc5f422dd2269b44a99e6e8936f",
-        "before": "7b1c79302c415b3f47e7f6ea4e4ced86811ec3422511156e32d492bcb32eb295"
+        "after": "933890abd92d61329c27a7fabdc61e77c1d11b9ddff3d5ac3aa9c577f77be50d",
+        "before": "15b5e82d47a0fd3c5c4ad6c12d755063999366e41bba443ca9bd74ec9fbcb94d"
       },
       "to_revision": 125
     },
@@ -14052,7 +14052,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.81",
         "resulting_revision": 126,
-        "resulting_state_digest": "2d021a9c4586e06f20c9d5d8cc16fdc907c6256dd26e23e687b0b5936a555f17"
+        "resulting_state_digest": "713c13ff66bbf2c702d6948d1e419064e8736438526b631b107e42b7a23ff674"
       },
       "encountered_definition_ids": [
         219
@@ -14129,8 +14129,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "2d021a9c4586e06f20c9d5d8cc16fdc907c6256dd26e23e687b0b5936a555f17",
-        "before": "61c6b2d5b14961b60959c45e818c17321522ffc5f422dd2269b44a99e6e8936f"
+        "after": "713c13ff66bbf2c702d6948d1e419064e8736438526b631b107e42b7a23ff674",
+        "before": "933890abd92d61329c27a7fabdc61e77c1d11b9ddff3d5ac3aa9c577f77be50d"
       },
       "to_revision": 126
     },
@@ -14149,7 +14149,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.82",
         "resulting_revision": 127,
-        "resulting_state_digest": "5fc4cd54499ed13fce15258b8edec429dc264a2fe61c4e45b52cfcfcfe660bae"
+        "resulting_state_digest": "5716457f5ffb22b248a556f28630a432e2f80f59c8a2c053b1bca1607bd79230"
       },
       "encountered_definition_ids": [
         81
@@ -14202,8 +14202,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5fc4cd54499ed13fce15258b8edec429dc264a2fe61c4e45b52cfcfcfe660bae",
-        "before": "2d021a9c4586e06f20c9d5d8cc16fdc907c6256dd26e23e687b0b5936a555f17"
+        "after": "5716457f5ffb22b248a556f28630a432e2f80f59c8a2c053b1bca1607bd79230",
+        "before": "713c13ff66bbf2c702d6948d1e419064e8736438526b631b107e42b7a23ff674"
       },
       "to_revision": 127
     },
@@ -14222,7 +14222,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.83",
         "resulting_revision": 128,
-        "resulting_state_digest": "5387adc29d855eca9ccaadf6801f5cc8e2ecaf0210bd34fd7830781592bee9b7"
+        "resulting_state_digest": "b5e551f9023e702d1818f4bb30d1fe3829ddc45c2115ceb3a0785c7dbdd82490"
       },
       "encountered_definition_ids": [
         79
@@ -14276,8 +14276,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5387adc29d855eca9ccaadf6801f5cc8e2ecaf0210bd34fd7830781592bee9b7",
-        "before": "5fc4cd54499ed13fce15258b8edec429dc264a2fe61c4e45b52cfcfcfe660bae"
+        "after": "b5e551f9023e702d1818f4bb30d1fe3829ddc45c2115ceb3a0785c7dbdd82490",
+        "before": "5716457f5ffb22b248a556f28630a432e2f80f59c8a2c053b1bca1607bd79230"
       },
       "to_revision": 128
     },
@@ -14296,10 +14296,10 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.84",
         "resulting_revision": 129,
-        "resulting_state_digest": "9b76e2fab5bd95e46428e88aa5f97ef2301e62dbcdba7f7f3b8e4c3f5ec7d5c2"
+        "resulting_state_digest": "2db07577df379b1d34d5c4ef5596918ca29c885261b79d1192dd403aef1c703f"
       },
       "encountered_definition_ids": [
-        267
+        268
       ],
       "encountered_programs": [
         "tla.south_pole_voyager.triggered.0"
@@ -14349,8 +14349,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "9b76e2fab5bd95e46428e88aa5f97ef2301e62dbcdba7f7f3b8e4c3f5ec7d5c2",
-        "before": "5387adc29d855eca9ccaadf6801f5cc8e2ecaf0210bd34fd7830781592bee9b7"
+        "after": "2db07577df379b1d34d5c4ef5596918ca29c885261b79d1192dd403aef1c703f",
+        "before": "b5e551f9023e702d1818f4bb30d1fe3829ddc45c2115ceb3a0785c7dbdd82490"
       },
       "to_revision": 129
     },
@@ -14369,7 +14369,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.85",
         "resulting_revision": 130,
-        "resulting_state_digest": "156b5e72792c9d61933b16d64ac814edcfe3c4753616e023e65ff7dc5a34b026"
+        "resulting_state_digest": "0235d64bfadc6352c1f8c3679c8483416369f7679d5a3d9ef120c96649a2c5aa"
       },
       "encountered_definition_ids": [
         31
@@ -14423,8 +14423,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "156b5e72792c9d61933b16d64ac814edcfe3c4753616e023e65ff7dc5a34b026",
-        "before": "9b76e2fab5bd95e46428e88aa5f97ef2301e62dbcdba7f7f3b8e4c3f5ec7d5c2"
+        "after": "0235d64bfadc6352c1f8c3679c8483416369f7679d5a3d9ef120c96649a2c5aa",
+        "before": "2db07577df379b1d34d5c4ef5596918ca29c885261b79d1192dd403aef1c703f"
       },
       "to_revision": 130
     },
@@ -14443,7 +14443,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.86",
         "resulting_revision": 131,
-        "resulting_state_digest": "242858db1c1f671e00ddcc2db0c1b6c47cff99a98e1263885c1d4c4b4a3085b6"
+        "resulting_state_digest": "6f8415db25acb4e16dbf06b3c3cf90ffab533d3b9805e37ea7e31b981a497117"
       },
       "encountered_definition_ids": [
         31
@@ -14497,8 +14497,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "242858db1c1f671e00ddcc2db0c1b6c47cff99a98e1263885c1d4c4b4a3085b6",
-        "before": "156b5e72792c9d61933b16d64ac814edcfe3c4753616e023e65ff7dc5a34b026"
+        "after": "6f8415db25acb4e16dbf06b3c3cf90ffab533d3b9805e37ea7e31b981a497117",
+        "before": "0235d64bfadc6352c1f8c3679c8483416369f7679d5a3d9ef120c96649a2c5aa"
       },
       "to_revision": 131
     },
@@ -14517,7 +14517,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.87",
         "resulting_revision": 132,
-        "resulting_state_digest": "8b24f06b2b65107f74c5cf0bfafb8e35b290a7e93fb4876367bf40f927a3aabc"
+        "resulting_state_digest": "d07b071b62a4b7bcd45da88ad434eb9d021caf386e324c2f03699d879e9c8958"
       },
       "encountered_definition_ids": [
         127
@@ -14570,8 +14570,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8b24f06b2b65107f74c5cf0bfafb8e35b290a7e93fb4876367bf40f927a3aabc",
-        "before": "242858db1c1f671e00ddcc2db0c1b6c47cff99a98e1263885c1d4c4b4a3085b6"
+        "after": "d07b071b62a4b7bcd45da88ad434eb9d021caf386e324c2f03699d879e9c8958",
+        "before": "6f8415db25acb4e16dbf06b3c3cf90ffab533d3b9805e37ea7e31b981a497117"
       },
       "to_revision": 132
     },
@@ -14590,14 +14590,14 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.88",
         "resulting_revision": 133,
-        "resulting_state_digest": "ba7cfee9ed64f9a7e85dd6079cc31f3177559b714e3a8c016d415066f8d60b23"
+        "resulting_state_digest": "e4db525f9bc2c828d7fe8b57b7c384be8d78ec682af8579c66557a97ecc07f7d"
       },
       "encountered_definition_ids": [
         31,
         79,
         81,
-        267,
-        341
+        268,
+        342
       ],
       "encountered_programs": [
         "tla.badgermole_cub.triggered.0",
@@ -14728,7 +14728,7 @@
           "amount": 0,
           "controller_id": 1,
           "definition_ids": [
-            267
+            268
           ],
           "event_type": "COMBAT_ATTACKERS_DECLARED",
           "from_zone": -1,
@@ -14778,8 +14778,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "ba7cfee9ed64f9a7e85dd6079cc31f3177559b714e3a8c016d415066f8d60b23",
-        "before": "8b24f06b2b65107f74c5cf0bfafb8e35b290a7e93fb4876367bf40f927a3aabc"
+        "after": "e4db525f9bc2c828d7fe8b57b7c384be8d78ec682af8579c66557a97ecc07f7d",
+        "before": "d07b071b62a4b7bcd45da88ad434eb9d021caf386e324c2f03699d879e9c8958"
       },
       "to_revision": 133
     },
@@ -14798,7 +14798,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.45",
         "resulting_revision": 134,
-        "resulting_state_digest": "4ba09f7fce6404feb4fb5d258d69e452f61e961b1c28c7db48f9c7e05d9b8f20"
+        "resulting_state_digest": "2a7d2f1c83489510376d7dd708569df4055291c71f6094eea716228b4f246db1"
       },
       "encountered_definition_ids": [
         116
@@ -14849,8 +14849,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "4ba09f7fce6404feb4fb5d258d69e452f61e961b1c28c7db48f9c7e05d9b8f20",
-        "before": "ba7cfee9ed64f9a7e85dd6079cc31f3177559b714e3a8c016d415066f8d60b23"
+        "after": "2a7d2f1c83489510376d7dd708569df4055291c71f6094eea716228b4f246db1",
+        "before": "e4db525f9bc2c828d7fe8b57b7c384be8d78ec682af8579c66557a97ecc07f7d"
       },
       "to_revision": 134
     },
@@ -14869,7 +14869,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.46",
         "resulting_revision": 135,
-        "resulting_state_digest": "50073642444cda05eb82e09cbaa53ab81ad0a930841d8b3484cb2909d8601a6a"
+        "resulting_state_digest": "70bc545bf898a153ca984f4f8ec4182fed002f9329edeb298d0f3e34c86b7d71"
       },
       "encountered_definition_ids": [
         31,
@@ -14877,7 +14877,7 @@
         81,
         126,
         153,
-        267
+        268
       ],
       "encountered_programs": [
         "stx.igneous_inspiration.spell.0",
@@ -15280,7 +15280,7 @@
           "amount": 5,
           "controller_id": -1,
           "definition_ids": [
-            267
+            268
           ],
           "event_type": "COMBAT_DAMAGE_DEALT",
           "from_zone": -1,
@@ -15405,8 +15405,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "50073642444cda05eb82e09cbaa53ab81ad0a930841d8b3484cb2909d8601a6a",
-        "before": "4ba09f7fce6404feb4fb5d258d69e452f61e961b1c28c7db48f9c7e05d9b8f20"
+        "after": "70bc545bf898a153ca984f4f8ec4182fed002f9329edeb298d0f3e34c86b7d71",
+        "before": "2a7d2f1c83489510376d7dd708569df4055291c71f6094eea716228b4f246db1"
       },
       "to_revision": 135
     }
@@ -15754,7 +15754,7 @@
       "registry_name": "Plains"
     },
     {
-      "definition_index": 267,
+      "definition_index": 268,
       "definition_key": "tla.south_pole_voyager",
       "encountered_revisions": [
         68,
@@ -15766,11 +15766,11 @@
       ],
       "key": "tla.south_pole_voyager.triggered.0",
       "kind": "triggered",
-      "program_index": 344,
+      "program_index": 345,
       "registry_name": "South Pole Voyager"
     },
     {
-      "definition_index": 303,
+      "definition_index": 304,
       "definition_key": "tla.tiger_seal",
       "encountered_revisions": [
         2,
@@ -15791,11 +15791,11 @@
       ],
       "key": "tla.tiger_seal.triggered.0",
       "kind": "triggered",
-      "program_index": 403,
+      "program_index": 404,
       "registry_name": "Tiger-Seal"
     },
     {
-      "definition_index": 303,
+      "definition_index": 304,
       "definition_key": "tla.tiger_seal",
       "encountered_revisions": [
         2,
@@ -15816,11 +15816,11 @@
       ],
       "key": "tla.tiger_seal.triggered.1",
       "kind": "triggered",
-      "program_index": 404,
+      "program_index": 405,
       "registry_name": "Tiger-Seal"
     },
     {
-      "definition_index": 333,
+      "definition_index": 334,
       "definition_key": "tla.water_tribe_rallier",
       "encountered_revisions": [
         33,
@@ -15853,18 +15853,18 @@
       ],
       "key": "tla.water_tribe_rallier.activated.0",
       "kind": "activated",
-      "program_index": 443,
+      "program_index": 444,
       "registry_name": "Water Tribe Rallier"
     },
     {
-      "definition_index": 345,
+      "definition_index": 346,
       "definition_key": "tla.yip_yip",
       "encountered_revisions": [
         23
       ],
       "key": "tla.yip_yip.spell.0",
       "kind": "spell",
-      "program_index": 457,
+      "program_index": 458,
       "registry_name": "Yip Yip!"
     }
   ],
@@ -15877,7 +15877,7 @@
     },
     "content_hash": "legacy-content-unversioned",
     "content_pack_manifest": {
-      "content_digest": "1728f70ed6364500ce0fcf3cebf013197d9b7910959476a96191176f6eaaf5e4",
+      "content_digest": "28a0744e5183c1dea6bc766046fe6018bdac415f3bd37370745b68bc930040bd",
       "definitions": [
         {
           "card_def_id": 0,
@@ -16897,406 +16897,410 @@
         },
         {
           "card_def_id": 254,
-          "registry_name": "Seismic Sense"
+          "registry_name": "Secret of Bloodbending"
         },
         {
           "card_def_id": 255,
-          "registry_name": "Serpent of the Pass"
+          "registry_name": "Seismic Sense"
         },
         {
           "card_def_id": 256,
-          "registry_name": "Serpent's Pass"
+          "registry_name": "Serpent of the Pass"
         },
         {
           "card_def_id": 257,
-          "registry_name": "Serra Angel"
+          "registry_name": "Serpent's Pass"
         },
         {
           "card_def_id": 258,
-          "registry_name": "Shared Roots"
+          "registry_name": "Serra Angel"
         },
         {
           "card_def_id": 259,
-          "registry_name": "Shivan Dragon"
+          "registry_name": "Shared Roots"
         },
         {
           "card_def_id": 260,
-          "registry_name": "Sokka's Haiku"
+          "registry_name": "Shivan Dragon"
         },
         {
           "card_def_id": 261,
-          "registry_name": "Sokka, Bold Boomeranger"
+          "registry_name": "Sokka's Haiku"
         },
         {
           "card_def_id": 262,
-          "registry_name": "Sokka, Lateral Strategist"
+          "registry_name": "Sokka, Bold Boomeranger"
         },
         {
           "card_def_id": 263,
-          "registry_name": "Sokka, Tenacious Tactician"
+          "registry_name": "Sokka, Lateral Strategist"
         },
         {
           "card_def_id": 264,
-          "registry_name": "Sold Out"
+          "registry_name": "Sokka, Tenacious Tactician"
         },
         {
           "card_def_id": 265,
-          "registry_name": "Soldier"
+          "registry_name": "Sold Out"
         },
         {
           "card_def_id": 266,
-          "registry_name": "Solstice Revelations"
+          "registry_name": "Soldier"
         },
         {
           "card_def_id": 267,
-          "registry_name": "South Pole Voyager"
+          "registry_name": "Solstice Revelations"
         },
         {
           "card_def_id": 268,
-          "registry_name": "Southern Air Temple"
+          "registry_name": "South Pole Voyager"
         },
         {
           "card_def_id": 269,
-          "registry_name": "Sozin's Comet"
+          "registry_name": "Southern Air Temple"
         },
         {
           "card_def_id": 270,
-          "registry_name": "Sparring Dummy"
+          "registry_name": "Sozin's Comet"
         },
         {
           "card_def_id": 271,
-          "registry_name": "Spectral Sailor"
+          "registry_name": "Sparring Dummy"
         },
         {
           "card_def_id": 272,
-          "registry_name": "Spirit"
+          "registry_name": "Spectral Sailor"
         },
         {
           "card_def_id": 273,
-          "registry_name": "Spirit Water Revival"
+          "registry_name": "Spirit"
         },
         {
           "card_def_id": 274,
-          "registry_name": "Suki, Courageous Rescuer"
+          "registry_name": "Spirit Water Revival"
         },
         {
           "card_def_id": 275,
-          "registry_name": "Suki, Kyoshi Warrior"
+          "registry_name": "Suki, Courageous Rescuer"
         },
         {
           "card_def_id": 276,
-          "registry_name": "Sun Warriors"
+          "registry_name": "Suki, Kyoshi Warrior"
         },
         {
           "card_def_id": 277,
-          "registry_name": "Sun-Blessed Peak"
+          "registry_name": "Sun Warriors"
         },
         {
           "card_def_id": 278,
-          "registry_name": "Swamp"
+          "registry_name": "Sun-Blessed Peak"
         },
         {
           "card_def_id": 279,
-          "registry_name": "Swampsnare Trap"
+          "registry_name": "Swamp"
         },
         {
           "card_def_id": 280,
-          "registry_name": "Team Avatar"
+          "registry_name": "Swampsnare Trap"
         },
         {
           "card_def_id": 281,
-          "registry_name": "Teo, Spirited Glider"
+          "registry_name": "Team Avatar"
         },
         {
           "card_def_id": 282,
-          "registry_name": "The Boulder, Ready to Rumble"
+          "registry_name": "Teo, Spirited Glider"
         },
         {
           "card_def_id": 283,
-          "registry_name": "The Cave of Two Lovers"
+          "registry_name": "The Boulder, Ready to Rumble"
         },
         {
           "card_def_id": 284,
-          "registry_name": "The Earth King"
+          "registry_name": "The Cave of Two Lovers"
         },
         {
           "card_def_id": 285,
-          "registry_name": "The Fire Nation Drill"
+          "registry_name": "The Earth King"
         },
         {
           "card_def_id": 286,
-          "registry_name": "The Last Agni Kai"
+          "registry_name": "The Fire Nation Drill"
         },
         {
           "card_def_id": 287,
-          "registry_name": "The Legend of Kuruk"
+          "registry_name": "The Last Agni Kai"
         },
         {
           "card_def_id": 288,
-          "registry_name": "Avatar Kuruk"
+          "registry_name": "The Legend of Kuruk"
         },
         {
           "card_def_id": 289,
-          "registry_name": "The Legend of Kyoshi"
+          "registry_name": "Avatar Kuruk"
         },
         {
           "card_def_id": 290,
-          "registry_name": "Avatar Kyoshi"
+          "registry_name": "The Legend of Kyoshi"
         },
         {
           "card_def_id": 291,
-          "registry_name": "The Legend of Roku"
+          "registry_name": "Avatar Kyoshi"
         },
         {
           "card_def_id": 292,
-          "registry_name": "Avatar Roku"
+          "registry_name": "The Legend of Roku"
         },
         {
           "card_def_id": 293,
-          "registry_name": "The Legend of Yangchen"
+          "registry_name": "Avatar Roku"
         },
         {
           "card_def_id": 294,
-          "registry_name": "Avatar Yangchen"
+          "registry_name": "The Legend of Yangchen"
         },
         {
           "card_def_id": 295,
-          "registry_name": "The Lion-Turtle"
+          "registry_name": "Avatar Yangchen"
         },
         {
           "card_def_id": 296,
-          "registry_name": "The Mechanist, Aerial Artisan"
+          "registry_name": "The Lion-Turtle"
         },
         {
           "card_def_id": 297,
-          "registry_name": "The Rise of Sozin"
+          "registry_name": "The Mechanist, Aerial Artisan"
         },
         {
           "card_def_id": 298,
-          "registry_name": "Fire Lord Sozin"
+          "registry_name": "The Rise of Sozin"
         },
         {
           "card_def_id": 299,
-          "registry_name": "The Spirit Oasis"
+          "registry_name": "Fire Lord Sozin"
         },
         {
           "card_def_id": 300,
-          "registry_name": "The Unagi of Kyoshi Island"
+          "registry_name": "The Spirit Oasis"
         },
         {
           "card_def_id": 301,
-          "registry_name": "The Walls of Ba Sing Se"
+          "registry_name": "The Unagi of Kyoshi Island"
         },
         {
           "card_def_id": 302,
-          "registry_name": "Tiger-Dillo"
+          "registry_name": "The Walls of Ba Sing Se"
         },
         {
           "card_def_id": 303,
-          "registry_name": "Tiger-Seal"
+          "registry_name": "Tiger-Dillo"
         },
         {
           "card_def_id": 304,
-          "registry_name": "Tireless Provisioner"
+          "registry_name": "Tiger-Seal"
         },
         {
           "card_def_id": 305,
-          "registry_name": "Tireless Tracker"
+          "registry_name": "Tireless Provisioner"
         },
         {
           "card_def_id": 306,
-          "registry_name": "Tolls of War"
+          "registry_name": "Tireless Tracker"
         },
         {
           "card_def_id": 307,
-          "registry_name": "Toph, Hardheaded Teacher"
+          "registry_name": "Tolls of War"
         },
         {
           "card_def_id": 308,
-          "registry_name": "Toph, the Blind Bandit"
+          "registry_name": "Toph, Hardheaded Teacher"
         },
         {
           "card_def_id": 309,
-          "registry_name": "Toph, the First Metalbender"
+          "registry_name": "Toph, the Blind Bandit"
         },
         {
           "card_def_id": 310,
-          "registry_name": "Treasure"
+          "registry_name": "Toph, the First Metalbender"
         },
         {
           "card_def_id": 311,
-          "registry_name": "Treetop Freedom Fighters"
+          "registry_name": "Treasure"
         },
         {
           "card_def_id": 312,
-          "registry_name": "True Ancestry"
+          "registry_name": "Treetop Freedom Fighters"
         },
         {
           "card_def_id": 313,
-          "registry_name": "Trusty Boomerang"
+          "registry_name": "True Ancestry"
         },
         {
           "card_def_id": 314,
-          "registry_name": "Tundra Tank"
+          "registry_name": "Trusty Boomerang"
         },
         {
           "card_def_id": 315,
-          "registry_name": "Turtle-Duck"
+          "registry_name": "Tundra Tank"
         },
         {
           "card_def_id": 316,
-          "registry_name": "Twin Blades"
+          "registry_name": "Turtle-Duck"
         },
         {
           "card_def_id": 317,
-          "registry_name": "Ty Lee, Artful Acrobat"
+          "registry_name": "Twin Blades"
         },
         {
           "card_def_id": 318,
-          "registry_name": "Ty Lee, Chi Blocker"
+          "registry_name": "Ty Lee, Artful Acrobat"
         },
         {
           "card_def_id": 319,
-          "registry_name": "Typhoid Rats"
+          "registry_name": "Ty Lee, Chi Blocker"
         },
         {
           "card_def_id": 320,
-          "registry_name": "Uncle Iroh"
+          "registry_name": "Typhoid Rats"
         },
         {
           "card_def_id": 321,
-          "registry_name": "United Front"
+          "registry_name": "Uncle Iroh"
         },
         {
           "card_def_id": 322,
-          "registry_name": "Unlucky Cabbage Merchant"
+          "registry_name": "United Front"
         },
         {
           "card_def_id": 323,
-          "registry_name": "Vengeful Villagers"
+          "registry_name": "Unlucky Cabbage Merchant"
         },
         {
           "card_def_id": 324,
-          "registry_name": "Vindictive Warden"
+          "registry_name": "Vengeful Villagers"
         },
         {
           "card_def_id": 325,
-          "registry_name": "Wall of Stone"
+          "registry_name": "Vindictive Warden"
         },
         {
           "card_def_id": 326,
-          "registry_name": "Walltop Sentries"
+          "registry_name": "Wall of Stone"
         },
         {
           "card_def_id": 327,
-          "registry_name": "Wan Shi Tong, Librarian"
+          "registry_name": "Walltop Sentries"
         },
         {
           "card_def_id": 328,
-          "registry_name": "Wandering Musicians"
+          "registry_name": "Wan Shi Tong, Librarian"
         },
         {
           "card_def_id": 329,
-          "registry_name": "War Balloon"
+          "registry_name": "Wandering Musicians"
         },
         {
           "card_def_id": 330,
-          "registry_name": "War Mammoth"
+          "registry_name": "War Balloon"
         },
         {
           "card_def_id": 331,
-          "registry_name": "Wartime Protestors"
+          "registry_name": "War Mammoth"
         },
         {
           "card_def_id": 332,
-          "registry_name": "Water Tribe Captain"
+          "registry_name": "Wartime Protestors"
         },
         {
           "card_def_id": 333,
-          "registry_name": "Water Tribe Rallier"
+          "registry_name": "Water Tribe Captain"
         },
         {
           "card_def_id": 334,
-          "registry_name": "Waterbender Ascension"
+          "registry_name": "Water Tribe Rallier"
         },
         {
           "card_def_id": 335,
-          "registry_name": "Waterbending Lesson"
+          "registry_name": "Waterbender Ascension"
         },
         {
           "card_def_id": 336,
-          "registry_name": "Waterbending Scroll"
+          "registry_name": "Waterbending Lesson"
         },
         {
           "card_def_id": 337,
-          "registry_name": "Waterfall Aerialist"
+          "registry_name": "Waterbending Scroll"
         },
         {
           "card_def_id": 338,
-          "registry_name": "Watery Grasp"
+          "registry_name": "Waterfall Aerialist"
         },
         {
           "card_def_id": 339,
-          "registry_name": "Weaponize the Monsters"
+          "registry_name": "Watery Grasp"
         },
         {
           "card_def_id": 340,
-          "registry_name": "White Lotus Hideout"
+          "registry_name": "Weaponize the Monsters"
         },
         {
           "card_def_id": 341,
-          "registry_name": "White Lotus Reinforcements"
+          "registry_name": "White Lotus Hideout"
         },
         {
           "card_def_id": 342,
-          "registry_name": "White Lotus Tile"
+          "registry_name": "White Lotus Reinforcements"
         },
         {
           "card_def_id": 343,
-          "registry_name": "Wind Drake"
+          "registry_name": "White Lotus Tile"
         },
         {
           "card_def_id": 344,
-          "registry_name": "Wolfbat"
+          "registry_name": "Wind Drake"
         },
         {
           "card_def_id": 345,
-          "registry_name": "Yip Yip!"
+          "registry_name": "Wolfbat"
         },
         {
           "card_def_id": 346,
-          "registry_name": "Youthful Knight"
+          "registry_name": "Yip Yip!"
         },
         {
           "card_def_id": 347,
-          "registry_name": "Yue, the Moon Spirit"
+          "registry_name": "Youthful Knight"
         },
         {
           "card_def_id": 348,
-          "registry_name": "Yuyan Archers"
+          "registry_name": "Yue, the Moon Spirit"
         },
         {
           "card_def_id": 349,
-          "registry_name": "Zhao, Ruthless Admiral"
+          "registry_name": "Yuyan Archers"
         },
         {
           "card_def_id": 350,
-          "registry_name": "Zhao, the Moon Slayer"
+          "registry_name": "Zhao, Ruthless Admiral"
         },
         {
           "card_def_id": 351,
-          "registry_name": "Zuko's Conviction"
+          "registry_name": "Zhao, the Moon Slayer"
         },
         {
           "card_def_id": 352,
-          "registry_name": "Zuko's Exile"
+          "registry_name": "Zuko's Conviction"
         },
         {
           "card_def_id": 353,
-          "registry_name": "Zuko, Conflicted"
+          "registry_name": "Zuko's Exile"
         },
         {
           "card_def_id": 354,
+          "registry_name": "Zuko, Conflicted"
+        },
+        {
+          "card_def_id": 355,
           "registry_name": "Zuko, Exiled Prince"
         }
       ],
@@ -17377,7 +17381,7 @@
     }
   },
   "terminal_witness": {
-    "frame_hash": "641a91e2965464681909966c0af9cf921a2ff0e68b19293dd47e127267201833",
+    "frame_hash": "97187d89acc9314ce953d8dec588e71b8a93e6a599ae88318dfabcf707e36aff",
     "players": [
       {
         "battlefield": [
@@ -17663,7 +17667,7 @@
       }
     ],
     "revision": 135,
-    "state_digest": "50073642444cda05eb82e09cbaa53ab81ad0a930841d8b3484cb2909d8601a6a",
+    "state_digest": "70bc545bf898a153ca984f4f8ec4182fed002f9329edeb298d0f3e34c86b7d71",
     "terminal": true,
     "turn": {
       "active_player_id": 1,

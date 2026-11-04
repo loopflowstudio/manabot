@@ -331,14 +331,15 @@ foretold cards, but never private sideboards or outside-game selections.
 Ordered control schedules and delegated decisions use v5/v6 relation kinds 13/14;
 widths and v1–v4 exclusions are unchanged. Definition-derived learning tokens,
 native/Python encoders, text and Academy expose the same authority. State hash
-contract 14 includes control schedules. The optional Academy `player_controls`
+contract 15 includes control schedules alongside T6's delayed lifetimes. The optional Academy `player_controls`
 projection distinguishes historical absence from a live empty list; protocol
 version 1 is unchanged. No frozen historical evidence is rewritten.
 The [full-file reconciliation](docs/rules/tla/acceptance.md) accounts for all
 286 identities / 294 faces and records concrete interaction coverage limits.
-T6 schedule/selector capture and main's v6 capacity are integrated; combined
-w17 evidence refresh remains gate-owned after the pending T6 delayed-lifetime
-completion is incorporated.
+T6 schedule/selector capture, delayed lifetimes and main's v6 capacity are
+integrated from published T6 `7c790f78e`. Mutable w17 receipts are rebound to
+the combined content/hash identity; their 135-Command authored tape and 66
+public commitments remain unchanged. CI and review acceptance remain separate.
 
 ## w16: one card authority (superseded by w17)
 

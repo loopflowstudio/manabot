@@ -14786,7 +14786,7 @@ fn cast_bloodbending(s: &mut Scenario, caster: usize, paid: bool) {
         choose(s, |a| matches!(a, Action::PayCost { .. }));
     }
     settle(s);
-    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    assert_eq!(zone_of(s, card), Some(ZoneType::Exile));
     assert_eq!(s.game().state.turn.player_controls.len(), 1);
     assert!(!s.game().state.turn.player_controls[0].active);
 }

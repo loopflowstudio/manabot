@@ -1,7 +1,7 @@
 # TLA full-file reconciliation — MTG-226
 
 This audit reconciles the allocation with the native catalog and directed behavior
-witnesses on the T7 implementation, now merged with published T6 `bf7631c6a`.
+witnesses on the T7 implementation, now merged with published T6 `7c790f78e`.
 The [allocation](allocation.jsonl) remains the planning authority; this document
 is evidence navigation, never an admission allowlist. Definition is support.
 
@@ -58,14 +58,18 @@ native owners; they have no new end-to-end witness here. Extra-combat expiry is
 covered; a Bloodbending + Kuruk extra-turn combination is not separately played.
 No absent witness removes a defined card from play.
 
-T6's schedule-presentation and delayed-selector capture are integrated from
-published `bf7631c6a`. Its later accepted separation of delayed-event matching,
-firing frequency and expiry remains parent-owned and needs a later published
-sync before final combined acceptance. No dirty parent checkout was copied.
-Gate owns the affected suites, mutable w17 receipt refresh,
-arena admission/monitoring checks and CI Engine Budget. The inventory and focused
-T7 proofs do not substitute for that gate, nor do earlier receipts certify this
-unpublished combination.
+T6's schedule-presentation, delayed-selector capture and separation of
+delayed-event matching, firing frequency and expiry are integrated from
+published `7c790f78e` at `cd412daa3`. No dirty parent checkout was copied.
+Publication validation refreshed the mutable w17 kernel, authored-match and
+parity corpora, Academy fixtures and current belief pins. The 14 kernel cases
+retain their command counts and outcomes (3,473 Commands total); the authored
+tape retains all 135 Commands, 66 public commitments and presentation hashes.
+Changed event definition IDs follow Bloodbending's insertion in the name-ordered
+catalog. The combined Academy/training/admission/monitoring suite passed 86
+checks. Frozen historical evidence and checkpoints remain unchanged.
+CI Engine Budget and browser layout/interaction evidence remain pending; these
+headless proofs do not establish either or certify all cross-card combinations.
 
 ## Faces, obligations and witnesses
 
