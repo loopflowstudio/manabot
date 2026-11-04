@@ -1,5 +1,11 @@
 # Decisions and open questions — 5da5f4
 
+- Restart authorization, Jack Heart, 2026-11-04: "start it when you can" and
+  "seems fine" after the GPU allocation failure. Resume repair and a viable
+  prospective GPU attempt under the existing cumulative $25 cap; no additional
+  review permission is required. Preserve the failed attempt and its evidence.
+  See the latest restart section of the plan. No merge or model promotion.
+
 - Execution counterexample, 2026-11-04: the eight-learner RTX 5090 cohort
   actually ran, but first updates took 169–239 seconds and a second took
   151.24 seconds versus the required 32.23. All seeds were stopped before

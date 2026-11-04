@@ -137,3 +137,34 @@ final billing, retain uncertain costs as reserved, and preserve every attempt.
 Do not launch a second provider while acquisition on the first is uncertain.
 An excluded seed74200 CUDA admission can check actual collection/update and
 throughput before launch; its score never selects treatments or scientific seeds.
+
+## Restart admission — prospective 2026-11-04
+
+Jack Heart authorized a replacement attempt after the allocation failure. The
+failed cohort above remains unsuccessful and immutable; this amendment selects
+no scientific retry or score. Before any replacement science, measure eight
+ordinary updates for each reducer on excluded seed 74200, first sequentially,
+then as a concurrent pair. Use the same source, recipes, CUDA float32, 32 streams,
+complete games and learner authority; only admission identity, eight-update
+horizon and 600-second per-learner watchdog differ. A two-learner allocation
+caps each CUDA allocator at 40% and each host watchdog at 6 GiB. This is bounded
+ordinary learning, not artificial resource pressure. No admission scoring.
+
+Use the released Etude 0.2.14 launcher, locked 0.2.12 worker, and task-local
+launcher store. Admission permits one compatible RTX 3090, minimum four CPUs
+and 16 GB host RAM, with free provider transfers and 40 GB disk included. Rent
+at most one job hour plus setup under a $0.50 whole-rental reservation. Preserve
+prior reservations ($0.07258259388618171 bill, $6 ancillary, $0.50 admission,
+$17.20 failed cohort) pending reconciliation: including this new reservation is
+$24.27258259388618171, below the original $25 cap. No scientific allocation may
+reuse the failed allocation's reservation without accounting reconciliation.
+
+Measure wall time for both arms together, including interpreter startup and
+exports. Project the eight-learner 2,048-update workload as measured seconds ×
+4 seeds × 2,048 / 8, with a 50% extrapolation allowance, 90 minutes evaluation
+and 15 minutes setup. Concurrency is already in the measurement; never divide
+by it again. Retain both arrangements, actual per-arm exposure, hardware and
+cost. This admission cannot establish learning saturation or guarantee later
+game length. Only an affordable measured arrangement can select a prospectively
+frozen replacement. If neither fits, preserve the evidence and report the
+budget/throughput block rather than replaying eight concurrent learners.

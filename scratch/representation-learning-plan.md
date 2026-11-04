@@ -1,5 +1,34 @@
 # V7 learning comparison — GPU plateau continuation
 
+## Restart authorization — Jack Heart, 2026-11-04
+
+After the cancelled eight-learner attempt and its throughput failure were
+reported, Jack Heart said "start it when you can" and "seems fine". Resume
+execution-design repair and the GPU study within the ORIGINAL cumulative $25
+cap. This supersedes the operator's earlier return-to-review/no-replacement
+restriction below; no further permission is needed for a viable replacement.
+Keep the failed cohort immutable and explicitly unsuccessful. Freeze any new
+attempt and execution amendment prospectively; this approval does not erase the
+old no-retry denominator or allow score-based survivor selection.
+
+Jack Heart also asked what "5–7x longer" means and why. The comparison was
+against the allocation's required 32.23 seconds/update, not measured isolated
+hardware regression. Single-learner admission averaged19.30seconds/update;
+eight concurrent learners measured169–239seconds for their first updates and
+151.24seconds for one second update. At the latter rates,2048updates would take
+roughly86–136hours per learner while all run concurrently. GPU contention is
+a plausible explanation, not a conclusively profiled mechanism. Spare memory
+did not establish concurrent compute throughput. Do not assume that reducing
+concurrency, enabling MPS or buying a larger GPU automatically solves total
+cohort cost. Measure actual ordinary learner throughput and total cost for the
+proposed execution arrangement before spending on the replacement cohort;
+no artificial load. Consider sequential/lower-concurrency execution, supported
+batching or cheaper compatible hardware as routine choices, and keep changes
+bounded. Preserve independent seeds, scientific treatments, meaningful horizon,
+initialization/curve evaluation, budget/teardown and results review. Reconcile
+prior billing/reservations before allocation. Loopflow's installed compatible
+build ac8e088f5 now reads Task state; the old Graph is stopped with no live worker.
+
 ## Current direction — Jack Heart, 2026-11-04
 
 Jack Heart reviewed the completed short CPU cohort in this conversation and
@@ -330,3 +359,24 @@ all 1,024 retained replay flags passed. All 823 added manifest entries matched
 local file size and SHA256, and every prior manifest entry remained unchanged.
 The existing artifact publication log records those 823 published entries.
 No new scientific cohort, rental, model promotion or merge was performed.
+
+## Restart implementation — 2026-11-04
+
+Prospective admission is appended to the GPU protocol. Measure both arms at
+one and two concurrent learners, eight updates each on excluded seed 74200,
+without scores; project total cohort cost with 50% allowance and separate
+setup/evaluation. Latest read confirms both prior Vast instances absent and
+both bills unavailable. The cheapest compatible fresh offer was a 3090 at
+$0.2474074074/hour; keep old reservations and $6 ancillary pending settlement.
+The additional $0.50 admission reservation gives $24.2725825939 reserved.
+
+Delete — do not maintain: the invalidated eight-context scientific allocation
+in `worker`, its 10% CUDA allocator cap and the 20-hour assumption. Preserve
+scientific recipes, independent seeds, curve/held-out definitions, uncertainty,
+ordinary execute_regime/monitor authorities and archived failed evidence. The
+replacement execution arrangement depends on measured admission; no scientific
+launch has been selected or authorized by a score.
+
+Check: nine focused study tests, Ruff and whitespace passed. Gate retains
+broader suites. Remaining: execute admission, reconcile billing/reservations,
+then freeze and launch only an affordable measured replacement.

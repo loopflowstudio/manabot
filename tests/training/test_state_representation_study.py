@@ -130,3 +130,32 @@ def test_gpu_cohort_reaps_siblings_after_failure(tmp_path: Path) -> None:
     receipt = json.loads((tmp_path / "processes.json").read_text())
     assert receipt["exit_codes"][0] == 7
     assert all(code is not None for code in receipt["exit_codes"])
+
+
+def test_throughput_admission_projects_whole_cohort_cost() -> None:
+    # This time includes BOTH arms. Pairing affects measured time, not how many
+    # training updates the full cohort needs. Never divide by concurrency twice.
+    serial = gpu.ThroughputAdmission(
+        concurrency=1, elapsed_seconds=320, updates_per_arm=8
+    )
+    paired = gpu.ThroughputAdmission(
+        concurrency=2, elapsed_seconds=320, updates_per_arm=8
+    )
+    expected_hours = (1.5 * 320 * 4 * 2048 / 8 + 5400 + 900) / 3600
+    assert serial.cohort_hours() == paired.cohort_hours() == expected_hours
+    assert paired.projected_usd(Decimal("0.25")) > Decimal("25")
+    with pytest.raises(ValueError, match="finite and positive"):
+        paired.projected_usd(Decimal("NaN"))
+    with pytest.raises(ValueError):
+        gpu.ThroughputAdmission(
+            concurrency=1, elapsed_seconds=math.inf, updates_per_arm=8
+        )
+
+
+def test_throughput_admission_is_bounded_and_excludes_scientific_seeds() -> None:
+    (run,) = read_job_file(Path(gpu.__file__), ["--revision", "HEAD", "--admission"])
+    assert gpu.StudyJob.model_validate_json(run.job.config or "").mode == "admission"
+    assert run.job.max_usd == Decimal("0.50")
+    assert run.job.max_hours == 1
+    assert run.job.until == "updates=8"
+    assert gpu.ADMISSION_SEED not in gpu.SEEDS
