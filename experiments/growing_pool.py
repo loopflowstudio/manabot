@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from hashlib import sha256
 import os
 from pathlib import Path
 from typing import Literal
@@ -90,10 +91,13 @@ class Comparison:
     """An expected export/panel/anchor slot, even when it cannot be executed."""
 
     update: int
-    panel: str
+    panel: Panel
     anchor: Anchor
-    expected_games: int
     matchup: Matchup | None
+
+    @property
+    def expected_games(self) -> int:
+        return 4 * len(self.panel.deals)
 
 
 def runs(revision: str) -> list[Run]:
@@ -117,26 +121,35 @@ def runs(revision: str) -> list[Run]:
     return job.runs(*protocol.budget.seeds)
 
 
-def _policy_source() -> list[Path]:
+def policy_source() -> list[Path]:
     """Keep the fixed opponent independent of deck/protocol revisions."""
     return sorted((ROOT / "manabot").rglob("*.py"))
 
 
+def policy_source_sha256() -> str:
+    """Registration identity shared by callback delivery and sealed analysis."""
+    return canonical_sha256(
+        {str(path.relative_to(ROOT)): file_sha256(path) for path in policy_source()}
+    )
+
+
 def _source() -> list[Path]:
     return [
-        *_policy_source(),
+        *policy_source(),
         ROOT / "experiments/growing_pool.py",
         ROOT / "experiments/growing_pool_protocol.py",
         ROOT / "experiments/growing_pool_exposure.py",
+        ROOT / "experiments/growing_pool_analysis.py",
         PROTOCOL,
     ]
 
 
-def comparisons(run: TrainingRun, protocol: Protocol) -> tuple[Comparison, ...]:
-    if run.experiment != EXPERIMENT:
+def comparisons(run: TrainingRun | None, protocol: Protocol) -> tuple[Comparison, ...]:
+    """Keep the declared schedule even when the entire training run is absent."""
+    if run is not None and run.experiment != EXPERIMENT:
         raise ValueError("growing-pool comparisons require this experiment's exports")
     checkpoints = {}
-    for checkpoint in run.checkpoints:
+    for checkpoint in run.checkpoints if run is not None else ():
         update = checkpoint.clocks.get("updates")
         if update is None or update < 0 or update != int(update):
             raise ValueError("exports require nonnegative integer update coordinates")
@@ -145,7 +158,7 @@ def comparisons(run: TrainingRun, protocol: Protocol) -> tuple[Comparison, ...]:
         # coordinate; it does not replace any later planned milestone.
         if update != 0 or 0 not in checkpoints:
             checkpoints[int(update)] = checkpoint
-    source = _policy_source()
+    source = policy_source()
     inference = Inference(source=source)
     initial = checkpoints.get(0)
     anchors: dict[Anchor, Model | Code | None] = {
@@ -164,6 +177,7 @@ def comparisons(run: TrainingRun, protocol: Protocol) -> tuple[Comparison, ...]:
         for panel in protocol.manifest.panels:
             matchup = None
             if candidate is not None and anchor is not None:
+                assert run is not None
                 matchup = Matchup(
                     name=f"{run.name} u{update} {panel.id} vs {label}",
                     players=(candidate, anchor),
@@ -180,9 +194,7 @@ def comparisons(run: TrainingRun, protocol: Protocol) -> tuple[Comparison, ...]:
                         for deal in panel.deals
                     ),
                 )
-            result.append(
-                Comparison(update, panel.id, label, 4 * len(panel.deals), matchup)
-            )
+            result.append(Comparison(update, panel, label, matchup))
     return tuple(result)
 
 
@@ -260,12 +272,7 @@ def _registration(
             **common,
             runner_kind="code",
             player_spec={"kind": "heuristic"},
-            source_sha256=canonical_sha256(
-                {
-                    str(path.relative_to(ROOT)): file_sha256(path)
-                    for path in _policy_source()
-                }
-            ),
+            source_sha256=policy_source_sha256(),
         ), None
     path = local_checkpoint_file(player)
     validate_training_origin(
@@ -385,7 +392,8 @@ def play(match: Match) -> Result:
             authored_matchup=matchup,
             game_seconds=protocol.budget.game_seconds,
             max_commands=protocol.budget.max_commands,
-            bootstrap_seed=2459001,
+            bootstrap_seed=protocol.analysis.bootstrap_seed,
+            bootstrap_replicates=protocol.analysis.bootstrap_resamples,
             purpose="growing-pool-protocol-check",
         ),
         out_dir=output,
@@ -397,13 +405,17 @@ def play(match: Match) -> Result:
         trace = TypeAdapter(dict[str, JsonValue]).validate_json(trace_path.read_bytes())
         if "card_evidence" in trace:
             delivered = trace_card_tables(evidence, trace, ("candidate", "opponent"))
+    receipt = result.model_dump_json().encode()
     return Result(
         tables={
             **delivered.tables,
+            "evaluation_results": [
+                {"group": "all", "sha256": sha256(receipt).hexdigest()}
+            ],
             "games": outcome_rows(result, conditions),
             "decisions": decision_rows(delivered.blobs),
         },
-        blobs=delivered.blobs,
+        blobs=[*delivered.blobs, receipt],
     )
 
 

@@ -421,6 +421,35 @@ class Budget(StrictModel):
         )
 
 
+class Analysis(StrictModel):
+    """Prospective estimator and sealed training-health inputs, never defaults."""
+
+    bootstrap_seed: int = Field(ge=0)
+    bootstrap_resamples: int = Field(ge=1)
+    health_clock: Literal["updates"]
+    parameter_change: Literal["numerical/parameter_relative_delta"]
+    finite_metrics: tuple[str, ...] = Field(min_length=1)
+    zero_metrics: tuple[str, ...] = Field(min_length=1)
+    positive_metrics: tuple[str, ...] = Field(min_length=1)
+    sampled_finite_metrics: tuple[str, ...] = Field(min_length=1)
+    sampled_updates: tuple[int, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def distinct_metrics(self) -> Analysis:
+        metrics = (
+            *self.finite_metrics,
+            *self.zero_metrics,
+            *self.positive_metrics,
+            *self.sampled_finite_metrics,
+            self.parameter_change,
+        )
+        if len(set(metrics)) != len(metrics):
+            raise ValueError("health metrics must be distinct")
+        if tuple(sorted(set(self.sampled_updates))) != self.sampled_updates:
+            raise ValueError("sampled health coordinates must be unique and increasing")
+        return self
+
+
 class Protocol(StrictModel):
     schema_version: Literal[1] = 1
     id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
@@ -432,6 +461,7 @@ class Protocol(StrictModel):
     agent: ModelConfig
     learning: DampedPolicyLearning
     budget: Budget
+    analysis: Analysis
 
     @model_validator(mode="after")
     def contract(self) -> Protocol:
@@ -439,6 +469,10 @@ class Protocol(StrictModel):
             raise ValueError("growing-pool protocol never truncates legal choices")
         if self.agent.world != "world":
             raise ValueError("growing-pool policy must read the complete world catalog")
+        if any(
+            not 1 <= u <= self.budget.updates for u in self.analysis.sampled_updates
+        ):
+            raise ValueError("sampled health coordinates outside update horizon")
         schedule = self.learning.iteration_schedule
         if schedule is None or schedule.steps != self.budget.updates:
             raise ValueError("learning schedule must bind the pilot update horizon")

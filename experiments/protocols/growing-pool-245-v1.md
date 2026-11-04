@@ -165,9 +165,13 @@ per-family/per-participant **legal opportunity → selected Command → resolved
 effect** counts, keyed by native object incarnation and world. Its decision value
 is to distinguish rare opportunity from refusal/misplay. The cheapest credible
 producer is an extension of existing native capture/replay, shared by training
-and evaluation; no label parsing or parallel mechanics taxonomy. That extension
-is not required to run the first ordinary learnability check. Without it,
-mechanic-coverage claims remain narrower than aggregate learning claims.
+and evaluation; no label parsing or parallel mechanics taxonomy. The current
+tables permit a narrower ordinary learnability check, but do not close the
+Task's requirement to measure training exposure and meaningful decisions.
+Whether replay-linked evaluation draws and action-type counts suffice for the
+first handoff remains a review decision; Jack Heart's selection of A did not
+accept that reduction. Broader capture remains unimplemented, and its ownership
+must be coordinated with Tasks 01/03 before claiming that requirement complete.
 
 Rare families get authored decks and separate directed probes, not inverse-
 frequency loss weights. A repeatedly dominant card is capped by list counts and
@@ -231,6 +235,42 @@ coarse; two seeds establish a bounded engineering check, not a method-ranking
 study. A method claim waits for the deeper track, independent seeds and an
 explicit uncertainty analysis. Do not average missing/failed games as losses,
 zero exposure or successful draws; publish attempted/expected/valid denominators.
+
+`growing_pool_analysis.py` reads sealed Etude results independently of the
+report curves. It starts from both declared training seeds, finds each seed in
+Etude's training declarations, and retains every expected export, callback and
+four-leg deal. Unknown/duplicate seeds, changed regime/source/checkpoint/deck
+identities and contradictory replay receipts are rejected. Absent runs, exports,
+callbacks, game rows or replay evidence remain explicit missing/failed slots;
+a failed callback's lost per-game work is unknown, not four played losses.
+No surviving subset substitutes for a complete contrast.
+
+The JSON prospectively binds bootstrap seed **2459001**, **2,000 resamples** and
+95% percentile intervals through the evaluator's `bootstrap_mean_interval`.
+Within each seed/panel, the same resampled whole-deal indices apply to scores
+and trained-minus-initialization gains. Raw four-leg scores and deal means remain
+in the JSON output. Seeds are never pooled. Callback delivery seals the existing
+`EvaluationResult` as a match blob alongside `GameEvidence`; the reader checks
+blob membership/digests, registrations, replay receipts, trace joins, actual
+seats/decks, world and input identities without replaying or launching a game.
+
+Health inputs are existing sealed Etude metric points on the `updates` clock,
+not a manually supplied pass flag. The JSON names finite losses on every update,
+zero numerical incident counts, and positive optimizer-step counts. Gradient
+norms and relative parameter changes use the learner's existing sampled updates
+**1 and 25**, not invented measurements on unsampled updates. Every declared
+coordinate must be present and finite; at least one sampled parameter change
+must be positive. The report binds declaration and metric digests and names
+missing coordinates and failed health checks. A completed export alone cannot
+establish healthy optimizer activity.
+
+`complete` reports completeness of all five panels plus training/health evidence.
+`modest_check` applies the primary criterion below: missing primary or health
+evidence gives null; sufficient evidence gives true/false. Missing secondary
+panels still make the report incomplete, but their scores do not redefine that
+criterion. A favorable modest check does not close the separate unresolved
+training-exposure acceptance boundary. Controlled sealed fixtures establish the
+reader's behavior only; they are not empirical evidence of learning.
 
 ## First pilot for Task 04
 
@@ -369,16 +409,23 @@ uses the ordinary Etude discovery/callback path and an explicit output directory
 ```sh
 ETUDE_OUTPUT_DIR="$PWD/.runs/growing-pool-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/growing_pool.py --source r2://manabot/jobs
 uv run --extra artifacts --extra evaluation etude report experiments/growing_pool.py --source r2://manabot/jobs
+uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_analysis --source r2://manabot/jobs --out .runs/growing-pool-analysis.json
 ```
 
 The evaluation command plays games and needs Task 04's authorization and budget;
-it is not part of `check`. Its report curves are descriptive. Join the expected
-`comparisons()` schedule with obtained match rows before assessing the decision
-rule; absent exports and failed callbacks remain missing. A new protocol after
+it is not part of `check`. The report curves are descriptive; the analysis
+command is read-only and reconciles the full declared schedule before assessing
+the decision rule. Absent exports and failed callbacks remain missing. A new protocol after
 execution must use a new experiment identity/source; never overwrite v1's JSON
 or recycle its experiment name to blend populations.
 
-MTG-245 supplies code, manifest, interpretation and the two-batch plan. Task 04's
-handoff is complete only after its integrated revision, authored lists and
-budget are accepted and its actual run reports update/throughput/exposure/crash
-receipts. No design audit or successful discovery test is evidence of learning.
+MTG-245 supplies code, manifest, interpretation and the two-batch authoring plan.
+The paired reader is implemented; the training-exposure acceptance boundary
+remains unresolved for authored review. Neither discovery nor controlled fixtures
+establish experimental acceptance or measured learning. The future batch table is not two executable manifests or
+delivered policy probes. Task 04 owns authoring those lists and scenario IDs on
+its declared integrated snapshot, accepting numeric bounds, and obtaining
+execution authorization. Its measured validation outcome then requires actual
+update/throughput/exposure/crash receipts. MTG-245's protocol handoff and Task 04's
+experimental completion are separate outcomes. No design audit or successful
+discovery test is evidence of learning.

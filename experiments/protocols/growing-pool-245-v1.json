@@ -657,7 +657,7 @@
     "collection_kl": 0.1,
     "learning_rate_scale": 0.5,
     "learning_rate_power": 1.1,
-    "learning_rate_min": 5e-6,
+    "learning_rate_min": 5e-06,
     "learning_rate_max": 0.0001,
     "tau_scale": 0.05,
     "tau_power": 0.3,
@@ -689,5 +689,34 @@
     "game_seconds": 60.0,
     "max_commands": 10000,
     "proposed_total_usd": 5.0
+  },
+  "analysis": {
+    "bootstrap_seed": 2459001,
+    "bootstrap_resamples": 2000,
+    "health_clock": "updates",
+    "parameter_change": "numerical/parameter_relative_delta",
+    "finite_metrics": [
+      "loss",
+      "policy_loss",
+      "value_loss"
+    ],
+    "zero_metrics": [
+      "numerical/nonfinite_count",
+      "numerical/rejected_steps",
+      "numerical/skipped_steps",
+      "numerical/legal_underflow_count",
+      "numerical/empty_actor_batch"
+    ],
+    "sampled_finite_metrics": [
+      "numerical/gradient_norm_before",
+      "numerical/gradient_norm_after"
+    ],
+    "positive_metrics": [
+      "numerical/optimizer_steps"
+    ],
+    "sampled_updates": [
+      1,
+      25
+    ]
   }
 }

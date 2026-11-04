@@ -1,5 +1,60 @@
 # MTG-245 — exploration, 2026-11-04
 
+## Accepted execution scope — 2026-11-04
+
+Jack Heart said “ok, lets do that” to the four-Wave/workflow proposal, then
+corrected the proposed separate Task with “nah i think jsut leave that in this”.
+Implement this work inside MTG-245 alongside its original protocol deliverable.
+No separate Task was created. The existing live Graph owns implementation;
+do not start a competing Graph or replay completed steps solely for this steer.
+This supersedes earlier statements below that workflow installation and Wave
+reorganization were only proposals.
+
+Accepted outcome:
+
+- Four core Waves: Experiments, Coverage, Engine performance, Infrastructure.
+  Keep Academy separate. Infrastructure owns shared systems, tooling and
+  reliability. Route Tasks by outcome, not the files they change.
+- Compose builtin code graphs where suitable. Use narrowly named forks only
+  where domain-specific placement requires them. Preserve review, delivery and
+  verification boundaries; do not shadow generic builtin code.
+- Coverage has three independent code loops: working behavior → scalable
+  decomposition for growing the card file → measured performance optimization.
+  Each owns implementation, checks, review and revision until its criterion is
+  satisfied. Three PRs/merges were not requested. Preserve shared semantics,
+  debug invariants and the prohibition on artificial load.
+- One experiment graph encompasses training and evaluation. Architecture, regime
+  and new-card coverage are design/analysis lenses, not three mandatory flows
+  or automatically launched campaigns. Specialist branches can reconcile into
+  one protocol when useful. Existing checkpoints need no placeholder fitting.
+- Validation owns authored decks and a bounded experiment on the integrated
+  snapshot. Card authors provide interactions and behavior evidence. Preserve
+  A's reference league and the versioned protocol/splits. Tiny runs may prove
+  execution while leaving learning inconclusive.
+
+Use supported lf operations for Wave identities and membership. Preserve Task
+IDs, PRs, histories, frozen evidence, captured graphs and live runs. Do not claim
+or execute other backlog Tasks to reorganize them. Refresh state before effects;
+bring consequential ambiguous mappings here. Prefer identity-preserving rename/
+move operations to duplicates. Preserve Wave memory/provenance through the
+selected migration procedure.
+
+Refresh these observed integration facts: training selects missing `iterate`;
+eval's goal is empty; legacy `.lf/flows/` are not discovered by the installed
+graph catalog. PR #421, Task 5da5f4, modifies `.lf/wave/training/MEMORY.md`;
+preserve that work and its reserved empirical decisions. MTG-241/244 and this
+Task have live work; MTG-243 is at demo. MTG-213 has separate paid-run authority.
+
+Acceptance adds discoverable/validated graphs and skills, three Coverage loops,
+one experiment lifecycle, documented Wave boundaries/defaults, supported migration
+receipts, unresolved mappings where necessary, and proof live work/frozen identities
+were preserved. Validate compilation/discovery and safe fixtures; do not launch a
+scientific campaign as a setup test. No new games/training campaigns, rental,
+spending or automatic shipping authority is supplied. Task 04 still owns actual
+training/results and Task 08 the later campaign. Use MTG-245's existing review.
+
+## Earlier exploration and evidence
+
 Jack Heart invoked `explore` on 2026-11-04, then selected A as the starting
 approach: “i agree A is the place to start”. The reference league is the accepted
 initial direction: authored functional decks, a frozen mixture and stable

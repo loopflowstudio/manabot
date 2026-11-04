@@ -407,6 +407,10 @@ Etude evaluation tables use `seat` for the participant's index in
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
 group native play/draw reports by `game_seat`. Etude's conversion owns the
 historical `player`/`seat` column rename; never rewrite retained tables for it.
+Every Etude result row names a participant `seat` or a declared `group`; use
+`group: all` for a receipt covering the whole match. `card_plays.game` is the
+native trace's game ID, not its leg index; join evaluator rows to retained card
+blobs by `trace_sha256` within the match, then validate the blob's deal and leg.
 
 ### Offline inference reports
 

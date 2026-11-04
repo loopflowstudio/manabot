@@ -396,13 +396,24 @@ def test_callback_delivers_failure_slots_and_replay_linked_exposure(
     assert set(result.tables) == {
         "games",
         "decisions",
+        "evaluation_results",
         "card_plays",
         "card_counts",
         "cards",
     }
     assert len(result.tables["games"]) == 8
     assert all(row["score"] is None for row in result.tables["games"])
-    assert len(result.blobs) == 1
+    assert len(result.blobs) == 2
     assert {row["evidence_sha256"] for row in result.tables["decisions"]} == {
         row["evidence_sha256"] for row in result.tables["card_plays"]
     }
+
+
+def test_analysis_parameters_are_prospective_and_required(protocol: Protocol) -> None:
+    raw = protocol.model_dump(mode="json")
+    del raw["analysis"]["bootstrap_resamples"]
+    with pytest.raises(ValueError, match="bootstrap_resamples"):
+        Protocol.model_validate(raw)
+    raw = protocol.model_dump(mode="json")
+    raw["analysis"]["bootstrap_seed"] += 1
+    assert Protocol.model_validate(raw).digest != protocol.digest
