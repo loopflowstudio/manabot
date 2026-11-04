@@ -347,6 +347,16 @@ world/ABI admission and failure receipts inside the attempt output. Only a
 completed target emits `etude-result.json` with the admitted policy path.
 Cancellation is checked with the resource watchdog (at most once per second at
 check boundaries) and retains a failed receipt, not a successful partial target.
+Opt-in `GameErrorPolicy.recover_capacity` lets the collector quarantine a native
+observation-capacity failure in one active game, discard its uncommitted samples
+from both seats, and replace only that stream. Receipts distinguish
+`resource_limit` from engine errors and retain the observation configuration for
+encoder-boundary replay. The settled-game rolling window counts both; the
+threshold is strict (`rate > threshold`). Invalid buffers/provenance and reset
+failures stay fatal. Omitted capacity recovery is false and excluded from frozen
+serialization. Evaluation failures stay in their scheduled slots. Regathering
+creates selection bias toward games that fit the configured resources.
+
 Policy checkpoints cannot resume optimizer, RNG or collector state. Automatic
 retries are disabled (`max_attempts=1`); multi-stage and imported-state jobs are
 not yet admitted. This worker proof does not establish SDK placement, remote

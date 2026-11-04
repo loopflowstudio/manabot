@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 from manabot.env.failures import read_failure
 from manabot.env.match import Match
+from manabot.env.observation import ObservationEncoder
 from manabot.env.replay import (
     ReplayAgreement,
     matches_retained_error,
@@ -30,11 +31,17 @@ from manabot.env.replay import (
     require_replay_runtime,
     run_bounded_replay,
 )
-from manabot.infra.config import MatchConfig
+from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
 
 GameOutcome = Literal[
-    "completed", "engine_error", "truncated", "action_limit", "deadline", "abandoned"
+    "completed",
+    "engine_error",
+    "resource_limit",
+    "truncated",
+    "action_limit",
+    "deadline",
+    "abandoned",
 ]
 # Run-level interruptions: the game did not fail, the run stopped playing it.
 # "deadline" is a deadline or wall allowance; "abandoned" any other run stop.
@@ -48,6 +55,7 @@ class GameErrorPolicy(BaseModel):
     window: int = Field(default=100, ge=1, le=100_000)
     warmup: int = Field(default=100, ge=1)
     max_game_actions: int = Field(default=40_000, ge=1, le=1_000_000)
+    recover_capacity: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def bounded_warmup(self) -> "GameErrorPolicy":
@@ -73,9 +81,18 @@ class GameAttempt(BaseModel):
     error: str | None = None
     frame_json: str | None = None
     native_trace: str | None = None
+    observation: ObservationConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     discarded_samples: int = 0
     valid_samples: int = 0
     seconds: float = 0
+
+    @model_validator(mode="after")
+    def resource_limit_has_input_contract(self) -> "GameAttempt":
+        if self.outcome == "resource_limit" and self.observation is None:
+            raise ValueError("resource-limit replay requires observation configuration")
+        return self
 
 
 class GameErrorState(BaseModel):
@@ -196,6 +213,13 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     env.reset(Match(attempt.matchup).to_rust())
     frame: str | None = None
     agreement = ReplayAgreement(attempt.outcome)
+    encoder = (
+        ObservationEncoder(attempt.observation)
+        if attempt.outcome == "resource_limit" and attempt.observation is not None
+        else None
+    )
+    # Replay the same fixed allocation at every step, as the collector does.
+    buffers = encoder.allocate() if encoder is not None else {}
     for index, action in enumerate(attempt.actions):
         if index == len(attempt.actions) - 1:
             frame = env.semantic_decision_frame_json()
@@ -210,7 +234,7 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                     }
             agreement.at_retained_failure = True
         try:
-            _, _, terminated, truncated, _ = env.step(action)
+            observation, _, terminated, truncated, _ = env.step(action)
         except BaseException as error:
             if (
                 not isinstance(error, managym.AgentError)
@@ -228,6 +252,28 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                 "error_class": type(error).__name__,
                 "error": str(error),
             }
+        if encoder is not None:
+            # Native gameplay alone cannot reproduce an allocation failure.
+            try:
+                env.encode_observation_into(
+                    observation, buffers, encoder.config.action_overflow
+                )
+            except ValueError as error:
+                agreement.matches_error = (
+                    None
+                    if attempt.error_class is None or attempt.error is None
+                    else agreement.at_retained_failure
+                    and attempt.error_class == "ObservationCapacity"
+                    and str(error) == attempt.error
+                )
+                return {
+                    **asdict(agreement),
+                    "status": "failed",
+                    "action_index": index,
+                    "frame": frame,
+                    "error_class": type(error).__name__,
+                    "error": str(error),
+                }
         if terminated or truncated:
             return {
                 **asdict(agreement),

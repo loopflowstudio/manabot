@@ -343,11 +343,21 @@ and RTX3090/L4/A4000 capacity; A6000 availability was false. The final inventory
 found no active pilot rental or unsettled hardware. A separate representation
 rental was identified by its Run ownership and left untouched. No new spending,
 trained export or evaluation followed; all 15 preflight files are published
-under `experiments/data/mtg213/gpu-v9-preflight-20261104/`. These dated refusals
-establish no future availability. The plan owns fresh inventory/billing/quote
-reconciliation and execution of that prepared Run within the unchanged
-$1 allocation/$10 total. A new freeze is needed only for a source amendment;
-repeating preparation does not reserve provider capacity.
+under `experiments/data/mtg213/gpu-v9-preflight-20261104/`.
+
+The 20:59–21:00 UTC continuation reused that Run and obtained L4 and A6000
+whole-rental quotes of $0.7375 each, but both launch-time checks refused capacity
+before submission. RTX5090 exceeded its price ceiling; RTX3090/A4000 still
+refused capacity. Final inventory at 21:00:52 UTC contained no Vast instances,
+RunPod pods or unsettled hardware; the unrelated rental disappeared independently.
+The ten published `gpu-v9-recheck-20261104/` receipts retain zero new spending
+and unchanged prior estimates/reservations, with earlier Vast billing still
+unavailable. Even a compatible whole-rental quote is not allocation evidence.
+Repeated refusals supplied no further actionable placement: continuation needs
+new capacity evidence within $1 allocation/$10 cumulative, then fresh inventory,
+billing and quote reconciliation. These dated reads establish no future supply.
+The plan owns remaining execution and evaluation. A new freeze is needed only
+for a source amendment; repeating preparation does not reserve provider capacity.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)

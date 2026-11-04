@@ -2,7 +2,8 @@
 
 Execution status and remaining acceptance: `scratch/tla-pilot-postmerge-verify.md`.
 Results, costs and retained receipts: `experiments/tla-trophy-pilot.md`.
-Current contract: `experiments/protocols/tla-trophy-213-v9.md` and its JSON/regime.
+Executed contract: `experiments/protocols/tla-trophy-213-v9.md` and its JSON/regime.
+Prospective successor: v10, permanent capacity 64 with fresh initialization.
 V9 Run `2171156493ca` executed on the accepted Vast allocation and failed after
 5 updates at 41 permanents against capacity 40. No trained endpoint exists.
 Its 32 initialization games are complete; 256 scheduled games remain missing.
@@ -24,10 +25,10 @@ available Vast RTX5090 offer at about USD0.963/hour and roughly USD1.19 for
 setup plus the planned run ("that seems fine"). This supersedes the USD1
 per-allocation stop for this attempt; the operator uses USD1.25 as the rounded
 whole-rental ceiling and USD0.97/hour as its offer ceiling. The cumulative USD10
-cap remains unchanged, including failures, setup and teardown. Reconcile current
-inventory and outstanding reservations before submitting the existing v9 Run;
-preserve its source, recipe and schedule. Do not replay implementation or freeze
-a replacement merely to change the external placement allowance.
+cap remains unchanged, including failures, setup and teardown. This placement-only amendment governed the executed v9 Run, preserving its
+source, recipe and schedule. The subsequently accepted resource-limit repair
+requires a fresh v10 source freeze before inventory/budget reconciliation and
+execution; unchanged v9 retries are superseded.
 
 Comment 42a12145 approved shared-effect fixed tensors, encoding each effect
 once and routing it to affected object embeddings before attention. Task 5da5f4
@@ -120,6 +121,18 @@ they do not replace MTG-213's direction. Cleared demo/verification plans remain
 at `d2ff60e6a^:scratch/tla-pilot-demo.md` and
 `d2ff60e6a^:scratch/tla-pilot-verify.md`.
 
-## Approved placement envelope — 2026-11-04 22:04 UTC
+## Historical v9 placement envelope — 2026-11-04 22:04 UTC
 
 Etude 0.2.14 includes setup in the job-dollar check, so raising only the supply/cohort ceiling refused launch with “job dollars do not cover the hours.” Apply the already approved USD1.25 to `Job.max_usd` in a separate placement copy; SDK `job_identity` explicitly excludes limits. Assert unchanged identity, Run 2171156493ca, source, scientific config and schedule; retain the original prepared-run.json. This is the simpler launch-only interpretation of the accepted placement amendment, not a new scientific Run.
+
+## Permanent-capacity repair assumption — 2026-11-04
+
+The verification feedback selects the existing 64-row allocation prospectively.
+V10 initially changed permanent capacity and identities. Comment ca1660e8
+subsequently adds explicit per-game capacity recovery and a .25 threshold.
+The recorded USD1.25 allocation ceiling was already accepted; global defaults
+and v9 bytes stay frozen.
+The retained case proves 41 rows are needed, not that 64 is a universal bound.
+The 100-update target and checkpoint cadence remain unchanged; exporting earlier
+checkpoints would be a separate scientific schedule change. Gate/delivery and
+GPU execution remain explicit subsequent Graph work.

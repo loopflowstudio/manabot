@@ -10,6 +10,16 @@ The [training receipt](data/mtg213/gpu-v9-20261104/training/run.json) retains
 exclude part of the rental. No trained checkpoint exported before failure;
 only initialization is retained. MTG-213 remains incomplete.
 
+The unexecuted [v10 successor](protocols/tla-trophy-213-v10.md) retains every
+permanent with a 64-row allocation and opts into isolated resource-limit recovery.
+Jack Heart selected a .25 failure threshold over the existing 100-game window
+and warmup. A failed game loses only its own uncommitted samples from both seats;
+other streams and completed updates remain. Resource failures keep replay inputs
+and their encoder configuration. Evaluation keeps failed scheduled slots.
+This introduces selection bias toward games that fit the runtime; it is not a
+lossless solution to unbounded Airship growth or evidence of learning. V10 still
+needs final-source freezing, paid execution and complete paired evaluation.
+
 The [exact replay](data/mtg213/gpu-v9-20261104/capacity-replay.json) identifies
 stream 43, seed 32624, after 371 actions, with a matching pre-command frame.
 Scalar native, vector native and Python encoding reject the same 41-permanent
@@ -67,30 +77,21 @@ complete trained-export/evaluation acceptance. See the
 
 ## V9 preflight history
 
+Before the execution above, the 20:59–21:00 UTC recheck obtained L4 and A6000
+whole-rental quotes of USD0.7375 each, but both launch checks refused capacity.
+RTX 5090 exceeded the then-current USD0.81/hour ceiling; RTX 3090 and A4000
+also refused capacity. No submission or new cost followed these checks.
+[Recheck evidence](data/mtg213/gpu-v9-recheck-20261104/outcome.json) and the
+[earlier preflight](data/mtg213/gpu-v9-preflight-20261104/outcome.json) retain
+the exact quotes, refusals and accounting; the prepared source was reused.
 
-V9 Run **2171156493ca** freezes merged source
-`6da60684cb628ec9b431dbbb9d7dc91348743622`, the original 134 decks and matched
-first-64 legal support for all participants. It remains **unsubmitted**.
-The fresh 20:59–21:00 UTC recheck on 2026-11-04 briefly obtained compatible
-L4 and A6000 whole-rental quotes of USD0.7375 each. Both launch-time rechecks
-then refused capacity **before submission**. RTX 5090 quoted
-USD1.1481481481481481/hour, above the USD0.81 ceiling; RTX 3090 and A4000
-also refused capacity. The attempt stopped blocked instead of repeating
-unchanged requests. [Recheck evidence](data/mtg213/gpu-v9-recheck-20261104/outcome.json)
-retains the quotes, launch refusals and accounting. The
-[earlier preflight](data/mtg213/gpu-v9-preflight-20261104/outcome.json)
-retains the prepared Run and initial refusals; no source was prepared again.
-
-The final 21:00:52 UTC inventory confirms no Vast instances, RunPod pods or
-unsettled launcher hardware. The independently owned representation rental
-was untouched and disappeared independently between reads. Accounted prior
-full-rental cost remains **USD0.32710677365251912**, with
-**USD3.9139916049382716** conservatively reserved against USD10;
-**new paid compute is USD0**. Provider billing for the earlier Vast rental
-remains unavailable, so its full-rental estimate is retained. The USD1 allocation
-cap is unchanged. V9 still needs GPU execution, an admitted trained checkpoint,
-paired evaluation and the qualified Elemental comparison. A new capacity signal
-is needed before another unchanged launch attempt.
+At 21:00:52 UTC, inventory contained no rentals or unsettled hardware. The
+separately owned representation rental disappeared independently and was left
+untouched. Historical costs were USD0.32710677365251912, with
+USD3.9139916049382716 conservatively reserved and earlier Vast billing unavailable.
+The subsequent accepted placement and execution supersede this preflight's
+USD1 allocation limit and pending-launch status. Full prior narration is retained
+at `6dff2e919:experiments/tla-trophy-pilot.md`.
 
 ## Previous executed pilot: v5
 
@@ -286,8 +287,8 @@ The [single-stream input](data/mtg213/gpu-corrected-20261103/capacity-stream.jso
 retain the exact decks, sideboards, seed, actions, buffer shapes and runtime IDs.
 Replay used the same source/world on macOS; native binary bytes differ from Linux.
 
-Encoding errors are deliberately fatal in `step_isolated_into`; they are not
-quarantined gameplay errors. This invalidates the pilot's capacity assumption.
+V1 treated encoding errors as fatal in `step_isolated_into`, outside gameplay
+quarantine. This invalidated that pilot's capacity assumption.
 No facts were truncated, frozen shapes widened, decks removed, actions hidden,
 or failing games replaced. This failure required a shared representation decision;
 the accepted prospective v6 contract is described above. The launcher listed
@@ -405,8 +406,8 @@ Task 5da5f4 delivered it in PR #419, merged as
 V5 subsequently reached GPU learning, as reported above. An admitted trained
 checkpoint, complete paired evaluation and Elemental-relative learning analysis
 remain outstanding. Any successor needs an explicit prospective contract and
-fresh inventory, billing and quote reconciliation within the $1 allocation and
-cumulative $10 caps. Preserve all executed versions; new games cannot fill their
+fresh inventory, billing and quote reconciliation within the accepted allocation
+and cumulative $10 caps. Preserve all executed versions; new games cannot fill their
 missing evaluation slots.
 
 ### Card-capacity repair publication checks (2026-11-04 UTC)
@@ -508,7 +509,7 @@ sources retain the preceding 957-pass debug validation (two ignored) and Clippy
 result. Platform CI and the engine performance comparison remain delivery
 checks. These software checks supply no trained checkpoint or learning result.
 
-## Prospective v9: integration and matched support (2026-11-04)
+## V9 implementation: integration and matched support (2026-11-04)
 
 Jack Heart selected the same first-64 legal prefix for the heuristic as for
 learned policies (comment ffd29028). The [v9 protocol](protocols/tla-trophy-213-v9.md)
