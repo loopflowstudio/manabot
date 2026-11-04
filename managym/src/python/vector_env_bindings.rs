@@ -372,7 +372,7 @@ pub(super) fn input_buffer_config(
                 return Err(PyValueError::new_err("invalid fact buffer shape"));
             }
             config.max_facts = fact_shape[fact_shape.len() - 2];
-            if buffers.contains("effects")? {
+            if shared_count == 3 {
                 7
             } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
                 5
@@ -425,6 +425,14 @@ fn read_observation_buffers(
     n: usize,
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
+    let shared_buffer = |name: &str, rows: usize, width: usize| -> PyResult<Option<Py<PyAny>>> {
+        if c.policy_input_version < 7 {
+            return Ok(None);
+        }
+        Ok(Some(
+            require_numpy_array(buffers, name, &[n, rows, width], "float32")?.unbind(),
+        ))
+    };
     Ok(ObservationBuffers {
         relations: if c.policy_input_version >= 2 {
             Some(
@@ -443,57 +451,21 @@ fn read_observation_buffers(
         } else {
             None
         },
-        effects: if c.policy_input_version >= 7 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "effects",
-                    &[
-                        n,
-                        crate::agent::shared_effects::EFFECT_ROWS,
-                        crate::agent::shared_effects::EFFECT_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
-        effect_details: if c.policy_input_version >= 7 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "effect_details",
-                    &[
-                        n,
-                        crate::agent::shared_effects::DETAIL_ROWS,
-                        crate::agent::shared_effects::DETAIL_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
-        effect_members: if c.policy_input_version >= 7 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "effect_members",
-                    &[
-                        n,
-                        crate::agent::shared_effects::MEMBER_ROWS,
-                        crate::agent::shared_effects::MEMBER_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
+        effects: shared_buffer(
+            "effects",
+            crate::agent::shared_effects::EFFECT_ROWS,
+            crate::agent::shared_effects::EFFECT_DIM,
+        )?,
+        effect_details: shared_buffer(
+            "effect_details",
+            crate::agent::shared_effects::DETAIL_ROWS,
+            crate::agent::shared_effects::DETAIL_DIM,
+        )?,
+        effect_members: shared_buffer(
+            "effect_members",
+            crate::agent::shared_effects::MEMBER_ROWS,
+            crate::agent::shared_effects::MEMBER_DIM,
+        )?,
         facts: if c.policy_input_version >= 5 {
             Some(
                 require_numpy_array(

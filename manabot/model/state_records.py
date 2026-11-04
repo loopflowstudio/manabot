@@ -9,11 +9,8 @@ within-record difference is a sum versus a GRU. Neither retains temporal state.
 The v5 admission limits and missing exact effect-source links still apply.
 """
 
-from typing import Literal
-
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pack_sequence
 
 from manabot.env.observation import (
     FACT_DIM,
@@ -24,57 +21,13 @@ from manabot.env.observation import (
     RELATION_VALID_INDEX,
 )
 from manabot.infra.config import ObservationConfig
-
-RecordReduction = Literal["typed_pool", "typed_gru"]
-
-
-def _rows(
-    value: torch.Tensor, count: int, width: int, valid_column: int
-) -> torch.Tensor:
-    """Mask padding before any arithmetic or indexing; reject malformed live rows."""
-    if value.ndim != 3 or value.shape[1:] != (count, width):
-        raise ValueError(f"expected [batch, {count}, {width}] state records")
-    valid = value[..., valid_column]
-    if not ((valid == 0) | (valid == 1)).all():
-        raise ValueError("state record validity must be binary")
-    clean = torch.where(valid.bool().unsqueeze(-1), value, 0)
-    if not torch.isfinite(clean).all():
-        raise ValueError("state records must be finite")
-    return clean
-
-
-def _indexes(values: torch.Tensor, maximum: int, name: str) -> torch.Tensor:
-    if not ((values == values.floor()) & (values >= 0) & (values <= maximum)).all():
-        raise ValueError(f"invalid {name} reference")
-    return values.long()
-
-
-def _join(values: torch.Tensor, indexes: torch.Tensor) -> torch.Tensor:
-    """One-based local references; zero is explicit absence, never object zero."""
-    return values[(indexes - 1).clamp_min(0)].masked_fill(
-        (indexes == 0).unsqueeze(-1), 0
-    )
-
-
-class RecordReducer(nn.Module):
-    """Reduce nonempty ordered token lists; no hidden state crosses calls."""
-
-    def __init__(self, width: int, reduction: RecordReduction) -> None:
-        super().__init__()
-        self.gru = (
-            nn.GRU(width, width, batch_first=True) if reduction == "typed_gru" else None
-        )
-        self.output = nn.Linear(width, width)
-
-    def forward(self, records: list[torch.Tensor]) -> torch.Tensor:
-        if self.gru is None:
-            pooled = torch.stack([record.sum(0) for record in records])
-        else:
-            # Embedding happens before packing only for actual tokens, not a
-            # batch-wide padded record array. Gradients reach every input token.
-            _, hidden = self.gru(pack_sequence(records, enforce_sorted=False))
-            pooled = hidden[-1]
-        return self.output(torch.tanh(pooled))
+from manabot.model.records import (
+    RecordReducer,
+    RecordReduction,
+    join_rows,
+    masked_record_rows,
+    record_indexes,
+)
 
 
 class SharedFactEncoder(nn.Module):
@@ -90,7 +43,7 @@ class SharedFactEncoder(nn.Module):
         self.reducer = RecordReducer(width, reduction)
 
     def forward(self, facts: torch.Tensor, objects: torch.Tensor) -> torch.Tensor:
-        facts = _rows(facts, self.rows, FACT_DIM, 11)
+        facts = masked_record_rows(facts, self.rows, FACT_DIM, 11)
         if facts.shape[0] != objects.shape[0]:
             raise ValueError("fact and object batch sizes differ")
         results = list(objects.unbind(0))
@@ -100,18 +53,18 @@ class SharedFactEncoder(nn.Module):
         for batch in active_batches:
             rows, table = facts[batch], objects[batch]
             active = rows[rows[:, 11].bool()]
-            links = _indexes(active[:, 0], len(table), "fact object")
+            links = record_indexes(active[:, 0], len(table), "fact object")
             if (links == 0).any():
                 raise ValueError("live fact has no object")
             # Group all payload columns, including source, timestamp and detail.
             # The inverse preserves duplicates and different object memberships.
             payload, inverse = torch.unique(active[:, 1:11], dim=0, return_inverse=True)
-            kinds = _indexes(payload[:, 0], FACT_KINDS, "fact kind")
+            kinds = record_indexes(payload[:, 0], FACT_KINDS, "fact kind")
             if (kinds == 0).any():
                 raise ValueError("live fact has no kind")
-            ids = _indexes(payload[:, 1:5], 65535, "fact vocabulary half")
-            source = _indexes(payload[:, 9], 2**24, "fact source")
-            duration = _indexes(payload[:, 7], 3, "fact duration")
+            ids = record_indexes(payload[:, 1:5], 65535, "fact vocabulary half")
+            source = record_indexes(payload[:, 9], 2**24, "fact source")
+            duration = record_indexes(payload[:, 7], 3, "fact duration")
             numeric = torch.cat(
                 (
                     payload[:, 5:7],
@@ -165,7 +118,9 @@ class TypedContinuationEncoder(nn.Module):
     def forward(
         self, relations: torch.Tensor, objects: torch.Tensor, definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        rows = _rows(relations, RELATION_ROWS, RELATION_DIM_V5, RELATION_VALID_INDEX)
+        rows = masked_record_rows(
+            relations, RELATION_ROWS, RELATION_DIM_V5, RELATION_VALID_INDEX
+        )
         if rows.shape[0] != objects.shape[0]:
             raise ValueError("relation and object batch sizes differ")
         all_frames = list(
@@ -183,14 +138,14 @@ class TypedContinuationEncoder(nn.Module):
             active = rows[batch, live]
             defs = definitions[batch, live]
             frames = table.new_zeros((RELATION_ROWS, table.shape[-1]))
-            handles = _indexes(active[:, 1], RELATION_ROWS, "frame")
-            parents = _indexes(active[:, 2], RELATION_ROWS, "parent")
-            kinds = _indexes(active[:, 3], 10, "frame kind")
-            row_kinds = _indexes(active[:, 0], 6, "relation kind")
+            handles = record_indexes(active[:, 1], RELATION_ROWS, "frame")
+            parents = record_indexes(active[:, 2], RELATION_ROWS, "parent")
+            kinds = record_indexes(active[:, 3], 10, "frame kind")
+            row_kinds = record_indexes(active[:, 0], 6, "relation kind")
             if (handles == 0).any() or (kinds == 0).any() or (row_kinds == 0).any():
                 raise ValueError("live relation lacks frame or kind")
-            sources = _indexes(active[:, 6], len(table), "source object")
-            targets = _indexes(active[:, 24], len(table), "target object")
+            sources = record_indexes(active[:, 6], len(table), "source object")
+            targets = record_indexes(active[:, 24], len(table), "target object")
             headers = (row_kinds == 1).nonzero().flatten()
             header_handles = handles[headers]
             if len(header_handles.unique()) != len(headers) or set(
@@ -222,7 +177,7 @@ class TypedContinuationEncoder(nn.Module):
                     (
                         active[index, self.header_columns],
                         defs[index, 0],
-                        _join(table, sources[index : index + 1])[0],
+                        join_rows(table, sources[index : index + 1])[0],
                         rank,
                     )
                 )
@@ -243,14 +198,14 @@ class TypedContinuationEncoder(nn.Module):
                         (
                             active[child, self.edge_columns],
                             defs[child, 1],
-                            _join(table, targets[child : child + 1])[0],
+                            join_rows(table, targets[child : child + 1])[0],
                         )
                     )
                     tokens.append(torch.tanh(self.edge(edge)))
                 records.append(torch.stack(tokens))
             local = self.reducer(records)
             frames = frames.index_add(0, header_handles - 1, local)
-            parent_messages = self.parent(_join(frames, parents[headers]))
+            parent_messages = self.parent(join_rows(frames, parents[headers]))
             resolved = local + parent_messages
             frames = frames.index_copy(0, header_handles - 1, resolved)
             groups = (

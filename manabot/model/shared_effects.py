@@ -17,12 +17,12 @@ from manabot.env.shared_effects import (
     MEMBER_DIM,
     MEMBER_ROWS,
 )
-from manabot.model.state_records import (
+from manabot.model.records import (
     RecordReducer,
     RecordReduction,
-    _indexes,
-    _join,
-    _rows,
+    join_rows,
+    masked_record_rows,
+    record_indexes,
 )
 
 
@@ -43,7 +43,7 @@ class SharedEffectEncoder(nn.Module):
         members: torch.Tensor,
         objects: torch.Tensor,
     ) -> torch.Tensor:
-        headers = _rows(headers, EFFECT_ROWS, EFFECT_DIM, 17)
+        headers = masked_record_rows(headers, EFFECT_ROWS, EFFECT_DIM, 17)
         batch = len(objects)
         if (
             headers.shape[0] != batch
@@ -54,9 +54,9 @@ class SharedEffectEncoder(nn.Module):
         results = list(objects.unbind(0))
         for b in headers[..., 17].bool().any(-1).nonzero().flatten().tolist():
             live = headers[b, headers[b, :, 17].bool()]
-            halves = _indexes(live[:, :2], 65535, "effect vocabulary half")
-            source = _indexes(live[:, 11], 2**24, "effect source definition")
-            links = _indexes(
+            halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
+            source = record_indexes(live[:, 11], 2**24, "effect source definition")
+            links = record_indexes(
                 live[:, [10, 12]], objects.shape[1], "effect source/controller"
             )
             if (links[:, 0] == 0).any():
@@ -67,15 +67,15 @@ class SharedEffectEncoder(nn.Module):
                 torch.cat(
                     (
                         numeric,
-                        _join(objects[b], links[:, 0]),
-                        _join(objects[b], links[:, 1]),
+                        join_rows(objects[b], links[:, 0]),
+                        join_rows(objects[b], links[:, 1]),
                     ),
                     -1,
                 )
             )
             mod = self.modification(((halves[:, 0] << 16) | halves[:, 1]) % 4096)
             sources = self.source(source % 4096)
-            offsets = _indexes(
+            offsets = record_indexes(
                 live[:, 13:17], MEMBER_ROWS, "effect CSR offset/count"
             ).tolist()
             records: list[torch.Tensor] = []
@@ -93,8 +93,8 @@ class SharedEffectEncoder(nn.Module):
                     raise ValueError("invalid effect CSR partition")
                 d_end, m_end = d + count, m + targets
                 tokens = details[b, d:d_end]
-                kinds = _indexes(tokens[:, 0], 3, "effect detail kind")
-                ids = _indexes(tokens[:, 1:], 65535, "effect detail half")
+                kinds = record_indexes(tokens[:, 0], 3, "effect detail kind")
+                ids = record_indexes(tokens[:, 1:], 65535, "effect detail half")
                 if (kinds == 0).any():
                     raise ValueError("live effect detail has no kind")
                 encoded_details = self.detail(
@@ -109,12 +109,12 @@ class SharedEffectEncoder(nn.Module):
                     )
                 )
                 memberships = members[b, m:m_end]
-                targets_index = _indexes(
+                targets_index = record_indexes(
                     memberships[:, 0], objects.shape[1], "effect member"
                 )
                 if (targets_index == 0).any():
                     raise ValueError("effect membership is absent")
-                orders = _indexes(
+                orders = record_indexes(
                     memberships[:, 1], MEMBER_ROWS, "effect membership order"
                 )
                 if (orders == 0).any():

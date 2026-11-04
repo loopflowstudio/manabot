@@ -5,7 +5,7 @@
 //! an ordered membership, including duplicates. No timestamps are coalesced.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     agent::observation::ContinuousEffectData,
@@ -114,11 +114,12 @@ pub const MEMBER_DIM: usize = 2;
 pub fn encode(
     observation: &super::observation::Observation,
     objects: &HashMap<i32, i32>,
+    ranks: &BTreeMap<i32, f32>,
     headers: &mut [f32],
     details: &mut [f32],
     members: &mut [f32],
 ) -> Result<(), super::observation_encoder::ObservationEncodeError> {
-    use super::observation_encoder::{split_id, timestamp_ranks, ObservationEncodeError as Error};
+    use super::observation_encoder::{split_id, ObservationEncodeError as Error};
     use crate::cards::tokens::name_value;
 
     let records = observation
@@ -159,7 +160,6 @@ pub fn encode(
     headers.fill(0.0);
     details.fill(0.0);
     members.fill(0.0);
-    let ranks = timestamp_ranks(observation, true);
     let (mut d, mut m) = (0, 0);
     let mut orders = std::collections::BTreeSet::new();
     for (row, record) in headers.chunks_exact_mut(EFFECT_DIM).zip(records) {

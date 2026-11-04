@@ -555,14 +555,15 @@ class ObservationEncoder:
             )
             for exception in perm.copy.exceptions:
                 push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
-        holders = [
-            (obs.agent.id, obs.agent.effects),
-            (obs.opponent.id, obs.opponent.effects),
-            *((perm.id, perm.effects) for perm in permanents),
-        ]
-        for obj, effects in [] if self.config.policy_input_version >= 7 else holders:
-            for effect in effects:
-                push_modification(obj, FACT_EFFECT, effect)
+        if self.config.policy_input_version < 7:
+            holders = [
+                (obs.agent.id, obs.agent.effects),
+                (obs.opponent.id, obs.opponent.effects),
+                *((perm.id, perm.effects) for perm in permanents),
+            ]
+            for obj, effects in holders:
+                for effect in effects:
+                    push_modification(obj, FACT_EFFECT, effect)
         if len(rows) > self.config.fact_rows:
             raise ValueError(
                 f"observation capacity exceeded: facts {len(rows)} > {self.config.fact_rows}"

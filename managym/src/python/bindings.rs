@@ -35,6 +35,7 @@ use crate::{
             StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
+        shared_effects,
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
     },
     decision::Command as SemanticCommand,
@@ -102,46 +103,25 @@ fn encoded_to_dict<'py>(
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
     if config.policy_input_version >= 7 {
-        dict.set_item(
-            "effects",
-            to_numpy_array_f32(
-                py,
-                &np,
+        for (name, values, shape) in [
+            (
+                "effects",
                 &encoded.effects,
-                &[
-                    crate::agent::shared_effects::EFFECT_ROWS,
-                    crate::agent::shared_effects::EFFECT_DIM,
-                ],
-            )?,
-        )?;
-    }
-    if config.policy_input_version >= 7 {
-        dict.set_item(
-            "effect_details",
-            to_numpy_array_f32(
-                py,
-                &np,
+                [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
+            ),
+            (
+                "effect_details",
                 &encoded.effect_details,
-                &[
-                    crate::agent::shared_effects::DETAIL_ROWS,
-                    crate::agent::shared_effects::DETAIL_DIM,
-                ],
-            )?,
-        )?;
-    }
-    if config.policy_input_version >= 7 {
-        dict.set_item(
-            "effect_members",
-            to_numpy_array_f32(
-                py,
-                &np,
+                [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
+            ),
+            (
+                "effect_members",
                 &encoded.effect_members,
-                &[
-                    crate::agent::shared_effects::MEMBER_ROWS,
-                    crate::agent::shared_effects::MEMBER_DIM,
-                ],
-            )?,
-        )?;
+                [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
+            ),
+        ] {
+            dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
+        }
     }
     if config.policy_input_version >= 5 {
         dict.set_item(

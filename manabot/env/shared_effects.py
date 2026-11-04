@@ -89,8 +89,9 @@ def encode_shared_effects(
         tokens = [
             *((1, name) for name in effect.keywords),
             *((2, name) for name in effect.subtypes),
-            *((3, f"Color::{effect.color}") for _ in range(effect.color is not None)),
         ]
+        if effect.color is not None:
+            tokens.append((3, f"Color::{effect.color}"))
         for kind, name in tokens:
             out["effect_details"][d] = kind, *_token(name)
             d += 1

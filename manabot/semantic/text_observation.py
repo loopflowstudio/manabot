@@ -627,8 +627,9 @@ class _Renderer:
                 lines.append("Keeps unspent red mana until end of turn.")
             if history := _turn_history(player.turn_history):
                 lines.append(f"This turn: {history}.")
-            for effect in player.effects if state.shared_effects is None else []:
-                lines.append(f"Effect: {self._effect(effect)}.")
+            if state.shared_effects is None:
+                for effect in player.effects:
+                    lines.append(f"Effect: {self._effect(effect)}.")
             counts: list[tuple[str, dict[int, int]]] = [
                 ("Publicly known hand minima", player.known_hand)
             ]

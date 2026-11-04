@@ -90,6 +90,19 @@ value scoring now iterate the selected ObservationSpace. Frozen v5 experimental
 arms remain explicit v5 inputs; no new scientific comparison replaces their
 unlaunched draft protocol yet.
 
+Retired `scratch/representation_probe.py` (synthetic keyword/ragged-wire algebra)
+and `scratch/observation-architecture-snapshot.html` (duplicate v6 walkthrough).
+Their exact bytes remain at `d5a09a707:scratch/`; native shared-effect rules and
+transport tests now own the regression proof, and `docs/observation-architecture.html`
+owns the current description. Keep the contrary native timestamp evidence below.
+No remaining production deletion target: frozen v5 experimental encoders and
+their checkpoint/calibration consumers remain supported.
+
+Shared neural record validation, joins and reduction belong in `model/records.py`;
+v7 must not depend on the experimental v5 encoder module for these primitives.
+Native encoding computes timestamp ranks once and passes the same map to object,
+local-fact and shared-effect writers, avoiding repeated sorting and legacy scans.
+
 ## Retained calibration and cost evidence
 
 The complete earlier plan, schema alternatives and launch chronology are at
@@ -149,15 +162,20 @@ is 37,888 bytes versus v6/256’s 12,288. The 270-fragment case uses 1,944 activ
 effect bytes versus 12,960 old active fragment bytes; no padded-memory or CUDA
 throughput improvement is claimed. Persistent memory remains deferred below.
 
-Verification: 24 focused transport/model/serving tests, 13 text/field guards,
-15 v5 compatibility/prototype checks, four debug shared-effect rules tests and
-Ty Lee’s source-dependent behavior passed; root release extension rebuild and
-atomic replacement passed. Ruff and HTML script/arithmetic checks pass (no visual
-renderer). Exact commands/results and source hashes are published under
+Verification receipts for the implementation remain published under
 `experiments/data/state-representation-5da5f4/v7-implementation/` via the artifact
-manifest. Gate owns affected Rust/Clippy, model, semantic/text, package-boundary,
-arena/monitoring and CI checks. Publication/merge remain downstream in the live
-Graph; no duplicate Graph or Task was started.
+manifest. The simplification preserves the architecture and numerical operations.
+
+- `uv run --extra dev --extra artifacts pytest tests/model/{test_shared_effects,test_state_records}.py tests/infra/{test_ci_selection,test_release}.py -q` → 78 passed.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 -p managym --test rules_tests shared_effects` → 4 passed; the same invocation with `--lib agent::observation_encoder` → 6 passed in debug.
+- Root `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` → passed; cp312 extension replaced atomically.
+- `uv run --extra dev --extra artifacts pytest tests/verify/test_shared_effect_transport.py tests/verify/test_observation_parity.py::{test_v5_source_dependent_duration_matches_native_authority,test_v5_encodes_every_observed_permanent_and_card_field_in_parity,test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow,test_v6_vector_buffers_derive_fact_capacity} tests/semantic/test_text_observation.py::test_continuous_effect_records_are_stated_in_order_with_duration -q` → 29 passed against the rebuilt extension.
+
+Ruff, `cargo fmt --manifest-path managym/Cargo.toml --check`, `git diff --check`,
+and HTML source-hash/parameter-total checks pass. Gate owns affected suites,
+Clippy, arena/monitoring and CI acceptance; its explicit integration invocation
+must include `tests/verify/test_shared_effect_transport.py`. Publication and merge
+remain downstream in the live Graph. Context remains below both configured limits.
 
 151 initial artifact entries (about 106 MB) were published, retaining all old
 calibration directories, evaluation evidence and a sanitized allocation ledger.

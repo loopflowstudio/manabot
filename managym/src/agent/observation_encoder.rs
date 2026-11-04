@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 use crate::{
     agent::observation::{
@@ -767,12 +770,10 @@ pub fn encode_into(
                 row[PERMANENT_TIMESTAMP_INDEX] = ranks[&permanent.timestamp()];
             }
         }
-    }
-
-    if config.policy_input_version >= 5 {
         encode_facts(
             obs,
             &object_to_index,
+            &ranks,
             out.facts,
             config.policy_input_version >= 7,
         )?;
@@ -780,6 +781,7 @@ pub fn encode_into(
             super::shared_effects::encode(
                 obs,
                 &object_to_index,
+                &ranks,
                 out.effects,
                 out.effect_details,
                 out.effect_members,
@@ -1237,33 +1239,24 @@ fn effect_facts(object: i32, kind: FactKind, effect: &ContinuousEffectData, out:
 
 /// Rank of each timestamp among the observation's permanents and effect
 /// records (1-based), so order is visible without exposing raw ids.
-pub(super) fn timestamp_ranks(
-    obs: &Observation,
-    shared: bool,
-) -> std::collections::BTreeMap<i32, f32> {
+fn timestamp_ranks(obs: &Observation, shared: bool) -> BTreeMap<i32, f32> {
     let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
-    let effects = [&obs.agent.effects, &obs.opponent.effects]
-        .into_iter()
-        .chain(permanents.clone().map(|permanent| &permanent.effects))
-        .flatten()
-        .map(|effect| effect.timestamp);
-    let mut stamps: Vec<i32> = permanents
-        .map(PermanentData::timestamp)
-        .chain(effects)
-        .collect();
+    let mut stamps: Vec<i32> = permanents.clone().map(PermanentData::timestamp).collect();
     if shared {
-        stamps = obs
-            .agent_permanents
-            .iter()
-            .chain(&obs.opponent_permanents)
-            .map(PermanentData::timestamp)
-            .chain(
-                obs.shared_effects
-                    .iter()
-                    .flatten()
-                    .map(|record| record.effect.timestamp),
-            )
-            .collect();
+        stamps.extend(
+            obs.shared_effects
+                .iter()
+                .flatten()
+                .map(|record| record.effect.timestamp),
+        );
+    } else {
+        stamps.extend(
+            [&obs.agent.effects, &obs.opponent.effects]
+                .into_iter()
+                .chain(permanents.map(|permanent| &permanent.effects))
+                .flatten()
+                .map(|effect| effect.timestamp),
+        );
     }
     stamps.sort_unstable();
     stamps.dedup();
@@ -1282,6 +1275,7 @@ pub(super) fn split_id(id: i32) -> [f32; 2] {
 fn encode_facts(
     obs: &Observation,
     object_to_index: &HashMap<i32, i32>,
+    ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
     shared: bool,
 ) -> Result<(), ObservationEncodeError> {
@@ -1295,7 +1289,6 @@ fn encode_facts(
         });
     }
     out.fill(0.0);
-    let ranks = timestamp_ranks(obs, shared);
     for (row, fact) in out.as_chunks_mut::<FACT_DIM>().0.iter_mut().zip(&facts) {
         row[FACT_OBJECT_INDEX] = object_to_index
             .get(&fact.object)
