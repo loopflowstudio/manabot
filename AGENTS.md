@@ -128,6 +128,12 @@ checkpoints or experiment evidence.
   buffers read capacity from the fact axis; a 128-row v6 buffer encodes exactly
   like v5. Model timestamp normalization remains rank / 128 in both versions,
   independent of capacity. Legacy configurations omit `max_facts`.
+  Native buffer binding derives card, permanent, action, focus and event capacities
+  from the supplied `ObservationSpace` arrays on both scalar and vector paths.
+  Companion shapes must agree before writes. Event width selects legacy events
+  or public history; only public history has the 32-row bound. Relation and
+  shared-effect axes stay version-fixed. Never replace a supplied capacity with
+  a native default or truncate legal choices to make it fit.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.

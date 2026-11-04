@@ -78,11 +78,14 @@ V4 failed before learning at 61 card objects including sideboard (40 original ca
 
 ## Main integration boundary — 2026-11-04 UTC
 
-The [continuation note](tla-pilot-verify.md#delivered-repair-and-source-boundary)
-owns the prepared Run, T6 runtime/schema mismatch and fixture limitations.
-Continuation selects that frozen Run; no prospective v6 pilot or re-freeze onto
-main has been selected. Synthetic fixtures never authorize actual training,
-encoding or replay under a historical identity.
+The [continuation note](tla-pilot-verify.md#source-and-repair-boundary)
+owns the executed v5 Run, T6 runtime/schema mismatch and fixture limitations.
+V5 is now closed as failed. Operator comment bbc34e15 (2026-11-04 17:49 UTC)
+selects native configurable-axis repair and prospective continuation under
+Jack Heart's existing authorization; no new product decision is required. The
+successor source/capacity/protocol identity remains to be bound before execution.
+Synthetic fixtures never authorize actual training, encoding or replay under
+a historical identity.
 
 A main sync brought T6 scratch decisions into this checkout. They remain at
 `5cd6ed3f6e54e81f9f39c5c2bb56f322dc1576c1:scratch/questions.md`; they do not
@@ -100,7 +103,8 @@ inside the $1 allocation/$10 cumulative limits. The existing SSH public key
 was registered; VAST_API_KEY remains in Doppler etude/prd.
 
 V5 ran once and failed after three updates; the continuation note owns settlement,
-remaining acceptance and the prospective repair boundary. Release and provider
-handoff notes are consolidated there. Their complete pre-edit text, together
+remaining acceptance and the prospective repair boundary. Release 0.2.14
+completed at 17:40:58 UTC; release and provider handoff facts are consolidated
+there. Their complete pre-edit text, together
 with this file and the report, is preserved under
 `.runs/mtg213/context-before-compress-20261104-1745/`.

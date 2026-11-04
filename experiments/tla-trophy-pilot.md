@@ -336,3 +336,12 @@ the native runtime used for these Python checks.
 These checks establish the retained 61-card repair and CPU learner/export/reload
 behavior at 128 cards. They do not execute the prepared v5 GPU Run, establish a
 universal capacity bound, or supply missing trained-checkpoint evaluations.
+
+## Prospective v6 buffer repair (2026-11-04 UTC)
+
+The [v6 protocol](protocols/tla-trophy-213-v6.md) binds current world/content and
+73/56/38 object widths with 512 actions. Native scalar/vector buffers now derive
+all configurable capacities from the supplied arrays; scalar companion validation
+finishes before copying any output. The active runner and analysis move to v6;
+v5 source, protocols and evidence remain frozen. This prepares fresh training
+and evaluation on the same 134 decks; it supplies no new learner or cost result.

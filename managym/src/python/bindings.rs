@@ -319,6 +319,8 @@ fn fill_encoded_into_existing_buffers(
     let np = PyModule::import_bound(py, "numpy")?;
     let copyto = np.getattr("copyto")?;
     let expected = encoded_to_dict(py, encoded, config)?;
+    // Validate the complete contract before changing any caller-owned buffer.
+    let mut copies = Vec::new();
     for (key_obj, source) in expected.iter() {
         let key = key_obj.extract::<String>()?;
         let dtype_name = source
@@ -327,6 +329,9 @@ fn fill_encoded_into_existing_buffers(
             .extract::<String>()?;
         let shape = shape_to_vec(&source.getattr("shape")?)?;
         let target = require_numpy_array(out, &key, &shape, &dtype_name)?;
+        copies.push((target, source));
+    }
+    for (target, source) in copies {
         copyto.call1((target, source))?;
     }
 

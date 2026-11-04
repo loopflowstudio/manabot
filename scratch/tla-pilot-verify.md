@@ -1,4 +1,4 @@
-# TLA pilot continuation — reconciled 2026-11-04 17:45 UTC
+# TLA pilot continuation — reconciled 2026-11-04 after the GPU result
 
 Jack Heart's accepted outcome is preliminary TLA self-play and paired evaluation
 on the frozen 134-deck trophy population. GPUs and enabling repairs are authorized
@@ -34,12 +34,32 @@ under that identity.
 The frozen-source replay matches stream 103 / seed 32172 after 76 actions:
 scalar, vector and Python encoders all reject 256 legal actions at capacity 64.
 Diagnostic Python configuration at 512 retains all 256; frozen native buffers
-still enforce 64. A configuration-only retry is insufficient. Review current
-main's capacity handling before implementing the narrow repair: native scalar
-and vector buffers must honor the selected ObservationSpace action axis, with
-Python parity. A successor needs an explicit source/world/protocol/regime binding,
-fresh initialization/evaluation and the same 134 entries. No successor or paid
-retry has been selected by this diagnostic.
+still enforce 64. A configuration-only retry on that source is insufficient.
+
+The 2026-11-04 source inspection confirms that current main's native default is
+512, but `input_buffer_config` in
+`managym/src/python/vector_env_bindings.rs` still derives only card and fact
+capacities. Scalar `encode_observation_into` and vector binding share that
+helper; neither derives action, permanent or focus capacities from supplied
+buffers. Vector event rows follow configuration only for public history; other
+events use the default, while scalar input does not infer event rows. Shared-effect
+and relation axes are version-fixed, not configurable capacities. Merely using
+512 actions would agree with today's default without fixing that contract.
+
+Primary operator comment bbc34e15 (2026-11-04 17:49 UTC) selects the routine
+buffer repair under Jack Heart's existing enabling-fix and $10 authorization;
+no new product choice is needed. Remaining implementation is to derive every
+configurable axis at the shared native boundary, validate companion shapes,
+and establish scalar/vector/Python parity on the retained 256-action position
+and controlled non-default capacities, including overflow rejection. Historical
+configurations and all legal actions must remain intact. The implementation cut below now resolves that buffer boundary, with focused
+parity and overflow checks; it is not evidence of completed GPU acceptance.
+
+Prospective v6 now binds the current world/content and tensor shapes, 512
+actions and the unchanged 134 entries in its new regime/protocol. Exact
+executable source freezing and fresh initialization/evaluation remain before
+scoring. The executed v5 identity cannot be
+reused for the repair or silently rebound to main's different world and widths.
 
 Remaining acceptance: an admitted trained checkpoint, complete paired schedule
 and a report of learning and full cost relative to Elemental. The next execution
@@ -60,33 +80,49 @@ to 17:33:51 UTC. No retry, watcher or background service remains from the launch
 
 Vast support originated in Etude EXP-35 (loopflow://etude/task/EXP-35), delivered
 by PR #79; PR #80 supplied release 0.2.14 from source
-`4c28da88cbd79b3f1e75669d7a84993a8da0f763`. The primary conversation owns release
-completion. At 17:30, workflow 41876921350 had successful PyPI upload but remained
-in progress; its release process (exec session 15617 in `/Users/jack/src/etude`)
-was waiting and the tag was absent. The installed published client was verified;
-final release/tag settlement was not. Do not start a duplicate release.
-
-The managed lf binary recorded on the ship process is
-`/Users/jack/.lf/bin/lf-f631bbe3771ffecf9ef045006c9d63f348165220b70fb2de7e6baacd556eda2c`
-(0.15.1+ac8e088f5); the app binary lagged the shared-store wave_removal schema.
-An earlier Task comment failed with “no Loopflow registry on this machine”; no
-auth repair was performed. The later milestone comment succeeded.
+`4c28da88cbd79b3f1e75669d7a84993a8da0f763`. Release completion is verified:
+workflow 41876921350 succeeded at 17:40:58 UTC,
+and tag v0.2.14 resolves to that source. The published client imported VastAPI
+successfully. Provider configuration, the registered account SSH public key and
+SDK release are delivered, superseding the earlier launch-integration blocker.
 
 Frozen-source local evaluation initially stopped before games with
 `identity_path_without_files`. Explicit ETUDE_SOURCE_DIR/ETUDE_COMMIT identified
 the extracted archive and allowed the retained initialization evaluation.
 
-## Reduction and validation
+## Evidence and validation boundary
 
-Delete — do not maintain: separate `scratch/vast-provider-followup.md` and
-`scratch/etude-release-status.md` handoff/status notes; their live facts are above.
-No code deletion targets. Frozen protocols and evidence remain reproducibility
-records. Wave memory predates the v5 result; its next authorized maintenance
-step should reconcile it against the report. Uncommitted pre-edit notes/report
-are preserved under
-`.runs/mtg213/context-before-compress-20261104-1745/`; the prior blocked decision
-is at `.runs/mtg213/v5-continuation/verify-before-20261104-1720.md`.
+The unchanged executable source retains the 09:58 UTC result of 43 passing
+pilot/discovery tests. That result does not cover the unfinished buffer repair.
+The selected Training Wave memory now includes the v5 learning/failure result;
+there are no immediate child memories. Earlier notes remain at
+`9e19d83a0da7a3abe3fc47b22ec1d6e6e665f4ea:scratch/tla-pilot-verify.md` and the
+release completion receipt at the same commit's `scratch/etude-release-status.md`.
+Uncommitted pre-compression evidence is preserved in
+`.runs/mtg213/context-before-compress-20261104-1745/`.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py -q` — 43 passed at 09:58 UTC; reused for unchanged executable code. Gate owns affected acceptance checks; design/implementation owns the prospective action-capacity repair.
+Check: release extension rebuilt/atomically installed; 50 buffer regressions and focused v6 identity/discovery checks pass, as does the debug Rust `learn_outside_focus_is_complete_and_capacity_errors_are_explicit` test; Ruff and diff checks pass. Gate owns affected suites, full debug/Clippy, current-world admission, training checks and CI collection.
 
-Check: `git diff --check` — clean; all 114 new manifest entries match retained SHA256/byte counts and existing entries are unchanged. `lf context` confirms memory and scratch are within both limits. No executable code changed.
+## Current implementation cut
+
+Delete — do not maintain: remove `event_buffer_config` and its vector-only
+capacity/default selection. `input_buffer_config` remains the single native
+owner of configurable axes for scalar/vector buffers; relation/shared-effect
+widths and historical input semantics remain fixed. Validate all companions
+before scalar copies, preserving explicit overflow and public-history bounds.
+Add controlled non-default capacity and retained 256-action parity fixtures.
+The prospective pilot keeps v7, 128 cards, 40 permanents, 128 facts, 512 actions,
+2 focus objects and 32 legacy events; no population or recipe change beyond
+current runtime binding and the repaired action capacity. Publication and
+landing remain the caller Graph's delivery steps.
+
+The active experiment entry moves from `tla_pilot_v5.py` to `tla_pilot_v6.py`
+with its analysis/discovery consumers. Delete the v5 entry rather than keep a
+second live launcher; frozen v5 protocols, regimes, data and source
+`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd` remain the historical execution path.
+
+Fresh read at 2026-11-04 18:10:23 UTC (`.runs/mtg213/v6-continuation/inventory.json`):
+no Vast instances, RunPod pods or unsettled hardware; accounted full rental
+cost $0.32710677365251912, conservative reservations $3.9139916049382716.
+The same $1 allocation fits the cumulative $10 cap. A fresh quote/submission
+still owns its exact source and hardware reservation.
