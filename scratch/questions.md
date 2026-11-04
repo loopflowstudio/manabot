@@ -1,9 +1,8 @@
 # MTG-213 — decisions and assumptions (2026-11-04 UTC)
 
 Current outcome, dependency and acceptance: `scratch/tla-pilot-verify.md`.
-Results and cost receipts: `experiments/tla-trophy-pilot.md`. These supersede
-older open-choice language in Wave memory; this step leaves Wave memory to its
-owning procedure.
+Results and cost receipts: `experiments/tla-trophy-pilot.md`. Training Wave
+memory now records the accepted shared-effect repair and its evidence limits.
 
 ## Accepted direction
 

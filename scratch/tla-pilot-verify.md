@@ -20,7 +20,9 @@ His $10 cumulative paid-compute cap includes setup, failures, retries and cleanu
 shipping enabling changes after checks is authorized. He confirmed the immediate
 larger-capacity hotfix, with the operator selecting 256 after his question.
 The accepted next repair is shared-effect fixed tensors, owned by Task 5da5f4
-(see below); no later numeric capacity choice is accepted. V1/v2/v3 source, protocols, attempts and evidence stay frozen;
+(see below); its concrete layout and capacities are that owner's engineering
+choices, with no prospective pilot binding yet. V1/v2/v3 source, protocols,
+attempts and evidence stay frozen;
 no truncation, deck exclusion, failed-game replacement or inherited budget applies.
 
 ## Completed implementation and execution
@@ -30,6 +32,9 @@ PR #416 merged as `3b122de9078c985f846a0f3c5a3a42ebca3b1182`; its tree
 CI run 41752523278 and 38 focused corpus/pilot/discovery tests passed. Etude froze
 that merged source for run `c216c6be7037`, cohort `mtg213-pilot-v3`. Subsequent
 checkout changes retain the results and reconcile context; they are not its pin.
+Verification on 2026-11-04 at 05:01 UTC confirmed that fetched main still
+resolved to this merge and its runner, protocol, regime, implementation and
+tests had no diff from this checkout. GitHub confirmed PR #416 merged.
 
 The v3 runtime is w17/card digest
 `dcb9d47c674a657176c2a9d56e016288d1e175729aa09cd60f0dc333633330ed`,
@@ -46,7 +51,10 @@ permanents create two distinct keyword-removal facts each. Diagnostic parity at
 512 covers this counterexample only. Fresh initialization completed 32 valid
 baseline games (3 wins / 29 losses, all replay-passing); analysis retains all
 288 expected games, `complete=false`, `success=null`. All 120 evidence files are
-artifact-published in the manifest; advertised `etude-result.json` was absent.
+artifact-published in the manifest; the 05:01 UTC verification recomputed all
+120 SHA256 hashes and byte sizes successfully. Advertised `etude-result.json`
+was absent. These results establish launch and failure progress, but collection
+still fails before learning under the merged contract.
 Local scripts and intermediate receipts remain in `.runs/mtg213/v3-continuation/`.
 
 ## Operational evidence and remaining budget
@@ -74,20 +82,27 @@ retained settlement observations, not fresh availability or final v3 billing.
 Comment 42a12145-a070-4afb-8735-4d7bf56116a9 supersedes the unresolved
 512-versus-representation choice: Jack Heart approved shipping shared-effect
 fixed tensors, encoding effects once and routing them to affected object
-embeddings before attention. Task 5da5f4 owns this bounded prerequisite. Do not
-duplicate its live implementation or retry v3 unchanged. The last dependency
-read (`lf task status 5da5f4 --json`, 2026-11-04 04:14–04:16 UTC) showed an
-active implementation Session and no PR. A shipping retry was not delivery.
-Recheck delivery before binding a prospective pilot; generic v6's 512 default
-does not choose its contract.
+embeddings before attention. Task 5da5f4 owns this bounded prerequisite. The
+latest retained dependency read (`lf task status 5da5f4 --json`) showed no PR,
+an active "Simplify shared effects" Session and its code Graph at `compress`
+(updated 2026-11-04 04:56:20 UTC). Recheck delivery before binding the next
+pilot; do not duplicate that owner's implementation. This is an execution
+dependency with accepted direction, not an unresolved product decision.
+Generic v6's 512 default does not select the prospective contract, and
+unchanged v3 retries cannot satisfy acceptance.
+
+Lossless factoring preserves complete payloads and explicit memberships;
+the retained projection roundtrips as nine payloads and 135 memberships.
+Redundant-activation merging requires separate proof of identical future
+behavior, including expiry, source dependencies and intervening effects.
+The existing trainer, evaluator and allocation owner remain the execution path.
 
 ## Delete — do not maintain
 
-No product path is replaced in this continuation. The shared-effect owner
-removes the representation paths it replaces. Preserve historical v1/v2/v3
-protocols, runners and evidence; they are reproducibility inputs, not deletion
-targets. Keep the existing trainer, evaluator and allocation owner for the
-prospective pilot. There is no additional local deletion target.
+Remove duplicate verification chronology from this note; keep dated evidence
+beside the result or dependency it establishes. No pilot predecessor is a
+deletion target: frozen v1/v2/v3 protocols, runners and evidence remain
+reproducibility inputs. The representation owner controls its own deletion cut.
 
 ## Remaining acceptance
 
@@ -107,9 +122,10 @@ After delivery of that prerequisite, remaining acceptance consists of:
    pace limits. Shipping evidence or green implementation tests alone do not
    complete the training outcome.
 
-Verification established that main and PR #416's runner, regime and protocol
-match the failed v3/256 execution. Manifest hashes and sizes for `summary.json`,
-`capacity-replay.json`, `analysis.json` and `settlement.json` matched. Decision:
-fix forward after the shared-effect repair; merge alone did not complete MTG-213.
+No prospective binding, GPU allocation or code change was made pending delivery.
+The pre-consolidation note is retained locally at
+`.runs/mtg213/context-before-compress/verify-before-consolidation-20261104.md`;
+earlier committed context is at
+`8b1259d7308bf37f252b413ebbfb7014301b225b:scratch/tla-pilot-verify.md`.
 
-Checks: `git diff --check` passed; manifest SHA256/size verification passed for all 120 added files; `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q` passed (1 test); prior 38-test result reused, no executable behavior changed. Gate owns prospective pilot checks after Task 5da5f4 delivers.
+Check: `git diff --check` passed; prior 120-file manifest verification, artifact-tracking test and 38-test corpus/pilot/discovery result reused (documentation only); gate owns prospective contract checks after Task 5da5f4 delivers.

@@ -131,9 +131,21 @@ it neither selects a new pilot contract nor establishes universal capacity.
 The 256-row allocation repaired the first counterexample but is now empirically
 insufficient. V1/v2/v3 evidence stays frozen; a new capacity/representation choice
 requires a prospective identity, fresh initialization and evaluation. No automatic
-increase is selected. Broader representation/history/memory work belongs to
-Task 5da5f4; the immediate continuation decision remains open in
-scratch/tla-pilot-verify.md.
+increase is selected. Jack Heart subsequently approved shipping shared-effect
+fixed tensors (comment 42a12145, relaying his 2026-11-03 decision): complete
+effects are encoded once and explicitly routed into affected object embeddings
+before attention. Task 5da5f4 owns that bounded prerequisite as well as the
+broader representation investigation. This resolves the immediate repair choice;
+it does not establish delivery or successful learning. Concrete layout and
+capacities are engineering choices for that owner. Lossless factoring preserves
+memberships, multiplicity, source, duration and ordering; semantic coalescing
+requires proof of identical future behavior. The retained 270-row projection
+roundtrips as nine complete payloads and 135 memberships, not nine independent
+facts with their affected objects discarded. Once delivered, the new contract
+requires a prospective pilot identity, fresh initialization and evaluation on
+the same 134 decks within MTG-213's existing $10 cap. The representation Task's
+separate experimental budget does not replenish that cap. GPU learner updates
+remain the launch milestone; a merged implementation is not Task completion.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
