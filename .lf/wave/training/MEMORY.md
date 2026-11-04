@@ -86,7 +86,7 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The retained 2026-11-04 08:19:03 UTC inventory confirms all four
+rentals. The retained 2026-11-04 09:03:38 UTC inventory confirms all four
 Task rentals ended and no provider pods or unsettled hardware rentals. Fresh
 provider bills total $0.213831719709560274, including v4's $0.043283410370349884;
 they supersede the earlier billed-plus-estimated total. All four reservations
@@ -97,9 +97,10 @@ omit idle cleanup time; budget against
 the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
 Exact accounting and settlement receipts are referenced in
 experiments/tla-trophy-pilot.md; the later reconciliation is retained in
-`.runs/mtg213/v5-continuation/inventory-20261104-0819.json` and
-`capacity-check-20261104-0819.json` in the same directory. A6000 availability at
-08:17 disappeared by 08:19, when all four configured GPUs were unavailable.
+`.runs/mtg213/v5-continuation/inventory-20261104-0903.json` and
+`capacity-check-20261104-0903.json` in the same directory. A6000 availability at
+08:17 disappeared by 08:19; all four configured GPUs remained unavailable at
+09:03:37. These observations do not reserve capacity.
 Availability must be reconciled at launch, even after a recent positive read.
 
 Etude 0.2.13 restored launcher decoding of `input_undelivered` through an isolated
@@ -240,6 +241,16 @@ later source simplifications. Its 06:38 UTC receipt records a refused quote and
 no submission or rental, not a failed training attempt. The live plan owns the
 prepared identity, fresh budget/availability reconciliation and remaining GPU,
 checkpoint, complete evaluation and Elemental-relative learning acceptance.
+
+T6 main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` subsequently widened
+player/card inputs to 73/56 and fresh action capacity to 512; the prepared v5
+still binds 67/55 and 64 actions. Unchanged runner code does not imply unchanged
+runtime compatibility. Its world and shape guards reject current-source
+substitution. Synthetic schedule/analysis fixtures explicitly bind the historical
+world and widths, whereas retained-position replay uses the real runtime; neither
+supplies training evidence under the frozen identity. Continuation selects the
+prepared source, not a re-freeze onto main. Related Tasks' scratch brought in by
+a merge is historical context, not replacement authority for this pilot.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)

@@ -11,52 +11,75 @@ capacity read is negative. Detailed accepted choices remain in `questions.md`.
 ## Delivered repair and validation
 
 PR #420 merged at 08:15:17 UTC as
-`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. The implementation matches that
-merged commit; this checkout also contains continuation notes. The active v5
+`0a5f2ad0fb55030f2b8caa2d7e403e3a3876dd8a`. Its capacity repair remains in
+this checkout after the T6 main sync. The active v5
 regime retains 134 independently sampled entries, explicit input v7 and
 `max_cards_per_player=128`. This is a prospective architecture with fresh
 initialization; it does not resume v4's checkpoint.
 
-The 09:02 UTC source inspection found the pilot runner, regime, protocol and
-vector capacity binding unchanged on main at
-`5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`. That main also contains later
-TLA rules/content changes; the checks below do not validate its newer runtime.
+The 09:58 UTC verification confirmed executable source, protocols and tests
+match main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`; only notes/report differ.
+SSH fetch failed with `Permission denied (publickey)`; the authenticated GitHub
+API confirmed the main SHA and PR #420 merge. That main contains T6
+rules/content changes and widened player/card
+rows (73/56 versus frozen v5's 67/55), plus fresh action capacity 512 versus
+v5's explicit 64. The unchanged runner rejects incompatible world or tensor
+shapes. Its synthetic scheduling/analysis fixtures pin historical identity and
+widths; the real replay regression uses current native semantics and action
+capacity. Neither fixture nor replay certifies the frozen v5 runtime.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/verify/test_shared_effect_transport.py 'tests/model/test_shared_effects.py::test_shared_effect_policy_uses_ordinary_learner_and_export[128]' tests/eval/test_experiment_files.py::test_etude_finds_each_current_experiment_and_nothing_else -q` — 50 passed in 22.18s; retained result reused for unchanged implementation.
+The prepared Run remains the execution path selected by the continuation
+feedback. Running the experiment from current HEAD would require a separately
+chosen prospective binding; it is not a substitute for this Run.
 
-Coverage includes the retained 61-card prefix at capacities 61/128 and failure
-at 60, native scalar/vector/Python parity, shared-effect repair of the 140/270
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py -q` — 43 passed in 16.34s at 09:58 UTC, covering retained 61-card parity, frozen population/shapes, real runtime rejection, discovery and incomplete-result accounting. No executable changes since; reuse this result. The earlier rejection-only check passed 4 tests after rebuilding a stale extension (initially 3 failures/1 pass).
+
+Retained PR #420 validation (50 focused checks) includes the retained 61-card
+prefix at capacities 61/128 and failure at 60, native scalar/vector/Python parity, shared-effect repair of the 140/270
 fact failures, frozen versions, v5 population/protocol binding, discovery,
 incomplete-result accounting and a CPU update with checkpoint export/reload.
-Full gate results remain in `experiments/tla-trophy-pilot.md`; this continuation
-did not rerun the full Rust/Python gate or CUDA admission.
+Full gate results remain in `experiments/tla-trophy-pilot.md`; no new full
+Rust/Python gate or CUDA admission is established by this reconciliation.
 
 ## Latest recorded inventory and capacity
 
 Authenticated Etude 0.2.13 reads used nested Doppler `manabot/prd` then
-`etude/prd`. At 09:03:38 UTC all four pilot rentals had ended, no provider pods
+`etude/prd`. At 10:00:53 UTC all four pilot rentals had ended, no provider pods
 remained and no hardware rental was unsettled. The unsettled `mini` session has
 no hardware and is outside this pilot. Provider bills for all four rentals total
 **$0.213831719709560274**, superseding the earlier billed-plus-estimated amount.
 The conservative **$2.95 reservation accounting remains against the $10 cap**.
 
 A6000 was rentable at 08:17:09 UTC, but subsequent reads found all four GPUs
-unavailable at 08:19 and again at 09:03:37 UTC.
+unavailable, most recently L4 at 10:00:29 UTC and A6000/A4000/A4500 at
+10:00:44 UTC. The implementation continuation stopped at this external
+prerequisite without a quote, submission or paid retry. No background process
+or capacity watcher was started.
 Recorded rates were $0.59/hour for A6000/L4 and $0.25/hour for A4000/A4500.
 Availability is not a reservation. No v5 submission or rental is recorded.
 
-Receipts: `.runs/mtg213/v5-continuation/inventory-20261104-0903.json` and
-`.runs/mtg213/v5-continuation/capacity-check-20261104-0903.json`. The complete
-pre-consolidation notes and report are preserved in
+Receipts: `.runs/mtg213/v5-continuation/inventory-implement-20261104-1001.json` and
+`.runs/mtg213/v5-continuation/capacity-check-implement-20261104-1001.json`. The
+09:58 verification independently found the same availability, ended rentals,
+zero learner clocks and bill total; its inventory remains at
+`.runs/mtg213/v5-continuation/inventory-verify-20261104-0958.json`.
+Earlier dated receipts remain unchanged. Complete pre-consolidation notes and
+report are preserved in
 `.runs/mtg213/context-before-compress/20261104-0903/`. Earlier committed
 continuation context is at
 `8bd685ee02a9dd31588911b66a2713f4aec037f6:scratch/tla-pilot-verify.md`.
+The uncommitted verification/implementation notes before this consolidation are
+retained at `.runs/mtg213/context-before-compress/continuation-consolidation/tla-pilot-verify.md`.
 
 ## Remaining execution and acceptance
 
-Delete — do not maintain: duplicated verification-pass narration. Keep one
-current execution state here; frozen runs, contracts and evidence remain retained.
-There are no code deletion targets.
+Decision: finish the unexecuted GPU acceptance in this Task. No further code
+defect was found. Capacity is an external prerequisite, not missing human
+authorization or a reason to change the frozen inputs.
+
+Delete — do not maintain: none in this execution-only continuation. The merged
+repair remains the sole implementation; frozen earlier protocols and evidence
+remain reproducibility records.
 
 Prepared v5 Run `e8c76bc2c06f` remains bound to frozen source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`. Execution depends on fresh inventory,
