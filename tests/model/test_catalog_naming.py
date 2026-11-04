@@ -13,6 +13,7 @@ import torch
 from manabot.env.observation import ACTION_MODE_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
@@ -233,6 +234,44 @@ def test_catalog_naming_programs_affect_scores(
     print(
         f"naming scoring: {len(raw.action_space.actions)} candidates, {score_seconds:.6f}s (one CPU forward; no speed threshold)"
     )
+
+
+@pytest.mark.parametrize("change", ["name", "order", "definition"])
+def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
+    naming_root: managym.Env,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+) -> None:
+    space = ObservationSpace(ObservationConfig(policy_input_version=8))
+    model = ActorCritic(
+        space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
+    ).eval()
+    tensors = _tensor(space.encode(naming_root.observation_for_player(0)))
+    path = tmp_path / "naming.pt"
+    save_checkpoint(model, space, path, player_configs=None)
+    restored, restored_space = load_checkpoint(str(path))
+    assert restored_space.shapes == space.shapes
+    with torch.no_grad():
+        for actual, expected in zip(restored(tensors), model(tensors), strict=True):
+            torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+
+    # Keep tensor shapes identical: admission must bind identities and joins,
+    # not merely the number of candidate embedding rows.
+    candidates = list(managym.naming_catalog())
+    first = candidates[0]
+    if change == "name":
+        candidates[0] = managym.NameCandidate("Changed name", first.definition)
+    elif change == "order":
+        candidates[0], candidates[1] = candidates[1], candidates[0]
+    else:
+        assert first.definition is not None
+        candidates[0] = managym.NameCandidate(first.name, None)
+    monkeypatch.setattr(managym, "naming_catalog", lambda: candidates)
+    with patch.object(ActorCritic, "load_state_dict") as load_weights:
+        with pytest.raises(ValueError, match="world/setup/input binding differs"):
+            load_checkpoint(str(path))
+        load_weights.assert_not_called()
 
 
 @pytest.mark.parametrize("naming", [False, True])

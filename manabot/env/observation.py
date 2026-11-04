@@ -959,9 +959,7 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
     # -------------------------------------------------------------------------
-    def _encode_actions(
-        self, actions: list[managym.Action]
-    ) -> dict[str, np.ndarray]:
+    def _encode_actions(self, actions: list[managym.Action]) -> dict[str, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
         action_focus = np.full(

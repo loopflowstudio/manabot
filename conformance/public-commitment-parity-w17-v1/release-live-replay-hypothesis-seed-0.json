@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "2c16cf6762f36828fa8cd58040dd007bbd9719c63b92cfd3f1b63a21d658c7db"
+          "sha256": "c765695aea51c3968a64715db9cb00be83a0edaf30c2d2275a5ce8ecc37c8b02"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -85,7 +85,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "00cb8669d9ad96226ffaeab1a0e15207700437efb437ff5cdd23a3c2e045b84d"
+          "sha256": "e6e16fed09117a0cfc108a4eed48c13825343e4eb42258385973eb9b74a59a6c"
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
@@ -101,7 +101,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "9df9dc37273c76bfb6a9c8aae5173c07614720d0631ed2957651222bee3cfb23"
+          "sha256": "98120a27a7cb5a32219a22c165cfe318c03147ad795b008c8de739c585dfb0ec"
         },
         {
           "path": "managym/cards/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "e9b1a5f3ab90027e4ba079f88d778eaea38b929777bd721ebe1914966596305c"
         }
       ],
-      "sha256": "84d9b60769e1708b791b1e9de118dbb8f1de21b023714b4a49617ddd822b6835"
+      "sha256": "3de5ccf56fd71f729dff9c3a2f7dde106ec116ff2f730c7efc26c52563442d2c"
     },
     "seed": 0,
     "semantic_decision_version": 8

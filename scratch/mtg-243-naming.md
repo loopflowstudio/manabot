@@ -95,19 +95,19 @@ Pre-reduction debug allocation attribution (not a speed threshold): catalog setu
 width 8) took 19.5 ms before sharing its program table. Setup, projection, encoding, scoring and ordinary work are
 reported separately; no cross-runner performance claim. The focused
 `catalog_naming_cost_attribution` test with `benchmark` and one test thread
-provides bounded attribution. These pre-reduction numbers do not establish final
-performance; final attribution and the same-runner CI comparison remain pending.
+provides bounded attribution. Final attribution is recorded under publication
+verification below; the same-runner CI comparison remains pending.
 
 ## Remaining work and review
 
-Gate owns the complete debug Rust suite, Clippy/format checks, affected Python
-model/checkpoint and active-training suites, current-world arena admission and
-monitoring, Academy world/fixture checks and headless browser coverage. The
-full checkpoint path still needs explicit v8 vocabulary mismatch coverage;
-the current naming unit test checks binding presence and model-state restoration.
-Final parity source fingerprints and Engine Budget remain unverified. The changed
-hash contract needs an explained CI digest adoption while unchanged Commands stay
-exact. MTG-241 continuation compatibility becomes relevant when its code is synced.
+Publication verification below covers the complete debug Rust suite, Clippy/format
+checks, affected Python model/checkpoint and active-training suites, current-world
+arena admission and monitoring, Academy world/fixture checks and focused headless
+browser coverage. The full checkpoint path now rejects changed names, ordering
+and definition joins before loading weights. Engine Budget still requires the
+published PR's same-runner CI comparison; the changed hash contract needs an
+explained CI digest adoption while unchanged Commands stay exact. MTG-241
+continuation compatibility becomes relevant when its code is synced.
 
 No product decision blocks the current catalog scope. Production admission of
 validated names without definitions and default adoption of v8 remain unaccepted
@@ -179,3 +179,57 @@ implemented behavior. Future questions remain outside this Task: which validated
 names without definitions should production admit, and when should v8 become
 the fresh default? Neither choice is needed for the authorized explicit-version,
 real-catalog outcome. No publication, merge or training authorization is added.
+
+## Publication verification — 2026-11-04
+
+`lf sync` completed cleanly against `8e8d702f8`, checkpointing the preceding
+review/reconciliation edits as `c755e7e1c`. Publication review added full portable
+v8 checkpoint coverage: exact restored scores and rejection of changed names,
+ordering or definition joins before weights load, even with identical shapes.
+It also formatted the changed Python action helper.
+
+The affected Python run covered all `tests/model/`, observation/cutoff/buffer
+parity, active training, current-world arena admission and monitoring, Academy
+named-search reconnect, choice navigation, Learn setup and both parity receipts.
+It produced 428 passes, one skip and one stale authored-source receipt failure.
+Both parity receipts were then rebuilt with an assertion that every non-source
+field remained exact; only `identity.relevant_source` changed. Both source
+manifests now match this checkout. The original authority's 135 Commands remain
+byte-for-byte unchanged against main; frozen evidence was not rewritten.
+
+Other completed checks: full optimized-debug Cargo suite (970 passed, two
+ignored), Cargo fmt and all-target/all-feature Clippy, Ruff check/format on all
+17 changed Python files, all nine focused naming/checkpoint tests, four Academy
+decision-label unit tests, Svelte check (zero errors/warnings), production build,
+and eight isolated headless choice-navigation/trigger-order tests. Browser
+servers were reaped and their ports have no listeners. Logs remain local under
+`.lf/logs/naming-publish/`.
+
+Final bounded optimized-debug allocation attribution (allocations / bytes):
+
+| Operation | Allocations | Bytes |
+| --- | ---: | ---: |
+| Catalog setup | 5,197 | 1,830,552 |
+| 928-name validated vocabulary setup | 5,286 | 799,455 |
+| Shared naming decision | 0 | 0 |
+| Naming action space | 1 | 37,120 |
+| Naming observation | 1,880 | 154,583 |
+| Encode into existing buffers | 5 | 792 |
+| Naming search fork | 15 | 47,012 |
+| Ordinary search fork | 15 | 10,404 |
+| Ordinary fork and step | 393 | 41,980 |
+
+The focused semantic scoring check measured 30.5 ms for one CPU forward with
+344 installed candidates and width 8; its test also verifies gradients reach
+the definition program. These are single bounded observations, with other
+validation running, not speed thresholds or before/after performance claims.
+The full same-runner Engine Budget and any explained digest adoption require
+published CI and remain pending. Full release browser coverage also remains
+for CI; the local browser proof covered eight affected interactions. Large
+vocabulary native legality and policy scoring remain complementary fixtures,
+not a single 928-name vector/Academy end-to-end proof. MTG-241 has not landed on
+main and its completion interface is still outside this synchronized change.
+
+After the fingerprint refresh, `tests/academy/test_authored_match_parity.py`
+passed all three tests. Local publication checks are complete. Publication is
+for interactive review only; it does not authorize merge or auto-merge.
