@@ -42,3 +42,19 @@
   `c823c9c8f53df06c723e93d6d3e7a8676a71fa9d` has frozen v5. The MTG-213 hotfix
   was not ported. Replaced inherited MTG-239 notes remain completely at
   `c823c9c8f53df06c723e93d6d3e7a8676a71fa9d:scratch/questions.md`.
+- Canary launch state (2026-11-04): first preparation `b65b1912e41a` failed on
+  transient remote history fetch before any run or rental; a bounded read-only
+  reproduction succeeded. Retried preparation with the same committed protocol
+  and cap. Source `a8c1cbbff182`; cohort `representation-5da5f4-canary` owns runs
+  `532222ba6ec2` (rows), `7b9fcf7557a3` (typed_pool), `dcbd40a43d09` (typed_gru),
+  machine `representation-5da5f4-6168654d2c3f`, deadline 2026-11-04 03:19 UTC.
+  Launcher state is `.runs/representation/etude`; no global controller or pilot
+  state is touched. A bounded local supervisor is active; all Task-owned rentals
+  and supervision must be settled before ending the run.
+- First canary is complete and its supervisor ended. All three CUDA updates
+  succeeded; full rental estimate $0.07083924, deletion confirmed 02:35:17 UTC.
+  Candidate time exceeded the tentative 45-minute projection. Sparse-batch
+  routing now skips empty observations without changing equations; 20 focused
+  checks pass. A second excluded canary is predeclared in the design at $0.60,
+  keeping cumulative canary reservations below $0.90. Scientific horizon/seed
+  allocation still awaits that result; no learning scores were inspected.

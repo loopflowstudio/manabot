@@ -89,15 +89,18 @@ class SharedFactEncoder(nn.Module):
 
     def forward(self, facts: torch.Tensor, objects: torch.Tensor) -> torch.Tensor:
         facts = _rows(facts, FACT_ROWS, FACT_DIM, 11)
-        results: list[torch.Tensor] = []
-        for rows, table in zip(facts, objects, strict=True):
+        if facts.shape[0] != objects.shape[0]:
+            raise ValueError("fact and object batch sizes differ")
+        results = list(objects.unbind(0))
+        # One routing transfer for the batch. Empty observations need no
+        # per-sample CUDA indexing/validation synchronizations.
+        active_batches = facts[..., 11].bool().any(-1).nonzero().flatten().tolist()
+        for batch in active_batches:
+            rows, table = facts[batch], objects[batch]
             active = rows[rows[:, 11].bool()]
             links = _indexes(active[:, 0], len(table), "fact object")
             if (links == 0).any():
                 raise ValueError("live fact has no object")
-            if not len(active):
-                results.append(table)
-                continue
             # Group all payload columns, including source, timestamp and detail.
             # The inverse preserves duplicates and different object memberships.
             payload, inverse = torch.unique(active[:, 1:11], dim=0, return_inverse=True)
@@ -127,7 +130,7 @@ class SharedFactEncoder(nn.Module):
             )
             encoded = self.reducer(list(tokens.unbind(0)))[inverse]
             delta = torch.zeros_like(table).index_add(0, links - 1, encoded)
-            results.append(table + delta)
+            results[batch] = table + delta
         return torch.stack(results)
 
 
@@ -161,17 +164,23 @@ class TypedContinuationEncoder(nn.Module):
         self, relations: torch.Tensor, objects: torch.Tensor, definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         rows = _rows(relations, RELATION_ROWS, RELATION_DIM_V5, RELATION_VALID_INDEX)
-        all_frames: list[torch.Tensor] = []
-        summaries: list[torch.Tensor] = []
-        for batch, table in enumerate(objects):
+        if rows.shape[0] != objects.shape[0]:
+            raise ValueError("relation and object batch sizes differ")
+        all_frames = list(
+            objects.new_zeros((len(objects), RELATION_ROWS, objects.shape[-1])).unbind(
+                0
+            )
+        )
+        summaries = list(objects.new_zeros((len(objects), objects.shape[-1])).unbind(0))
+        active_batches = (
+            rows[..., RELATION_VALID_INDEX].bool().any(-1).nonzero().flatten().tolist()
+        )
+        for batch in active_batches:
+            table = objects[batch]
             live = rows[batch, :, RELATION_VALID_INDEX].bool()
             active = rows[batch, live]
             defs = definitions[batch, live]
             frames = table.new_zeros((RELATION_ROWS, table.shape[-1]))
-            if not len(active):
-                all_frames.append(frames)
-                summaries.append(table.new_zeros(table.shape[-1]))
-                continue
             handles = _indexes(active[:, 1], RELATION_ROWS, "frame")
             parents = _indexes(active[:, 2], RELATION_ROWS, "parent")
             kinds = _indexes(active[:, 3], 10, "frame kind")
@@ -251,6 +260,6 @@ class TypedContinuationEncoder(nn.Module):
             for mask, projection in zip(groups, self.structures, strict=True):
                 if mask.any():
                     summary = summary + projection(resolved[mask].mean(0))
-            all_frames.append(frames)
-            summaries.append(summary)
+            all_frames[batch] = frames
+            summaries[batch] = summary
         return torch.stack(summaries), torch.stack(all_frames)

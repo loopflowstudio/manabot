@@ -580,3 +580,33 @@ and experiment result bytes go through the existing artifact-store procedure.
 Unavailable native tooling is reported; capable CI owns the missing checks.
 
 **Check result (2026-11-03):** `uv run --no-project --python 3.12 scratch/representation_probe.py` — PASS; 70→7 payloads with 70 memberships, exact roundtrip and counterexamples; native paired replays, neural costs and learning quality not tested.
+
+### First CUDA canary outcome and bounded revision
+
+Source `a8c1cbbff182`, excluded seed 73200, all three arms completed one CUDA
+update and exported admitted checkpoints. Rows / typed_pool / typed_gru used
+11.981 / 38.354 / 48.257 seconds of collection plus learning, with
+11,133 / 11,427 / 11,427 learner decisions and 64 complete games each; no
+numerical failure was recorded. These are one-update feasibility measurements,
+not scores or a speed distribution. The first rental
+`representation-5da5f4-6168654d2c3f` is confirmed deleted at 02:35:17 UTC;
+SDK full-window estimate including setup/idle is $0.07083924. Its receipts are
+`.runs/representation/canary/<arm>/run.json`. A diagnostic listing call after
+successful termination used the wrong argument; termination and receipt fetch
+both completed, and `etude machines --all` independently confirms deletion.
+
+The unoptimized candidates project beyond the initial 45-minute horizon.
+Source inspection identified per-sample CUDA mask/index synchronizations even
+for observations without facts/frames. The revised implementation routes only
+active samples once per batch; equations, parameter layout, memberships and
+ordering stay the same. Focused native/model/action checks passed (20). No
+scientific seed has run, so the training horizon remains unselected.
+
+Second excluded canary: same seed, three arms, update count and watchdogs, source
+at the next commit; cohort `representation-5da5f4-canary-batched-empty`, **$0.60
+maximum** with one machine. First settled rental plus this entire reservation is
+$0.67084, below the existing $0.90 canary envelope. Prediction: both candidate
+collection+learning times below their first canary; no numerical or export
+regression. Retain all results even if the prediction fails. This is a distinct
+implementation calibration, not a retry or replacement of first-canary evidence.
+The source-preparation failure `b65b1912e41a` remains recorded separately at $0.
