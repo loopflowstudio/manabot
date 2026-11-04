@@ -35,6 +35,18 @@ def check() -> None:
     pass
 
 
+def _attach_saved_sampler(
+    teacher: LocalUpdateTeacher, directory: Path
+) -> LocalUpdateTeacher:
+    artifact = saved_sampler(teacher, directory / "saved-sampler.pt")
+    return LocalUpdateTeacher(
+        teacher.likelihood.checkpoint,
+        teacher.likelihood.checkpoint_sha256,
+        teacher.config.model_copy(update={"sampling": "learned"}),
+        sampler=artifact,
+    )
+
+
 @pytest.mark.parametrize("kind", ["attack", "cast", "blockers"])
 def test_native_prefix_projection(kind: str) -> None:
     env, _ = _block_root(2, 2) if kind == "blockers" else _root(kind, 3)
@@ -139,20 +151,15 @@ def test_supported_root_rollout_reaching_payment_replays(
         player_configs=configs,
         extra={"value_semantic": "signed_outcome"},
     )
-    config = LocalSearchConfig(depth=2, decision_seconds=20)
-    teacher = LocalUpdateTeacher(path, file_sha256(path), config)
+    teacher = LocalUpdateTeacher(
+        path, file_sha256(path), LocalSearchConfig(depth=2, decision_seconds=20)
+    )
+    if learned:
+        teacher = _attach_saved_sampler(teacher, tmp_path)
     assert (
         teacher.agent.observation_space.encoder.config
         == agent.observation_space.encoder.config
     )
-    if learned:
-        artifact = saved_sampler(teacher, tmp_path / "sampler.pt")
-        teacher = LocalUpdateTeacher(
-            path,
-            file_sha256(path),
-            config.model_copy(update={"sampling": "learned"}),
-            sampler=artifact,
-        )
     action = next(
         i
         for i, row in enumerate(raw.action_space.actions)
@@ -283,9 +290,9 @@ def test_saved_compound_teacher_replays(
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(3)
-    space = ObservationSpace()
     agent = ActorCritic(
-        space, ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+        ObservationSpace(),
+        ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
     )
     config = [
         managym.PlayerConfig(
@@ -297,18 +304,12 @@ def test_saved_compound_teacher_replays(
         managym.PlayerConfig("b", {"Gray Ogre": 36, "Mountain": 4}),
     ]
     path = tmp_path / "compound.pt"
-    save_checkpoint(agent, space, path, player_configs=config)
+    save_checkpoint(agent, agent.observation_space, path, player_configs=config)
     teacher = LocalUpdateTeacher(
         path, file_sha256(path), LocalSearchConfig(depth=2, decision_seconds=20)
     )
     if learned:
-        artifact = saved_sampler(teacher, tmp_path / "sampler.pt")
-        teacher = LocalUpdateTeacher(
-            path,
-            file_sha256(path),
-            teacher.config.model_copy(update={"sampling": "learned"}),
-            sampler=artifact,
-        )
+        teacher = _attach_saved_sampler(teacher, tmp_path)
     env, _ = _block_root(2, 2) if kind == "blockers" else _root(kind, 3)
     viewer = int(env.current_agent_index())
     history = ViewerHistory.from_observation(
@@ -399,7 +400,10 @@ def test_compound_arena_executes_and_replays_saved_policies(
         )
         checkpoint = directory / "compound.pt"
         save_checkpoint(
-            agent, original.space, checkpoint, player_configs=env.match.to_rust()
+            agent,
+            agent.observation_space,
+            checkpoint,
+            player_configs=env.match.to_rust(),
         )
         return LocalUpdateTeacher(
             checkpoint,
@@ -407,17 +411,8 @@ def test_compound_arena_executes_and_replays_saved_policies(
             LocalSearchConfig(depth=1, decision_seconds=20),
         ), env
 
-    def attach(teacher: LocalUpdateTeacher, directory: Path) -> LocalUpdateTeacher:
-        artifact = saved_sampler(teacher, directory / "saved-sampler.pt")
-        return LocalUpdateTeacher(
-            teacher.likelihood.checkpoint,
-            teacher.likelihood.checkpoint_sha256,
-            teacher.config.model_copy(update={"sampling": "learned"}),
-            sampler=artifact,
-        )
-
     monkeypatch.setattr(local_fixtures, "make_teacher", make)
-    monkeypatch.setattr(local_fixtures, "attach_learned_sampler", attach)
+    monkeypatch.setattr(local_fixtures, "attach_learned_sampler", _attach_saved_sampler)
     local_fixtures.test_arena_uses_exact_range_lifecycle_and_replays(
         tmp_path, learned=True
     )
