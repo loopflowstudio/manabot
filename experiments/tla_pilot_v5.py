@@ -93,10 +93,8 @@ def frozen() -> tuple[TrainingRegime, Protocol]:
         raise ValueError("pilot runtime world differs from the prospective protocol")
     if regime.world != protocol.runtime_world.world_version:
         raise ValueError("pilot regime world differs from its protocol")
-    if regime.observation != ObservationConfig(
-        policy_input_version=7, max_facts=128, max_cards_per_player=128
-    ):
-        raise ValueError("pilot requires its declared v7 observation configuration")
+    # The hashed regime owns the configuration; the protocol also pins derived
+    # shapes so an encoder change cannot silently alter its allocation.
     if ObservationSpace(regime.observation).shapes != protocol.observation_shapes:
         raise ValueError("pilot tensor capacities differ from frozen protocol")
     if regime.deck_source is None or regime.deck_source.entry_ids is None:

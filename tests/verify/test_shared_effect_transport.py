@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import pytest
 
 from manabot.env.failures import GameInputs
-from manabot.env.observation import ObservationEncoder, ObservationSpace
+from manabot.env.observation import ObservationEncoder
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.representation import source_effect_root
@@ -51,13 +51,7 @@ def test_retained_drill_prefix_admits_shared_effects(
     scalar.reset(players)
     config = ObservationConfig(policy_input_version=7)
     encoder = ObservationEncoder(config)
-    space = ObservationSpace(config)
-    buffers = {
-        key: np.zeros((1, *item.shape), dtype=item.dtype) for key, item in space.items()
-    }
-    buffers["action_focus"] = np.zeros(
-        (1, *space.shapes["action_focus"]), dtype=np.int32
-    )
+    buffers = encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
         terminated=np.zeros(1, dtype=np.uint8),

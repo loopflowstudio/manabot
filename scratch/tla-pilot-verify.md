@@ -77,6 +77,12 @@ analysis remain at their named source commits, rather than parallel maintained
 paths. Keep every frozen regime/protocol file and evidence artifact. No competing
 shared-effect representation is added here.
 
+The runner's duplicate observation-default comparison is removed: the frozen
+regime hash owns configuration, and protocol shapes detect encoder allocation
+drift. Retained transport tests use the production allocator and exercise the
+61-row boundary and 128-row pilot through the same scalar/vector/Python path.
+No remaining deletion targets; frozen inputs, fixtures and evidence stay intact.
+
 ## Budget and execution ownership
 
 Nested Doppler manabot/prd then etude/prd supplies artifacts and provider access.
@@ -100,6 +106,7 @@ must fit the unchanged $1 ceiling. Exact receipts and scripts are under
    fresh 06:37:17 UTC L4/A4000/A4500 reads all report unavailable. No v5
    submission or rental occurred. Resume this prepared identity only after a
    fresh inventory/budget/quote, then execute through the ordinary CUDA gate.
+   Later source simplifications do not retarget this prepared Run.
 2. Send the explicitly requested Task launch milestone only after observed GPU
    learner updates, with job/GPU/progress/rate/deadline evidence. Provisioning,
    CPU validation and initialization do not qualify.
@@ -107,7 +114,6 @@ must fit the unchanged $1 ceiling. Exact receipts and scripts are under
    later games never fill old identities' slots. Report learning gains, uncertainty,
    errors, full cost and Elemental-relative limits. Shipping alone is incomplete.
 
-Check: 30 pilot/discovery checks, 18 retained card/shared-transport checks and the
-128-card learner/export/reload proof pass; release rebuild, Ruff, rustfmt and diff
-checks pass. Full affected suites and debug validation remain with gate. All 110 published v4 files were hash/size verified. Context
-is within both limits. Older detailed context: `0b6c2bb854ba:scratch/tla-pilot-verify.md`.
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/verify/test_shared_effect_transport.py tests/eval/test_experiment_files.py -q` — 52 passed; Ruff check/format and diff checks pass. Gate owns full affected suites and debug validation.
+Prior release rebuild, learner/export/reload proof and verification of all 110
+published v4 files remain at `cce484db70049e81ee81983500cec4664b4962b1:scratch/tla-pilot-verify.md`.

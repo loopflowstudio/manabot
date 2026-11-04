@@ -3,11 +3,15 @@
 V5 source is frozen as `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, prepared
 run `e8c76bc2c06f`. Its A6000 quote was refused; at 06:37:17 UTC L4, A4000
 and A4500 also reported no capacity. **V5 has not been submitted or rented**.
-No GPU learner update is yet established. All earlier rentals are ended.
+No GPU learner update is yet established. All earlier rentals are ended. The
+[v5 contract](protocols/tla-trophy-213-v5.md) retains v7, the 134 entries, learner
+and evaluation schedule, with a 128-card axis and corrected native buffer sizing.
+It requires fresh initialization.
 
+## V4 result (2026-11-04 UTC)
 
-V4 run **baa8671d6480**, source `0b6c2bb854ba`, passed CUDA numerical admission
-on an RTX A6000 but failed before learning at **61 card objects plus sideboard
+Run **baa8671d6480**, source `0b6c2bb854ba`, passed CUDA numerical admission
+on an RTX A6000 but failed before learning at **61 card and sideboard objects
 against capacity 60**. Exact replay identifies stream 22 after 300 actions:
 40 original cards, five generated tokens and 16 sideboard cards. Its 238
 completed games supplied no optimizer update. The rental ended; estimated full
@@ -17,26 +21,13 @@ All four reservations total $2.95 conservatively held against the same $10 cap.
 V4 initialization evaluation completed 32 valid games (**2 wins / 30 losses**),
 with 256 scheduled games still missing: complete=false, success=null. All
 receipts remain under [v4 evidence](data/mtg213/gpu-v4-20261104/summary.json).
-The prospective [v5 contract](protocols/tla-trophy-213-v5.md) increases the
-existing card axis to 128 and corrects native buffer sizing. It retains v7,
-the 134 entries, learner and evaluation schedule, and requires fresh initialization.
 
-
-Retained **v4** consumed delivered PR #419's v7 shared-effect inputs.
-The [new contract](protocols/tla-trophy-213-v4.md) binds all tensor capacities,
-fresh initialization and the unchanged 134-entry population. Retained 140/270
-positions pass native scalar/vector/Python parity; compatibility and overflow
-checks pass. This preparation does not establish GPU learning. At 05:59 UTC,
-all three earlier pilot rentals are ended, provider inventory is empty, and
-fresh bills total **$0.17054831** (v3: $0.09962018). Conservatively retain the
-prior **$2.2125** reservations until the next launch is reconciled.
-
-
-The retained **v3/256 GPU attempt also failed before its first learner update**.
-Nine Fire Nation Drill activations over fifteen permanents produced **270 distinct
-fact rows**, exceeding 256. The rental is terminated. The fresh initialization
-completed all 32 baseline games, but there is no trained checkpoint or learning
-claim. Frozen v1/v2/v3 protocols and evidence remain unchanged.
+The [v4 contract](protocols/tla-trophy-213-v4.md) consumed PR #419's delivered
+v7 shared-effect inputs and bound all tensor capacities. Retained 140/270-fact
+positions pass native scalar/vector/Python parity, compatibility and overflow
+checks. At the 05:59 UTC pre-launch settlement, the three earlier rentals had
+ended and bills totaled **$0.17054831** (v3: $0.09962018). The cumulative cost
+and four reservations above include the subsequent v4 rental.
 
 ## V3 continuation (2026-11-04 UTC)
 
@@ -82,8 +73,7 @@ hash-verified. [Summary and cost accounting](data/mtg213/gpu-v3-20261104/summary
 [missing-output receipt](data/mtg213/gpu-v3-20261104/missing-outputs.json) retain
 these limits.
 
-The 256-row assumption is invalidated. The approved shared-effect repair and
-remaining acceptance are below. V3 source, inputs, attempts and evidence remain
+The 256-row assumption is invalidated. V3 source, inputs, attempts and evidence remain
 frozen; no unchanged retry, truncation or deck exclusion is justified.
 
 ## Historical v1 result (2026-11-03)
@@ -210,7 +200,7 @@ uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg213
 ## Local implementation proof
 
 This separate CPU proof used the production regime executor, full 64×2 model,
-current v5 input and the whole eligible population, reduced to two streams and
+policy input v5 and the whole eligible population, reduced to two streams and
 one update. It is not a GPU pilot result or learning-rate comparison.
 
 | Measurement | Observed |
@@ -267,10 +257,11 @@ why those checks did not establish sufficient capacity for training.
 
 Jack Heart approved the shared-effect fixed-tensor repair (comment 42a12145):
 encode effects once and route them to affected object embeddings before attention.
-Task 5da5f4 owns that prerequisite. After delivery, bind a prospective pilot with
-fresh initialization and evaluation on the same 134 decks, reconciling costs
-against the existing cumulative $10 cap before allocation. Preserve v1/v2/v3
-evidence; the new run cannot fill v3's 256 missing evaluation slots.
+Task 5da5f4 delivered it in PR #419, merged as
+`fb5ad2c1372f9c967b550f0b8ae0f84883f75563`; v4 consumed it and v5 retains it.
+Resume the prepared v5 identity only after fresh inventory, billing and quote
+reconciliation within the cumulative $10 cap. Preserve all earlier inputs and
+evidence; new games cannot fill their missing evaluation slots.
 
 GPU learner updates and trained checkpoints remain missing. No paid-training
 milestone or learning/Elemental-pace claim is supported; MTG-213 is incomplete.

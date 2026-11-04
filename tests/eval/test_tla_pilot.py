@@ -489,23 +489,37 @@ def test_prospective_pilot_preserves_population_and_rejects_old_initialization()
             eval(ExperimentState(experiment=experiment))
 
 
-def test_pilot_rejects_changed_tensor_capacities(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("binding", ("regime", "tensor_shapes"))
+def test_pilot_rejects_changed_observation_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, binding: str
 ) -> None:
-    protocol = json.loads(tla_pilot_v5.PROTOCOL.read_bytes())
-    protocol["observation_shapes"]["effect_members"][0] += 1
-    path = tmp_path / "protocol.json"
-    path.write_text(json.dumps(protocol))
-    monkeypatch.setattr(tla_pilot_v5, "PROTOCOL", path)
-    with pytest.raises(ValueError, match="tensor capacities differ"):
+    if binding == "regime":
+        config = json.loads(tla_pilot_v5.REGIME.read_bytes())
+        config["observation"]["max_cards_per_player"] += 1
+        target, error = "REGIME", "regime differs"
+    else:
+        config = json.loads(tla_pilot_v5.PROTOCOL.read_bytes())
+        config["observation_shapes"]["effect_members"][0] += 1
+        target, error = "PROTOCOL", "tensor capacities differ"
+    path = tmp_path / "changed.json"
+    path.write_text(json.dumps(config))
+    monkeypatch.setattr(tla_pilot_v5, target, path)
+    with pytest.raises(ValueError, match=error):
         frozen()
 
 
-def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders() -> None:
+@pytest.mark.parametrize("card_capacity", (61, 128))
+def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
+    card_capacity: int,
+) -> None:
     evidence = read_failure(ROOT / "tests/fixtures/tla-pilot-card-capacity.jsonl")
     (game,) = evidence.games
     regime, _ = frozen()
-    encoder = ObservationEncoder(regime.observation)
+    # Both the exact occupied boundary and the pilot allocation retain every
+    # generated token and sideboard card through scalar/vector/Python paths.
+    encoder = ObservationEncoder(
+        regime.observation.model_copy(update={"max_cards_per_player": card_capacity})
+    )
     players = [player.native() for player in game.players]
     scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
     scalar.reset(players)
@@ -538,16 +552,7 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders() -> None:
     for key, value in reference.items():
         np.testing.assert_array_equal(value, native[key], err_msg=key)
         np.testing.assert_array_equal(value, buffers[key][0], err_msg=key)
-    # The exact occupied boundary succeeds; one fewer slot rejects rather than
-    # silently dropping either a generated token or a sideboard card.
-    boundary = ObservationEncoder(
-        regime.observation.model_copy(update={"max_cards_per_player": 61})
-    )
-    expected = boundary.encode(observation)
-    actual = boundary.allocate()
-    scalar.encode_observation_into(observation, actual)
-    for key in expected:
-        np.testing.assert_array_equal(expected[key], actual[key], err_msg=key)
+    # One fewer slot rejects rather than silently dropping an object.
     old = ObservationEncoder(
         regime.observation.model_copy(update={"max_cards_per_player": 60})
     )
