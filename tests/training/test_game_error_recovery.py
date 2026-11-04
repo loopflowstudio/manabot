@@ -75,7 +75,7 @@ class PaymentMismatchVector:
                 self.shadows[row].step(actions[row])
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
+        self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None:
         enabled = list(active)
         failures: dict[int, dict[str, Any]] = {}
@@ -96,7 +96,7 @@ class PaymentMismatchVector:
                     "game_error_frame": frame,
                     "game_error_trace": "deterministic offered-cast payment fixture",
                 }
-        self.native.step_isolated_into_buffers(actions, enabled)
+        self.native.step_isolated_into_buffers(actions, enabled, recover_capacity)
         self.infos = self.native.get_last_info()
         for row, failure in failures.items():
             self.infos[row] = failure

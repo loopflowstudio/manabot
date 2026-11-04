@@ -171,7 +171,7 @@ class ShardedVectorEnv:
         ]
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
+        self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None:
         """Gameplay errors are row outcomes; infrastructure errors still stop."""
         self._rows(len(actions))
@@ -182,6 +182,7 @@ class ShardedVectorEnv:
                     shard.native.step_isolated_into_buffers,
                     actions[shard.start : shard.stop],
                     active[shard.start : shard.stop],
+                    recover_capacity,
                 )
                 for shard in self._shards
             ]
