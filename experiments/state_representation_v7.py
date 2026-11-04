@@ -38,6 +38,8 @@ from manabot.verify.store import VerifyStore
 Arm = Literal["typed_pool", "typed_gru"]
 ARMS: tuple[Arm, ...] = ("typed_pool", "typed_gru")
 SEEDS = (73201, 73202, 73203, 73204)
+EXPERIMENT = "state_representation_v7"
+UPDATES = 128
 
 
 def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
@@ -56,48 +58,40 @@ def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
     stage.learning_seats = "both"
     if not smoke:
         stage.games_per_stream = 1
-        stage.updates = 128
+        stage.updates = UPDATES
         stage.streams = 32
         stage.execution.device = "cpu"
         stage.execution.memory_bytes = 16 * 1024**3
-        # Setup and finalization must also fit the rental's bounded window.
+        # The same bounded CPU recipe is used locally and in job declarations.
         stage.execution.wall_seconds = 4200
         regime.wall_seconds = 4200
     return TrainingRegime.model_validate(regime.model_dump())
 
 
-def runs(revision: str, canary: bool = False) -> list[Run]:
+def runs(revision: str) -> list[Run]:
     """Eight declared runs, no submission; each is bounded by its job allocation.
 
     Actual rental price and cohort controls must be inspected before launch.
     This module does not authorize a default machine or the existing pilot pool.
     """
     result: list[Run] = []
-    regimes = {arm: recipe(arm) for arm in ARMS}
-    if canary:
-        for regime in regimes.values():
-            regime.id += "-canary"
-            stage = regime.stages[0]
-            assert isinstance(stage, TrainSelfPlay)
-            stage.updates = 1
-            stage.execution.wall_seconds = regime.wall_seconds = 300
     jobs = {
         arm: TrainingJob(
-            regime=regimes[arm],
-            experiment="state_representation_v7",
+            regime=recipe(arm),
+            experiment=EXPERIMENT,
             milestones=(),
-            finalization_seconds=60 if canary else 120,
+            finalization_seconds=120,
         ).job(
             repo=Path(__file__).resolve().parents[1],
             revision=revision,
-            max_hours=0.2 if canary else 1.25,
-            max_usd=Decimal("0.90") if canary else Decimal("1.75"),
+            max_hours=1.25,
+            max_usd=Decimal("1.75"),
         )
         for arm in ARMS
     }
     # Interleave treatments within each seed to reduce machine/time confounds.
-    for index, seed in enumerate((73200,) if canary else SEEDS):
-        for arm in (*ARMS[index % 2 :], *ARMS[: index % 2]):
+    for index, seed in enumerate(SEEDS):
+        for arm in ARMS if index % 2 == 0 else reversed(ARMS):
             result.extend(jobs[arm].runs(seed))
     return result
 
@@ -110,7 +104,7 @@ def evaluate_run(run_path: Path, checkpoint_path: Path, out: Path) -> MonitorRes
         run.status != "completed"
         or run.seed not in SEEDS
         or run.regime_digest != canonical_sha256(recipe(arm).model_dump(mode="json"))
-        or run.updates_through() != 128
+        or run.updates_through() != UPDATES
     ):
         raise ValueError(
             "evaluation requires a declared seed and completed frozen recipe"
@@ -215,6 +209,10 @@ def paired_interval(differences: tuple[float, ...]) -> PairedEstimate:
 def compare(results: list[ArmEvaluation]) -> PairedEstimate:
     """Reject missing/duplicate/incomplete attempts rather than select successful seeds."""
     expected = {(arm, seed) for arm in ARMS for seed in SEEDS}
+    protocol = evaluation_protocol()
+    recipe_digests = {
+        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
+    }
     found: dict[tuple[Arm, int], float] = {}
     for item in results:
         result = item.result
@@ -224,11 +222,10 @@ def compare(results: list[ArmEvaluation]) -> PairedEstimate:
             key not in expected
             or key in found
             or result.status != "completed"
-            or result.protocol != evaluation_protocol()
+            or result.protocol != protocol
             or result.score is None
-            or result.regime_digest
-            != canonical_sha256(recipe(item.arm).model_dump(mode="json"))
-            or result.coordinates.updates != 128
+            or result.regime_digest != recipe_digests[item.arm]
+            or result.coordinates.updates != UPDATES
         ):
             raise ValueError(
                 "evaluation is duplicate, incomplete or outside the frozen cohort"
@@ -252,7 +249,7 @@ def train_arm(arm: Arm, seed: int, out: Path) -> TrainingRun:
             seed,
             out / "training",
             store,
-            experiment="state_representation_v7",
+            experiment=EXPERIMENT,
             checkpoint_updates=(),
             stop_path=out.parent / "stop",
         )
