@@ -29,13 +29,15 @@ def test_paired_interval_uses_independent_seeds() -> None:
 
 
 def test_science_and_smoke_have_distinct_endpoints() -> None:
-    for arm in ("rows", "typed_pool", "typed_gru"):
+    for arm in ("typed_pool", "typed_gru"):
         scientific = recipe(arm)
         smoke = recipe(arm, smoke=True)
         stage = scientific.stages[0]
         assert isinstance(stage, TrainSelfPlay)
         assert stage.learning_seats == "both" and stage.games_per_stream == 1
         assert stage.updates == 128 and smoke.stages[0].updates == 1
+        assert stage.streams == 32
+        assert scientific.observation.policy_input_version == 7
         assert scientific.observation == smoke.observation
         assert scientific.id != smoke.id
     protocol = evaluation_protocol()

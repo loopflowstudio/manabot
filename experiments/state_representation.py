@@ -1,11 +1,9 @@
 """Same-input state encoder comparison; declaration does not allocate compute.
 
-All arms run the existing complete-game self-play executor and checkpoint path.
-The original draft protocol is retained at
-8e6cc62df:scratch/5da5f4-design-effective-state.md. No scientific seed ran. The
-subsequent v7 repair supersedes its proposed common transport; any learning
-comparison needs a newly frozen protocol/allocation before launch; the smoke recipe is
-only an engineering check and must never be scored as a training replicate.
+Both arms run the existing complete-game self-play executor and checkpoint path.
+The v7 protocol is experiments/protocols/state-representation-5da5f4-v7.md.
+Original v5 declarations and excluded canaries remain bound to their historical
+source; this prospective cohort has distinct identities and never admits them.
 """
 
 import argparse
@@ -33,34 +31,35 @@ from manabot.sim.execution import EvalExecution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import ArtifactReference, TrainingRegime, TrainSelfPlay
 
-Arm = Literal["rows", "typed_pool", "typed_gru"]
-ARMS: tuple[Arm, ...] = ("rows", "typed_pool", "typed_gru")
+Arm = Literal["typed_pool", "typed_gru"]
+ARMS: tuple[Arm, ...] = ("typed_pool", "typed_gru")
 SEEDS = (73201, 73202, 73203, 73204)
 
 
 def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
-    """Same v5 observations and learner across arms; no recurrence or pilot edits."""
+    """Same v7 inputs; jointly compare effect and continuation token reducers."""
     regime = local_smoke(steps=1, seconds=120) if smoke else batched_baseline()
-    regime.id = f"state-representation-{arm}" + ("-smoke" if smoke else "")
+    regime.id = f"state-representation-v7-{arm}" + ("-smoke" if smoke else "")
     regime.agent.state_encoder = arm
     regime.agent.policy_film = True
     regime.agent.recent_events = False
-    regime.observation.policy_input_version = 5
-    regime.observation.max_facts = None
+    regime.observation.policy_input_version = 7
+    regime.observation.max_facts = 128
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"
     if not smoke:
         stage.games_per_stream = 1
         stage.updates = 128
-        # Setup and finalization must also fit the rental's one-hour window.
-        stage.execution.wall_seconds = 2700
-        regime.wall_seconds = 2700
+        stage.streams = 32
+        # Setup and finalization must also fit the rental's bounded window.
+        stage.execution.wall_seconds = 4200
+        regime.wall_seconds = 4200
     return TrainingRegime.model_validate(regime.model_dump())
 
 
 def runs(revision: str, canary: bool = False) -> list[Run]:
-    """Twelve declared runs, no submission; $1/run is only a reservation ceiling.
+    """Eight declared runs, no submission; each is bounded by its job allocation.
 
     Actual rental price and cohort controls must be inspected before launch.
     This module does not authorize a default machine or the existing pilot pool.
@@ -77,20 +76,20 @@ def runs(revision: str, canary: bool = False) -> list[Run]:
     jobs = {
         arm: TrainingJob(
             regime=regimes[arm],
-            experiment="state_representation",
-            milestones=() if canary else (32, 64, 96),
+            experiment="state_representation_v7",
+            milestones=(),
             finalization_seconds=60 if canary else 120,
         ).job(
             repo=Path(__file__).resolve().parents[1],
             revision=revision,
-            max_hours=0.2 if canary else 1,
-            max_usd=Decimal("0.30") if canary else Decimal("1"),
+            max_hours=0.2 if canary else 1.25,
+            max_usd=Decimal("0.20") if canary else Decimal("1.40"),
         )
         for arm in ARMS
     }
     # Interleave treatments within each seed to reduce machine/time confounds.
     for index, seed in enumerate((73200,) if canary else SEEDS):
-        for arm in (*ARMS[index % 3 :], *ARMS[: index % 3]):
+        for arm in (*ARMS[index % 2 :], *ARMS[: index % 2]):
             result.extend(jobs[arm].runs(seed))
     return result
 
@@ -149,10 +148,14 @@ def evaluation_protocol() -> MonitorProtocol:
 
 # Frozen with the final scientific source commit, after the excluded canary.
 SCORING = {
-    "name": "same-v5-input-state-representation",
+    "name": "same-v7-input-state-representation",
     "arms": ARMS,
     "training_seeds": SEEDS,
     "endpoint": "final-raw-update-128",
+    "games_per_seed": 4096,
+    "streams": 32,
+    "input": "v7 shared effects; 128 local facts",
+    "treatment": "sum versus GRU in effects and typed continuations; no temporal memory",
     "deals": tuple(range(84001, 84033)),
     "legs": "both authored deck assignments and both seats",
     "opponent": "heuristic-at-training-source",
@@ -162,7 +165,7 @@ SCORING = {
     "max_commands": 10_000,
     "primary": "typed_gru minus typed_pool paired seed score",
     "prediction": "mean >= 0.03; training cost ratio <= 1.25",
-    "analysis": "95% Student-t interval over four paired seed means, df3; secondary contrasts descriptive",
+    "analysis": "95% Student-t interval over four paired seed means, df3; effects and continuation change jointly",
     "selection": "only if primary lower > 0, mean >= 0.03 and measured cost ratio <= 1.25",
     "failure": "all scheduled games and seeds required; no retries or best-checkpoint selection",
 }
