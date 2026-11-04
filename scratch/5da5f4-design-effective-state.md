@@ -618,3 +618,11 @@ pinned image, 900-second startup and 300-second delivery, ceiling $0.30/hour,
 max one. Keep the same excluded recipe and $0.60 cohort cap. The hardware
 change confounds before/after speed attribution; use the result only to
 calibrate the final hardware/horizon, not to claim the sparse-routing speedup.
+
+The Ada offer disappeared during launch admission `5c8cef228edb`; no machine
+or run was created. A fresh catalog offers RTX 3090 at $0.50/hour (LOW), A40
+at $0.59 and RTX 4090 at $0.89. Use the cheapest available, RTX 3090, through
+new Task-local `representation-5da5f4-3090` with the same safeguards and a
+$0.50/hour ceiling. Same excluded calibration and $0.60 cohort maximum; no
+scientific protocol change or run. If this offer also disappears, preserve the
+availability failures without claiming training results.
