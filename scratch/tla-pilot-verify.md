@@ -197,3 +197,31 @@ PR: https://github.com/loopflowstudio/manabot/pull/420. The generated copy was
 reviewed against the actual main diff and correctly preserves all proof limits.
 The publisher automatically staged a concurrent provider follow-up note; it was
 removed from the diff while retained locally and locally excluded from staging.
+
+## Gate review — 2026-11-04 UTC
+
+Reviewed `fb5ad2c1372f9c967b550f0b8ae0f84883f75563..51566c9f71b01cbef3b40993a62c1e459c10a470`,
+including the untracked demo note. No additional implementation defect or
+documentation correction was found. The current PR description accurately
+distinguishes the repaired capacity from unfinished GPU learning acceptance.
+Frozen v4 protocol language remains historical; v5 is the maintained runner.
+
+Validation plan follows the changed paths: native buffer sizing reaches scalar
+and vector encoding, retained-prefix parity and learner/export/reload; the
+runner rename and schema reach discovery, regime binding and paired analysis;
+the manifest reaches artifact tracking. Observation allocation also requires
+the documented active-training and current-world admission/monitoring checks.
+The publication validation above covers these inputs. Comparing its checkpoint
+`6912c249e` with this HEAD changes only the pilot report and this continuation
+note; the untracked demo note adds no executable input. Keep those passing suite
+results rather than repeating unchanged tests. The subsequent demo independently
+records four passing production-path checks at this HEAD.
+
+- `git diff --name-only -z fb5ad2c13 HEAD | bash .github/ci/select-tests.sh` — selects all CI jobs because native bindings changed; this is a job classifier, not a focused local test runner or content-aware result cache.
+- `git diff --check fb5ad2c13 HEAD` and `git diff --check` — passed.
+- `gh pr view 420 --json headRefOid,state,statusCheckRollup` — PR open at reviewed HEAD; no failed checks at this read. Rust, Linux main/long integration, Academy integration, macOS install and Engine Budget remain in progress. Other reported checks passed. Pending jobs remain CI's responsibility and are not local passes.
+
+Gate is ready to hand back to delivery, subject to required CI. No source,
+protocol, evidence, budget or prepared Run identity changed during this pass;
+no paid allocation or background process was started. GPU learner updates,
+trained-checkpoint admission and complete evaluation remain outstanding.
