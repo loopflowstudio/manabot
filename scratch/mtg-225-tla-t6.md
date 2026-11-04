@@ -1,11 +1,10 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (2026-11-03, final publication pass): accepted T6 behavior, frozen-pilot
-isolation and combined-head typed-encoder integration are implemented and
-validated below. `lf sync` preserved the review edits at `2beda6071`; main
-remains `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`. The two mutable parity
-receipts now include v7 projection hashes. Existing PR #417 remains one
-cohesive delivery; publish this completion and stop for Jack Heart's review.
+Status (2026-11-03, post-demo gate): accepted T6 behavior, frozen-pilot isolation
+and combined-head typed-encoder integration are published at `d17e8bfd779739a20f1ae0344fcad542e3e694e0`
+on PR #417. Base remains `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`.
+Local validation and the second headless demo pass; final-head CI remains
+pending. The branch is mergeable and stops for Jack Heart's review.
 No merge or auto-merge authorized.
 
 ## Accepted direction
@@ -217,6 +216,44 @@ Python deck checking returns diagnosed issues directly, without a never-failing
 These reductions add no mechanics, identity or observation contract changes.
 
 ## Evidence, limitations and remaining gate
+
+### Post-demo gate — 2026-11-03
+
+Reviewed the accepted scope against base `fb5ad2c13`, with special attention to
+the latest typed-encoder repair, delayed-lifetime API, Saga lifecycle, schedule
+display and documentation. No further code change was warranted. Preserve the
+uncommitted second-demo evidence in `t6-demo.md`.
+
+Validation plan and reuse: the repository's changed-aware selector is
+`.github/ci/select-tests.sh`; it selects all nine job families for the complete
+T6 diff. Since the preceding publication gate at `2beda6071`, executable changes
+are limited to `manabot/model/state_records.py` and its tests; two mutable parity
+receipts also changed. These reach typed model/training consumers and parity/
+belief checks, already covered after the edits by 47 and 20 passing checks.
+The second demo adds 67 consumer passes and seven rendered-component passes
+on the exact published head. Rust inputs are identical to the 952-pass debug
+and Clippy run; UI source is identical to the previous frontend/browser checks.
+Only scratch Markdown changed after the demo, so this gate reuses those results
+and runs the documentation diff check rather than repeating unchanged suites.
+No required-check timeout appears in the combined or second-demo logs; the two
+retained typed-encoder failures have the explicit repair and passing cases above.
+
+- `git diff --name-only -z fb5ad2c13 HEAD | bash .github/ci/select-tests.sh` — all nine CI families selected; inspected their workflow coverage.
+- `gh pr view 417 --json headRefOid,baseRefOid,mergeable,mergeStateStatus,state,statusCheckRollup,url` — exact published head, open and mergeable; snapshot in `.runs/t6-publication/gate-pr-state.json`.
+- `git diff --check` — passed; the changed-aware selector selects no jobs for the two Markdown-only edits.
+
+At this inspection, final-head unit, protocol, semantic-kernel, Academy UI,
+clean-machine and both platform package/install checks passed. Rust, main/long
+integration, Academy integration and Engine Budget were still running, with no
+failed checks. Those results remain CI-owned; this gate does not claim a final
+green aggregate or a new performance result. Existing PR copy accurately
+describes the implementation and pending CI, so it needs no duplicate rewrite.
+
+Academy's production performance signal for this view should be
+Command-to-frame latency, plus schedule-panel render duration for populated
+queues. This is a proposed measurement, not a new instrumentation change or a
+measured result. Retained-session and rendering limits remain as stated in the
+demo. No further implementation blocker or unresolved product decision was found.
 
 ### Combined-head publication verification
 
