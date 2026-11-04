@@ -1,315 +1,203 @@
 # MTG-241 — composable rules execution
 
-## Outcome and status
+## Outcome and boundary
 
-Accepted directive: Jack Heart, 2026-11-04. One PR using the code Graph, stopping
-at interactive review. Original base `4463e57f5`; checkpoint `37928095d` contains
-nested iteration and both contextual-read fixes. Checkpoint `e6b268956` adds
-common frame completion and shared library ordering; `58535f9f2` integrates
-main `8e8d702f8`. Checkpoint `cf9f5a24b` adds retained inspection, keyword
-completion and public-result selection after that sync. The current implementation extends that checkpoint with retained event batches
-and affected-player replacement choices (2026-11-04). The full Task is **incomplete**, with
-hidden-zone selection and successor-input projection still unfinished. No human decision is
-missing. No PR publication, PR merge, training or retained-evidence rewriting occurred.
-The Task initially had no Wave; `lf context` now reports the `coverage` binding.
-Local `.lf/wave/coverage/GOAL.md` and `MEMORY.md` are absent; the supplied Task
-directive remains the available scope. Wave memory has not been edited.
+Jack Heart's accepted directive (2026-11-04): one PR through the code Graph,
+stopping at interactive review; no merge, auto-merge, training or retained-evidence
+rewriting. The Task remains **incomplete**. No human judgment is missing.
+Original base: `4463e57f5`; integrated main: `8e8d702f8` via `58535f9f2`.
+Latest implementation checkpoint: `301877ea1` (retained event batches).
+The supplied feedback about synchronous commits describes the earlier
+`cf9f5a24b` checkpoint, not current code.
 
-Effect execution retains nested operations, exact objects, scoped results and
-root finalization across native choices. Replacement proposals must retain
-transformed events, affected chooser, applied identities and logical batches,
-re-evaluate applicability, and emit facts only at commit. Selection must preserve
-cardinality, visibility, order, shuffle, reveal and result binding.
+`lf context` reports the `coverage` binding, but local Wave GOAL/MEMORY files
+are absent. The supplied Task directive is the available scope; Wave memory
+has not been edited. Detailed prior implementation/evidence is preserved at
+`301877ea1:scratch/mtg-241-composable-rules-execution.md`.
 
-## Implemented ownership
+## Surviving ownership and contracts
 
-`EffectFrame`/`run_frame` own execution; `Decision` owns the current question.
-Native `Effect` remains the sole authored program. `FrameCompletion` now owns
-one return destination: `Priority`, `Spell`, `Frame(Box<EffectFrame>)`, or
-`Decision(Box<SuspendedResolution>)`, or a completion `Event` with its caller.
-It replaces the independent `parent` and
-`finalize` fields. Iteration keeps its remaining targets and creates a fresh
-child scope; branches share their scope. Parent results and stack cleanup wait
-until every child completes. `EffectFrame::new` initializes fresh result state.
+Native `Effect` is the sole authored program. `EffectFrame`/`run_frame` own
+execution; `Decision` owns the current question. `FrameCompletion` retains one
+return destination: caller frame/decision, operation event, spell cleanup,
+paid announcement, activated ability, rule continuation or priority. Iteration
+retains remaining targets, creates isolated child results and defers parent
+suffix/finalization; branches share their scope. `EffectFrame::new` initializes
+fresh results. `ObjectSelector::Targets` applies one verb to all eligible slots
+in one batch; `ForEachTarget` instead runs a sequential child program per slot.
+Leaves from the Vine uses `Targets` for its simultaneous counter placement.
 
-`advance_mana_upfront` commits the automatic mana prefix, tap and life costs,
-then retains the output decision and original payment frame. A sacrifice runs
-through `run_before_decision` as an ordinary effect frame. Completing it restores
-the saved output without re-entering payment, paying costs again or granting
-priority. Nested continuation projection includes the saved caller's frame and
-obligation chain before the active child.
+`EventBatch` retains proposals, stable original ordinals, exact replacement
+identities (source, definition index and namespace), cursor, departure LKI,
+trigger sources, results and consequent child batches. Applicability is rechecked
+after every replacement; the affected player chooses the order. No member commits
+until all members are ready. Linked returns finish before the root's results are
+bound and never replace those results. `bind_event_results` owns instruction
+postambles after completion; `run_frame` owns scheduling and resumption.
 
-Mana activation transfers the caller frame and decision by ownership; it does
-not clone the decision chain or allocate a placeholder frame to overwrite.
+Snapshots are limited to batches with departures. Departures match pre-batch
+sources; entries match the finished battlefield. LKI is captured before members
+leave. Earlier paid tap/life events match before sacrifice can remove sources;
+triggers remain queued during replacement choices. Lifelink and damage counter
+loss commit within the damage batch, without another trigger pass. Entry counters,
+including Saga lore, pass through replacement before entry; emitted counts are
+transformed counts. `apply_immediate_event` uses this same executor with an explicit
+no-question precondition, never a pending-as-success adapter. The batch owns trigger
+processing, including for immediate zone moves.
 
-At checkpoint `e6b268956` this established the completion owner and its payment
-caller, not yet resumable zone/replacement execution. The cost-completion witness uses a constructed child
-program (sacrifice then Surveil) to exercise a real pause through Commands. It is
-not evidence of the still-unimplemented linked-entry replacement scenario.
+Mana activation transfers its caller by ownership. `advance_mana_upfront` commits
+the automatic mana prefix, tap and life costs, then retains output and original
+payment before running sacrifice. Linked-entry replacement choices can suspend
+that cost without exposing output, paying again or granting priority. Activated
+source/target metadata is captured before sacrifices; card-ability source identity
+binds after discard cost. Spell entry/finalization, combat damage, SBA departures,
+token creation, Earthbend, library placement, chosen exile/sacrifice groups,
+counter distribution and LookAndSelect battlefield movement use retained batches.
+First-strike retains normal damage across its SBA interval; SBA progress is
+Stable/Changed/Pending. Token/attachment cleanup waits for child work, and
+`turn_tick` exposes pending turn actions before stabilization.
 
-`OrderLibrary` owns both top and bottom ordering. It retains cards, a committed
-prefix cursor and `LibraryEnd`. Bottom ordering preserves its existing immediate
-placement and private remaining-card contract (obligation code 23). Surveil's
-keep action enters top ordering when multiple cards remain; all kept cards stay
-privately visible/pinned, and choices commit a first-to-draw-first prefix. Top
-ordering appends obligation code 27; its `mode` is the prefix length. Native
-context, labels, text and Academy name that choice. The shared encoders already
-encode the obligation code/cursor and visible library cards in their native order.
-Existing widths and code meanings are unchanged. Complete iteration/results and
-event payload projection still needs its explicit policy version boundary.
+`SelectCards` currently migrates **public-zone results**: exact selector candidates,
+min/max cardinality and a selected child scope. `CardsThisWay` retains the latest
+mill/discard independently of later `Move`. Avatar Destiny preserves its source
+return between mill and selection; Ostrich-Horse keeps decline counters; Sparring
+Dummy reads its caller's mill result for the Lesson condition. The Command witness
+covers partial selection, divergent forks, exact-incarnation rejection, a child
+pause and one finalization. Do not extend these snapshots to hidden consumers
+before the materialization cut below.
 
-Top placement has one helper for forced and chosen ordering. Selecting a card
-rotates it into the committed prefix, preserving the remaining offer order
-without removing and reinserting it. Nested iteration, payment and ordering
-witnesses share the same bound Command/replay/stale-rejection check.
+`OrderLibrary` owns top/bottom ordering. Bottom keeps immediate placement and
+remaining-only private visibility; top keeps the full inspected prefix pinned and
+visible until complete. Rotation preserves the remaining offer order. Surveil
+retains its graveyard partition privately until selection finishes, moves it as
+one retained batch, then orders kept cards. Scry/Surveil completion events wait for
+all choices (including empty-library completion) and match sources before the
+caller's suffix can remove them. Planetarium recognizes both keywords. No current
+real definition prints Surveil above 1: constructed programs prove arbitrary
+kept order, while Joo Dee proves the registered interaction.
 
-`SuspendedResolution::continuation` owns the root-first walk through frames and
-saved decisions. Observation projection, inspection permissions and search read
-that borrowed chain; they no longer reconstruct separate frame/mana ancestry.
-Projection maps each retained part and links it to its predecessor. This changes
-neither serialized runtime state nor continuation codes.
+`SuspendedResolution::continuation` owns the root-first borrowed walk through
+frames and saved mana decisions. Projection, inspection and determinization share
+that ancestry. Existing obligation codes remain fixed: bottom 23; top 27 (mode =
+committed prefix length); shared selection 28 (legacy 5 retired); replacement 29.
+Labels, source focus, text and Academy name those choices. These surfaces **do not**
+complete retained payload observability. Prospective entry conditions now use the
+entering controller; SourcePower reads exact current/LKI power, never a returned
+incarnation.
 
 ## Delete — do not maintain
 
-Removed in checkpoint `37928095d`:
-- Local ForEachTarget subframe loop and no-decision assertion; retained scopes
-  preserve eligibility/order, isolated results and root finalization.
-- Owner-based entry conditions and live-only SourcePower. Surviving reads use
-  prospective entry control and exact-source current/LKI power.
-- Repeated fresh-frame literals and the one-use `with_parent` helper.
+Completed cuts (history and original checks at the checkpoint references below):
+- Local ForEachTarget subframe loop/no-decision assertion; owner-based entry
+  conditions; live-only SourcePower; repeated fresh-frame literals.
+- Independent frame parent/finalize fields and `FrameFinalize`; cloned mana
+  resume chains/placeholder frames; post-call ManaUpfront mutation.
+- `OrderLibraryBottom`, `library_bottom_decision`, `MillAndSelect`,
+  `ReturnMilledThisWay`, `MilledBonus`, `Decision::SelectMilled` and duplicated
+  Lesson/non-Lesson selection branches.
+- One-pass replacement sorting, synchronous recursive linked returns/Saga counter
+  insertion, `finalize_frame`, synchronous sacrifice/destruction/moved-object and
+  explicit-source processing wrappers, post-call damage measurement and combat
+  hit loops. Leaves' per-target counter loop is gone.
+- Obsolete SBA event-reference/controller collection and immediate zone-move
+  trigger postamble. Surveil uses the shared batch-to-decision handoff; batch
+  binding iterates moved results directly unless the frame must retain them.
+  Shared entry-replacement fixtures remove three copies of identical setup.
 
-Removed in checkpoint `e6b268956`:
-- Independent `EffectFrame.parent` and `FrameFinalize` ownership; completion
-  names the interrupted scope or caller in one place.
-- Mana sacrifice's post-call `ManaUpfront` mutation; its output is retained
-  before child work starts.
-- Mana activation's cloned resume chain and throwaway frame; transfer the
-  retained caller directly.
-- `OrderLibraryBottom` and `library_bottom_decision`; all current consumers use
-  shared top/bottom ordering. Surveil no longer resumes immediately on keeping
-  multiple cards.
-
-Implemented in `cf9f5a24b` (2026-11-04): retained inspection walks all caller/iteration
-frames and saved mana decisions, shared by observation and determinization.
-`FrameCompletion::Event` retains a keyword completion fact until child choices
-finish. Surveil retains its graveyard partition until selection finishes,
-then moves it synchronously under one pre-movement trigger-source snapshot,
-then orders kept cards; Scry and Surveil announce completion after their choices.
-Planetarium now matches both keyword events. Completion immediately matches
-trigger sources before the caller can remove them, without placing triggers or
-granting priority; a directed departure witness verifies that boundary. These
-changes do not yet make replacement or zone entry suspendable.
-The Surveil witness proves no movement during partition selection, one move
-per chosen card and one keyword event after kept ordering. The movement loop
-still calls the synchronous zone authority for each card; it does not prove
-a retained simultaneous batch across replacement choices.
-
-Removed in the current cut: `MillAndSelect`, `ReturnMilledThisWay`, `MilledBonus`
-and `Decision::SelectMilled`. Native `SelectCards` chooses exact selector results
-with min/max cardinality, then binds `Selected` in a child scope. Mill/discard
-results now retain exact objects in `this_way`, independently of later `Move`.
-`CardsThisWayMatch` replaces the discard-specific condition. Avatar Destiny
-preserves its source-return between milling and selection; Ostrich-Horse keeps
-its decline counter and Sparring Dummy its Lesson condition. Mill movement uses
-one pre-batch trigger snapshot. Shared selection appends obligation code 28;
-legacy code 5 remains retired. Text and Academy name the new stage. The native
-Command witness covers partial selection, two forks, exact incarnation rejection,
-a child pause, preserved caller mill results and one finalization.
-Sparring Dummy now reads that retained mill result after selection, removing the
-duplicated selection in its Lesson/non-Lesson branches. Selection completion
-uses its already-clamped maximum rather than checking candidate count again.
-
-The current selector migration covers public-zone results. Extending it to hand
-search/discard needs explicit hidden-world handling: a retained exact hand
-candidate can be reassigned to the library by determinization. Rebuilding only
-the active action list cannot repair a saved caller or its partially selected
-subset. The migration must preserve viewer-known exact memberships and refresh
-unknown commitments coherently through every retained frame, using the same
-source/visibility contract as possible-world materialization. Do not extend
-snapshot candidates into hidden-zone consumers before that cut is implemented.
-
-Still slated for removal in the same PR (updated after the event-batch cut):
-- OptionalDiscardDraw, MayDiscard,
-  SearchBasicLand and overlapping search/move handlers and dedicated decisions,
-  after moving real-card consumers to shared selection. Preserve distinct
-  keyword events, private inspection, decline and ordered remainders.
-- Remaining synchronous hidden-search movement/finalization postambles; move
-  their consumers to the batch owner as part of deleting those composites.
-
-## Current event-batch cut — 2026-11-04
-
-`EffectFrame.batch` owns `EventBatch`: proposals, stable original ordinals,
-applied identities (exact source, definition index and static/replacement
-namespace), cursor, pre-departure LKI and trigger sources, committed results and
-consequent child batches. Applicability is recomputed after each replacement.
-`Decision::OrderReplacement` (code 29) gives the affected player the choice;
-labels and action focus name its source. No proposal commits until every member
-is ready. Linked returns retain the root's results instead of replacing them.
-Already-paid tap/life events are matched before the next batch can remove their
-sources; their triggers stay queued during replacement choices. Lifelink and
-counter loss from damage commit within the same damage batch, without a nested
-trigger pass. Counter placement emits the transformed count; entry counters, including Saga
-lore, pass through replacement before entry. Departures match against pre-batch
-sources, entries against the finished battlefield. LKI is captured before any
-member leaves. Snapshots are limited to batches with departures; no cache was
-introduced and no performance improvement is claimed.
-
-Frame completion now retains spell entry/finalization, paid announcements and
-activation objects. Cost source/target metadata is captured before sacrifices;
-hand-ability source identity binds after its discard cost. Combat damage uses a
-batch, then emits its successful-hit group once. First-strike's SBA interval
-retains the normal-damage return destination. SBA progress is explicitly
-Stable/Changed/Pending, and token/attachment cleanup waits for child work.
-`turn_tick` exposes a pending turn action before stabilization. Token creation,
-Earthbend, library placement, chosen exile/sacrifice groups, counter distribution
-and LookAndSelect battlefield movement now retain their postambles. Surveil's
-partition is one batch before the saved kept-order decision becomes available.
-
-Removed in this cut: one-pass replacement sorting; synchronous recursive linked
-returns and Saga counter insertion; `finalize_frame`; synchronous sacrifice,
-destruction, moved-object and explicit-source event-processing wrappers; damage
-wrappers measuring mutable post-call state; synchronous combat hit loops.
-`apply_immediate_event` is the same batch executor with an explicit no-question
-precondition, for fixture mutations and the remaining immediate callers. It is
-not a pending-as-success adapter. The surviving SearchBasicLand path remains a
-planned deletion; it is not converted to snapshot hidden candidates here.
-
-Five Command/fork/replay/stale-rejection witnesses cover two-object counter
-batches producing 3 or 4, newly applicable entry replacements and once-only
-identity, actual paid mana activation → sacrifice → linked-entry choice → output
-→ original payment, simultaneous combat damage, and SBA linked returns/LKI.
-The counter drivers are explicitly constructed `ModifyCounters` programs, **not**
-registered Caradora/Doubling Season cards or the real Leaves from the Vine
-acceptance witness with those cards. A further directed test uses the registered
-Leaves from the Vine chapter and constructed replacement sources through Commands,
-fork/replay and stale rejection. Its former `ForEachTarget` counter loop was a
-newly found predecessor: it committed each target separately. Removed that loop;
-`ObjectSelector::Targets` supplies every eligible slot to one verb/batch, while
-`ForEachTarget` retains its distinct sequential-program meaning. The learning
-token guard covers the selector. Both placements remain uncommitted through the
-second object's question, then each receives three or four counters once.
-The complete Task remains **incomplete**.
+Remaining deletion cut, **with consumer migration and materialization together**:
+- OptionalDiscardDraw, MayDiscard, SearchBasicLand and overlapping search/move
+  handlers and dedicated decisions. Preserve decline, keyword events, private
+  inspection, reveal/shuffle, ordered remainders and result binding.
+- Synchronous hidden-search movement/finalization postambles; search's
+  source-bottoming must retain linked returns. Do not polish these predecessors.
 
 ## Remaining implementation and acceptance
 
 1. Complete the real Leaves from the Vine / Caradora / Doubling Season witness,
-   including complete definitions, learning/observation coverage and its logical
-   simultaneous counter event. Current fixtures prove the replacement operation,
-   not those cards. `ModifyCounters` expresses positive placements (including
-   entry) as `count * multiplier + additional`; no current card is registered
-   using it yet.
-2. Migrate hidden-zone selection/materialization and delete OptionalDiscardDraw,
-   MayDiscard, SearchBasicLand and their exclusive handlers/decisions. Preserve
-   decline, inspected membership, reveal, shuffle, ordered remainders and all
-   result bindings through every retained caller. Public-result SelectCards
-   still snapshots exact objects; its hidden-world warning above still applies.
-   Complete the audit of immediate callers during this deletion cut; search's
-   source-bottoming postamble must also retain linked returns.
-   Materialization audit: both `Game::determinize` and
-   `HiddenHandConstraints::materialize_validated` reassign hidden membership,
-   repin inspected library prefixes, then refresh only the active offer. The
-   cut needs retained source/visibility provenance and traversal of selections
-   in saved decisions and child scopes. Unknown selected subsets must be
-   resampled consistently with the sampled zone and predicate; known exact
-   membership stays fixed. A partially selected restricted search also constrains
-   which deals are compatible (enough eligible objects must remain); merely
-   discarding missing selected IDs would erase an earlier commitment. This is
-   required behavior for the shared authority, not permission to preserve stale
-   snapshots or silently narrow legal candidates.
+   including complete definitions and learning/observation coverage. Current
+   `ModifyCounters` drivers use `count * multiplier + additional`; no registered
+   card uses that replacement yet. The registered Leaves chapter with constructed
+   drivers proves simultaneous placement, not those two complete cards.
+2. Migrate hidden selection and delete the composites above. Both `Game::determinize`
+   and `HiddenHandConstraints::materialize_validated` reassign hidden membership,
+   repin inspected library prefixes, then refresh only the active offer. Retained
+   exact hand candidates can therefore become library members. Add source/visibility
+   provenance and traverse saved decisions/child scopes; preserve viewer-known
+   membership and coherently resample unknown selected subsets against the sampled
+   zone/predicate. A partial restricted search also constrains compatible deals
+   (enough eligible objects must remain). Dropping missing selected IDs erases prior
+   commitments; updating only current offers cannot repair saved callers. Audit
+   immediate callers during this cut.
 3. Project pending batches (including precommit entrants), iteration progress,
-   selected/this-way results, completion events and paid/rule callers. Current
-   obligation 29, labels and source focus are only the legal-choice surface;
-   they do not complete policy, LLM, Academy or reconnect observability.
-   Paired states with identical current offers must distinguish consequential
-   viewer-safe payloads and hide unavailable bindings. Preserve frozen versions
-   and reject unrepresentable older inputs before inference.
-4. Reconcile successor schema with MTG-244 through ordinary integration. Its
-   latest shared risk directive explicitly names **v8**; no concrete layout has
-   been supplied in Task comments. This Task has not assigned a competing v8.
-   MTG-243 received code 29 and completion-interface coordination. Preserve
-   v1-v7 meanings, fresh v6, capacities and overflow contracts. World/hash,
-   capture version boundaries and a new conformance corpus remain unfinished.
-5. Jack Heart's added performance/learning-risk acceptance is in
-   [risk validation](mtg-241-risk-validation.md). Gate owns bounded same-runner
-   step/search total/tail measurements, profiling and remeasurement of targeted
-   mitigations, paired policy inputs/model coverage, full debug Rust/Clippy,
-   affected Python/headless Academy, world admission and Engine Budget. No
-   benchmark, new training experiment or speed claim has been made in this cut.
-   No publication or merge is authorized before interactive review.
+   selected/this-way results, completion events and paid/rule callers. Paired states
+   with identical current offers must distinguish consequential viewer-safe payloads
+   and hide unavailable bindings. Cover native/Python inputs, learning tokens,
+   actual model input, LLM, Academy, replay/fork and reconnect. Reject unrepresentable
+   older inputs before inference; obligation codes alone are insufficient.
+4. Reconcile the successor schema with MTG-244 through ordinary integration. Its
+   shared risk directive explicitly names **v8**, but shared comments supplied no
+   concrete layout; this Task has not assigned a competing v8. Preserve v1–v7,
+   fresh v6, saved omissions, capacities, original action-prefix indices/Commands
+   and omitted-overflow-is-error. World/hash, capture boundaries and new conformance
+   corpus remain unfinished.
+5. Follow Jack Heart's [performance/learning-risk acceptance](mtg-241-risk-validation.md).
+   Gate owns bounded same-runner ordinary-step and search total/tail measurements,
+   equivalent-work vs added-branching attribution, profiling and remeasurement of
+   targeted mitigations, paired policy/model checks, full debug Rust/Clippy, affected
+   Python/headless Academy, current-world admission and Engine Budget. No speed or
+   learning claim follows from these refactors, and no experiment was launched.
 
-## Integrated upstream contracts — 2026-11-04
+## Integration and evidence
 
-Main `8e8d702f8` derives native scalar/vector capacities from supplied arrays,
-validates companion shapes, and adds explicit `action_overflow=first-legal`.
-Continuation projection must retain those capacities and original prefix
-indices/Commands; omitted overflow remains an error. Academy and native legality
-still expose all actions. The MTG-213 pilot exception is not permission to cap
-new replacement or selection choices implicitly. Main also shares the selected
-casting cost between X announcement and payment and preserves X under any-type
-mana permissions; payment integration must retain those fixes.
+MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. Dated shared
+reads (2026-11-04) found MTG-242 idle after its second loop-or-next, MTG-243 published
+for review at demo ([#424](https://github.com/loopflowstudio/manabot/pull/424)), and
+MTG-244 implementing. Publication does not establish integration. Task comments
+carry FrameCompletion, paid-output protocol and codes 27–29. MTG-244 received the
+schema coordination request. Other checkouts were neither edited nor copied.
+Main's selected casting-cost/X fixes and buffer/overflow contracts remain intact.
+The MTG-213 first-64 pilot exception does not authorize truncating new choices.
 
-The updated validation guide adds observation, cutoff and buffer-capacity tests
-for encoding/action changes, and active-training tests for input/model changes.
-These are gate obligations alongside the existing world-admission checks.
-The focused checks recorded in `cf9f5a24b` ran after this merge. Thus the supplied
-iteration feedback's “post-sync runtime validation remains unclaimed” applies
-to its earlier checkpoint, not this one. Broader gate validation is still
-unclaimed; focused passes do not close the remaining acceptance cases.
+Jack Heart's publication handoff makes [#425](https://github.com/loopflowstudio/manabot/pull/425)
+the source of the approved PRINCIPLES.md/README guide when syncing. Preserve newer
+edits; do not republish the older embedded draft. Current guide links public PRs
+#42, #348, #353, #289, #412 and the speed investigation. Research publication does
+not merge or complete this Task.
 
-## Completion-boundary evidence
+Rules evidence previously checked:
+- [Guilds release notes](https://magic.wizards.com/en/news/feature/guilds-ravnica-release-notes-2018-09-20):
+  surveil triggers after completion, including an empty library.
+- [Aetherdrift notes](https://magic.wizards.com/en/news/feature/aetherdrift-release-notes)
+  and [Foundations notes](https://magic.wizards.com/en/news/feature/foundations-release-notes):
+  affected-controller counter ordering, including entry; (1 + 1) × 2 = 4 vs
+  (1 × 2) + 1 = 3. These are behavior requirements, not complete card proofs.
 
-The original `advance_mana_upfront` counterexample is now executable through
-real Commands: an activated mana source pays mana/tap/life and sacrifices,
-ending a linked exile duration; the returned object's entry replacement asks a
-question while the already-paid output and original payment remain retained.
-After choosing, output is offered once and the original payment completes once.
-This replaces the former constructed sacrifice-then-Surveil proof for that
-specific integration claim. Full observation/learning acceptance remains open.
+Historical checks and limits:
+- `37928095d:scratch/mtg-241-composable-rules-execution.md`: 43 focused debug tests,
+  two contextual card tests, one parity case and rebuilt extension. Nested choices
+  cover both seats, two levels, forks/replay/stale rejection and deferred SBAs;
+  departed Combustion Man reads seven-power LKI rather than returned four power.
+- `e6b268956:scratch/mtg-241-composable-rules-execution.md`: completion/payment and
+  ordering checks. The constructed sacrifice-then-Surveil witness only isolated
+  completion ownership; it did not prove actual linked-entry suspension.
+- `cf9f5a24b:scratch/mtg-241-composable-rules-execution.md`: after main sync, 38
+  focused debug tests, inherited card/trigger checks, four Python text/parity cases
+  and atomically installed extension.
+- `301877ea1:scratch/mtg-241-composable-rules-execution.md`: five retained-batch
+  Command/fork/replay/stale witnesses, Surveil and code-bound checks; replacement,
+  combat, SBA, activation, strike/lifelink filters; three Leaves tests and selector
+  token guard; rebuilt/atomically installed extension and Joo Dee text case.
+  This checkpoint proves actual mana payment → sacrifice → linked-entry replacement
+  → output → original payment exactly once, newly applicable/once-only replacements,
+  two-object 3/4-counter commits, simultaneous combat and SBA linked-return/LKI.
+  Full projection/model/performance acceptance remains open.
 
-## Coordination and evidence
-
-MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. Shared
-Task reads on 2026-11-04 during this reconciliation show MTG-242 idle after its
-second loop-or-next pass, MTG-243 published for review as
-[PR #424](https://github.com/loopflowstudio/manabot/pull/424) at demo, and
-MTG-244 implementing. Publication does not establish integration here.
-Task comments now carry FrameCompletion and the paid-output child protocol;
-MTG-243 also has the code-27 reservation. MTG-244's dated comment records Jack
-Heart's successor-input approval and rejection before inference for older inputs
-that cannot represent its payload. No shared comment reserves a concrete input
-or world version. Their checkouts were not modified or copied. Ordinary Task sync
-remains integration; the layers algorithm is untouched.
-
-Wizards' [Guilds of Ravnica release notes](https://magic.wizards.com/en/news/feature/guilds-ravnica-release-notes-2018-09-20)
-confirm that surveil triggers after its operation completes, including an empty
-library. The Planetarium/Joo Dee witness covers the real keyword interaction.
-
-Wizards' Aetherdrift release notes (Caradora) give counter replacement order to
-the affected permanent's controller, including entry. Foundations release notes
-state Doubling Season also changes entry counters. Thus (1 + 1) × 2 = 4 and
-(1 × 2) + 1 = 3 are distinct legal outcomes:
-- https://magic.wizards.com/en/news/feature/aetherdrift-release-notes
-- https://magic.wizards.com/en/news/feature/foundations-release-notes
-
-Prior checkpoint evidence is at
-`37928095d:scratch/mtg-241-composable-rules-execution.md`: 43 focused debug tests,
-two real-card contextual tests and one native/Python parity test; extension
-rebuilt/atomically installed. The nested Command witness covers both seats,
-two nesting levels, divergent forks, replay, stale rejection and one finalization;
-the timing witness defers SBAs. Combustion Man uses departed seven-power LKI
-instead of the returned four-power incarnation; raid uses entering control.
-
-Approved `managym/PRINCIPLES.md` and its README link remain. Its final evidence
-paragraph follows Jack Heart's steer: public PRs #42, #348, #353, #289 and #412
-plus the speed investigation, without relying on the uncommitted retrospective.
-
-Previous check details remain at `e6b268956:scratch/mtg-241-composable-rules-execution.md`.
-Post-sync evidence and exact commands remain at
-`cf9f5a24b:scratch/mtg-241-composable-rules-execution.md`: 38 focused debug
-Rust tests, inherited real-card/trigger checks and four Python text/parity
-cases passed; the release extension was rebuilt and atomically installed.
-These results are reused, not rerun for this documentation-only reconciliation.
-Gate owns affected suites, successor-input admission, reconnect/browser coverage
-and Engine Budget after the remaining implementation cuts.
-
-Check (2026-11-04, current cut): focused debug Rust filters passed: `--lib retained_batch` (5), `--lib surveil` (2), `--lib every_decision_code_is_within_the_validated_bound` (1), and `--test rules_tests` filters `cr_614_replacement` (5), `cr_510_combat_damage` (3), `cr_704_sba` (10), `cr_602_activated_abilities` (8), `strike` (4), `lifelink` (2), with `-p managym --no-default-features`; the five new witnesses were rerun after the paid-tap timing fix. After adding the Targets selector, `-p managym-cards --test cards` filters `leaves_from_the_vine` (3) and `every_object_and_player_selector_reaches_the_learning_tokens` (1) passed in debug. The final cp312 release extension was rebuilt and installed atomically after the selector change; `uv run --extra dev pytest tests/semantic/test_text_observation.py -q -k joo_dee_surveil` passed (1). `git diff --check` and `lf context` pass. Gate owns broader checks and all performance/model-risk measurements; earlier checkpoint evidence above remains historical.
+Check (2026-11-04, `301877ea1` + Rust diff SHA256
+`a9b4e963263e4db02f60b3b04633649d8c975580d9ceded6924078a69db5a8f8`):
+`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 -p managym --no-default-features`
+with `--lib flow::resolution::resolution_tests` passed 34; `--test rules_tests`
+filters `cr_704_sba` and `cr_614_replacement` passed 10 and 5; `cargo fmt --manifest-path managym/Cargo.toml --all --check`
+passed; root `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
+passed and cp312 extension installed atomically; `uv run --extra dev pytest tests/semantic/test_text_observation.py -q -k 'joo_dee_surveil or shared_mill_selection'`
+passed 2; `git diff --check` and `lf context` passed. Gate owns broader suites
+and performance/model-risk measurements; hidden selection/projection remains implement-owned.

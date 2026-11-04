@@ -1811,29 +1811,23 @@ impl Observation {
                 .as_ref()
                 .map(|perm| vec![perm.id])
                 .unwrap_or_default(),
-            // Decisions about the resolving/cast object: focus its card.
-            Action::ChooseMode { mode, .. }
-                if matches!(
-                    game.state.suspended_decision.as_ref().map(|s| &s.decision),
-                    Some(Decision::OrderReplacement { .. })
-                ) =>
-            {
-                let Decision::OrderReplacement { candidates, .. } = &game
-                    .state
-                    .suspended_decision
-                    .as_ref()
-                    .expect("replacement decision")
-                    .decision
-                else {
-                    unreachable!()
-                };
-                candidates
-                    .get(*mode)
-                    .map(|candidate| game.state.cards[CardId::from(candidate.source().entity)].id)
-                    .into_iter()
-                    .collect()
-            }
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
+                if let (
+                    Action::ChooseMode { mode, .. },
+                    Some(Decision::OrderReplacement { candidates, .. }),
+                ) = (
+                    action,
+                    game.state.suspended_decision.as_ref().map(|s| &s.decision),
+                ) {
+                    return candidates
+                        .get(*mode)
+                        .map(|candidate| {
+                            game.state.cards[CardId::from(candidate.source().entity)].id
+                        })
+                        .into_iter()
+                        .collect();
+                }
+                // Other decisions focus the resolving or cast object's card.
                 let card = game
                     .state
                     .suspended_decision

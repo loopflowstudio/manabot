@@ -2094,13 +2094,10 @@ fn retained_batch_counter_order_is_affected_players_choice_and_commits_once() {
     }
 }
 
-#[test]
-fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() {
-    use crate::flow::decision::{EffectFrame, FrameCompletion};
+/// An exiled object whose own entry replacement enables the counter drivers.
+fn exiled_counter_entry(game: &mut Game, player: PlayerId) -> CardId {
     use crate::state::card::ReplacementEffect;
-    let player = PlayerId(0);
-    let (mut game, _, _) = fixture(player);
-    counter_replacement_drivers(&mut game, player);
+
     let card = CardId(
         game.state
             .cards
@@ -2120,6 +2117,16 @@ fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() 
             count: 1,
             condition: None,
         }];
+    card
+}
+
+#[test]
+fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    counter_replacement_drivers(&mut game, player);
+    let card = exiled_counter_entry(&mut game, player);
     let mut frame = EffectFrame::new(
         player,
         vec![Effect::Move {
@@ -2163,7 +2170,6 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
     use crate::flow::trigger::ExileLink;
     use crate::state::ability::PaymentCost;
-    use crate::state::card::ReplacementEffect;
     use crate::state::mana::{Mana, ManaCost};
     let player = PlayerId(0);
     let (mut game, _, _) = fixture(player);
@@ -2193,25 +2199,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         effects: vec![Effect::gain_life(9)],
         intervening_if: None,
     }];
-    let returned = CardId(
-        game.state
-            .cards
-            .iter()
-            .enumerate()
-            .find(|(index, card)| {
-                card.owner == player
-                    && card.name == "Gray Ogre"
-                    && game.state.zones.zone_of(CardId(*index)) != Some(ZoneType::Battlefield)
-            })
-            .unwrap()
-            .0,
-    );
-    game.move_card(returned, ZoneType::Exile);
-    game.state.cards[returned].replacement_effects =
-        vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: None,
-        }];
+    let returned = exiled_counter_entry(&mut game, player);
     game.state.exile_links.push(ExileLink {
         source: source_ref,
         exiled_card: returned,
@@ -2322,31 +2310,12 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
 #[test]
 fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     use crate::flow::{sba::SbaProgress, trigger::ExileLink};
-    use crate::state::card::ReplacementEffect;
     let player = PlayerId(0);
     let (mut game, source, _) = fixture(player);
     counter_replacement_drivers(&mut game, player);
     let source_card = game.state.permanents[source].as_ref().unwrap().card;
     let source_ref = game.permanent_object_ref(source).unwrap();
-    let returned = CardId(
-        game.state
-            .cards
-            .iter()
-            .enumerate()
-            .find(|(index, card)| {
-                card.owner == player
-                    && card.name == "Gray Ogre"
-                    && game.state.zones.zone_of(CardId(*index)) != Some(ZoneType::Battlefield)
-            })
-            .unwrap()
-            .0,
-    );
-    game.move_card(returned, ZoneType::Exile);
-    game.state.cards[returned].replacement_effects =
-        vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: None,
-        }];
+    let returned = exiled_counter_entry(&mut game, player);
     game.state.exile_links.push(ExileLink {
         source: source_ref,
         exiled_card: returned,

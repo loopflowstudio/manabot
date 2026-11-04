@@ -906,14 +906,11 @@ impl Game {
                 frame,
             );
         }
-        let objects: Vec<_> = chosen
-            .iter()
-            .filter_map(|id| self.permanent_object_ref(*id))
-            .collect();
         frame.batch = Some(
             self.event_batch(
-                objects
-                    .into_iter()
+                chosen
+                    .iter()
+                    .filter_map(|id| self.permanent_object_ref(*id))
                     .map(|object| {
                         self.zone_move_proposal(
                             CardId::from(object.entity),
@@ -939,23 +936,15 @@ impl Game {
         if player == self.active_player() {
             return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept, frame);
         }
-        let events = self
-            .unkept_creatures(&kept)
+        let events = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+            .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .filter_map(|id| self.permanent_object_ref(id))
             .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target })
             .collect();
         frame.batch = Some(self.event_batch(events));
         None
-    }
-
-    /// Sacrifice every creature not in `kept`, as one event.
-    fn unkept_creatures(&self, kept: &[PermanentId]) -> Vec<PermanentId> {
-        [self.active_player(), PlayerId(1 - self.active_player().0)]
-            .into_iter()
-            .flat_map(|player| self.battlefield_permanents(player))
-            .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
-            .collect()
     }
 
     /// The permanents a pending `Decision::ChooseObject` may select: those
@@ -1072,85 +1061,7 @@ impl Game {
                     });
                     return;
                 }
-                let measured = match batch.binding {
-                    EventBinding::Damage { result } => result,
-                    _ => None,
-                };
-                let excess_damage = batch
-                    .results
-                    .iter()
-                    .filter(|result| measured.is_none_or(|index| index == result.ordinal))
-                    .filter_map(|result| result.excess_damage)
-                    .next_back();
-                let moved: Vec<ObjectRef> = batch
-                    .results
-                    .into_iter()
-                    .filter_map(|result| result.moved)
-                    .collect();
-                match batch.binding {
-                    EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
-                    EventBinding::Bending { player, kind } => self.record_bending(player, kind),
-                    EventBinding::Shuffle { player } => self.shuffle_library(player),
-                    EventBinding::PlaceInLibrary { second_from_top } => {
-                        for object in moved {
-                            let card = CardId::from(object.entity);
-                            if self.state.zones.zone_of(card) != Some(ZoneType::Library) {
-                                continue;
-                            }
-                            if second_from_top {
-                                let owner = self.state.cards[card].owner;
-                                let library =
-                                    self.state.zones.zone_cards_mut(ZoneType::Library, owner);
-                                library.retain(|candidate| *candidate != card);
-                                let below_top = library.len().saturating_sub(1);
-                                library.insert(below_top, card);
-                            } else {
-                                self.put_on_bottom_of_library(card);
-                            }
-                        }
-                    }
-                    EventBinding::Created {
-                        attacking,
-                        attach_source,
-                    } => {
-                        for object in moved {
-                            let card = CardId::from(object.entity);
-                            self.finish_created_token(card, attacking);
-                            if let Ok(id) = self.lookup_current_permanent(object) {
-                                frame.created = Some(id);
-                                if attach_source {
-                                    self.attach_source_to(&frame, id);
-                                }
-                            }
-                        }
-                    }
-                    EventBinding::Damage { .. } => {
-                        if let Some(excess) = excess_damage {
-                            frame.excess_damage = excess;
-                        }
-                    }
-                    EventBinding::Moved { shuffle, .. } => {
-                        frame.moved = moved;
-                        let mut owners = Vec::new();
-                        for object in &frame.moved {
-                            let card = CardId::from(object.entity);
-                            let owner = self.state.cards[card].owner;
-                            match self.state.zones.zone_of(card) {
-                                Some(ZoneType::Library) if shuffle => {
-                                    if !owners.contains(&owner) {
-                                        owners.push(owner);
-                                    }
-                                }
-                                Some(ZoneType::Hand) => self.invalidate_mana_cache(owner),
-                                _ => {}
-                            }
-                        }
-                        for owner in owners {
-                            self.shuffle_library(owner);
-                        }
-                    }
-                    EventBinding::ThisWay => frame.this_way = moved,
-                }
+                self.bind_event_results(&mut frame, batch);
             }
             if frame.iteration.is_some() {
                 frame = frame.next_iteration();
@@ -1289,6 +1200,81 @@ impl Game {
             }
             // A chosen permanent belongs to the one instruction that ran.
             frame.chosen = None;
+        }
+    }
+
+    /// Consume the instruction's results only after its whole batch and linked
+    /// returns finish. Binding never consumes a consequent child batch's results.
+    fn bind_event_results(&mut self, frame: &mut EffectFrame, batch: EventBatch) {
+        let moved = batch.results.iter().filter_map(|result| result.moved);
+        match batch.binding {
+            EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
+            EventBinding::Bending { player, kind } => self.record_bending(player, kind),
+            EventBinding::Shuffle { player } => self.shuffle_library(player),
+            EventBinding::PlaceInLibrary { second_from_top } => {
+                for object in moved {
+                    let card = CardId::from(object.entity);
+                    if self.state.zones.zone_of(card) != Some(ZoneType::Library) {
+                        continue;
+                    }
+                    if second_from_top {
+                        let owner = self.state.cards[card].owner;
+                        let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
+                        library.retain(|candidate| *candidate != card);
+                        let below_top = library.len().saturating_sub(1);
+                        library.insert(below_top, card);
+                    } else {
+                        self.put_on_bottom_of_library(card);
+                    }
+                }
+            }
+            EventBinding::Created {
+                attacking,
+                attach_source,
+            } => {
+                for object in moved {
+                    let card = CardId::from(object.entity);
+                    self.finish_created_token(card, attacking);
+                    if let Ok(id) = self.lookup_current_permanent(object) {
+                        frame.created = Some(id);
+                        if attach_source {
+                            self.attach_source_to(frame, id);
+                        }
+                    }
+                }
+            }
+            EventBinding::Damage { result: measured } => {
+                if let Some(excess) = batch
+                    .results
+                    .iter()
+                    .filter(|result| measured.is_none_or(|index| index == result.ordinal))
+                    .filter_map(|result| result.excess_damage)
+                    .next_back()
+                {
+                    frame.excess_damage = excess;
+                }
+            }
+            EventBinding::Moved { shuffle, .. } => {
+                frame.moved = moved.collect();
+                let mut owners = Vec::new();
+                for object in &frame.moved {
+                    let card = CardId::from(object.entity);
+                    let owner = self.state.cards[card].owner;
+                    match self.state.zones.zone_of(card) {
+                        Some(ZoneType::Library) if shuffle => {
+                            if !owners.contains(&owner) {
+                                owners.push(owner);
+                            }
+                        }
+                        Some(ZoneType::Hand) => self.invalidate_mana_cache(owner),
+                        _ => {}
+                    }
+                }
+                for owner in owners {
+                    self.shuffle_library(owner);
+                }
+            }
+            EventBinding::ThisWay => frame.this_way = moved.collect(),
         }
     }
 
@@ -2930,15 +2916,7 @@ impl Game {
         looked.retain(|card| !graveyard.contains(card));
         let next =
             self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);
-        if let Some(decision) = next {
-            let mut child = EffectFrame::new(*player, Vec::new());
-            child.batch = Some(batch);
-            suspended.decision = decision;
-            self.run_before_decision(child, suspended);
-        } else {
-            suspended.frame.batch = Some(batch);
-            self.run_frame(suspended.frame);
-        }
+        self.run_batch_before_decision(batch, suspended, next);
     }
 
     /// Reorder inspected library cards, first to draw first. Their exact

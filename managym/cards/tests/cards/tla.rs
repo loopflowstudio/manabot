@@ -15575,7 +15575,9 @@ fn cruel_administrator_entry_raid_reads_the_entering_controller() {
 #[test]
 fn planetarium_casts_after_joo_dee_surveillance_finishes() {
     let mut s = five_color_setup(&[
-        "Planetarium of Wan Shi Tong", "Joo Dee, One of Many", "Gray Ogre",
+        "Planetarium of Wan Shi Tong",
+        "Joo Dee, One of Many",
+        "Gray Ogre",
     ]);
     s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
     let joo_dee = s.force_permanent_on_battlefield(0, "Joo Dee, One of Many");

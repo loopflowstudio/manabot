@@ -148,16 +148,13 @@ impl Game {
             let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
                 continue;
             };
-            let Some(event_ref) = self.object_event_ref(object_ref) else {
-                continue;
-            };
-            candidates.push((object_ref, event_ref, permanent.controller, destroy));
+            candidates.push((object_ref, destroy));
         }
-        candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
+        candidates.sort_by_key(|(object_ref, _)| *object_ref);
 
         let mut events: Vec<_> = candidates
             .into_iter()
-            .map(|(target, _, _, destroy)| {
+            .map(|(target, destroy)| {
                 if destroy {
                     ProposedEvent::Destroy { target }
                 } else {

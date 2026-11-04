@@ -508,10 +508,7 @@ impl Game {
         entry: ZoneEntry,
     ) {
         let event = self.zone_move_proposal(card, to_zone, entry);
-        let committed = self.apply_immediate_event(event);
-        if committed {
-            self.process_game_events();
-        }
+        self.apply_immediate_event(event);
     }
 
     pub(crate) fn zone_move_proposal(

@@ -1444,8 +1444,14 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::SelectCards { effects, if_declined, .. } => effects.iter()
-                .chain(if_declined).find_map(Effect::target_spec),
+            Effect::SelectCards {
+                effects,
+                if_declined,
+                ..
+            } => effects
+                .iter()
+                .chain(if_declined)
+                .find_map(Effect::target_spec),
             Effect::MayDiscard { then }
             | Effect::ForPlayer { effects: then, .. }
             | Effect::MayOnceEachTurn { effects: then } => {

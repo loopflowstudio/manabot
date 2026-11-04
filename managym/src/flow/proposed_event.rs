@@ -420,7 +420,6 @@ impl Game {
                         to: ZoneType::Hand,
                         ..
                     } => Some((
-                        *card,
                         self.state.cards[*card].owner,
                         self.state.cards[*card].definition_id,
                     )),
@@ -429,13 +428,13 @@ impl Game {
             } else {
                 None
             };
-            if let Some((_, owner, definition)) = reveal {
+            if let Some((owner, definition)) = reveal {
                 self.emit(GameEvent::CardRevealed { owner, definition });
             }
             let committed =
                 self.commit_proposed_event(event, pending.departing_lki.clone(), &mut followups);
             if committed {
-                if let Some((_, owner, definition)) = reveal {
+                if let Some((owner, definition)) = reveal {
                     let count = self.state.players[owner.0]
                         .known_hand
                         .get(&definition)
@@ -443,8 +442,6 @@ impl Game {
                         .unwrap_or(0);
                     self.set_known_hand_count(owner, definition, count + 1);
                 }
-            }
-            if committed {
                 died.extend(death);
                 hits.extend(hit);
             }
@@ -756,16 +753,13 @@ impl Game {
         // Positive placements, including prospective entry counters. This is
         // deliberately recomputed after each transformation: an own-entry
         // replacement may create the first counters another effect can modify.
-        let placement = match event {
-            ProposedEvent::CounterChange {
-                target,
-                kind,
-                delta,
-                ..
-            } if *delta > 0 => self.lookup_current_permanent(*target).ok().map(|id| {
-                let permanent = self.state.permanents[id].as_ref().expect("current target");
-                (permanent.card, permanent.controller, Some((*kind, *delta)))
-            }),
+        let recipient = match event {
+            ProposedEvent::CounterChange { target, delta, .. } if *delta > 0 => {
+                self.lookup_current_permanent(*target).ok().map(|id| {
+                    let permanent = self.state.permanents[id].as_ref().expect("current target");
+                    (permanent.card, permanent.controller)
+                })
+            }
             ProposedEvent::ZoneMove {
                 card,
                 to: ZoneType::Battlefield,
@@ -774,11 +768,10 @@ impl Game {
             } if !entry.counters.is_empty() => Some((
                 *card,
                 entry.controller.unwrap_or(self.state.cards[*card].owner),
-                None,
             )),
             _ => None,
         };
-        if let Some((card, controller, placement)) = placement {
+        if let Some((card, controller)) = recipient {
             for id in self.battlefield_permanents(controller) {
                 if self.characteristics(id).abilities_lost {
                     continue;
@@ -801,17 +794,17 @@ impl Game {
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
                         _ => self.card_matches_predicate(card, predicate),
                     };
-                    let matches_kind = placement.map_or_else(
-                        || match event {
-                            ProposedEvent::ZoneMove { entry, .. } => {
-                                entry.counters.iter().any(|(placed, count)| {
-                                    count > 0 && kind.is_none_or(|kind| kind == placed)
-                                })
-                            }
-                            _ => false,
-                        },
-                        |(placed, _)| kind.is_none_or(|kind| kind == placed),
-                    );
+                    let matches_kind = match event {
+                        ProposedEvent::CounterChange { kind: placed, .. } => {
+                            kind.is_none_or(|kind| kind == *placed)
+                        }
+                        ProposedEvent::ZoneMove { entry, .. } => {
+                            entry.counters.iter().any(|(placed, count)| {
+                                count > 0 && kind.is_none_or(|kind| kind == placed)
+                            })
+                        }
+                        _ => unreachable!("counter placement"),
+                    };
                     if matches_card && matches_kind {
                         candidates.push(ReplacementCandidate {
                             identity: ReplacementId {

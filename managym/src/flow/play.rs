@@ -1914,8 +1914,8 @@ impl Game {
         self.commit_payment(player, *payment, None, None, tapped)
     }
 
-    /// Costs are paid: put the activated ability on the stack (handling
-    /// sacrifice-as-cost) and reset the priority round.
+    /// Capture the ability before its source can leave, commit its tap cost,
+    /// and propose its sacrifice cost. Frame completion puts it on the stack.
     fn prepare_activated_ability(
         &mut self,
         player: PlayerId,
@@ -1975,9 +1975,9 @@ impl Game {
         ))
     }
 
-    /// Costs are paid: discard the source if the ability says so (CR 602.2b)
-    /// and put the ability on the stack. It exists independently of the card
-    /// (CR 113.7a) and refers to the card by its identity after costs.
+    /// Capture an off-battlefield ability and propose its discard cost.
+    /// Frame completion binds the post-cost source identity (CR 602.2b, 113.7a)
+    /// before putting the ability on the stack.
     fn prepare_card_activated_ability(
         &mut self,
         player: PlayerId,
@@ -1991,8 +1991,7 @@ impl Game {
         let cost = ability
             .discard_source
             .then(|| self.zone_move_proposal(card, ZoneType::Graveyard, Default::default()));
-        // The card as it stands once costs are paid: a discarded source is
-        // referenced in the graveyard, where "it" still deals its damage.
+        // The completion replaces this identity after the proposed cost commits.
         let source_ref = self
             .current_object_ref(card)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;

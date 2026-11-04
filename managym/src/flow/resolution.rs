@@ -802,19 +802,13 @@ impl Game {
                 // One simultaneous destruction: leave-the-battlefield
                 // abilities look back at the permanents as they all were
                 // before it (CR 603.10a).
-                let objects: Vec<_> = self
+                let events = self
                     .selected_permanents(what, frame)
                     .into_iter()
                     .filter_map(|id| self.permanent_object_ref(id))
+                    .map(|target| ProposedEvent::Destroy { target })
                     .collect();
-                frame.batch = Some(
-                    self.event_batch(
-                        objects
-                            .into_iter()
-                            .map(|target| ProposedEvent::Destroy { target })
-                            .collect(),
-                    ),
-                );
+                frame.batch = Some(self.event_batch(events));
                 None
             }
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
