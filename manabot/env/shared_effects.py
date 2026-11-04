@@ -1,4 +1,4 @@
-"""V7 fixed buffers for complete effect payloads and explicit CSR memberships.
+"""Versioned shared effect buffers with explicit CSR memberships.
 
 Native authority supplies exact provenance. This reference encoder never infers
 it from old per-object fragments. Offsets address bounded token/member arrays;
@@ -15,17 +15,14 @@ import managym
 EFFECT_ROWS, EFFECT_DIM = 128, 18
 DETAIL_ROWS, DETAIL_DIM = 512, 3
 MEMBER_ROWS, MEMBER_DIM = 2048, 2
-SHARED_EFFECT_SHAPES = {
-    "effects": (EFFECT_ROWS, EFFECT_DIM),
-    "effect_details": (DETAIL_ROWS, DETAIL_DIM),
-    "effect_members": (MEMBER_ROWS, MEMBER_DIM),
-}
 
 
 def shared_effect_shapes(version: int) -> dict[str, tuple[int, int]]:
+    """The selected input's shared layout; v7's detail capacity stays frozen."""
     return {
-        **SHARED_EFFECT_SHAPES,
+        "effects": (EFFECT_ROWS, EFFECT_DIM),
         "effect_details": (4096 if version >= 8 else DETAIL_ROWS, DETAIL_DIM),
+        "effect_members": (MEMBER_ROWS, MEMBER_DIM),
     }
 
 

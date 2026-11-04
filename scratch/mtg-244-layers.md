@@ -2,35 +2,14 @@
 
 Jack Heart accepted one composable-layers Task on 2026-11-04: Beorn/Kellan as
 real cards, historical interactions as rules fixtures. The code Graph publishes
-one PR for review; no merge or experiment launch. On 2026-11-04 Jack Heart
-approved a new input version: "new input version is totally fine". The prior
-input-version blocker is resolved. The implementation started from
-`4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`; reconciliation on 2026-11-04
-uses `85cb1ceab87e75712265e6a4c9f26351c68d4add`, including the risk
-implementation checkpoint `b2fb06cbadb8978d1f2373c9b2490551c358c907` and main
-`19bdee9444fb185ba6cf290de61a0d64e4e40d37`. The latest sync only removes the
-eval Wave and renames training to experiments; it changes no runtime code.
-Coverage's objective and memory still govern this Task. No immediate child
-directories containing memory exist under `.lf/wave/coverage/` at this head.
+one PR for review; no merge, world freeze or training launch. Jack Heart approved
+a successor policy input the same day: "new input version is totally fine".
+Explicit v8 is implemented; fresh v6 and frozen saved versions remain unchanged.
 
-Implementation 2026-11-04: recovered the archived draft and replaced the old
-staged evaluator with a complete board context. The branch now contains the
-engine/consumer cutover, both real cards, all eleven interaction fixtures and
-explicit v8 encoders/model support. No merge, world freeze
-or experiment launch is selected.
-
-Status: implemented with focused correctness evidence; not yet ready for review.
-Jack Heart's 2026-11-04 risk-measurement direction remains required before
-review readiness, detailed in [mtg-244-risk-validation.md](mtg-244-risk-validation.md).
-Local-fact isolation, numeric saturation and unnecessary mana-board rebuilding
-are repaired. Shared-program and real configuration-selection checks pass;
-allocation, operation and buffer costs are measured. Complete legal-payment
-attribution now agrees before/after on every action, resource and digest. The new
-Layer Risk Measurements workflow supplies the missing isolated execution path;
-its clean comparative engine/full-policy receipts remain outstanding until the
-measurement change is published. The standard Engine Budget alone does not
-execute those harnesses. Review readiness still needs those receipts and
-combined-head Gate checks. No further product decision is needed.
+Status: implemented with focused correctness and mitigation evidence, awaiting
+isolated timing receipts and combined-head Gate checks. No human decision is
+missing. [Risk validation](mtg-244-risk-validation.md) owns measured results,
+configurations, exact sources and limitations; remaining acceptance is listed below.
 
 Accepted outcome: one `Game::characteristics` authority composes types, colors,
 abilities and power/toughness for rules and policy consumers, preserving a cheap
@@ -205,20 +184,57 @@ Completed cuts; no remaining deletion targets identified:
   membership routing has one implementation; v7 retains its original reduction.
 - Glob-discovered policy cases and count-only receipt completeness are removed;
   the producer/comparator share exact case identities. No exclusive fixtures remain.
+- The unqualified v7 complete-effect claim and stale 67/55 object widths in
+  usage docs are replaced by explicit v8 selection/recovery and selected-space
+  layouts; retained inputs and their compatibility boundaries remain documented.
+- `SHARED_EFFECT_SHAPES` and its copy/override path are removed; the selected
+  version's `shared_effect_shapes` owns the layout directly. Local program
+  unpacking uses Torch's `unpack_sequence`; independent program ordering,
+  parameter shapes and gradients retain their existing regression witnesses.
 - Duplicate Kellan walkers in tests and the policy benchmark are replaced by
   `verify.representation::{kellan_upgrade_root,kellan_trigger_root}`. Commands,
   bounded prefixes, retained inputs, program ownership and gradients are preserved.
 
+## Concept review — 2026-11-04
+
+Accepted amendment: **explicit input selection and failure recovery belong in
+the caller-facing usage contract.** This follows Jack Heart's successor-input
+approval, not a default migration or checkpoint conversion. The review used
+`45d9c7b0f` and the retained risk note; it supplied no new performance proof.
+
+Implemented in `docs/training.md#policy-inputs` and `manabot/README.md`:
+
+- A new layer-capable run explicitly selects v8 before collector/model creation.
+  V7's former “complete resolved effects” claim is scoped to representable payloads.
+- Older inputs reject at `validate_policy_input` before either encoder writes
+  buffers or selects an action prefix. A later state can fail after earlier
+  observations succeed; admission does not preflight a game or roll back actions.
+- Preserve failed-run configuration/evidence. New work can construct a compatible
+  v8 model; saved checkpoints retain saved inputs and ordinary world admission.
+  Version editing, weight reshaping, live swaps and automatic restart are not recovery.
+- Touched layouts match `ObservationSpace`: v5–v8 object widths 73/56/38,
+  relations 64 × 49; v7/v8 shared headers 128 × 18, members 2048 × 2,
+  details 512/4096 × 3 and default local facts 128/512 × 12.
+
+The usage example matches `test_v8_recipe_collector_and_evaluation_select_saved_input`.
+Recipe serialization, documented shapes and fresh/saved defaults were checked
+without playing games. Rejection wording/order was inspected in Python
+`ObservationEncoder.encode` and native `encode_into`/`validate_policy_input`.
+The retained-input, collector/checkpoint, program-isolation and source-departure
+witnesses cover the distinct failure modes described above. Review illustration:
+`scratch/concept-review.html` (not a browser capture or new execution evidence).
+
 ## Remaining work
 
-1. Obtain and inspect the first isolated `layer-risk.yml` artifact after the
-   caller's publication step. It runs original TLA baseline/before/after,
+1. The first isolated `layer-risk.yml` artifact remains outstanding, with
+   publication as its execution prerequisite; the Task has no PR as of this
+   reconciliation. The configured producer runs original TLA baseline/before/after,
    dependency before/after, complete payments and seven full-policy cases per
    revision. Require full score digests/counts, search samples, bounded 128-step
    prefixes, native/Python encoding, inference/backward throughput and process
    RSS. Mitigate demonstrated regressions and remeasure before review readiness.
    Standard Engine Budget does not execute the dependency/model harnesses.
-   Local timings remain exploratory under host load above 600; no further
+   Retained contended timings remain exploratory; no further
    product decision is needed. [Risk evidence](mtg-244-risk-validation.md) owns
    measured results, exact sources, configurations and limitations.
 2. Gate owns affected suites and current-world admission: full debug Rust,
@@ -235,28 +251,27 @@ Completed cuts; no remaining deletion targets identified:
    payloads are not claimed by current v8. Coordinate schemas through ordinary
    sync before combined publication without adding a second execution authority.
 
-Complete-payment attribution is closed: eight pool-funded and eight land-funded
-Cadets activations preserve every action, resource, stacked program and digest.
-Allocations fall 1,176→510 / 2,882→1,668; the two necessary tap rebuilds remain.
-Historical/candidate wheels match all seven native/Python inventory cases each.
-These are deterministic counts/parity, not timing or learning acceptance.
-
-The measurement producer and comparator now use one exact policy-case list;
-file globbing/counts are no longer completion authority. Complete payment
-identities and eight finite policy samples/two warmups per operation are checked
-before a comparison is written. Frozen runtime/input behavior is unchanged.
-
-Validation: `uv run --no-sync pytest tests/infra/test_layer_risk_receipts.py -q`
-— 17 passed; infrastructure collection and Ruff/diff checks passed. Reapplying the comparator to the retained payment JSON
-matched all 16 cases and the recorded allocation reductions. Reuse the
-unchanged engine/model evidence: `b2fb06cba:scratch/mtg-244-layers.md` retains
+Retained validation at `fb264f7c7`: 17 injected-receipt checks, infrastructure
+collection and Ruff/diff checks passed. The unchanged engine/model evidence at
+`b2fb06cba:scratch/mtg-244-layers.md` retains
 27 debug Rust / 22 Python passes (two optimizer cases excluded), and payment
 bundle `88d6abd34d8b56a9606c3ec58696063955d08226` retains the debug payment proof,
 14 inventories, atomic wheel installs, rustfmt/actionlint and prior receipt tests.
 Full suites and isolated timing remain with the producers above. No merge,
 training launch or clean-performance acceptance is implied.
 
+Check: `uv run --no-sync pytest tests/model/test_layer_input.py tests/model/test_shared_effects.py -q -k 'not tiny_learning and not representation_proof'` — 24 passed (all cases selected, including the two existing bounded learner/export smokes). Ruff, diff checks and the extracted documentation recipe/serialization/layout probe passed. Gate owns full suites; isolated comparative timing remains with `layer-risk.yml`. No performance or learning-quality acceptance follows from these checks.
+
 ## Preserved evidence
+
+The complete plan before this reduction, including uncommitted concept-review
+and documentation evidence, is git blob `6486ea3e1dde73d3977e8ce160ada16962ddfe6a`.
+Implementation started at `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`;
+reconciliation uses `45d9c7b0fbf927b5f57ca38f86010709cdc1e422`.
+Runtime mitigation: `b2fb06cbadb8978d1f2373c9b2490551c358c907`; measurement/payment
+checkpoint: `fb264f7c78dcd1a864cbe35a9e7d4cd985f9faf7`. Main's intervening
+`115f88165` / `510b5ec35` Wave changes introduced no runtime diff. Coverage memory
+and goal govern this Task; its Wave has no immediate child memory directories.
 
 The complete pre-compression plan, including detailed validation scope and source
 history, is blob `7b17e207b67ed3d9785e9915a69439a1e6eb44a1` (`git show <blob>`).

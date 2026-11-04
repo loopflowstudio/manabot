@@ -17,7 +17,7 @@ tokens. Earlier inputs retain their kind embeddings and row-only architecture.
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
+from torch.nn.utils.rnn import pack_sequence, unpack_sequence
 
 from manabot.env.observation import (
     FACT_CONTINUATION_PROGRAM,
@@ -129,10 +129,7 @@ class FactEncoder(nn.Module):
         packed, _ = self.program_sequence(
             pack_sequence(list(tokens.split(lengths)), enforce_sorted=False)
         )
-        sequences, _ = pad_packed_sequence(packed, batch_first=True)
-        sequence = torch.cat(
-            [sequences[i, :length] for i, length in enumerate(lengths)]
-        )
+        sequence = torch.cat(unpack_sequence(packed))
         return hidden.masked_scatter(program.unsqueeze(-1), tokens + sequence)
 
     def forward(self, facts: torch.Tensor, objects: torch.Tensor) -> torch.Tensor:

@@ -382,10 +382,17 @@ preserves accepted decisions, dated proof limits and source history.
   nested conditions and newly granted statics. Finalized activation outputs and
   trigger indexes still refresh; debug recomputation remains the correctness
   oracle. Eight warmed-board pool-write probes fell from 471 to 10 allocations
-  each, but this does not measure a complete payment or whole-game throughput.
+  each. Subsequent complete-payment attribution (`fb264f7c7`, retained bundle
+  `88d6abd34d8b56a9606c3ec58696063955d08226`) preserves every legal action,
+  selected action, resource, captured program and digest across eight pool-funded
+  and eight land-funded Cadets activations. Allocations fall 1,176→510 and
+  2,882→1,668 respectively; land payment retains both necessary tap rebuilds.
+  This closes payment attribution, not whole-game throughput acceptance.
   Neither a digest refresh nor a component speedup waives the 10% Engine Budget.
   The standard CI budget runs only the original TLA workloads; added dependency
-  and policy harnesses require explicit execution and retained receipts.
+  and policy harnesses have a separate sequential `layer-risk.yml` producer.
+  Its presence establishes an execution path, not successful hosted execution
+  or comparative performance; no isolated artifact is yet retained.
 - Exact numeric transport does not guarantee meaningful model separation.
   V8 integers 4096/8192 shared an embedding bucket and saturated the raw numeric
   projection to identical local-program outputs. Signed log magnitudes repair
@@ -394,9 +401,12 @@ preserves accepted decisions, dated proof limits and source history.
   state. Join/order/padding/gradient and real collector/checkpoint-selection
   checks support these mechanisms, not general injectivity or learning quality.
   Exact receipts and limitations are at
-  `b2fb06cba:scratch/mtg-244-risk-validation.md`. Full-model comparative latency,
-  final engine/search remeasurement and complete-payment attribution remain
-  open; training outcomes need separately authorized experiments.
+  `fb264f7c7:scratch/mtg-244-risk-validation.md`. All seven before/after input
+  inventories agree in native/Python arrays, configurations and storage. Inventory
+  parity is not a policy timing receipt. Full-model comparative latency and final
+  engine/search remeasurement remain open; contended timings establish neither
+  regression nor acceptance. Training outcomes need separately authorized
+  experiments.
 
 ## Architecture convergence (accepted 2026-07-17)
 
