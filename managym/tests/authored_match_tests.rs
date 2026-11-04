@@ -16,15 +16,6 @@ fn authored_configs(pack: &AuthoredSetup) -> Vec<PlayerConfig> {
     ]
 }
 
-fn jeong_configs(pack: &AuthoredSetup) -> Vec<PlayerConfig> {
-    vec![
-        pack.player_config("UR Lessons", "ur_lessons")
-            .expect("UR setup"),
-        pack.player_config("GW Allies — Jeong", "gw_allies_jeong")
-            .expect("GW setup"),
-    ]
-}
-
 #[test]
 fn exact_authored_match_runs_to_a_winner_on_the_catalog() {
     let pack = authored_setup("two_deck").unwrap();
@@ -55,15 +46,6 @@ fn exact_authored_match_runs_to_a_winner_on_the_catalog() {
         "compiled triggered programs must resolve"
     );
     assert!(damage > 0, "compiled damage programs must affect the world");
-}
-
-#[test]
-fn jeong_increment_runs_on_the_catalog_in_either_seat_order() {
-    let configs = jeong_configs(authored_setup("jeong_increment").unwrap());
-    for player_configs in [configs.clone(), configs.into_iter().rev().collect()] {
-        let game = Game::new(player_configs, 23, true);
-        assert_eq!(game.state.players.len(), 2);
-    }
 }
 
 #[test]

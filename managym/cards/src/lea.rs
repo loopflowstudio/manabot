@@ -184,15 +184,7 @@ fn lightning_bolt() -> CardDefinition {
             3,
             ObjectSelector::Target(TargetSpec::AnyTarget),
         )],
-        targeting: vec![TargetRequirement {
-            shares_creature_type: false,
-            spec: TargetSpec::AnyTarget,
-            min: 1,
-            max: 1,
-            another: false,
-            max_x: false,
-            total_mana_value_x: false,
-        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -65,9 +65,10 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, Condition, DelayedEvent, Effect, EffectValue, Except, LinkedChooser,
-            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayWindow, PlayerSelector,
-            Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
+            Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
+            PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+            TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -824,7 +825,9 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::CreateDelayedTrigger {
             remember: None,
-            event: DelayedEvent::CreatureDiesThisTurn,
+            event: DelayedEvent::CreatureDies,
+            frequency: DelayedFrequency::EachMatch,
+            expiry: DelayedExpiry::ThisTurn,
             effects: vec![Effect::gain_life(1)],
         },
         Effect::ForPlayer {
@@ -2257,13 +2260,8 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 // ---------------------------------------------------------------------------
 // Tokens.
 
-/// Defined tokens whose producing card is not defined yet, with that producer.
-/// When the producer lands, its reference makes the token leave this list.
-const TOKENS_AWAITING_PRODUCER: [(&str, &str); 0] = [];
-
 /// Every `token.*` definition is a definition reference from a card that
-/// creates it (or awaits a named producer), and a created token's observation
-/// carries its characteristics.
+/// creates it, and a created token's observation carries its characteristics.
 #[test]
 fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
     let pack = default_content_pack();
@@ -2282,12 +2280,8 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
             .zip(&catalog.definition_ref_target_rows)
             .filter(|(_, &target)| target == row)
             .count();
-        let awaiting = TOKENS_AWAITING_PRODUCER
-            .iter()
-            .any(|(key, _)| *key == token.key);
-        assert_eq!(
+        assert!(
             referencing > 0,
-            !awaiting,
             "{}: {referencing} creating references",
             token.key
         );
@@ -2637,6 +2631,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         x => [column(Relation, RELATION_X_INDEX)],
         granted_keywords => [Columns(Relation, RELATION_KEYWORDS_INDEX, KEYWORD_COUNT)],
         this_turn => [column(Relation, RELATION_THIS_TURN_INDEX)],
+        delayed_frequency => [Rows("v5/v6 delayed frequency relation kind 9, code in column 28")],
     }));
     fields.extend(encoding!(ClauseTarget {
         reference => [Rows("VisibleReference below")],
@@ -3404,9 +3399,9 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
             or_exiled: true, ..
         } => (2, true),
         DelayedTriggerEvent::CreatureDies => (3, false),
-        DelayedTriggerEvent::NextEndStep { your_turn } => (if *your_turn { 7 } else { 4 }, false),
+        DelayedTriggerEvent::EndStep { your_turn } => (if *your_turn { 7 } else { 4 }, false),
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
-        DelayedTriggerEvent::NextUpkeep => (6, false),
+        DelayedTriggerEvent::Upkeep => (6, false),
     }
 }
 
@@ -3426,14 +3421,10 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
             or_exiled: true,
         },
         DelayedTriggerEvent::CreatureDies,
-        DelayedTriggerEvent::NextEndStep {
-            your_turn: false,
-        },
-        DelayedTriggerEvent::NextEndStep {
-            your_turn: true,
-        },
+        DelayedTriggerEvent::EndStep { your_turn: false },
+        DelayedTriggerEvent::EndStep { your_turn: true },
         DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
-        DelayedTriggerEvent::NextUpkeep,
+        DelayedTriggerEvent::Upkeep,
     ];
     let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();
     assert_eq!(codes.len(), events.len());
@@ -3480,10 +3471,23 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
         );
         assert!(watched > 0.0, "the watched creature is joined");
         let observation = encoded(&s, viewer, 5);
-        let remembered = observation.relations.as_chunks::<RELATION_DIM_V5>().0.iter()
-            .find(|row| row[0] == 8.0 && row[3] == 10.0).expect("captured subject row");
-        assert_eq!(remembered[24], watched, "capture and event watch are distinct relations");
-        assert!(!encoded(&s, viewer, 4).relations.as_chunks::<33>().0.iter().any(|row| row[0] == 8.0));
+        let remembered = observation
+            .relations
+            .as_chunks::<RELATION_DIM_V5>()
+            .0
+            .iter()
+            .find(|row| row[0] == 8.0 && row[3] == 10.0)
+            .expect("captured subject row");
+        assert_eq!(
+            remembered[24], watched,
+            "capture and event watch are distinct relations"
+        );
+        assert!(!encoded(&s, viewer, 4)
+            .relations
+            .as_chunks::<33>()
+            .0
+            .iter()
+            .any(|row| row[0] == 8.0));
         assert!(
             definitions_seen(&s, viewer).contains(&s.game().state.cards[fissure].definition_id.0)
         );
@@ -4170,5 +4174,56 @@ fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
             tokens.contains(&(TokenKind::Variant, name_value(variant))),
             "{variant}"
         );
+    }
+}
+
+#[test]
+fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
+    for frequency in [DelayedFrequency::Once, DelayedFrequency::EachMatch] {
+        for expiry in [DelayedExpiry::ThisTurn, DelayedExpiry::Never] {
+            let tokens = tokens_of(&spell(vec![Effect::CreateDelayedTrigger {
+                event: DelayedEvent::Upkeep,
+                frequency,
+                expiry,
+                remember: None,
+                effects: vec![Effect::gain_life(1)],
+            }]));
+            assert!(tokens.contains(&(
+                TokenKind::Variant,
+                name_value(match frequency {
+                    DelayedFrequency::Once => "DelayedFrequency::Once",
+                    DelayedFrequency::EachMatch => "DelayedFrequency::EachMatch",
+                })
+            )));
+            assert!(tokens.contains(&(
+                TokenKind::Variant,
+                name_value(match expiry {
+                    DelayedExpiry::ThisTurn => "DelayedExpiry::ThisTurn",
+                    DelayedExpiry::Never => "DelayedExpiry::Never",
+                })
+            )));
+            let code = if frequency == DelayedFrequency::Once {
+                1
+            } else {
+                2
+            };
+            let frame = ContinuationFrame {
+                kind: 10,
+                decision: 6,
+                delayed_frequency: Some(code),
+                this_turn: expiry == DelayedExpiry::ThisTurn,
+                ..Default::default()
+            };
+            let mut rows = vec![0.0; 64 * RELATION_DIM_V5];
+            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
+                .unwrap();
+            assert_eq!(rows[28], 6.0, "event code stays on header");
+            assert_eq!(rows[RELATION_DIM_V5], 9.0);
+            assert_eq!(rows[RELATION_DIM_V5 + 28], f32::from(code));
+            assert_eq!(
+                rows[RELATION_DIM_V5 + RELATION_THIS_TURN_INDEX],
+                f32::from(expiry == DelayedExpiry::ThisTurn)
+            );
+        }
     }
 }

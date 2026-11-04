@@ -3,8 +3,8 @@
 Jack Heart's T7 scope, accepted chooser API and review boundaries are in
 [mtg-226-tla-t7-player.md](mtg-226-tla-t7-player.md). The inherited T6 plan is
 historical context. Published schedule/selector
-completion is integrated at `20f42a09a`; the later accepted delayed-event
-frequency/expiry separation remains parent-owned and awaits a published sync.
+completion is integrated at `20f42a09a`; this sync incorporates the later
+accepted delayed-event frequency/expiry separation from published T6 `7c790f78e`.
 Publication may be stacked; landing remains parent-first
 and requires review. No merge, auto-merge or paid training is authorized.
 
@@ -57,3 +57,22 @@ as historical evidence, preserving their post-consolidation additions. Complete 
 notes, including schedule presentation and main v6 integration decisions, remain
 at `bf7631c6a1d229c1405ea800bd57e493aa66c45c:scratch/questions.md`.
 This sync does not operate T6 or authorize landing, experiments or broader work.
+
+
+## Published T6 delayed-lifetime sync — 2026-11-03
+
+Resolve the existing merge onto published parent `7c790f78e7008701c5d1bcb7903a8b83693bd093`.
+Retain both branches' independent card and observability proofs, T7's chooser
+contract and T7's concept-review page. Incorporate the parent's delayed-event,
+frequency and expiry implementation and its shared engine memory additions.
+The parent's complete notes and review remain at that commit's
+`scratch/questions.md` and `scratch/concept-review.html`; its working design
+and direction remain in this checkout.
+
+Delayed lifetime uses `DelayedFrequency::{Once, EachMatch}` and
+`DelayedExpiry::{ThisTurn, Never}`. The existing `this_turn` observation stays a
+derived expiry fact; optional frequency is relation row kind 9 in v5/v6, unknown
+in historical captures. T7's control frames 13/14 remain intact. The parent moves
+canonical hashing to contract 15; gate owns mutable-w17 receipt refresh and
+combined consumer validation. This conflict resolution does not claim those
+checks or authorize landing. The waiting sync caller owns verification and push.

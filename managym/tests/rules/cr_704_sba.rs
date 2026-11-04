@@ -336,7 +336,8 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
             with_counter: None,
             linked: None,
         }],
-        this_turn: false,
+        frequency: managym::state::ability::DelayedFrequency::Once,
+        expiry: managym::state::ability::DelayedExpiry::Never,
     });
     s.game_mut().state.permanents[new_permanent]
         .as_mut()

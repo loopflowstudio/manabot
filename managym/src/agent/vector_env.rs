@@ -829,7 +829,7 @@ mod tests {
     #[test]
     fn independent_training_decks_preserve_mirrors_entries_and_seed_recovery() {
         let mut first = PlayerConfig::new("event-a", BTreeMap::from([("Plains".into(), 12)]));
-        first.world = Some("world".into());
+        first.submitted = true;
         let mut second = first.clone();
         second.name = "event-b".into();
         let decks = vec![first.clone(), second];

@@ -73,14 +73,23 @@ carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
-Delayed abilities compose timing, captured subjects and effects.
+Delayed abilities compose event matching, frequency, expiry, captured subjects
+and effects. `CreateDelayedTrigger.event` only matches the event;
+`DelayedFrequency::Once` consumes its watcher on the first match, even if the
+occurrence is countered or later does nothing. `EachMatch` keeps waiting until
+`DelayedExpiry::ThisTurn` removes the watcher at cleanup, or `Never` supplies no
+stated expiry. Exact-object death watchers retire when the watched incarnation
+leaves, regardless of frequency. Expiry removes waiting watchers, never queued
+or stacked occurrences. No printed trigger vocabulary is migrated.
 `CreateDelayedTrigger.remember` resolves an ordinary `ObjectSelector` when the
 ability is created. Its exact incarnations travel through placement, stack and
 suspended resolution; `ObjectSelector::Remembered` never follows a departed
 object into a new incarnation. Event context (such as the spell just cast) stays
 separate. End-step timing can wait for either player's step or the controller's,
-independently of what was captured. Viewer-safe v5 relations and text expose the
-remembered references; earlier input versions retain their exclusions.
+independently of what was captured. Viewer-safe v5/v6 relations and text expose
+the remembered references, expiry and frequency. Relation row kind 9 carries
+frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
+Missing historical frequency is unknown. Widths and existing meanings stay fixed; earlier input versions retain their exclusions.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
 not a set of revealed physical cards. Search forks by full clone: clone the

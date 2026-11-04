@@ -12,7 +12,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        ability::PaymentCost,
+        ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
         mana::ManaCost,
         stack_object::StackObject,
@@ -124,8 +124,11 @@ pub struct ContinuationFrame {
     /// in `KeywordData` field order.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_keywords: [bool; KEYWORD_COUNT],
-    /// A waiting delayed trigger that ends in this turn's cleanup step if it
-    /// has not fired.
+    /// Waiting frequency: 1 once, 2 each match. Missing historical data is unknown.
+    /// V5/v6 encode it as a kind-9 relation row with the code in column 28.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delayed_frequency: Option<u8>,
+    /// A waiting delayed trigger that ends in this turn's cleanup step.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
 }
@@ -133,9 +136,9 @@ pub struct ContinuationFrame {
 pub const MAX_DELAYED_EVENT_CODE: u8 = 7;
 
 /// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
-/// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the next end
-/// step, 5 its controller next casts a matching spell, 6 the next upkeep,
-/// 7 its controller's next end step.
+/// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the end
+/// step, 5 its controller casts a matching spell, 6 upkeep,
+/// 7 its controller's end step. Frequency is projected separately.
 pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     match event {
         DelayedTriggerEvent::Leaves {
@@ -145,14 +148,14 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
             or_exiled: true, ..
         } => 2,
         DelayedTriggerEvent::CreatureDies => 3,
-        DelayedTriggerEvent::NextEndStep {
+        DelayedTriggerEvent::EndStep {
             your_turn: false, ..
         } => 4,
-        DelayedTriggerEvent::NextEndStep {
+        DelayedTriggerEvent::EndStep {
             your_turn: true, ..
         } => 7,
         DelayedTriggerEvent::YouCastSpell(_) => 5,
-        DelayedTriggerEvent::NextUpkeep => 6,
+        DelayedTriggerEvent::Upkeep => 6,
     }
 }
 
@@ -381,10 +384,10 @@ impl Game {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
             }
-            DelayedTriggerEvent::NextEndStep { .. }
+            DelayedTriggerEvent::EndStep { .. }
             | DelayedTriggerEvent::CreatureDies
             | DelayedTriggerEvent::YouCastSpell(_)
-            | DelayedTriggerEvent::NextUpkeep => None,
+            | DelayedTriggerEvent::Upkeep => None,
         };
         ContinuationFrame {
             remembered: self.remembered_references(&trigger.remembered, viewer),
@@ -393,7 +396,11 @@ impl Game {
             controller: trigger.controller.0,
             source,
             context,
-            this_turn: trigger.this_turn,
+            delayed_frequency: Some(match trigger.frequency {
+                DelayedFrequency::Once => 1,
+                DelayedFrequency::EachMatch => 2,
+            }),
+            this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
             ..ContinuationFrame::default()
         }
     }
@@ -888,7 +895,9 @@ pub fn encode_into(
                 + usize::from(f.context.is_some())
                 + usize::from(f.sacrifice.is_some())
                 + if dim == RELATION_DIM_V5 {
-                    usize::from(f.inherited_from.is_some()) + f.remembered.len()
+                    usize::from(f.inherited_from.is_some())
+                        + f.remembered.len()
+                        + usize::from(f.delayed_frequency.is_some())
                 } else {
                     0
                 }
@@ -987,6 +996,12 @@ pub fn encode_into(
             }
             for (ordinal, reference) in frame.remembered.iter().enumerate() {
                 reference_row(8.0, *reference, 0, ordinal, None);
+            }
+            if let Some(frequency) = frame.delayed_frequency {
+                let row = rows.next().unwrap();
+                row.copy_from_slice(&header);
+                row[0] = 9.0;
+                row[28] = f32::from(frequency);
             }
         }
         for pair in &frame.hybrid {

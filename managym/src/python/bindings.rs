@@ -4286,6 +4286,9 @@ fn parse_continuation_frames_json(
                     .contains(&frame.decision)
                     || frame.parent.is_some()))
             || (frame.kind != 10 && frame.this_turn)
+            || frame
+                .delayed_frequency
+                .is_some_and(|frequency| frame.kind != 10 || !(1..=2).contains(&frequency))
             || (frame.kind != 5
                 && frame
                     .targets

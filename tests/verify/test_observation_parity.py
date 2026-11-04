@@ -597,8 +597,10 @@ def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
         env.encode_observation_into(obs, buffers)
 
 
-def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
-    env = priority_root(("Fatal Fissure",), ("Swamp", "Swamp"), opponent=("Gray Ogre",))
+@pytest.mark.parametrize("frequency", [1, 2])
+def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -> None:
+    card = "Fatal Fissure" if frequency == 1 else "Ruinous Waterbending"
+    env = priority_root((card,), ("Swamp",) * 7, opponent=("Gray Ogre",))
     obs = env.scenario_refresh()
     ogre = obs.opponent_permanents[0].id
     for _ in range(12):
@@ -609,7 +611,11 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
             range(len(actions)),
             key=lambda index: (
                 actions[index].action_type
-                not in (ActionEnum.PRIORITY_CAST_SPELL, ActionEnum.CHOOSE_TARGET)
+                not in (
+                    ActionEnum.PRIORITY_CAST_SPELL,
+                    ActionEnum.CHOOSE_TARGET,
+                    ActionEnum.PAY_COST,
+                )
                 or (
                     actions[index].action_type == ActionEnum.CHOOSE_TARGET
                     and ogre not in actions[index].focus
@@ -619,8 +625,8 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         )
         obs, *_ = env.step(ranked[0])
     else:
-        raise AssertionError("Fatal Fissure's trigger is not waiting")
-    for version in (4, 5):
+        raise AssertionError(f"{card} trigger is not waiting")
+    for version in (4, 5, 6):
         expected = ObservationEncoder(
             ObservationConfig(policy_input_version=version)
         ).encode(obs)
@@ -633,10 +639,14 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
             assert not waiting.any(), "a v5 fact"
             continue
         header = relations[waiting & (relations[:, 0] == 1)][0]
-        watched = relations[waiting & (relations[:, 0] == 3)][0]
-        assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
-        remembered = relations[waiting & (relations[:, 0] == 8)][0]
-        assert remembered[24] == watched[24] > 0
+        assert header[28] == (1 if frequency == 1 else 3)
+        assert header[RELATION_THIS_TURN_INDEX] == 1
+        lifetime = relations[waiting & (relations[:, 0] == 9)][0]
+        assert lifetime[28] == frequency
+        if frequency == 1:
+            watched = relations[waiting & (relations[:, 0] == 3)][0]
+            remembered = relations[waiting & (relations[:, 0] == 8)][0]
+            assert remembered[24] == watched[24] > 0
 
 
 @pytest.mark.parametrize("version", [4, 5, 6])
@@ -676,7 +686,7 @@ def test_t6_transform_parity_and_schedule_relation_versions(
         frame | {"kind": 3, "x": 6},
         frame | {"kind": 6, "decision": 24, "can_decline": True},
         frame | {"kind": 6, "decision": 25, "mode": 3, "can_decline": True},
-        frame | {"kind": 10, "decision": 7},
+        frame | {"kind": 10, "decision": 7, "delayed_frequency": 2},
         frame | {"kind": 11, "source": empty, "mode": 0},
         frame | {"kind": 12, "source": empty, "mode": 1, "attackers": "land creatures"},
     ]
@@ -693,6 +703,8 @@ def test_t6_transform_parity_and_schedule_relation_versions(
         assert (relations[:, 0] == 7).any(), (
             "inherited definition joins learning tokens"
         )
+        frequency = relations[relations[:, 0] == 9]
+        assert len(frequency) == 1 and frequency[0, 28] == 2
         assert (relations[:, 3] == 12).any(), "pending combat is visible"
         assert (relations[:, RELATION_X_INDEX] == 6).any(), "paid X is retained"
         for kind in (9,):

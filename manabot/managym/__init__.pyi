@@ -803,6 +803,7 @@ class ContinuationFrame:
     resolutions_this_turn: int
     x: int
     granted_keywords: list[bool]
+    delayed_frequency: int | None
     this_turn: bool
 
 def validate_observation_json(text: str) -> None: ...

@@ -944,6 +944,8 @@ pub enum Effect {
     /// are chosen as the delayed ability is put on the stack.
     CreateDelayedTrigger {
         event: DelayedEvent,
+        frequency: DelayedFrequency,
+        expiry: DelayedExpiry,
         /// Resolve this selector now, not when the delayed ability resolves.
         /// Its exact objects become `ObjectSelector::Remembered` there.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -1083,17 +1085,30 @@ pub enum PlayWindow {
 /// [`Effect::CreateDelayedTrigger`] waits for (CR 603.7).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DelayedEvent {
-    /// "When it dies this turn": watch each captured object.
-    DiesThisTurn,
-    /// "Whenever a creature dies this turn."
-    CreatureDiesThisTurn,
-    /// "At the beginning of the next end step", optionally only yours.
-    NextEndStep { your_turn: bool },
-    /// "When you next cast a [predicate] spell this turn"; that spell is
-    /// the delayed ability's context.
-    YouNextCastThisTurn(CardPredicate),
-    /// "At the beginning of the next upkeep".
-    NextUpkeep,
+    /// Watch each captured object's death during that exact battlefield stint.
+    Dies,
+    CreatureDies,
+    EndStep {
+        your_turn: bool,
+    },
+    /// The matching spell supplies event context, separate from captured subjects.
+    YouCastSpell(CardPredicate),
+    Upkeep,
+}
+
+/// Whether a matching event consumes the watcher, independently of resolution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DelayedFrequency {
+    Once,
+    EachMatch,
+}
+
+/// When to stop waiting. Expiry never removes an already-created occurrence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DelayedExpiry {
+    ThisTurn,
+    /// No stated expiry; exact-object watchers still retire when that object leaves.
+    Never,
 }
 
 /// Effects that run when any card milled by the same instruction matches.
