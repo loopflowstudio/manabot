@@ -448,8 +448,9 @@ preserves accepted decisions, dated proof limits and source history.
   triggers use LKI. Ordered extra turns/combats and their restrictions need
   both deterministic identity and shared policy/text observation. T6 represents
   them in v5/v6 frames/facts and definition-derived tokens, preserving v1–v4
-  widths and exclusions. Their initial hash contract 13 is superseded by 14
-  for retained delayed-object captures; mutable receipts must follow that change.
+  widths and exclusions. Hash contract 13 moved to 14 for delayed-object captures
+  and 15 for independent lifetime fields; mutable receipts must follow those
+  changes, while frozen evidence stays fixed.
 - Jack Heart accepted Academy's public schedule completion in T6 on
   2026-11-03 (option 1a). Equal per-player counts can conceal opposite turn
   orders, and zero pending combats can conceal an active restriction. Native
@@ -470,6 +471,18 @@ preserves accepted decisions, dated proof limits and source history.
   Definition-derived tokens and viewer-safe native/Python/text projection carry
   the state. This changes content/hash identity, so old green receipts are not
   evidence for the corrected engine; frozen evidence remains untouched.
+- Jack Heart accepted independent delayed-event matching, firing frequency and
+  expiry on 2026-11-03 (option 1a), superseding the earlier open scope choice.
+  `DelayedFrequency::{Once, EachMatch}` and `DelayedExpiry::{ThisTurn, Never}`
+  compose with event predicates. A once-only watcher is consumed on its match,
+  not successful resolution; cleanup removes waiting records, never existing
+  occurrences. Exact-object death watchers retire on departure even with no
+  stated expiry or repeating frequency. Captured references and event context
+  retain separate identities and the original controller. V5/v6 relation kind 9
+  carries frequency without changing widths; absent historical frequency stays
+  unknown. Focused debug, hash/fork, native/Python/text/token and retained-session
+  proofs support this slice, not crash persistence or combined-head acceptance.
+  This correction introduces no general printed-trigger migration or second DSL.
 - Main's v6 integration (`3b122de90`, merged into T6 at `bf7631c6a`) makes fact
   capacity configurable, fresh default 512, independently of T6's 512-action
   capacity. Frozen v5 remains 128 facts; omitted saved action capacity stays

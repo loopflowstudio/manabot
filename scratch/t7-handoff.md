@@ -40,10 +40,12 @@ one global catalog, faces/Sagas, turn and combat scheduling, retained ability
 state, Sozin payment/search authority, and referenced-row learner encoding.
 Do not reimplement those foundations or revive authored pack multiplicity.
 
-T6 is still running a final accepted schedule-presentation completion: public
-ordered extra turns/resume and current/pending extra combats with attacker
-restrictions must reach Academy and retained-session recovery. Its implementation
-Graph is a31a0147-dab4-464d-8112-3cddf160516b. Start T7 from the published parent
+T6 head `7c790f78e` implements the accepted public schedule projection and
+independent delayed event/frequency/expiry composition. Ordered extra turns/resume
+and current/pending combat restrictions reach Academy; focused retained-session
+recovery and native/Python/text/token proofs are recorded. Mutable-w17 receipt
+refresh to hash contract 15 and combined gate validation remain outstanding.
+Its implementation Graph is a31a0147-dab4-464d-8112-3cddf160516b. Start T7 from the published parent
 only; never copy a live dirty T6 tree. Expect overlap in turn/decision state,
 observation, experience projection and Academy. Incorporate T6's later published
 completion through a supported sync before final combined validation. Landing
