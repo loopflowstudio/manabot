@@ -13577,6 +13577,37 @@ fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
     );
 }
 
+#[test]
+fn aang_swift_savior_entry_trigger_can_be_redirected_after_transforming() {
+    let mut s = five_color_setup(&["Aang, Swift Savior", "Redirect Lightning", "Gray Ogre"]);
+    let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let aang_card = cast(&mut s, "Aang, Swift Savior");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(first)));
+    let trigger = s.game().state.stack_objects.last().unwrap().as_target();
+
+    // Transform while the front face's entry trigger is still on the stack.
+    let aang = s.game().state.card_to_permanent[aang_card].unwrap();
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, aang, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    resolve_top(&mut s);
+    assert!(s.game().state.cards[aang_card].is_transformed());
+
+    s.set_player_mana_pool(0, "3R");
+    cast(&mut s, "Redirect Lightning");
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(trigger));
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(!offered_targets(&s).contains(&Target::Permanent(first)));
+    assert!(s.choose_target(Target::Permanent(second)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card_of(&s, first)), Some(ZoneType::Battlefield));
+    assert!(s.game().state.permanents[second].is_none());
+}
+
 /// Each mode copies a creature on its side with its own exceptions: not
 /// legendary, a 4/4 Hero or a 2/2 Coward. A copy of a transformed permanent
 /// shows the face that's up and is transformed itself (CR 707.8a).

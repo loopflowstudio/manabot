@@ -18,6 +18,7 @@ use crate::{
     state::{
         ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        mana::ManaCost,
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -708,19 +709,21 @@ impl Game {
     /// Temporary native permission to inspect another player's hidden zones.
     /// It ends with the search instruction and never depends on deck disclosure.
     pub(crate) fn searches_private_zones(&self, viewer: PlayerId, owner: PlayerId) -> bool {
-        self.state.suspended_decision.as_ref().is_some_and(|suspended| matches!(suspended.decision, Decision::SearchNamed { player, owner: searched, .. } if player == viewer && searched == owner))
+        self.state
+            .suspended_decision
+            .as_ref()
+            .is_some_and(|suspended| {
+                matches!(suspended.decision, Decision::SearchNamed { player, owner: searched, .. }
+                if player == viewer && searched == owner)
+            })
     }
 
     /// Search permission reveals all cards in the searched zones only to
     /// the chooser; eligibility by name restricts actions, not information.
-    pub(crate) fn named_search_cards(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::SearchNamed { owner, .. } = decision else {
-            return Vec::new();
-        };
+    pub(crate) fn named_search_cards(&self, owner: PlayerId) -> impl Iterator<Item = CardId> + '_ {
         [ZoneType::Graveyard, ZoneType::Hand, ZoneType::Library]
             .into_iter()
-            .flat_map(|zone| self.state.zones.zone_cards(zone, *owner).iter().copied())
-            .collect()
+            .flat_map(move |zone| self.state.zones.zone_cards(zone, owner).iter().copied())
     }
 
     fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
@@ -838,17 +841,31 @@ impl Game {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 actions: (0..=u8::MAX)
-                    .take_while(|x| self.can_pay_mana_cost(*player, &crate::state::mana::ManaCost::default().with_generic(*x)))
-                    .map(|x| Action::ChooseMode { player: *player, mode: usize::from(x) })
-                    .chain([Action::Decline { player: *player }]).collect(),
+                    .take_while(|x| {
+                        self.can_pay_mana_cost(*player, &ManaCost::default().with_generic(*x))
+                    })
+                    .map(|x| Action::ChooseMode {
+                        player: *player,
+                        mode: usize::from(x),
+                    })
+                    .chain([Action::Decline { player: *player }])
+                    .collect(),
                 focus: source_focus,
             },
-            decision @ Decision::SearchNamed { player, remaining, .. } => ActionSpace {
+            Decision::SearchNamed {
+                player,
+                owner,
+                name,
+                remaining,
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, self.named_search_cards(decision).into_iter().filter(|card| {
-                    matches!(decision, Decision::SearchNamed { name, .. } if self.state.cards[*card].name == *name) && *remaining > 0
-                }), true),
+                actions: select_cards(
+                    *player,
+                    self.named_search_cards(*owner)
+                        .filter(|card| self.state.cards[*card].name == *name && *remaining > 0),
+                    true,
+                ),
                 focus: source_focus,
             },
             Decision::ManaUpfront { player, .. } => ActionSpace {
@@ -1214,10 +1231,7 @@ impl Game {
             (Decision::ChoosePaymentX { player, if_paid }, Action::ChooseMode { mode, .. }) => {
                 let x = u8::try_from(*mode).ok();
                 let Some(x) = x.filter(|x| {
-                    self.can_pay_mana_cost(
-                        *player,
-                        &crate::state::mana::ManaCost::default().with_generic(*x),
-                    )
+                    self.can_pay_mana_cost(*player, &ManaCost::default().with_generic(*x))
                 }) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("unpayable X".into()));
@@ -1225,7 +1239,7 @@ impl Game {
                 suspended.frame.x = x;
                 let payment = PaymentProgress::new(
                     *player,
-                    PaymentCost::Mana(crate::state::mana::ManaCost::default().with_generic(x)),
+                    PaymentCost::Mana(ManaCost::default().with_generic(x)),
                     std::mem::take(if_paid),
                     Vec::new(),
                 );

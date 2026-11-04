@@ -237,13 +237,18 @@ impl Game {
         }
     }
 
-    /// The ability's definition on its source's face. An index past the
-    /// printed abilities is inherited: its lending definition was fixed at
-    /// activation, so removal or a later choice cannot change its meaning.
-    pub(crate) fn own_activated_ability(
+    /// The definition retained by an activation, shared by resolution and
+    /// retargeting. Printed, inherited and attached grants keep their source
+    /// even when that source leaves or the permanent chooses new abilities.
+    pub(crate) fn stacked_activated_ability(
         &self,
         ability: &ActivatedAbilityOnStack,
     ) -> Option<&ActivatedAbilityDefinition> {
+        if let Some(grant) = ability.granted_by {
+            return self.state.cards[CardId::from(grant.grantor.entity)]
+                .attached_grants()
+                .nth(grant.index);
+        }
         let printed = &self
             .source_face(ability.source_card, ability.source_definition_id)?
             .activated_abilities;
@@ -256,14 +261,7 @@ impl Game {
     }
 
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        // A granted ability keeps its grantor's text after the grantor leaves.
-        let definition = match ability.granted_by {
-            Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
-                .attached_grants()
-                .nth(grant.index),
-            None => self.own_activated_ability(&ability),
-        };
-        let Some(definition) = definition.cloned() else {
+        let Some(definition) = self.stacked_activated_ability(&ability).cloned() else {
             return;
         };
 

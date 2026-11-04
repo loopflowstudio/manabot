@@ -1077,9 +1077,8 @@ impl Observation {
         if let Some(suspended) = &game.state.suspended_decision {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
-                    decision @ crate::flow::decision::Decision::SearchNamed { .. } => game
-                        .named_search_cards(decision)
-                        .into_iter()
+                    crate::flow::decision::Decision::SearchNamed { owner, .. } => game
+                        .named_search_cards(*owner)
                         .filter(|card| {
                             game.state.zones.zone_of(*card) == Some(ZoneType::Library)
                                 || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)

@@ -251,7 +251,9 @@ reach v5 facts/continuations, Python and text without widening frozen rows.
 Fresh action tables hold 512 alternatives for unrestricted catalog names;
 checkpoint readers retain an omitted historical action capacity of 64.
 Match-state hash contract 13 includes pending scheduling and retained ability
-meaning. Only mutable current-w17 evidence is refreshed; earlier worlds stay fixed.
+meaning. Retargeting and resolution both read the ability's captured face,
+including when its source has transformed. Only mutable current-w17 evidence
+is refreshed; earlier worlds stay fixed.
 
 Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.

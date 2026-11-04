@@ -9,7 +9,7 @@
 use crate::{
     flow::{decision::Decision, game::Game},
     state::{
-        ability::{effect_target_requirements, Ability, TargetRequirement},
+        ability::{effect_target_requirements, TargetRequirement},
         game_object::{CardId, PlayerId, Target},
         stack_object::StackObject,
     },
@@ -39,30 +39,24 @@ impl Game {
                     .get(*spell.target_req_indices.get(slot)?)
                     .cloned()
             }
-            StackObject::ActivatedAbility(ability) => {
-                let definition = match ability.granted_by {
-                    Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
-                        .attached_grants()
-                        .nth(grant.index)?,
-                    None => self.own_activated_ability(ability)?,
-                };
-                definition.target_requirement()
-            }
+            StackObject::ActivatedAbility(ability) => self
+                .stacked_activated_ability(ability)?
+                .target_requirement(),
             StackObject::TriggeredAbility(triggered) => {
                 let effects = match &triggered.inline_effects {
-                    Some(effects) => effects.clone(),
+                    Some(effects) => effects.as_slice(),
                     None => {
                         let card = triggered
                             .source_lki
                             .as_ref()
                             .map_or(triggered.source_card, |lki| lki.card);
-                        let Ability::Triggered { effects, .. } = self.state.cards[card]
+                        self.source_face(card, triggered.source_definition_id)?
                             .abilities
-                            .get(triggered.ability_index)?;
-                        effects.clone()
+                            .get(triggered.ability_index)?
+                            .effects()
                     }
                 };
-                effect_target_requirements(&effects)
+                effect_target_requirements(effects)
                     .get(*triggered.target_req_indices.get(slot)?)
                     .cloned()
             }

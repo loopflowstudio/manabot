@@ -215,14 +215,14 @@ impl ManaCost {
     pub fn reduced_by(&self, reduction: &ManaCost) -> ManaCost {
         let mut out = self.clone();
         let generic = Color::Generic as usize;
-        for (slot, count) in reduction.cost.iter().enumerate() {
-            for _ in 0..*count {
-                if slot != generic && out.cost[slot] > 0 {
-                    out.cost[slot] -= 1;
-                } else {
-                    out.cost[generic] = out.cost[generic].saturating_sub(1);
-                }
-            }
+        for (slot, &count) in reduction.cost.iter().enumerate() {
+            let colored = if slot == generic {
+                0
+            } else {
+                out.cost[slot].min(count)
+            };
+            out.cost[slot] -= colored;
+            out.cost[generic] = out.cost[generic].saturating_sub(count - colored);
         }
         out.update_mana_value();
         out
@@ -666,6 +666,22 @@ mod tests {
         assert_eq!(kicked.mana_value, 6);
         assert!(Mana::parse("2RRWG").can_pay(&kicked));
         assert_eq!(kicked.with_generic(0).mana_value, 4);
+    }
+
+    #[test]
+    fn colored_reductions_spill_into_generic_but_never_other_colors() {
+        for (cost, reduction, expected) in [
+            ("{5}{W}{W}{U}{R}", "{W}{W}{W}{U}{B}{R}{G}", "{2}"),
+            ("{1}{U}{U}", "{W}{W}{W}", "{U}{U}"),
+            ("{3}{G}", "{2}{G}{G}", "{0}"),
+            ("{X}{2}{R/W}{R}", "{R}{R}{R}", "{X}{R/W}"),
+        ] {
+            assert_eq!(
+                ManaCost::parse(cost).reduced_by(&ManaCost::parse(reduction)),
+                ManaCost::parse(expected),
+                "{cost} less {reduction}"
+            );
+        }
     }
 
     #[test]
