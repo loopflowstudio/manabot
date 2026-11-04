@@ -5,6 +5,8 @@ learner update at 61 card objects including sideboard against capacity 60.
 The prospective v5 implementation uses the existing 128-card configuration,
 with the native scalar/vector binding corrected to derive that axis from
 ObservationSpace. All shared-effect tensors remain the delivered v7 contract.
+Integration, prospective binding and analysis/discovery migration are complete.
+GPU execution and learning acceptance remain outstanding.
 
 ## Accepted outcome and constraints
 
@@ -81,6 +83,10 @@ The runner's duplicate observation-default comparison is removed: the frozen
 regime hash owns configuration, and protocol shapes detect encoder allocation
 drift. Retained transport tests use the production allocator and exercise the
 61-row boundary and 128-row pilot through the same scalar/vector/Python path.
+Native buffer admission matches the scalar/batched card shapes directly and
+counts shared arrays without a temporary collection. Test setup takes the
+active experiment identifier from the runner; the discovery inventory and
+callback assertion still pin its expected public name independently.
 No remaining deletion targets; frozen inputs, fixtures and evidence stay intact.
 
 ## Budget and execution ownership
@@ -91,10 +97,11 @@ Etude 0.2.13 is the isolated control client; frozen training dependencies retain
 and submit through client.launch_cohort. Existing launcher owners control
 allocation, deadline and teardown. No automatic retry.
 
-Fresh inventory at 06:13:32 UTC confirms all four pilot rentals ended and no
+Fresh inventory at 06:46:13 UTC confirms all four pilot rentals ended and no
 provider pods. The only unsettled session is unrelated non-rented mini.
-Prior three provider bills total $0.17054831; v4's full-rental estimate is
-$0.04314118 pending billing. Cumulative billed-plus-estimated cost is $0.21368949.
+Prior three provider bills total $0.17054831; v4's conservative planned-to-ended
+full-rental estimate is $0.04314150 pending billing. Cumulative
+billed-plus-estimated cost is $0.21368981.
 Retain all four reservations ($2.95) conservatively against $10; a next allocation
 must fit the unchanged $1 ceiling. Exact receipts and scripts are under
 `.runs/mtg213/v4-continuation/` and `.runs/mtg213/v5-continuation/`.
@@ -103,10 +110,14 @@ must fit the unchanged $1 ceiling. Exact receipts and scripts are under
 
 1. Prepared v5 run `e8c76bc2c06f` binds source
    `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`. Its A6000 quote was refused;
-   fresh 06:37:17 UTC L4/A4000/A4500 reads all report unavailable. No v5
+   fresh 06:46:27 UTC A6000/L4/A4000/A4500 reads all report unavailable. No v5
    submission or rental occurred. Resume this prepared identity only after a
    fresh inventory/budget/quote, then execute through the ordinary CUDA gate.
    Later source simplifications do not retarget this prepared Run.
+   The fresh inventory/billing reconciliation leaves billed totals unchanged;
+   receipt: `.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
+   Capacity remains the external blocker. No repeated quote/submission was made
+   after these unavailable responses; a new availability signal is required.
 2. Send the explicitly requested Task launch milestone only after observed GPU
    learner updates, with job/GPU/progress/rate/deadline evidence. Provisioning,
    CPU validation and initialization do not qualify.
@@ -114,6 +125,6 @@ must fit the unchanged $1 ceiling. Exact receipts and scripts are under
    later games never fill old identities' slots. Report learning gains, uncertainty,
    errors, full cost and Elemental-relative limits. Shipping alone is incomplete.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/verify/test_shared_effect_transport.py tests/eval/test_experiment_files.py -q` — 52 passed; Ruff check/format and diff checks pass. Gate owns full affected suites and debug validation.
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/verify/test_shared_effect_transport.py tests/eval/test_experiment_files.py -q` — 52 passed after release rebuild and atomic extension replacement; Ruff, Rust fmt and diff checks pass. Gate owns full affected suites and debug validation.
 Prior release rebuild, learner/export/reload proof and verification of all 110
 published v4 files remain at `cce484db70049e81ee81983500cec4664b4962b1:scratch/tla-pilot-verify.md`.

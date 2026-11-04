@@ -341,17 +341,14 @@ pub(super) fn input_buffer_config(
         .get_item("agent_cards")?
         .ok_or_else(|| PyValueError::new_err("missing agent_cards"))?;
     let card_shape: Vec<usize> = cards.getattr("shape")?.extract()?;
-    if !matches!(card_shape.len(), 2 | 3) || card_shape[card_shape.len() - 2] == 0 {
-        return Err(PyValueError::new_err("invalid card buffer shape"));
+    config.max_cards_per_player = match card_shape.as_slice() {
+        &[rows, _] | &[_, rows, _] if rows > 0 => rows,
+        _ => return Err(PyValueError::new_err("invalid card buffer shape")),
+    };
+    let mut shared_count = 0;
+    for name in ["effects", "effect_details", "effect_members"] {
+        shared_count += usize::from(buffers.contains(name)?);
     }
-    config.max_cards_per_player = card_shape[card_shape.len() - 2];
-    let shared_count = ["effects", "effect_details", "effect_members"]
-        .into_iter()
-        .map(|name| buffers.contains(name))
-        .collect::<PyResult<Vec<_>>>()?
-        .into_iter()
-        .filter(|present| *present)
-        .count();
     if shared_count != 0 && shared_count != 3 {
         return Err(PyValueError::new_err(
             "v7 requires all shared-effect buffers",

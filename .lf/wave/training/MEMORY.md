@@ -11,8 +11,10 @@ the final representation repair; v1–v6 and executed pilot identities remain
 frozen. At 03:01 UTC he approved shipping complete shared effects routed into
 affected object embeddings before attention. The bounded approval does not
 promote a production default or establish learning quality. PR416's v6 repair
-is integrated; 5da5f4's v7 implementation has focused verification but is not
-yet published or merged at this reconciliation.
+is integrated; 5da5f4 delivered v7 in PR #419, merged on 2026-11-04 at
+05:55:57 UTC as `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`, with executed
+CI checks passing. MTG-213 integrated that contract without a second
+representation implementation.
 
 Complete native payloads factor before capacity admission. V7 uses fixed
 128 × 18 headers, 512 × 3 typed details and 2,048 × 2 membership edges;
@@ -33,8 +35,10 @@ contributions; mean alone would erase them. Lossless transport is not an
 injective neural encoding: hashed/summed embeddings can alias or saturate.
 V7 `rows` and `typed_pool` select the same reducer; `typed_gru` reduces tokens
 within one observation and carries no game memory. Original v5 three-arm
-calibration remains v5 evidence. No scientific replicate or new v7 CUDA result
-exists. Active-byte reduction does not imply padded-memory savings: default v7
+calibration remains v5 evidence. MTG-213 v4 subsequently passed v7 CUDA
+admission but failed collection before learning at a separate card-object
+capacity boundary. No scientific replicate or v7 GPU learner update is
+established. Active-byte reduction does not imply padded-memory savings: default v7
 effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
 
 Native source-A/B positions equal under v6 differ under v7 and diverge after
@@ -82,10 +86,13 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The 2026-11-04 settlement confirms all three Task rentals ended;
-cumulative provider bills plus the latest full-rental estimate total $0.17051348.
-All three reservations ($2.2125) remain conservatively held against $10 pending
-final billing. Per-run allocation cost can omit idle cleanup time; budget against
+rentals. The retained 2026-11-04 06:13:32 UTC inventory confirms all four
+Task rentals ended and no provider pods. The first three provider bills total
+$0.17054831; v4's full-rental estimate adds $0.04314118 pending billing, for
+$0.21368949 billed plus estimated. All four reservations ($2.95) remain
+conservatively held against $10 pending reconciliation. These are dated receipts,
+not a fresh provider balance or availability claim. Per-run allocation cost can
+omit idle cleanup time; budget against
 the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
 Exact accounting and settlement receipts live in experiments/tla-trophy-pilot.md.
 
@@ -189,16 +196,39 @@ fixed tensors (comment 42a12145, relaying his 2026-11-03 decision): complete
 effects are encoded once and explicitly routed into affected object embeddings
 before attention. Task 5da5f4 owns that bounded prerequisite as well as the
 broader representation investigation. This resolves the immediate repair choice;
-it does not establish delivery or successful learning. Concrete layout and
-capacities are engineering choices for that owner. Lossless factoring preserves
+the delivered contract is recorded above, while successful learning remains
+unestablished. Concrete layout and capacities are engineering choices for that
+owner. Lossless factoring preserves
 memberships, multiplicity, source, duration and ordering; semantic coalescing
 requires proof of identical future behavior. The retained 270-row projection
 roundtrips as nine complete payloads and 135 memberships, not nine independent
-facts with their affected objects discarded. Once delivered, the new contract
-requires a prospective pilot identity, fresh initialization and evaluation on
-the same 134 decks within MTG-213's existing $10 cap. The representation Task's
+facts with their affected objects discarded. V4 consumed the delivered contract
+with fresh initialization and evaluation on the same 134 decks; v5 retains
+those requirements within MTG-213's existing $10 cap. The representation Task's
 separate experimental budget does not replenish that cap. GPU learner updates
 remain the launch milestone; a merged implementation is not Task completion.
+
+V4's exact retained prefix exposed an independent capacity bound: 40 original
+cards, five generated tokens and 16 sideboard cards require 61 card rows, above
+the default 60. CUDA admission passed, but 238 completed games supplied no
+learner update. Its initialization evaluation completed 32 games (2 wins, 30
+losses), leaving 256 scheduled games missing. All 110 v4 artifacts were published;
+all 120 v3 artifacts remain retained. V4's source and evidence remain frozen.
+
+The prospective v5 pilot selects the existing `max_cards_per_player=128` under
+the operator's workflow-repair authority, retaining explicit input v7 and its
+shared-effect capacities. The native scalar/vector binding now derives the card
+axis from ObservationSpace; the exact retained prefix agrees with Python at 61
+and 128 rows while 60 fails. Generated cards and sideboards cannot be dropped to
+fit an allocation. Schema-3 protocol shapes and regime hashes bind every axis;
+fresh initialization is required when model object capacity changes. This repairs
+a counterexample, not every reachable-state capacity or a learning result.
+Analysis and discovery share the active v5 identity; historical executions use
+pinned sources. The prepared v5 Run remains bound to its original source despite
+later source simplifications. Its 06:38 UTC receipt records a refused quote and
+no submission or rental, not a failed training attempt. The live plan owns the
+prepared identity, fresh budget/availability reconciliation and remaining GPU,
+checkpoint, complete evaluation and Elemental-relative learning acceptance.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)

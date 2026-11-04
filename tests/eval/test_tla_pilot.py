@@ -28,7 +28,7 @@ import pytest
 
 from experiments import tla_pilot_v5
 from experiments.tla_pilot_analysis import analyze
-from experiments.tla_pilot_v5 import ROOT, eval, frozen
+from experiments.tla_pilot_v5 import EXPERIMENT, ROOT, eval, frozen
 from manabot.env.failures import read_failure
 from manabot.env.observation import ObservationEncoder
 from manabot.eval.results import RateInterval
@@ -41,7 +41,7 @@ import managym
 def _checkpoint(update: int) -> Checkpoint:
     return Checkpoint(
         run="fixture-training",
-        experiment="tla_pilot_v5",
+        experiment=EXPERIMENT,
         ordinal=update + 1,
         artifact=ArtifactRef(
             uri=f"file:///fixture/u{update}.pt", sha256="a" * 64, size_bytes=1
@@ -107,7 +107,7 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
         assert matchup.games == 4 and len(matchup.conditions) == 8
         if "initial" in matchup.tags:
             assert matchup.players[1].checkpoint.key.name == "u0.pt"
-    assert eval(ExperimentState(experiment="tla_pilot_v5")) == []
+    assert eval(ExperimentState(experiment=EXPERIMENT)) == []
 
 
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
@@ -142,11 +142,11 @@ def _state(
     status: Literal["running", "finished", "failed"] = "finished",
 ) -> ExperimentState:
     return ExperimentState(
-        experiment="tla_pilot_v5",
+        experiment=EXPERIMENT,
         runs=(
             TrainingRun(
                 name="fixture-training",
-                experiment="tla_pilot_v5",
+                experiment=EXPERIMENT,
                 state=status,
                 checkpoints=Checkpoints(_checkpoint(update) for update in updates),
             ),
@@ -379,7 +379,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     state = _state()
     store = tmp_path / "store"
     with track(
-        experiment="tla_pilot_v5",
+        experiment=EXPERIMENT,
         run="fixture-training",
         directory=store,
         clocks=(Clock(name="updates", kind="step", meaning="Learner updates"),),
@@ -392,7 +392,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
         pilot_db.execute("ALTER TABLE games DROP COLUMN failure")
     tournament = evaluation_spec(eval(state)[0]).tournament
     declared = declare(
-        experiment="tla_pilot_v5",
+        experiment=EXPERIMENT,
         run="fixture-eval",
         kind="evaluation",
         clocks=(),

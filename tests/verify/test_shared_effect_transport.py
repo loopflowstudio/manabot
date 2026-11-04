@@ -93,7 +93,7 @@ def test_retained_drill_prefix_admits_shared_effects(
             assert not obs.opponent.main_counts
             assert not reference["decklists"][1].any()
         native = scalar.encode_observation(obs, 7)
-        into = {key: np.zeros_like(value) for key, value in reference.items()}
+        into = encoder.allocate()
         scalar.encode_observation_into(obs, into)
         for key in reference:
             np.testing.assert_array_equal(reference[key], native[key], err_msg=key)
