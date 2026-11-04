@@ -1,6 +1,22 @@
 # TLA trophy pilot: capacity failures before learning
 
-Prospective **v4** now consumes delivered PR #419's v7 shared-effect inputs.
+V4 run **baa8671d6480**, source `0b6c2bb854ba`, passed CUDA numerical admission
+on an RTX A6000 but failed before learning at **61 card objects plus sideboard
+against capacity 60**. Exact replay identifies stream 22 after 300 actions:
+40 original cards, five generated tokens and 16 sideboard cards. Its 238
+completed games supplied no optimizer update. The rental ended; estimated full
+rental cost is $0.04314118, cumulative billed plus estimated cost **$0.21368949**.
+All four reservations total $2.95 conservatively held against the same $10 cap.
+
+V4 initialization evaluation completed 32 valid games (**2 wins / 30 losses**),
+with 256 scheduled games still missing: complete=false, success=null. All
+receipts remain under [v4 evidence](data/mtg213/gpu-v4-20261104/summary.json).
+The prospective [v5 contract](protocols/tla-trophy-213-v5.md) increases the
+existing card axis to 128 and corrects native buffer sizing. It retains v7,
+the 134 entries, learner and evaluation schedule, and requires fresh initialization.
+
+
+Retained **v4** consumed delivered PR #419's v7 shared-effect inputs.
 The [new contract](protocols/tla-trophy-213-v4.md) binds all tensor capacities,
 fresh initialization and the unchanged 134-entry population. Retained 140/270
 positions pass native scalar/vector/Python parity; compatibility and overflow
@@ -10,7 +26,7 @@ fresh bills total **$0.17054831** (v3: $0.09962018). Conservatively retain the
 prior **$2.2125** reservations until the next launch is reconciled.
 
 
-The latest **v3/256 GPU attempt also failed before its first learner update**.
+The retained **v3/256 GPU attempt also failed before its first learner update**.
 Nine Fire Nation Drill activations over fifteen permanents produced **270 distinct
 fact rows**, exceeding 256. The rental is terminated. The fresh initialization
 completed all 32 baseline games, but there is no trained checkpoint or learning

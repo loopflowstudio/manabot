@@ -107,8 +107,8 @@ handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
 The fixed TLA trophy pilot uses `experiments/tla_corpus.py` to prefetch and
-admit whole 17Lands trophy lists, and `experiments/tla_pilot_v4.py` for Etude
-training/evaluation. Its [frozen protocol](../experiments/protocols/tla-trophy-213-v4.md)
+admit whole 17Lands trophy lists, and `experiments/tla_pilot_v5.py` for Etude
+training/evaluation. Its [frozen protocol](../experiments/protocols/tla-trophy-213-v5.md)
 names the corpus, budget and comparison limits. `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
 contract. Stable population entry IDs distinguish events even when lists match;
@@ -119,7 +119,7 @@ Local Etude evaluation needs an explicit directory for the pilot's replay eviden
 (rented jobs receive this directory from the launcher):
 
 ```sh
-ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v4.py --source r2://manabot/jobs
+ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v5.py --source r2://manabot/jobs
 ```
 
 ## World identity

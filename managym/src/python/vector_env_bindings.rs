@@ -328,6 +328,7 @@ impl PyVectorEnv {
     }
 }
 
+/// Card capacity follows the supplied ObservationSpace on scalar/vector paths.
 /// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
 /// capacity from the fact axis. At 128 rows their encoding is identical; the
 /// Python configuration/checkpoint still owns the declared version identity.
@@ -336,6 +337,14 @@ pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
     mut config: ObservationEncoderConfig,
 ) -> PyResult<ObservationEncoderConfig> {
+    let cards = buffers
+        .get_item("agent_cards")?
+        .ok_or_else(|| PyValueError::new_err("missing agent_cards"))?;
+    let card_shape: Vec<usize> = cards.getattr("shape")?.extract()?;
+    if !matches!(card_shape.len(), 2 | 3) || card_shape[card_shape.len() - 2] == 0 {
+        return Err(PyValueError::new_err("invalid card buffer shape"));
+    }
+    config.max_cards_per_player = card_shape[card_shape.len() - 2];
     let shared_count = ["effects", "effect_details", "effect_members"]
         .into_iter()
         .map(|name| buffers.contains(name))

@@ -72,3 +72,5 @@ the continuation note. The manifest retains all 120 added v3 evidence entries.
 Shared-effect owner decisions remain at `fb5ad2c1372f9c967b550f0b8ae0f84883f75563:scratch/questions.md`; its memory section was preserved during integration.
 
 Prospective v4 uses delivered v7 defaults explicitly: 128 local facts, 128 × 18 effect headers, 512 × 3 details, 2048 × 2 memberships. Protocol schema 3 serializes every ObservationSpace shape and checks it at runtime; capacities remain bounded engineering choices, not universal coverage. This is a new initialization, preserving the prior recipe and all 134 entries.
+
+V4 failed before learning at 61 card objects including sideboard (40 original cards + 5 tokens + 16 sideboard). Under the existing workflow-bug authorization, the prospective v5 pilot explicitly raises the existing `max_cards_per_player` configuration to 128, retaining v7 and all shared-effect capacities. This is an operator allocation to accommodate generated objects, not a representation change, population exclusion or universal bound. V4 source/evidence remains frozen at `0b6c2bb854ba48b37fb7e5ac360c0c9d047cea34`.

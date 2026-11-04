@@ -1,0 +1,162 @@
+{
+  "allocation_hours": 1.0,
+  "allocation_usd": "1",
+  "bootstrap_seed": 21392001,
+  "corpus_sha256": "2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
+  "deck_seed": 21390001,
+  "game_seconds": 120.0,
+  "max_commands": 10000,
+  "max_paid_usd": "10",
+  "milestones": [
+    25,
+    50,
+    75
+  ],
+  "observation_shapes": {
+    "action_focus": [
+      64,
+      2
+    ],
+    "actions": [
+      64,
+      22
+    ],
+    "actions_valid": [
+      64
+    ],
+    "agent_cards": [
+      128,
+      55
+    ],
+    "agent_cards_valid": [
+      128
+    ],
+    "agent_permanents": [
+      40,
+      38
+    ],
+    "agent_permanents_valid": [
+      40
+    ],
+    "agent_player": [
+      1,
+      67
+    ],
+    "agent_player_valid": [
+      1
+    ],
+    "decklists": [
+      2,
+      128,
+      5
+    ],
+    "effect_details": [
+      512,
+      3
+    ],
+    "effect_members": [
+      2048,
+      2
+    ],
+    "effects": [
+      128,
+      18
+    ],
+    "events": [
+      32,
+      7
+    ],
+    "events_valid": [
+      32
+    ],
+    "facts": [
+      128,
+      12
+    ],
+    "known_hand": [
+      2,
+      128,
+      2
+    ],
+    "opponent_cards": [
+      128,
+      55
+    ],
+    "opponent_cards_valid": [
+      128
+    ],
+    "opponent_permanents": [
+      40,
+      38
+    ],
+    "opponent_permanents_valid": [
+      40
+    ],
+    "opponent_player": [
+      1,
+      67
+    ],
+    "opponent_player_valid": [
+      1
+    ],
+    "relations": [
+      64,
+      49
+    ],
+    "semantic_cards": [
+      2,
+      128
+    ]
+  },
+  "pairs": [
+    {
+      "deal": 21391000,
+      "first": 104,
+      "second": 81
+    },
+    {
+      "deal": 21391001,
+      "first": 27,
+      "second": 132
+    },
+    {
+      "deal": 21391002,
+      "first": 29,
+      "second": 57
+    },
+    {
+      "deal": 21391003,
+      "first": 16,
+      "second": 123
+    },
+    {
+      "deal": 21391004,
+      "first": 100,
+      "second": 81
+    },
+    {
+      "deal": 21391005,
+      "first": 78,
+      "second": 97
+    },
+    {
+      "deal": 21391006,
+      "first": 90,
+      "second": 36
+    },
+    {
+      "deal": 21391007,
+      "first": 72,
+      "second": 96
+    }
+  ],
+  "predecessor_protocol_sha256": "040961f225a5f2ba93cdff7c029aca7098928b0ad250d4dc34c0c68a176bbc38",
+  "regime_sha256": "6b31d5942c34ece0f71962960041cd15b12f2f182167819bc2b96229b54ed42c",
+  "runtime_world": {
+    "card_digest": "dcb9d47c674a657176c2a9d56e016288d1e175729aa09cd60f0dc333633330ed",
+    "world_version": "w17"
+  },
+  "schema_version": 3,
+  "source_base": "0b6c2bb854ba48b37fb7e5ac360c0c9d047cea34",
+  "training_seed": 21301
+}

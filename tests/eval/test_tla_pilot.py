@@ -23,21 +23,25 @@ from etude.jobs import evaluation_spec
 from etude.run.declaration import declare
 from etude.run.records import ArtifactRef, Clock
 from etude.train.run import track
+import numpy as np
 import pytest
 
-from experiments import tla_pilot_v4
+from experiments import tla_pilot_v5
 from experiments.tla_pilot_analysis import analyze
-from experiments.tla_pilot_v4 import ROOT, eval, frozen
+from experiments.tla_pilot_v5 import ROOT, eval, frozen
+from manabot.env.failures import read_failure
+from manabot.env.observation import ObservationEncoder
 from manabot.eval.results import RateInterval
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+import managym
 
 
 def _checkpoint(update: int) -> Checkpoint:
     return Checkpoint(
         run="fixture-training",
-        experiment="tla_pilot_v4",
+        experiment="tla_pilot_v5",
         ordinal=update + 1,
         artifact=ArtifactRef(
             uri=f"file:///fixture/u{update}.pt", sha256="a" * 64, size_bytes=1
@@ -66,6 +70,7 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert stage.execution.device == "cuda" and stage.behavior == "current-self"
     assert regime.observation.policy_input_version == 7
     assert regime.observation.max_facts == 128
+    assert regime.observation.max_cards_per_player == 128
     assert protocol.observation_shapes["facts"] == (128, 12)
     assert protocol.observation_shapes["effects"] == (128, 18)
     assert protocol.observation_shapes["effect_details"] == (512, 3)
@@ -102,14 +107,14 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
         assert matchup.games == 4 and len(matchup.conditions) == 8
         if "initial" in matchup.tags:
             assert matchup.players[1].checkpoint.key.name == "u0.pt"
-    assert eval(ExperimentState(experiment="tla_pilot_v4")) == []
+    assert eval(ExperimentState(experiment="tla_pilot_v5")) == []
 
 
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
-    experiment = read_experiment(ROOT / "experiments/tla_pilot_v4.py")
+    experiment = read_experiment(ROOT / "experiments/tla_pilot_v5.py")
     job = experiment.eval(_state((0,)))[0]
     callback = evaluation_spec(job).play
-    assert callback.module == "experiments.tla_pilot_v4"
+    assert callback.module == "experiments.tla_pilot_v5"
     assert callable(callback.load(job.repo))
 
 
@@ -137,11 +142,11 @@ def _state(
     status: Literal["running", "finished", "failed"] = "finished",
 ) -> ExperimentState:
     return ExperimentState(
-        experiment="tla_pilot_v4",
+        experiment="tla_pilot_v5",
         runs=(
             TrainingRun(
                 name="fixture-training",
-                experiment="tla_pilot_v4",
+                experiment="tla_pilot_v5",
                 state=status,
                 checkpoints=Checkpoints(_checkpoint(update) for update in updates),
             ),
@@ -374,7 +379,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     state = _state()
     store = tmp_path / "store"
     with track(
-        experiment="tla_pilot_v4",
+        experiment="tla_pilot_v5",
         run="fixture-training",
         directory=store,
         clocks=(Clock(name="updates", kind="step", meaning="Learner updates"),),
@@ -387,7 +392,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
         pilot_db.execute("ALTER TABLE games DROP COLUMN failure")
     tournament = evaluation_spec(eval(state)[0]).tournament
     declared = declare(
-        experiment="tla_pilot_v4",
+        experiment="tla_pilot_v5",
         run="fixture-eval",
         kind="evaluation",
         clocks=(),
@@ -471,26 +476,82 @@ def test_prospective_pilot_preserves_population_and_rejects_old_initialization()
     assert protocol.corpus_sha256 == old_protocol["corpus_sha256"]
     assert protocol.milestones == tuple(old_protocol["milestones"])
     previous = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/tla-trophy-213-v3.json").read_bytes()
+        (ROOT / "experiments/regimes/tla-trophy-213-v4.json").read_bytes()
     )
     assert regime == previous.model_copy(
         update={"id": regime.id, "observation": regime.observation}
     )
     assert protocol.predecessor_protocol_sha256 == file_sha256(
-        ROOT / "experiments/protocols/tla-trophy-213-v3.json"
+        ROOT / "experiments/protocols/tla-trophy-213-v4.json"
     )
-    for experiment in ("tla_pilot", "tla_pilot_v2", "tla_pilot_v3"):
-        with pytest.raises(ValueError, match="fresh v4"):
+    for experiment in ("tla_pilot", "tla_pilot_v2", "tla_pilot_v3", "tla_pilot_v4"):
+        with pytest.raises(ValueError, match="fresh v5"):
             eval(ExperimentState(experiment=experiment))
 
 
 def test_pilot_rejects_changed_tensor_capacities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    protocol = json.loads(tla_pilot_v4.PROTOCOL.read_bytes())
+    protocol = json.loads(tla_pilot_v5.PROTOCOL.read_bytes())
     protocol["observation_shapes"]["effect_members"][0] += 1
     path = tmp_path / "protocol.json"
     path.write_text(json.dumps(protocol))
-    monkeypatch.setattr(tla_pilot_v4, "PROTOCOL", path)
+    monkeypatch.setattr(tla_pilot_v5, "PROTOCOL", path)
     with pytest.raises(ValueError, match="tensor capacities differ"):
         frozen()
+
+
+def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders() -> None:
+    evidence = read_failure(ROOT / "tests/fixtures/tla-pilot-card-capacity.jsonl")
+    (game,) = evidence.games
+    regime, _ = frozen()
+    encoder = ObservationEncoder(regime.observation)
+    players = [player.native() for player in game.players]
+    scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
+    scalar.reset(players)
+    vector = managym.VectorEnv(
+        num_envs=1,
+        seed=game.seed,
+        seed_stride=evidence.seed_stride,
+        skip_trivial=evidence.skip_trivial,
+    )
+    buffers = encoder.allocate(1)
+    buffers.update(
+        rewards=np.zeros(1, dtype=np.float64),
+        terminated=np.zeros(1, dtype=np.uint8),
+        truncated=np.zeros(1, dtype=np.uint8),
+    )
+    vector.set_buffers(buffers)
+    vector.reset_all_into_buffers(players)
+    for index, action in enumerate(game.actions):
+        assert isinstance(action, int)
+        if index == len(game.actions) - 1:
+            assert scalar.semantic_decision_frame_json() == game.frame
+            assert vector.semantic_decision_frames_json()[0] == game.frame
+        observation, *_ = scalar.step(action)
+        vector.step_into_buffers([action])
+    assert len(observation.agent_cards) == 45
+    assert len(observation.agent_sideboard) == 16
+    reference = encoder.encode(observation)
+    native = encoder.allocate()
+    scalar.encode_observation_into(observation, native)
+    for key, value in reference.items():
+        np.testing.assert_array_equal(value, native[key], err_msg=key)
+        np.testing.assert_array_equal(value, buffers[key][0], err_msg=key)
+    # The exact occupied boundary succeeds; one fewer slot rejects rather than
+    # silently dropping either a generated token or a sideboard card.
+    boundary = ObservationEncoder(
+        regime.observation.model_copy(update={"max_cards_per_player": 61})
+    )
+    expected = boundary.encode(observation)
+    actual = boundary.allocate()
+    scalar.encode_observation_into(observation, actual)
+    for key in expected:
+        np.testing.assert_array_equal(expected[key], actual[key], err_msg=key)
+    old = ObservationEncoder(
+        regime.observation.model_copy(update={"max_cards_per_player": 60})
+    )
+    with pytest.raises(ValueError, match="agent_cards plus sideboard"):
+        old.encode(observation)
+    with pytest.raises(ValueError, match="agent_cards plus sideboard 61 > 60"):
+        scalar.encode_observation_into(observation, old.allocate())
