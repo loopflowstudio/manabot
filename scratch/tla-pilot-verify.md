@@ -125,3 +125,55 @@ Prior build, learner/export/reload and 110-file publication verification:
 Uncommitted notes before this consolidation are preserved at
 `.runs/mtg213/context-before-compress-20261104-card-capacity/`; the current plan
 retains their live decisions, contradictory evidence and outstanding work.
+
+## Concept review — 2026-11-04 07:35 UTC
+
+**Outcome: nothing to change and no open product choice.** This review adds no
+implementation direction. The existing repair follows Jack Heart's accepted
+fixed-population training/evaluation experience and shared-effect decision.
+Execution and gate work above remain incomplete; that is not a design ambiguity.
+
+The operator's interaction is: select the frozen pilot, prepare its exact source,
+request one bounded GPU allocation, observe learner updates, then evaluate its
+checkpoints. The few necessary records are the corpus (population), regime and
+protocol (learning/input/evaluation contract), Etude Run (source and execution),
+and retained checkpoint/match evidence (what happened). Pilot revision v5 and
+policy-input version v7 name different contracts; neither is a progress counter.
+There is one current runner, with historical implementations recoverable from
+their pinned source. Existing README usage already states the selected runner,
+pinned evaluation source and required output directory; no usage or skill
+instruction rewrite is needed.
+
+The consequential mismatch was an allocation that claimed a configurable card
+axis while native encoding still used 60. The implemented repair makes
+ObservationConfig → ObservationSpace → native scalar/vector capacity one chain
+of authority; it does not create another population filter or rules model.
+`frozen()` checks the hashed regime, native world and all tensor shapes;
+`runs()` delegates execution to TrainingJob, while `eval()` and
+`comparison_schedule()` retain expected comparisons and reject old pilot
+initializations. `analyze()` keeps missing and failed evidence visible. The
+existing Etude launch owner continues to own rental/deadline/teardown state;
+there is no reason to introduce a second recovery controller here.
+
+Normal path: independent draws from the same 134 entries feed ordinary self-play;
+actual optimizer updates support the requested launch milestone, and admitted
+checkpoints feed the paired schedule. Failure: the retained 61-object state
+(40 original cards + five generated tokens + 16 sideboard cards) disproves 60
+as a sufficient allocation. Recovery: retain that failed v4 identity and all
+costs, use prospective v5/128 with fresh initialization, then obtain new evidence
+within the same $10 cap. Prepared Run e8c76bc2c06f remains bound to its frozen
+source, not later HEAD; its own CUDA admission remains necessary. A quote refusal
+creates neither learner progress nor permission to replace an existing rental.
+
+Counterexamples remain binding: 140/270-fragment failures invalidate the old
+fact allocations; shared-effect provenance and duplicate memberships cannot be
+deleted merely because current characteristics match; a future state exceeding
+128 card rows must still fail explicitly. The larger card allocation proves
+neither universal capacity nor learning quality. Missing old evaluation games
+cannot be filled by v5 games, and a missing endpoint is not a negative strength
+result. These are already represented in the implementation and retained plan.
+
+Next proof is the existing gate plus bounded GPU execution and complete paired
+evaluation, including cost and Elemental-relative learning limits. No new paid
+run, publication, merge, tests or provider availability read was performed for
+this review. Page: `scratch/concept-review.html`. Loop-or-next owns navigation.
