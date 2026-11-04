@@ -105,18 +105,21 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
     assert run.job.experiment == gpu.EXPERIMENT
     assert run.job.max_attempts == 1
     assert run.job.max_usd == Decimal("0.20")
+    assert run.job.max_hours == 0.5
+    assert run.job.until == "updates=4"
+    assert gpu.ADMISSION_SEED not in gpu.SEEDS
     assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
 
 
 def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None:
     flat = gpu.PlateauInterval(
-        "typed_pool", 1792, 2048, paired_interval((0.0, 0.0, 0.0, 0.0))
+        "typed_pool", *gpu.POINTS[-2:], paired_interval((0.0, 0.0, 0.0, 0.0))
     )
     improving = gpu.PlateauInterval(
-        "typed_pool", 1792, 2048, paired_interval((0.1, 0.1, 0.1, 0.1))
+        "typed_pool", *gpu.POINTS[-2:], paired_interval((0.1, 0.1, 0.1, 0.1))
     )
     uncertain = gpu.PlateauInterval(
-        "typed_pool", 1792, 2048, paired_interval((-0.1, 0.1, -0.1, 0.1))
+        "typed_pool", *gpu.POINTS[-2:], paired_interval((-0.1, 0.1, -0.1, 0.1))
     )
     assert flat.bounded
     assert not improving.bounded
@@ -124,16 +127,42 @@ def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None
     assert not uncertain.bounded
 
 
-def test_gpu_cohort_reaps_siblings_after_failure(tmp_path: Path) -> None:
-    commands = [
-        [sys.executable, "-c", "raise SystemExit(7)"],
-        [sys.executable, "-c", "import time; time.sleep(20)"],
-    ]
-    with pytest.raises(RuntimeError, match="child failed"):
-        gpu._batch(commands, tmp_path, tmp_path / "stop", time.time() + 10)
+@pytest.mark.parametrize("exit_code", (0, 7))
+def test_gpu_admission_retains_child_exit(tmp_path: Path, exit_code: int) -> None:
+    command = [sys.executable, "-c", f"raise SystemExit({exit_code})"]
+    if exit_code:
+        with pytest.raises(RuntimeError, match="child failed: exit 7"):
+            gpu._run_child(command, tmp_path, tmp_path / "stop", time.time() + 10)
+    else:
+        gpu._run_child(command, tmp_path, tmp_path / "stop", time.time() + 10)
     receipt = json.loads((tmp_path / "processes.json").read_text())
-    assert receipt["exit_codes"][0] == 7
-    assert all(code is not None for code in receipt["exit_codes"])
+    assert receipt["exit_codes"] == [exit_code]
+
+
+@pytest.mark.parametrize("cancelled", (False, True))
+def test_gpu_admission_reaps_child_on_stop(tmp_path: Path, cancelled: bool) -> None:
+    stop = tmp_path / "stop"
+    if cancelled:
+        stop.touch()
+    deadline = time.time() + 10 if cancelled else time.time() - 1
+    command = [sys.executable, "-c", "import time; time.sleep(20)"]
+    with pytest.raises(RuntimeError, match="cancelled or allocation expired"):
+        gpu._run_child(command, tmp_path, stop, deadline)
+    receipt = json.loads((tmp_path / "processes.json").read_text())
+    (exit_code,) = receipt["exit_codes"]
+    assert exit_code is not None and exit_code != 0
+
+
+def test_gpu_admission_retains_failed_start(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        gpu._run_child(
+            [str(tmp_path / "missing-worker")],
+            tmp_path,
+            tmp_path / "stop",
+            time.time() + 10,
+        )
+    receipt = json.loads((tmp_path / "processes.json").read_text())
+    assert receipt["exit_codes"] == []
 
 
 def test_throughput_admission_projects_whole_cohort_cost() -> None:
@@ -153,11 +182,3 @@ def test_throughput_admission_projects_whole_cohort_cost() -> None:
         gpu.ThroughputAdmission(
             concurrency=1, elapsed_seconds=math.inf, updates_per_arm=4
         )
-
-
-def test_throughput_admission_is_bounded_and_excludes_scientific_seeds() -> None:
-    (run,) = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
-    assert run.job.max_usd == Decimal("0.20")
-    assert run.job.max_hours == 0.5
-    assert run.job.until == "updates=4"
-    assert gpu.ADMISSION_SEED not in gpu.SEEDS

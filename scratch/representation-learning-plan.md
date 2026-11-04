@@ -1,412 +1,184 @@
-# V7 learning comparison — GPU plateau continuation
+# V7 representation learning — Task 5da5f4
 
-## Restart authorization — Jack Heart, 2026-11-04
+## Current authorization and outcome
 
-After the cancelled eight-learner attempt and its throughput failure were
-reported, Jack Heart said "start it when you can" and "seems fine". Resume
-execution-design repair and the GPU study within the ORIGINAL cumulative $25
-cap. This supersedes the operator's earlier return-to-review/no-replacement
-restriction below; no further permission is needed for a viable replacement.
-Keep the failed cohort immutable and explicitly unsuccessful. Freeze any new
-attempt and execution amendment prospectively; this approval does not erase the
-old no-retry denominator or allow score-based survivor selection.
+Jack Heart requested actual GPU learning to the beginning of a sustained plateau
+on 2026-11-04; the completed 128-update CPU comparison is insufficient for
+architecture selection. His subsequent “start it when you can” and “seems fine”
+authorize execution repair and a viable prospective replacement within the
+ORIGINAL cumulative $25. They supersede earlier no-further-training and
+return-to-review restrictions, but do not erase unsuccessful attempts or permit
+score-based retries. A necessary Etude SDK release and Vast use are authorized;
+Etude PR79/80 and release 0.2.14 already supply that capability.
 
-Jack Heart also asked what "5–7x longer" means and why. The comparison was
-against the allocation's required 32.23 seconds/update, not measured isolated
-hardware regression. Single-learner admission averaged19.30seconds/update;
-eight concurrent learners measured169–239seconds for their first updates and
-151.24seconds for one second update. At the latter rates,2048updates would take
-roughly86–136hours per learner while all run concurrently. GPU contention is
-a plausible explanation, not a conclusively profiled mechanism. Spare memory
-did not establish concurrent compute throughput. Do not assume that reducing
-concurrency, enabling MPS or buying a larger GPU automatically solves total
-cohort cost. Measure actual ordinary learner throughput and total cost for the
-proposed execution arrangement before spending on the replacement cohort;
-no artificial load. Consider sequential/lower-concurrency execution, supported
-batching or cheaper compatible hardware as routine choices, and keep changes
-bounded. Preserve independent seeds, scientific treatments, meaningful horizon,
-initialization/curve evaluation, budget/teardown and results review. Reconcile
-prior billing/reservations before allocation. Loopflow's installed compatible
-build ac8e088f5 now reads Task state; the old Graph is stopped with no live worker.
+The plateau objective remains unmet. One scientific GPU cohort was cancelled
+before scoring and three restart admissions were unsuccessful. No replacement
+scientific cohort has launched. At the last retained provider read, all five
+relevant Vast instances were absent. No allocation is selected until accounting
+is reconciled and a complete two-arm admission demonstrates affordability.
+The current Graph step is compression, not another rental attempt.
 
-## Current direction — Jack Heart, 2026-11-04
+Stop at results demo/review. No study merge, model/default promotion, temporal
+memory implementation or MTG-213 spending is approved. The repair's earlier
+“ship it” approval applied to PR419 only. Use the installed
+`/Applications/Loopflow.app/Contents/MacOS/lf` for Work commands.
 
-Jack Heart reviewed the completed short CPU cohort in this conversation and
-said: "training on cpus doesnt seem long enough" and "we needt o at least get
-to the point of the gpu curve where were starting to hit a plateau".
-This supersedes the earlier stop at results review and restriction on further
-training. Continue this Task with actual GPU learning toward a sustained
-learning-curve plateau, under the existing $25 cumulative ceiling, not a new
-$25 allocation. The previous CPU study remains completed, frozen and
-inconclusive; do not rebind or overwrite its evidence. No merge, model/default
-promotion, temporal-memory implementation or MTG-213 spending is authorized.
+## Surviving implementation and next proof
 
-Provider follow-up from Jack Heart in the same conversation: "we can push an
-etude sdk release and then use vast if necessary". A necessary Etude SDK
-release and subsequent Vast GPU use are authorized for this continuation.
-Inspect the existing Etude work/release state and reuse supported provider
-implementation; do not duplicate work already underway. Coordinate any SDK
-release through its repository's release procedure and verify the released
-client before rental. This conditional release approval does not approve
-merging the representation-study PR or spending beyond $25 total. Record SDK
-and provider identities prospectively and retain the same accounting,
-deadline, cleanup and scientific-evidence requirements on Vast.
+`experiments/state_representation_gpu.py` declares the 256-stream candidate and
+launches ONLY an excluded admission: four ordinary complete-game updates per
+arm, sequentially, seed 74200, CUDA float32. Each learner has 600 seconds,
+24 GiB host allowance and 80% CUDA allocator allowance. The rental allows
+30 minutes plus 15 minutes setup, at most $0.20, on a compatible RTX 3090 with
+at least 32 GB host RAM, included disk and free transfers. These are retained
+candidate bounds, not permission to reuse its spent reservation.
 
-Execution direction for the continuation:
+Wider minibatches change optimization. Any later science needs a new prospective
+identity and fresh paired seeds 74211–74214; 256 updates × 256 complete games
+preserve 65,536 games per learner. `IterationSchedule(steps=256,
+reference_steps=2048)` maps schedule progress to game exposure with nonzero
+rates. Pooled versus GRU jointly changes effect and continuation reduction;
+keep the authored Allies/Lessons population and other treatment dimensions
+fixed. No score selected this candidate, and lost admission output does not
+establish its speed, memory sufficiency or affordability.
 
-- Retain pooled versus GRU and at least four independent paired training seeds.
-  Use the existing authored blue-red Lessons / green-white Allies population
-  to address horizon without also changing the deck distribution. This is an
-  operator choice, not a user claim that these decks are sufficient for general
-  architecture selection. The user was told evaluation previously held out
-  deals, not decks, against a frozen heuristic.
-- Define and freeze a prospective GPU protocol before scoring: initialization
-  evaluation, periodic checkpoints, comparable learner-decision/game exposure,
-  a substantially longer supported horizon and a sustained-plateau criterion
-  across seeds and multiple checkpoints. Quantify uncertainty; a noisy flat
-  point or failure to reject a slope is not positive evidence of saturation.
-  Keep final held-out scoring separate from observations used for stopping.
-- Inspect the inherited learning-rate/optimizer schedule: extending execution
-  with an exhausted 128-update schedule must not manufacture a plateau. Bind
-  any schedule changes in the new identity, with consistent arms and fresh
-  initialization unless exact continuation is scientifically justified.
-- Quote available compatible GPUs broadly within the cumulative budget;
-  budget setup, idle time, evaluation, artifact transfer/storage, failures and
-  teardown. Reconcile the prior $0.07258259388618171 bill and $6 pending
-  ancillary reserve. Use configured provider access (Doppler etude/prd),
-  artifact access (manabot/prd), task-local allocations, and supported Etude
-  ownership/deadline/cleanup. Existing provider capabilities may be used;
-  account creation or a new provider integration is not a prerequisite.
-- GPU execution is now explicit direction: do not substitute another short CPU
-  cohort. Capacity admission and throughput calibration are sanity checks,
-  not study completion. If all compatible capacity is unavailable, report the
-  concrete capacity block; if the budget ends before a credible plateau, retain
-  all curves and report the plateau objective unmet. Never exceed the cap or
-  select successful seeds/checkpoints after seeing scores.
-- Deliver training/evaluation curves, per-seed outcomes, plateau evidence or
-  its absence, exact costs and teardown receipts. Stop at results demo/review.
+Before scientific execution:
 
-## GPU implementation and stopped allocation — 2026-11-04
+1. Reconcile bills/reservations and quote the entire proposed arrangement,
+   including setup, idle time, evaluation, artifacts, failures and cleanup.
+2. Complete both ordinary admission learners. Measure their combined wall time,
+   including startup and exports; project four paired seeds at the full horizon
+   with 50% extrapolation allowance, 90 minutes evaluation and 15 minutes setup.
+   Do not divide sequential time by assumed concurrency. Spare GPU memory does
+   not prove compute throughput. No artificial load or automatic eight-context
+   retry; MPS was investigated but neither enabled nor validated.
+3. Freeze affordable execution and scoring prospectively. Retain independent
+   RNG/optimizers, initialization and 32-update curve checkpoints, separate
+   final held-out deals, actual game/decision/optimizer exposure and uncertainty.
+   Both arms' final three paired-seed gain intervals must each fit within
+   ±0.05 (95% Student-t, df3); all 72 curve endpoints must complete. A noisy flat
+   point or nonsignificant slope alone is insufficient. Flat poor play does
+   not establish competence. No survivor or checkpoint selection.
+4. Retain every attempt, supervised deadlines, complete teardown and costs.
+   If capacity or budget prevents a credible plateau, report it as unmet.
 
-The prospective declaration is `experiments/state_representation_gpu.py`; protocol:
-`experiments/protocols/state-representation-5da5f4-gpu.md`. Scientific source:
-`27a12642200a35fc0cb436a9db69ce16c505016a`. Both joint treatments retain the
-authored decks, four fresh paired seeds, 2,048 CUDA updates, 256-update curves
-and separate final held-out deals. Absolute LR/tau scheduling stays positive.
-All six final-window paired-seed gain intervals must lie inside +/-0.05; missing
-points cannot qualify. No scientific scores informed hardware selection.
+`execute_regime` owns learning; existing monitoring owns evaluation. The released
+0.2.14 launcher and locked 0.2.12 worker have distinct identities. Provider
+credentials use Doppler `etude/prd`, artifacts `manabot/prd`; nested injection
+supplies both without copying or printing keys. Task-local allocations remain
+separate from MTG-213. Frozen protocol and amendments:
+`experiments/protocols/state-representation-5da5f4-gpu.md`.
 
-Etude PR79 and release PR80 are merged; published SDK 0.2.14 controls Vast.
-The scientific worker retains locked SDK 0.2.12. RunPod 6000Ada/L40S/A100
-rentals refused before acquisition. Excluded Vast admission `edb504230b42`
-at source `35770e55b`, instance 59138171/session `d407636829cb`, passed CUDA
-12.8 numerics and four GRU updates: 128 games, 24,202 learner decisions and
-733 optimizer updates. Collection 47.50s plus learning 29.70s; sampled peak RSS
-4.32GB. Deletion was confirmed at 17:36:17 UTC, with subsequent provider absence.
-Full-rental estimate $0.1146496 is not a settled bill; retain $0.50 reservation.
-Receipts: `.runs/representation/gpu-plateau/admission/` and adjacent accounting.
+## Attempt denominator and accounting (2026-11-04 UTC)
 
-Measured throughput invalidated the initial per-replicate two-hour allocation
-before any scientific seed launched. Revision `8c7712bc9` retains that unexecuted
-predecessor. Eight independent ordinary `execute_regime` learners now share one
-GPU, each bounded at 6 GiB host memory and 10% of the CUDA caching allocator.
-No weights, optimizer or RNG are shared. Training precedes evaluation, with two
-evaluators at once. One Etude guardian owns the allocation; any child failure
-reaps siblings. Timing describes concurrent use, never isolated GPU performance.
-The job allows 20 hours plus 15 minutes setup, at most $17.20. Prior known bill
-$0.07258259388618171, $6 ancillary reserve and $0.50 admission reserve bound the
-cumulative reservation at $23.77258259388618171. Learners have 66,000 seconds;
-evaluation retains a separate deadline reserve.
+| Run / source | Retained outcome |
+|---|---|
+| `edb504230b42` / `35770e55b` | Excluded RTX 5090 admission passed CUDA numerics and four GRU updates: 128 games, 24,202 learner decisions, 733 optimizer updates; 77.19s collection/learning, 4.32 GB peak RSS. Instance 59138171 deleted at 17:36:17. |
+| `9c7c8e6841a4` / `27a12642200a35fc0cb436a9db69ce16c505016a` | Scientific eight-learner RTX 5090 cohort cancelled at 18:26:21 before scoring. Partial running snapshots retain 320 games and 57,258 decisions. Instance 59143644 deleted at 18:29:35; provider absence confirmed. |
+| `332a954fd935` / `978bf3eae` | RTX 3090 instance 59148889 never booted before startup deadline; `machine_lost_before_start`. No learning. Deleted; absent at 19:12:11. |
+| `1fca2d156e65` / `f0669347e` | Japan RTX 3090 instance 59149701 passed numerics; sequential pooled learner paused at finalization after 7/8 updates, 224 games, 40,241 decisions. Collection 204.40s + learning 143.74s (49.73s/update), 4.03 GB host RSS, 2.95 GB CUDA reserved. No GRU or concurrent pair. Deleted; absent at 19:30:36. |
+| `52617ef80df1` / `1ca17ed12` | 256-stream admission entered its pooled learner, then `lost / machine_lost`, no final exit status or output inventory. Cause/exposure unknown, not zero or an established OOM/native/model fault. Deletion confirmed at 19:41:03. |
 
-Acquisition evidence: 128GB-host and later 60GB 5090 quotes initially refused;
-4090 and 3090 offers appeared and disappeared before acquisition. Launch
-`ea36a15587b1` for prepared run `e4bc79b1e907` refused 3090 capacity without a
-rental or job execution. Source preparation originally downloaded all Git history;
-reusing local Git objects through `GIT_ALTERNATE_OBJECT_DIRECTORIES` preserved
-remote verification and completed it. Interrupted local fetches were reaped.
-A prospective amendment permits one 3090, 4090 or 5090 selected before execution,
-identically for every seed and both arms, within the unchanged cap.
+The scientific allocation required 32.23 seconds/update for 2,048 updates in
+66,000 seconds. First concurrent updates took 169–239s and a second took
+151.24s, versus isolated admission's 19.30s/update. “5–7× longer” compared with
+the required pace, not an isolated hardware regression. Contention is plausible,
+not conclusively profiled. At those rates the cohort needs roughly 86–136 hours.
+Cancellation invalidated the allocation, not the scientific treatments; keep its
+no-retry denominator and last running child snapshots unchanged.
 
-Run `9c7c8e6841a4` acquired RTX 5090 / 32 vCPUs / 64GB on Vast at 18:17 UTC,
-instance 59143644, session `d123328bc691`, machine
-`representation-5da5f4-cohort5090-60gb-d123328bc691`. CUDA numerics passed and
-all eight scientific learners started. First-update collection/learning took
-169–239 seconds per learner; a measured second update took 151.24 seconds.
-The 66,000-second reserve requires 32.23 seconds/update. This invalidates the
-concurrent-allocation assumption, rather than establishing learning saturation.
+Earlier RunPod 6000Ada/L40S/A100 refusals acquired nothing. Vast 3090 launch
+`ea36a15587b1` for prepared run `e4bc79b1e907` also refused before acquisition;
+4090/5090 selection was prospective, not score-based. The unexecuted per-run
+allocation survives at `8c7712bc9`. Acquisition details and complete inventories
+remain in the protocol and historical plan cited below.
 
-Operator decision, 2026-11-04: stop dependent execution and return this allocation
-to design review, following implement's architectural-counterexample boundary.
-The whole cohort was cancelled before evaluation; no score selected a seed,
-checkpoint or stopping point. Etude's terminal cancellation is 18:26:21 UTC.
-Last child manifests remain running snapshots; never rewrite them as successful
-or complete. The failed attempt remains in the evidence and no-retry denominator.
+Known L4 bill: $0.07258259388618171. Unsettled full-rental estimates: original
+admission $0.1146496; scientific cohort $0.15609933786798355; restart attempts
+$0.0187264764, $0.0581526294 and $0.0285087767. Billed-plus-estimated provider
+total: $0.4487194142. The $6 ancillary reserve remains pending. Conservative
+reservations, including prior unspent caps, total $24.9725825939: this is NOT
+money spent or proof that the scientific budget is consumed. Provider absence
+is not final invoicing. No further rental fits those unreconciled reservations.
 
-Etude confirmed deletion at 18:29:35 UTC; Vast confirmed both this instance and
-the earlier admission absent at 18:30:30 UTC. Full-rental retained estimates:
-admission $0.1146496 and cohort $0.15609933786798355; neither bill has settled.
-Together with the prior known $0.07258259388618171, estimated provider total is
-$0.34333153175416525. Keep the original reservations and $6 ancillary reserve;
-provider absence is not a final invoice. Output inventory contains 116 retained
-files. Compact receipts live under
-`experiments/data/state-representation-gpu-5da5f4/`; the launcher's output inventory
-retains the complete artifact names and hashes. Local operational logs remain
-under `.runs/representation/gpu-plateau/`. Interrupted redundant SCP bytes there
-are partial, not admitted evidence.
+Manifest-backed evidence: `experiments/data/state-representation-gpu-5da5f4/`,
+including `restart/`, compact receipts, all attempt inventories, quotes and final
+accounting. The first cohort inventory names/hashes 116 outputs. Operational
+logs remain under `.runs/representation/gpu-plateau/` and `gpu-restart/`;
+interrupted SCP bytes and lost outputs are not admitted evidence.
 
-Draft execution discovery, not a selected replacement: independent CUDA contexts
-serialize GPU work; NVIDIA MPS can enable cooperative concurrent kernels
-([NVIDIA architecture](https://docs.nvidia.com/deploy/mps/architecture.html)).
-The rented host had the MPS control binary, but MPS was neither enabled nor
-validated. A replacement needs complete-cohort throughput admission before any
-new scientific launch, plus a prospective decision about the failed cohort and
-no-retry boundary. No new allocation, production promotion or merge is selected.
+## Delivered contracts and frozen CPU evidence
 
-Delete — do not maintain: the unexecuted per-replicate TrainingJob allocation
-and worker path were removed together. Frozen CPU science and executed admission
-retain historical sources; `execute_regime` and monitor remain the authorities.
+PR419 merged as `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`. Explicit v7 carries
+128 × 18 shared-effect headers, 512 × 3 details and 2,048 × 2 memberships;
+headers own offset/count slices, members keep one-based public object joins
+and original record ordinals. Complete native payloads preserve controller,
+exact source incarnation, duration, order and duplicate contributions. Route
+learned vectors into affected objects before attention/action focus. Effective
+characteristics alone cannot describe future expiry or source dependencies.
+Nine Drill activations over fifteen objects become nine payloads, eighteen
+details and 135 edges instead of 270 legacy fragments. Bounds still reject
+overflow; old captures cannot supply missing provenance. Lossless transport
+does not establish injective learned embeddings or stronger play. Fresh defaults
+remain v6; frozen v1–v6 and pilot evidence retain their meanings.
 
-Check: focused study/discovery tests passed, plus the untracked-data policy test;
-all 23 published receipt entries match local size/SHA256, and every prior manifest
-entry is unchanged. Ruff and whitespace checks passed. Gate owns broader suites.
-Remaining: reconcile unsettled bills and review the invalidated allocation.
-The plateau objective remains unmet; no new scientific launch is selected.
+The CPU cohort completed on `92becff6091912a3ec83ae8fdd4e1c2347ff1d45`:
+eight runs, 128 updates/4,096 games each, 4,056,651 learner decisions and 1,024
+held-out replay passes. GRU minus pooling: −0.98 percentage points, 95% paired-seed
+interval [−10.13, +8.18], training-time ratio 1.06. No advantage criterion passed;
+this establishes neither equivalence nor a winner. Four seeds, one matchup,
+joint reducer changes, extra GRU parameters and absent initialization control
+limit inference. Full report/protocol/receipts remain in
+`experiments/state-representation-v7.md` and
+`experiments/data/state-representation-v7-5da5f4/`.
 
-The historical sections below describe the completed CPU cohort, not the new
-continuation's authorization or acceptance criteria.
+Main sync `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` preserves main's catalog,
+scheduling/delayed-frequency relations, configurable cards and v5 pilot. It is
+not the scientific runtime. Pin original CPU recipe axes (64 actions); smoke
+uses today's native 512 actions. The earlier default drift changed both recipe
+hashes despite passing discovery checks; regression hashes and eight-endpoint
+read-only admission now protect retained identities. Re-execution needs archived
+source/native runtime, not rewritten evidence.
 
-2026-11-04 · Task 5da5f4 · results stop at demo/review; no model promotion.
+## Delete — do not maintain
 
-## Accepted outcome and scope
+Completed removals: old v5 declaration/three-arm timing proof and canary launcher;
+unexecuted per-replicate GPU allocation; failed eight-context launcher, 10% CUDA
+cap, 20-hour allocation and exclusive evaluator orchestration. Source for the
+executed GPU predecessor is `27a126422`; CPU predecessor proofs are at `9dc32125f`.
+Native `source_effect_root`/`shared_effect_root` fixtures remain shared test inputs.
 
-Jack Heart requested the combined effective-state, shared-effect and memory
-investigation on 2026-11-03. On 2026-11-04 he approved shipping the bounded
-shared-effect repair, delivered in PR419, and separately authorized/resumed
-replicated representation learning within $25 total. The latter stops at results
-review. Neither approval selects temporal memory, semantic coalescing, a new
-production default or further training after this frozen cohort.
+Removed the leftover `_batch` multi-child supervisor and its sibling-failure test:
+the surviving sequential admission owns one child at a time, preserving deadline,
+stop, terminate/kill/reap, logs and exit receipts. Reused `ArmEvaluation` instead
+of the identical `CurvePoint` model; compute protocol/recipe identities once per
+analysis. Combined duplicate job-discovery checks. Removed the superseded
+`scratch/concept-review.html`; its CPU-only review choices and accounting are
+archived at `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/concept-review.html`.
+No remaining deletion targets after this cut. Scientific recipe/protocol hashes
+and all existing receipt bytes remain unchanged.
 
-## Delivered behavior and evidence
+## Deferred questions and evidence references
 
-All eight replicates completed on `92becff6091912a3ec83ae8fdd4e1c2347ff1d45`:
-128 updates and 4,096 games each, 4,056,651 learner decisions total. All 1,024
-held-out games completed and replayed. GRU minus pooled score was −0.98 points
-(95% paired-seed interval [−10.13, +8.18]); training-time ratio 1.06. The declared
-advantage criterion failed. This is inconclusive, not equivalence or a winner.
-See `experiments/state-representation-v7.md` and the published manifest-backed
-receipts in `experiments/data/state-representation-v7-5da5f4/`.
+Persistent memory, relation-table splitting, affected-set interning and semantic
+coalescing remain proposals. Coalescing needs proof across expiry, sources,
+affected sets/later entrants, intervening grants and additive effects. MTG-240's
+keyword-ordering defect is separate: Indefinite LoseKeywords(Flying), Indefinite
+AddKeywords(Flying), then EndOfTurn LoseKeywords still lacks flying after cleanup.
+The shipped expiry fixture uses correctly ordered LoseAllAbilities; no records
+were deleted. A memory design still needs seat/viewer ownership, reset, slot
+reuse, eviction, replay/fork identity, exact restoration and matching serving
+transitions; obligations older than the history window must remain observable.
 
-Both arms use the delivered v7 contract; effect and continuation reduction change
-jointly. No temporal memory, ABI/default, native rules or frozen pilot evidence
-changed. The scientific source archive is retained. The maintained runner is
-`experiments/state_representation_v7.py`, matching the v7 tracking name; its
-Etude page shows training diagnostics separately from the scientific comparison.
-
-## Completed cleanup
-
-- Removed the stale v5 scientific declaration and unexecuted three-arm schedule.
-  `experiments/state_representation.py` became `state_representation_v7.py`;
-  historical source/receipts retain the original filename.
-- Removed `manabot.verify.representation.Measurement`, `prove`, `main` and its
-  three-arm timing command. It predates v7 and has no remaining consumers.
-  Retained `source_effect_root` and `shared_effect_root`: current transport/model
-  tests still need these native fixtures. Old proofs remain at `9dc32125f`.
-- Removed the completed `runs(canary=True)` allocation path. Retained `recipe(smoke=True)`
-  for bounded learner tests and `runs(revision)` for cohort/report discovery.
-  Calibration receipts stay excluded and bound to their original sources.
-- Consolidated completed continuation and PR419 verification notes here and in
-  `questions.md`; full notes remain at `9dc32125f:scratch/`.
-
-No remaining deletion targets. Frozen recipes, protocol hashes, run order,
-allocation limits and receipts are preserved after the capacity repair below.
-
-The 2026-11-04 sync incorporated main `5dd11cec4`: its single catalog,
-schedule/remembered-subject/delayed-frequency relations, configurable card buffers
-and v5 pilot entry point coexist with this study runner. The completed experiment
-remains bound to its archived source; the current tree's later rules and catalog
-are not a replication of that source. Retained sync checks cover integration,
-not scientific rebinding. Reconciliation found that main's fresh action capacity
-had grown from 64 to 512, changing both recipe hashes and rejecting retained
-evaluations in `compare`. The runner now pins every original observation axis;
-a regression check binds both recipes to the independently retained TrainingRun
-digests. The read-only audit again admits all eight endpoints and reproduces the
-retained contrast and timing exactly. No scientific bytes were rewritten.
-
-## Cost and remaining boundary
-
-Jack Heart authorized $25 total, separate from MTG-213. L40/L40S were unavailable;
-4090 launch `8dd337797e0a` refused capacity without acquisition. The whole-cohort
-CPU fallback was frozen before training: two balanced four-process batches,
-one thread and 16 GiB per run. Evaluation followed training, four endpoints at
-once with two active games each. No retries or score-based extensions.
-
-Prior L4 bill: $0.07258259388618171 (supersedes $0.07083924 estimate). No new rental
-charges; the $6 ancillary reserve remains pending invoices. Provider-name checks
-confirmed both relevant pods absent. Etude retains refused-session metadata
-without a provider receipt; its terminate operation skips refused sessions.
-No Task training/evaluation process remains; MTG-213 allocations are untouched.
-
-Prior cleanup validation recorded 38 focused passes; sync recorded 19 Python
-passes and one debug Rust exact-source/zone-change pass. These results precede
-this reconciliation's explicit capacity pin. Gate owns broader acceptance;
-demo/review owns result judgment.
-
-Earlier artifact tracking check passed; Etude report admitted all 8 runs and
-784 metrics. `uv run --extra dev ty check` could not start because ty is absent.
-No further training is needed for this step.
-
-## Remaining acceptance and draft questions
-
-Results demo/review remains outstanding. The measured contrast changes effect
-and continuation reduction jointly and does not compare the production `rows`
-continuation. Four seeds, one authored matchup and no initialization/no-update
-control prevent a general architecture or improvement claim. The review decision
-is whether to accept this inconclusive endpoint comparison or authorize a new,
-separately frozen study; no winner or follow-up is selected here. Gate retains
-broader validation, including configured typing when its tooling is available.
-Ancillary invoices remain unsettled under the existing reserve.
-
-The original broader design questions remain draft, not completed behavior:
-splitting the mixed relation table, testing history or persistent memory, and
-proving any semantic coalescing. The prior design and diagram remain at
+Complete prior plan/decisions/validation:
+`1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`. PR419 verification:
+`9dc32125f:scratch/shared-effects-main-verification.md` (23 Python/four debug Rust
+checks after rebuild; no PyPI release claimed). Original design/diagram:
 `8e6cc62df:scratch/5da5f4-design-effective-state.md` and
-`8e6cc62df:scratch/observation-architecture-snapshot.html`. A memory design still
-requires viewer/seat ownership, reset and slot reuse, bounded-history eviction,
-replay/fork identity, exact checkpoint restoration, and matching training/serving
-transitions. Active obligations must remain observable when older than the
-history window. No temporal-memory implementation or experiment is claimed.
-MTG-240 owns the known keyword-ordering defect; it does not permit deleting
-records or weakening the source/expiry/membership constraints.
+`:scratch/observation-architecture-snapshot.html`. Main's inherited T6 notes:
+`5dd11cec4:scratch/questions.md`; PR416 notes: `3b122de907:scratch/questions.md`.
+No uncommitted evidence was discarded. Earlier publication validation and receipt
+hash audits remain in that committed plan; gate owns broader acceptance and
+results demo/review owns scientific judgment. No rendering proof is claimed.
 
-Check (2026-11-04): `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` → 8 passed; `uv run --extra dev pytest tests/training/test_regimes.py -q` → 18 passed; read-only `uv run --extra artifacts python -` receipt audit reproduced all eight endpoints, contrast and timing; Ruff, `git diff --check` and `lf context` passed (both context budgets satisfied).
-
-## Concept review — 2026-11-04
-
-Outcome: no design change and no open product choice blocking the accepted
-completed-cohort scope. Results still require the requested demo/review; this
-review neither accepts a winner nor authorizes another experiment. The earlier
-question about accepting the result or commissioning a follow-up belongs at that
-boundary, not to a prerequisite for maintaining this completed study.
-
-The consequential distinction is complete transport versus learned compression.
-Jack Heart approved complete native effects, explicit memberships and routing
-before attention. He did not require injective embeddings or approve replacing
-ongoing obligations with memory. `encode_shared_effects` projects native
-provenance; `SharedEffectEncoder.forward` reduces each payload and accumulates
-its membership contributions into addressable objects before attention and
-action-focus lookup. The study's GRU reads tokens within records, without state
-across decisions. Its joint effect/continuation treatment cannot identify which
-reducer caused a score difference. Existing README and result wording already
-explain these distinctions; no usage-doc or skill change is needed.
-
-Concrete interaction: nine Drill activations over fifteen permanents produce
-270 legacy keyword fragments. Explicit v7 carries nine complete payloads,
-eighteen keyword details and 135 membership edges, retaining separate timestamps
-and original record ordinals. Header slices own bounded member lists; neither
-affected-set interning nor semantic deletion is selected. Native viewer
-projection owns visibility and source incarnation. Effective characteristics
-describe what holds now; active effects also describe what can change later.
-People and policies still receive the same authoritative legal action space.
-
-Failure and recovery preserve that authority. Overflow or missing native
-provenance rejects encoding. Replay retained commands under their bound runtime
-to investigate; changed-runtime replay needs explicit identification and cannot
-replace historical evidence. A future capacity/input change requires a
-prospective identity. Fetching manifest-backed receipts and calling `compare`
-reads the completed cohort without training: `TrainingRun`, recipe/protocol
-digests and endpoint coordinates own admission. The existing explicit-axis
-repair restores those identities after default drift; today's catalog cannot
-be presented as the original execution.
-
-Counterexamples remain requirements: equal current characteristics with different
-source dependencies diverge when one source leaves; unequal expiries diverge at
-cleanup; later entrants need not belong to an earlier fixed affected set;
-repeated additive effects cannot become one contribution. An obligation older
-than a history window must still be observable. MTG-240's keyword ordering
-defect remains separate and supplies no license to delete records. Complete
-transport does not rule out learned aliasing or establish stronger play.
-
-Deferred product questions, with no selection here: (1) should a separately
-authorized study isolate effect reduction from continuation reduction, given
-the joint treatment and wide interval; (2) should a future agent carry memory
-across decisions, with what viewer/seat, reset, eviction, replay/fork and exact
-restoration contract? This comparison cannot answer either. Relation-table
-redesign and semantic coalescing remain proposals. None is a prerequisite for
-presenting this cohort honestly.
-
-Next proof remains gate and results demo: show all endpoints, the failed
-advantage criterion, uncertainty, accounting limits and frozen identities.
-Concept review changed no implementation and ran no training. Its page is
-`scratch/concept-review.html`; source inspection is not a browser-rendering proof.
-
-## Publication verification — 2026-11-04
-
-`lf sync` completed cleanly against main `5dd11cec4`. Full diff inspection
-removed an exact duplicate source-duration parity test left by reconciliation.
-The publication checks found that pinning the scientific 64-action axis also
-made the unscored smoke incompatible with today's native 512-action buffer.
-The smoke now inherits the current action capacity; scientific recipes keep
-both retained digests. The report explicitly distinguishes current integration
-checks from reproduction under the archived scientific runtime.
-
-The bounded validation set passed 147 checks initially; its two learner-smoke
-failures were repaired and both then passed together with eight recipe/discovery
-checks (10 passes). Coverage includes model/state transport, checkpoint reload,
-experiment report/runner, recipe discovery, CI/release selection and untracked
-artifact policy. Ruff and diff whitespace checks passed. A read-only receipt
-audit admitted all eight endpoints and reproduced the contrast/timing exactly;
-all 1,024 retained replay flags passed. All 823 added manifest entries matched
-local file size and SHA256, and every prior manifest entry remained unchanged.
-The existing artifact publication log records those 823 published entries.
-No new scientific cohort, rental, model promotion or merge was performed.
-
-## Restart result — 2026-11-04
-
-Three bounded admissions ran under the original $25 ceiling. No replacement
-scientific cohort launched, no score selected a treatment, and the plateau
-objective remains unmet. The next step needs reliable completed admission and
-accounting reconciliation, not another launch of the failed eight-context plan.
-
-- `332a954fd935` / `978bf3eae`: RTX 3090 instance 59148889 failed to boot before
-  its startup deadline; no learning. Provider deletion confirmed.
-- `1fca2d156e65` / `f0669347e`: Japan RTX 3090 instance 59149701 passed CUDA
-  numerics. The first sequential pooled learner completed 7 of 8 updates,
-  224 games and 40,241 learner decisions, then paused for its wall/finalization
-  budget. Collection 204.40s plus learning 143.74s (49.73s/update); peak host
-  RSS 4.03 GB and CUDA reserved 2.95 GB. GRU and concurrent-pair passes never ran;
-  no complete throughput admission exists. Provider deletion confirmed.
-- `52617ef80df1` / `1ca17ed12`: the prospectively frozen 256-stream candidate
-  entered its first pooled learner, then Etude reported `machine_lost`, without
-  a final exit status or output inventory. The cause is unknown; neither OOM
-  nor a native/model failure is established. It is not evidence that batching
-  is faster, slower or affordable. Deletion confirmed at 19:41:03 UTC.
-
-All five relevant Vast instances, including the prior admission and failed
-scientific cohort, are absent in the final provider read. Known provider bill
-plus retained whole-rental estimates totals $0.4487194142; the three new rental
-estimates are $0.0187264764, $0.0581526294 and $0.0285087767. All Vast bills remain
-unsettled. The $6 ancillary reserve remains, and conservative reservations
-(including prior unspent caps) total $24.9725825939. This is not $24.97 spent or
-an assertion that the remaining scientific budget has been consumed. No further
-allocation is selected pending reconciliation and a viable execution path.
-
-Compact receipts, complete attempt inventories, quotes and final accounting
-are under `experiments/data/state-representation-gpu-5da5f4/restart/`, published
-through the artifact manifest. Full operational logs remain under
-`.runs/representation/gpu-restart/`; lost worker outputs are missing, not zeros.
-The previous CPU cohort and failed eight-seed GPU evidence remain unchanged.
-
-Delete — do not maintain: completed removal of the eight-context launcher,
-10% per-process CUDA cap, 20-hour allocation and its exclusive evaluation
-orchestration. Original source is 27a126422. The current declaration launches
-only sequential 256-stream admission, using execute_regime and a whole-cohort
-cost projection. It preserves 65,536 prospective games/learner through 256 updates
-and maps the optimizer schedule to game exposure. Wider minibatches change
-optimization; fresh paired seeds 74211–74214 are declared for any later science.
-No scientific execution path or automatic promotion is enabled by admission.
-
-Check: nine focused study tests and the artifact-tracking test passed; Ruff,
-whitespace and context budgets passed. All 19 published receipts match their
-manifest size/SHA256, and every previous manifest entry is unchanged. Gate owns
-broader suites. Remaining: completed two-arm admission, affordable supervised
-scientific execution, replicated curves/held-out evaluation and results review.
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` → 15 passed before the final failed-start receipt check; rerunning the study module → 12 passed (four discovery passes reused). Ruff/format, `git diff --check` and `lf context` passed; read-only audits preserved GPU recipe/scoring identities, matched all 865 added artifact hashes/sizes and all 11,117 prior manifest entries. Gate owns broader suites; actual GPU admission/plateau execution remains outstanding, with no rental launched in this step.

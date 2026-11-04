@@ -26,11 +26,12 @@ from experiments.batched_baseline import batched_baseline
 from experiments.state_representation_v7 import (
     ARMS,
     Arm,
+    ArmEvaluation,
     PairedEstimate,
     paired_interval,
 )
 from manabot.env.observation import ObservationConfig
-from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.experiment.numerics import check_numerics
 from manabot.infra.files import atomic_json
@@ -227,7 +228,7 @@ def admit_throughput(out: Path, stop: Path, deadline: float) -> None:
             "--stop",
             str(stop),
         ]
-        _batch([command], batch, stop, min(deadline - 120, time.time() + 720))
+        _run_child(command, batch, stop, min(deadline - 120, time.time() + 720))
         print(f"admission: {arm} completed", flush=True)
     result = ThroughputAdmission(
         concurrency=1,
@@ -238,48 +239,36 @@ def admit_throughput(out: Path, stop: Path, deadline: float) -> None:
     atomic_json(out / "etude-result.json", {"clocks": {"updates": ADMISSION_UPDATES}})
 
 
-def _batch(commands: list[list[str]], out: Path, stop: Path, deadline: float) -> None:
-    """Bound child lifetimes by the shared rental, and reap every child on exit."""
-    children: list[subprocess.Popen[bytes]] = []
-    # Each child creates its own local tracking run under its retained output.
-    # Passing the parent's launcher identity would attach every child to one run.
+def _run_child(command: list[str], out: Path, stop: Path, deadline: float) -> None:
+    """Bound one admission learner by the rental and reap it on every exit."""
+    # The learner owns local tracking; it must not attach to the launcher run.
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("ETUDE_")
     }
+    with (out / "child-0.log").open("ab") as log:
+        try:
+            child = subprocess.Popen(
+                command, env=environment, stdout=log, stderr=subprocess.STDOUT
+            )
+        except OSError:
+            atomic_json(out / "processes.json", {"exit_codes": []})
+            raise
     try:
-        for index, command in enumerate(commands):
-            with (out / f"child-{index}.log").open("ab") as log:
-                children.append(
-                    subprocess.Popen(
-                        command, env=environment, stdout=log, stderr=subprocess.STDOUT
-                    )
-                )
-        while any(child.poll() is None for child in children):
-            if (
-                stop.exists()
-                or time.time() >= deadline
-                or any(child.returncode not in (None, 0) for child in children)
-            ):
-                raise RuntimeError(
-                    "cohort child failed, cancellation requested or allocation expired"
-                )
+        while child.poll() is None:
+            if stop.exists() or time.time() >= deadline:
+                raise RuntimeError("admission cancelled or allocation expired")
             time.sleep(1)
-        if any(child.returncode != 0 for child in children):
-            raise RuntimeError("cohort child failed")
+        if child.returncode != 0:
+            raise RuntimeError(f"admission child failed: exit {child.returncode}")
     finally:
-        for child in children:
-            if child.poll() is None:
-                child.terminate()
-        for child in children:
-            try:
-                child.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait()
-        atomic_json(
-            out / "processes.json",
-            {"exit_codes": [child.returncode for child in children]},
-        )
+        if child.poll() is None:
+            child.terminate()
+        try:
+            child.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()
+        atomic_json(out / "processes.json", {"exit_codes": [child.returncode]})
 
 
 def worker() -> None:
@@ -296,12 +285,6 @@ def worker() -> None:
     if gate.status != "completed":
         raise RuntimeError("CUDA numerical admission failed")
     admit_throughput(out, stop, deadline)
-
-
-class CurvePoint(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    arm: Arm
-    result: MonitorResult
 
 
 @dataclass(frozen=True)
@@ -324,13 +307,20 @@ class PlateauResult:
     intervals: tuple[PlateauInterval, ...] = ()
 
 
-def plateau(points: list[CurvePoint]) -> PlateauResult:
+def plateau(points: list[ArmEvaluation]) -> PlateauResult:
     """Positive bounded-change evidence across seeds, not a nonsignificant slope.
 
     The fixed final window avoids choosing a favorable flat patch after seeing
     the curve. This conditional small-sample diagnostic is not equivalence of
     architectures or proof that no later improvement is possible.
     """
+    expected = {
+        (arm, seed, update) for arm in ARMS for seed in SEEDS for update in POINTS
+    }
+    protocol = evaluation_protocol()
+    recipe_digests = {
+        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
+    }
     scores: dict[tuple[Arm, int, int], float] = {}
     for item in points:
         result = item.result
@@ -338,19 +328,14 @@ def plateau(points: list[CurvePoint]) -> PlateauResult:
         key = item.arm, result.training_seed, result.coordinates.updates
         if (
             key in scores
-            or result.training_seed not in SEEDS
-            or result.coordinates.updates not in POINTS
+            or key not in expected
             or result.status != "completed"
             or result.score is None
-            or result.protocol != evaluation_protocol()
-            or result.regime_digest
-            != canonical_sha256(recipe(item.arm).model_dump(mode="json"))
+            or result.protocol != protocol
+            or result.regime_digest != recipe_digests[item.arm]
         ):
             raise ValueError("incomplete, duplicate or undeclared curve point")
         scores[key] = result.score.mean
-    expected = {
-        (arm, seed, update) for arm in ARMS for seed in SEEDS for update in POINTS
-    }
     if set(scores) != expected:
         return PlateauResult(False, len(scores), len(expected))
     intervals: list[PlateauInterval] = []
