@@ -405,9 +405,7 @@ pub(super) fn input_buffer_config(
                 return Err(PyValueError::new_err("invalid fact buffer shape"));
             }
             config.max_facts = rows;
-            if shared_count == 3
-                && relation_width == crate::agent::continuation::RELATION_DIM_V8
-            {
+            if shared_count == 3 && relation_width == crate::agent::continuation::RELATION_DIM_V8 {
                 8
             } else if shared_count == 3 {
                 7

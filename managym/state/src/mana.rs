@@ -538,20 +538,6 @@ impl Mana {
         colors
     }
 
-    /// Total usable for one spend purpose, without promising a color assignment.
-    pub fn usable_total(&self, cost: &ManaCost) -> u16 {
-        self.mana
-            .iter()
-            .chain(
-                self.restricted()
-                    .iter()
-                    .filter(|(class, _)| class.allows(&cost.purpose))
-                    .flat_map(|(_, amounts)| amounts),
-            )
-            .map(|amount| u16::from(*amount))
-            .sum()
-    }
-
     /// Enumerate concrete remainders after colored, hybrid, then generic
     /// payment. Ordinary spending stops at the first result; activation search
     /// considers alternatives so generic costs cannot consume a parent's pip.

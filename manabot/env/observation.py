@@ -312,6 +312,10 @@ class ObservationEncoder:
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+        # Native selection owns the optional policy prefix; authority stays complete.
+        retained = managym.policy_action_count(
+            len(obs.action_space.actions), self.max_actions, self.config.action_overflow
+        )
         if self.config.policy_input_version < 8:
             restrictions = [
                 r
@@ -330,10 +334,6 @@ class ObservationEncoder:
                 for name in (*r.spells, *r.abilities)
             ):
                 raise ValueError("mana state requires policy input v8")
-        # Native selection owns the optional policy prefix; authority stays complete.
-        retained = managym.policy_action_count(
-            len(obs.action_space.actions), self.max_actions, self.config.action_overflow
-        )
         actions = obs.action_space.actions[:retained]
         for label, size, capacity in (
             ("agent cards", len(obs.agent_cards), self.cards_per_player),

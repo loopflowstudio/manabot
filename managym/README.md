@@ -240,8 +240,9 @@ This guard documents implementation coverage; it never removes playable cards.
 Variable outputs stay as rules effects in `Characteristics`; payment evaluates
 them after costs. Hypothetical resource changes use a fork and the ordinary
 layered view for these outputs. Ordinary fixed sources do not clone the game.
-One mana-action enumeration reuses its source inventory, but there is no cache
-across decisions: mana, life, taps, usage, turn and pending payment all matter.
+Activation and selected-tap offer probes share one source inventory per
+enumeration, with independent resource states. There is no cache across decisions:
+mana, life, taps, usage, turn and pending payment all matter.
 Performance remains subject to the same-runner Engine Budget.
 
 Explicit input v8 preserves v7 object widths and shared effects. Relations have

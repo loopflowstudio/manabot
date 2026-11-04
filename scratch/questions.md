@@ -1,7 +1,7 @@
 # MTG-242 decisions — 2026-11-04
 
 Jack Heart authorized one engine change and a reviewable PR, stopping at review;
-no merge or training run. The implement step owns code and focused checks only.
+no merge or training run.
 
 The inherited T7 note does not select this work. Its complete text remains at
 `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372:scratch/questions.md`.
@@ -19,3 +19,12 @@ relation-width selection and mana spending contexts compose with those changes.
 Incoming MTG-213 decisions remain historical context at
 `8e8d702f807d61675fc1bca46417eee69316daa0:scratch/questions.md`;
 they do not authorize a training run or expand this Task's review boundary.
+
+## Completion dependency — 2026-11-04
+
+MTG-241 remains an active writer and explicitly requests no live cherry-pick.
+Its shared frame owner exists, but linked-entry replacement suspension does not.
+Preserve that ownership boundary: add a synchronous linked-return Command/fork
+witness here, stop dependent runtime edits, and retain the actual suspended-return
+acceptance in the plan. No human input is required; the missing event interface
+must be implemented before integration can complete.
