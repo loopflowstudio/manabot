@@ -5,6 +5,76 @@ enabling repair before delivery, with paid pilot acceptance still owned by the
 following verification step (`lf help code`: pursue → demo → deliver → verify).
 This is an agent scope interpretation, not new human approval or Task completion.
 Fresh proof and the advance rationale are in `scratch/tla-pilot-demo.md`.
+## Next card-file milestone — 2026-11-04
+
+Jack Heart selected full support for any Standard deck, initially prioritizing
+the post-rotation pool. He requires increasing engine composability/modularity
+so shared rules parts multiply across cards, and improving or preserving both
+search and ordinary runtime performance. He requested one independent analysis
+per Standard set, a retrospective of Allies/Lessons, Elemental and TLA delivery,
+an audit of existing shortcuts that may warrant substantial refactors, and a
+comparison with other large Magic engines. Research is active at
+[Standard milestone research](../docs/research/standard-2026-11/README.md).
+The working rotation assumption is early 2027. Implementation order, exact
+tournament-play boundary and any future architecture changes remain proposals.
+This request does not inherit historical T6 shipping or auto-merge instructions.
+Jack Heart clarified the acceptance standard on 2026-11-04: imperfect rules
+correctness is expected; a generally working engine that supports training is
+valuable. The consequential failure is later having to invalidate conclusions
+believed learned. Prioritize defects by training disruption, strategic distortion
+and risk to experimental conclusions, and architectural work by the recurring
+cost it removes. Do not turn all edge cases into prerequisites for training or
+card admission. Retain exact versions and evidence so discovered defects can be
+scoped to affected conclusions; neither a rules fix nor a bug automatically
+invalidates every checkpoint or prior result.
+Jack Heart confirmed Phase (`https://phase-rs.dev/`), XMage
+(`magefree/mage`) and Forge (`Card-Forge/forge`). He sees Phase as particularly
+useful for problems its wider coverage has exposed, while judging its code
+less disciplined. He requested both regression/commit-history lessons and a
+deep comparison of engine objects, state machines, continuous effects and
+triggers across these systems. Source-level structural comparisons and proposed
+changes must remain distinct from tested runtime or performance claims.
+
+Jack Heart authorized three implementation Tasks from the current-engine audit,
+then explicitly added one independent layers Task (not one Task per card pair).
+All four were created and launched on the code Graph on 2026-11-04, with ordinary
+interactive review before landing: MTG-241 composable execution, selection,
+replacements and contextual reads; MTG-242 mana restrictions/resources; MTG-243
+catalog-wide naming and policy scaling; MTG-244 layers. Their self-contained
+briefs are under `docs/research/standard-2026-11/tasks/`. No merge or experiment
+launch was authorized. All four primary Task conversations were opened and
+visually confirmed in separate terminal blocks in the existing `manabot` Rex
+session. `lf open --host rex` is unimplemented; opening used `rex run --session
+manabot ... lf open <task-url> --host terminal`.
+
+The requested durable engine guide is `managym/PRINCIPLES.md`, linked near the
+top of its README. MTG-241's brief carries its full draft and owns including it
+in delivery. It incorporates the five implementation lessons, imperfect-but-
+trainable acceptance, and architectural ownership boundaries. MTG-244 includes
+Beorn the Fierce/Kellan plus ten nominated layer interaction witnesses. The old
+Blood Moon/Urza's Saga automatic-sacrifice ruling is obsolete; use current rules
+and preserve the distinction between basic layer order, timestamps and actual
+same-layer dependency.
+
+Jack Heart subsequently requested fewer than 50 Tasks for the post-rotation
+milestone, prioritizing trusted rules, performance and composability, then
+coherent changes, large engine changes early, and full FDN before generally
+newer sets. Only the first 2–3 milestones should be concrete, over at most eight
+new Tasks excluding the four launched. Include frequent bounded training
+validation for learning, runtime and replayable crashes, plus sparser deeper
+strength/generalization assessments. This is planning, not experiment launch.
+The proposed two-milestone/eight-Task sequence and rough later arc are in
+[standard-milestone.md](standard-milestone.md), with the requested HTML API
+walkthrough at [standard-milestone.html](standard-milestone.html). API sketches
+are proposals; existing excerpts are revision-pinned. MTG-245 was subsequently created as a separate research Task (see below). Jack Heart then requested roughly 1.5–2×
+more cards per implementation Task and more ambitious exploration of Adventure,
+prepare, planeswalkers and other engine-shaping mechanics. The plan now calls
+for broad cross-set mechanism cohorts, with explicit identity/permission/ability
+comparisons inside implementation Tasks; full FDN remains the first set closure.
+Training coverage follows the broader cohorts without automatically doubling
+run budgets. Exact per-Task card counts remain to be assigned from the ledgers.
+
+Jack Heart's accepted scope is all 16 T6 cards plus one catalog (2026-11-02). His 2026-11-03 steer requires completing the detected Sozin gaps and auditing earlier approximations, then publishing for review. No merge or auto-merge is authorized. The current plan is [mtg-225-tla-t6.md](mtg-225-tla-t6.md).
 
 Current outcome, dependency and acceptance: `scratch/tla-pilot-verify.md`.
 Results and cost receipts: `experiments/tla-trophy-pilot.md`. Training Wave
@@ -191,3 +261,21 @@ Python focused suite passed 141 tests, then 84 relevant tests passed after five
 additional invalid-capacity cases; 96 broader admission/monitoring/boundary tests
 passed. Ruff and diff whitespace checks passed. Recorded failure remains
 d2ff60e6a1c11aa77e9592d0ecc3aedd72e0c3a7 / required-integration. No paid launch.
+The frozen v5 protocol pins player/card widths 67/55; T6 uses 73/56. Synthetic scheduling/analysis fixtures pin these historical widths as well as world identity, while separate negative tests prove real-world and real-schema rejection. Frozen protocol/regime/evidence bytes stay unchanged.
+
+## Growing card-pool training methodology — 2026-11-04
+
+Created MTG-245 (task_af1330d001e4460f9eab6f9fef7400cc), “Design training and
+evaluation for growing card pools.” Jack Heart authorized launching it in Rex,
+and corrected the proposed replacement of Task 04: MTG-245 is separate research;
+Task 04 must actually run training, and Task 08 remains the later actual run.
+The near-term plan now has nine new Tasks. Research has no engine prerequisite;
+training depends on the selected protocol and integrated snapshots. No training
+or compute provisioning is authorized by this research launch. Full brief:
+docs/research/standard-2026-11/tasks/growing-pool-training.md.
+
+MTG-245 launched on the code Graph (d70ef881-3587-4355-8fc5-b5fbef861965),
+confirmed running implement. Worktree: /Users/jack/src/manabot.mtg-245-design-training-and.
+Opened its primary conversation in Rex manabot block
+block:01a1a853-8fe4-7c6b-be5f-d064e00ea155. Corrected Task description saved
+locally before launch; Linear writeback is pending due to service rate limiting.
