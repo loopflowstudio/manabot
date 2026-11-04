@@ -1,5 +1,11 @@
 # Decisions and open questions — 5da5f4
 
+- Prospective allocation assumption, 2026-11-04: select one available RTX 3090,
+  4090 or 5090 before scientific execution, identically for all eight learners.
+  The 3090 launch refused before acquisition; fresh 4090/5090 offers fit the
+  existing cap. Retain the actual device and CUDA admission. No scores informed
+  the choice, and recipes, seeds, horizon and scoring remain unchanged.
+
 - Provider direction, Jack Heart, 2026-11-04: "we can push an etude sdk release
   and then use vast if necessary". A necessary SDK release and Vast use are
   authorized for the GPU plateau continuation within the original $25 total.

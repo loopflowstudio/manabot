@@ -21,7 +21,9 @@ Four fresh paired seeds 74201–74204, alternating treatment order within seed.
 curriculum. Target 2,048 updates: 65,536 games per replicate, sixteen times the
 previous horizon. Record actual decisions, optimizer exposure and completion.
 CUDA float32 training only, 6 GiB host-memory watchdog per learner. Eight independent
-processes share one RTX3090 with at least60 GB host RAM and16 CPUs. Each CUDA
+processes share one available RTX 3090, 4090 or 5090 with at least 60 GB host RAM
+and 16 CPUs. Select capacity before any scientific seed starts, retain the exact
+device, and use the same device for both arms and every seed. Each CUDA
 caching allocator is capped at10% of device memory, leaving20% for contexts and
 external workspaces. No CPU substitution. The same sharing applies to both arms;
 wall-time contrasts are concurrent-use measurements, not isolated speed claims.
@@ -86,6 +88,13 @@ the4090 quote also disappeared before acquisition. A fresh3090 quote with at
 least16CPUs/60GB at$0.179556/hour permits the20-hour allocation within the same
 $17.20 ceiling, with CUDA numerical admission repeated on that hardware. The earlier
 per-replicate Job allocation is removed, not maintained as a fallback.
+
+Prospective allocation amendment, 2026-11-04: the 3090 launch refused capacity
+before acquisition. At 18:15 UTC, fresh compatible 4090 and 5090 offers appeared
+at $0.611111 and $0.779141/hour. The permitted device set above avoids treating
+an ephemeral quote as an architectural choice. Seeds, recipes, horizon, scoring,
+memory bounds and the $17.20 rental ceiling are unchanged. No scientific seed
+or evaluation informed this amendment.
 
 Use task-local provider/storage configuration and the released Etude launcher;
 retain its version separately from the worker's locked SDK/runtime. Supported
