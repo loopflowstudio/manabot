@@ -418,6 +418,46 @@ preserves accepted decisions, dated proof limits and source history.
   only), so restoring it needs an engine accessor, a decision Jack Heart
   has not made.
 
+## T6 lessons (2026-11-03; pending review)
+
+- Jack Heart accepted the one-catalog simplification into T6 on 2026-11-02:
+  `ContentPack` owns stable name-ordered definition rows and content identity;
+  authored presets are decklists, not separate worlds. Back-face rows follow
+  their fronts. The refactor alone preserved content bytes at `2c1ba169f`;
+  later card/rules changes intentionally moved the digest. Historical labels
+  stay readable, but former authored-pack checkpoint manifests are not
+  migrated, and no retained checkpoint binary has established compatibility.
+- A shared consumer trace can agree while the rules are wrong. T6's first
+  publication gate reproduced targets-before-payment and automatic named-card
+  exile despite earlier green suites. Optional X payment must complete before
+  a distinct reflexive trigger chooses targets within its retained budget and
+  offers priority. A search's optional zero-through-four selection is a real
+  native decision; matching the final state is insufficient evidence.
+- Private zone search grants temporary physical visibility to its chooser,
+  including nonmatching cards, while inspected hand definitions remain known
+  afterward. Observation, text, Academy projection and both search samplers
+  must consume that same permission. The searched library's owner acquires no
+  extra visibility, and replay/Study redaction remains viewer-relative.
+- Future behavior depends on history as well as the visible face: a transform
+  count detects an intervening round trip; stacked inherited abilities retain
+  their lending definition across source departure or replacement; departure
+  triggers use LKI. Ordered extra turns/combats and their restrictions need
+  both deterministic identity and shared policy/text observation. T6 represents
+  them in hash contract 13, v5 frames/facts and definition-derived tokens,
+  preserving v1–v4 widths and exclusions.
+- Concurrent vocabulary additions need explicit ordinal reconciliation.
+  Main's library ordering keeps decision code 23 and loyalty/defense keep
+  counter ordinals 7/8; unpublished T6 payment/search use 24/25, choose-to-exile
+  uses 26 and lore appends at 9. Combined receipts inherit main's corrected
+  135-Command trace, not the older 142-Command tape. Regeneration and focused
+  parity at `64b79d895` do not establish full-suite or review acceptance.
+- Referenced-row training avoids encoding unused catalog programs while
+  retaining gradients; serving keeps the full cached table because subset GRU
+  execution is not bitwise identical. Focused behavioral/gradient evidence
+  does not prove retained-checkpoint compatibility, strength or a new runtime
+  budget. Fresh action capacity is 512; omitted saved capacity remains 64,
+  and overflow must fail explicitly rather than hide legal choices.
+
 ## Open tensions
 
 - Migrate current Academy match/revision/replay bookkeeping into managym without

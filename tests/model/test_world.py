@@ -40,7 +40,9 @@ def checkpoint():
     }
 
 
-def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
+def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "policy.pt"
     payload = checkpoint()
     torch.save(payload, path)
@@ -49,7 +51,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
     for match in (selected_match(), selected_match().swapped()):
         policy = CheckpointVillain(str(path), player_configs=match.to_rust())
         assert policy.agent.world_binding == agent.world_binding
-    assert space.shapes["actions"][0] == 64
+    assert space.shapes["actions"][0] == 512
 
 
 @pytest.mark.parametrize(

@@ -1,8 +1,9 @@
 # T6 direction (Jack Heart, 2026-11-02)
 
-- Develop T6 stacked on T5 (PR #405, Task a7234f / MTG-224). T5 is being synced
-  onto main; when its synced head publishes, rebase or merge T6 onto that head
-  rather than the pre-sync T5 commit (24b335fe0).
+- Original stacking decision: develop T6 on T5 (PR #405, Task a7234f / MTG-224),
+  using its synced head rather than pre-sync `24b335fe0`. Fulfilled: T5 and the
+  later MTG-235/238/239 work are integrated in T6 head `64b79d895` on main
+  `c823c9c8f` (2026-11-03).
 - Follow the TLA PR brief: one cohesive PR covering all 16 T6 cards, then stop
   for Jack Heart's review. No merge without that review.
 
@@ -44,9 +45,12 @@ Decision: the content-pack simplification is part of T6, not a separate Task.
   `tests/cards/observability.rs` pass; `world_identity_names_the_version_and_card_digest`
   still holds; `CARD_DEFINITION_COUNT` equals the catalog length.
 
-## Follow-up Tasks (launched by Jack Heart, 2026-11-02; state on 2026-11-02)
+## Related work (reconciled 2026-11-03)
 
-All target main, not T6 as first briefed: MTG-235 effect vocabulary (#412, open);
-MTG-236 derived state (#411, merged, in HEAD; its Task stays open on acceptance
-of absolute budgets); MTG-237 engine budget in CI (#413, merged, in HEAD);
-MTG-238 catalog-scale types (#414, open, merges before T6).
+Jack Heart launched MTG-235 effect vocabulary (#412), MTG-236 derived state
+(#411), MTG-237 engine budget (#413), and MTG-238 catalog-scale types (#414)
+on 2026-11-02, targeting main. Their code is now integrated; MTG-238
+precedence is fulfilled. MTG-239 (#415) also landed and supplies the corrected
+admission, library ordering and Rallier traces. These integrations do not
+settle the related Tasks' independent empirical acceptance. T6's draft PR #417
+is open; its remaining validation and review are tracked in the current plan.

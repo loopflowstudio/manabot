@@ -102,3 +102,13 @@ partial: the two-pass scheduler has typed fixture coverage, while matching on
 another ability triggering is still unsupported. The original source identity,
 audited revision, draft and `unification.md` retain the dated audit findings.
 See [the w14 contract](../../../WORLDS.md#w14-controller-selected-trigger-placement).
+
+## T6 catalog follow-up — 2026-11-03
+
+The one-catalog change removes `Game::new_with_content`. Live setup references
+in `reviews.json`, the index and its generator now name `Game::construct`,
+the shared constructor used by ordinary and decision-capturing games. It still
+enforces exactly two players and draws seven cards without a mulligan procedure.
+This anchor repair changes no rule dispositions or coverage claims. The original
+audit reports, source identity and validation receipts retain their dated owners
+and evidence.

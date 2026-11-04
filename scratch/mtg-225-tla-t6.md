@@ -1,6 +1,6 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (2026-11-03, implementation repair): all 16 cards and the accepted one-catalog change are implemented. MTG-238 is integrated at `373bb08ca` against main `44388ad42`. Jack Heart's 2026-11-03 steer (`b77a8b6d-6066-48d4-be08-3007994aeb33`) requires repairing the publication findings and other recorded approximations, then publishing one cohesive PR for review. No auto-merge or landing is authorized.
+Status (2026-11-03, reconciled after sync): all 16 cards and the accepted one-catalog change are implemented. Repairs are in `854d5e282`, compression in `ecba733ca`, and the combined head is `64b79d895` on main `c823c9c8f`, including MTG-235/238/239. [Draft PR #417](https://github.com/loopflowstudio/manabot/pull/417) is open at that head. Jack Heart's 2026-11-03 repair steer (`b77a8b6d-6066-48d4-be08-3007994aeb33`) retains one cohesive PR for review. Broad acceptance is pending; no auto-merge or landing is authorized.
 
 The accepted outcome is correct play for humans and bots through the shared native rules authority, with directed debug tests for every obligation, complete viewer-safe choices and policy/text observations. `scratch/t6-direction.md` retains Jack Heart's 2026-11-02 scope decisions. Full earlier implementation, integration and publication history is retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/mtg-225-tla-t6.md` and `:scratch/questions.md`.
 
@@ -78,7 +78,12 @@ The refactor alone preserved content bytes and row ordering at `2c1ba169f`; late
 
 Authored presets retain their bypass of submitted-deck construction checks. Main `c823c9c8f` removes bug-based admission exclusions: every defined non-token, non-fixture front face is playable. `PlayerConfig.submitted` still selects construction validation. Review-visible consequences remain: edited setup metadata alone no longer fails checkpoint loading (execution checks actual decks), authored mirrors need no pack selection, and any pair of Elemental decks receives the roster binding by membership.
 
-## Delete — do not maintain
+## Completed simplification
+
+Completed delete — do not maintain: live audit references to removed
+`Game::new_with_content` in `reviews.json`, `index.jsonl` and
+`scripts/audit_rules.py` now point to the surviving `Game::construct` without
+changing rule dispositions, coverage claims, source hashes or historical reports.
 
 Completed in this repair:
 
@@ -94,18 +99,27 @@ The surviving activation lookup is `stacked_activated_ability`: resolution and r
 
 ## Verification and remaining work
 
-2026-11-03 check result: focused debug `cargo test` filters for Sozin, Koh, transform round trips, Foggy timing, observability, scheduling hashes and decision codes passed **69 cases**; focused `uv run --extra dev --extra play pytest` passed **15 cases** across transform/version parity, field/text/schema coverage, the real Sozin text/Academy/policy path and Bumi schedule-fact parity (the last two runs resolve the earlier fixture failure and reuse 13 unaffected passes). `cargo clippy --lib --features python -- -D warnings`, workspace fmt and changed-Python Ruff passed. Release cp312 rebuilt and installed atomically; all six protocol schemas regenerated. Logs: `.runs/t6-publication/*-repair.log`, `repair-{clippy,wheel}.log`; broader gate/receipt refresh remains deferred to gate.
+The repair evidence at `854d5e282` covers 69 focused debug Rust cases and 15 Python cases for payment/search, transform/version parity, inherited abilities, delayed timing, schedule identity and observation/text/Academy projection. Compression at `ecba733ca` adds 28 focused Rust passes and the Sozin text/policy/Academy pass, plus library/Python Clippy, formatting and changed-Python Ruff. These are focused proofs, not full-suite acceptance. Logs remain in `.runs/t6-publication/*-repair.log` and `compress-*.log`; the release cp312 extension was rebuilt and installed atomically.
 
-Compression check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2` with state filter `mana::tests` and card filters `sozin`, `koh`, `avatar_aang`, `trusty_boomerang`, `aang_swift_savior`, `redirect_lightning` — **28 passed**; `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py::test_sozin_search_plays_through_text_policy_and_academy_projection -q` — **1 passed**; library/Python Clippy, workspace fmt and diff checks passed. Release cp312 rebuilt/installed atomically and fresh import succeeded (`w17`, 355 rows). Logs: `.runs/t6-publication/compress-*.log`; full suites and affected receipts remain owned by gate. `lf context` confirms memory and scratch below both configured limits.
+The sync at `64b79d895` already regenerated the mutable w17 semantic kernel (14 cases, 3,473 Commands, 15 Phase rows), authored match and both parity receipts, Academy demos/navigation/trigger order, and current belief-v3 pins. Live/headless parity retained main's corrected 135 Commands with no divergence; public parity retained 66 commitments with no gaps. Focused sync evidence adds eight card/observability, five engine/admission and four Python passes. Logs: `.runs/t6-publication/sync-*.log`. Decision code 23 remains main's library-bottom ordering, T6 payment/search use 24/25, and choose-to-exile uses 26; loyalty/defense retain ordinals 7/8 and lore appends at 9. This supersedes the earlier 142-Command tape and the claim that producer refresh is still wholly outstanding.
 
-Gate owns the affected full suites and automated acceptance after this repair: debug engine/card/state tests and all-target clippy, Python model/training/current-world admission and observation checks, protocol/UI checks, and the current-world producer refresh. The new rules/content/hash inputs invalidate the previous affected receipt checks; unrelated successful checks can be reused.
+Reconciliation inspected the shared payment/reflexive-trigger/search paths, retained activation lookup, catalog authority and directed tests against these logs. No new bounded implementation mismatch was identified. Before repair, gate at `a7ba7432c` passed 913 Rust tests (two ignored), model/admission/training/parity checks, 102 focused Python tests, 119 Academy unit tests and ten Playwright cases. That evidence established the earlier integration, not omitted Sozin behavior or the final combined source; exact commands and limits remain at the historical git reference above.
 
-Only mutable w17 receipts may be rebound: semantic-kernel, authored-match, authored live parity, public commitment parity, Academy demos/navigation/trigger-order, and current belief-v3 pins. Preserve main’s accepted 135 authored Commands (superseding the earlier 142 after Rallier’s corrected Suki filter), choice prefixes/offer ids, presentation and intended state outcomes. Historical receipts, retained checkpoints and frozen worlds remain untouched. Schema exports follow their native/Pydantic authorities, independently of receipt generation.
+Remaining acceptance belongs to gate/CI: full debug engine/card/state suites and all-target Clippy; Python model/training/current-world admission and observation checks; protocol/UI checks; and validation of the refreshed receipts against the combined head. CI run `41744841447` was in progress when reconciled. Successful unaffected checks remain reusable. Producer regeneration is only needed again if validation identifies a mismatch or its inputs change. Schema exports follow native/Pydantic authorities independently of receipt generation.
 
-Before this repair, gate at `a7ba7432c` passed 913 existing Rust tests (2 ignored), model/admission/training/parity checks, 102 focused Python tests, Academy's 119 unit tests and 10 Playwright cases. That established integration, not the omitted Sozin behavior; it is not final-source evidence. Exact command/results and limits remain in the git reference above.
+Only mutable w17 receipts may be rebound. Main's accepted 135 authored Commands, ordering/navigation prefixes, offer ids, presentation and intended outcomes remain the baseline. Historical receipts, retained checkpoints and frozen worlds remain untouched. The draft PR description still says regeneration is outstanding; its validation summary needs the completed sync evidence at the caller's publication boundary. No further product decision is identified; Jack Heart's PR review remains required.
 
-Engine Budget is CI-owned. If rules/catalog changes move its digests, or the reference no longer builds, adoption requires the PR candidate's own CI artifact and an explicit reason; no local performance result is claimed. Publication is one cohesive T6 PR for Jack Heart's review, not a merge.
+Engine Budget is CI-owned. Changed benchmark digests, an accepted cost or an incompatible reference require the PR candidate's own artifact and an explicit adoption reason. No local performance or playing-strength result is claimed.
 
-## Proposed Wave memory
+CI run `41744841447` found stale audit anchors to deleted `Game::new_with_content`
+and a fresh-checkpoint test expecting the historical 64-action default. Both are
+reconciled with the surviving constructor and accepted fresh capacity of 512.
+The raw pinned rules source was recovered with its original SHA-256; regeneration
+changes only authorities/anchors across 331 rows, preserving all 3,322 dispositions,
+source spans and hashes. Historical reports and receipts remain unchanged.
 
-Wave memory is unchanged. Candidates after accepted delivery: one catalog replaces per-pack identity; referenced-row learning restores the enlarged vocabulary's worker cost while full-table serving preserves bitwise inference; private search permissions must cover observations, both samplers and remembered hand facts; schedule/transform history affecting future play belongs in deterministic identity and shared observation.
+Check result (2026-11-03): `uv run --python 3.12 --extra dev pytest tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/` — 103 passed; `uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py` — 17 passed; pinned-source inventory verification, changed-file Ruff and `git diff --check` passed. Logs: `.runs/t6-publication/audit-*.log`; remaining combined-head checks stay with gate/CI.
+
+## Wave memory
+
+The code Graph's realign step records the accepted one-catalog direction and reusable payment/search, retained-state and sync-ordinal lessons in `.lf/wave/engine/MEMORY.md`. T6 remains pending review; focused evidence does not establish final acceptance. Engine has no immediate child memory directories in this checkout.

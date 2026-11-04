@@ -25,14 +25,14 @@ Complete inherited T2–T5, decklist, MTG-235/236/237/238, integration and previ
 
 ## Main sync — 2026-11-03
 
-Combine T6 with main `c823c9c8f`: preserve the single catalog and main's
+Completed at `64b79d895`: T6 incorporates main `c823c9c8f`, preserving the single catalog and main's
 definition-based admission (no incomplete-card exclusion), plus both sets of
 card fixes. Main has published decision code 23 for library-bottom ordering
-and counter ordinals 7/8 for loyalty/defense; append T6's choose-to-exile at
+and counter ordinals 7/8 for loyalty/defense; T6's choose-to-exile is appended at
 26 and lore at 9. T6 payment/search keep 24/25. This resolves the unpublished
-T6 collisions without changing main's retained meanings. Current w17 receipt
-Commands start from main's corrected Rallier/Accumulate Wisdom traces; rebind
-derived runtime values for the combined implementation. Historical receipts
+T6 collisions without changing main's retained meanings. Refreshed current w17 receipt
+Commands use main's corrected Rallier/Accumulate Wisdom traces, with derived
+runtime values rebound to the combined implementation. Historical receipts
 remain untouched.
 
 Main supersedes the old 142-Command tape with 135 Commands after Rallier
