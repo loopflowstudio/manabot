@@ -30,7 +30,12 @@ scientific cohort, $6 ancillary reserve, $0.073 prior billing rounded up;
 $1.927 remains unallocated. No MTG-213 money or machines. Read-only admission
 receipt `.runs/representation/resume-admission.json`.
 
-Remaining: freeze source, execute canary/cohort, fetch raw endpoint and receipts,
+V7 CPU GRU admission completed one32-game update in19.04seconds. RunPod
+refused4090 launch8dd337797e0a after source preparation, acquiring no machine.
+Protocol now freezes whole-cohort CPU execution in two four-process batches
+(two seeds × both arms each), one thread/process,16GiB watchdog each.
+
+Remaining: execute cohort and retain raw endpoints/receipts,
 evaluate fixed deals, report independent-seed uncertainty and costs, verify
 teardown, publish evidence. Stop on capacity/data/numerical errors; no scientific
 seed retries or score-dependent extensions. CPU fallback requires prospectively

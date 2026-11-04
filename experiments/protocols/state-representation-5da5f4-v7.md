@@ -33,11 +33,16 @@ are explicit; old canaries remain v5 evidence at their original sources.
   curriculum, width64/depth2, policy FiLM, no recent events or persistent memory,
   v7 with128local facts and the delivered effect capacities. Shared schedule and
   learning rule derive from batched_baseline, including its128-update schedule.
-- CPU float32, one thread, sequential runs on the same local host;16GiB per-run
+- CPU float32, one thread, two fixed four-process batches on the same host;16GiB per-run
   memory watchdog and4200seconds per training run. Compare measured elapsed time.
   Before scientific execution, RunPod refused the available4090 offer (launch
   8dd337797e0a; no rental acquired); L40/L40S reported unavailable. The entire
-  cohort therefore uses the supported local CPU fallback. No device-selected
+  cohort therefore uses the supported local CPU fallback. Batch one contains
+  both arms for73201/73202; batch two both arms for73203/73204. Each batch has
+  two pooled and two GRU replicates, at most64GiB combined watchdog limits.
+  The excluded CPU GRU admission completed one32-game update in19.04seconds.
+  Start no evaluations until training ends. Concurrent real training changes
+  elapsed-time interpretation; report it and do not induce artificial contention. No device-selected
   survivors are combined. Earlier CUDA declarations remain in git atb73d97eeb.
 - Only final raw update128 is scored. Initial exports are retained but not used
   for selection. No-update controls are absent, so this is an endpoint architecture

@@ -28,8 +28,10 @@ from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
 from manabot.recipes.local import local_smoke
 from manabot.sim.execution import EvalExecution
+from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import ArtifactReference, TrainingRegime, TrainSelfPlay
+from manabot.verify.store import VerifyStore
 
 Arm = Literal["typed_pool", "typed_gru"]
 ARMS: tuple[Arm, ...] = ("typed_pool", "typed_gru")
@@ -38,6 +40,8 @@ SEEDS = (73201, 73202, 73203, 73204)
 
 def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
     """Same v7 inputs; jointly compare effect and continuation token reducers."""
+    if arm not in ARMS:
+        raise ValueError("arm is outside the v7 cohort")
     regime = local_smoke(steps=1, seconds=120) if smoke else batched_baseline()
     regime.id = f"state-representation-v7-{arm}" + ("-smoke" if smoke else "")
     regime.agent.state_encoder = arm
@@ -123,7 +127,7 @@ def evaluate_run(run_path: Path, checkpoint_path: Path, out: Path) -> MonitorRes
         checkpoint.coordinates,
         out,
         protocol=evaluation_protocol(),
-        concurrent_activity="ordinary local evaluation; remote training may be active",
+        concurrent_activity="local cohort evaluation; task training has finished",
         execution=EvalExecution(
             device="cpu",
             max_active_games=2,
@@ -235,12 +239,40 @@ def compare(results: list[ArmEvaluation]) -> PairedEstimate:
     )
 
 
+def train_arm(arm: Arm, seed: int, out: Path) -> TrainingRun:
+    """One declared replicate through the ordinary executor; never resume/retry."""
+    if seed not in SEEDS:
+        raise ValueError("training seed is outside the frozen cohort")
+    out.mkdir(parents=True, exist_ok=False)
+    with VerifyStore(out / "training.sqlite") as store:
+        return execute_regime(
+            recipe(arm),
+            seed,
+            out / "training",
+            store,
+            experiment="state_representation_v7",
+            checkpoint_updates=(),
+            stop_path=out.parent / "stop",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run", type=Path, required=True)
-    parser.add_argument("--checkpoint", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--run", type=Path)
+    mode.add_argument("--train-arm", choices=ARMS)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if args.train_arm:
+        if args.seed is None or args.checkpoint is not None:
+            parser.error("training requires --seed and no --checkpoint")
+        run = train_arm(args.train_arm, args.seed, args.out)
+        print(run.status, "updates", run.updates_through(), "error", run.error)
+        return int(run.status != "completed")
+    if args.checkpoint is None or args.seed is not None:
+        parser.error("evaluation requires --checkpoint and no --seed")
     result = evaluate_run(args.run, args.checkpoint, args.out)
     print(result.status, "games", len(result.rows), "score", result.score)
     return int(result.status != "completed")
