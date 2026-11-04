@@ -3,6 +3,7 @@ use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     cards::content_pack::default_content_pack,
     flow::{
+        decision::Decision,
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
@@ -19,7 +20,7 @@ use crate::{
     },
 };
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1061,71 +1062,88 @@ impl Observation {
             }
         }
 
-        for card in game.state.zones.zone_cards(ZoneType::Hand, agent_player) {
-            self.add_card(game, *card, ZoneType::Hand);
-        }
+        // Inspection paths can overlap (hand, library top and a pending
+        // search). Emit each card once, retaining first-visible order.
+        let mut seen = HashSet::new();
+        let mut add_card = |card: CardId, zone: ZoneType| {
+            if seen.insert(card) {
+                self.push_card(
+                    Self::card_data(game, card, zone),
+                    game.state.cards[card].owner,
+                );
+            }
+        };
 
-        // The top of the agent's own library, when they may look at it any
-        // time (CR 401.2).
-        if let Some(card) = game
-            .library_top_card(agent_player)
-            .filter(|_| game.looks_at_library_top(agent_player))
-        {
-            self.add_card(game, card, ZoneType::Library);
-        }
+        for perspective in [agent_player, PlayerId(1 - agent_player.0)] {
+            if !game.shares_information(agent_player, perspective) {
+                continue;
+            }
+            for card in game.state.zones.zone_cards(ZoneType::Hand, perspective) {
+                add_card(*card, ZoneType::Hand);
+            }
 
-        // Library cards revealed to the agent by a pending mid-resolution
-        // decision. Search candidates are derived from the current library;
-        // scry/look choices retain their exact cards. Only the deciding player
-        // sees them.
-        if let Some(suspended) = &game.state.suspended_decision {
-            if suspended.decision.player() == agent_player {
-                let cards = match &suspended.decision {
-                    crate::flow::decision::Decision::SearchNamed { owner, .. } => game
-                        .named_search_cards(*owner)
-                        .filter(|card| {
-                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
-                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
-                                    && game.state.cards[*card].owner != agent_player)
-                        })
-                        .collect(),
-                    crate::flow::decision::Decision::SearchBasicLand {
-                        player,
-                        subtype,
-                        to_hand,
-                        ..
-                    } => game.basic_land_search_candidates(*player, subtype, *to_hand),
-                    crate::flow::decision::Decision::SearchLibraryToHand { player, predicate } => {
-                        game.library_search_candidates(*player, predicate)
-                    }
-                    decision @ crate::flow::decision::Decision::DiscardFromRevealedHand {
-                        ..
-                    } => game.revealed_hand_candidates(decision),
-                    decision @ crate::flow::decision::Decision::SearchDistinctLands {
-                        selected,
-                        ..
-                    } => {
-                        let mut cards = selected.clone();
-                        cards.extend(game.distinct_land_search_candidates(decision));
-                        cards
-                    }
-                    decision => decision.revealed_cards().to_vec(),
-                };
-                for card in cards {
-                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
-                    self.add_card(game, card, zone);
+            // A library top the viewer or controlled player may inspect (CR 401.2).
+            if let Some(card) = game
+                .library_top_card(perspective)
+                .filter(|_| game.looks_at_library_top(perspective))
+            {
+                add_card(card, ZoneType::Library);
+            }
+
+            // Library cards revealed to the agent by a pending mid-resolution
+            // decision. Search candidates are derived from the current library;
+            // scry/look choices retain their exact cards. Native information
+            // sharing admits the deciding player and their controller.
+            let Some(suspended) = game
+                .state
+                .suspended_decision
+                .as_ref()
+                .filter(|suspended| suspended.decision.player() == perspective)
+            else {
+                continue;
+            };
+            let cards = match &suspended.decision {
+                Decision::SearchNamed { owner, .. } => game
+                    .named_search_cards(*owner)
+                    .filter(|card| {
+                        game.state.zones.zone_of(*card) == Some(ZoneType::Library)
+                            || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
+                                && game.state.cards[*card].owner != perspective)
+                    })
+                    .collect(),
+                Decision::SearchBasicLand {
+                    player,
+                    subtype,
+                    to_hand,
+                    ..
+                } => game.basic_land_search_candidates(*player, subtype, *to_hand),
+                Decision::SearchLibraryToHand { player, predicate } => {
+                    game.library_search_candidates(*player, predicate)
                 }
+                decision @ Decision::DiscardFromRevealedHand { .. } => {
+                    game.revealed_hand_candidates(decision)
+                }
+                decision @ Decision::SearchDistinctLands { selected, .. } => {
+                    let mut cards = selected.clone();
+                    cards.extend(game.distinct_land_search_candidates(decision));
+                    cards
+                }
+                decision => decision.revealed_cards().to_vec(),
+            };
+            for card in cards {
+                let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
+                add_card(card, zone);
             }
         }
 
         for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
             for card in game.state.zones.zone_cards(ZoneType::Graveyard, player) {
-                self.add_card(game, *card, ZoneType::Graveyard);
+                add_card(*card, ZoneType::Graveyard);
             }
             for card in game.state.zones.zone_cards(ZoneType::Exile, player) {
-                // A foretold card is face down: only its owner sees it.
-                if player == agent_player || !game.is_foretold(*card) {
-                    self.add_card(game, *card, ZoneType::Exile);
+                // A foretold card is face down; inspection follows native control.
+                if game.shares_information(agent_player, player) || !game.is_foretold(*card) {
+                    add_card(*card, ZoneType::Exile);
                 }
             }
         }
@@ -1163,17 +1181,6 @@ impl Observation {
             self.stack_objects
                 .push(Self::stack_object_data(game, object));
         }
-    }
-
-    /// List a card on its owner's side; see [`Self::push_card`].
-    fn add_card(
-        &mut self,
-        game: &Game,
-        card_id: crate::state::game_object::CardId,
-        zone: ZoneType,
-    ) {
-        let owner = game.state.cards[card_id].owner;
-        self.push_card(Self::card_data(game, card_id, zone), owner);
     }
 
     /// List a card on `side`: its owner's, except that battlefield cards

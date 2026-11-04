@@ -237,6 +237,7 @@ impl Game {
         if self.is_game_over() {
             return None;
         }
+        let player = space.actions.first().map(|action| action.player())?;
         let actor = space.player?;
         let mut view = DecisionContextView {
             actor: actor.0 as u8,
@@ -392,6 +393,14 @@ impl Game {
             } else {
                 "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately.".into()
             };
+        }
+        if actor != player {
+            view.instruction = format!(
+                "Seat {} chooses for Seat {} using that player's resources. {}",
+                actor.0 + 1,
+                player.0 + 1,
+                view.instruction
+            );
         }
         Some(view)
     }

@@ -198,3 +198,61 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert_eq!(misplaced_resolution_conditions(&source_buff).len(), 1);
 }
+
+/// Planning inventory is audited against the catalog, never used to admit a
+/// card. Back faces and tokens exist but are not independent deck entries.
+#[test]
+fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
+    use managym::cards::{content_pack::default_content_pack, world_pool, Eligibility};
+    use std::collections::BTreeSet;
+    let catalog = default_content_pack();
+    let pool = world_pool();
+    let mut identities = BTreeSet::new();
+    let (mut faces, mut tokens, mut markers, mut excluded) = (0, 0, 0, 0);
+    for line in include_str!("../../../../docs/rules/tla/allocation.jsonl").lines() {
+        let row: Value = serde_json::from_str(line).unwrap();
+        let name = row["face_name"].as_str().unwrap();
+        match row["kind"].as_str().unwrap() {
+            "card_face" => {
+                faces += 1;
+                identities.insert(row["oracle_id"].as_str().unwrap().to_owned());
+                let id = catalog
+                    .definition_id(name)
+                    .unwrap_or_else(|| panic!("undefined allocated face {name}"));
+                let entry = pool
+                    .definitions
+                    .iter()
+                    .find(|row| row.card_def_id == id)
+                    .unwrap();
+                assert_eq!(
+                    entry.eligibility == Eligibility::Eligible,
+                    row["face_index"] == 0,
+                    "{name}"
+                );
+            }
+            "token_template" if row["in_tla_closure"] == true => {
+                tokens += 1;
+                let id = catalog
+                    .definition_id(name)
+                    .unwrap_or_else(|| panic!("undefined allocated token {name}"));
+                assert!(catalog.definition(id).unwrap().is_token, "{name}");
+            }
+            "copy_marker" => {
+                markers += 1;
+                assert_eq!(name, "Copy");
+                assert!(catalog.definition_id(name).is_none());
+            }
+            "token_template" => {
+                excluded += 1;
+                assert_eq!(name, "Treasure");
+                assert!(row["planned_pr"].is_null());
+                assert_eq!(row["in_tla_closure"], false);
+            }
+            kind => panic!("unreviewed allocation kind {kind}"),
+        }
+    }
+    assert_eq!(
+        (identities.len(), faces, tokens, markers, excluded),
+        (286, 294, 9, 1, 1)
+    );
+}

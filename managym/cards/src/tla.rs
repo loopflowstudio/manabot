@@ -220,6 +220,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         saber_tooth_moose_lion(),
         sandbender_scavengers(),
         sandbenders_storm(),
+        secret_of_bloodbending(),
         secret_tunnel(),
         seismic_sense(),
         serpent_of_the_pass(),
@@ -7615,6 +7616,36 @@ fn sandbenders_storm() -> CardDefinition {
                 }],
             ],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn secret_of_bloodbending() -> CardDefinition {
+    use managym_state::ability::PlayerControlDuration;
+    let text_box = "As an additional cost to cast this spell, you may waterbend {10}.\nYou control target opponent during their next combat phase. If this spell's additional cost was paid, you control that player during their next turn instead. (You see all cards that player could see and make all decisions for them.)\nExile Secret of Bloodbending.";
+    CardDefinition {
+        key: "tla.secret_of_bloodbending",
+        scryfall_id: "9bb928ae-f636-4aee-9146-a7885e6a8976",
+        name: "Secret of Bloodbending".into(),
+        mana_cost: Some(ManaCost::parse("{U}{U}{U}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Lesson".into()],
+        additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{10}"))],
+        spell_effects: vec![
+            Effect::If {
+                condition: Condition::Kicked,
+                then: vec![Effect::ControlPlayer {
+                    what: ObjectSelector::Target(TargetSpec::Opponent),
+                    duration: PlayerControlDuration::NextTurn,
+                }],
+                otherwise: vec![Effect::ControlPlayer {
+                    what: ObjectSelector::Target(TargetSpec::Opponent),
+                    duration: PlayerControlDuration::NextCombat,
+                }],
+            },
+            Effect::exile(ObjectSelector::This),
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

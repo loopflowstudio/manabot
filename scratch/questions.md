@@ -167,3 +167,11 @@ masked distribution, close/reseed accounting and frozen-configuration proofs.
 Hard termination can leave counts since the last flush missing; exact totals
 require normal finalization. GPU learning gain and universal action fairness
 are not established by these software proofs.
+
+## CI integration — 2026-11-04
+
+PR #423 recorded head `d2ff60e6a1c11aa77e9592d0ecc3aedd72e0c3a7`
+required integration with main. The only textual conflict is this notes file.
+Preserve MTG-213 direction and the concurrent concept review above; incoming T7
+notes remain at `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372:scratch/questions.md`.
+Those historical T7 delivery boundaries do not replace this Task’s authorization.

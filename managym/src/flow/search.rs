@@ -62,34 +62,24 @@ impl Game {
         // membership to the searcher until this instruction finishes.
         let searching_opponent = self.searches_private_zones(perspective, opponent);
         if !searching_opponent {
-            let (mut known, mut residual) = self.hidden_hand_partition(opponent);
-            residual.extend(self.foretold_cards(opponent));
-            residual.sort_unstable_by_key(|card| card.0);
-            residual.shuffle(&mut rng);
-            assert!(
-                self.fill_foretold_slots(opponent, &mut residual),
-                "foretold cards are in their own pool"
-            );
-            let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
-            let library = residual.split_off(unknown_slots);
-            known.extend(residual);
-            self.state.zones.reassign_hidden(opponent, known, library);
+            if self.shares_information(perspective, opponent) {
+                self.shuffle_private_library(opponent, &mut rng);
+            } else {
+                let (mut known, mut residual) = self.hidden_hand_partition(opponent);
+                residual.extend(self.foretold_cards(opponent));
+                residual.sort_unstable_by_key(|card| card.0);
+                residual.shuffle(&mut rng);
+                assert!(
+                    self.fill_foretold_slots(opponent, &mut residual),
+                    "foretold cards are in their own pool"
+                );
+                let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
+                let library = residual.split_off(unknown_slots);
+                known.extend(residual);
+                self.state.zones.reassign_hidden(opponent, known, library);
+            }
         }
-        // A top card the perspective may look at stays where it is.
-        let known_top = self
-            .library_top_card(perspective)
-            .filter(|_| self.looks_at_library_top(perspective));
-        self.state
-            .zones
-            .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
-        if let Some(card) = known_top {
-            let library = self
-                .state
-                .zones
-                .zone_cards_mut(ZoneType::Library, perspective);
-            library.retain(|other| *other != card);
-            library.push(card);
-        }
+        self.shuffle_private_library(perspective, &mut rng);
 
         self.repin_revealed_library_cards();
         // An opponent's hidden hand can change under resampling. Rebuild
@@ -117,6 +107,21 @@ impl Game {
             if let Some(space) = self.suspended_decision_action_space() {
                 self.publish_action_space(space);
             }
+        }
+    }
+
+    /// Shuffle an unknown library order while preserving its permitted top.
+    pub(crate) fn shuffle_private_library(&mut self, player: PlayerId, rng: &mut ChaCha8Rng) {
+        let known_top = self
+            .library_top_card(player)
+            .filter(|_| self.looks_at_library_top(player));
+        self.state
+            .zones
+            .shuffle_canonical(ZoneType::Library, player, rng);
+        if let Some(card) = known_top {
+            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
+            library.retain(|other| *other != card);
+            library.push(card);
         }
     }
 
@@ -154,7 +159,7 @@ impl Game {
             .iter()
             .flat_map(|zone| self.state.zones.zone_cards(*zone, owner).iter().copied())
             .collect();
-        if owner != viewer {
+        if !self.shares_information(viewer, owner) {
             cards.extend(self.foretold_cards(owner));
         }
         cards

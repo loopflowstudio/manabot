@@ -22,6 +22,13 @@ offers remain authoritative. After reconnecting, the schedule comes from the
 recovered game state. Older recordings without schedule data say “Schedule not
 recorded,” rather than claiming nothing is scheduled.
 
+When you control another player, the board stays in your perspective. The
+decision context names who chooses for whom and whose resources apply. **Search
+cards** introduces the native search instructions without assuming whose zones
+are searched. Private inspection labels retain each card's owner and zone;
+inspection does not make an opponent's cards yours. Reconnect resumes the
+pending choice with the same legal offers and permitted information.
+
 ## Modules
 
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,

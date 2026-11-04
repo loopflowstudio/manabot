@@ -9,7 +9,7 @@ the set that first printed them (Corrupt Court Official in `ptk.rs`, Epic
 Downfall in `eld.rs`, Lightning Strike in `ths.rs`). Setup manifests only choose
 definition keys and counts. The engine runs those definitions directly and
 derives learning tokens from them. Current execution uses world **w17** and
-learning schema **9**.
+learning schema **10**.
 
 `managym.content_pool("world")` is the world pool: every card any set file
 defines, with definition IDs, keys, Scryfall ids, world/content identity and
@@ -64,3 +64,9 @@ The new `tla-baseline-v1` authored proof pairs white Captain/Glider and red
 Treetop/Fire Sages decks. It exercises the same programs through native Commands,
 exact forks, learning projection and Academy observation serialization. It adds
 no product matchup UI and leaves all existing authored deck counts unchanged.
+
+T7 defines Secret of Bloodbending through native scheduled player control. The
+[full-file reconciliation](acceptance.md) links every allocated face to its
+definition and behavior witness, preserves token/exclusion denominators, and
+names limits of the combined evidence. Academy and training use the same
+chooser-bound actions with ordinary native trivial-decision skipping.

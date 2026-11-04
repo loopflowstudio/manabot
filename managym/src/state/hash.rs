@@ -63,6 +63,8 @@ struct CanonicalCard {
 
 #[derive(Serialize)]
 struct CanonicalTurn {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    player_controls: Vec<crate::flow::turn::PlayerControl>,
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
@@ -89,6 +91,7 @@ struct CanonicalTurn {
 impl From<&TurnState> for CanonicalTurn {
     fn from(turn: &TurnState) -> Self {
         Self {
+            player_controls: turn.player_controls.clone(),
             active_player: turn.active_player,
             turn_number: turn.turn_number,
             lands_played: turn.lands_played,

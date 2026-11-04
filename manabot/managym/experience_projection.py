@@ -361,6 +361,7 @@ def serialize_observation(
         _serialize_card(card)
         for card in obs.opponent_cards
         if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
+        or (card.cast_permission is not None and card.cast_permission.foretold)
     ]
     if inspected:
         data["agent"].setdefault("inspected", []).extend(inspected)
@@ -407,6 +408,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """
     observation = env.observation_for_player(viewer)
     data = serialize_observation(observation, include_details=True)
+    data["player_controls"] = json.loads(env.player_controls_json())
     data["schedule"] = json.loads(env.public_schedule_json())
     context = json.loads(env.decision_context_json(viewer))
     if context is not None:

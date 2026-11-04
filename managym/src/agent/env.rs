@@ -495,6 +495,14 @@ impl Env {
             .decision_offer_subjects(PlayerId(viewer)))
     }
 
+    pub fn player_controls(&self) -> Result<Vec<crate::experience::PlayerControlView>, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.player_controls called before reset".into()))?;
+        Ok(game.player_control_views())
+    }
+
     pub fn decision_context(
         &self,
         viewer: usize,
