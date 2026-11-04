@@ -92,6 +92,64 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
+## Observation and neural architecture
+
+The [full illustrated walkthrough](docs/observation-architecture.html) explains
+the observation tensors, card-program encoder, effects, attention and policy/value
+heads. Download or open the HTML locally for its interactive tensor explorer and
+fact-capacity example; it is self-contained and works offline.
+
+The observation boundary belongs to managym. It supplies viewer-safe state and
+the complete legal decision before the neural network sees either.
+
+```mermaid
+flowchart LR
+    G[Authoritative game state] --> V[Viewer-safe observation]
+    V --> O[Players, visible cards, effective permanents]
+    V --> F[Facts, object links, current continuation]
+    V --> K[Known hand and disclosed decklists]
+    V --> A[Legal actions and focus objects]
+    D[Native card definitions] --> T[Typed rules tokens]
+    T --> S[Semantic card encoder]
+    O --> E[Typed object embeddings]
+    F --> E
+    K --> E
+    S --> E
+    E --> N[Shared policy/value network]
+    A --> N
+```
+
+For the TLA pilot, each object has 64 channels. Two self-attention blocks, each
+with four heads, mix up to 202 padded object slots: two players, 120 cards and
+80 permanents. Facts are summed into their owning object embeddings; increasing
+fact capacity does not add attention tokens or learned parameters.
+
+```mermaid
+flowchart TD
+    C[Card-program tokens] --> GRU[Token embedding + GRU]
+    GRU --> E[Object projections + definitions + knowledge]
+    F[Facts + attachment/blocking links + continuation] --> E
+    E --> X[202 object slots x 64 channels]
+    X --> AT[2 self-attention blocks / 4 heads / masked padding]
+    AT --> FO[Gather up to 2 focus objects per action]
+    A[Action projection + continuation context] --> AC[Concatenate: 64 + 2 x 64 = 192]
+    FO --> AC
+    AC --> P[192 to 64 to 64 / policy head to 1 logit per action]
+    P --> L[Legal-action mask + categorical distribution]
+    AT --> M[Per-object projection + masked mean]
+    M --> VAL[Scalar value head]
+```
+
+The GRU encodes a card's rules program, not game history. This pilot has no
+recurrent game memory and does not enable the optional recent-event encoder.
+Current continuation describes the pending decision. Permanent rows already
+include effective characteristics; extra facts retain effects and provenance.
+The immediate capacity repair selects 256 fact rows for the pilot while
+preserving frozen v5's 128-row contract. Broader changes to effective-state,
+shared-effect and history/memory representations are separate design work.
+The HTML records the exact source/configuration snapshot behind its dimensions
+and parameter counts; other checkpoints can use different architectures.
+
 ## Versioned installs
 
 Versioned PyPI release preparation, platform support, CPU/CUDA installation and

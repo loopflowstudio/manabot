@@ -60,7 +60,7 @@ pub const PERMANENT_DIM: usize = PERMANENT_DEALT_DAMAGE_INDEX + 2;
 /// to it like relation references. Vocabulary ids are the learning tokens'
 /// values (`cards::tokens::name_value` of the same Rust or printed name), split
 /// into 16-bit halves so f32 keeps them exact.
-pub const FACT_ROWS: usize = 128;
+pub const V5_FACT_ROWS: usize = 128;
 /// Object index + 1 of the player or permanent the fact is about.
 pub const FACT_OBJECT_INDEX: usize = 0;
 /// `FactKind` value.
@@ -140,6 +140,7 @@ pub const DECKLIST_DIM: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
     pub policy_input_version: u8,
+    pub max_facts: usize,
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
     pub max_actions: usize,
@@ -157,7 +158,8 @@ impl Default for ObservationEncoderConfig {
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
-            policy_input_version: 5,
+            policy_input_version: 6,
+            max_facts: 512,
         }
     }
 }
@@ -212,12 +214,17 @@ impl ObservationEncoderConfig {
         }
     }
 
-    pub fn facts_len(&self) -> usize {
-        if self.policy_input_version >= 5 {
-            FACT_ROWS * FACT_DIM
-        } else {
-            0
+    /// V5 is frozen; v6 changes capacity only, not row meanings.
+    pub fn fact_rows(&self) -> usize {
+        match self.policy_input_version {
+            0..=4 => 0,
+            5 => V5_FACT_ROWS,
+            _ => self.max_facts,
         }
+    }
+
+    pub fn facts_len(&self) -> usize {
+        self.fact_rows() * FACT_DIM
     }
 
     pub fn cards_len(&self) -> usize {
@@ -1195,10 +1202,11 @@ fn encode_facts(
     out: &mut [f32],
 ) -> Result<(), ObservationEncodeError> {
     let facts = facts(obs);
-    if facts.len() > FACT_ROWS {
+    let capacity = out.len() / FACT_DIM;
+    if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
             field: "facts",
-            capacity: FACT_ROWS,
+            capacity,
             actual: facts.len(),
         });
     }
@@ -1326,8 +1334,8 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData,
-                Observation, PermanentData, PlayerData, TurnData,
+                ActionOption, ActionSpaceData, CardData, CardTypeData, ContinuousEffectData,
+                EventData, KeywordData, Observation, PermanentData, PlayerData, TurnData,
             },
         },
         flow::turn::{PhaseKind, StepKind},
@@ -1336,7 +1344,8 @@ mod tests {
 
     use super::{
         encode, encode_into, EncodedObservationMut, ObservationEncodeError,
-        ObservationEncoderConfig, ACTION_DIM, EVENT_DIM, LEGACY_CARD_DIM, LEGACY_PERMANENT_DIM,
+        ObservationEncoderConfig, ACTION_DIM, EVENT_DIM, FACT_DIM, FACT_ORDER_INDEX,
+        FACT_SOURCE_INDEX, FACT_VALID_INDEX, LEGACY_CARD_DIM, LEGACY_PERMANENT_DIM,
         LEGACY_PLAYER_DIM, ZONE_DIM,
     };
 
@@ -1367,6 +1376,55 @@ mod tests {
                 Err(ObservationEncodeError::Capacity { .. })
             ));
         }
+    }
+
+    #[test]
+    fn versioned_fact_capacity_preserves_every_effect() {
+        let mut obs = sample_observation();
+        // The retained Drill failure has 70 records, two keyword facts each.
+        obs.agent.effects = (1..=70)
+            .map(|timestamp| ContinuousEffectData {
+                modification: "LoseKeywords".into(),
+                keywords: vec!["hexproof".into(), "indestructible".into()],
+                duration: "EndOfTurn".into(),
+                timestamp,
+                source_registry_key: Some(271),
+                ..Default::default()
+            })
+            .collect();
+        let legacy = ObservationEncoderConfig {
+            policy_input_version: 5,
+            ..Default::default()
+        };
+        assert!(matches!(
+            encode(&obs, &legacy),
+            Err(ObservationEncodeError::Capacity {
+                field: "facts",
+                capacity: 128,
+                actual: 140,
+            })
+        ));
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&obs, &config).unwrap();
+        assert_eq!(encoded.facts.len(), 512 * FACT_DIM);
+        for (index, row) in encoded.facts.as_chunks::<FACT_DIM>().0.iter().enumerate() {
+            if index < 140 {
+                assert_eq!(row[FACT_VALID_INDEX], 1.0);
+                assert_eq!(row[FACT_ORDER_INDEX], (index / 2 + 1) as f32);
+                assert_eq!(row[FACT_SOURCE_INDEX], 272.0);
+            } else {
+                assert!(row.iter().all(|value| *value == 0.0));
+            }
+        }
+        let exact = encode(
+            &obs,
+            &ObservationEncoderConfig {
+                max_facts: 140,
+                ..config
+            },
+        )
+        .unwrap();
+        assert_eq!(exact.facts, encoded.facts[..140 * FACT_DIM]);
     }
 
     fn sample_observation() -> Observation {
@@ -1625,6 +1683,7 @@ mod tests {
             max_events: 2,
             policy_history: false,
             policy_input_version: 4,
+            ..ObservationEncoderConfig::default()
         };
 
         let encoded = encode(&obs, &config).unwrap();
@@ -1740,6 +1799,7 @@ mod tests {
             max_events: 1,
             policy_history: false,
             policy_input_version: 4,
+            ..ObservationEncoderConfig::default()
         };
 
         let mut agent_player = vec![0.0; 1];

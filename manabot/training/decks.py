@@ -6,14 +6,17 @@ however it likes (reading decklists, generating decks) and places it in the
 regime. Each new game asks the source for its two decks; game creation admits
 every deck natively, so a source is never a permission.
 
-`UniformDecks` is the one source so far (`uniform-distinct-v1`): every new game
-draws two different decks uniformly from a small list, in a native draw seeded
-by the game's reset seed. Exact resume therefore reproduces the same decks for
-the same games, and the run also records each game's actual decks.
+`UniformDecks` samples two population entries in a native draw seeded by the
+game's reset seed. `uniform-independent-v1` draws each seat independently,
+including mirrors; historical `uniform-distinct-v1` excludes mirrors. Exact
+resume reproduces the same decks for the same games, and the run also records
+each game's actual decks.
 Checkpoints never know the source; they bind only the world.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -25,14 +28,38 @@ from managym import Deck
 
 
 class UniformDecks(StrictModel):
-    """uniform-distinct-v1 over distinct decks, in the experiment's order."""
+    """Uniform population entries in experiment order, with explicit pair semantics.
 
-    decks: tuple[Deck, ...] = Field(min_length=2)
+    Independent sampling keeps duplicate lists from different source events as
+    separate entries. Optional stable entry IDs distinguish those events in game
+    receipts; deck content identity remains owned by `Deck`.
+    """
+
+    decks: tuple[Deck, ...] = Field(min_length=1)
+    sampling: Literal["uniform-distinct-v1", "uniform-independent-v1"] = Field(
+        default="uniform-distinct-v1",
+        exclude_if=lambda value: value == "uniform-distinct-v1",
+    )
+    entry_ids: tuple[str, ...] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
-    def distinct(self) -> UniformDecks:
-        if len({deck.identity for deck in self.decks}) != len(self.decks):
+    def valid_population(self) -> UniformDecks:
+        if self.sampling == "uniform-distinct-v1" and (
+            len(self.decks) < 2
+            or len({deck.identity for deck in self.decks}) != len(self.decks)
+        ):
             raise ValueError("uniform-distinct-v1 requires distinct decks")
+        if self.entry_ids is not None and (
+            len(self.entry_ids) != len(self.decks)
+            or len(set(self.entry_ids)) != len(self.entry_ids)
+            or any(not name.strip() for name in self.entry_ids)
+        ):
+            raise ValueError(
+                "deck population entry IDs must be nonempty, unique and aligned"
+            )
         return self
 
     @property
@@ -45,11 +72,16 @@ class UniformDecks(StrictModel):
         admit_world_decks(self.players())
 
     def players(self) -> list[managym.PlayerConfig]:
-        return [deck.player() for deck in self.decks]
+        players = [deck.player() for deck in self.decks]
+        if self.entry_ids is not None:
+            for player, name in zip(players, self.entry_ids, strict=True):
+                player.name = name
+        return players
 
     def match_config(self) -> MatchConfig:
         """A representative root; sampled roots come from the native draw."""
-        return pair_match(*self.players()[:2])
+        players = self.players()
+        return pair_match(players[0], players[1] if len(players) > 1 else players[0])
 
 
 def pair_match(

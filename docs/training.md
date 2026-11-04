@@ -824,14 +824,23 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 ### Current continuation input
 
-Fresh `ObservationConfig` uses policy input v5. A native `relations[64,33]`
-float32 buffer carries ordered stack entries, announced targets and clauses,
-chosen modes and abilities, kicker, reserved sacrifices, suspended payment
-obligations and waiting triggers with their context; v5 also widens player
-rows to 60 columns and card rows to 55. Native buffers bind the version by
-relation width (32 for v2/v3, 33 for v4/v5) and, at 33, player width (40 for
-v4, 60 for v5); validity is column 31. Checkpoints omitting the version load as
-v1 through `ObservationConfig.from_checkpoint`; loading never upgrades weights.
+Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.
+V6 retains v5's fact columns and all other tensor layouts; v5 keeps exactly
+128 fact rows. Facts remain one row per object/detail with source, duration and
+timestamp rank. The model divides fact timestamp ranks by **128** in both
+versions; capacity does not change the numeric scale. Larger finite buffers
+still reject overflow rather than dropping state. Configuration owns allocation,
+native scalar/vector buffer shapes, model shape checks and checkpoint receipts.
+
+A native `relations[64,49]` float32 buffer carries ordered stack entries,
+announced targets and clauses, chosen modes and abilities, kicker, reserved
+sacrifices, suspended payments and waiting triggers. V5/v6 player, card and
+permanent widths are 67/55/38. Native buffers bind relation semantics by width
+(32 for v2/v3, 33 for v4, 49 for v5/v6); validity stays at column 31. The fact
+axis binds capacity; at 128 rows v5 and v6 encode identically, while the saved
+configuration still distinguishes their identities. Checkpoints omitting the
+version load as v1 through `ObservationConfig.from_checkpoint`; legacy configs
+omit `max_facts`, preserving historical architecture hashes.
 `agent/continuation.rs` projects the facts once per observation and
 `manabot/env/observation.py` is the matching reference encoder. Only the
 acting viewer receives private continuation; overflow fails rather than

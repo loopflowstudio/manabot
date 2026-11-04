@@ -327,7 +327,9 @@ class SeatRoutedCollector:
                 else stream_matches(match, num_envs, matchup_curriculum)
             )
             if deck_source is not None:
-                self._env.set_training_decks(self._uniform_roster, deck_source.digest)
+                self._env.set_training_decks(
+                    self._uniform_roster, deck_source.digest, deck_source.sampling
+                )
             elif self._uniform_roster:
                 self._env.set_uniform_roster(self._uniform_roster)
             if matchup_curriculum in ("fixed", "elemental-uniform"):
