@@ -3,6 +3,53 @@ import { expect, it } from 'vitest';
 import type { Observation } from '$lib/types';
 import fixture from '../../../../../protocol/fixtures/bolt-target.json';
 import GameBoard from './GameBoard.svelte';
+import DecisionContext from './DecisionContext.svelte';
+
+it.each([0, 1])('keeps viewer seat %i in place across delegated search, own response and expiry', (viewer) => {
+  const observation = structuredClone(fixture.recovery.frame.projection) as Observation;
+  const other = 1 - viewer;
+  observation.agent.player_index = viewer;
+  observation.agent.id = 40 + viewer;
+  observation.opponent.player_index = other;
+  observation.opponent.id = 40 + other;
+  observation.agent.mana = [0, 3, 0, 0, 0, 0];
+  observation.opponent.mana = [0, 1, 0, 0, 0, 0];
+  observation.opponent.hand = [];
+  observation.agent.inspected = [{
+    ...observation.agent.hand[0], id: 900, name: 'Island',
+    zone: 'LIBRARY', owner_id: observation.opponent.id,
+  }];
+  const instruction = `Seat ${viewer + 1} chooses for Seat ${other + 1} using that player's resources. Inspect the permitted library candidates.`;
+  observation.decision_context = {
+    actor: viewer, stage: 'private_search', instruction,
+    recent_facts: [], source: null, targets: [], reserved_sacrifice: null,
+    mana_cost: null, chosen_mode: null,
+  };
+  for (const whole_turn of [false, true]) {
+    observation.player_controls = [{ player: other, controller: viewer, whole_turn, active: true, effective: true }];
+    const board = render(GameBoard, { props: { observation, heroLabel: 'You' } }).body;
+    const context = render(DecisionContext, { props: { observation } }).body;
+    expect(context).toContain('Search cards');
+    expect(context).not.toContain('Search your library');
+    expect(context).toContain(instruction);
+    expect(context).toContain(whole_turn ? 'for this turn' : 'for this combat phase');
+    expect(board).toContain("Island · opponent's library · private inspection");
+    expect(board).toContain('You mana: 3 {U}');
+    expect(board).toContain('Opponent mana: 1 {U}');
+    expect(board.indexOf('Opponent mana')).toBeLessThan(board.indexOf('You mana'));
+  }
+  // A control record can remain active while its chooser makes their own choice.
+  observation.decision_context.stage = 'priority';
+  observation.decision_context.instruction = 'Choose an explicit legal offer to commit one decision.';
+  expect(render(DecisionContext, { props: { observation } }).body).not.toContain('chooses for');
+  expect(render(GameBoard, { props: { observation, heroLabel: 'You' } }).body).toContain('You mana: 3 {U}');
+  observation.player_controls = [];
+  observation.agent.inspected = [];
+  const expired = render(GameBoard, { props: { observation, heroLabel: 'You' } }).body;
+  expect(expired).not.toContain('aria-label="Private inspection"');
+  expect(expired).toContain('Opponent mana: 1 {U}');
+  expect(render(DecisionContext, { props: { observation } }).body).not.toContain('aria-label="Player control"');
+});
 
 it('states the announced X on an ordered stack entry only when present', () => {
   const observation = structuredClone(fixture.recovery.frame.projection) as Observation;

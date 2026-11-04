@@ -233,6 +233,14 @@ export interface StackEntryView {
   x?: number;
 }
 
+export interface PlayerControlView {
+  player: number;
+  controller: number;
+  whole_turn: boolean;
+  active: boolean;
+  effective: boolean;
+}
+
 export interface CombatView {
   player_index: number;
   /** Absent means no additional attacker restriction; legal offers still govern. */
@@ -249,6 +257,7 @@ export interface ScheduleView {
 export interface Observation {
   /** Missing on historical captures means unknown, not an empty schedule. */
   schedule?: ScheduleView;
+  player_controls?: PlayerControlView[];
   stack_objects?: StackEntryView[];
   decision_context?: DecisionContextView;
   definition_names?: Record<string, string>;

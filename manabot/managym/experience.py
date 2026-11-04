@@ -530,6 +530,14 @@ class StackEntryView(ProtocolModel):
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class PlayerControlView(ProtocolModel):
+    player: UInt8
+    controller: UInt8
+    whole_turn: bool
+    active: bool
+    effective: bool
+
+
 class CombatView(ProtocolModel):
     player_index: UInt32
     attackers: str | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -550,6 +558,9 @@ class ScheduleView(ProtocolModel):
 
 class LegacyHeroObservation(ProtocolModel):
     schedule: ScheduleView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    player_controls: list[PlayerControlView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     stack_objects: list[StackEntryView] | None = Field(

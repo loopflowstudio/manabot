@@ -139,9 +139,13 @@ impl Game {
                 space.kind
             )));
         }
-        let player = space.player.ok_or_else(|| {
-            AgentError("scenario_refresh_priority: priority space has no player".to_string())
-        })?;
+        let player = space
+            .actions
+            .first()
+            .map(|action| action.player())
+            .ok_or_else(|| {
+                AgentError("scenario_refresh_priority: priority space has no player".to_string())
+            })?;
         let actions = self.compute_player_actions(player);
         self.publish_action_space(ActionSpace {
             player: Some(player),

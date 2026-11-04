@@ -27,3 +27,20 @@
 Complete preceding decisions, attribution, contrary evidence and historical
 validation remain at `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`.
 The live plan consolidates those sources; no uncommitted evidence was removed.
+
+## Inherited T7 context from main
+
+The sync retains T7's chooser API and stable viewer perspective. Control does
+not imply a perspective switch or new identity field. Preserve frozen input
+widths and saved omissions, and keep synthetic pilot fixtures separate from
+strict runtime/schema rejection.
+
+T7's evidence does not establish search WebSocket recovery, crash durability
+or retained-checkpoint compatibility with the new world. Earlier green T6
+suites missed targets-before-payment and automatic-four-card search; current
+checks must not inherit stronger claims.
+
+T7's publication and no-experiment boundaries belong to that Task, not this
+representation study. Its complete decisions, demo references and historical
+sources remain at
+`4463e57f5a92ebd3b60e2fb50c046b84ac2c0372:scratch/questions.md`.
