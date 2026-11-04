@@ -395,7 +395,7 @@ pub enum EffectValue {
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
     /// The source permanent's current power ("where X is this creature's
-    /// power"); 0 once it has left the battlefield or outside a resolution.
+    /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
     /// Attacking creatures `controller` controls matching `predicate`, as
     /// the effect resolves ("search for up to that many").

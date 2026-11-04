@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     agent::action::Action,
+    decision::Command,
     flow::{event::GameEvent, game::Game, turn::StepKind},
     state::{
         ability::{
@@ -1193,4 +1194,148 @@ fn delayed_lifetime_death_watchers_retire_on_exact_object_departure() {
             );
         }
     }
+}
+
+#[test]
+fn nested_iteration_retains_choices_scopes_and_finalizes_once() {
+    for controller in [PlayerId(0), PlayerId(1)] {
+        let (mut game, first, second) = fixture(controller);
+        let choose_damage = Effect::Modal {
+            modes: vec![
+                vec![damage()],
+                vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            ],
+        };
+        stack(
+            &mut game,
+            Entry::Spell,
+            controller,
+            vec![Effect::TargetClause {
+                requirement: TargetRequirement::up_to(2, TargetSpec::Creature),
+                effects: vec![
+                    Effect::ForEachTarget {
+                        effects: vec![Effect::ForEachTarget {
+                            effects: vec![choose_damage],
+                        }],
+                    },
+                    Effect::gain_life(3),
+                ],
+            }],
+            vec![Target::Permanent(first), Target::Permanent(second)],
+            vec![0, 0],
+        );
+        game.resolve_top_of_stack();
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let root = game.state.deterministic_hash();
+        let frames = game.capture_decision(controller, 0).unwrap().frames;
+        let scopes: Vec<_> = frames.iter().filter(|frame| frame.kind == 5).collect();
+        assert_eq!(scopes.len(), 3, "root and both interrupted iterations");
+        assert_eq!(scopes[0].targets.len(), 2);
+        assert_eq!(scopes[1].targets.len(), 1);
+        assert_eq!(game.state.stack_objects.len(), 1);
+        for first_mode in [0, 1] {
+            let mut branch = game.clone();
+            for mode in [first_mode, 1 - first_mode] {
+                let index = branch
+                    .action_space()
+                    .unwrap()
+                    .actions
+                    .iter()
+                    .position(|action| {
+                        matches!(action, Action::ChooseMode { mode: choice, .. } if *choice == mode)
+                    })
+                    .unwrap();
+                let frame = branch.semantic_decision_frame().unwrap();
+                let command = Command {
+                    command_id: format!("nested-{first_mode}-{mode}"),
+                    expected_revision: frame.revision,
+                    offer_id: frame.offers[index].id.0,
+                    answers: vec![],
+                    object_preconditions: vec![],
+                };
+                let mut replay = branch.clone();
+                branch.execute_semantic_command(&command).unwrap();
+                replay.execute_semantic_command(&command).unwrap();
+                assert_eq!(
+                    branch.state.deterministic_hash(),
+                    replay.state.deterministic_hash()
+                );
+                let after = branch.state.deterministic_hash();
+                assert!(branch.execute_semantic_command(&command).is_err());
+                assert_eq!(branch.state.deterministic_hash(), after);
+            }
+            assert!(branch.state.suspended_decision.is_none());
+            assert!(branch.state.stack_objects.is_empty());
+            assert_eq!(branch.state.players[controller.0].life, 23);
+            for (id, mode) in [(first, first_mode), (second, 1 - first_mode)] {
+                let permanent = branch.state.permanents[id].as_ref().unwrap();
+                assert_eq!(permanent.damage, i32::from(mode == 0));
+                assert_eq!(
+                    permanent.counter_count(CounterKind::PlusOnePlusOne),
+                    i32::from(mode == 1)
+                );
+            }
+            assert_eq!(
+                branch
+                    .state
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event, GameEvent::SpellResolved { .. }))
+                    .count(),
+                1
+            );
+            assert_eq!(game.state.deterministic_hash(), root, "retained fork root");
+        }
+    }
+}
+
+#[test]
+fn nested_iteration_defers_state_based_actions_until_root_completion() {
+    let controller = PlayerId(0);
+    let (mut game, first, second) = fixture(controller);
+    stack(
+        &mut game,
+        Entry::Spell,
+        controller,
+        vec![Effect::TargetClause {
+            requirement: TargetRequirement::up_to(2, TargetSpec::Creature),
+            effects: vec![Effect::ForEachTarget {
+                effects: vec![
+                    Effect::deal_damage(2, ObjectSelector::Target(TargetSpec::Creature)),
+                    pause(),
+                ],
+            }],
+        }],
+        vec![Target::Permanent(first), Target::Permanent(second)],
+        vec![0, 0],
+    );
+    game.resolve_top_of_stack();
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert_eq!(game.state.permanents[first].as_ref().unwrap().damage, 2);
+    assert_eq!(game.state.permanents[second].as_ref().unwrap().damage, 0);
+    game.step(0).unwrap();
+    assert!(game.state.suspended_decision.is_some());
+    assert_eq!(game.state.permanents[first].as_ref().unwrap().damage, 2);
+    assert_eq!(game.state.permanents[second].as_ref().unwrap().damage, 2);
+    assert!(!game
+        .state
+        .events
+        .iter()
+        .any(|event| matches!(event, GameEvent::SpellResolved { .. })));
+    game.step(0).unwrap();
+    assert!(game.state.suspended_decision.is_none());
+    assert!(game.state.permanents[first].is_none());
+    assert!(game.state.permanents[second].is_none());
+    assert_eq!(
+        game.state
+            .events
+            .iter()
+            .filter(|event| matches!(event, GameEvent::SpellResolved { .. }))
+            .count(),
+        1
+    );
 }

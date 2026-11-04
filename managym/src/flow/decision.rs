@@ -56,6 +56,12 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    /// Interrupted scope. Only the root owns stack finalization and priority.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<Box<EffectFrame>>,
+    /// An iteration owns its remaining subjects while one child scope runs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iteration: Option<TargetIteration>,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectRef>,
@@ -119,7 +125,75 @@ pub struct EffectFrame {
     pub finalize: FrameFinalize,
 }
 
+/// Runtime progress through one authored `ForEachTarget`, not another program.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TargetIteration {
+    pub remaining: VecDeque<ResolutionTarget>,
+    pub effects: Vec<Effect>,
+}
+
 impl EffectFrame {
+    /// A fresh scope with no source, results or stack cleanup. Callers bind
+    /// their source and targets; only a root spell supplies finalization.
+    pub(crate) fn new(controller: PlayerId, effects: Vec<Effect>) -> Self {
+        Self {
+            parent: None,
+            iteration: None,
+            remembered: Vec::new(),
+            inherited_from: None,
+            source_transforms: 0,
+            source: None,
+            source_ref: None,
+            controller,
+            resolutions_this_turn: 0,
+            kicked: false,
+            x: 0,
+            excess_damage: 0,
+            this_way: Vec::new(),
+            moved: Vec::new(),
+            chosen: None,
+            created: None,
+            targets: Vec::new(),
+            active_requirement: 0,
+            context_target: None,
+            triggering_player: None,
+            grantor: None,
+            ability: None,
+            queue: effects.into(),
+            finalize: FrameFinalize::None,
+        }
+    }
+
+    /// Start the next child with an isolated result scope. The interrupted
+    /// scope keeps its targets, results, suffix and finalization unchanged.
+    fn next_iteration(mut self) -> Self {
+        let iteration = self.iteration.as_mut().expect("pending iteration");
+        let Some(target) = iteration.remaining.pop_front() else {
+            self.iteration = None;
+            return self;
+        };
+        let mut child = Self {
+            remembered: self.remembered.clone(),
+            inherited_from: self.inherited_from,
+            source_transforms: self.source_transforms,
+            source: self.source,
+            source_ref: self.source_ref,
+            resolutions_this_turn: self.resolutions_this_turn,
+            kicked: self.kicked,
+            x: self.x,
+            targets: vec![ResolutionTarget {
+                requirement: 0,
+                ..target
+            }],
+            triggering_player: self.triggering_player,
+            grantor: self.grantor,
+            ability: self.ability,
+            ..Self::new(self.controller, iteration.effects.clone())
+        };
+        child.parent = Some(Box::new(self));
+        child
+    }
+
     /// Run a selected branch before the remaining effects, in authored order.
     pub fn prepend_effects(&mut self, effects: impl DoubleEndedIterator<Item = Effect>) {
         for effect in effects.rev() {
@@ -747,30 +821,7 @@ impl Game {
 
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
-            frame: EffectFrame {
-                remembered: Vec::new(),
-                source: None,
-                source_ref: None,
-                inherited_from: None,
-                source_transforms: 0,
-                controller: decision.player(),
-                resolutions_this_turn: 0,
-                kicked: false,
-                x: 0,
-                excess_damage: 0,
-                created: None,
-                this_way: Vec::new(),
-                moved: Vec::new(),
-                chosen: None,
-                targets: Vec::new(),
-                active_requirement: 0,
-                context_target: None,
-                triggering_player: None,
-                grantor: None,
-                ability: None,
-                queue: VecDeque::new(),
-                finalize: FrameFinalize::None,
-            },
+            frame: EffectFrame::new(decision.player(), Vec::new()),
             decision,
         });
     }
@@ -790,7 +841,19 @@ impl Game {
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
-        while let Some(effect) = frame.queue.pop_front() {
+        loop {
+            if frame.iteration.is_some() {
+                frame = frame.next_iteration();
+                continue;
+            }
+            let Some(effect) = frame.queue.pop_front() else {
+                if let Some(parent) = frame.parent.take() {
+                    frame = *parent;
+                    continue;
+                }
+                self.finalize_frame(frame);
+                return;
+            };
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
                 *self.state.suspended_decision_mut() =
                     Some(SuspendedResolution { frame, decision });
@@ -799,7 +862,6 @@ impl Game {
             // A chosen permanent belongs to the one instruction that ran.
             frame.chosen = None;
         }
-        self.finalize_frame(frame);
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
@@ -2333,30 +2395,7 @@ mod learn_tests {
     }
 
     fn learn(game: &mut Game) {
-        game.run_frame(EffectFrame {
-            remembered: Vec::new(),
-            source: None,
-            source_ref: None,
-            inherited_from: None,
-            source_transforms: 0,
-            controller: PlayerId(0),
-            resolutions_this_turn: 0,
-            kicked: false,
-            x: 0,
-            excess_damage: 0,
-            created: None,
-            this_way: Vec::new(),
-            moved: Vec::new(),
-            chosen: None,
-            targets: vec![],
-            active_requirement: 0,
-            context_target: None,
-            triggering_player: None,
-            grantor: None,
-            ability: None,
-            queue: VecDeque::from([Effect::Learn]),
-            finalize: FrameFinalize::None,
-        });
+        game.run_frame(EffectFrame::new(PlayerId(0), vec![Effect::Learn]));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
     }
 
@@ -3054,28 +3093,9 @@ mod payment_tests {
             165,
             false,
         );
-        game.run_frame(EffectFrame {
-            remembered: Vec::new(),
-            source: None,
-            source_ref: None,
-            inherited_from: None,
-            source_transforms: 0,
-            controller: PlayerId(0),
-            resolutions_this_turn: 0,
-            kicked: false,
-            x: 0,
-            excess_damage: 0,
-            created: None,
-            this_way: Vec::new(),
-            moved: Vec::new(),
-            chosen: None,
-            targets: vec![],
-            active_requirement: 0,
-            context_target: None,
-            triggering_player: None,
-            grantor: None,
-            ability: None,
-            queue: VecDeque::from([
+        game.run_frame(EffectFrame::new(
+            PlayerId(0),
+            vec![
                 Effect::OptionalPayment {
                     cost,
                     if_paid: vec![Effect::DrawCards {
@@ -3088,9 +3108,8 @@ mod payment_tests {
                 Effect::DrawCards {
                     count: EffectValue::Fixed(3),
                 },
-            ]),
-            finalize: FrameFinalize::None,
-        });
+            ],
+        ));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         game
     }

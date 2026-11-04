@@ -250,15 +250,16 @@ impl Game {
                 card,
                 object,
                 to: ZoneType::Battlefield,
+                entry,
                 ..
             } => {
                 let source = object.unwrap_or(ObjectRef {
                     entity: EntityId::from(*card),
                     incarnation: self.state.object_incarnations[*card],
                 });
-                // Entering objects come under their owner's control; the
-                // condition reads that player's battlefield before the move.
-                let entering_controller = self.state.cards[*card].owner;
+                // Entry conditions read the prospective controller, including
+                // a spell or reanimation controlled by someone other than its owner.
+                let entering_controller = entry.controller.unwrap_or(self.state.cards[*card].owner);
                 // "[predicate] permanents enter tapped" from the battlefield.
                 let static_tapped = [PlayerId(0), PlayerId(1)]
                     .into_iter()

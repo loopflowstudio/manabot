@@ -15228,3 +15228,92 @@ fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step()
     assert!(s.game().state.permanents[boulder].is_none());
     assert!(s.game().state.delayed_triggers.is_empty());
 }
+
+/// The attack occurrence owns the departed incarnation's last power, even if
+/// the physical source returns before the opponent answers its question.
+#[test]
+fn combustion_man_uses_departed_source_power_across_a_choice_and_reentry() {
+    let mut s = five_color_setup(&["Combustion Man", "Gray Ogre"]);
+    let man = s.force_permanent_on_battlefield(0, "Combustion Man");
+    let source = card_of(&s, man);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let affected = s.game().affected_permanent(man).unwrap();
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::ModifyPt {
+            power: 3,
+            toughness: 0,
+        },
+        EffectDuration::EndOfTurn,
+    );
+    clear_summoning_sickness(&mut s, man);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(&mut s, |action| {
+        matches!(action,
+        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == man)
+    });
+    if s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        s.decline_attack();
+    }
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    s.game_mut().move_card(source, ZoneType::Graveyard);
+    s.game_mut().move_card(source, ZoneType::Battlefield);
+    let returned = s.game().state.card_to_permanent[source].unwrap();
+    assert_ne!(returned, man);
+    assert_eq!(s.game().characteristics(returned).power, 4);
+    let mut replay = s.game().clone();
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::PayCost { .. }))
+        .unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let command = Command {
+        command_id: "departed-power".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    s.game_mut().execute_semantic_command(&command).unwrap();
+    replay.execute_semantic_command(&command).unwrap();
+    assert_eq!(
+        s.life(1),
+        13,
+        "last-known power was seven, returned power is four"
+    );
+    assert_eq!(
+        s.game().state.deterministic_hash(),
+        replay.state.deterministic_hash()
+    );
+}
+
+#[test]
+fn cruel_administrator_entry_raid_reads_the_entering_controller() {
+    for attacked in [PlayerId(0), PlayerId(1)] {
+        let mut s = five_color_setup(&["Cruel Administrator"]);
+        let card = cast(&mut s, "Cruel Administrator");
+        s.game_mut().state.turn.history[attacked.0].attacked = true;
+        let managym::state::stack_object::StackObject::Spell(spell) =
+            s.game_mut().state.stack_objects.last_mut().unwrap()
+        else {
+            panic!("administrator spell expected");
+        };
+        spell.controller = PlayerId(1);
+        resolve_top(&mut s);
+        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        assert_eq!(
+            s.game().state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .controller,
+            PlayerId(1)
+        );
+        assert_eq!(counters(&s, permanent), i32::from(attacked == PlayerId(1)));
+    }
+}

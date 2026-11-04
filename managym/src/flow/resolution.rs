@@ -2,15 +2,12 @@
 // Resolving stack objects. Effects execute through an EffectFrame so a
 // resolution can suspend on a mid-resolution decision (see decision.rs).
 
-use crate::state::card::Keyword;
-use std::collections::VecDeque;
-
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
         decision::{
             Decision, EffectFrame, FrameFinalize, PaymentProgress, ResolutionCastOffer,
-            ResolutionTarget,
+            ResolutionTarget, TargetIteration,
         },
         event::GameEvent,
         game::Game,
@@ -24,7 +21,7 @@ use crate::{
             LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
             TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardDefId, CardDefinition},
+        card::{ActivatedAbilityDefinition, CardDefId, CardDefinition, Keyword},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Counters, Permanent},
@@ -54,7 +51,14 @@ impl Game {
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::SourcePower => self
                 .source_permanent_id(frame)
-                .map_or(0, |id| self.characteristics(id).power),
+                .map(|id| self.characteristics(id).power)
+                .or_else(|| {
+                    frame
+                        .source_ref
+                        .and_then(|source| self.object_lki(source))
+                        .map(|lki| lki.power)
+                })
+                .unwrap_or(0),
             EffectValue::AttackingMatching { predicate } => self
                 .battlefield_permanents(frame.controller)
                 .into_iter()
@@ -170,31 +174,16 @@ impl Game {
         };
 
         let frame = EffectFrame {
-            remembered: Vec::new(),
             source: Some(card),
             source_ref: self.current_object_ref(card),
-            inherited_from: None,
-            source_transforms: 0,
-            controller: spell.controller,
-            resolutions_this_turn: 0,
             kicked: spell.kicked,
             x: spell.x,
-            excess_damage: 0,
-            created: None,
-            this_way: Vec::new(),
-            moved: Vec::new(),
-            chosen: None,
             targets,
-            active_requirement: 0,
-            context_target: None,
-            triggering_player: None,
-            grantor: None,
-            ability: None,
-            queue: VecDeque::from(effects),
             finalize: FrameFinalize::Spell {
                 card,
                 attach_to: None,
             },
+            ..EffectFrame::new(spell.controller, effects)
         };
         self.run_frame(frame);
     }
@@ -284,31 +273,19 @@ impl Game {
         // CR 113.7a: an activated ability exists independently of its source.
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
-        let source_ref = Some(ability.source_ref);
-
         let frame = EffectFrame {
-            remembered: Vec::new(),
             source: Some(ability.source_card),
-            source_ref,
+            source_ref: Some(ability.source_ref),
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
-            controller: ability.controller,
-            resolutions_this_turn: 0,
-            kicked: false,
             x: ability.x,
-            excess_damage: 0,
-            created: None,
-            this_way: Vec::new(),
-            moved: Vec::new(),
-            chosen: None,
             targets,
-            active_requirement: 0,
             context_target: attached,
-            triggering_player: None,
             grantor: ability.granted_by.map(|grant| grant.grantor),
-            ability: None,
-            queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
-            finalize: FrameFinalize::None,
+            ..EffectFrame::new(
+                ability.controller,
+                crate::state::ability::bind_effect_clauses(effects),
+            )
         };
         self.run_frame(frame);
     }
@@ -388,23 +365,16 @@ impl Game {
                 .as_ref()
                 .and_then(|lki| lki.inherited_from),
             source_transforms: triggered.source_transforms,
-            controller: triggered.controller,
             resolutions_this_turn,
-            kicked: false,
             x: triggered.x,
-            excess_damage: 0,
-            created: None,
-            this_way: Vec::new(),
-            moved: Vec::new(),
-            chosen: None,
             targets,
-            active_requirement: 0,
             context_target: triggered.context,
             triggering_player: triggered.player,
-            grantor: None,
             ability,
-            queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
-            finalize: FrameFinalize::None,
+            ..EffectFrame::new(
+                triggered.controller,
+                crate::state::ability::bind_effect_clauses(effects),
+            )
         };
         self.run_frame(frame);
     }
@@ -1838,44 +1808,10 @@ impl Game {
                 None
             }
             Effect::ForEachTarget { effects } => {
-                // Run the inner effects once per chosen target with that
-                // target as the primary. Inner effects must not suspend.
-                for target in frame.active_targets() {
-                    let mut sub = EffectFrame {
-                        remembered: frame.remembered.clone(),
-                        source: frame.source,
-                        source_ref: frame.source_ref,
-                        inherited_from: frame.inherited_from,
-                        source_transforms: frame.source_transforms,
-                        controller: frame.controller,
-                        resolutions_this_turn: frame.resolutions_this_turn,
-                        kicked: frame.kicked,
-                        x: frame.x,
-                        excess_damage: 0,
-                        created: None,
-                        this_way: Vec::new(),
-                        moved: Vec::new(),
-                        chosen: None,
-                        targets: vec![ResolutionTarget {
-                            requirement: 0,
-                            ..target
-                        }],
-                        active_requirement: 0,
-                        context_target: None,
-                        triggering_player: frame.triggering_player,
-                        grantor: frame.grantor,
-                        ability: frame.ability,
-                        queue: VecDeque::from(effects.clone()),
-                        finalize: FrameFinalize::None,
-                    };
-                    while let Some(effect) = sub.queue.pop_front() {
-                        let decision = self.execute_frame_effect(&effect, &mut sub);
-                        debug_assert!(
-                            decision.is_none(),
-                            "ForEachTarget sub-effects must not suspend"
-                        );
-                    }
-                }
+                frame.iteration = Some(TargetIteration {
+                    remaining: frame.active_targets().collect(),
+                    effects: effects.clone(),
+                });
                 None
             }
         }

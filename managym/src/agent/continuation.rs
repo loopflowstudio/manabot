@@ -668,53 +668,53 @@ impl Game {
         viewer: PlayerId,
         frames: &mut Vec<ContinuationFrame>,
     ) {
-        let effect = &suspended.frame;
-        let parent = if self.pending_choice.is_some() {
-            Some(frames.len() - 1)
-        } else {
-            None
-        };
-        let frame = ContinuationFrame {
-            kind: 5,
-            parent,
-            controller: effect.controller.0,
-            source: effect
-                .source_ref
-                .map(|r| self.visible_reference(r, viewer))
-                .unwrap_or_else(|| {
-                    effect
-                        .source
-                        .map(|card| self.card_reference(card, viewer))
-                        .unwrap_or_default()
+        // Walk outward, then project root first so every parent precedes its child.
+        let scopes: Vec<_> =
+            std::iter::successors(Some(&suspended.frame), |effect| effect.parent.as_deref())
+                .collect();
+        let mut parent = self.pending_choice.as_ref().map(|_| frames.len() - 1);
+        for effect in scopes.into_iter().rev() {
+            let frame = ContinuationFrame {
+                kind: 5,
+                parent,
+                controller: effect.controller.0,
+                source: effect
+                    .source_ref
+                    .map(|r| self.visible_reference(r, viewer))
+                    .unwrap_or_else(|| {
+                        effect
+                            .source
+                            .map(|card| self.card_reference(card, viewer))
+                            .unwrap_or_default()
+                    }),
+                kicked: effect.kicked,
+                inherited_from: effect.inherited_from.map(|id| VisibleReference {
+                    definition: Some(id.0),
+                    ..Default::default()
                 }),
-            kicked: effect.kicked,
-            inherited_from: effect.inherited_from.map(|id| VisibleReference {
-                definition: Some(id.0),
-                ..Default::default()
-            }),
-            x: effect.x,
-            source_transforms: effect.source_transforms,
-            resolutions_this_turn: effect.resolutions_this_turn,
-            active_clause: Some(effect.active_requirement),
-            targets: effect
-                .targets
-                .iter()
-                .map(|slot| ClauseTarget {
-                    reference: self.target_reference(slot.target, viewer),
-                    clause: slot.requirement,
-                    legal_at_resolution_start: Some(slot.legal),
-                })
-                .collect(),
-            remembered: self.remembered_references(&effect.remembered, viewer),
-            context: effect
-                .context_target
-                .map(|t| self.target_reference(t, viewer)),
-            ..ContinuationFrame::default()
-        };
-        // The native chain starts at the active choice and follows resume
-        // obligations. Reverse its projection so each interrupted obligation
-        // precedes its child and the current decision is the deepest frame.
-        frames.push(frame);
+                x: effect.x,
+                source_transforms: effect.source_transforms,
+                resolutions_this_turn: effect.resolutions_this_turn,
+                active_clause: Some(effect.active_requirement),
+                targets: effect
+                    .targets
+                    .iter()
+                    .map(|slot| ClauseTarget {
+                        reference: self.target_reference(slot.target, viewer),
+                        clause: slot.requirement,
+                        legal_at_resolution_start: Some(slot.legal),
+                    })
+                    .collect(),
+                remembered: self.remembered_references(&effect.remembered, viewer),
+                context: effect
+                    .context_target
+                    .map(|t| self.target_reference(t, viewer)),
+                ..ContinuationFrame::default()
+            };
+            frames.push(frame);
+            parent = Some(frames.len() - 1);
+        }
+        // Interrupted obligations precede the current decision.
         let first_decision = frames.len();
         let mut decision = &suspended.decision;
         loop {

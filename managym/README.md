@@ -6,6 +6,9 @@ and `academy` (the optional play UI). The Python API is `manabot.managym`,
 bundled with the `manabot` distribution; `import managym` remains a compatibility
 alias. Rust sources stay in this directory.
 
+[Engine development principles](PRINCIPLES.md) describe the learning, ownership
+and evidence boundaries for rules changes.
+
 ## Architecture
 
 managym is Manabot's authoritative world: match execution, semantic
