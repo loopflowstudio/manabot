@@ -1,5 +1,20 @@
 # Decisions and open questions — 5da5f4
 
+- Current result: cheaper 3090 completed both admission arms; all outputs verified
+  and rental deleted. Corrected cost $71.82 exceeds the $16 science allowance.
+  Fixed-cost extrapolation and prospective stops are repaired; model bottleneck
+  attribution still needs profiling. See `scratch/vast-host-diagnosis.md`. No
+  scientific cohort or plateau, budget increase, merge or promotion follows.
+
+- Latest, Jack Heart, 2026-11-04 22:38 UTC: diagnose implementation and actual phase costs on the owned rental; repair fixed-cost extrapolation and add prospective workload-based stops. Do not infer a bad host from hourly price or rental elapsed time. No extra budget/allocation; retained receipts remain immutable.
+
+- Latest, Jack Heart, 2026-11-04: "thats ok lets try" in response to the newly
+  available Vast3090 at about$0.247/hour. Attempt bounded two-arm throughput
+  admission now, at most$0.50 deducted from existing$16.50 compute remainder;
+  then run the full study if its measured cost fits. Requote, allow enough time
+  to avoid the known600-second finalization failure, keep all prior evidence,
+  and retain the ORIGINAL$25 cap. See current authorization atop the plan.
+
 - Latest continuation, Jack Heart, 2026-11-04: "keep going" after the primary
   explained the operator-created accounting deadlock. The current accounting
   decision at the top of the plan supersedes the final-settlement-only gate
@@ -28,6 +43,11 @@
   horizon and schedule by exposure. No admission score selects a treatment.
   The preceding machine loss established neither OOM nor affordability; the
   current 4090 receipt establishes a wall-budget pause and unaffordable projection.
+- Realignment (2026-11-04): the retained 4090 result supersedes the original
+  $0.20/3090 candidate description; current executable admission is capped at
+  $0.50. That reserved attempt cannot be reused as funding. Training memory now
+  records the implemented orchestration and actual Linux/CUDA proof. No new
+  hardware offer, scientific outcome or spending authorization follows.
 - Reconciliation (2026-11-04): the executable now supplies sequential scientific
   orchestration as well as admission and analysis; actual scientific execution
   still requires measured affordability; no architecture decision
@@ -73,7 +93,10 @@ prospective v9 declaration, configurable native capacities and explicit
 native-action prefix for the pilot heuristic, candidate and initialization
 anchor. Native legality and Academy still expose every choice; omitted policy
 settings still reject overflow. These pilot choices do not change this study's
-frozen recipes, evidence, budget or acceptance criteria.
+frozen recipes, evidence, budget or acceptance criteria. The GPU study continues
+to declare 512 actions with overflow rejection; the new native casting/buffer
+repairs need a prospective runtime freeze and admission before replacement
+science, even when recipe digests do not change.
 
 MTG-213 v5 completed three GPU learner updates before action-capacity failure;
 that establishes execution, not learning gain or a trained evaluation endpoint.

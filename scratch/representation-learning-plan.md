@@ -2,13 +2,63 @@
 
 ## Current authorization and outcome
 
+Latest direction, Jack Heart, 2026-11-04 22:38 UTC: diagnose the current rental
+before attributing slowness to its host, and implement prospective workload-based
+startup, progress and affordability stops. The $25 total/$0.50 current attempt
+caps remain. No second allocation. Separate setup, collection/inference,
+learning, exports and idle/unclassified time; check CUDA, batching, threads,
+memory and available host telemetry without synthetic load. The aggregate
+elapsed projection below is superseded by corrected phase accounting: it
+multiplies child startup/export time by 256. Existing receipts stay frozen.
+
+Delete — do not maintain: replace the total-elapsed-per-update projection and
+its exclusive expected-value fixture. Keep full-cohort exposure, the 50%
+recurring-work allowance, initialization, periodic exports, evaluation and
+rental setup/teardown in the surviving phase-based projection. Replace immediate
+termination for policy stops with stop-file grace and retained exit/evidence;
+resource-deadline hard reaping remains. Non-recoverable collection must consume
+the existing executor stop callback, just as recoverable collection does.
+
+Completed cheaper admission, 2026-11-04: source `22c10ca55`, run
+`803bcc26e7de`, both arms completed four updates/1,024 games on the same 3090.
+All 46 outputs (131,204,931 bytes) verified; instance `59168556` absent at
+22:58:28 UTC. Reported rental charge $0.205; conservative reserves leave $16.
+The corrected phase projection is $71.82; recurring training alone without
+allowances is $47.58. No replacement science launched and plateau remains unmet.
+Implementation diagnosis, measured phases, attribution limits and prospective
+watchdogs are in `scratch/vast-host-diagnosis.md`; evidence is manifest-backed
+under `experiments/data/state-representation-gpu-5da5f4/cheaper-3090/`.
+
+Latest direction, 2026-11-04: after the primary reported fresh Vast availability
+(21:55 UTC: one verified RTX3090 offer58799774 in Japan at$0.2474074/hour,
+13.33vCPUs,42.918GBhost RAM,40GBdisk/free transfer; no4090 and five5090 offers),
+Jack Heart said "thats ok lets try". Attempt the cheaper3090 now within the
+existing $16.50 remaining compute allowance and ORIGINAL$25 total. This is
+explicit approval of a bounded attempt despite uncertain full-study affordability,
+not a budget increase or changed scientific scope. Requote before renting;
+the observed offer is not reserved. Use at most$0.50 for this new ordinary
+two-arm admission, deducted from remaining compute, with complete rental/setup/
+evaluation/cleanup costs accounted. Preserve all failed attempts.
+
+Avoid repeating the known600-second predictive-finalization failure: budget
+enough bounded time for both four-update sequential learners, using the retained
+4090 and3090 timings and the actual quote. Adjust only admission watchdog and
+lease controls prospectively as needed within$0.50; do not shorten science or
+fabricate completed admission. Use locked Etude Git source, one owned allocation,
+and retained numerics/throughput/exit/teardown receipts. Continue directly with
+the implemented scientific path if measured complete-cohort cost fits the
+remaining allowance. If the offer disappears or actual throughput is still
+unaffordable, report that concrete outcome. This changed capacity and explicit
+instruction supersede the preceding no-further-attempt decision; the settlement
+watermark deadlock remains superseded too.
+
 Jack Heart requested actual GPU learning through the beginning of a sustained
 plateau on 2026-11-04. The completed short CPU study is insufficient for
 architecture selection. His subsequent “start it when you can”, “seems fine”
 and “keep going” authorize execution repair and a viable prospective restart
 within the ORIGINAL cumulative **$25**, preserving failed attempts and excluding
 score-based retries. Necessary Etude SDK work and Vast use are authorized.
-Stop at results demo/review: no study merge, model/default promotion, temporal
+The delivery boundary is results demo/review: no study merge, model/default promotion, temporal
 memory implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
 
 ### Current accounting decision — 2026-11-04
@@ -21,18 +71,19 @@ compute and $6 ancillary, leaving at most $17 for further compute. The subsequen
 $0.50 admission leaves **$16.50**; its result and teardown are below. These
 conservative operational reserves are not final invoices or new allowances.
 
-Before another purchase, read task-owned instances and reported charges once
-using the locked repaired SDK. Reconcile whole rental lifetimes, quoted rates,
-disk/transfer terms and reported amounts. Increase prior reserves if needed;
-never double-count charges and their reservations. Unknown live allocations
-retain their full commitment. Keep historical receipts immutable. An unavailable
+Another purchase requires one current read of task-owned instances and reported
+charges using the locked repaired SDK, reconciled against whole rental lifetimes,
+quoted rates and disk/transfer terms. Larger costs reduce the available allowance;
+charges and their reservations count only once. Unknown live allocations retain
+their full commitment. Historical receipts remain immutable. An unavailable
 settlement watermark alone does not block execution or implementation.
 
-Finish a bounded ordinary two-arm throughput check and execute a prospectively
-frozen affordable four-paired-seed GPU comparison. Do not repeat the eight-context
-failure, substitute CPU evidence, shorten the learning objective or treat cleanup
-as completion. The plateau objective remains unmet: one scientific cohort was
-cancelled, four restart admissions failed, and no replacement science launched.
+Remaining work is a measured implementation improvement and a prospectively
+frozen affordable four-paired-seed GPU comparison. Repeating the eight-context
+failure, substituting CPU evidence, shortening the learning objective or treating
+cleanup as completion does not meet acceptance. The plateau objective remains unmet: one scientific cohort was
+cancelled, four restart admissions failed, the cheaper two-arm admission completed
+but remains unaffordable, and no replacement science launched.
 The latest measured throughput/budget constraint below is the remaining blocker.
 
 Jack Heart selected public Etude Git main for source checkouts. `uv.lock` pins
@@ -47,11 +98,13 @@ and CUDA numerics. Historical locks stay frozen; no SDK release is claimed.
 
 `experiments/state_representation_gpu.py` declares the 256-stream candidate and
 defaults to an excluded admission: four ordinary complete-game updates per
-arm, sequentially, seed 74200, CUDA float32. Each learner has 600 seconds,
+arm, sequentially, seed 74200, CUDA float32. Each learner has 1,800 seconds,
 24 GiB host allowance and 80% CUDA allocator allowance. The rental allows
-30 minutes plus 15 minutes setup, originally at most $0.20, on a compatible RTX 3090 with
-at least 32 GB host RAM, included disk and free transfers. These are retained
-candidate bounds, not permission to reuse its spent reservation.
+75 minutes plus 15 minutes setup. Prospective startup/progress/cost stops can
+end it earlier with retained evidence and bounded graceful teardown. The operational amendment raised the original
+$0.20 / RTX 3090 admission allocation to $0.50 on a qualifying RTX 4090 with
+included disk and free transfers. The executable now declares $0.50; that spent
+reservation cannot fund a second admission. No current hardware offer is implied.
 
 Wider minibatches change optimization. Any later science needs a new prospective
 identity and fresh paired seeds 74211–74214; 256 updates × 256 complete games
@@ -62,7 +115,7 @@ keep the authored Allies/Lessons population and other treatment dimensions
 fixed. No score selected this candidate, and lost admission output does not
 establish its speed, memory sufficiency or affordability.
 
-## Current execution result — 2026-11-04
+## Preceding 4090 execution — 2026-11-04
 
 Source `e5df2a58758f` implements scientific orchestration in the existing module:
 explicit frozen allocation, sequential balanced seed/arm order, initialization
@@ -136,8 +189,9 @@ by the operational revision above; retained receipts are not rewritten.
 | `9c7c8e6841a4` / `27a12642200a35fc0cb436a9db69ce16c505016a` | Scientific eight-learner RTX 5090 cohort cancelled at 18:26:21 before scoring. Partial running snapshots retain 320 games and 57,258 decisions. Instance 59143644 deleted at 18:29:35; provider absence confirmed. |
 | `332a954fd935` / `978bf3eae` | RTX 3090 instance 59148889 never booted before startup deadline; `machine_lost_before_start`. No learning. Deleted; absent at 19:12:11. |
 | `1fca2d156e65` / `f0669347e` | Japan RTX 3090 instance 59149701 passed numerics; sequential pooled learner paused at finalization after 7/8 updates, 224 games, 40,241 decisions. Collection 204.40s + learning 143.74s (49.73s/update), 4.03 GB host RSS, 2.95 GB CUDA reserved. No GRU or concurrent pair. Deleted; absent at 19:30:36. |
-| `886233843d34` / `e5df2a58758f` | 4090 pooled admission paused after 3/4 updates (768 games); no GRU. Worker/controller failed; exports verified and published. Concrete pooled-only cost exceeds remaining scientific budget. |
 | `52617ef80df1` / `1ca17ed12` | 256-stream admission entered its pooled learner, then `lost / machine_lost`, no final exit status or output inventory. Cause/exposure unknown, not zero or an established OOM/native/model fault. Deletion confirmed at 19:41:03. |
+| `803bcc26e7de` / `22c10ca55` | Cheaper 3090: both arms completed four updates/1,024 games, all 46 outputs verified. Corrected full cost $71.82 exceeds $16; no science. Deleted, absent 22:58:28 UTC. |
+| `886233843d34` / `e5df2a58758f` | 4090 pooled admission paused after 3/4 updates (768 games); no GRU. Worker/controller failed; exports verified and published. Concrete pooled-only cost exceeds remaining scientific budget. |
 
 The scientific allocation required 32.23 seconds/update for 2,048 updates in
 66,000 seconds. First concurrent updates took 169–239s and a second took
@@ -218,6 +272,14 @@ hashes despite passing discovery checks; regression hashes and eight-endpoint
 read-only admission now protect retained identities. Re-execution needs archived
 source/native runtime, not rewritten evidence.
 
+The subsequent sync onto `8e8d702f807d61675fc1bca46417eee69316daa0`
+integrates native buffer-capacity and casting repairs plus MTG-213's prospective
+v9 first-64 support across its heuristic/candidate/initialization policies.
+That pilot exception does not change this study: its GPU recipe still declares
+512 actions with overflow rejection. New rules require a prospective runtime
+freeze/admission before any replacement, even if recipe hashes stay unchanged.
+No training, scoring or current-hardware proof followed this sync.
+
 ## Retired implementation and surviving ownership
 
 Delete — do not maintain: the SDK's `VastAPI.bill` timestamp-to-coverage
@@ -272,9 +334,13 @@ Historical validation, including the 28 isolated dependency checks, SDK suite,
 CPU endpoint reanalysis and original 18 study checks, remains at
 `37511d297611aa8720c52453a0034991c753be06:scratch/representation-learning-plan.md`.
 Manifest-backed `reconciliation-repaired/source-proof.json` and
-`sdk-validation.json` retain dependency commands and identities. The pre-existing
-uncommitted Training memory edit remains untouched; its older accounting and
-admission-only statements are superseded by this plan.
+`sdk-validation.json` retain dependency commands and identities. The selected
+Graph's 2026-11-04 reconciliation replaces Training memory's superseded accounting
+gate and admission-only claims with the retained operational result. No immediate
+Training child memory directories exist; inherited pilot decisions remain separate.
 
-Check: `uv run --locked --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` — 26 passed; Ruff and `git diff --check` clean. Gate owns broader suites. The actual 4090 admission failed its declared horizon;
-the original plateau objective remains unmet.
+Prior validation: 26 focused study/discovery tests passed after executor
+consolidation; Ruff was clean. Gate owns broader suites. The actual 4090 admission
+failed its declared horizon; the original plateau objective remains unmet.
+
+Check: `uv run --locked python` (manifest/accounting audit) — all 41 operational evidence files match hashes and lengths; budget/outcome claims agree; `git diff --check` clean. No scientific execution was repeated.

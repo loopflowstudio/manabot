@@ -44502,6 +44502,290 @@
    "sha256": "8c95a8421ad1c881079539b3242cd02a8652d25da8af12e6790108600b0d62c6",
    "bytes": 117
   },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/accounting.json": {
+   "sha256": "dc9e15eda9439a8ccd26c277ad3bca622ba4363554d5c4a25c109bb45c4e7782",
+   "bytes": 4180
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/analyze.py": {
+   "sha256": "08a8aa9714395aeb33f194b05c4f8f5a9943106ec0043fb03b3e7b5105959a18",
+   "bytes": 2266
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/availability.txt": {
+   "sha256": "427a6c07cb7d1043448f89f561451147aa53e99b85f62a40ff8035ffcd1901b1",
+   "bytes": 191
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/collect-final.log": {
+   "sha256": "13a1ba46f43a7c8b590db9bb1c30029e4ab0599857c9a3916c1d13e174d42b97",
+   "bytes": 4192
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/diagnosis.md": {
+   "sha256": "89bcf5e0b7ef3c201efc5960dd8de5c25d633acfe9dcf8bf01540f12864ab3d2",
+   "bytes": 5936
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/final-accounting.json": {
+   "sha256": "9f7c81fbadab72283f89dd044d93ce3c7b6cfd4783d701c799d675a7c53d3069",
+   "bytes": 2193
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/final-attempt.json": {
+   "sha256": "c4dbbc9141749158d4258c546b322ffc259d6d01c4b79fbdb4ddb8740cffd321",
+   "bytes": 10379
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/final-logs.json": {
+   "sha256": "2dfc6fbb0cc084fd368c2b24665e74635c6570c8c650a45ce7c685c202998238",
+   "bytes": 17687
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/gru-current.txt": {
+   "sha256": "1260e6dcad07ead5e3c8820c879ccd9f1a5673a26117300d3f3a9b8e3d9c6afd",
+   "bytes": 292
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/host-telemetry.txt": {
+   "sha256": "6f71d7236ba4dc3d80f30d1f1f9cf978cffb9caa1f0885e209bdce5c2cade959",
+   "bytes": 1192
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/launch.log": {
+   "sha256": "aa95684c24f8559a96334886b0b6bee18c5657b735ce64d90e050a443b74e1c5",
+   "bytes": 362
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/offers.json": {
+   "sha256": "a1f64747ab60cc60bbf6fee8e6216b19db01e5d9dbdd8a89325ddc23ce17a92c",
+   "bytes": 485
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/batch-0/child-0.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/batch-0/processes.json": {
+   "sha256": "a6ea7831199dd7ce265625709935944d13f575d2ae3487b554fa8463fbe8cb05",
+   "bytes": 32
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/batch-1/child-0.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/batch-1/processes.json": {
+   "sha256": "a6ea7831199dd7ce265625709935944d13f575d2ae3487b554fa8463fbe8cb05",
+   "bytes": 32
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/device.json": {
+   "sha256": "9e2217d6b86d29675e1025b78f1337fe65d9e6042a5b8f23ad17170afc6beeb1",
+   "bytes": 125
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training.sqlite": {
+   "sha256": "bf11832b489c43500c3c45dbb1a9d7c50deb251b82e9e3d69cea5812b8ef70c9",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/run.json": {
+   "sha256": "f5ca1e6b89211f3b179f5ace461422a761e6891f0b5229beb91a67341e29b79d",
+   "bytes": 11937
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play-ema.pt": {
+   "sha256": "ecf202a4e8147df430499aafb54599ed2c502aa57b97016c1f8f01d0113a280e",
+   "bytes": 9931355
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play-initial-raw.pt": {
+   "sha256": "20482c88ac3a3c607819ccd26afe48b37091c02b3070783303301ebb09b33404",
+   "bytes": 9930319
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play-optimizer.pt": {
+   "sha256": "7e95b6a653ac425541f5ee15c3c8ed1b4c7a49827844b3a6297c21ae8dc80da7",
+   "bytes": 15729971
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play-raw.pt": {
+   "sha256": "e6cf422e38342bbcf2cb2ef8579b22a6afd628178a9aa190e544156eabef6f17",
+   "bytes": 9929463
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/checkpoints/learner_transitions-0.json": {
+   "sha256": "36b94ebff9ba08d06f1a8d065b407985e979d94ba9f7d6ae5ff43224eca72933",
+   "bytes": 494
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/checkpoints/learner_transitions-0.pt": {
+   "sha256": "20482c88ac3a3c607819ccd26afe48b37091c02b3070783303301ebb09b33404",
+   "bytes": 9930319
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/checkpoints/learner_transitions-188735.json": {
+   "sha256": "5b357406ca1f4fcd94ad5d5ffbd3f3d7579ecd74975d3a67f132401353c92d85",
+   "bytes": 504
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/checkpoints/learner_transitions-188735.pt": {
+   "sha256": "e6cf422e38342bbcf2cb2ef8579b22a6afd628178a9aa190e544156eabef6f17",
+   "bytes": 9929463
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/metrics/2-00000000-00000004-d0552d531ad5.blk": {
+   "sha256": "ce119a257da743e30babb9eaab504ccc704bce1e6db808cfd7f3ce8517e3f97f",
+   "bytes": 358536
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/metrics/d0552d531ad5.index.json": {
+   "sha256": "ce33de334de41f9f522d3eaa8ba0055ec2d358052b3b9563cc4ae3d26e073add",
+   "bytes": 59707
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/metrics/d0552d531ad5.json": {
+   "sha256": "a703c6037cefae04303431b52f18b9de975c511106620cf01f0294de579e2e69",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/metrics/d0552d531ad5.permanent.json": {
+   "sha256": "e71d8fa0a2c2e6cba541480939ab03809a0f680df460d74e33fb04fb34077905",
+   "bytes": 415966
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/metrics/d0552d531ad5.removed": {
+   "sha256": "0522bab71f6ca00d0d0a66894b7cbfe568a7741dc4101b23cb3c4eeff4daad53",
+   "bytes": 180
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/run.json": {
+   "sha256": "1938f1b82faf30e70eb924ea78b6b7c805a05be310ee261bc5130a0df28016a8",
+   "bytes": 6531
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_gru/training/self-play/etude/979c57b41b3b4179aeacc2b4d8ab83a8/state.json": {
+   "sha256": "69b393866cf6b30f32e64ea9cd2ac94dd13612fe0e2faa36e6ca6eca0d368e7d",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/device.json": {
+   "sha256": "c90bcd15152bfaf114ac06d4b58151f14a4b2061a7f0e7bdb47ad205d7eebc8f",
+   "bytes": 125
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training.sqlite": {
+   "sha256": "bbccb85b9e9521a0504cf968dc62854dd3139c0930db4e0b5e136d8aca54725e",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/run.json": {
+   "sha256": "e49f02158292c8c98234999bef2eec7f40bef2060647003305b80610e937f8c7",
+   "bytes": 11947
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play-ema.pt": {
+   "sha256": "3f8a2cf1c09ba9a2c70c6e06c2669ddba8402bbefc1fedb92598e52f0013e74c",
+   "bytes": 9728827
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play-initial-raw.pt": {
+   "sha256": "832c8a2bca35163830b236416c07331b74472677f9f00c15f65d79eca0f23724",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play-optimizer.pt": {
+   "sha256": "422b270bfe68e4e0074a76d5435e20a54e531e403473be957d2a3e5fd71fa7e8",
+   "bytes": 15323779
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play-raw.pt": {
+   "sha256": "ffbfb40b5253cf5320137a58562c4a42d313540ea264c9db52be0acf07e592a0",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/checkpoints/learner_transitions-0.json": {
+   "sha256": "63128b76cd73786510caf510a7cd6f894bd6114a51ea5c7cf2d44ce64aaa0fcc",
+   "bytes": 495
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/checkpoints/learner_transitions-0.pt": {
+   "sha256": "832c8a2bca35163830b236416c07331b74472677f9f00c15f65d79eca0f23724",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/checkpoints/learner_transitions-186007.json": {
+   "sha256": "967460b46ead854130ec25fc10fa65645e2969f0011075bd72b955d07a68ee82",
+   "bytes": 505
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/checkpoints/learner_transitions-186007.pt": {
+   "sha256": "ffbfb40b5253cf5320137a58562c4a42d313540ea264c9db52be0acf07e592a0",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/metrics/2-00000000-00000004-34e6fcfcf99e.blk": {
+   "sha256": "9a7c6064247ccb77a4d33bac45aaafab052dc5653bb083ec83c5e904091dcbe9",
+   "bytes": 358536
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/metrics/34e6fcfcf99e.index.json": {
+   "sha256": "a2354e70191f9216dde5184d42d746047817ab04897f84550fd4157c333e58cf",
+   "bytes": 59706
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/metrics/34e6fcfcf99e.json": {
+   "sha256": "46ab498930b0b9bae0724f4e85710fbf860320e652b63af9768e96fae358a3bc",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/metrics/34e6fcfcf99e.permanent.json": {
+   "sha256": "52d7818727b2c9e26a8711453ba5e95a260dafa4cbc1abe3f4aa9091ac848172",
+   "bytes": 415890
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/metrics/34e6fcfcf99e.removed": {
+   "sha256": "060f84e1998b99ba1142f9884944ef2c9cf3c86ee2ece3aa15e3ed8fe165c6f9",
+   "bytes": 180
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/run.json": {
+   "sha256": "b5bf1f053ed1fd2c2fcc64a4f986df3ef161cbfff9c81c8c0dc619622ba1e90a",
+   "bytes": 6534
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/admission-1/typed_pool/training/self-play/etude/5d4740d3f0c34865866c361bead538c8/state.json": {
+   "sha256": "9202387481f85bec0f5174f9c0e7e9e759cedd591c801619f13e65077be99702",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/etude-result.json": {
+   "sha256": "2158a15193352e39c98b7b904276ac1c04b5c1b8b0d6723be6ce8d0103819b6d",
+   "bytes": 39
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/numerical-validation.json": {
+   "sha256": "0c39a23a2dd00ba841d074ba6017085c561b5edbd289e97f3a919c2bcf21670b",
+   "bytes": 647
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/numerical-validation.log": {
+   "sha256": "a76a5c421a0a5952d7d5ad552fe82fc994ef2246bb42e06ef837edb5c33a67a8",
+   "bytes": 663
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/outputs/throughput.json": {
+   "sha256": "218b4d91241d03b2e3aa73dd3f458e04ce785ce6a71d6f195bee7727987f7080",
+   "bytes": 102
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/phase-projection.json": {
+   "sha256": "d7375fb41b60dbbfb265c864ace55842afc650f7dc99dd0c3c8bec2d9274cef8",
+   "bytes": 1718
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/pooled-update-timings.json": {
+   "sha256": "f93c1ff1d51ad84d5af1468836cc84aabb23f5b2936a3002ec48d0ff3dfce45f",
+   "bytes": 6329
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/provider-running.json": {
+   "sha256": "048b53d27fc9bcebd4c534a54b9410d9265f153e72134315475af8edf2089895",
+   "bytes": 305
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/provider.json": {
+   "sha256": "048b53d27fc9bcebd4c534a54b9410d9265f153e72134315475af8edf2089895",
+   "bytes": 305
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/quote.log": {
+   "sha256": "fc9e355146bf42702b4d5fdbeed2861e915c5dfe436cc02edcab5450001fe013",
+   "bytes": 334
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/rental.json": {
+   "sha256": "6d37f61c80a45f6c274bf9f8da1befbcab47a60be36f1bc4c4d5d1ff7e3251ff",
+   "bytes": 253
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/result-recovery.json": {
+   "sha256": "61e34ec5788011216c41f8fcb96adc26251a14dc00d50294625f943d7ee9a2e8",
+   "bytes": 346
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/run.json": {
+   "sha256": "333e3811bbdbfd4c7323c8284dd288c1e01fce6e5d961af0f30047b6e6a464e0",
+   "bytes": 155975
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/session.json": {
+   "sha256": "0abf2429f8adcf90dd91795e41686e26621f40c4515af2c033dea10d88716e7e",
+   "bytes": 501
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/status.json": {
+   "sha256": "e43b9a4946337fe95f5c58bd3e2ecce20b89012d549e5dda4a4e777e1ee114b1",
+   "bytes": 428
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/telemetry-provider.json": {
+   "sha256": "b8cf1ad047bab992042da778e6781e31da5420a01a6692019d75eb936cd9b5fd",
+   "bytes": 555
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/terminate.log": {
+   "sha256": "9e107cc5653e50ac63087c66a4e57cc1d9b2f091f1515e8d37d2354850dcca5d",
+   "bytes": 178
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/wait.log": {
+   "sha256": "e588501a655a33b20a7c7243260a376534628319eb2ef030d26fcb1a26568c5e",
+   "bytes": 378
+  },
   "experiments/data/state-representation-gpu-5da5f4/operational-restart/accounting.json": {
    "sha256": "877b2567c7e92212cb976f2db91c40ca65834b50b68b35f3ab71d685c35714ad",
    "bytes": 3729

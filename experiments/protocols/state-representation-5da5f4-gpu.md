@@ -328,3 +328,57 @@ recipes, seeds, horizons and criteria remain unchanged. The locked Etude Git
 source remains 64e9eaabf016f567cb9567280bcf8730f6f5d524. Admission scores are
 neither calculated nor used for selection. Proceed with science only if the
 complete two-arm elapsed-time projection, including allowances, fits $16.
+
+## Phase accounting and execution supervision — prospective 2026-11-04
+
+Jack Heart's 22:38 UTC direction requires diagnosing implementation before
+assigning host fault and failing unsuitable execution promptly within the same
+allowance. The completed `22c10ca55` rental retains its original controls and
+receipt schema. The following controls apply only to future prepared sources;
+no additional rental or scientific scoring follows from this amendment.
+
+Replace total-elapsed extrapolation with per-arm `ArmThroughput` derived from
+ordinary TrainingRun phases. Recurring collection, learning and unclassified
+in-stage bookkeeping scale to 256 updates for four seeds, with 50% allowance.
+Imports/setup/close and initial/final exports count once per learner. Each of
+seven intermediate raw exports is conservatively bounded by that arm's whole
+admission export bundle. Remaining outer orchestration counts once per paired
+seed; add 900s rental setup, 5,400s evaluation and 120s teardown once. This does
+not establish later game length or exact intermediate-export cost. Archived
+aggregate receipts keep their schema and bytes; derived analysis is separate.
+
+An explicit `admission_limits` JSON freezes the scientific allowance, quoted
+hourly ceiling, startup and grace limits in `StudyJob`. Current defaults bind
+$16 science, $0.26/hour, 180s to ready CUDA/one-thread placement and 120s shutdown
+grace. The no-completed-update window is max(300s, four times the affordable
+mean update duration), where affordable mean is the science time allowance less
+the fixed rental reserve divided by eight learners × 256 updates. After two
+completed ordinary updates, reject if even that arm's four-seed phase projection
+plus fixed rental reserve exceeds the entire scientific allowance, treating the
+other arm as free. These score-independent capacity rules identify unsuitable
+execution, not defective hardware. Missing/incorrect placement, startup,
+no-progress and affordability retain distinct reasons and completed exposure.
+
+The supervisor writes progress and its reason, requests the child's existing
+stop file, allows bounded evidence flush, then reaps the process group if needed.
+The executor checks that stop/resource callback during ordinary collection as
+well as recoverable collection. Hard rental bounds still apply. Controlled
+fixtures cover startup, progress, cost, placement, graceful receipt retention and
+forced reaping without synthetic load. Future live execution must verify these
+controls; no such proof is claimed from the already frozen rental.
+
+The cheaper admission `803bcc26e7de` succeeded: four updates/1,024 games per arm,
+2,715.66s two-arm elapsed. All 46 outputs (131,204,931 bytes) match the worker
+inventory. Pool collection/learning/export took 843.07/440.84/0.61s; GRU took
+969.56/448.04/0.58s. Most measured collection time was policy inference/action
+selection. Host samples and the encoder source audit suggest CPU dispatch/device
+synchronization as a candidate, without isolating its causal contribution.
+The previous 4090 has different training/native source hashes, so it supplies
+no matched-source hardware speed comparison.
+
+Corrected full-cohort projection is **$71.82**, or **$47.58** for recurring
+training alone without allowances/fixed/evaluation costs, versus **$16** available.
+No science launched; all plateau acceptance remains open. Instance `59168556`
+was terminated and confirmed absent at 22:58:28 UTC. Reported charge $0.205 is
+not final settlement. Manifest-backed evidence and distinct derived projection:
+`experiments/data/state-representation-gpu-5da5f4/cheaper-3090/`.
