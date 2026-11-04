@@ -1,7 +1,7 @@
 # TLA full-file reconciliation — MTG-226
 
 This audit reconciles the allocation with the native catalog and directed behavior
-witnesses on the T7 implementation, now merged with published T6 `7c790f78e`.
+witnesses on the T7 implementation, now integrated with merged T6 `5dd11cec4`.
 The [allocation](allocation.jsonl) remains the planning authority; this document
 is evidence navigation, never an admission allowlist. Definition is support.
 
@@ -47,6 +47,15 @@ control; the Academy proof reconnects at the actual controlled cleanup discard,
 preserves offers/private inspection and rejects duplicate/stale Commands.
 Configured priority automation remains marked in the retained trace. This is
 bounded consumer integration, not a training run or a strength claim.
+
+`tests/semantic/test_player_control.py` also plays delegated Giant Koi
+Islandcycling in both seats and both durations through the native-to-Academy
+projection. It covers intervening own-player priority, native owner/zone labels,
+exact search forks and library-inspection expiry. Focused Svelte rendering
+checks keep the board and mana labels viewer-relative, show neutral “Search
+cards” headings with native delegation instructions, and label inspected cards
+by owner and zone. These are headless consumer and rendering checks, not a
+browser-layout or process-crash recovery proof.
 
 ## Concrete limits and remaining combined acceptance
 

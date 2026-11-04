@@ -154,42 +154,25 @@ def test_submitted_tla_decks_play_through_the_training_environment() -> None:
             break
         actions = raw.action_space.actions
         lands = len(raw.agent_permanents)
+        preferences = [managym.ActionEnum.PRIORITY_PLAY_LAND]
+        if raw.agent.player_index == 0 and lands >= 14:
+            preferences.append(managym.ActionEnum.PRIORITY_CAST_SPELL)
+        preferences.extend(
+            (
+                managym.ActionEnum.PAY_COST,
+                managym.ActionEnum.CHOOSE_TARGET,
+                managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+            )
+        )
         preferred = next(
             (
                 i
-                for i, a in enumerate(actions)
-                if a.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+                for kind in preferences
+                for i, action in enumerate(actions)
+                if action.action_type == kind
             ),
-            None,
+            0,
         )
-        if preferred is None and raw.agent.player_index == 0 and lands >= 14:
-            preferred = next(
-                (
-                    i
-                    for i, a in enumerate(actions)
-                    if a.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
-                ),
-                None,
-            )
-        if preferred is None:
-            preferred = next(
-                (
-                    i
-                    for i, a in enumerate(actions)
-                    if a.action_type
-                    in (managym.ActionEnum.PAY_COST, managym.ActionEnum.CHOOSE_TARGET)
-                ),
-                None,
-            )
-        if preferred is None:
-            preferred = next(
-                (
-                    i
-                    for i, a in enumerate(actions)
-                    if a.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
-                ),
-                0,
-            )
         _, _, done, truncated, _ = env.step(preferred)
         assert not done and not truncated
     else:
