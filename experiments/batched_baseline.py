@@ -6,12 +6,17 @@ from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.regime import (
+    BatchClosure,
     Execution,
     IterationSchedule,
     TrainingRegime,
     TrainSelfPlay,
 )
 import managym
+
+# Rows per stream per update; experiments/protocols/closure-lambda-v1.md calibrates.
+CLOSURE_QUOTA = 106
+CLOSURE_COMPLETE_FLOOR = 76
 
 
 def batched_baseline() -> TrainingRegime:
@@ -58,6 +63,7 @@ def scale_ladder() -> TrainingRegime:
     stage.updates = 100_000
     stage.streams = 256
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.learning = move_learning()
     stage.execution = Execution(
         device="cuda", wall_seconds=400_000, memory_bytes=40 * GIB
@@ -83,6 +89,7 @@ def seat_comparison(seats: Literal["one", "both"], updates: int) -> TrainingRegi
     assert isinstance(stage, TrainSelfPlay)
     stage.updates = updates
     stage.learning_seats = seats
+    stage.batch_closure = "complete-games"
     stage.games_per_stream = 1 if seats == "both" else 2
     return TrainingRegime.model_validate(regime.model_dump())
 
@@ -94,4 +101,39 @@ def scale_ladder_both() -> TrainingRegime:
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"
+    stage.batch_closure = "complete-games"
+    return TrainingRegime.model_validate(regime.model_dump())
+
+
+def closure_comparison(closure: BatchClosure, updates: int) -> TrainingRegime:
+    """One-seat `seat_comparison` differing only in when each batch closes.
+
+    The exact arm's quota is the learner decisions per stream that
+    `seat_comparison`'s two whole games yield. The complete arm's floor sits below
+    it by the mean overshoot of finishing the game in progress, so both arms take
+    about the same rows per update and sit at the same point of the absolute
+    iteration schedules at equal learner decisions. Recorded counters verify this.
+    """
+    regime = seat_comparison("one", updates)
+    regime.id = f"batch-closure-{closure}-v1"
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.games_per_stream = None
+    stage.batch_closure = closure
+    stage.transitions = (
+        CLOSURE_QUOTA if closure == "exact-quota" else CLOSURE_COMPLETE_FLOOR
+    )
+    return TrainingRegime.model_validate(regime.model_dump())
+
+
+def lambda_sweep(
+    policy_lambda: float, value_lambda: float, updates: int
+) -> TrainingRegime:
+    """Two-seat complete-game `seat_comparison` differing only in its traces."""
+    regime = seat_comparison("both", updates)
+    regime.id = f"lambda-sweep-p{policy_lambda:g}-v{value_lambda:g}-v1"
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.learning.policy_lambda = policy_lambda
+    stage.learning.value_lambda = value_lambda
     return TrainingRegime.model_validate(regime.model_dump())

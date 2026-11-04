@@ -1,13 +1,14 @@
 """Seat-routed on-policy collection for shared RL learning rules.
 
 ``SeatRoutedCollector`` owns native game streams and frozen behavior scopes.
-One-seat collection alternates learner seats by stream and pauses at an exact
-learner-decision quota. This remains the control and the random/frozen-opponent
-path. Default both-seat self-play collection keeps a separate trajectory for each seat,
-collects at least the requested total decisions per native stream, then finishes
-its current game. Complete trajectories are packed in one column, separated by
-terminal flags: GAE cannot cross players or games, and no behavior sample or
-pending action survives an update. Batch row counts may exceed the quota.
+Who learns and when a batch closes are separate declarations. One-seat collection
+alternates learner seats by stream; default both-seat self-play keeps a separate
+trajectory for each seat. Complete-game closure collects at least the requested
+decisions per native stream, then finishes its current game. Complete trajectories
+are packed in one column, separated by terminal flags: GAE cannot cross players or
+games, and no behavior sample or pending action survives an update. Batch row
+counts may exceed the quota. Exact-quota closure, one seat only, pauses each stream
+at the learner-decision quota and carries the game across the update.
 
 Self-play uses one live model for both seats. ``collect_pair`` instead returns
 one batch per learning model, with seats balanced across streams; each model's
@@ -47,6 +48,7 @@ from manabot.sim.rollout import (
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.regime import BatchClosure
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
@@ -132,6 +134,8 @@ class CollectorStats:
     """Cumulative accounting, including the opponent fingerprint."""
 
     micro_steps: int = 0
+    # Stream slots left unstepped while another stream finished its batch share.
+    idle_stream_steps: int = 0
     learner_transitions: int = 0
     opponent_decisions: int = 0
     games: int = 0
@@ -149,6 +153,7 @@ class CollectorStats:
         return {
             "micro_steps": self.micro_steps,
             "environment_decisions": self.micro_steps,
+            "idle_stream_steps": self.idle_stream_steps,
             "learner_transitions": self.learner_transitions,
             "opponent_decisions": self.opponent_decisions,
             "games": self.games,
@@ -196,7 +201,9 @@ class SeatRoutedCollector:
 
     ``learning_seats="both"`` is the default for ``self``
     (one shared model) or ``learning`` (two distinct models). ``one`` retains
-    the exact-quota, learner-only control, including in self-play.
+    the learner-only control, including in self-play. ``batch_closure`` says
+    separately when a batch ends: after whole games, or at an exact one-seat
+    quota that bootstraps its mid-game tail from the critic.
     """
 
     def __init__(
@@ -210,6 +217,7 @@ class SeatRoutedCollector:
         opponent_mode: str = "random",
         opponent_agent: ActorCritic | None = None,
         learning_seats: Literal["one", "both"] | None = None,
+        batch_closure: BatchClosure = "complete-games",
         games_per_stream: int | None = None,
         device: str = "cpu",
         recovery_max_microsteps: int | None = None,
@@ -260,6 +268,12 @@ class SeatRoutedCollector:
             raise ValueError("learning opponents require both learning seats")
         if opponent_mode in ("frozen", "learning") and opponent_agent is None:
             raise ValueError(f"opponent_mode={opponent_mode!r} requires opponent_agent")
+        if batch_closure == "exact-quota" and (
+            learning_seats == "both"
+            or games_per_stream is not None
+            or game_errors is not None
+        ):
+            raise ValueError("exact quota requires one seat and no per-game accounting")
 
         self.observation_space = observation_space
         self.match = match
@@ -267,6 +281,7 @@ class SeatRoutedCollector:
         self.num_envs = num_envs
         self.opponent_mode = opponent_mode
         self.learning_seats = learning_seats
+        self.batch_closure = batch_closure
         self.games_per_stream = games_per_stream
         self.opponent_agent = opponent_agent
         self.device = torch.device(device)
@@ -561,11 +576,12 @@ class SeatRoutedCollector:
         deadline_monotonic: float | None = None,
         check: Callable[[], None] | None = None,
     ) -> RolloutBatch:
-        """Collect exact one-seat quotas or complete-game two-seat batches.
+        """Collect a batch closed at an exact quota or after complete games.
 
-        With games_per_stream, both controls stop after that many whole games
-        in each stream. Otherwise two-seat num_steps is a total-decision floor.
-        No sampled action crosses the update boundary.
+        With games_per_stream, a stream stops after that many whole games.
+        Otherwise num_steps is a floor on the stream's retained decisions, the
+        total across seats when both learn. No sampled action crosses the update
+        boundary.
         """
 
         if self.opponent_mode == "learning":
@@ -629,9 +645,7 @@ class SeatRoutedCollector:
         num_envs = self.num_envs
 
         both = self.learning_seats == "both"
-        complete_games = (
-            both or self.games_per_stream is not None or self.game_errors is not None
-        )
+        complete_games = self.batch_closure == "complete-games"
         if self.game_error_state.stop_reason:
             raise GameErrorLimit(self.game_error_state.stop_reason)
         completed = np.zeros(num_envs, dtype=bool)
@@ -686,6 +700,7 @@ class SeatRoutedCollector:
             )
             if not active.any():
                 break
+            self.stats.idle_stream_steps += num_envs - int(active.sum())
             actions = np.zeros(num_envs, dtype=np.int64)
             learner_rows = np.flatnonzero(active & (acting == self.learner_seat))
             opp_rows = np.flatnonzero(active & (acting != self.learner_seat))

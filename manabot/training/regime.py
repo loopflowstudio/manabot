@@ -1,6 +1,6 @@
 """Validated recipe definitions: stages, learning settings and execution admission."""
 
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, TypedDict, cast
 
 from pydantic import (
     BaseModel,
@@ -14,6 +14,8 @@ from pydantic import (
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.training.decks import UniformDecks
 from manabot.training.state.game_errors import GameErrorPolicy
+
+BatchClosure = Literal["exact-quota", "complete-games"]
 
 
 class ArtifactReference(TypedDict):
@@ -357,6 +359,22 @@ class LearningStateOrigin(Strict):
     )
 
 
+def _implied_closure(
+    learning_seats: str, games_per_stream: int | None, game_errors: object
+) -> BatchClosure:
+    """What a serialized stage omitting `batch_closure` declares.
+
+    Closure was once inferred from these fields, and saved recipes rely on it:
+    only one-seat recipes with neither field stopped at an exact quota.
+    """
+    complete = (
+        learning_seats == "both"
+        or games_per_stream is not None
+        or game_errors is not None
+    )
+    return "complete-games" if complete else "exact-quota"
+
+
 class TrainSelfPlay(Stage):
     game_errors: GameErrorPolicy | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -391,6 +409,14 @@ class TrainSelfPlay(Stage):
         default=None, ge=1, exclude_if=lambda value: value is None
     )
     learning_seats: Literal["one", "both"] = "both"
+    # When a batch closes, independently of who learns. "complete-games" treats
+    # `transitions` as a per-stream floor and finishes the game in progress, so
+    # every return ends at a real result. "exact-quota" pauses each stream at
+    # `transitions` learner rows, usually mid-game, and bootstraps from
+    # V(next_obs). A new stage defaults here; a saved one that omits the field is
+    # resolved by TrainingRegime, so it serializes only when `_implied_closure`
+    # would say otherwise.
+    batch_closure: BatchClosure = "complete-games"
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = Field(default="fixed", exclude_if=lambda value: value == "fixed")
@@ -407,6 +433,18 @@ class TrainSelfPlay(Stage):
             return {**value, "learning_seats": "one"}
         return value
 
+    @model_serializer(mode="wrap")
+    def omit_implied_closure(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        # Regime digests hash these bytes, and saved stages never held the field.
+        values: dict[str, object] = handler(self)
+        if self.batch_closure == _implied_closure(
+            self.learning_seats, self.games_per_stream, self.game_errors
+        ):
+            values.pop("batch_closure")
+        return values
+
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
         if self.game_errors is not None and (
@@ -415,6 +453,17 @@ class TrainSelfPlay(Stage):
             raise ValueError(
                 "game error recovery requires native fresh-stage collection"
             )
+        if self.batch_closure == "exact-quota":
+            if self.learning_seats == "both":
+                raise ValueError(
+                    "both learning seats require complete games: at a pause only "
+                    "the acting seat has a next observation, so the other seat's "
+                    "pending row has no successor"
+                )
+            if self.games_per_stream is not None or self.game_errors is not None:
+                raise ValueError(
+                    "games_per_stream and game error recovery require complete games"
+                )
         if self.learning_seats == "both" and self.behavior not in (
             "current-self",
             "ema-self",
@@ -583,6 +632,22 @@ class RecoveryPolicy(Strict):
     checkpoint_updates: int = Field(default=128, ge=1)
 
 
+def _read_saved_self_play(
+    stage: dict[str, object], one_seat: bool
+) -> dict[str, object]:
+    if one_seat:
+        stage = {**stage, "learning_seats": stage.get("learning_seats", "one")}
+    seats = stage.get("learning_seats")
+    if seats is None:
+        seats = "one" if stage.get("behavior") in ("random", "frozen") else "both"
+    closure = _implied_closure(
+        str(seats),
+        cast(int | None, stage.get("games_per_stream")),
+        stage.get("game_errors"),
+    )
+    return {"batch_closure": closure, **stage}
+
+
 class TrainingRegime(Strict):
     schema_version: Literal[1, 2] = 2
     id: str
@@ -614,21 +679,24 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="before")
     @classmethod
-    def read_one_seat_regime(cls, value: object) -> object:
-        """Schema 1 omitted the one-seat choice; never relabel frozen evidence."""
-        if isinstance(value, dict) and value.get("schema_version") == 1:
-            stages = value.get("stages")
-            if isinstance(stages, list):
-                return {
-                    **value,
-                    "stages": [
-                        {**stage, "learning_seats": stage.get("learning_seats", "one")}
-                        if isinstance(stage, dict)
-                        and stage.get("operation") == "train_self_play"
-                        else stage
-                        for stage in stages
-                    ],
-                }
+    def read_saved_stages(cls, value: object) -> object:
+        """Resolve what saved stages omit; never relabel frozen evidence.
+
+        Schema 1 omitted the one-seat choice, and no saved stage declared its
+        batch closure. Stage instances are new authoring and keep their defaults.
+        """
+        if isinstance(value, dict) and isinstance(value.get("stages"), list):
+            one_seat = value.get("schema_version") == 1
+            return {
+                **value,
+                "stages": [
+                    _read_saved_self_play(stage, one_seat)
+                    if isinstance(stage, dict)
+                    and stage.get("operation") == "train_self_play"
+                    else stage
+                    for stage in value["stages"]
+                ],
+            }
         return value
 
     @model_serializer(mode="wrap")
@@ -814,6 +882,7 @@ class TrainingRegime(Strict):
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.learning_seats != stage.learning_seats
+                    or parent.batch_closure != stage.batch_closure
                     or parent.games_per_stream != stage.games_per_stream
                     or parent.matchup_curriculum != stage.matchup_curriculum
                     or parent.learning.ema != stage.learning.ema
@@ -823,7 +892,7 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock, workers and opponent"
+                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers and opponent"
                     )
             if isinstance(stage, TrainCompound):
                 if initial and parent is not latest_compound:

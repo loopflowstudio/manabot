@@ -191,3 +191,19 @@ Python focused suite passed 141 tests, then 84 relevant tests passed after five
 additional invalid-capacity cases; 96 broader admission/monitoring/boundary tests
 passed. Ruff and diff whitespace checks passed. Recorded failure remains
 d2ff60e6a1c11aa77e9592d0ecc3aedd72e0c3a7 / required-integration. No paid launch.
+
+## Task fc6ffb — batch closure and lambda (2026-11-04)
+
+Earlier sections are MTG-213 notes inherited from main; they do not direct this Task.
+
+Assumptions, each reversible:
+- Omitted closure means saved. `TrainingRegime` resolves dict stages by the old
+  inference; `TrainSelfPlay` instances take the complete-games default. No regime
+  schema bump, so every existing digest holds. A hand-written dict one-seat regime
+  therefore reads as exact quota and must declare complete games.
+- `baseline(learning_seats="one")` / `--learning-seats one` is new authoring, so it
+  now means complete games and its digest moved. Saved runs of it stay exact quota.
+- `AttackPlan` schema 2 uses the template closure; schema 1 stays exact quota.
+- The lambda study uses the two-seat recipe, since two-seat is settled as the recipe;
+  the closure study stays one-seat as the Task states.
+Protocol: `experiments/protocols/closure-lambda-v1.md`.
