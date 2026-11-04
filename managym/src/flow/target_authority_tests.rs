@@ -73,6 +73,7 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
 
 fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
+        remembered: Vec::new(),
         source_card: source,
         source_ref: None,
         source_lki: None,

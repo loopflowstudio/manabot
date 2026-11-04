@@ -27,6 +27,8 @@ STRUCT_MODELS = (
     "CommandReceipt",
     "DeckNames",
     "ExperienceFrame",
+    "ScheduleView",
+    "CombatView",
     "InteractionOffer",
     "LegacyCardTypesView",
     "LegacyCardView",

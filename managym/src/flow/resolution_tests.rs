@@ -106,6 +106,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            remembered: Vec::new(),
             source_transforms: 0,
             id,
             controller,
@@ -663,6 +664,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_card = game.state.permanents[source].as_ref().unwrap().card;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        remembered: Vec::new(),
         source_transforms: 0,
         id,
         controller: PlayerId(0),
@@ -754,4 +756,220 @@ fn counter_spell_cannot_target_an_ability() {
         &TargetSpec::Spell,
         PlayerId(0)
     ));
+}
+
+/// The selector is evaluated at creation; expiry and a response-time blink
+/// cannot make its effects follow the physical card into another incarnation.
+#[test]
+fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry() {
+    use crate::flow::{event::GameEvent, turn::StepKind};
+    use crate::state::ability::DelayedEvent;
+
+    for controller in [PlayerId(0), PlayerId(1)] {
+        for leave_before_firing in [false, true] {
+            let (mut game, subject, other) = fixture(controller);
+            let subject_card = game.state.permanents[subject].as_ref().unwrap().card;
+            let captured = game.permanent_object_ref(subject).unwrap();
+            stack(
+                &mut game,
+                Entry::Triggered,
+                controller,
+                vec![Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::NextEndStep { your_turn: false },
+                    remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
+                    effects: vec![
+                        pause(),
+                        Effect::Tap {
+                            what: ObjectSelector::Remembered,
+                        },
+                    ],
+                }],
+                vec![Target::Permanent(subject)],
+                vec![0],
+            );
+            game.resolve_top_of_stack();
+            assert_eq!(game.state.delayed_triggers[0].remembered, vec![captured]);
+            let source = game.state.delayed_triggers[0].source_card;
+            let mut different = game.clone();
+            different.state.delayed_triggers[0].remembered =
+                vec![game.permanent_object_ref(other).unwrap()];
+            assert_ne!(
+                game.state.deterministic_hash(),
+                different.state.deterministic_hash()
+            );
+            // Source departure does not discard the ability or its controller.
+            game.move_card(source, ZoneType::Graveyard);
+            if leave_before_firing {
+                game.move_card(subject_card, ZoneType::Exile);
+                game.move_card(subject_card, ZoneType::Battlefield);
+            }
+            game.emit(GameEvent::StepStarted {
+                step: StepKind::End,
+            });
+            game.process_game_events();
+            assert!(game.state.delayed_triggers.is_empty(), "one shot");
+            assert_eq!(game.state.pending_triggers[0].remembered, vec![captured]);
+            assert!(game.flush_triggers().is_none());
+            let frame = game
+                .continuation_frames(controller)
+                .into_iter()
+                .find(|f| f.kind == 3)
+                .unwrap();
+            assert_eq!(frame.remembered.len(), 1);
+            assert!(frame.context.is_none(), "step events supply no object");
+            game.resolve_top_of_stack();
+            assert_eq!(
+                game.state
+                    .suspended_decision
+                    .as_ref()
+                    .unwrap()
+                    .frame
+                    .remembered,
+                vec![captured]
+            );
+            if !leave_before_firing {
+                game.move_card(subject_card, ZoneType::Exile);
+                game.move_card(subject_card, ZoneType::Battlefield);
+            }
+            let new_subject = game.state.card_to_permanent[subject_card].unwrap();
+            assert_ne!(game.permanent_object_ref(new_subject).unwrap(), captured);
+            let space = game.suspended_decision_action_space().unwrap();
+            assert_eq!(space.player, Some(controller));
+            let choice = space
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::ChooseMode { mode: 0, .. }))
+                .unwrap();
+            game.publish_action_space(space);
+            let before = game.capture_decision(controller, 0).unwrap();
+            let mut replay = game.clone();
+            assert_eq!(
+                replay.capture_decision(controller, 0).unwrap().digest,
+                before.digest
+            );
+            game.step(choice).unwrap();
+            replay.step(choice).unwrap();
+            assert_eq!(
+                game.state.deterministic_hash(),
+                replay.state.deterministic_hash()
+            );
+            assert!(!game.state.permanents[new_subject].as_ref().unwrap().tapped);
+        }
+    }
+}
+
+#[test]
+fn delayed_capture_keeps_event_context_and_original_controller_after_source_changes() {
+    use crate::flow::event::GameEvent;
+    use crate::state::ability::DelayedEvent;
+
+    for controller in [PlayerId(0), PlayerId(1)] {
+        let (mut game, subject, _) = fixture(controller);
+        let remembered = game.permanent_object_ref(subject).unwrap();
+        stack(
+            &mut game,
+            Entry::Triggered,
+            controller,
+            vec![Effect::CreateDelayedTrigger {
+                event: DelayedEvent::YouNextCastThisTurn(CardPredicate::default()),
+                remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
+                effects: vec![
+                    pause(),
+                    Effect::Tap {
+                        what: ObjectSelector::Remembered,
+                    },
+                    Effect::gain_life(3),
+                ],
+            }],
+            vec![Target::Permanent(subject)],
+            vec![0],
+        );
+        game.resolve_top_of_stack();
+        let source = game.state.delayed_triggers[0].source_card;
+        let source_permanent = game.state.card_to_permanent[source].unwrap();
+        game.change_control(source_permanent, PlayerId(1 - controller.0));
+        game.move_card(source, ZoneType::Graveyard);
+        stack(&mut game, Entry::Spell, controller, vec![], vec![], vec![]);
+        let StackObject::Spell(spell) = game.state.stack_objects.last().unwrap() else {
+            panic!("spell")
+        };
+        let cast = spell.card;
+        game.emit(GameEvent::SpellCast {
+            card: cast,
+            targets: vec![],
+        });
+        game.process_game_events();
+        assert!(game.state.delayed_triggers.is_empty());
+        let pending = &game.state.pending_triggers[0];
+        assert_eq!(pending.remembered, vec![remembered]);
+        assert_eq!(pending.context, Some(Target::StackSpell(cast)));
+        assert!(game.flush_triggers().is_none());
+        game.resolve_top_of_stack();
+        let suspended = game.state.suspended_decision.as_ref().unwrap();
+        assert_eq!(suspended.frame.remembered, vec![remembered]);
+        assert_eq!(
+            suspended.frame.context_target,
+            Some(Target::StackSpell(cast))
+        );
+        let space = game.suspended_decision_action_space().unwrap();
+        assert_eq!(
+            space.player,
+            Some(controller),
+            "source's later controller does not own this ability"
+        );
+        let choice = space
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::ChooseMode { mode: 0, .. }))
+            .unwrap();
+        game.publish_action_space(space);
+        let life = game.state.players[controller.0].life;
+        game.step(choice).unwrap();
+        assert!(game.state.permanents[subject].as_ref().unwrap().tapped);
+        assert_eq!(game.state.players[controller.0].life, life + 3);
+    }
+}
+
+#[test]
+fn delayed_capture_projects_only_viewer_visible_incarnations() {
+    use crate::agent::continuation::VisibleReference;
+    use crate::state::ability::DelayedEvent;
+
+    let (mut game, subject, _) = fixture(PlayerId(0));
+    let card = game.state.permanents[subject].as_ref().unwrap().card;
+    stack(
+        &mut game,
+        Entry::Triggered,
+        PlayerId(0),
+        vec![
+            Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Creature)),
+            Effect::CreateDelayedTrigger {
+                event: DelayedEvent::NextEndStep { your_turn: false },
+                remember: Some(ObjectSelector::Moved),
+                effects: vec![Effect::exile(ObjectSelector::Remembered)],
+            },
+        ],
+        vec![Target::Permanent(subject)],
+        vec![0],
+    );
+    game.resolve_top_of_stack();
+    let captured = game.current_object_ref(card).unwrap();
+    assert_eq!(game.state.delayed_triggers[0].remembered, vec![captured]);
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let frame = game
+            .continuation_frames(viewer)
+            .into_iter()
+            .find(|frame| frame.kind == 10)
+            .unwrap();
+        assert_eq!(frame.remembered.len(), 1);
+        if viewer == PlayerId(0) {
+            assert_eq!(frame.remembered[0], VisibleReference::default());
+        } else {
+            assert!(frame.remembered[0].object.is_some());
+            assert_eq!(
+                frame.remembered[0].definition,
+                Some(game.state.cards[card].definition_id.0)
+            );
+        }
+    }
 }

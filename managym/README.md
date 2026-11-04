@@ -73,6 +73,15 @@ carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
+Delayed abilities compose timing, captured subjects and effects.
+`CreateDelayedTrigger.remember` resolves an ordinary `ObjectSelector` when the
+ability is created. Its exact incarnations travel through placement, stack and
+suspended resolution; `ObjectSelector::Remembered` never follows a departed
+object into a new incarnation. Event context (such as the spell just cast) stays
+separate. End-step timing can wait for either player's step or the controller's,
+independently of what was captured. Viewer-safe v5 relations and text expose the
+remembered references; earlier input versions retain their exclusions.
+
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
 not a set of revealed physical cards. Search forks by full clone: clone the
 `Game` before a normal Command `apply` and compare `search_state::witness` to
@@ -217,7 +226,8 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v5 keeps v4's trigger-placement action joins and retained
+Fresh policy input v6 has configurable fact capacity (512 by default), with
+v5 frozen at 128 rows and identical column meanings. It keeps v4's trigger-placement action joins and retained
 resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its

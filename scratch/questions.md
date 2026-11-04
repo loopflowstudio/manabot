@@ -40,3 +40,18 @@ The complete inherited files are retained, byte-for-byte, at
 and contrary evidence, and older history references. All three matched that
 commit before curation; no uncommitted evidence was removed. Parent HTML review
 artifacts remain untouched and are historical proposals, not new T7 direction.
+
+## Published T6 sync — 2026-11-03
+
+Integrate published parent `bf7631c6a1d229c1405ea800bd57e493aa66c45c` into T7.
+Retain both public schedule and player-control projections through native,
+Python, TypeScript and schema boundaries, plus both branches' directed card
+checks. T7's published chooser remains authoritative; native Decision/Action
+players retain resource ownership. Parent v6 fact capacity and delayed-selector
+changes remain intact.
+
+Restore the updated parent `mtg-225-tla-t6.md` and `t6-direction.md` as historical
+evidence rather than discard their post-consolidation additions. Complete parent
+notes, including schedule presentation and main v6 integration decisions, remain
+at `bf7631c6a1d229c1405ea800bd57e493aa66c45c:scratch/questions.md`.
+This sync does not operate T6 or authorize landing, experiments or broader work.

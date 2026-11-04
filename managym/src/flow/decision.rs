@@ -56,6 +56,9 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<crate::state::card::CardDefId>,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -745,6 +748,7 @@ impl Game {
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
             frame: EffectFrame {
+                remembered: Vec::new(),
                 source: None,
                 source_ref: None,
                 inherited_from: None,
@@ -2330,6 +2334,7 @@ mod learn_tests {
 
     fn learn(game: &mut Game) {
         game.run_frame(EffectFrame {
+            remembered: Vec::new(),
             source: None,
             source_ref: None,
             inherited_from: None,
@@ -3050,6 +3055,7 @@ mod payment_tests {
             false,
         );
         game.run_frame(EffectFrame {
+            remembered: Vec::new(),
             source: None,
             source_ref: None,
             inherited_from: None,

@@ -319,6 +319,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
     assert_ne!(old_ref, new_ref);
 
     s.game_mut().state.delayed_triggers.push(DelayedTrigger {
+        remembered: Vec::new(),
         event: DelayedTriggerEvent::Leaves {
             watched: old_ref,
             or_exiled: true,

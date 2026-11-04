@@ -100,13 +100,14 @@ PERMANENT_DIM = PERMANENT_DEALT_DAMAGE_INDEX + 2
 # V5 fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
-FACT_ROWS = 128
+# Frozen model numeric scale, independent of v6 row allocation.
+FACT_TIMESTAMP_SCALE = 128
 FACT_OBJECT_INDEX = 0
 FACT_KIND_INDEX = 1
 FACT_ID_INDEX = 2  # high, low
 FACT_DETAIL_INDEX = 4  # high, low: a keyword, subtype or color an effect names
 FACT_VALUE_INDEX = 6  # amounts / 10: count, power or N; then toughness
-FACT_DURATION_INDEX = 8  # 1 until end of turn, 2 indefinite
+FACT_DURATION_INDEX = 8  # 1 until end of turn, 2 indefinite, 3 while controlling source
 FACT_ORDER_INDEX = 9  # timestamp rank (1-based)
 FACT_SOURCE_INDEX = 10  # source definition + 1
 FACT_VALID_INDEX = 11
@@ -247,7 +248,11 @@ class ObservationEncoder:
                 if self.config.policy_input_version >= 2
                 else {}
             ),
-            **({"facts": (FACT_ROWS, FACT_DIM)} if self.shows_everything else {}),
+            **(
+                {"facts": (self.config.fact_rows, FACT_DIM)}
+                if self.shows_everything
+                else {}
+            ),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             **(
@@ -283,8 +288,9 @@ class ObservationEncoder:
         }
 
     def allocate(self, *leading_dims: int) -> Dict[str, np.ndarray]:
+        dtypes = self.dtypes
         return {
-            key: np.zeros((*leading_dims, *shape), dtype=self.dtypes[key])
+            key: np.zeros((*leading_dims, *shape), dtype=dtypes[key])
             for key, shape in self.shapes.items()
         }
 
@@ -552,7 +558,13 @@ class ObservationEncoder:
                     else []
                 ),
             ] or [0]
-            duration = 1.0 if effect.duration == "EndOfTurn" else 2.0
+            match effect.duration:
+                case "EndOfTurn":
+                    duration = 1.0
+                case "WhileYouControlSource":
+                    duration = 3.0
+                case _:
+                    duration = 2.0
             provenance = (duration, effect.timestamp, effect.source_registry_key)
             for detail in details:
                 push(obj, kind, ident, values, detail, provenance)
@@ -577,11 +589,11 @@ class ObservationEncoder:
         for obj, effects in holders:
             for effect in effects:
                 push_modification(obj, FACT_EFFECT, effect)
-        if len(rows) > FACT_ROWS:
+        if len(rows) > self.config.fact_rows:
             raise ValueError(
-                f"observation capacity exceeded: facts {len(rows)} > {FACT_ROWS}"
+                f"observation capacity exceeded: facts {len(rows)} > {self.config.fact_rows}"
             )
-        out = np.zeros((FACT_ROWS, FACT_DIM), dtype=np.float32)
+        out = np.zeros((self.config.fact_rows, FACT_DIM), dtype=np.float32)
         if rows:
             out[: len(rows)] = rows
         return out
@@ -657,6 +669,12 @@ class ObservationEncoder:
                 inherited[0], inherited[22], inherited[29] = 7, 1, 1
                 _reference(inherited, frame.inherited_from)
                 rows.append(inherited)
+            if self.shows_everything:
+                for ordinal, reference in enumerate(frame.remembered, 1):
+                    remembered = row.copy()
+                    remembered[0], remembered[22], remembered[29] = 8, 1, ordinal
+                    _reference(remembered, reference)
+                    rows.append(remembered)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1

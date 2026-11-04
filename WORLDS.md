@@ -250,12 +250,18 @@ inherited ability definitions, ordered extra turns and combat restrictions
 reach v5 facts/continuations, Python and text without widening frozen rows.
 Fresh action tables hold 512 alternatives for unrestricted catalog names;
 checkpoint readers retain an omitted historical action capacity of 64.
-Match-state hash contract 13 includes pending scheduling and retained ability
-meaning. Retargeting and resolution both read the ability's captured face,
+Match-state hash contract 14 includes pending scheduling, retained ability
+meaning and exact delayed-trigger subjects. Delayed timing is independent of
+selector capture; remembered incarnations remain distinct from event context
+through placement, stack and resolution. V5 carries them in reference rows of
+kind 8 (unchanged 49-column width); v1–v4 exclude them. Retargeting and resolution both read the ability's captured face,
 including when its source has transformed. Only mutable current-w17 evidence
 is refreshed; earlier worlds stay fixed.
 
-Policy input **v5** is the default; v1–v4 keep their widths. In every widened
+Policy input **v6** is the default, with configurable fact capacity (512 by
+default). V5 stays at 128 rows; v1–v4 keep their widths. V6 changes no column
+meanings or timestamp normalization (rank / 128). A checkpoint binds the
+version and selected capacity independently of this open rules-world label. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the
 hand-only lock, no maximum hand size, turn number, seat, kept red mana and

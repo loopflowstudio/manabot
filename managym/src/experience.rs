@@ -635,12 +635,37 @@ pub struct PlayerControlView {
     pub effective: bool,
 }
 
+/// Public committed scheduling only; absent on historical projections that
+/// did not record it. Order is execution order, independently in each domain.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScheduleView {
+    pub extra_turns: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_with: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_combat: Option<CombatView>,
+    pub additional_combats: Vec<CombatView>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CombatView {
+    pub player_index: u32,
+    /// Rules-derived predicate description. Absent means no extra restriction;
+    /// ordinary native attack legality still applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attackers: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyHeroObservation {
     /// Absent in historical frames; present empty means no scheduled control.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_controls: Option<Vec<PlayerControlView>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<ScheduleView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack_objects: Option<Vec<StackEntryView>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

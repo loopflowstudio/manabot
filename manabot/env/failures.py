@@ -380,14 +380,21 @@ class CapturedVector(_Capture):
         self._sampled_roots = True
 
     def set_training_decks(
-        self, decks: list[managym.PlayerConfig], digest: str
+        self,
+        decks: list[managym.PlayerConfig],
+        digest: str,
+        sampling: Literal[
+            "uniform-distinct-v1", "uniform-independent-v1"
+        ] = "uniform-distinct-v1",
     ) -> None:
         """Replace decks for later roots; evidence keeps each game's actual setup."""
-        self.native.set_training_decks(decks)
+        self.native.set_training_decks(
+            decks, distinct=sampling == "uniform-distinct-v1"
+        )
         self._sampled_roots = True
         self.identities["deck_source"] = {
             "digest": digest,
-            "sampling_policy": "uniform-distinct-v1",
+            "sampling_policy": sampling,
             "deck_ids": [player.name for player in decks],
         }
 

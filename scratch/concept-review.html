@@ -1,98 +1,70 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T6 · Concept review</title>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T6 · Know what comes next</title>
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
-  body { margin: 0 auto; max-width: 48rem; padding: 2.5rem 1.2rem 4rem; }
-  h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.2; }
-  h2 { margin-top: 2.4rem; font-size: 1.3rem; }
-  p, li { max-width: 70ch; }
-  small { display: block; }
-  code { font-size: .88em; overflow-wrap: anywhere; }
-  ol { padding-left: 1.5rem; }
-  li { margin: .85rem 0; }
-  blockquote { margin: 1.4rem 0; padding-left: 1rem; border-left: .2rem solid #987542; }
-  a { color: light-dark(#725322, #e1bc83); }
-  .muted { color: light-dark(#555, #bcbcbc); }
+:root{color-scheme:light dark;--paper:#faf8f3;--ink:#242e2c;--muted:#606b67;--line:#c7cdc3;--accent:#285e4d;--wash:#ecf0e9;font-family:system-ui,sans-serif;line-height:1.55;background:var(--paper);color:var(--ink)}
+@media(prefers-color-scheme:dark){:root{--paper:#18201e;--ink:#edf0e8;--muted:#b0bdb5;--line:#47564d;--accent:#aad4ba;--wash:#24312a}}
+*{box-sizing:border-box}body{max-width:780px;margin:auto;padding:32px 22px 56px}h1{font-family:Georgia,serif;font-size:clamp(2rem,6vw,3rem);font-weight:400;line-height:1.12;margin:18px 0}h2{font-size:1.1rem;margin:28px 0 10px}p{margin:12px 0}small,.muted{color:var(--muted)}code{font-size:.86em;overflow-wrap:anywhere}a{color:var(--accent)}.example{margin:20px 0;padding:18px 22px;border-left:3px solid var(--accent);background:var(--wash)}.example p:first-child{margin-top:0}.example p:last-child{margin-bottom:0}.steps{padding-left:24px}.steps li{padding:4px 0}table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}details{margin:20px 0}summary{cursor:pointer;color:var(--accent)}button{font:inherit;background:transparent;border:1px solid var(--line);border-radius:4px;padding:7px 12px;color:var(--ink);cursor:pointer}button[aria-pressed=true]{background:var(--accent);color:var(--paper)}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.questions li{margin:12px 0}footer{border-top:1px solid var(--line);margin-top:28px;padding-top:8px}@media(max-width:480px){body{padding:24px 16px}table{font-size:.8rem}td,th{padding:8px 4px}}
 </style>
+</head>
+<body>
 <header>
-  <small>MTG-225 · concept-review · 2026-11-03 · source head a82a963aa</small>
-  <h1>The choices are part of the rules.</h1>
-  <p><strong>No new product decision is needed.</strong> The repaired model follows
-  the accepted T6 experience. This review proposes no redesign and supplies no
-  merge approval.</p>
-  <p class="muted">Built from <a href="mtg-225-tla-t6.md">the working design</a>,
-  <a href="t6-direction.md">accepted direction</a>, <a href="questions.md">decisions</a>,
-  <code>managym/cards/src/tla.rs</code>, <code>managym/src/flow/{decision,resolution}.rs</code>,
-  <code>managym/src/cards/content_pack.rs</code>, their directed card tests,
-  <code>manabot/managym/experience_projection.py</code>, and
-  <code>tests/semantic/test_text_observation.py</code>, and
-  <code>tests/sim/test_local_update_compound.py</code>.</p>
+<small>MTG-225 · Concept review with Jack Heart · 3 November 2026 · source 01ed2fbcb</small>
+<h1>Know what comes next.</h1>
+<p><strong>Accepted by Jack Heart: finish the schedule projection in T6 (1a).</strong> The engine knows the order of extra turns and the restrictions on extra combats. The earlier Academy view showed counts. A person should be able to understand the same public state before choosing an action. The schedule projection is implemented locally; focused native, WebSocket and Svelte checks pass. The examples below remain illustrative copy, not browser captures.</p>
+<small>Built from the <a href="mtg-225-tla-t6.md">working design</a>, <a href="t6-direction.md">accepted direction</a>, <code>flow/turn.rs</code>, <code>agent/continuation.rs</code>, <code>experience_projection.py</code>, <code>PlayerArea.svelte</code> and <code>test_named_search_recovery.py</code>. Source inspection; these examples are proposed copy, not browser captures.</small>
 </header>
 <main>
-  <h2>Before: the publication failure</h2>
-  <p>Sozin chose targets before paying. Chapter II automatically exiled matches.</p>
-  <blockquote>The same final board does not preserve the player's choices,
-  payment commitment, or the opponent's response window.</blockquote>
-  <p class="muted">Historical failure: <code>.runs/t6-publication/sozin-payment-order.log</code>.
-  These were implementation gaps in accepted scope, not approved alternatives.</p>
-
-  <h2>Now: actions → concepts → APIs</h2>
-  <ol>
-    <li><strong>Choose X, or decline.</strong><br>
-    An optional payment → <code>Decision::ChoosePaymentX</code>.
-    X = 0 remains different from declining.</li>
-    <li><strong>Pay, then choose eligible graveyard targets.</strong><br>
-    A committed payment followed by a distinct trigger →
-    <code>PaymentProgress</code> → <code>Effect::WhenYouDo</code> →
-    <code>TargetRequirement.total_mana_value_x</code>.</li>
-    <li><strong>Allow responses, then resolve.</strong><br>
-    A stack object retains X and the damaged opponent. If one target leaves,
-    remaining legal targets resolve; payment stays committed.</li>
-  </ol>
-  <p><strong>Chapter II:</strong> name a card → inspect the opponent's searched
-  zones → choose individual matching cards → stop and shuffle, or finish at four.
-  <code>Decision::SearchNamed</code> owns the searched player, name and remaining
-  count. Native <code>SelectCard</code>/<code>Decline</code> actions advance it.</p>
-  <p>Academy displays native-authorized inspection with original owner and zone.
-  Policy, text and search read the same permission. Nonmatching cards are visible
-  but not selectable. After completion, physical inspection ends and learned
-  hand-definition knowledge remains.</p>
-
-  <h2>Recovery preserves the decision</h2>
-  <p>After one exile and a disconnect, the accepted contract is to recover the
-  retained search with three choices remaining. A stale Command must fail;
-  already-committed exiles and information stay committed. There is no new draft,
-  confirmation, or undo state.</p>
-  <p class="muted">The inspected tests cover exact selection, visibility,
-  payment/target ordering and consumer parity. Generic revision rejection exists.
-  A Sozin-specific retained-session reconnect proof remains a next verification
-  case; process-crash durability is not established here.</p>
-
-  <h2>One authority, few concepts</h2>
-  <p>Decklists choose cards from one catalog. The catalog owns stable definition
-  rows and content identity. Face changes preserve permanent identity; transform
-  history and captured abilities retain the facts needed by pending effects.
-  Ordered turn/combat schedules retain timing and restrictions. Academy projects
-  these facts without owning a second rules lifecycle.</p>
-  <p>Historical vocabulary labels and omitted saved observation defaults remain
-  compatibility inputs. Old authored-pack checkpoint migration is not claimed.</p>
-  <p><strong>Save and reload an agent:</strong> its actual observation configuration
-  → checkpoint input identity → <code>save_checkpoint(agent,
-  agent.observation_space, ...)</code>. The repaired fixture verifies that identity
-  after the final sampler reload. Fresh defaults do not redefine an existing
-  agent. This preserves the accepted contract without a new compatibility layer.</p>
-
-  <h2>Review result</h2>
-  <p><strong>Nothing to change; no open product choice.</strong> No proposed
-  behavior replaces the accepted design. Preserve the target-departure,
-  early-search-stop, retained-knowledge and intervening-transform counterexamples.</p>
-  <p class="muted">This pass rechecked source and saved evidence at the current
-  head. It did not rerun tests or refresh CI status.</p>
-  <p>Next proof: retained-session search recovery with stale resubmission, then
-  the outstanding acceptance checks recorded in the working design. Jack Heart's
-  PR review remains required. This page does not choose the Graph's next step.</p>
+<h2>One distinction the counts lose</h2>
+<p>Both players have one extra turn queued. The counts are identical even when the execution order is reversed.</p>
+<div role="group" aria-label="Compare two illustrative native schedules">
+<button type="button" id="you" aria-pressed="true">Your extra turn first</button>
+<button type="button" id="opponent" aria-pressed="false">Opponent’s first</button>
+</div>
+<div class="example">
+<p><strong>Earlier Academy copy — identical for both positions</strong><br>You will take an extra turn after this one.<br>Opponent will take an extra turn after this one.</p>
+<p><strong>Implemented — read the committed order</strong><br>After the current turn: <span id="order" aria-live="polite">your extra turn → opponent’s extra turn</span>.</p>
+<small>Illustrative queued turns only. Show the normal turn to resume when the native state supplies it; never guess it from the counts.</small>
+</div>
+<p><strong>Bumi exposes the same gap:</strong> “an additional combat phase” omits “only land creatures can attack.” During that combat the pending count is zero, but the restriction still matters.</p>
+<table>
+<thead><tr><th>Your action</th><th>Concept</th><th>Authority → projection</th></tr></thead>
+<tbody>
+<tr><td>Plan your next move</td><td>Ordered scheduled turns</td><td><code>TurnState.extra_turns / resume_with</code> → public continuation kind 11 → typed Academy schedule</td></tr>
+<tr><td>Prepare for Bumi’s combat</td><td>Pending or current combat, with its restriction</td><td><code>additional_combats / combat_attackers</code> → kind 12 → “Only land creatures can attack”</td></tr>
+<tr><td>Reconnect and continue</td><td>The same authoritative state</td><td>Recovered <code>ExperienceFrame</code> → schedule and current legal offers; no browser-owned queue</td></tr>
+</tbody></table>
+<details>
+<summary>Walk it through: normal play, failure, recovery</summary>
+<ol class="steps"><li>Bumi’s ability resolves. Before your next choice, the view shows the scheduled combat and its land-creature restriction.</li><li>Enter that combat. The restriction remains visible as <em>current</em>, even though the pending count is now zero. Native attack offers remain authoritative.</li><li>Disconnect. Reconnect to the retained session: recover that same restriction, remaining schedule and pending decision. Reject a stale Command without changing them.</li></ol>
+<p>A later effect can change the schedule. Show committed events only; do not predict unresolved abilities. Keep turn order and combat order separate rather than inventing one future-game timeline.</p>
+<p><strong>Focused proof passed:</strong> opposite turn orders with equal counts; current versus pending combat; unrestricted combat after a restricted one; both viewers; retained-session reconnect and stale rejection. Browser layout and final combined CI remain gate-owned. Historical captures without schedule data mean “not recorded,” not “nothing scheduled.” This needs no new persistence service.</p>
+</details>
+<details>
+<summary>Usage guidance and what already works</summary>
+<blockquote><strong>Academy usage guidance:</strong> Before choosing an action, read the scheduled turns and extra combats. The list shows events already scheduled, in execution order; later effects can change it. Restricted combats state which creatures may attack. After reconnecting, the list comes from the recovered game state.</blockquote>
+<p><strong>Existing, implemented:</strong> one catalog supplies card definitions; decklists choose cards. Learning encodes referenced definitions without restoring per-deck catalogs. Face state is separate from permanent identity. Checkpoints restore their saved input configuration; old authored-pack weights are not migrated.</p>
+<p><strong>Sozin now preserves the interaction:</strong> choose X or decline → pay → choose reflexive-trigger targets → allow responses. Chapter II names a card, privately inspects searched zones, and commits each selected exile or stops and shuffles. There is no draft or undo.</p>
+<p>The retained-session WebSocket test covers one exile, reconnect, duplicate retry, stale rejection and early stop with inspection ending. It does not prove recovery from a server process crash. Existing catalog documentation and skill instructions remain unchanged.</p>
+</details>
+<h2>Remember the object, schedule the event</h2>
+<p><strong>Accepted correction from Jack Heart, 3 November:</strong> delayed timing must compose with object selectors. A token-specific end-step event mixed two responsibilities. The implementation now captures exact objects when the ability is created; the later event supplies timing and its own context.</p>
+<div class="example"><p><strong>Foggy Swamp Visions and Fire Navy Trebuchet</strong></p>
+<ol class="steps"><li>Create a token and remember <code>CreatedThisWay</code> immediately.</li><li>Wait for the next end step—your own for Visions, either player's for Trebuchet.</li><li>Resolve ordinary <code>Sacrifice(Remembered)</code>, acting only on those exact incarnations.</li></ol>
+<p>Two copies have two independent captures. A departed object cannot be replaced by its later incarnation. Removing or gaining control of the source does not change who controls the delayed ability.</p></div>
+<p>Fatal Fissure uses the same capture path to watch its chosen creature's death. Spell-cast and creature-death context remain separate from remembered subjects. Upkeep timing, one-shot removal and this-turn expiry retain their existing rules. Native and Python tensors and text carry viewer-safe remembered references separately; learning tokens derive from the same selectors.</p>
+<p>Directed debug proofs cover reentry before and after firing, capture through placement and a suspended-choice fork, source departure/control change, separate event context and hidden hand projection. Current-world receipt refresh and final combined acceptance remain gate work; historical evidence is unchanged.</p>
+<footer>
+<h2>Decision recorded</h2>
+<ol class="questions"><li><strong>1a — Complete it in T6.</strong> Jack Heart selected this on 3 November 2026. Carry existing public order and restrictions into Academy, then prove recovery. Deferral (1b) was not selected.</li></ol>
+<p class="muted">The existing Task resumes implementation on PR #417 and returns to review after publication. No merge or auto-merge is authorized. No open product question remains from this review.</p>
+</footer>
 </main>
-</html>
+<script>
+const you=document.getElementById('you'),opponent=document.getElementById('opponent'),order=document.getElementById('order');
+function choose(first){const own=first==='you';you.setAttribute('aria-pressed',String(own));opponent.setAttribute('aria-pressed',String(!own));order.textContent=own?'your extra turn → opponent’s extra turn':'opponent’s extra turn → your extra turn';}
+you.addEventListener('click',()=>choose('you'));opponent.addEventListener('click',()=>choose('opponent'));
+</script>
+</body></html>

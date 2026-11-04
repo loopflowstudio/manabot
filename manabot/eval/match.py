@@ -24,6 +24,7 @@ from manabot.sim.match import play_game
 from manabot.sim.matchup import (
     SELECTED_SUITE,
     AuthoredMatchup,
+    DeckMatchup,
     selected_decks,
     selected_match,
 )
@@ -79,7 +80,7 @@ def play_cell(
     game_seconds: float = 120.0,
     max_commands: int = 10_000,
     matchup_mode: MatchupMode = "cross",
-    authored_matchup: AuthoredMatchup | None = None,
+    authored_matchup: AuthoredMatchup | DeckMatchup | None = None,
     execution: EvalExecution | None = None,
     inference: InferenceRuntime | None = None,
     card_evidence_dir: Path | None = None,

@@ -8,6 +8,7 @@ from collections.abc import Iterator
 import json
 import os
 from pathlib import Path
+import time
 
 import numpy as np
 import pytest
@@ -285,6 +286,7 @@ class ExtremeAgent(ActorCritic):
 
 
 def test_extreme_real_collector_to_learner() -> None:
+    torch.manual_seed(213)
     space = ObservationSpace()
     agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
         DEVICE
@@ -295,6 +297,9 @@ def test_extreme_real_collector_to_learner() -> None:
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
+        # This numerical fixture needs four decisions per stream. Two-seat
+        # collection waits for whole games, which this extreme policy can stall.
+        learning_seats="one",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
@@ -314,6 +319,18 @@ def test_extreme_real_collector_to_learner() -> None:
     assert all(torch.isfinite(p).all() for p in agent.parameters())
 
 
+class _AccountingClock:
+    def __init__(self) -> None:
+        self.epoch = time.perf_counter()
+        self.elapsed = 0.0
+
+    def perf_counter(self) -> float:
+        return self.epoch + self.elapsed
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(time, name)
+
+
 @pytest.mark.parametrize("fault", ["none", "capture", "telemetry"])
 def test_failed_update_retains_state_and_excludes_prior_overhead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
@@ -327,11 +344,15 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert isinstance(stage, TrainSelfPlay)
     stage.transitions = 2
     stage.updates = 2
+    # Fault accounting needs two tiny updates, not completion of sampled games.
+    # Keep the workload bounded as well as the injected accounting clock.
+    stage.learning_seats = "one"
     stage.execution.device = DEVICE
     stage.learning.min_advantage = 0
-    offset = [0.0]
-    clock = execution.time.perf_counter
-    monkeypatch.setattr(execution.time, "perf_counter", lambda: clock() + offset[0])
+    # Charge only injected durations in the executor. Keep watchdogs and the
+    # collector's clocks real, so CPU/CUDA speed cannot decide this assertion.
+    clock = _AccountingClock()
+    monkeypatch.setattr(execution, "time", clock)
     original_update = execution.update_iteration
     calls = [0]
     corrupted_rows: list[int] = []
@@ -339,8 +360,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     def update(*args: object, **kwargs: object) -> object:
         calls[0] += 1
         if calls[0] == 1:
-            return original_update(*args, **kwargs)
-        offset[0] += 0.25
+            result = original_update(*args, **kwargs)
+            clock.elapsed += 10.0
+            return result
+        clock.elapsed += 0.25
         batch = args[1]
         probabilities = torch.as_tensor(batch.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")
@@ -367,7 +390,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         # Simulates expensive initialization/persistence accumulated before the
         # failing operation. Keep watchdog limits unchanged and generous.
         if run.status == "running":
-            offset[0] += 2.0
+            clock.elapsed += 2.0
 
     monkeypatch.setattr(execution, "update_iteration", update)
     monkeypatch.setattr(VerifyStore, "save_training_run", save)
@@ -395,9 +418,8 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         return
     assert "incident capture failed" not in run["error"]
     assert record["updates"] == 1
-    assert record["learning_seconds"] >= 0.25
+    assert record["learning_seconds"] == pytest.approx(10.25)
     assert record["diagnostic_seconds"] >= 2
-    assert record["learning_seconds"] < record["diagnostic_seconds"]
     artifacts = record["rejected_artifacts"]
     assert set(artifacts) == {
         "numerical/tensors.pt",

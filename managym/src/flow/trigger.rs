@@ -48,6 +48,9 @@ impl TriggerPlacement {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PendingTrigger {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
     pub source_card: CardId,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
@@ -88,6 +91,9 @@ pub struct PendingTrigger {
 /// that is a battlefield object, supplies last known information).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DelayedTrigger {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
     pub source_card: CardId,
@@ -108,10 +114,8 @@ pub enum DelayedTriggerEvent {
     Leaves { watched: ObjectRef, or_exiled: bool },
     /// "Whenever a creature dies".
     CreatureDies,
-    /// "At the beginning of the next end step"; `context` is the trigger's
-    /// context ("sacrifice that token").
+    /// "At the beginning of the next end step", optionally only the controller's.
     NextEndStep {
-        context: Option<Target>,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         your_turn: bool,
     },

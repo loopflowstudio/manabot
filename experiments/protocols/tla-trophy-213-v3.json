@@ -1,0 +1,66 @@
+{
+  "allocation_hours": 1.0,
+  "allocation_usd": "1",
+  "bootstrap_seed": 21392001,
+  "corpus_sha256": "2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
+  "deck_seed": 21390001,
+  "game_seconds": 120.0,
+  "max_commands": 10000,
+  "max_paid_usd": "10",
+  "milestones": [
+    25,
+    50,
+    75
+  ],
+  "pairs": [
+    {
+      "deal": 21391000,
+      "first": 104,
+      "second": 81
+    },
+    {
+      "deal": 21391001,
+      "first": 27,
+      "second": 132
+    },
+    {
+      "deal": 21391002,
+      "first": 29,
+      "second": 57
+    },
+    {
+      "deal": 21391003,
+      "first": 16,
+      "second": 123
+    },
+    {
+      "deal": 21391004,
+      "first": 100,
+      "second": 81
+    },
+    {
+      "deal": 21391005,
+      "first": 78,
+      "second": 97
+    },
+    {
+      "deal": 21391006,
+      "first": 90,
+      "second": 36
+    },
+    {
+      "deal": 21391007,
+      "first": 72,
+      "second": 96
+    }
+  ],
+  "predecessor_protocol_sha256": "a99d10ad8efe5f66015177c5a5503d11d8d65236510fbfa4ad1ffba24b5fd43b",
+  "regime_sha256": "e7744139240fb2edb71b5f9230da9d93e9dfddedc48bdd980ad83941716fcf80",
+  "runtime_world": {
+    "card_digest": "dcb9d47c674a657176c2a9d56e016288d1e175729aa09cd60f0dc333633330ed",
+    "world_version": "w17"
+  },
+  "schema_version": 2,
+  "source_base": "a6d481ba9f97eca5f819ffc07616060881a5491e",
+  "training_seed": 21301
+}

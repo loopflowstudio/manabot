@@ -584,6 +584,8 @@ class _Renderer:
         if relation.context is not None:
             label = "watching" if relation.kind == 10 else "trigger context"
             details.append(f"{label} {self.fact_reference(relation.context)}")
+        for reference in relation.remembered:
+            details.append(f"remembered {self.fact_reference(reference)}")
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)

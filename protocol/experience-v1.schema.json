@@ -524,6 +524,27 @@
         }
       ]
     },
+    "CombatView": {
+      "type": "object",
+      "properties": {
+        "attackers": {
+          "description": "Rules-derived predicate description. Absent means no extra restriction;\nordinary native attack legality still applies.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "player_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "player_index"
+      ]
+    },
     "Command": {
       "type": "object",
       "properties": {
@@ -1192,6 +1213,16 @@
           "items": {
             "$ref": "#/$defs/PlayerControlView"
           }
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleView"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "stack_objects": {
           "type": [
@@ -2295,6 +2326,49 @@
       "format": "uint8",
       "maximum": 255,
       "minimum": 0
+    },
+    "ScheduleView": {
+      "description": "Public committed scheduling only; absent on historical projections that\ndid not record it. Order is execution order, independently in each domain.",
+      "type": "object",
+      "properties": {
+        "additional_combats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CombatView"
+          }
+        },
+        "current_combat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CombatView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extra_turns": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "resume_with": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "extra_turns",
+        "additional_combats"
+      ]
     },
     "SideboardCardView": {
       "type": "object",

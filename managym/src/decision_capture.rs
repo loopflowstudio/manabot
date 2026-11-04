@@ -165,6 +165,7 @@ impl Game {
                 ids.extend(target.reference.definition);
             }
             ids.extend(frame.context.and_then(|r| r.definition));
+            ids.extend(frame.remembered.iter().filter_map(|r| r.definition));
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
         let mut definitions = BTreeMap::new();

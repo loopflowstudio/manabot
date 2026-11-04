@@ -699,6 +699,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
             id,
             controller: trigger.controller,
@@ -988,6 +989,7 @@ impl Game {
             };
             let id = TriggerId(self.state.trigger_enqueue_counter);
             self.state.pending_triggers_mut().push(PendingTrigger {
+                remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
@@ -1139,10 +1141,8 @@ impl Game {
                 amount: EffectValue::Fixed(1),
                 until_end_of_combat: true,
             };
-            self.enqueue_inline_trigger(card, Some(source), controller, vec![effect], None);
-            if let Some(trigger) = self.state.pending_triggers.last_mut() {
-                trigger.attacker = Some(attacker);
-            }
+            self.enqueue_inline_trigger(card, Some(source), controller, vec![effect], None)
+                .attacker = Some(attacker);
         }
     }
 
@@ -1173,15 +1173,20 @@ impl Game {
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
             let context = match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, _) if creature_died => None,
+                (DelayedTriggerEvent::CreatureDies, GameEvent::CardMoved { card, .. })
+                    if creature_died =>
+                {
+                    self.latest_card_lki(*card)
+                        .map(|lki| Target::Permanent(lki.permanent))
+                }
                 (
-                    DelayedTriggerEvent::NextEndStep { context, your_turn },
+                    DelayedTriggerEvent::NextEndStep { your_turn },
                     GameEvent::StepStarted {
                         step: StepKind::End,
                     },
                 ) if !your_turn || self.active_player() == trigger.controller => {
                     spent.push(index);
-                    *context
+                    None
                 }
                 (
                     DelayedTriggerEvent::NextUpkeep,
@@ -1227,7 +1232,8 @@ impl Game {
             trigger.controller,
             trigger.effects.clone(),
             context,
-        );
+        )
+        .remembered = trigger.remembered.clone();
     }
 
     /// Put an occurrence with inline effects (no `Card::abilities` entry to
@@ -1241,7 +1247,7 @@ impl Game {
         controller: PlayerId,
         effects: Vec<Effect>,
         context: Option<Target>,
-    ) {
+    ) -> &mut PendingTrigger {
         let source_lki = source_ref.and_then(|source| {
             self.object_lki(source).cloned().or_else(|| {
                 (self.current_object_ref(source_card) == Some(source))
@@ -1251,6 +1257,7 @@ impl Game {
         });
         let id = TriggerId(self.state.trigger_enqueue_counter);
         self.state.pending_triggers_mut().push(PendingTrigger {
+            remembered: Vec::new(),
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
@@ -1273,6 +1280,10 @@ impl Game {
             .trigger_enqueue_counter
             .checked_add(1)
             .expect("trigger occurrence identity exhausted");
+        self.state
+            .pending_triggers_mut()
+            .last_mut()
+            .expect("enqueued trigger")
     }
 
     /// Abilities that function from their owner's graveyard (CR 113.6k):
@@ -1300,6 +1311,7 @@ impl Game {
             let source_ref = self.current_object_ref(card);
             let id = TriggerId(self.state.trigger_enqueue_counter);
             self.state.pending_triggers_mut().push(PendingTrigger {
+                remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,

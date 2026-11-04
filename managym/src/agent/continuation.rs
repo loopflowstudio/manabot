@@ -71,6 +71,9 @@ pub struct ManaOutput {
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
+    /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<VisibleReference>,
     /// Source's captured ability lender, retained after source departure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<VisibleReference>,
@@ -378,14 +381,13 @@ impl Game {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
             }
-            DelayedTriggerEvent::NextEndStep { context, .. } => {
-                context.map(|t| self.target_reference(t, viewer))
-            }
-            DelayedTriggerEvent::CreatureDies
+            DelayedTriggerEvent::NextEndStep { .. }
+            | DelayedTriggerEvent::CreatureDies
             | DelayedTriggerEvent::YouCastSpell(_)
             | DelayedTriggerEvent::NextUpkeep => None,
         };
         ContinuationFrame {
+            remembered: self.remembered_references(&trigger.remembered, viewer),
             kind: 10,
             decision: delayed_event_code(&trigger.event),
             controller: trigger.controller.0,
@@ -394,6 +396,17 @@ impl Game {
             this_turn: trigger.this_turn,
             ..ContinuationFrame::default()
         }
+    }
+
+    fn remembered_references(
+        &self,
+        objects: &[ObjectRef],
+        viewer: PlayerId,
+    ) -> Vec<VisibleReference> {
+        objects
+            .iter()
+            .map(|object| self.visible_reference(*object, viewer))
+            .collect()
     }
 
     /// The acting viewer's announcement, resolution and placement frames.
@@ -452,6 +465,7 @@ impl Game {
                         &trigger.target_req_indices,
                         viewer,
                     ),
+                    remembered: self.remembered_references(&trigger.remembered, viewer),
                     context: trigger.context.map(|t| self.target_reference(t, viewer)),
                     ..ContinuationFrame::default()
                 });
@@ -526,6 +540,7 @@ impl Game {
                     .source_ref
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
+                frame.remembered = self.remembered_references(&ability.remembered, viewer);
                 frame.context = ability.context.map(|t| self.target_reference(t, viewer));
                 &ability.target_req_indices
             }
@@ -683,6 +698,7 @@ impl Game {
                     legal_at_resolution_start: Some(slot.legal),
                 })
                 .collect(),
+            remembered: self.remembered_references(&effect.remembered, viewer),
             context: effect
                 .context_target
                 .map(|t| self.target_reference(t, viewer)),
@@ -871,7 +887,11 @@ pub fn encode_into(
             1 + f.targets.len()
                 + usize::from(f.context.is_some())
                 + usize::from(f.sacrifice.is_some())
-                + usize::from(dim == RELATION_DIM_V5 && f.inherited_from.is_some())
+                + if dim == RELATION_DIM_V5 {
+                    usize::from(f.inherited_from.is_some()) + f.remembered.len()
+                } else {
+                    0
+                }
                 + f.hybrid.len()
                 + 2 * f.mana_outputs.len()
         })
@@ -964,6 +984,9 @@ pub fn encode_into(
         if dim == RELATION_DIM_V5 {
             if let Some(definition) = frame.inherited_from {
                 reference_row(7.0, definition, 0, 0, None);
+            }
+            for (ordinal, reference) in frame.remembered.iter().enumerate() {
+                reference_row(8.0, *reference, 0, ordinal, None);
             }
         }
         for pair in &frame.hybrid {

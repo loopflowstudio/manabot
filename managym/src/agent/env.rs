@@ -517,6 +517,17 @@ impl Env {
             .decision_context(PlayerId(viewer)))
     }
 
+    /// Identical for both viewers: only committed public turn/phase state.
+    pub fn public_schedule(&self) -> Result<crate::experience::ScheduleView, AgentError> {
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .state
+            .turn
+            .public_schedule())
+    }
+
     pub fn capture_decision(
         &self,
         viewer: usize,
