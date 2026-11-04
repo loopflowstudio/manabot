@@ -44,7 +44,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             cast = False
             # Reach chapter II using ordinary Commands, without injecting state.
             for ordinal in range(200):
-                if any(o.label == "Stop searching and shuffle" for o in frame.offers):
+                if any(o.label == "Name Gray Ogre" for o in frame.offers):
                     break
                 labels = ["Name Gray Ogre", "Target Villain", "Play Swamp"]
                 if not cast:
@@ -70,8 +70,39 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 assert result["status"] == "accepted"
                 frame = ExperienceFrame.model_validate(result["update"]["frame"])
             else:
-                pytest.fail("Sozin's private search was not reached")
+                pytest.fail("Sozin's naming decision was not reached")
 
+        # Disconnect before naming: recovery must retain the complete vocabulary
+        # and its exact Command binding, without granting search inspection early.
+        with client.websocket_connect("/ws/play") as socket:
+            socket.send_json(
+                {
+                    "type": "resume",
+                    "session_id": initial["session_id"],
+                    "resume_token": initial["resume_token"],
+                }
+            )
+            recovered_name = ExperienceFrame.model_validate(
+                socket.receive_json()["recovery"]["frame"]
+            )
+            assert recovered_name == frame
+            name_offer = next(
+                offer for offer in frame.offers if offer.label == "Name Gray Ogre"
+            )
+            name_command = _command(frame, name_offer, "name-gray-ogre")
+            socket.send_json({"type": "command", "command": name_command})
+            named = socket.receive_json()
+            assert named["status"] == "accepted"
+            frame = ExperienceFrame.model_validate(named["update"]["frame"])
+            socket.send_json(
+                {
+                    "type": "command",
+                    "command": name_command | {"command_id": "name-stale"},
+                }
+            )
+            stale_name = socket.receive_json()
+            assert stale_name["status"] == "rejected"
+            assert stale_name["rejection"]["code"] == "stale_revision"
             assert frame.action_space == "LOOK_AND_SELECT"
             choices = [o for o in frame.offers if o.action_type == "SELECT_CARD"]
             assert len(choices) > 4

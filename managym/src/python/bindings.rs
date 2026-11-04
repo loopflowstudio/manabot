@@ -102,6 +102,12 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
+    if config.policy_input_version >= 8 {
+        dict.set_item(
+            "name_candidates",
+            to_numpy_array_f32(py, &np, &encoded.name_candidates, &[config.max_actions, 2])?,
+        )?;
+    }
     if config.policy_input_version >= 7 {
         for (name, values, shape) in [
             (
@@ -2048,6 +2054,10 @@ pub struct PyAction {
     #[pyo3(get, set)]
     pub mode_index: Option<usize>,
     #[pyo3(get, set)]
+    pub name_definition: Option<u32>,
+    #[pyo3(get, set)]
+    pub name_index: Option<usize>,
+    #[pyo3(get, set)]
     pub ability_index: Option<usize>,
     #[pyo3(get)]
     pub continuation_index: Option<usize>,
@@ -2159,6 +2169,8 @@ impl From<ActionOption> for PyAction {
             declared: value.declared,
             description: value.description,
             mode_index: value.mode_index,
+            name_definition: value.name_definition,
+            name_index: value.name_index,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
         }
@@ -2174,6 +2186,8 @@ impl From<PyAction> for ActionOption {
             declared: value.declared,
             description: value.description,
             mode_index: value.mode_index,
+            name_definition: value.name_definition,
+            name_index: value.name_index,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
         }
@@ -4150,7 +4164,7 @@ impl PyEnv {
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=7) {
+        if !matches!(policy_input_version, 1..=8) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
@@ -4160,7 +4174,16 @@ impl PyEnv {
         }
         let config = ObservationEncoderConfig {
             policy_input_version,
-            max_facts: max_facts.unwrap_or(if policy_input_version == 7 {
+            max_actions: if policy_input_version >= 8 {
+                ObservationEncoderConfig::default().max_actions.max(
+                    crate::cards::content_pack::default_content_pack()
+                        .name_candidates()
+                        .len(),
+                )
+            } else {
+                ObservationEncoderConfig::default().max_actions
+            },
+            max_facts: max_facts.unwrap_or(if policy_input_version >= 7 {
                 crate::agent::observation_encoder::V5_FACT_ROWS
             } else {
                 ObservationEncoderConfig::default().max_facts
@@ -4203,6 +4226,43 @@ fn authored_setup(name: &str) -> PyResult<&'static crate::cards::setups::Authore
 #[pyfunction]
 fn unsupported_cards(names: Vec<String>) -> Vec<String> {
     crate::world::unsupported_cards(names.iter().map(String::as_str))
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl crate::cards::names::NameCandidate {
+    #[new]
+    #[pyo3(signature = (name, definition=None))]
+    fn py_new(name: String, definition: Option<u32>) -> PyResult<Self> {
+        if name.is_empty() {
+            return Err(PyValueError::new_err("empty card name"));
+        }
+        Ok(Self {
+            name,
+            definition: definition.map(crate::state::card::CardDefId),
+        })
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[getter]
+    fn definition(&self) -> Option<u32> {
+        self.definition.map(|id| id.0)
+    }
+}
+
+/// Public naming vocabulary in Command order, with learning definition joins.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn naming_catalog() -> Vec<crate::cards::names::NameCandidate> {
+    crate::cards::content_pack::default_content_pack()
+        .name_candidates()
+        .iter()
+        .cloned()
+        .collect()
 }
 
 /// Learning tokens for every catalog definition, derived from the engine's card
@@ -4446,6 +4506,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(world_identity, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(naming_catalog, m)?)?;
+    m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
     m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;

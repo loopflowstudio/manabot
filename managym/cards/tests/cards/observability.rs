@@ -2675,6 +2675,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         focus => [Rows("action_focus")],
         declared => [column(Action, 17)],
         mode_index => [column(Action, 18)],
+        name_definition => [Rows("name_candidates (v8)")],
+        name_index => [Rows("name_candidates (v8)")],
         ability_index => [column(Action, 19)],
         continuation_index => [column(Action, 20)],
     }));

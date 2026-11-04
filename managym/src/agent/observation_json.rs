@@ -1,4 +1,4 @@
-//! Decode schema-7 viewer JSON into the authoritative native types.
+//! Decode schema-8 viewer JSON into the authoritative native types.
 //! Canonical round-trip validation rejects unknown fields and missing facts.
 use crate::{
     agent::{

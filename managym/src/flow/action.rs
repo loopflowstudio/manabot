@@ -74,6 +74,9 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
+                    Decision::NameCard { names, .. } => names
+                        .get(*mode)
+                        .map(|candidate| format!("Name {}", candidate.name)),
                     Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))
@@ -93,7 +96,6 @@ impl Game {
                                 "On the bottom".into()
                             })
                         }
-                        [Effect::ExileNamed { name, .. }] => Some(format!("Name {name}")),
                         [Effect::SearchBasicLand { .. }] => {
                             Some("Search your library for a basic land".into())
                         }

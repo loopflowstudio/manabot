@@ -149,6 +149,12 @@ checkpoints or experiment evidence.
   the model routes shared vectors before attention, preserving duplicate edges.
   V1–v6 remain frozen and fresh defaults remain v6. Allocate and collect every
   key from the selected `ObservationSpace`, never a global default key list.
+- Explicit input v8 retains v7 layouts and adds `name_candidates[A,2]`: public
+  name row plus optional definition reference, both one-based. Allocate `A` as
+  the larger of configured action capacity and installed vocabulary size.
+  Names are not game objects; do not use card slots or invent definitions for
+  them. Native scalar/vector paths infer v8 from this buffer and validate its
+  shape. V1–v7 and fresh v6 defaults remain unchanged.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

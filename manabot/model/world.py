@@ -118,6 +118,18 @@ def _input_binding(observation_space: Any) -> dict:
     return {
         "world": WORLD,
         "policy_input_version": observation_space.encoder.config.policy_input_version,
+        **(
+            {
+                "naming_vocabulary": _digest(
+                    [
+                        {"name": candidate.name, "definition": candidate.definition}
+                        for candidate in managym.naming_catalog()
+                    ]
+                )
+            }
+            if observation_space.encoder.config.policy_input_version >= 8
+            else {}
+        ),
         "rules": {
             "decision_version": SEMANTIC_DECISION_VERSION,
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,

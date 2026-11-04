@@ -26,3 +26,6 @@ pub mod trigger;
 pub mod triggers;
 pub mod turn;
 pub mod zones;
+
+#[cfg(test)]
+mod naming_tests;

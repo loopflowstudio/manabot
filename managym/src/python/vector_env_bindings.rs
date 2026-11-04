@@ -43,6 +43,7 @@ struct ObservationBuffers {
     effects: Option<Py<PyAny>>,
     effect_details: Option<Py<PyAny>>,
     effect_members: Option<Py<PyAny>>,
+    name_candidates: Option<Py<PyAny>>,
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
@@ -345,6 +346,15 @@ pub(super) fn input_buffer_config(
         &[rows, _] | &[_, rows, _] if rows > 0 => rows,
         _ => return Err(PyValueError::new_err("invalid card buffer shape")),
     };
+    let actions = buffers
+        .get_item("actions")?
+        .ok_or_else(|| PyValueError::new_err("missing actions"))?;
+    let action_shape: Vec<usize> = actions.getattr("shape")?.extract()?;
+    config.max_actions = match action_shape.as_slice() {
+        &[rows, ACTION_DIM] | &[_, rows, ACTION_DIM] if rows > 0 => rows,
+        _ => return Err(PyValueError::new_err("invalid action buffer shape")),
+    };
+    let naming = buffers.contains("name_candidates")?;
     let mut shared_count = 0;
     for name in ["effects", "effect_details", "effect_members"] {
         shared_count += usize::from(buffers.contains(name)?);
@@ -355,7 +365,7 @@ pub(super) fn input_buffer_config(
         ));
     }
     let Some(relations) = buffers.get_item("relations")? else {
-        if shared_count != 0 {
+        if shared_count != 0 || naming {
             return Err(PyValueError::new_err("v7 requires relations"));
         }
         config.policy_input_version = 1;
@@ -394,6 +404,14 @@ pub(super) fn input_buffer_config(
     };
     if shared_count != 0 && config.policy_input_version != 7 {
         return Err(PyValueError::new_err("v7 requires current relation width"));
+    }
+    if naming {
+        if config.policy_input_version != 7 {
+            return Err(PyValueError::new_err(
+                "v8 requires shared effects and current relations",
+            ));
+        }
+        config.policy_input_version = 8;
     }
     Ok(config)
 }
@@ -440,6 +458,19 @@ fn read_observation_buffers(
         ))
     };
     Ok(ObservationBuffers {
+        name_candidates: if c.policy_input_version >= 8 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "name_candidates",
+                    &[n, c.max_actions, 2],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
         relations: if c.policy_input_version >= 2 {
             Some(
                 require_numpy_array(
@@ -918,6 +949,7 @@ struct SendObservationFieldSlices {
     effects: Option<SendSlice<f32>>,
     effect_details: Option<SendSlice<f32>>,
     effect_members: Option<SendSlice<f32>>,
+    name_candidates: Option<SendSlice<f32>>,
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
@@ -1016,6 +1048,17 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.effect_details_len())?,
                         config.effect_details_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            name_candidates: if let Some(buffer) = self.name_candidates {
+                // SAFETY: registered buffers partition environments into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.name_candidates_len())?,
+                        config.name_candidates_len(),
                     )
                 }
             } else {
@@ -1200,6 +1243,11 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_details"))
         .transpose()?;
+    let name_candidates_buffer = buffers
+        .name_candidates
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "name_candidates"))
+        .transpose()?;
     let effect_members_buffer = buffers
         .effect_members
         .as_ref()
@@ -1268,6 +1316,10 @@ fn with_send_write_buffers<R>(
         effect_details: effect_details_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "effect_details"))
+            .transpose()?,
+        name_candidates: name_candidates_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "name_candidates"))
             .transpose()?,
         effect_members: effect_members_buffer
             .as_ref()

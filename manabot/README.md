@@ -23,6 +23,16 @@ promoted to v7 by guessing a source/controller. Text representation
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
 
+## Naming policies
+
+Explicit input v8 scores the entire installed naming vocabulary using categorical
+name identity plus each available definition's learning tokens. Its action
+capacity follows the catalog, independently of card/permanent capacity; ordinary
+steps encode only referenced programs. Names with no executable definition can
+have a vocabulary identity without becoming playable cards. Checkpoints bind
+ordered names and optional definition joins. See the
+[naming input contract](../docs/training.md#catalog-naming-input).
+
 ## Quickstart
 
 ```bash

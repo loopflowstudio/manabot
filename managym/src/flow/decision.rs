@@ -213,6 +213,13 @@ pub enum ResolutionCastOffer {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    /// Choose a name from the immutable installed vocabulary. Only the selected
+    /// candidate materializes an effect; clones retain constant-size bookkeeping.
+    NameCard {
+        player: PlayerId,
+        count: usize,
+        names: std::sync::Arc<crate::cards::names::NameVocabulary>,
+    },
     /// Select the generic X of an optional resolution payment, or decline.
     ChoosePaymentX {
         player: PlayerId,
@@ -463,6 +470,7 @@ impl Decision {
         match self {
             Decision::Payment(payment) => payment.player,
             Decision::ChoosePaymentX { player, .. }
+            | Decision::NameCard { player, .. }
             | Decision::SearchNamed { player, .. }
             | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
@@ -497,6 +505,7 @@ impl Decision {
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
             Decision::ChoosePaymentX { .. }
+            | Decision::NameCard { .. }
             | Decision::SearchNamed { .. }
             | Decision::ManaUpfront { .. }
             | Decision::Payment(_)
@@ -1159,6 +1168,17 @@ impl Game {
                     focus: self.card_focus(looked),
                 }
             }
+            Decision::NameCard { player, names, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                focus: source_focus,
+                actions: (0..names.len())
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
             Decision::Modal { player, modes } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -1985,6 +2005,18 @@ impl Game {
             }
             (Decision::SelectMilled { if_declined, .. }, Action::Decline { .. }) => {
                 suspended.frame.prepend_effects(if_declined.iter().cloned());
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::NameCard { count, names, .. }, Action::ChooseMode { mode, .. }) => {
+                let Some(candidate) = names.get(*mode) else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("name candidate out of range".into()));
+                };
+                suspended.frame.queue.push_front(Effect::ExileNamed {
+                    name: candidate.name.clone(),
+                    count: *count,
+                });
                 self.run_frame(suspended.frame);
                 Ok(())
             }

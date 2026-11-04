@@ -840,7 +840,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::OptionalDiscardDraw { .. } => 7,
         Decision::Scry { .. } => 8,
         Decision::LookAndSelect { .. } => 9,
-        Decision::Modal { .. } => 10,
+        Decision::Modal { .. } | Decision::NameCard { .. } => 10,
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,

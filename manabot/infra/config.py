@@ -41,7 +41,7 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7] = Field(
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
     # V6 and v7 carry a configurable local-fact capacity. Omission on older inputs
@@ -53,8 +53,8 @@ class ObservationConfig(BaseConfig):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Includes every name in the current catalog (The Rise of Sozin).
-    # Larger action sets still fail explicitly, never truncate choices.
+    # Frozen inputs use this capacity directly; explicit v8 also reserves the
+    # installed naming vocabulary. Overflow is never truncated.
     max_actions: int = 512
     max_focus_objects: int = 2
     max_events: int = 32
@@ -66,7 +66,7 @@ class ObservationConfig(BaseConfig):
     def validate_fact_capacity(self) -> "ObservationConfig":
         if self.policy_input_version >= 6:
             if self.max_facts is None:
-                self.max_facts = 128 if self.policy_input_version == 7 else 512
+                self.max_facts = 128 if self.policy_input_version >= 7 else 512
         elif self.max_facts is not None:
             raise ValueError("max_facts requires policy input v6")
         return self

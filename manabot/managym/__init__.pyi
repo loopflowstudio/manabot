@@ -713,6 +713,8 @@ class Action:
     declared: bool | None
     description: str | None
     mode_index: int | None
+    name_definition: int | None
+    name_index: int | None
     ability_index: int | None
     continuation_index: int | None
 
@@ -828,3 +830,12 @@ class ManaOutput:
     mode: int
     mana: list[int]
     lesson: list[int]
+
+class NameCandidate:
+    def __init__(self, name: str, definition: int | None = None) -> None: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def definition(self) -> int | None: ...
+
+def naming_catalog() -> list[NameCandidate]: ...

@@ -1549,30 +1549,11 @@ impl Game {
                 self.invalidate_mana_cache(frame.controller);
                 None
             }
-            Effect::NameAndExileFromTargetPlayer { count } => {
-                // Every name a deck may hold; names are public knowledge.
-                let names: std::collections::BTreeSet<String> = default_content_pack()
-                    .definition_entries()
-                    .filter(|(id, definition)| {
-                        !definition.is_token
-                            && (!definition.key.is_empty()
-                                || default_content_pack().front_face(*id).is_some())
-                    })
-                    .map(|(_, definition)| definition.name.clone())
-                    .collect();
-                Some(Decision::Modal {
-                    player: frame.controller,
-                    modes: names
-                        .into_iter()
-                        .map(|name| {
-                            vec![Effect::ExileNamed {
-                                name,
-                                count: *count,
-                            }]
-                        })
-                        .collect(),
-                })
-            }
+            Effect::NameAndExileFromTargetPlayer { count } => Some(Decision::NameCard {
+                names: default_content_pack().name_candidates(),
+                player: frame.controller,
+                count: *count,
+            }),
             Effect::ExileNamed { name, count } => {
                 let Some(Target::Player(player)) = self.present_primary_target(frame) else {
                     return None;

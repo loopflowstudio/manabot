@@ -158,7 +158,8 @@ def test_object_embeddings(
     Verify that object embeddings maintain proper dimensionality and masking.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
 
     expected_objects = (
         2  # Two players
@@ -198,7 +199,8 @@ def test_attention_mechanism(
     Verify the attention mechanism's behavior and output properties.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     attended = agent.attention(objects, is_agent, key_padding_mask=key_padding_mask)
 
@@ -222,7 +224,8 @@ def test_focus_object_incorporation(
     Verify that focus objects are correctly incorporated into action representations.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     post_attention = agent.attention(
         objects, is_agent, key_padding_mask=key_padding_mask
@@ -340,7 +343,8 @@ def test_attention_stability(
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     outputs = []
     for _ in range(5):

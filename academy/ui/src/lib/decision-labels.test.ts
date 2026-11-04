@@ -24,6 +24,7 @@ describe('decision labels', () => {
     })).toBe('Treasure');
     expect(stageLabel('mana_color')).toBe('Choose mana to add');
     expect(stageLabel('private_search')).toBe('Search cards');
+    expect(stageLabel('name_card')).toBe('Name a card');
     expect(stageLabel('unknown_internal_stage')).toBe('Pending decision');
   });
 

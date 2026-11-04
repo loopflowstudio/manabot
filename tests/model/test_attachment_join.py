@@ -48,13 +48,15 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     with torch.no_grad():
         # Zero-initialized joins leave the initial function unchanged.
         same = [
-            agent._gather_object_embeddings(_batch(e))[0] for e in (encoded, detached)
+            agent._gather_object_embeddings(_batch(e)).objects
+            for e in (encoded, detached)
         ]
         torch.testing.assert_close(same[0], same[1])
         for layer in (*agent.link_to_target, *agent.link_from_target):
             layer.weight.normal_()
         linked, unlinked = (
-            agent._gather_object_embeddings(_batch(e))[0] for e in (encoded, detached)
+            agent._gather_object_embeddings(_batch(e)).objects
+            for e in (encoded, detached)
         )
     changed = (linked - unlinked).abs().sum(-1)[0]
     assert changed[host] > 0, "the host reads its attachment"

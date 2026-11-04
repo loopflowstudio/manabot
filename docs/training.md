@@ -822,6 +822,39 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 ## Policy inputs
 
+### Catalog naming input
+
+`ObservationConfig(policy_input_version=8)` retains v7's object, relation and
+shared-effect layouts and adds `name_candidates[A,2]`: one-based public name
+row and optional one-based definition reference (zero means absent). `A` is
+`max(max_actions, len(managym.naming_catalog()))`. Every installed candidate
+receives a legal row and a policy logit; excesses of other configured capacities
+still fail explicitly. No card/permanent row is fabricated for a name. V8
+suppresses the positional mode feature on these rows, so candidate identity
+comes from the categorical join, never from its magnitude.
+
+The policy adds a trainable name vector and, where present, the definition's
+existing learning-program embedding from the same table used by game objects.
+Each referenced program is encoded once per learner forward; inference reuses
+its policy-scoped catalog cache. Distinct names with equivalent rules
+remain distinguishable. Only naming decisions request all candidate programs;
+ordinary learner steps retain referenced-definition encoding. Action scoring
+trims trailing unused rows before the action network and restores padding in the
+returned logits. Buffer storage still grows linearly with the vocabulary.
+
+The checkpoint binding includes the ordered naming vocabulary and optional
+definition joins, in addition to tensor shapes and the content manifest.
+V1–v7 arrays, missing-checkpoint defaults and fresh v6 defaults are unchanged;
+using v8 is explicit. A historical fixed-capacity input still rejects an
+oversized naming decision. The new semantic observation/capture contracts are
+8/5, so earlier semantic world bindings are rejected for current execution.
+
+The default universe remains real non-token catalog names, including back faces.
+A separate immutable vocabulary can hold validated names without playable card
+definitions; this is exercised only by the offline large-vocabulary fixture.
+This does not claim that the supported catalog exhausts every name legal under
+Magic's rules, and does not broaden deck admission.
+
 ### Current continuation input
 
 Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.

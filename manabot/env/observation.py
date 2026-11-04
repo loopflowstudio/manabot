@@ -201,7 +201,13 @@ class ObservationEncoder:
             self.relation_dim = LEGACY_RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
-        self.max_actions = config.max_actions
+        # V8 binds its action axis to the installed vocabulary. Checkpoint
+        # identity already includes shapes and the exact content manifest.
+        self.max_actions = (
+            max(config.max_actions, len(managym.naming_catalog()))
+            if config.policy_input_version >= 8
+            else config.max_actions
+        )
         self.max_focus_objects = config.max_focus_objects
         self.max_events = config.max_events
 
@@ -276,6 +282,11 @@ class ObservationEncoder:
             "opponent_cards": (self.cards_per_player, self.card_dim),
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
             "opponent_permanents": (self.perms_per_player, self.permanent_dim),
+            **(
+                {"name_candidates": (self.max_actions, 2)}
+                if self.config.policy_input_version >= 8
+                else {}
+            ),
             "actions": (self.max_actions, self.action_dim),
             "events": (self.max_events, self.event_dim),
             "action_focus": (self.max_actions, self.max_focus_objects),
@@ -444,6 +455,25 @@ class ObservationEncoder:
 
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
+        if self.config.policy_input_version >= 8:
+            candidates = np.zeros((self.max_actions, 2), dtype=np.float32)
+            for index, action in enumerate(obs.action_space.actions):
+                if action.name_definition is not None and (
+                    action.name_index is None
+                    or not 0 <= action.name_definition <= MAX_ACTION_SELECTOR
+                ):
+                    raise ValueError("invalid name candidate definition")
+                if action.name_index is not None:
+                    if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name selector")
+                    candidates[index] = (
+                        action.name_index + 1,
+                        (action.name_definition + 1)
+                        if action.name_definition is not None
+                        else 0,
+                    )
+                    out["actions"][index, ACTION_MODE_INDEX] = 0
+            out["name_candidates"] = candidates
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
         if self.config.policy_history_version == 1:
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)

@@ -178,6 +178,15 @@ impl Default for ObservationEncoderConfig {
 }
 
 impl ObservationEncoderConfig {
+    /// Candidate rows share the action axis, but never consume object capacity.
+    pub fn name_candidates_len(&self) -> usize {
+        if self.policy_input_version >= 8 {
+            2 * self.max_actions
+        } else {
+            0
+        }
+    }
+
     pub fn relation_dim(&self) -> usize {
         match self.policy_input_version {
             5.. => super::continuation::RELATION_DIM_V5,
@@ -299,6 +308,7 @@ pub struct EncodedObservation {
     pub effects: Vec<f32>,
     pub effect_details: Vec<f32>,
     pub effect_members: Vec<f32>,
+    pub name_candidates: Vec<f32>,
     pub facts: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
@@ -327,6 +337,7 @@ pub struct EncodedObservationMut<'a> {
     pub effects: &'a mut [f32],
     pub effect_details: &'a mut [f32],
     pub effect_members: &'a mut [f32],
+    pub name_candidates: &'a mut [f32],
     pub facts: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
@@ -358,6 +369,7 @@ impl EncodedObservation {
             effects: &mut self.effects,
             effect_details: &mut self.effect_details,
             effect_members: &mut self.effect_members,
+            name_candidates: &mut self.name_candidates,
             facts: &mut self.facts,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
@@ -386,6 +398,7 @@ impl EncodedObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
     InvalidShared(&'static str),
+    InvalidName(&'static str),
     Capacity {
         field: &'static str,
         capacity: usize,
@@ -401,6 +414,7 @@ pub enum ObservationEncodeError {
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
                 field,
@@ -433,6 +447,7 @@ pub fn encode(
         effects: vec![0.0; config.effects_len()],
         effect_details: vec![0.0; config.effect_details_len()],
         effect_members: vec![0.0; config.effect_members_len()],
+        name_candidates: vec![0.0; config.name_candidates_len()],
         facts: vec![0.0; config.facts_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
@@ -499,6 +514,11 @@ pub fn encode_into(
         config.permanents_len(),
     )?;
     validate_buffer_len("actions", out.actions.len(), config.actions_len())?;
+    validate_buffer_len(
+        "name_candidates",
+        out.name_candidates.len(),
+        config.name_candidates_len(),
+    )?;
     validate_buffer_len(
         "action_focus",
         out.action_focus.len(),
@@ -578,6 +598,14 @@ pub fn encode_into(
         }
     }
     for action in &obs.action_space.actions {
+        if let Some(definition) = action.name_definition {
+            if action.name_index.is_none() || definition as usize > MAX_ACTION_SELECTOR {
+                return Err(ObservationEncodeError::InvalidName(
+                    "missing identity or definition exceeds exact integer capacity",
+                ));
+            }
+        }
+
         if let Some(index) = action.continuation_index {
             if config.policy_input_version < 2 || index >= obs.continuation.len() {
                 return Err(ObservationEncodeError::Capacity {
@@ -591,7 +619,7 @@ pub fn encode_into(
                 });
             }
         }
-        for index in [action.mode_index, action.ability_index]
+        for index in [action.mode_index, action.ability_index, action.name_index]
             .into_iter()
             .flatten()
         {
@@ -817,6 +845,18 @@ pub fn encode_into(
         out.action_focus,
         &object_to_index,
     );
+    out.name_candidates.fill(0.0);
+    if config.policy_input_version >= 8 {
+        for (index, action) in obs.action_space.actions.iter().enumerate() {
+            if let Some(name_index) = action.name_index {
+                out.name_candidates[2 * index] = (name_index + 1) as f32;
+                out.name_candidates[2 * index + 1] =
+                    action.name_definition.map_or(0.0, |id| (id + 1) as f32);
+                out.actions[index * ACTION_DIM + ACTION_MODE_INDEX] = 0.0;
+            }
+        }
+    }
+
     if config.policy_history {
         for (index, row) in
             super::policy_history::encode(obs, config.max_events, config.max_cards_per_player)
@@ -1577,6 +1617,8 @@ mod tests {
                         declared: None,
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1586,6 +1628,8 @@ mod tests {
                         declared: None,
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1595,6 +1639,8 @@ mod tests {
                         declared: Some(true),
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1717,6 +1763,8 @@ mod tests {
                 declared: Some(declared),
                 description: None,
                 mode_index: None,
+                name_definition: None,
+                name_index: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -1884,6 +1932,8 @@ mod tests {
                 declared: None,
                 description: None,
                 mode_index: None,
+                name_definition: None,
+                name_index: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -1956,6 +2006,7 @@ mod tests {
         let mut events_valid = vec![0.0; 1];
 
         let out = EncodedObservationMut {
+            name_candidates: &mut [],
             relations: &mut [],
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
