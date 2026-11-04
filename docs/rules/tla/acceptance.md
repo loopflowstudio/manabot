@@ -79,10 +79,24 @@ catalog. The combined Academy/training/admission/monitoring suite passed 86
 checks. Frozen historical evidence and checkpoints remain unchanged.
 The resumed tree integrates merged T6 `5dd11cec4` at `d10f4bc71`, followed by
 the accepted presentation correction at `f052be4ad`. The counts above describe
-earlier publication evidence, not fresh combined-tree certification. Affected
-broad suites, mutable source fingerprints and final CI/Engine Budget remain
-with gate; browser layout/interaction evidence remains with demo/review. These
-headless proofs do not certify all cross-card combinations.
+earlier publication evidence, not fresh combined-tree certification.
+
+Resumed publication validation passed the full debug Rust workspace (963 passed,
+two ignored), 338 consumer/model/pilot checks (one skipped), 153 additional
+contract/privacy/replay checks, all 126 frontend tests, rustfmt, Clippy, Svelte
+checking and the frontend production build.
+The parity checks exposed stale mutable w17 receipts after main added
+`shared_effects` to native observations. Removing that field in a diagnostic
+comparison exactly reproduced all 816 earlier viewer snapshots and their
+observation hashes. The refreshed authored receipt changes only those hashes
+and source provenance; Commands, state transitions and presentation hashes are
+unchanged. The public-commitment receipt changes only source provenance and
+observation-bound prior, posterior and history digests; its 135 Commands,
+66 commitments, support sizes, privacy and atomicity results are unchanged.
+All seven focused parity checks passed after the refresh. Frozen evidence was
+not rewritten. Final CI/Engine Budget remains with gate;
+browser layout/interaction evidence remains with demo/review. These headless
+proofs do not certify all cross-card combinations.
 
 ## Faces, obligations and witnesses
 

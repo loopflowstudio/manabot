@@ -21,8 +21,8 @@ Check: `git diff --check` — passed for this documentation reconciliation; reus
 
 Remaining work:
 
-- Gate: affected suites from `docs/development.md`, mutable parity source
-  fingerprints, final CI and Engine Budget for the resumed combined tree.
+- Gate: final CI and Engine Budget for the resumed combined tree; local
+  publication validation and mutable parity reconciliation are recorded below.
 - Demo/review: both seats and durations in a browser, search, alternating own
   and delegated decisions, reconnect and expiry. Existing headless proofs cover
   behavior and rendering, not browser layout or search WebSocket recovery.
@@ -33,6 +33,28 @@ Remaining work:
 
 No product decision remains. Jack Heart's review is required before merge;
 merge, auto-merge, Task completion and experiment execution are not authorized.
+
+### Resumed publication validation — 2026-11-04
+
+`lf sync` found main already integrated and checkpointed the accepted
+reconciliation at `54778e314`. Full debug Rust passed 963 tests (two ignored).
+The consumer/model/admission/monitoring/pilot selection passed 338 (one skipped);
+the additional contract/privacy/replay selection passed 153 with three stale
+parity-receipt failures. Frontend tests passed 126; rustfmt and Clippy passed
+(Clippy needed an absolute `PYO3_PYTHON` path). Logs are
+`/tmp/mtg226-publish-{rust,python,contracts,ui,clippy}.log`.
+
+Main's `shared_effects` observation field explains all 816 changed authored
+viewer snapshots: removing only that field in a diagnostic comparison reproduces
+every prior state and observation hash exactly. The regenerated mutable w17
+authored receipt retains the entire Command tape, state transitions, consequences
+and presentation hashes. Public-commitment regeneration changes only source
+provenance and observation-bound prior/posterior/history digests; all other
+fields, including 135 Commands, 66 commitments, support, privacy and atomicity,
+match. Frozen receipts and protocols remain untouched. The focused parity
+recheck passed all seven tests (`/tmp/mtg226-publish-parity.log`). Svelte checking
+and the frontend production build also passed (`/tmp/mtg226-publish-check.log`
+and `/tmp/mtg226-publish-ui-build.log`).
 
 ## Outcome and acceptance
 
