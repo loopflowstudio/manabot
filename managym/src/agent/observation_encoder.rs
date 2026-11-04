@@ -146,6 +146,42 @@ pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
 pub const STEP_DIM: usize = 12;
+
+/// Policy support selection only; the game's legal actions remain complete.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActionOverflow {
+    #[default]
+    Error,
+    FirstLegal,
+}
+
+impl std::str::FromStr for ActionOverflow {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "error" => Ok(Self::Error),
+            "first-legal" => Ok(Self::FirstLegal),
+            _ => Err("unknown action overflow policy"),
+        }
+    }
+}
+
+/// Retain a prefix without renumbering native actions or their Commands.
+pub fn policy_action_count(
+    count: usize,
+    capacity: usize,
+    overflow: ActionOverflow,
+) -> Result<usize, ObservationEncodeError> {
+    if count > capacity && matches!(overflow, ActionOverflow::Error) {
+        return Err(ObservationEncodeError::Capacity {
+            field: "actions",
+            capacity,
+            actual: count,
+        });
+    }
+    Ok(count.min(capacity))
+}
 /// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
 /// remaining-sideboard counts (`PlayerData` decklist maps).
 pub const DECKLIST_DIM: usize = 5;
@@ -157,6 +193,7 @@ pub struct ObservationEncoderConfig {
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
     pub max_actions: usize,
+    pub action_overflow: ActionOverflow,
     pub max_focus_objects: usize,
     pub max_events: usize,
     pub policy_history: bool,
@@ -168,6 +205,7 @@ impl Default for ObservationEncoderConfig {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
             max_actions: 512,
+            action_overflow: ActionOverflow::Error,
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
@@ -585,7 +623,11 @@ pub fn encode_into(
         ),
         (
             "actions",
-            obs.action_space.actions.len(),
+            policy_action_count(
+                obs.action_space.actions.len(),
+                config.max_actions,
+                config.action_overflow,
+            )?,
             config.max_actions,
         ),
     ] {
@@ -597,7 +639,7 @@ pub fn encode_into(
             });
         }
     }
-    for action in &obs.action_space.actions {
+    for action in obs.action_space.actions.iter().take(config.max_actions) {
         if let Some(definition) = action.name_definition {
             if action.name_index.is_none() || definition as usize > MAX_ACTION_SELECTOR {
                 return Err(ObservationEncodeError::InvalidName(
@@ -1397,8 +1439,14 @@ fn encode_actions(
     out_names: &mut [f32],
     object_to_index: &HashMap<i32, i32>,
 ) {
-    // encode_into has already checked every action and focus against capacity.
-    for (action_index, action) in obs.action_space.actions.iter().enumerate() {
+    // encode_into has validated the retained policy support and its focus capacity.
+    for (action_index, action) in obs
+        .action_space
+        .actions
+        .iter()
+        .take(config.max_actions)
+        .enumerate()
+    {
         let action_start = action_index * ACTION_DIM;
         let action_end = action_start + ACTION_DIM;
         let row = &mut out_actions[action_start..action_end];

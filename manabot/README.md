@@ -33,6 +33,24 @@ have a vocabulary identity without becoming playable cards. Checkpoints bind
 ordered names and optional definition joins. See the
 [naming input contract](../docs/training.md#catalog-naming-input).
 
+## Policy action capacity
+
+Observation overflow raises an error by default. The TLA pilot explicitly uses
+`ObservationConfig(max_actions=64, action_overflow="first-legal")` to keep the
+first 64 legal actions in native order. Retained indices and Commands are
+unchanged; the engine and Academy still expose the complete legal set. Learned
+checkpoint evaluation uses the saved policy configuration. The prospective TLA
+benchmark gives its heuristic opponent the same prefix before scoring, including
+its fallback; the chosen original index is never clamped or remapped.
+
+Capture reports count consumed decisions, overflows and dropped actions by
+decision kind across all participating policies, with bounded replay samples.
+These aggregate counts are not learner-only or actor-specific rates.
+Collector/game close and vector
+reseeding flush exact totals, including zero-overflow runs. The approximation
+and its evaluation limits are specified in the
+[TLA v9 protocol](../experiments/protocols/tla-trophy-213-v9.md).
+
 ## Quickstart
 
 ```bash

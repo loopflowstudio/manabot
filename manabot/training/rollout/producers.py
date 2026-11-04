@@ -89,7 +89,9 @@ class ShardedVectorEnv:
             self.close()
             raise
 
-    def set_buffers(self, buffers: dict[str, Array]) -> None:
+    def set_buffers(
+        self, buffers: dict[str, Array], action_overflow: str = "error"
+    ) -> None:
         self._check()
         for value in buffers.values():
             self._rows(len(value))
@@ -103,6 +105,7 @@ class ShardedVectorEnv:
                         key: value[shard.start : shard.stop]
                         for key, value in buffers.items()
                     },
+                    action_overflow,
                 )
                 for shard in self._shards
             ]
@@ -215,4 +218,6 @@ class ShardedVectorEnv:
         if not self._closed:
             self._closed = True
             self._pool.shutdown(wait=True, cancel_futures=True)
+            for shard in self._shards:
+                shard.native.close()
             self._shards = ()

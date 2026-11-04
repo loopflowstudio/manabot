@@ -54,8 +54,11 @@ class ObservationConfig(BaseConfig):
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
     # Frozen inputs use this capacity directly; explicit v8 also reserves the
-    # installed naming vocabulary. Overflow is never truncated.
-    max_actions: int = 512
+    # installed naming vocabulary. A pilot may explicitly retain a legal prefix.
+    max_actions: int = Field(default=512, gt=0)
+    action_overflow: Literal["error", "first-legal"] = Field(
+        default="error", exclude_if=lambda value: value == "error"
+    )
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(

@@ -27,9 +27,9 @@ from etude.train.run import track
 import numpy as np
 import pytest
 
-from experiments import tla_pilot_v5
+from experiments import tla_pilot_v9
 from experiments.tla_pilot_analysis import analyze
-from experiments.tla_pilot_v5 import (
+from experiments.tla_pilot_v9 import (
     EXPERIMENT,
     PROTOCOL,
     ROOT,
@@ -46,6 +46,17 @@ from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 import managym
+
+
+@pytest.fixture
+def historical_protocol(monkeypatch: pytest.MonkeyPatch) -> Protocol:
+    """Select v5's immutable contract to exercise current-runtime rejection."""
+    path = ROOT / "experiments/protocols/tla-trophy-213-v5.json"
+    monkeypatch.setattr(tla_pilot_v9, "PROTOCOL", path)
+    monkeypatch.setattr(
+        tla_pilot_v9, "REGIME", ROOT / "experiments/regimes/tla-trophy-213-v5.json"
+    )
+    return Protocol.model_validate_json(path.read_bytes())
 
 
 @pytest.fixture
@@ -70,21 +81,26 @@ def pilot_world(monkeypatch: pytest.MonkeyPatch) -> RuntimeWorld:
 
 
 @pytest.mark.parametrize("entry", ["frozen", "runs", "eval"])
-def test_pilot_rejects_current_runtime_world(entry: str) -> None:
-    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
-    assert managym.world_identity() != protocol.runtime_world.model_dump()
+def test_pilot_rejects_historical_runtime_world(
+    entry: str, historical_protocol: Protocol
+) -> None:
+    assert managym.world_identity() != historical_protocol.runtime_world.model_dump()
     with pytest.raises(ValueError, match="runtime world differs"):
         if entry == "frozen":
             frozen()
         elif entry == "runs":
-            tla_pilot_v5.runs("HEAD")
+            tla_pilot_v9.runs("HEAD")
         else:
             eval(_state())
 
 
-def test_pilot_rejects_current_tensor_shapes(monkeypatch: pytest.MonkeyPatch) -> None:
-    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
-    monkeypatch.setattr(managym, "world_identity", protocol.runtime_world.model_dump)
+def test_pilot_rejects_historical_tensor_shapes(
+    historical_protocol: Protocol,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        managym, "world_identity", historical_protocol.runtime_world.model_dump
+    )
     with pytest.raises(ValueError, match="tensor capacities differ"):
         frozen()
 
@@ -107,7 +123,7 @@ def test_pilot_rejects_changed_input_contract(
 ) -> None:
     # Temporary copies keep the frozen bytes intact and pass the file-integrity
     # guard so this check reaches observation admission under compatible identity.
-    regime = json.loads(tla_pilot_v5.REGIME.read_bytes())
+    regime = json.loads(tla_pilot_v9.REGIME.read_bytes())
     regime["observation"][field] = value
     regime_path = tmp_path / "regime.json"
     regime_path.write_text(json.dumps(regime))
@@ -116,8 +132,8 @@ def test_pilot_rejects_changed_input_contract(
     )
     protocol_path = tmp_path / "protocol.json"
     protocol_path.write_text(protocol.model_dump_json())
-    monkeypatch.setattr(tla_pilot_v5, "REGIME", regime_path)
-    monkeypatch.setattr(tla_pilot_v5, "PROTOCOL", protocol_path)
+    monkeypatch.setattr(tla_pilot_v9, "REGIME", regime_path)
+    monkeypatch.setattr(tla_pilot_v9, "PROTOCOL", protocol_path)
     with pytest.raises(ValueError, match="tensor capacities differ"):
         frozen()
 
@@ -156,6 +172,9 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert regime.observation.policy_input_version == 7
     assert regime.observation.max_facts == 128
     assert regime.observation.max_actions == 64
+    assert (
+        regime.observation.action_overflow == protocol.action_overflow == "first-legal"
+    )
     assert regime.observation.max_cards_per_player == 128
     assert protocol.observation_shapes["facts"] == (128, 12)
     assert protocol.observation_shapes["effects"] == (128, 18)
@@ -195,15 +214,21 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
         assert matchup.games == 4 and len(matchup.conditions) == 8
         if "initial" in matchup.tags:
             assert matchup.players[1].checkpoint.key.name == "u0.pt"
+        else:
+            assert matchup.players[1].config == {
+                "kind": "heuristic",
+                "max_actions": 64,
+                "action_overflow": "first-legal",
+            }
     assert eval(ExperimentState(experiment=EXPERIMENT)) == []
 
 
 @pytest.mark.usefixtures("pilot_world")
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
-    experiment = read_experiment(ROOT / "experiments/tla_pilot_v5.py")
+    experiment = read_experiment(ROOT / "experiments/tla_pilot_v9.py")
     job = experiment.eval(_state((0,)))[0]
     callback = evaluation_spec(job).play
-    assert callback.module == "experiments.tla_pilot_v5"
+    assert callback.module == "experiments.tla_pilot_v9"
     assert callable(callback.load(job.repo))
 
 
@@ -527,7 +552,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
                 import sys
                 from unittest.mock import patch
 
-                from experiments.tla_pilot_v5 import PROTOCOL, Protocol
+                from experiments.tla_pilot_v9 import PROTOCOL, Protocol
 
                 world = json.loads(sys.argv.pop(1))
                 shapes = Protocol.model_validate_json(PROTOCOL.read_bytes()).observation_shapes
@@ -589,16 +614,31 @@ def test_prospective_pilot_preserves_population_and_rejects_old_initialization()
     assert protocol.corpus_sha256 == old_protocol["corpus_sha256"]
     assert protocol.milestones == tuple(old_protocol["milestones"])
     previous = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/tla-trophy-213-v4.json").read_bytes()
+        (ROOT / "experiments/regimes/tla-trophy-213-v5.json").read_bytes()
     )
     assert regime == previous.model_copy(
-        update={"id": regime.id, "observation": regime.observation}
+        update={
+            "id": regime.id,
+            "world": regime.world,
+            "observation": previous.observation.model_copy(
+                update={"max_actions": 64, "action_overflow": "first-legal"}
+            ),
+        }
     )
     assert protocol.predecessor_protocol_sha256 == file_sha256(
-        ROOT / "experiments/protocols/tla-trophy-213-v4.json"
+        ROOT / "experiments/protocols/tla-trophy-213-v8.json"
     )
-    for experiment in ("tla_pilot", "tla_pilot_v2", "tla_pilot_v3", "tla_pilot_v4"):
-        with pytest.raises(ValueError, match="fresh v5"):
+    for experiment in (
+        "tla_pilot",
+        "tla_pilot_v2",
+        "tla_pilot_v3",
+        "tla_pilot_v4",
+        "tla_pilot_v5",
+        "tla_pilot_v6",
+        "tla_pilot_v7",
+        "tla_pilot_v8",
+    ):
+        with pytest.raises(ValueError, match="fresh v9"):
             eval(ExperimentState(experiment=experiment))
 
 
@@ -608,17 +648,29 @@ def test_pilot_rejects_changed_observation_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, binding: str
 ) -> None:
     if binding == "regime":
-        config = json.loads(tla_pilot_v5.REGIME.read_bytes())
+        config = json.loads(tla_pilot_v9.REGIME.read_bytes())
         config["observation"]["max_cards_per_player"] += 1
         target, error = "REGIME", "regime differs"
     else:
-        config = json.loads(tla_pilot_v5.PROTOCOL.read_bytes())
+        config = json.loads(tla_pilot_v9.PROTOCOL.read_bytes())
         config["observation_shapes"]["effect_members"][0] += 1
         target, error = "PROTOCOL", "tensor capacities differ"
     path = tmp_path / "changed.json"
     path.write_text(json.dumps(config))
-    monkeypatch.setattr(tla_pilot_v5, target, path)
+    monkeypatch.setattr(tla_pilot_v9, target, path)
     with pytest.raises(ValueError, match=error):
+        frozen()
+
+
+def test_pilot_rejects_changed_cutoff_with_identical_shapes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = json.loads(tla_pilot_v9.PROTOCOL.read_bytes())
+    config["action_overflow"] = "error"
+    path = tmp_path / "changed.json"
+    path.write_text(json.dumps(config))
+    monkeypatch.setattr(tla_pilot_v9, "PROTOCOL", path)
+    with pytest.raises(ValueError, match="action overflow policy differs"):
         frozen()
 
 
@@ -628,16 +680,13 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
 ) -> None:
     evidence = read_failure(ROOT / "tests/fixtures/tla-pilot-card-capacity.jsonl")
     (game,) = evidence.games
-    # Replay uses the real current world and action capacity; the retained
-    # pilot's card-allocation boundary is the regression under test.
-    regime = TrainingRegime.model_validate_json(tla_pilot_v5.REGIME.read_bytes())
-    replay_config = regime.observation.model_copy(
-        update={"max_actions": ObservationConfig().max_actions}
-    )
+    # Replay uses the real current world and the explicit prospective contract;
+    # the retained pilot's card-allocation boundary is the regression under test.
+    regime = TrainingRegime.model_validate_json(tla_pilot_v9.REGIME.read_bytes())
     # Both the exact occupied boundary and the pilot allocation retain every
     # generated token and sideboard card through scalar/vector/Python paths.
     encoder = ObservationEncoder(
-        replay_config.model_copy(update={"max_cards_per_player": card_capacity})
+        regime.observation.model_copy(update={"max_cards_per_player": card_capacity})
     )
     players = [player.native() for player in game.players]
     scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
@@ -673,9 +722,39 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
         np.testing.assert_array_equal(value, buffers[key][0], err_msg=key)
     # One fewer slot rejects rather than silently dropping an object.
     old = ObservationEncoder(
-        replay_config.model_copy(update={"max_cards_per_player": 60})
+        regime.observation.model_copy(update={"max_cards_per_player": 60})
     )
     with pytest.raises(ValueError, match="agent_cards plus sideboard"):
         old.encode(observation)
     with pytest.raises(ValueError, match="agent_cards plus sideboard 61 > 60"):
         scalar.encode_observation_into(observation, old.allocate())
+
+
+def test_prospective_pilot_admits_current_runtime_without_fixtures() -> None:
+    _, protocol = frozen()
+    assert protocol.runtime_world.model_dump() == managym.world_identity()
+
+
+def test_prepared_v8_rejects_integrated_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        tla_pilot_v9, "PROTOCOL", ROOT / "experiments/protocols/tla-trophy-213-v8.json"
+    )
+    monkeypatch.setattr(
+        tla_pilot_v9, "REGIME", ROOT / "experiments/regimes/tla-trophy-213-v8.json"
+    )
+    with pytest.raises(ValueError, match="runtime world differs"):
+        frozen()
+
+
+def test_pilot_rejects_asymmetric_support(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    protocol = json.loads(PROTOCOL.read_bytes())
+    protocol["heuristic_action_support"] = "full"
+    path = tmp_path / "asymmetric.json"
+    path.write_text(json.dumps(protocol))
+    monkeypatch.setattr(tla_pilot_v9, "PROTOCOL", path)
+    with pytest.raises(ValueError, match="matched policy-prefix"):
+        frozen()

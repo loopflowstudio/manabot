@@ -315,10 +315,12 @@ class ObservationEncoder:
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
-        # Fixed training tensors must never turn a complete rules decision into
-        # a smaller, apparently legal policy decision.
+        # Native selection owns the optional policy prefix; authority stays complete.
+        retained = managym.policy_action_count(
+            len(obs.action_space.actions), self.max_actions, self.config.action_overflow
+        )
+        actions = obs.action_space.actions[:retained]
         for label, size, capacity in (
-            ("actions", len(obs.action_space.actions), self.max_actions),
             ("agent cards", len(obs.agent_cards), self.cards_per_player),
             ("opponent cards", len(obs.opponent_cards), self.cards_per_player),
             ("agent permanents", len(obs.agent_permanents), self.perms_per_player),
@@ -332,12 +334,9 @@ class ObservationEncoder:
                 raise ValueError(
                     f"Observation capacity exceeded: {label} {size} > {capacity}"
                 )
-        if any(
-            len(action.focus) > self.max_focus_objects
-            for action in obs.action_space.actions
-        ):
+        if any(len(action.focus) > self.max_focus_objects for action in actions):
             raise ValueError("Observation capacity exceeded: action focus")
-        for action in obs.action_space.actions:
+        for action in actions:
             if action.continuation_index is not None and (
                 self.config.policy_input_version < 2
                 or not 0 <= action.continuation_index < len(obs.continuation)
@@ -454,7 +453,7 @@ class ObservationEncoder:
             out[f"{key}_valid"] = out[key][..., -1].astype(np.float32)
 
         # Actionspace
-        out.update(self._encode_actions(obs))
+        out.update(self._encode_actions(actions))
         if self.config.policy_history_version == 1:
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
@@ -960,7 +959,9 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
     # -------------------------------------------------------------------------
-    def _encode_actions(self, obs: managym.Observation) -> dict[str, np.ndarray]:
+    def _encode_actions(
+        self, actions: list[managym.Action]
+    ) -> dict[str, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
         action_focus = np.full(
@@ -971,11 +972,6 @@ class ObservationEncoder:
             if self.config.policy_input_version >= 8
             else None
         )
-        actions = obs.action_space.actions
-        if len(actions) > self.max_actions:
-            raise ValueError(
-                f"observation capacity exceeded: actions {len(actions)} > {self.max_actions}"
-            )
         for idx, action in enumerate(actions):
             arr[idx, -1] = 1.0
             action_type = int(action.action_type)
