@@ -1,4 +1,4 @@
-# TLA pilot permanent-capacity repair — 2026-11-04
+# TLA pilot capacity and recovery repair — 2026-11-04
 
 ## Accepted outcome and current slice
 
@@ -18,31 +18,55 @@ Jack Heart subsequently accepted isolated resource-limit recovery at .25
 
 ## Delete — do not maintain
 
-- Removed `experiments/tla_pilot_v9.py`; the v10 runner, analysis import and
-  discovery inventory now own the live path. Historical execution uses
-  source `6da60684c`; keep v9 protocol/regime/evidence bytes unchanged.
-- Replaced obsolete scratch launch instructions with this current plan. Full
-  prior notes remain at `6dff2e919:scratch/tla-pilot-postmerge-verify.md`.
-No deletion targets remain; frozen protocols, regimes and evidence stay retained.
+- Retired `experiments/tla_pilot_v9.py`: current discovery/analysis use v10;
+  historical execution uses source `6da60684c`. Preserve v9 protocol/regime/evidence.
+- Removed current README references to absent `tla_pilot_v5.py` and its v5
+  usage protocol; current usage points to v10, historical receipts stay linked.
+- Removed the duplicate capacity-recovery explanation from the README's Etude
+  jobs section; `docs/training.md#game-failures` owns it, with README links.
+  Preserve recovery boundaries, denominator, defaults and evaluation limitations.
 
-## Implementation complete; remaining acceptance
+No deletion targets remain. The surviving runtime uses the existing collector,
+ledger and sampler; no parallel recovery authority is needed.
 
-1. Pin v10 regime/protocol with permanent64 and its shapes/hash; link predecessor
-   v9. Carry the accepted USD1.25 allocation ceiling and USD10 cumulative cap.
-   V9 checkpoints cannot become v10 initialization or fill its evaluation slots.
-2. Promote the retained stream43 / seed32624 / 371-action prefix to an offline
-   regression fixture. Verify old40 rejection and exact41/pilot64 parity through
-   Python, native scalar and vector buffers, preserving all configured keys.
-3. Preserve typed native encoder capacity errors through isolated vector writes,
-   opt in prospectively and settle them as resource_limit in the existing ledger.
-   Keep setup/buffer/provenance failures fatal. Verify both-seat sample isolation,
-   replay with the saved input contract, .25/.26 threshold and sharded transport.
-4. Verify prospective discovery/admission and reject mutated permanent capacity,
-   error policy and old initialization. Rebuild the native extension atomically.
-5. Gate owns affected suites; delivery owns publication. Execution owns a final
-   source freeze, fresh inventory/budget reconciliation, bounded GPU training,
-   checkpoints/evaluation, confirmed teardown and report. These remain acceptance,
-   not a reason to mark the Task complete after implementation.
+## Implemented in the prospective successor
+
+- V10 schema4 binds permanent64, tensor shapes, regime hash, predecessor v9,
+  USD1.25 allocation and USD10 cumulative cap. Discovery/admission reject changed
+  capacity, recovery policy and old initialization. Frozen v9 bytes remain intact.
+- The offline stream43 / seed32624 / 371-action fixture covers old40 rejection
+  and exact41/pilot64 parity through Python, native scalar and vector buffers.
+- Typed active-step capacity errors opt into the existing ledger as
+  `resource_limit`; setup/reset, buffer and provenance failures remain fatal.
+  Recovery preserves other streams and prior completed games, discarding only
+  the affected game's uncommitted samples from both seats. Receipts retain the
+  encoder contract for replay. Controlled tests cover isolation, sharded
+  transport, learnable retained rows and threshold boundaries.
+- The accepted .25 threshold uses a 100-settled-game window and warmup of 100.
+  Completed games, engine errors, resource limits, truncations and action limits
+  enter that denominator; run interruptions do not. 25/100 continues and 26/100
+  stops. Evaluation failures remain in their original scheduled slots. This
+  recovery biases training toward games that fit and is not universal capacity.
+
+## Remaining acceptance
+
+Gate still owns the affected recovery, encoding, current-world admission and
+debug-native checks required by docs/development.md and AGENTS.md. Delivery
+and final-source freezing remain unfinished. Execution then requires fresh
+inventory/budget reconciliation, CUDA admission, bounded GPU training from a
+fresh initialization, trained checkpoint exports, the paired schedule, confirmed
+teardown and a qualified report. No v10 paid execution or trained endpoint is
+established. Existing v9 initialization cannot fill v10 slots, and missing v9
+results remain missing. PR #423's merge did not complete this outcome.
+Retain overflow frequency and affected decks/positions for the next capacity
+decision (Jack Heart, comment c98cb420). Experiment 690c9b separately owns
+common-case representation overhead; it may conclude no architecture change
+is worthwhile and does not expand this repair.
+
+Main's `9f42e4e58` renamed the bound Wave from training to experiments and
+`19bdee944` removed Eval memory; neither changed the pilot runtime. The current
+Graph selects experiments memory curation. No child memory directories exist.
+Earlier launch notes remain at `6dff2e919:scratch/tla-pilot-postmerge-verify.md`.
 
 Latest settled estimate USD0.475343889; conservative reservations
 USD5.101645926 of USD10. Use USD0.97/hour / USD1.25 whole-rental ceilings after
@@ -53,7 +77,7 @@ Replay reuses one fixed buffer allocation; the preservation test compares v10
 directly with frozen v9. Native code is unchanged by this simplification, so its
 prior debug isolation tests and atomic release-extension rebuild remain applicable.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_game_errors.py tests/verify/test_native_buffer_capacities.py tests/eval/test_tla_pilot.py tests/eval/test_experiment_files.py -q` — 146 passed; Ruff lint/format and diff checks passed. Gate owns remaining affected suites per docs/development.md; delivery and final-source GPU execution remain unfinished.
+Check: `uv run python` static path/link, v10 protocol/regime hash, capacity/support and recovery-policy assertions plus `git diff --check` — passed; prose-only correction needed no build. Prior v10 admission/frozen-v9 checks and 146 focused passes remain applicable; remaining affected suites belong to gate.
 
 ## Retained Airship investigation
 
@@ -71,5 +95,21 @@ Across the retained prefix, observed peaks: 41 permanents/40 old slots (64 new),
 18 relations/64 and 26 legal actions/64. All prefix observations encode at64.
 More qualifying turns can exceed these finite limits. Capacity recovery, not
 indefinite allocation escalation, is the accepted bounded pilot treatment.
-The 256/512-row, grouping and GPU minibatch-memory ideas in comments52d6354e
-and173f02a6 remain design discussion; no recipe or attention changes are selected.
+The 256/512-row, grouping, sparse-attention and GPU minibatch-memory ideas in
+comments 52d6354e, 173f02a6 and c98cb420 remain design discussion; no recipe or
+attention changes are selected.
+
+## Documentation ownership
+
+Concept review selected the bounded usage correction, now applied: README
+introduction, protocol link and local evaluation command point to v10, retaining
+uv, `ETUDE_OUTPUT_DIR` and the pinned-source/native-world requirement. Historical
+runs remain linked to their evidence. The game-failures guide owns shared
+isolation, settled-game accounting, replay and fatal boundaries once, then names
+the capacity opt-in and v10's policy. README links to that guide. No runtime,
+protocol, regime or historical evidence changed in this documentation pass.
+
+The one-page review remains `scratch/concept-review.html`. Full pre-reduction
+notes are preserved as git blob `a10bb3a7d8edb6ed871de457c48510fc97fdd182`;
+the original proposed copy is blob `efdaa0114cca17bb53ee33505d213f2303a36409`.
+No unresolved product choice blocks this slice.

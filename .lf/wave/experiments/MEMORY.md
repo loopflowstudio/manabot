@@ -1,7 +1,10 @@
-# training wave memory
+# experiments wave memory
 
-Evaluation memory (hosted LLM comparisons, inference receipts and evidence
-reuse) lives in `.lf/wave/eval/MEMORY.md`.
+The Training Wave was renamed experiments in `9f42e4e58` on 2026-11-04.
+The removed Eval memory (hosted LLM comparisons, inference receipts and evidence
+reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md`; it is historical context,
+not an active scope or new campaign authorization. Filesystem inspection of
+experiments on 2026-11-04 found no immediate child directories or child memories.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 
@@ -136,7 +139,8 @@ rows, exceeding frozen v5's 128. Native and Python agree on that failure; replay
 the retained frame and error at stream 181, seed 31482, action 87. Cross-platform
 replay shares source/world, not Linux/macOS binary bytes. Whole-deck admission
 and CUDA admission therefore do not establish reachable-state input capacity.
-Encoding errors remain fatal, outside gameplay quarantine. The implementation
+Encoding errors were fatal in that executed contract, outside gameplay quarantine;
+the prospective v10 exception below does not rewrite it. The implementation
 audit found all 140 `(object, modification, detail, duration, timestamp, source)`
 tuples distinct: seven timestamps per object, two keyword details per timestamp,
 and no exact duplicates. Atomic capture retains the same records; text renders
@@ -160,7 +164,7 @@ v5 stays at 128 and legacy serialization omits the new field. Timestamp
 normalization remains rank / 128 independently of capacity; coupling its scale
 to the new allocation would unnecessarily change the model's numeric inputs.
 All twelve columns, ordering and provenance remain unchanged, and overflow
-stays fatal. A 128-row v6 buffer encodes exactly like v5 while saved configuration
+stays fatal in that contract. A 128-row v6 buffer encodes exactly like v5 while saved configuration
 still binds the version separately.
 
 The 23:20 UTC launcher, local tracking and configured artifact-store reads
@@ -353,11 +357,60 @@ RunPod pods or unsettled hardware; the unrelated rental disappeared independentl
 The ten published `gpu-v9-recheck-20261104/` receipts retain zero new spending
 and unchanged prior estimates/reservations, with earlier Vast billing still
 unavailable. Even a compatible whole-rental quote is not allocation evidence.
-Repeated refusals supplied no further actionable placement: continuation needs
-new capacity evidence within $1 allocation/$10 cumulative, then fresh inventory,
-billing and quote reconciliation. These dated reads establish no future supply.
+Repeated refusals supplied no actionable placement at that time. The later
+accepted placement and execution below supersede that $1 stop; these dated
+reads establish no future supply.
 The plan owns remaining execution and evaluation. A new freeze is needed only
 for a source amendment; repeating preparation does not reserve provider capacity.
+
+Jack Heart accepted the available Vast RTX5090 at about $0.963/hour and $1.19
+setup-plus-run on 2026-11-04. The rounded limits became $0.97/hour and $1.25
+whole rental, still within the same cumulative $10. Etude's job ceiling also
+includes setup; a placement copy raised `Job.max_usd` without changing SDK
+job identity, source, Run or schedule. This was not a new scientific sample.
+
+V9 then completed five GPU learner updates, 983 optimizer minibatch steps and
+251,040 learner transitions across 1,291 completed games, before collection
+failed at 41 permanents against 40. No trained checkpoint exported. Its 32
+initialization games scored 7–25; 256 scheduled games remain missing. The exact
+371-action replay at stream 43 / seed 32624 reproduces the boundary. Rental teardown
+was confirmed at 22:13:47 UTC; the unrelated representation rental was untouched.
+Whole-rental cost is estimated at $0.148237115, cumulative billed-plus-estimated
+$0.475343889 and conservative reservations $5.101645926 of $10. Vast billing
+remains unavailable, so these are dated estimates, not final invoices or fresh
+inventory. `6dff2e919` and experiments/tla-trophy-pilot.md retain the evidence.
+
+The prospective v10 uses the existing permanent64 axis and fresh initialization,
+preserving input-v7 effects, card128, matched first64 support, 134 decks, learning
+recipe and evaluation schedule. Old 40 rejects the retained case; exact 41 and 64
+preserve native scalar/vector/Python parity. Airship growth in that replay comes
+from successive qualifying end steps, not observed same-step recursive triggers:
+1→2→4→8→16, then one sacrifice and ten of 15 triggers produce 25 copies at failure.
+This agrees with the definition and directed tests without certifying every rules
+interaction. Finite permanent, card, relation and effect tables can still overflow.
+
+Jack Heart explicitly accepted dropping only the affected game and a permissive
+25% failure rate (ca1660e8, 2026-11-04), superseding the operator's whole-batch
+discard wording. V10 schema4 pins `recover_capacity=true`, threshold .25 and
+the existing 100/100 settled-game window/warmup. Typed encoder capacity errors
+during active steps join the existing recovery ledger as `resource_limit`.
+Both seats' uncommitted samples from that game are discarded; other streams,
+earlier complete games and committed updates survive. The ordinary sampler
+replaces that stream; no outcome or terminal reward is invented. Receipts retain
+the precise reason, replay prefix/frame and observation configuration. Reset,
+buffer/provenance integrity and infrastructure failures remain fatal. Omitted
+recovery stays false and serialization preserves frozen configurations.
+
+The error denominator counts completed games, engine failures, resource limits,
+truncations and action limits once per settled game; run interruptions remain
+separate. 25/100 continues and 26/100 stops. Controlled fixtures support both-seat
+isolation, retained-row learning, sharded transport and replay at the encoding
+boundary. Evaluation failures stay failed/incomplete in scheduled slots, never
+replaced by successful games. This introduces selection bias toward games that
+fit runtime limits. Implementation is not empirical learning: v10 still lacks
+paid execution, a trained endpoint and complete paired evaluation. Broader 256/512
+capacities, grouped objects, variable-length inputs and minibatch GPU transfers
+remain design discussion, not selected architecture or recipe changes.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)

@@ -3,7 +3,8 @@
 Execution status and remaining acceptance: `scratch/tla-pilot-postmerge-verify.md`.
 Results, costs and retained receipts: `experiments/tla-trophy-pilot.md`.
 Executed contract: `experiments/protocols/tla-trophy-213-v9.md` and its JSON/regime.
-Prospective successor: v10, permanent capacity 64 with fresh initialization.
+Prospective successor: v10, permanent capacity 64, isolated per-game recovery
+at .25 with window/warmup 100/100, and fresh initialization.
 V9 Run `2171156493ca` executed on the accepted Vast allocation and failed after
 5 updates at 41 permanents against capacity 40. No trained endpoint exists.
 Its 32 initialization games are complete; 256 scheduled games remain missing.
@@ -41,8 +42,8 @@ explicit deterministic first-64 legal-action cutoff with replay-linked diagnosti
 Comment ffd29028 records Jack Heart's concept-review answer **1b**: apply the
 same prefix to heuristic, learned candidate and initialization anchor. V9 and
 merged PR #423 implement it, superseding v8's full-support heuristic interpretation
-and v6/v7's 512-action plans. Training Wave memory now records this matched-support
-decision. Prepared v6/v7/v8 Runs must not launch.
+and v6/v7's 512-action plans. Experiments Wave memory records this matched-support
+decision (the Training Wave was renamed in `9f42e4e58`). Prepared v6/v7/v8 Runs must not launch.
 
 The engine and Academy retain all legal choices. Retained row i executes original
 native Command i; heuristic restriction precedes scoring/fallback. Padding is
