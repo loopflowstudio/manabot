@@ -32,6 +32,7 @@ from managym.enums import (  # noqa: F401
 import numpy as np
 
 # Local imports
+from manabot.env.shared_effects import SHARED_EFFECT_SHAPES, encode_shared_effects
 from manabot.infra.config import ObservationConfig
 from manabot.infra.log import getLogger
 import managym
@@ -162,16 +163,23 @@ def _timestamp(perm: managym.Permanent) -> int:
     return perm.id if perm.timestamp is None else perm.timestamp
 
 
-def _timestamp_ranks(obs: managym.Observation) -> Dict[int, float]:
+def _timestamp_ranks(
+    obs: managym.Observation, *, shared: bool = False
+) -> Dict[int, float]:
     """Rank (1-based) of every permanent and effect timestamp in `obs`."""
     permanents = [*obs.agent_permanents, *obs.opponent_permanents]
     stamps = {_timestamp(perm) for perm in permanents}
-    for effects in (
-        obs.agent.effects,
-        obs.opponent.effects,
-        *(perm.effects for perm in permanents),
-    ):
-        stamps.update(effect.timestamp for effect in effects)
+    if shared:
+        if obs.shared_effects is None:
+            raise ValueError("v7 requires native shared-effect provenance")
+        stamps.update(record.effect.timestamp for record in obs.shared_effects)
+    else:
+        for effects in (
+            obs.agent.effects,
+            obs.opponent.effects,
+            *(perm.effects for perm in permanents),
+        ):
+            stamps.update(effect.timestamp for effect in effects)
     return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
 
 
@@ -253,6 +261,7 @@ class ObservationEncoder:
                 if self.shows_everything
                 else {}
             ),
+            **(SHARED_EFFECT_SHAPES if self.config.policy_input_version >= 7 else {}),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             **(
@@ -403,7 +412,7 @@ class ObservationEncoder:
             out[key] = self._encode_perms(perms, is_mine=is_mine)
         if self.shows_everything:
             # Hosts may be listed after their attachments, so links follow indexing.
-            ranks = _timestamp_ranks(obs)
+            ranks = _timestamp_ranks(obs, shared=self.config.policy_input_version >= 7)
             for key, perms in (
                 ("agent_permanents", obs.agent_permanents),
                 ("opponent_permanents", obs.opponent_permanents),
@@ -419,6 +428,8 @@ class ObservationEncoder:
                             )
                     out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
             out["facts"] = self._encode_facts(obs, ranks)
+            if self.config.policy_input_version >= 7:
+                out.update(encode_shared_effects(obs, self.object_to_index, ranks))
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -581,14 +592,15 @@ class ObservationEncoder:
             )
             for exception in perm.copy.exceptions:
                 push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
-        holders = [
-            (obs.agent.id, obs.agent.effects),
-            (obs.opponent.id, obs.opponent.effects),
-            *((perm.id, perm.effects) for perm in permanents),
-        ]
-        for obj, effects in holders:
-            for effect in effects:
-                push_modification(obj, FACT_EFFECT, effect)
+        if self.config.policy_input_version < 7:
+            holders = [
+                (obs.agent.id, obs.agent.effects),
+                (obs.opponent.id, obs.opponent.effects),
+                *((perm.id, perm.effects) for perm in permanents),
+            ]
+            for obj, effects in holders:
+                for effect in effects:
+                    push_modification(obj, FACT_EFFECT, effect)
         if len(rows) > self.config.fact_rows:
             raise ValueError(
                 f"observation capacity exceeded: facts {len(rows)} > {self.config.fact_rows}"

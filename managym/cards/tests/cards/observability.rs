@@ -47,6 +47,7 @@ use managym::{
             PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
             PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
         },
+        shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
     flow::{
         trigger::DelayedTriggerEvent,
@@ -2407,6 +2408,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     use Buffer::*;
     use Encoded::*;
     let mut fields = encoding!(Observation {
+        shared_effects => [Rows("v7 effects, effect_details, effect_members")],
         continuation => [Rows("relations")],
         game_over => [Excluded("no decision follows the end of the game")],
         won => [Excluded("no decision follows the end of the game")],
@@ -2423,6 +2425,20 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         recent_events => [Rows("events")],
         policy_history => [Rows("events")],
     });
+    fields.extend(encoding!(SharedEffectData {
+        effect => [Rows("v7 effects columns 0..10, 11 and effect_details")],
+        controller_id => [Rows("v7 effects column 10: exact player join")],
+        source => [Rows("v7 effects column 12: exact source join")],
+        members => [Rows("v7 effects columns 15/16 index effect_members")],
+    }));
+    fields.extend(encoding!(EffectObject {
+        object_id => [Identity, Rows("v7 controller/source/member joins")],
+        incarnation => [Identity, Rows("native exact-reference admission, never a numeric identity feature")],
+    }));
+    fields.extend(encoding!(EffectMembership {
+        target => [Rows("v7 effect_members column 0: exact affected object")],
+        order => [Rows("v7 effect_members column 1: reversible native record order")],
+    }));
     fields.extend(encoding!(TurnData {
         turn_number => [column(Player, PLAYER_TURN_INDEX)],
         phase => [Columns(Player, 9, 5)],

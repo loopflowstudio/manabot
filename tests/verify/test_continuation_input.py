@@ -3,6 +3,7 @@
 from hashlib import sha256
 import json
 from pathlib import Path
+from typing import Literal
 
 from managym.decision_capture import DecisionInput
 import numpy as np
@@ -293,12 +294,14 @@ def test_scalar_and_vector_buffers_bind_policy_version_by_width(version: int) ->
 
 
 @pytest.mark.parametrize("difference", ["ability", "context"])
+@pytest.mark.parametrize("state_encoder", ["rows", "typed_pool", "typed_gru"])
 def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     difference: str,
+    state_encoder: Literal["rows", "typed_pool", "typed_gru"],
 ) -> None:
     torch.manual_seed(195)
     _, raw = ordering_root()
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     encoded = space.encode(raw)
     batch = {
         key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
@@ -320,7 +323,7 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     batch["actions"][0, 1, :-2] = batch["actions"][0, 0, :-2]
     batch["actions"][0, :2, -2] = torch.tensor([1, 2])
     batch["action_focus"].fill_(-1)
-    agent = ActorCritic(space, ModelConfig(hidden_dim=16))
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16, state_encoder=state_encoder))
     logits, _ = agent(batch)
     assert not torch.isclose(logits[0, 0], logits[0, 1])
     reordered = {key: value.clone() for key, value in batch.items()}

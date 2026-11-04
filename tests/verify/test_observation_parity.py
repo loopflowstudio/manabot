@@ -33,6 +33,7 @@ from manabot.env.observation import (
     ObservationEncoder,
 )
 from manabot.managym.enums import ActionEnum
+from manabot.verify.representation import source_effect_root
 from manabot.verify.text_observation import priority_root
 import managym
 
@@ -626,7 +627,7 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -
         obs, *_ = env.step(ranked[0])
     else:
         raise AssertionError(f"{card} trigger is not waiting")
-    for version in (4, 5, 6):
+    for version in (4, 5, 6, 7):
         expected = ObservationEncoder(
             ObservationConfig(policy_input_version=version)
         ).encode(obs)
@@ -649,7 +650,7 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -
             assert remembered[24] == watched[24] > 0
 
 
-@pytest.mark.parametrize("version", [4, 5, 6])
+@pytest.mark.parametrize("version", [4, 5, 6, 7])
 def test_t6_transform_parity_and_schedule_relation_versions(
     version: int,
 ) -> None:
@@ -757,6 +758,22 @@ def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> No
     assert "land" in next(
         frame.attackers for frame in obs.continuation if frame.kind == 12
     )
+
+
+def test_v5_source_dependent_duration_matches_native_authority() -> None:
+    env = source_effect_root()
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    actor = env.current_agent_index()
+    assert actor is not None
+    for viewer in (actor, 1 - actor):
+        obs = env.observation_for_player(viewer)
+        native = env.encode_observation(obs, 5)
+        reference = encoder.encode(obs)
+        effects = native["facts"][native["facts"][:, FACT_KIND_INDEX] == FACT_EFFECT]
+        assert len(effects) == 1
+        assert effects[0, FACT_DURATION_INDEX] == 3
+        for key in native:
+            np.testing.assert_array_equal(native[key], reference[key], err_msg=key)
 
 
 @pytest.mark.parametrize("capacity", [128, 140, 256, 512])

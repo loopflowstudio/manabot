@@ -635,6 +635,20 @@ class ContinuousEffect:
     source_name: str | None
     timestamp: int
 
+class EffectObject:
+    object_id: int | None
+    incarnation: int | None
+
+class EffectMembership:
+    target: EffectObject
+    order: int
+
+class SharedEffect:
+    effect: ContinuousEffect
+    controller_id: int
+    source: EffectObject | None
+    members: list[EffectMembership]
+
 class CopyEffect:
     """The copy effect that made a permanent a copy (CR 707.2)."""
 
@@ -739,6 +753,7 @@ class EventData:
     controller_id: int
 
 class Observation:
+    shared_effects: list[SharedEffect] | None
     continuation: list[ContinuationFrame]
 
     @staticmethod

@@ -3,7 +3,64 @@
 Evaluation memory (hosted LLM comparisons, inference receipts and evidence
 reuse) lives in `.lf/wave/eval/MEMORY.md`.
 
-## Fixed-corpus TLA pilot (MTG-213, 2026-11-03)
+## Shared effect inputs (5da5f4, 2026-11-04 UTC)
+
+Jack Heart's 02:49 UTC direction followed MTG-213 v3's second capacity failure,
+270 fragments exceeding v6/256. This supersedes treating the larger table as
+the final representation repair; v1–v6 and executed pilot identities remain
+frozen. At 03:01 UTC he approved shipping complete shared effects routed into
+affected object embeddings before attention. The bounded approval does not
+promote a production default or establish learning quality. PR416's v6 repair
+is integrated; 5da5f4 delivered v7 in PR #419, merged on 2026-11-04 at
+05:55:57 UTC as `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`, with executed
+CI checks passing. MTG-213 integrated that contract without a second
+representation implementation.
+
+Complete native payloads factor before capacity admission. V7 uses fixed
+128 × 18 headers, 512 × 3 typed details and 2,048 × 2 membership edges;
+header offsets/counts partition the latter arrays. Every original record keeps
+an ordered edge, including duplicate targets. Controller, exact current source
+incarnation, duration, timestamp and optional-value presence remain distinct.
+The 270-fragment case becomes 9 complete payloads and 135 memberships; no rules
+record or timestamp is deleted. Frozen v1–v6 keep effect fragments, while v7's
+local facts retain counters, subtypes, copies and other non-effect facts.
+All blocks come from the selected ObservationSpace. Fresh defaults stay v6.
+Bounds remain engineering allocations, with explicit overflow, not guarantees
+over all reachable games. Old projected captures cannot invent missing native
+provenance; replayed Command fixtures supply that authority.
+
+Explicit joins route each encoded payload before object attention and preserve
+action addressability and shared gradients. Sum retains duplicate membership
+contributions; mean alone would erase them. Lossless transport is not an
+injective neural encoding: hashed/summed embeddings can alias or saturate.
+V7 `rows` and `typed_pool` select the same reducer; `typed_gru` reduces tokens
+within one observation and carries no game memory. Original v5 three-arm
+calibration remains v5 evidence. MTG-213 v4 subsequently passed v7 CUDA
+admission but failed collection before learning at a separate card-object
+capacity boundary. No scientific replicate or v7 GPU learner update is
+established. Active-byte reduction does not imply padded-memory savings: default v7
+effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
+
+Native source-A/B positions equal under v6 differ under v7 and diverge after
+one source leaves. Final characteristics alone therefore cannot replace active
+provenance. A separate observed keyword grant/removal timestamp defect remains
+in 5da5f4's questions: fixed-layer keyword subtraction can ignore grant order.
+It predates transport and does not justify semantic coalescing. Such merging
+requires identical future behavior across expiry, sources, intervening effects,
+affected sets and multiplicity, as Jack Heart explicitly required.
+
+The separate $25 representation allowance covers all attempts and ancillary
+costs; retained paid calibration estimates $0.07083924 with the rental deleted,
+not a settled invoice. Engineering runs do not satisfy replicated learning.
+A revised v7 study needs a prospective common-input protocol. Persistent memory
+and relation-table redesign remain proposals; native current effects/knowledge
+cannot depend on a bounded history window. Any later recurrent design needs
+viewer/seat ownership, reset, replay/fork and exact restoration contracts.
+Evidence is published under `experiments/data/state-representation-5da5f4/`;
+the Task plan owns remaining acceptance and delivery. Filesystem inspection
+found no immediate Training child memory directories on 2026-11-04.
+
+## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-04 UTC)
 
 Jack Heart replaced the deferred full-TLA plan with a preliminary trophy-deck
 self-play pilot and evaluation on the same frozen eligible population. Each seat
@@ -29,11 +86,25 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The retained 20:48 UTC reconciliation records both torn down, no pods or
-unsettled GPU sessions, $0.06508817 estimated spend and $1.475 reserved pending
-provider billing. A fresh quote and cumulative-cost reconciliation remain
-necessary for any later allocation; provider availability is no longer the
-observed blocker.
+rentals. The retained 2026-11-04 06:46:13 UTC inventory confirms all four
+Task rentals ended and no provider pods. The first three provider bills total
+$0.17054831; the later v4 planned-to-ended full-rental estimate adds $0.04314150
+pending billing, for $0.21368981 billed plus estimated. All four reservations ($2.95) remain
+conservatively held against $10 pending reconciliation. These are dated receipts,
+not a fresh provider balance or availability claim. Per-run allocation cost can
+omit idle cleanup time; budget against
+the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
+Exact accounting and settlement receipts are referenced in
+experiments/tla-trophy-pilot.md; the later reconciliation is retained in
+`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
+
+Etude 0.2.13 restored launcher decoding of `input_undelivered` through an isolated
+client while the frozen worker kept 0.2.12. A newer control client need not change
+the experimental runtime. During the later network outage, launcher `setting_up`
+lagged the failed worker log; neither that status nor absent clocks established
+ongoing work or teardown. The existing rental owner settled under its supply lock
+after connectivity recovered. Inventory visibility is restored; final billing
+and fresh availability still need reconciliation before any later allocation.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
@@ -92,20 +163,74 @@ v2 bindings to 256. Earlier 512 preparation remains at
 512/256 replay receipts remain in `.runs/mtg213/`. Executed or scored bindings
 require a new prospective identity rather than an in-place amendment.
 
-Prospective protocol/regime `tla-trophy-213-v2` and experiment `tla_pilot_v2`
-bind v6/256, the selected runtime and the same 134 entries, weights, recipe and paired
-evaluation schedule. Fresh initialization/evaluation are required; the evaluator
-rejects v1 runs. The retained 87-action prefix matches the pre-command frame on
+Protocol/regime `tla-trophy-213-v2` bound v6/256 and the same 134 entries, weights,
+recipe and paired evaluation schedule. The retained 87-action prefix matches the pre-command frame on
 the selected runtime, with all 140 facts equal across v6 scalar/vector/Python
 paths at capacity 256; both v5 encoders retain the original overflow. A controlled
 boundary fixture retains all 256 distinct rows and rejects 258 in native/Python
 encoding. This establishes repair
 of the counterexample, not a successful training run or universal capacity.
 Historical v1 execution uses pinned source; its inputs and results remain
-unchanged. The prospective contract is in experiments/protocols/tla-trophy-213-v2.md;
-local replay/audit receipts and remaining validation are in scratch/mtg-213.md.
+unchanged. The historical contract is in experiments/protocols/tla-trophy-213-v2.md;
+its source remains at `d655d37996d2702cd5fee6ac37db11d855e87640`.
 Thirteen games completed before the batch failed but supplied no learner update;
 settled learner counters do not measure all attempted simulation work.
+
+Publication integrated PR #415's five-card repairs, changing the card digest
+again. V3 binds that runtime and preserves the population, v6/256 and schedule;
+merged PR #416 (`3b122de9078c985f846a0f3c5a3a42ebca3b1182`) supplied its exact
+frozen source. The subsequent read-only corpus audit admitted 306 of the original
+1,000 lists (172 additions, no regressions); it does not expand the frozen 134
+or retroactively remove historical exclusions. Admission still is not rules
+correctness or reachable-state capacity.
+
+V3 run `c216c6be7037` failed before its first learner update with 270 distinct
+facts: nine Drill activations × fifteen permanents × two keyword removals.
+The retained 208-action prefix matches the frame and overflow in scalar, vector
+and Python paths. The attempt ledger has 171 completed-but-unoptimized games.
+A diagnostic 512-row buffer preserves all 270 rows identically in native/Python;
+it neither selects a new pilot contract nor establishes universal capacity.
+The 256-row allocation repaired the first counterexample but is now empirically
+insufficient. V1/v2/v3 evidence stays frozen; a new capacity/representation choice
+requires a prospective identity, fresh initialization and evaluation. No automatic
+increase is selected. Jack Heart subsequently approved shipping shared-effect
+fixed tensors (comment 42a12145, relaying his 2026-11-03 decision): complete
+effects are encoded once and explicitly routed into affected object embeddings
+before attention. Task 5da5f4 owns that bounded prerequisite as well as the
+broader representation investigation. This resolves the immediate repair choice;
+the delivered contract is recorded above, while successful learning remains
+unestablished. Concrete layout and capacities are engineering choices for that
+owner. Lossless factoring preserves
+memberships, multiplicity, source, duration and ordering; semantic coalescing
+requires proof of identical future behavior. The retained 270-row projection
+roundtrips as nine complete payloads and 135 memberships, not nine independent
+facts with their affected objects discarded. V4 consumed the delivered contract
+with fresh initialization and evaluation on the same 134 decks; v5 retains
+those requirements within MTG-213's existing $10 cap. The representation Task's
+separate experimental budget does not replenish that cap. GPU learner updates
+remain the launch milestone; a merged implementation is not Task completion.
+
+V4's exact retained prefix exposed an independent capacity bound: 40 original
+cards, five generated tokens and 16 sideboard cards require 61 card rows, above
+the default 60. CUDA admission passed, but 238 completed games supplied no
+learner update. Its initialization evaluation completed 32 games (2 wins, 30
+losses), leaving 256 scheduled games missing. All 110 v4 artifacts were published;
+all 120 v3 artifacts remain retained. V4's source and evidence remain frozen.
+
+The prospective v5 pilot selects the existing `max_cards_per_player=128` under
+the operator's workflow-repair authority, retaining explicit input v7 and its
+shared-effect capacities. The native scalar/vector binding now derives the card
+axis from ObservationSpace; the exact retained prefix agrees with Python at 61
+and 128 rows while 60 fails. Generated cards and sideboards cannot be dropped to
+fit an allocation. Schema-3 protocol shapes and regime hashes bind every axis;
+fresh initialization is required when model object capacity changes. This repairs
+a counterexample, not every reachable-state capacity or a learning result.
+Analysis and discovery share the active v5 identity; historical executions use
+pinned sources. The prepared v5 Run remains bound to its original source despite
+later source simplifications. Its 06:38 UTC receipt records a refused quote and
+no submission or rental, not a failed training attempt. The live plan owns the
+prepared identity, fresh budget/availability reconciliation and remaining GPU,
+checkpoint, complete evaluation and Elemental-relative learning acceptance.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
@@ -114,8 +239,9 @@ the parity fixture covers all three durations. It does not repair capacity or
 refresh the pinned pilot's runtime evidence. Capacity changes must preserve
 duration, timestamp and source distinctions, not merely fit this one frame.
 
-Initialization evaluation completed all eight pairs/four legs: 3 wins, 29 losses,
-32 replay passes. The full schedule still expects 288 games, with 256 missing,
+V1 and v3 each independently completed initialization evaluation across all eight
+pairs/four legs: 3 wins, 29 losses, 32 replay passes. Their matching scores do not
+make the executions interchangeable. Each schedule expects 288 games, with 256 missing,
 no trained endpoint and no qualified learning result. A separate CPU proof has
 one update/199 decisions and 12 valid games. Neither establishes GPU learning or
 Elemental-relative pace; the full catalog/v5 policy and population differ.
@@ -139,7 +265,7 @@ fields, preserving required-column failures. Local evidence-writing evaluation
 requires an explicit ETUDE_OUTPUT_DIR. These execution/reader repairs preserve
 the frozen schedule and criterion, not missing experimental outcomes.
 Retained empirical limits live in experiments/tla-trophy-pilot.md. Training has
-no child memory directories at this reconciliation (2026-11-03).
+no child directories or child memories at this reconciliation (2026-11-04 UTC).
 
 ## Training consolidation and credit (MTG-179, 2026-10-22)
 

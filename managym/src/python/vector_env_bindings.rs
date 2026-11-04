@@ -40,6 +40,9 @@ type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 #[cfg(feature = "python")]
 struct ObservationBuffers {
     relations: Option<Py<PyAny>>,
+    effects: Option<Py<PyAny>>,
+    effect_details: Option<Py<PyAny>>,
+    effect_members: Option<Py<PyAny>>,
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
@@ -325,6 +328,7 @@ impl PyVectorEnv {
     }
 }
 
+/// Card capacity follows the supplied ObservationSpace on scalar/vector paths.
 /// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
 /// capacity from the fact axis. At 128 rows their encoding is identical; the
 /// Python configuration/checkpoint still owns the declared version identity.
@@ -333,7 +337,27 @@ pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
     mut config: ObservationEncoderConfig,
 ) -> PyResult<ObservationEncoderConfig> {
+    let cards = buffers
+        .get_item("agent_cards")?
+        .ok_or_else(|| PyValueError::new_err("missing agent_cards"))?;
+    let card_shape: Vec<usize> = cards.getattr("shape")?.extract()?;
+    config.max_cards_per_player = match card_shape.as_slice() {
+        &[rows, _] | &[_, rows, _] if rows > 0 => rows,
+        _ => return Err(PyValueError::new_err("invalid card buffer shape")),
+    };
+    let mut shared_count = 0;
+    for name in ["effects", "effect_details", "effect_members"] {
+        shared_count += usize::from(buffers.contains(name)?);
+    }
+    if shared_count != 0 && shared_count != 3 {
+        return Err(PyValueError::new_err(
+            "v7 requires all shared-effect buffers",
+        ));
+    }
     let Some(relations) = buffers.get_item("relations")? else {
+        if shared_count != 0 {
+            return Err(PyValueError::new_err("v7 requires relations"));
+        }
         config.policy_input_version = 1;
         return Ok(config);
     };
@@ -354,7 +378,9 @@ pub(super) fn input_buffer_config(
                 return Err(PyValueError::new_err("invalid fact buffer shape"));
             }
             config.max_facts = fact_shape[fact_shape.len() - 2];
-            if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
+            if shared_count == 3 {
+                7
+            } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
                 5
             } else {
                 6
@@ -366,6 +392,9 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
+    if shared_count != 0 && config.policy_input_version != 7 {
+        return Err(PyValueError::new_err("v7 requires current relation width"));
+    }
     Ok(config)
 }
 
@@ -402,6 +431,14 @@ fn read_observation_buffers(
     n: usize,
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
+    let shared_buffer = |name: &str, rows: usize, width: usize| -> PyResult<Option<Py<PyAny>>> {
+        if c.policy_input_version < 7 {
+            return Ok(None);
+        }
+        Ok(Some(
+            require_numpy_array(buffers, name, &[n, rows, width], "float32")?.unbind(),
+        ))
+    };
     Ok(ObservationBuffers {
         relations: if c.policy_input_version >= 2 {
             Some(
@@ -420,6 +457,21 @@ fn read_observation_buffers(
         } else {
             None
         },
+        effects: shared_buffer(
+            "effects",
+            crate::agent::shared_effects::EFFECT_ROWS,
+            crate::agent::shared_effects::EFFECT_DIM,
+        )?,
+        effect_details: shared_buffer(
+            "effect_details",
+            crate::agent::shared_effects::DETAIL_ROWS,
+            crate::agent::shared_effects::DETAIL_DIM,
+        )?,
+        effect_members: shared_buffer(
+            "effect_members",
+            crate::agent::shared_effects::MEMBER_ROWS,
+            crate::agent::shared_effects::MEMBER_DIM,
+        )?,
         facts: if c.policy_input_version >= 5 {
             Some(
                 require_numpy_array(
@@ -863,6 +915,9 @@ impl<T> SendSlice<T> {
 #[derive(Clone, Copy)]
 struct SendObservationFieldSlices {
     relations: Option<SendSlice<f32>>,
+    effects: Option<SendSlice<f32>>,
+    effect_details: Option<SendSlice<f32>>,
+    effect_members: Option<SendSlice<f32>>,
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
@@ -939,6 +994,39 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.relations_len())?,
                         config.relations_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            effects: if let Some(buffer) = self.effects {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.effects_len())?,
+                        config.effects_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            effect_details: if let Some(buffer) = self.effect_details {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.effect_details_len())?,
+                        config.effect_details_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            effect_members: if let Some(buffer) = self.effect_members {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.effect_members_len())?,
+                        config.effect_members_len(),
                     )
                 }
             } else {
@@ -1102,6 +1190,21 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "relations"))
         .transpose()?;
+    let effects_buffer = buffers
+        .effects
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "effects"))
+        .transpose()?;
+    let effect_details_buffer = buffers
+        .effect_details
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_details"))
+        .transpose()?;
+    let effect_members_buffer = buffers
+        .effect_members
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_members"))
+        .transpose()?;
     let facts_buffer = buffers
         .facts
         .as_ref()
@@ -1157,6 +1260,18 @@ fn with_send_write_buffers<R>(
         relations: relations_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "relations"))
+            .transpose()?,
+        effects: effects_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "effects"))
+            .transpose()?,
+        effect_details: effect_details_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "effect_details"))
+            .transpose()?,
+        effect_members: effect_members_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "effect_members"))
             .transpose()?,
         facts: facts_buffer
             .as_ref()

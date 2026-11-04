@@ -17,6 +17,8 @@ from pydantic import (
 
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
+StateEncoder = Literal["rows", "typed_pool", "typed_gru"]
+
 
 def _default_deck() -> dict[str, int]:
     return {
@@ -39,10 +41,10 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6] = Field(
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
-    # Only v6 carries a configurable fact capacity. Omission on older inputs
+    # V6 and v7 carry a configurable local-fact capacity. Omission on older inputs
     # preserves their serialized architecture receipts, including v1 defaults.
     max_facts: int | None = Field(
         default=None, gt=0, exclude_if=lambda value: value is None
@@ -64,7 +66,7 @@ class ObservationConfig(BaseConfig):
     def validate_fact_capacity(self) -> "ObservationConfig":
         if self.policy_input_version >= 6:
             if self.max_facts is None:
-                self.max_facts = 512
+                self.max_facts = 128 if self.policy_input_version == 7 else 512
         elif self.max_facts is not None:
             raise ValueError("max_facts requires policy input v6")
         return self
@@ -210,6 +212,12 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
+    # Within-observation reducers for frozen v5 fragments or explicit v7 shared
+    # payloads and typed continuations. Capacity belongs to ObservationConfig;
+    # none of these encoders carries temporal memory.
+    state_encoder: StateEncoder = Field(
+        default="rows", exclude_if=lambda value: value == "rows"
+    )
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
@@ -249,6 +257,8 @@ class ModelConfig(BaseConfig):
 
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":
+        if self.state_encoder != "rows" and self.compound_decisions:
+            raise ValueError("typed state experiment requires flat legal actions")
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:

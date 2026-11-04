@@ -76,3 +76,21 @@ in historical captures. T7's control frames 13/14 remain intact. The parent move
 canonical hashing to contract 15; gate owns mutable-w17 receipt refresh and
 combined consumer validation. This conflict resolution does not claim those
 checks or authorize landing. The waiting sync caller owns verification and push.
+
+## Resume integration — 2026-11-04
+
+Main `4da9931b500c4de8aef33aad421cf84d4affa8c7` contains merged T6,
+explicit v7 shared effects and the pilot fixture repair. Preserve those changes
+and T7 chooser semantics together. Historical T6 notes removed by main are
+retained at `02241d414:scratch/mtg-225-tla-t6.md`, `:scratch/t6-direction.md`
+and `:scratch/t7-handoff.md`; main's additional integration evidence is at
+`4da9931b5:scratch/questions.md`. No experiment authority transfers.
+
+The conflicting parity corpora retain T7's complete tapes and combined-world
+bindings pending verification/refresh of mutable source fingerprints. Frozen
+protocols, regimes and experiment evidence are unchanged. The pilot tests now
+use explicit historical identity/width fixtures for synthetic scheduling only;
+real-world and schema rejection retain independent negative coverage.
+
+Headless presentation proof uses existing Svelte server rendering and real
+Academy session tests; browser geometry remains for demo/CI.
