@@ -1,108 +1,71 @@
-# MTG-213 — decisions and assumptions (2026-11-03)
+# MTG-213 — decisions and assumptions (2026-11-04 UTC)
 
-Publication sync assumption: main advanced to PR #415 (`c823c9c8f`), whose five
-card repairs change the native world digest and admission. Preserve v1/v2
-protocol and regime bytes; use a new prospective **v3** identity for the merged
-runtime, with fresh initialization and the unchanged 134-entry population,
-v6/256 input, learning settings, budget and evaluation schedule. Do not expand
-the corpus just because admission expanded. Historical v2 code and validation
-remain at published commit `d655d37996d2702cd5fee6ac37db11d855e87640`.
+Current outcome, dependency and acceptance: `scratch/tla-pilot-verify.md`.
+Results and cost receipts: `experiments/tla-trophy-pilot.md`. These supersede
+older open-choice language in Wave memory; this step leaves Wave memory to its
+owning procedure.
 
-Jack Heart's comment 1540e0ad-743f-412b-ad5c-5cb55b03a0db supersedes the deferred
-Task brief: start preliminary fixed-corpus TLA self-play and evaluation now,
-rejecting whole unsupported decks. Comment 6434b4dd-5329-4904-9952-6493c9968b52
-authorizes GPUs under a hard $10 cumulative cap and shipping after checks,
-superseding local-only/no-merge assumptions. Comment d2108241 requires a launch
-milestone only after observed GPU learner updates, with job/GPU/progress/rate
-and deadline evidence. Neither quotes nor the CPU proof satisfy it.
+## Accepted direction
 
-- Population: the CC BY 4.0 public TLA PremierDraft dump, because the trophy API
-  restricts reuse to 17Lands.com. First 1,000 events with seven observed wins in
-  source order; seventh-win main/sideboards and event/build/results retained.
-  Missing losses stay unknown. Native whole-list admission yields 134 eligible,
-  866 rejected, without resampling. This is historical trophy data, not today's
-  feed or a uniform sample of drafts. Live fetching and deck holdout are deferred.
-- Recipe: preserve MTG-181/183's 64x2/four-head damped policy; original world/full
-  vocabulary/v5 and trophy population are declared deviations. No historical
-  checkpoint or budget is inherited. The $1 first allocation, 100-update target,
-  2,700-second watchdog and eight-pair/four-leg evaluation are engineering choices
-  frozen in `experiments/protocols/tla-trophy-213-v1.{json,md}`.
-- Credentials: Jack Heart corrected the prior blocker. Nested Doppler
-  `manabot/prd` then `etude/prd` supplies artifacts then provider access without
-  copying secrets. Configured GPU alternatives are authorized within $10;
-  record hardware/allocation deviations before scoring. Earlier credential and
-  zero-spend capacity reports are historical, not current launch instructions.
-- Runtime: prepared b8835f63b matched the corpus. V2 explicitly selects
-  post-PR-414 source plus the v6 repair, with the current card digest pinned in
-  its protocol. All 134 entries admit unchanged. The digest difference is
-  isolated to PR-414 keyword serialization and 13 rules-vocabulary locations;
-  version/admission alone does not establish runtime parity. Historical v1 correction
-  `2adbd0758e40518947daf91569e1938b060d4346` changed only the timing test from
-  b8835f63b, retaining native/learner/corpus/recipe/evaluator bytes.
-  Ordinary repair checkpoint: c29bf3a3. Keep original failed requests unchanged.
-- Allocation: prepare source once through existing `source.freeze`, retain the
-  typed Run, then quote/submit via `client.launch_cohort`; quotes reserve nothing.
-  Etude 0.2.12 cannot append runs to a cohort, so the corrected attempt used
-  `mtg213-pilot-v1-correction1` with a $1 ceiling. Operational cohort names do not
-  create scientific samples. T6 learner optimization and MTG-239 launcher work
-  retain separate ownership.
-- Analysis: retain milestones even after an early endpoint and both comparison
-  slots for an unknown endpoint. Failed callbacks count as failed matches;
-  unknown games stay missing and attempted games are a lower bound. The companion
-  analysis CLI owns the joint criterion; Etude curves are descriptive. Local CPU
-  validation and initialization strength establish neither GPU learning nor pace.
-- Capacity: stream 181 / seed 31482 / action 87 reproduces `facts 140 > 128`
-  with matching frame/error in both encoders. Seven legal Fire Nation Drill
-  activations over ten permanents produce two keyword-removal facts each.
-  Encoding errors are deliberately fatal. No padding, truncation, quarantine,
-  deck exclusion or unchanged paid retry resolves the shared representation
-  decision. The 2026-11-03 implementation audit established 140 distinct tuples
-  with seven distinct timestamps, zero exact duplicates, matching capture and
-  70 rendered text records. Lossless compaction cannot preserve unchanged v5
-  row meanings here. Operator comment 5d6cf81e selected prospective v6/max_facts=512;
-  0c17ad58 was an operator-issued run reason, not separate human confirmation.
-  New operator comment 78f4c226 selects **256 for the pilot**, following Jack
-  Heart's question about 256. The 23:20 UTC authoritative launcher/local/R2
-  reads found no v2 execution/scoring; the prepared v2 bindings were amended
-  in place. Receipt: `.runs/mtg213/v2-pre-amendment-state.json`. The numeric capacity is the operator's engineering choice.
-  Preserve timestamp rank / 128, all columns and v5.
-  Fresh v6 configuration defaults to 512; legacy configuration omits the new
-  field to preserve architecture hashes. Native buffers infer capacity from
-  their fact axis; 128-row v6 and v5 have identical encoding semantics. Existing v5 evidence remains unchanged.
+Jack Heart's comment 1540e0ad selects preliminary fixed-corpus TLA self-play
+and evaluation now, superseding the deferred Task brief. Comment 6434b4dd
+authorizes GPUs under a hard $10 cumulative cap and shipping after checks.
+Comment d2108241 requires a launch milestone only after observed GPU learner
+updates, including job/GPU/progress/rate/deadline evidence. Neither quotes nor
+the CPU proof satisfy it.
 
-Current results, reservations and remaining work: `scratch/tla-pilot-verify.md`;
-retained receipts: `experiments/tla-trophy-pilot.md`. Detailed decision chronology
-is at `72d67d4cf69cb055df4314849e55abf7f7448556:scratch/questions.md`.
-Inherited unrelated notes remain at
-`22e4aab716f2b582d704b88dc5d22cb1547ce623:scratch/questions.md`; main's MTG-238
-assumptions and engine-speed notes at
-`44388ad4211b4292cc161a3087eb1230b2005737:scratch/questions.md`.
+Comment 42a12145 resolves the next repair: Jack Heart approved shared-effect
+fixed tensors, encoding each effect once and routing it to affected object
+embeddings before attention. Task 5da5f4 owns implementation and redundant-
+activation investigation. Preserve semantics; no competing representation
+implementation or unchanged v3 retry. Its delivery must precede a fresh pilot
+identity, initialization and evaluation within the same budget and population.
 
-Comment be5b1394 relays Jack Heart's explicit confirmation of the immediate
-larger-capacity hotfix; broader representation/history/memory design belongs
-to a separate Task. The primary conversation owns
-`docs/observation-architecture.html` and README diagrams; preserve those
-contributions for delivery. They do not change model behavior.
+## Scientific and operational choices
 
-Publication validation assumption: the deliberately extreme numerical-policy
-fixture tests finite log probabilities and optimizer updates on four real
-decisions per stream; it does not require complete games. Its implicit two-seat
-collection stalled during the broad suite. Select the existing one-seat quota
-and a fixed Torch seed for this fixture only. Production two-seat training and
-the pilot's frozen recipe remain unchanged.
+- Population: CC BY 4.0 public TLA PremierDraft dump; the trophy API restricts
+  reuse to 17Lands.com. First 1,000 events with seven observed wins in source
+  order, retaining seventh-win main/sideboards and event/build/results. Missing
+  losses remain unknown. Native whole-list admission yielded 134 eligible and
+  866 rejected without resampling. This is historical trophy data, not a uniform
+  draft sample. Live fetching and held-out-deck generalization are deferred.
+- Recipe: MTG-181/183's 64x2/four-head damped policy, with explicit new-world,
+  full-vocabulary and trophy-population deviations; no checkpoint or budget
+  inheritance. The $1 allocation, 100-update target, 2,700-second watchdog and
+  eight-pair/four-leg evaluation are frozen engineering choices.
+- Credentials: nested Doppler `manabot/prd` then `etude/prd` supplies artifacts
+  and RunPod. Configured GPU alternatives are authorized within $10; record
+  hardware/allocation deviations before scoring. Quotes reserve nothing.
+- Launch: freeze source once through `source.freeze`, retain the typed Run,
+  quote/submit through `client.launch_cohort`. Etude 0.2.12 could not append
+  cohort runs, so `mtg213-pilot-v1-correction1` used a separate $1 ceiling
+  without creating a scientific sample. T6 and MTG-239 retain separate owners.
+- Analysis: retain milestones after early endpoints and both comparison slots
+  for unknown endpoints. Failed callbacks count as failed matches; unknown
+  games remain missing and attempted games are a lower bound. The companion
+  analysis CLI owns the joint criterion; Etude curves are descriptive.
 
-The failed-update accounting fixture likewise needs two bounded updates, not
-whole-game completion; it now explicitly uses one-seat quotas. For recovery,
-one-seat decision quotas do not guarantee any completed games after the merged
-rules change. Preserve exact state/metrics equality for both modes and require
-positive completed games only for the two-seat mode that guarantees them.
+## Frozen compatibility and provenance
 
-Inherited MTG-239 decisions are preserved at
-`7b8bb32731205981b6be09097eb4ca4b39b3864f:scratch/questions.md`;
-they select no additional work for this pilot.
+V1's 140 distinct facts exceeded 128. The operator selected v6/512, then 256
+following Jack Heart's question (78f4c226); be5b1394 relays his explicit approval
+of the immediate larger-capacity hotfix. Comment 0c17ad58 was an operator-issued
+run reason, not separate human confirmation. No v2 execution/scoring existed
+at amendment (`.runs/mtg213/v2-pre-amendment-state.json`). V6 retains all columns,
+timestamp rank / 128 and fatal overflow; v5 stays fixed at 128 and legacy
+serialization omits `max_facts`. Generic fresh v6 defaults to 512.
 
-Sync resolution: target main `3b122de9078c985f846a0f3c5a3a42ebca3b1182`
-contains the earlier pilot report. Retain the branch’s later v3 outcome and
-continuation notes, including the removal of inherited unrelated notes. All
-shared artifact manifest entries match exactly; retain the 120 additional v3
-evidence entries. This sync selects no new training or capacity change.
+PR #415 changed the native digest, so v3 bound the merged runtime with the same
+134 entries, v6/256, recipe and schedule. The later 306-list admission audit
+never expands this population. V3's 270-row failure invalidates its capacity
+assumption; frozen v1/v2/v3 inputs and evidence remain reproducibility records.
+The native/Python duration-parity repair does not refresh those runtime pins.
+
+Historical details: `b0d921cec92784d9303aea3d0d904416e8607982:scratch/questions.md`
+retains source-binding decisions, fixture repairs, documentation contributions,
+sync resolution and links to older decision history. V2 source is
+`d655d37996d2702cd5fee6ac37db11d855e87640`; pre-merge validation is at
+`7b8bb32731205981b6be09097eb4ca4b39b3864f:experiments/tla-trophy-pilot.md`.
+Uncommitted continuation notes before consolidation are preserved in
+`.runs/mtg213/context-before-compress/`; their substantive findings remain in
+the continuation note. The manifest retains all 120 added v3 evidence entries.

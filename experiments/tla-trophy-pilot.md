@@ -50,9 +50,9 @@ hash-verified. [Summary and cost accounting](data/mtg213/gpu-v3-20261104/summary
 [missing-output receipt](data/mtg213/gpu-v3-20261104/missing-outputs.json) retain
 these limits.
 
-The 256-row assumption is invalidated. Another paid attempt requires a prospective
-capacity or representation revision; no unchanged retry, truncation or deck
-exclusion is justified. V3 source, inputs, attempts and evidence remain frozen.
+The 256-row assumption is invalidated. The approved shared-effect repair and
+remaining acceptance are below. V3 source, inputs, attempts and evidence remain
+frozen; no unchanged retry, truncation or deck exclusion is justified.
 
 ## Historical v1 result (2026-11-03)
 
@@ -233,9 +233,12 @@ operator-issued run reason. The 140-row replay passed at 256 and a controlled
 258-row fixture failed as intended; v3's later 270-row failure demonstrates
 why those checks did not establish sufficient capacity for training.
 
-A prospective capacity/representation contract must cover the new counterexample
-before another paid attempt. Preserve v3, the corpus and cumulative budget;
-broader representation/history/memory design belongs to Task 5da5f4. GPU learner
-updates, trained checkpoints and 256 scheduled evaluation games remain missing.
-No paid-training milestone or learning/Elemental-pace claim is supported; MTG-213
-is incomplete.
+Jack Heart approved the shared-effect fixed-tensor repair (comment 42a12145):
+encode effects once and route them to affected object embeddings before attention.
+Task 5da5f4 owns that prerequisite. After delivery, bind a prospective pilot with
+fresh initialization and evaluation on the same 134 decks, reconciling costs
+against the existing cumulative $10 cap before allocation. Preserve v1/v2/v3
+evidence; the new run cannot fill v3's 256 missing evaluation slots.
+
+GPU learner updates and trained checkpoints remain missing. No paid-training
+milestone or learning/Elemental-pace claim is supported; MTG-213 is incomplete.

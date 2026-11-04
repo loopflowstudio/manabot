@@ -3,7 +3,7 @@
 Evaluation memory (hosted LLM comparisons, inference receipts and evidence
 reuse) lives in `.lf/wave/eval/MEMORY.md`.
 
-## Fixed-corpus TLA pilot (MTG-213, 2026-11-03)
+## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-04 UTC)
 
 Jack Heart replaced the deferred full-TLA plan with a preliminary trophy-deck
 self-play pilot and evaluation on the same frozen eligible population. Each seat
@@ -29,11 +29,20 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The retained 20:48 UTC reconciliation records both torn down, no pods or
-unsettled GPU sessions, $0.06508817 estimated spend and $1.475 reserved pending
-provider billing. A fresh quote and cumulative-cost reconciliation remain
-necessary for any later allocation; provider availability is no longer the
-observed blocker.
+rentals. The 2026-11-04 settlement confirms all three Task rentals ended;
+cumulative provider bills plus the latest full-rental estimate total $0.17051348.
+All three reservations ($2.2125) remain conservatively held against $10 pending
+final billing. Per-run allocation cost can omit idle cleanup time; budget against
+the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
+Exact accounting and settlement receipts live in experiments/tla-trophy-pilot.md.
+
+Etude 0.2.13 restored launcher decoding of `input_undelivered` through an isolated
+client while the frozen worker kept 0.2.12. A newer control client need not change
+the experimental runtime. During the later network outage, launcher `setting_up`
+lagged the failed worker log; neither that status nor absent clocks established
+ongoing work or teardown. The existing rental owner settled under its supply lock
+after connectivity recovered. Inventory visibility is restored; final billing
+and fresh availability still need reconciliation before any later allocation.
 
 Source preparation also fixes a runtime, not just a job recipe. After integrating
 PR #414, the retained corpus and local runtime both report w17 but different
@@ -92,20 +101,39 @@ v2 bindings to 256. Earlier 512 preparation remains at
 512/256 replay receipts remain in `.runs/mtg213/`. Executed or scored bindings
 require a new prospective identity rather than an in-place amendment.
 
-Prospective protocol/regime `tla-trophy-213-v2` and experiment `tla_pilot_v2`
-bind v6/256, the selected runtime and the same 134 entries, weights, recipe and paired
-evaluation schedule. Fresh initialization/evaluation are required; the evaluator
-rejects v1 runs. The retained 87-action prefix matches the pre-command frame on
+Protocol/regime `tla-trophy-213-v2` bound v6/256 and the same 134 entries, weights,
+recipe and paired evaluation schedule. The retained 87-action prefix matches the pre-command frame on
 the selected runtime, with all 140 facts equal across v6 scalar/vector/Python
 paths at capacity 256; both v5 encoders retain the original overflow. A controlled
 boundary fixture retains all 256 distinct rows and rejects 258 in native/Python
 encoding. This establishes repair
 of the counterexample, not a successful training run or universal capacity.
 Historical v1 execution uses pinned source; its inputs and results remain
-unchanged. The prospective contract is in experiments/protocols/tla-trophy-213-v2.md;
-local replay/audit receipts and remaining validation are in scratch/mtg-213.md.
+unchanged. The historical contract is in experiments/protocols/tla-trophy-213-v2.md;
+its source remains at `d655d37996d2702cd5fee6ac37db11d855e87640`.
 Thirteen games completed before the batch failed but supplied no learner update;
 settled learner counters do not measure all attempted simulation work.
+
+Publication integrated PR #415's five-card repairs, changing the card digest
+again. V3 binds that runtime and preserves the population, v6/256 and schedule;
+merged PR #416 (`3b122de9078c985f846a0f3c5a3a42ebca3b1182`) supplied its exact
+frozen source. The subsequent read-only corpus audit admitted 306 of the original
+1,000 lists (172 additions, no regressions); it does not expand the frozen 134
+or retroactively remove historical exclusions. Admission still is not rules
+correctness or reachable-state capacity.
+
+V3 run `c216c6be7037` failed before its first learner update with 270 distinct
+facts: nine Drill activations × fifteen permanents × two keyword removals.
+The retained 208-action prefix matches the frame and overflow in scalar, vector
+and Python paths. The attempt ledger has 171 completed-but-unoptimized games.
+A diagnostic 512-row buffer preserves all 270 rows identically in native/Python;
+it neither selects a new pilot contract nor establishes universal capacity.
+The 256-row allocation repaired the first counterexample but is now empirically
+insufficient. V1/v2/v3 evidence stays frozen; a new capacity/representation choice
+requires a prospective identity, fresh initialization and evaluation. No automatic
+increase is selected. Broader representation/history/memory work belongs to
+Task 5da5f4; the immediate continuation decision remains open in
+scratch/tla-pilot-verify.md.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
@@ -114,8 +142,9 @@ the parity fixture covers all three durations. It does not repair capacity or
 refresh the pinned pilot's runtime evidence. Capacity changes must preserve
 duration, timestamp and source distinctions, not merely fit this one frame.
 
-Initialization evaluation completed all eight pairs/four legs: 3 wins, 29 losses,
-32 replay passes. The full schedule still expects 288 games, with 256 missing,
+V1 and v3 each independently completed initialization evaluation across all eight
+pairs/four legs: 3 wins, 29 losses, 32 replay passes. Their matching scores do not
+make the executions interchangeable. Each schedule expects 288 games, with 256 missing,
 no trained endpoint and no qualified learning result. A separate CPU proof has
 one update/199 decisions and 12 valid games. Neither establishes GPU learning or
 Elemental-relative pace; the full catalog/v5 policy and population differ.
@@ -139,7 +168,7 @@ fields, preserving required-column failures. Local evidence-writing evaluation
 requires an explicit ETUDE_OUTPUT_DIR. These execution/reader repairs preserve
 the frozen schedule and criterion, not missing experimental outcomes.
 Retained empirical limits live in experiments/tla-trophy-pilot.md. Training has
-no child memory directories at this reconciliation (2026-11-03).
+no child directories or child memories at this reconciliation (2026-11-04 UTC).
 
 ## Training consolidation and credit (MTG-179, 2026-10-22)
 
