@@ -15,10 +15,10 @@ the CPU proof satisfy it.
 
 Comment 42a12145 resolves the next repair: Jack Heart approved shared-effect
 fixed tensors, encoding each effect once and routing it to affected object
-embeddings before attention. Task 5da5f4 owns implementation and redundant-
+embeddings before attention. Task 5da5f4 delivered the implementation in PR #419 and owns redundant-
 activation investigation. Preserve semantics; no competing representation
-implementation or unchanged v3 retry. Its delivery must precede a fresh pilot
-identity, initialization and evaluation within the same budget and population.
+implementation or unchanged v3 retry. V4 consumed that contract; the prepared
+v5 retains it with fresh initialization/evaluation and the same budget/population.
 
 ## Scientific and operational choices
 

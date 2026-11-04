@@ -86,15 +86,17 @@ availability and launch quotes are not reservations: Etude 0.2.12 uses the same
 template/offer path for both, but catalog responses changed between reads.
 Preparing the exact source once avoided repeated preparation delay but did not
 reserve capacity. Earlier zero-spend refusals were superseded by A6000 and L4
-rentals. The retained 2026-11-04 06:13:32 UTC inventory confirms all four
+rentals. The retained 2026-11-04 06:46:13 UTC inventory confirms all four
 Task rentals ended and no provider pods. The first three provider bills total
-$0.17054831; v4's full-rental estimate adds $0.04314118 pending billing, for
-$0.21368949 billed plus estimated. All four reservations ($2.95) remain
+$0.17054831; the later v4 planned-to-ended full-rental estimate adds $0.04314150
+pending billing, for $0.21368981 billed plus estimated. All four reservations ($2.95) remain
 conservatively held against $10 pending reconciliation. These are dated receipts,
 not a fresh provider balance or availability claim. Per-run allocation cost can
 omit idle cleanup time; budget against
 the whole rental. Unrelated provider inventory is not this Task's cleanup scope.
-Exact accounting and settlement receipts live in experiments/tla-trophy-pilot.md.
+Exact accounting and settlement receipts are referenced in
+experiments/tla-trophy-pilot.md; the later reconciliation is retained in
+`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
 
 Etude 0.2.13 restored launcher decoding of `input_undelivered` through an isolated
 client while the frozen worker kept 0.2.12. A newer control client need not change

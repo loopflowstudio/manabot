@@ -1,9 +1,10 @@
 # TLA trophy pilot: capacity failures before learning
 
 V5 source is frozen as `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, prepared
-run `e8c76bc2c06f`. Its A6000 quote was refused; at 06:37:17 UTC L4, A4000
-and A4500 also reported no capacity. **V5 has not been submitted or rented**.
-No GPU learner update is yet established. All earlier rentals are ended. The
+run `e8c76bc2c06f`. Its A6000 quote was refused; the latest retained availability
+read at 06:46:27 UTC on 2026-11-04 reports A6000, L4, A4000 and A4500 unavailable.
+**V5 has not been submitted or rented**. No GPU learner update is yet established.
+The 06:46:13 UTC inventory confirms all earlier rentals ended and no provider pods. The
 [v5 contract](protocols/tla-trophy-213-v5.md) retains v7, the 134 entries, learner
 and evaluation schedule, with a 128-card axis and corrected native buffer sizing.
 It requires fresh initialization.
@@ -15,7 +16,10 @@ on an RTX A6000 but failed before learning at **61 card and sideboard objects
 against capacity 60**. Exact replay identifies stream 22 after 300 actions:
 40 original cards, five generated tokens and 16 sideboard cards. Its 238
 completed games supplied no optimizer update. The rental ended; estimated full
-rental cost is $0.04314118, cumulative billed plus estimated cost **$0.21368949**.
+rental cost is $0.04314150, cumulative billed plus estimated cost **$0.21368981**,
+using the later planned-to-ended estimate in
+`.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
+This supersedes the earlier $0.04314118 estimate; v4 billing remains unsettled.
 All four reservations total $2.95 conservatively held against the same $10 cap.
 
 V4 initialization evaluation completed 32 valid games (**2 wins / 30 losses**),

@@ -1,12 +1,11 @@
 # TLA pilot continuation — 2026-11-04 UTC
 
-**Incomplete, fix forward.** V4 passed CUDA admission but failed before its first
-learner update at 61 card objects including sideboard against capacity 60.
-The prospective v5 implementation uses the existing 128-card configuration,
-with the native scalar/vector binding corrected to derive that axis from
-ObservationSpace. All shared-effect tensors remain the delivered v7 contract.
-Integration, prospective binding and analysis/discovery migration are complete.
-GPU execution and learning acceptance remain outstanding.
+**Fix forward; incomplete.** Main at
+`fb5ad2c1372f9c967b550f0b8ae0f84883f75563` contains PR #419's shared-effect
+contract but lacks the card-capacity repair. PR #416 merged at
+`3b122de9078c985f846a0f3c5a3a42ebca3b1182`; this Task has no later PR.
+The existing repair and prospective v5 runner are ready for gate and a new PR
+in this Task. GPU execution and learning acceptance remain outstanding.
 
 ## Accepted outcome and constraints
 
@@ -24,107 +23,105 @@ and all evidence. No truncation, deck exclusion, failed-game replacement or
 inherited budget. Choices and attribution: `scratch/questions.md`; results:
 `experiments/tla-trophy-pilot.md`.
 
-## Delivered prerequisite and retained attempts
+## Retained evidence and delivered prerequisite
 
-PR #419 merged at 05:55:57 UTC as
-`fb5ad2c1372f9c967b550f0b8ae0f84883f75563`, with executed CI checks passing.
-Task 5da5f4 owns that representation, now integrated here. V7 encodes complete
-effects once, joining them to affected objects before attention: 128 × 18
-headers, 512 × 3 details, 2048 × 2 memberships, plus 128 local facts. Fresh
-library defaults remain v6. Lossless factoring preserves provenance and
+Task 5da5f4 delivered v7 in PR #419, merged at 05:55:57 UTC with executed CI
+checks passing. Complete effects route to affected objects before attention:
+128 × 18 headers, 512 × 3 details, 2048 × 2 memberships and 128 local facts.
+Fresh library defaults remain v6. Factoring preserves provenance and
 multiplicity; redundant-activation merging was not proved. The inherited
-keyword grant/removal ordering defect remains separate. Default padded v7
-shared effects plus local facts occupy 37,888 bytes versus v6/256's 12,288;
-no speed or learning advantage follows from factoring alone.
+keyword grant/removal ordering defect remains separate. Padded v7 effects plus
+local facts occupy 37,888 bytes versus v6/256's 12,288; this establishes no
+memory, speed or learning advantage.
 
-V1 exceeded 128 facts at 140; v3 exceeded 256 at 270. The delivered v7 passes
-both exact retained prefixes in scalar/vector/Python encoding, preserving old
-versions' failures. V3 source is `3b122de9078c985f846a0f3c5a3a42ebca3b1182`;
-its 120 evidence artifacts remain in the manifest. V1/v2/v3 frozen inputs and
-evidence are unchanged. PR #415's later 306-deck admission audit does not expand
-the 134-entry population. Runtime remains w17 / card digest
+V1 exceeded 128 facts at 140; v3 exceeded 256 at 270. Delivered v7 passes both
+exact retained prefixes in scalar/vector/Python encoding while old versions
+retain their failures. V3 source is the PR #416 merge above; all 120 artifacts
+remain published. PR #415's later 306-list admission audit does not expand the
+134-entry population. Runtime remains w17 / card digest
 `dcb9d47c674a657176c2a9d56e016288d1e175729aa09cd60f0dc333633330ed`.
 
 V4 source `0b6c2bb854ba48b37fb7e5ac360c0c9d047cea34`, run `baa8671d6480`,
-cohort `mtg213-pilot-v4`, used RTX A6000 after an L4 quote refusal. The GPU
-substitution was recorded before scoring under the existing authorization.
-Its CUDA gate completed, then collection failed after 104.74 seconds, with
-238 completed-but-unoptimized games and 19 active prefixes. Stream 22's exact
-300-action prefix/frame reproduces 45 card objects (40 originals + 5 tokens)
-and 16 sideboard cards. V4 initialization evaluation finished all 32 games:
-2 wins / 30 losses, no failed/truncated games. Analysis retains 288 expected,
-256 missing, complete=false, success=null. Advertised etude-result.json is
-absent. All 110 retained artifact entries are published under
-`experiments/data/mtg213/gpu-v4-20261104/`. Its source/protocol/evidence stay frozen.
+cohort `mtg213-pilot-v4`, used RTX A6000 after an L4 quote refusal. That authorized
+substitution was recorded before scoring. CUDA admission passed; collection
+failed after 104.74 seconds with 238 completed-but-unoptimized games and 19
+active prefixes, **zero learner updates**. Stream 22's exact 300-action prefix
+reproduces 45 card objects (40 originals + 5 tokens) plus 16 sideboard cards:
+`agent_cards plus sideboard 61 > 60`. Initialization evaluation has 32 valid
+games, 2 wins / 30 losses, no failures/truncations; analysis retains 288 expected,
+256 missing, complete=false, success=null. Advertised `etude-result.json` is
+absent. All 110 retained artifacts are published under
+`experiments/data/mtg213/gpu-v4-20261104/`. Frozen inputs and evidence stay intact.
 
-## Prospective v5 and deletion cut
+## Surviving implementation
 
-V5 explicitly binds policy_input_version=7, max_facts=128 and
-max_cards_per_player=128. The schema-3 protocol serializes every tensor shape
-and rejects drift. This existing capacity is an operator engineering choice,
-not a new representation or guarantee over all reachable games. The recipe,
-100-update target, seeds, milestones and eight-pair/four-leg schedule remain.
-Fresh initialization/evaluation is mandatory.
+V5 binds policy_input_version=7, max_facts=128 and max_cards_per_player=128.
+The existing card capacity is an operator allocation, not a representation
+change or universal bound. Regime hashes own configuration; schema-3 protocol
+shapes reject encoder allocation drift. Recipe, seeds, 100-update target,
+milestones and eight-pair/four-leg schedule remain unchanged. Model object
+capacity changes require fresh initialization/evaluation.
 
-The first parity check exposed native input_buffer_config retaining 60 rows
-regardless of allocation. Its shared scalar/vector owner now reads the card
-axis and validates every consumed array against it. Default/frozen layouts and
-rules are unchanged. Exact 61 rows succeed; 60 fail without dropping tokens or
-sideboard cards. The full retained prefix agrees across all three encoders at
-128; an ordinary CPU learner/export/reload check passes at that configuration.
+The shared native `input_buffer_config` derives card capacity from scalar/batched
+buffers and validates consumed arrays against it. Previously it retained 60
+regardless of allocation. The retained prefix agrees across native scalar,
+vector and Python at 61 and 128 rows; 60 rejects without dropping tokens or
+sideboards. The ordinary CPU learner/export/reload proof passes at 128.
+Default/frozen layouts and rules remain unchanged. Tests use the production
+allocator; discovery and callback assertions independently pin the public v5 name.
 
-Delete — do not maintain: the active v3 runner was replaced by v4, now replaced
-by v5. Analysis, discovery, tests and docs move together. Historical runners and
-analysis remain at their named source commits, rather than parallel maintained
-paths. Keep every frozen regime/protocol file and evidence artifact. No competing
-shared-effect representation is added here.
+**Delete — do not maintain:** completed. `experiments/tla_pilot_v3.py` and the
+intermediate `experiments/tla_pilot_v4.py` are replaced by
+`experiments/tla_pilot_v5.py`; analysis, discovery, tests and current docs use
+that runner. Historical runners/analysis remain at their frozen source commits.
+Preserve every frozen regime/protocol, failure fixture and evidence artifact.
+No remaining deletion target or parallel shared-effect implementation is needed.
 
-The runner's duplicate observation-default comparison is removed: the frozen
-regime hash owns configuration, and protocol shapes detect encoder allocation
-drift. Retained transport tests use the production allocator and exercise the
-61-row boundary and 128-row pilot through the same scalar/vector/Python path.
-Native buffer admission matches the scalar/batched card shapes directly and
-counts shared arrays without a temporary collection. Test setup takes the
-active experiment identifier from the runner; the discovery inventory and
-callback assertion still pin its expected public name independently.
-No remaining deletion targets; frozen inputs, fixtures and evidence stay intact.
+## Budget and prepared execution
 
-## Budget and execution ownership
+Prepared Run `e8c76bc2c06f` binds source
+`97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`. Later guard, allocation and test
+simplifications do not retarget it or replace its own CUDA admission. Its
+06:38 UTC A6000 quote was refused; no v5 submission or rental occurred.
+The 06:46:27 UTC A6000/L4/A4000/A4500 reads, and the later retained operator
+receipt at 06:59:30–33 UTC, all report unavailable capacity. These are dated
+observations, not current availability. No unchanged failed-identity retry.
 
-Nested Doppler manabot/prd then etude/prd supplies artifacts and provider access.
-Etude 0.2.13 is the isolated control client; frozen training dependencies retain
-0.2.12. Freeze source once through source.freeze and retain the typed Run; quote
-and submit through client.launch_cohort. Existing launcher owners control
-allocation, deadline and teardown. No automatic retry.
+The 06:46:13 UTC inventory confirms all four pilot rentals ended and no provider
+pods; the only unsettled session is unrelated non-rented mini. Prior three bills
+total $0.17054831; v4's conservative planned-to-ended full-rental estimate is
+$0.04314150 pending billing: cumulative billed plus estimated $0.21368981.
+Retain all four reservations ($2.95) against $10 until reconciled. The next
+allocation must fit the unchanged $1 ceiling. Receipts/scripts:
+`.runs/mtg213/v4-continuation/`, `.runs/mtg213/v5-continuation/`, especially
+`capacity-check-20261104-0646.json` in the latter.
 
-Fresh inventory at 06:46:13 UTC confirms all four pilot rentals ended and no
-provider pods. The only unsettled session is unrelated non-rented mini.
-Prior three provider bills total $0.17054831; v4's conservative planned-to-ended
-full-rental estimate is $0.04314150 pending billing. Cumulative
-billed-plus-estimated cost is $0.21368981.
-Retain all four reservations ($2.95) conservatively against $10; a next allocation
-must fit the unchanged $1 ceiling. Exact receipts and scripts are under
-`.runs/mtg213/v4-continuation/` and `.runs/mtg213/v5-continuation/`.
+Nested Doppler manabot/prd then etude/prd supplies artifact/provider credentials.
+Etude 0.2.13 is the isolated control client; frozen workers retain 0.2.12.
+Freeze source once through `source.freeze`, retain the typed Run and quote/submit
+through `client.launch_cohort`. Existing launcher owners control allocation,
+deadline and teardown. No automatic retry or unowned inventory cleanup.
 
-## Remaining acceptance
+## Remaining work
 
-1. Prepared v5 run `e8c76bc2c06f` binds source
-   `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`. Its A6000 quote was refused;
-   fresh 06:46:27 UTC A6000/L4/A4000/A4500 reads all report unavailable. No v5
-   submission or rental occurred. Resume this prepared identity only after a
-   fresh inventory/budget/quote, then execute through the ordinary CUDA gate.
-   Later source simplifications do not retarget this prepared Run.
-   The fresh inventory/billing reconciliation leaves billed totals unchanged;
-   receipt: `.runs/mtg213/v5-continuation/capacity-check-20261104-0646.json`.
-   Capacity remains the external blocker. No repeated quote/submission was made
-   after these unavailable responses; a new availability signal is required.
-2. Send the explicitly requested Task launch milestone only after observed GPU
-   learner updates, with job/GPU/progress/rate/deadline evidence. Provisioning,
-   CPU validation and initialization do not qualify.
-3. Admit trained checkpoints and finish the entire v5 paired evaluation schedule;
-   later games never fill old identities' slots. Report learning gains, uncertainty,
-   errors, full cost and Elemental-relative limits. Shipping alone is incomplete.
+1. Gate and ship the existing repair in a new PR. Gate owns Rust fmt, all-feature
+   Clippy and debug `cargo test`, model and active-training suites, current-world
+   arena admission/monitoring and choice separability, discovery and experiment-
+   data tracking per `docs/development.md`. Focused checks do not discharge these.
+2. After delivery, obtain fresh capacity, inventory, billing and bounded quote
+   checks, then resume the prepared v5 Run through ordinary CUDA admission within
+   $10. Capacity is the external prerequisite; no human choice is missing.
+3. Send the requested Task launch milestone only after observed GPU learner
+   updates, including job/GPU/progress/rate/deadline evidence. Provisioning, CPU
+   validation and initialization do not qualify.
+4. Admit trained checkpoints, finish the whole v5 paired schedule and report
+   learning gains, uncertainty, errors, total cost and Elemental-relative limits.
+   New games cannot fill old identities' missing slots. Shipping is incomplete.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/verify/test_shared_effect_transport.py tests/eval/test_experiment_files.py -q` — 52 passed after release rebuild and atomic extension replacement; Ruff, Rust fmt and diff checks pass. Gate owns full affected suites and debug validation.
-Prior release rebuild, learner/export/reload proof and verification of all 110
-published v4 files remain at `cce484db70049e81ee81983500cec4664b4962b1:scratch/tla-pilot-verify.md`.
+Check: `git diff --check` — passed; retained `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_pilot.py tests/verify/test_shared_effect_transport.py tests/eval/test_experiment_files.py -q` — 52 passed after release rebuild/atomic extension replacement; no rerun for documentation-only compression, full suites/debug remain with gate.
+
+Prior build, learner/export/reload and 110-file publication verification:
+`cce484db70049e81ee81983500cec4664b4962b1:scratch/tla-pilot-verify.md`.
+Uncommitted notes before this consolidation are preserved at
+`.runs/mtg213/context-before-compress-20261104-card-capacity/`; the current plan
+retains their live decisions, contradictory evidence and outstanding work.
