@@ -110,3 +110,60 @@ refusals, try a separate RTX3090 supply with the same >=6vCPU/48GBRAM/80GB disk,
 permits this hardware substitution; preserve the exact source, recipe and job
 wall cap, and record the quote/rate/deadlines before scoring. Another Task's
 live RTX3090 rental is left untouched and is not charged to this pilot.
+
+## Interactive concept review — 2026-11-04
+
+Jack Heart invoked concept-review after PR #423 entered landing. This review
+does not revoke shipping authorization or restart execution. The accepted
+first-64 direction above remains in force. Implementation is evidence, not
+additional approval. The review page is `scratch/concept-review.html`.
+
+Experience and model: a manabot has a saved decision budget; managym still
+defines the complete legal choices. Legality is repaired before selecting the
+prefix. At an illustrative 80-choice decision the model scores rows 0..63,
+executes the original Command, and records 16 omitted choices. Academy can
+still display all 80. Padding is unavailable, and no page/continue action is
+invented. The cutoff changes policy support, not game termination.
+
+The consequential open choice is evaluation symmetry. Current v8 keeps the
+heuristic's full native choices, while the learned candidate and initialization
+anchor share the saved cutoff. Recommendation: keep that established benchmark
+and disclose the asymmetry; a matched-cutoff heuristic would answer a different
+comparison. Jack Heart has been asked here; no answer is assumed. Changing the
+benchmark must be prospective and must not rewrite executed evidence.
+
+Reporting finding: `Env.step` and `step_semantic` record cutoff diagnostics for
+every consumed environment decision. `ActionCutoffCounts` aggregates by kind,
+not actor/policy, while the evaluation runner allows the heuristic to act from
+the full raw observation. Therefore the aggregate is observation overflow across
+the game, not the frequency at which the learned bot actually lost choices.
+Bounded samples contain actors but cannot reconstruct actor-specific totals.
+Before making a policy-impact claim, either label the existing metric precisely
+or retain exact counts by acting participant and whether that participant uses
+bounded support. This follows the existing honest-reporting requirement; it
+does not select a new opponent policy. Proposed implementation direction only;
+no executable changes are made in this review.
+
+Draft usage guidance (proposed clarification): “A checkpoint saves its action
+budget. Training and checkpoint evaluation use the same first-64 native prefix.
+The engine's full legal set and human play are unchanged. The heuristic benchmark
+retains full choices. Report model-restricted decisions separately from whole-game
+observation overflow; neither ordering neutrality nor rare strategic impact is
+established by a low aggregate count.” Existing README setup guidance stays.
+
+Draft operator guidance (proposed clarification): “A capacity cutoff is a logged
+policy decision, not a failed game. A rules error remains a rules error. On an
+interrupted run retain source, checkpoint configuration, Commands, partial counts
+and costs; do not infer zero overflows from an absent final report or reconstruct
+lost optimizer state from counters. Any changed selection rule needs a new
+prospective experiment identity.” No separate skill installation is needed.
+
+Next proof: construct a mixed checkpoint/heuristic match where only the heuristic
+has >64 actions; show that whole-game overflow is positive while model-restricted
+decisions are zero. Also challenge a prefix whose only useful action occurs
+after row 63: it remains legal but inaccessible, illustrating the accepted
+approximation. Retain the existing <=64, prefix/Command, illegal-X rejection,
+masked distribution, close/reseed accounting and frozen-configuration proofs.
+Hard termination can leave counts since the last flush missing; exact totals
+require normal finalization. GPU learning gain and universal action fairness
+are not established by these software proofs.
