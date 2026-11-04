@@ -100,7 +100,7 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
     assert config.source_bundle.commit
     assert run.job.experiment == gpu.EXPERIMENT
     assert run.job.max_attempts == 1
-    assert run.job.max_usd == Decimal("17.20")
+    assert run.job.max_usd == Decimal("0.50")
     assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
 
 
@@ -153,8 +153,7 @@ def test_throughput_admission_projects_whole_cohort_cost() -> None:
 
 
 def test_throughput_admission_is_bounded_and_excludes_scientific_seeds() -> None:
-    (run,) = read_job_file(Path(gpu.__file__), ["--revision", "HEAD", "--admission"])
-    assert gpu.StudyJob.model_validate_json(run.job.config or "").mode == "admission"
+    (run,) = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
     assert run.job.max_usd == Decimal("0.50")
     assert run.job.max_hours == 1
     assert run.job.until == "updates=8"

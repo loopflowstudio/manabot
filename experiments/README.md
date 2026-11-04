@@ -178,9 +178,11 @@ Distributed-RL research and the unexecuted bounded workload plan live in
 removed unexecuted and remains in git history.
 
 The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu.md)
-uses `state_representation_gpu.py`: four paired CUDA seeds, initialization and
-periodic evaluation, a sustained-plateau criterion, and separate held-out scoring.
-Its first cohort was cancelled before scoring when measured concurrent GPU
-throughput invalidated the allocation budget. It establishes no plateau or
-architecture advantage; the completed CPU study remains frozen. The protocol
-records the failed attempt and the execution-design review boundary.
+retains four paired CUDA seeds, initialization and periodic evaluation, a
+sustained-plateau criterion, and separate held-out scoring. Its first cohort
+was cancelled before scoring when measured concurrent GPU throughput invalidated
+the allocation budget. `state_representation_gpu.py` now launches only a capped,
+excluded throughput admission for one and two concurrent ordinary learners;
+the failed eight-context launcher is removed. Measured whole-cohort affordability
+must precede a replacement scientific allocation. No plateau or architecture
+advantage is established; the completed CPU study remains frozen.

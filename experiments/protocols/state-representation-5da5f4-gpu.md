@@ -168,3 +168,13 @@ cost. This admission cannot establish learning saturation or guarantee later
 game length. Only an affordable measured arrangement can select a prospectively
 frozen replacement. If neither fits, preserve the evidence and report the
 budget/throughput block rather than replaying eight concurrent learners.
+
+Admission run `332a954fd935` at source `978bf3eae` acquired instance59148889
+at $0.2207407407/hour but never booted a worker. Etude ended it at its startup
+limit as `machine_lost_before_start`; provider absence was confirmed at
+19:12:11 UTC. No learner or score ran. Billing is unavailable; retain its $0.50
+reservation. A fresh, different offer in Japan (13 vCPUs / 42 GB, $0.2474074074/hour)
+is selected for one further admission under another $0.50 cap, bringing the
+conservative cumulative reservation to $24.7725825939. Setup failures remain
+in the attempt ledger. Current `runs()` launches only this excluded admission;
+the invalidated scientific launcher has been removed, not retained as a fallback.
