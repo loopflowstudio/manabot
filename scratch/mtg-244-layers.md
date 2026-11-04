@@ -220,9 +220,35 @@ The usage example matches `test_v8_recipe_collector_and_evaluation_select_saved_
 Recipe serialization, documented shapes and fresh/saved defaults were checked
 without playing games. Rejection wording/order was inspected in Python
 `ObservationEncoder.encode` and native `encode_into`/`validate_policy_input`.
+Reconciliation at `64e6bca33` confirms that the earlier review's documentation
+gap is closed, including the subsequent selected-shape and shared-fixture
+simplifications. The retained focused tests below cover those changes; this
+reconciliation adds no engine, policy-performance or learning-quality evidence.
 The retained-input, collector/checkpoint, program-isolation and source-departure
 witnesses cover the distinct failure modes described above. Review illustration:
 `scratch/concept-review.html` (not a browser capture or new execution evidence).
+
+Current concept-review outcome at `64e6bca33`: **nothing further to change;
+no open product choice**. The accepted documentation amendment is implemented,
+not a new implementation request. The review page is refreshed to show that
+disposition rather than its earlier proposed wording.
+
+The concrete interaction remains: select v8 for a new layer-capable run, inspect
+Beorn/Kellan through the shared characteristic view, choose and pay a legal
+activation, and resolve its captured effects even after the source changes.
+An older input can fail on a later observation; preserve its configuration and
+evidence, then construct a compatible v8 model for new work. No committed action
+is undone and no saved policy is relabeled. Current characteristics, captured
+programs and saved architecture identity have distinct lifetimes; merging them
+would revive the source-departure or checkpoint counterexamples. Derived caches
+remain internal machinery, not another caller-owned state model.
+
+Source inspection confirms the documented admission order in both encoders,
+captured-effects resolution, and the existing selection/ownership/rejection
+witnesses. It adds no test run or timing receipt. The next proof remains the
+isolated risk artifact and Gate's combined-head checks below; their absence
+limits readiness, not the settled product contract. No code, default, workflow
+boundary or accepted requirement changes in this review.
 
 ## Remaining work
 
@@ -250,6 +276,10 @@ witnesses cover the distinct failure modes described above. Review illustration:
    input stays v6. MTG-241's future retained frame/result/replacement-batch
    payloads are not claimed by current v8. Coordinate schemas through ordinary
    sync before combined publication without adding a second execution authority.
+   Its 2026-11-04 Task comment `dffd3f70` additionally identifies retained
+   `ZoneSelection`, state-owned `LibraryEnd`, optional `Move.library_end` and
+   public precommit entrants as pending integration interfaces. That report
+   supplies no combined-source proof or independently reserved input version.
 
 Retained validation at `fb264f7c7`: 17 injected-receipt checks, infrastructure
 collection and Ruff/diff checks passed. The unchanged engine/model evidence at
@@ -260,14 +290,18 @@ bundle `88d6abd34d8b56a9606c3ec58696063955d08226` retains the debug payment proo
 Full suites and isolated timing remain with the producers above. No merge,
 training launch or clean-performance acceptance is implied.
 
-Check: `uv run --no-sync pytest tests/model/test_layer_input.py tests/model/test_shared_effects.py -q -k 'not tiny_learning and not representation_proof'` — 24 passed (all cases selected, including the two existing bounded learner/export smokes). Ruff, diff checks and the extracted documentation recipe/serialization/layout probe passed. Gate owns full suites; isolated comparative timing remains with `layer-risk.yml`. No performance or learning-quality acceptance follows from these checks.
+Retained validation at `64e6bca33`: the layer-input/shared-effect pytest selection
+passed 24 cases, including the two existing bounded learner/export smokes;
+Ruff and diff checks passed. These results were not rerun for reconciliation.
+
+Check (2026-11-04): `uv run --no-sync python -` (extracted documentation recipe, serialization, fresh/saved defaults and v5–v8 ObservationSpace layout assertions) — passed without games or inference; `git diff --check` — passed. Full suites remain with Gate and isolated comparative timing with `layer-risk.yml`.
 
 ## Preserved evidence
 
 The complete plan before this reduction, including uncommitted concept-review
 and documentation evidence, is git blob `6486ea3e1dde73d3977e8ce160ada16962ddfe6a`.
 Implementation started at `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`;
-reconciliation uses `45d9c7b0fbf927b5f57ca38f86010709cdc1e422`.
+reconciliation uses `64e6bca33731010843531fff4cdabd177d08bb5e`.
 Runtime mitigation: `b2fb06cbadb8978d1f2373c9b2490551c358c907`; measurement/payment
 checkpoint: `fb264f7c78dcd1a864cbe35a9e7d4cd985f9faf7`. Main's intervening
 `115f88165` / `510b5ec35` Wave changes introduced no runtime diff. Coverage memory

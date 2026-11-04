@@ -22,7 +22,7 @@
 <main>
   <header>
     MTG-244 · concept-review · 2026-11-04<br>
-    Source head: <code>45d9c7b0f</code><br>
+    Source head: <code>64e6bca33</code><br>
     Built from <code>scratch/mtg-244-layers.md</code>,
     <code>scratch/mtg-244-risk-validation.md</code>, <code>scratch/questions.md</code>,
     <code>manabot/README.md</code>, <code>docs/training.md</code>,
@@ -31,22 +31,22 @@
     <code>manabot/infra/config.py</code> and <code>tests/model/test_layer_input.py</code>.
   </header>
 
-  <h1>Make the explicit v8 choice discoverable.</h1>
-  <p><strong>Review outcome: narrow design change; no open product choice.</strong>
-    The next implementation step should explain input selection and rejection
-    recovery in the normal usage docs. The accepted runtime model stays intact.</p>
+  <h1>No further product decision is needed.</h1>
+  <p><strong>Review outcome: nothing further to change; no open product choice.</strong>
+    Explicit v8 selection and rejection recovery are now documented in the normal
+    usage guides. The earlier amendment is implemented. Isolated risk measurements
+    and Gate checks remain outstanding.</p>
   <p>Jack Heart approved a successor input. Fresh configurations remain v6;
     frozen saved inputs retain their identity. Those decisions already settle
     the documentation direction.</p>
 
-  <h2>The mismatch a caller meets</h2>
+  <h2>The earlier mismatch is closed</h2>
   <blockquote>
-    Existing package guidance: <code>ObservationConfig(policy_input_version=7)</code>
-    admits “complete resolved effects.” The training guide describes v6 and
-    does not show v8. A defined card can therefore be playable while its later
-    layer state is unrepresentable by the caller's selected input.
+    Earlier package guidance described v7 as admitting “complete resolved effects,”
+    while the training guide did not show v8. A defined card can be playable while
+    its later layer state is unrepresentable by the caller's selected input.
   </blockquote>
-  <p><strong>Proposed documentation:</strong> select v8 explicitly for new work
+  <p><strong>Implemented documentation:</strong> select v8 explicitly for new work
     needing the added layer payloads. A saved checkpoint keeps its own input.
     Card eligibility, input representability and current-world checkpoint
     admission answer different questions.</p>
@@ -78,9 +78,10 @@
   <p><strong>Implemented:</strong> resolve the captured effects. Catalog joins
     describe provenance for encoding; they do not own execution. Derived board
     caches remain internal, immutable and revision-bound.</p>
-  <p><strong>Current documentation:</strong> v7 is described without the new
-    representability boundary.</p>
-  <p><strong>Proposed documentation example:</strong></p>
+  <p><strong>Current documentation:</strong> the package README scopes v7 to
+    representable effects and links to selection and recovery in the training
+    guide. No unimplemented product proposal remains.</p>
+  <p><strong>Documented selection:</strong></p>
   <pre><code>from manabot.infra.config import ObservationConfig
 
 # On a new recipe, before constructing its collector and model:
@@ -106,7 +107,8 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
     state from an unrelated holder; or resolution rediscovering an ability after
     its source leaves. Existing witnesses cover these counterexamples. This review
     adds no new runtime or timing evidence.</p>
-  <p>The isolated engine/full-policy comparison and combined-head Gate checks
+  <p>These are source-inspection conclusions using retained witnesses; this step
+    did not rerun them. The isolated engine/full-policy comparison and combined-head Gate checks
     remain outstanding. Their absence limits review readiness; it does not reopen
     the approved input decision. No learning-quality claim follows from bounded
     representation checks.</p>
@@ -116,13 +118,13 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
     <li>Should fresh defaults move to v8? <strong>Settled: no.</strong>
       Explicit selection preserves the accepted v6 default and saved versions.</li>
     <li>Should the normal docs expose selection and recovery?
-      <strong>Next implement direction: yes.</strong> Update the policy-input
-      section and scope/link the package README's v7 claim.</li>
+      <strong>Settled and implemented: yes.</strong> The policy-input section and
+      package README now describe both.</li>
     <li>Does anything require a new product decision?
       <strong>No.</strong> Performance evidence and Gate remain execution work
       under the existing acceptance plan.</li>
   </ol>
-  <p>Decisions and proposed wording live in
+  <p>Decisions and remaining proof live in
     <a href="mtg-244-layers.md">the working design</a>.
     This page is a review illustration, not a browser capture.</p>
 </main>

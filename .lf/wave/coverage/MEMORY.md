@@ -357,6 +357,16 @@ preserves accepted decisions, dated proof limits and source history.
   both exceed a retained model's embedding vocabulary. New payloads need the
   selected version's model-forward and checkpoint proofs as well as shared
   pre-inference rejection on older inputs. Card admission stays definition-based.
+- Explicit successor selection and failure recovery are part of the caller's
+  usage contract, following Jack Heart's 2026-11-04 successor-input approval.
+  Select v8 before constructing a new collector/model; observation admission
+  can reject a later state after earlier observations succeed. It is neither
+  whole-game preflight nor rollback of committed actions. Preserve failed-run
+  evidence and load saved configurations through `from_checkpoint`, including
+  absent-version v1 semantics. Architecture loading and current-world admission
+  remain separate; changing a saved version or reshaping weights is not recovery.
+  The recipe and selected-space layouts are documented in
+  `docs/training.md#policy-inputs`; this does not authorize a default migration.
 - An activation offered and paid from layered abilities must resolve the
   captured program, including after source departure. A printed-definition
   lookup at resolution discarded a granted activation in the directed witness.
