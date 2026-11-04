@@ -37,6 +37,7 @@ from manabot.experiment.checkpoint_evaluation import (
     stage_checkpoint,
 )
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.numerics import check_numerics
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
@@ -95,8 +96,8 @@ def recipe(arm: Arm) -> TrainingRegime:
     stage.learning = move_learning()
     stage.execution.device = "cuda"
     stage.execution.memory_bytes = 6 * 1024**3
-    stage.execution.wall_seconds = 42000
-    regime.wall_seconds = 42000
+    stage.execution.wall_seconds = 66000
+    regime.wall_seconds = 66000
     return TrainingRegime.model_validate(regime.model_dump())
 
 
@@ -120,7 +121,7 @@ def runs(revision: str) -> list[Run]:
         revision=revision,
         config=spec.model_dump_json(),
         until=f"updates={UPDATES}",
-        max_hours=14,
+        max_hours=20,
         max_usd=Decimal("17.20"),
         max_attempts=1,
     )
@@ -296,9 +297,12 @@ def worker() -> None:
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     stop = Path(os.environ["ETUDE_STOP_FILE"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
-    if deadline - time.time() < 48000:
+    if deadline - time.time() < 71400:
         raise ValueError("remaining allocation cannot cover training and evaluation")
     out.mkdir(parents=True, exist_ok=True)
+    gate = check_numerics(out, min(time.time() + 300, deadline))
+    if gate.status != "completed":
+        raise RuntimeError("CUDA numerical admission failed")
     assignments = [
         (arm, seed)
         for index, seed in enumerate(SEEDS)
@@ -319,7 +323,7 @@ def worker() -> None:
         ]
         for arm, seed in assignments
     ]
-    _batch(training, out, stop, min(deadline - 6000, time.time() + 42400))
+    _batch(training, out, stop, min(deadline - 5400, time.time() + 66400))
     for index in range(0, len(assignments), 2):
         evaluation = [
             base

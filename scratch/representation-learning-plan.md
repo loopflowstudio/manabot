@@ -82,15 +82,18 @@ That measured throughput invalidated the initial two-hour-per-replicate
 allocation before any scientific seed launched. Revision8c7712bc9 is the last
 per-replicate declaration, not an executed comparison. The prospective revision
 colocates eight independently seeded ordinary execute_regime learners on one
-5090 (>=16CPUs,60GBhost RAM). Each gets6GiBhost and10%CUDA allocator limits;
+4090 (>=16CPUs,60GBhost RAM). Each gets6GiBhost and10%CUDA allocator limits;
 no weights/optimizer/RNG are shared. Training precedes evaluation, with only
 two evaluators at once. One Etude allocation, deadline and guardian own all
 children, and any child failure reaps its siblings. Timing is concurrent-use
 evidence, never isolated GPU speed. Four2,048-update seeds per arm remain the
-scientific target. The full allocation allows14job hours plus15minutes setup,
+scientific target. The full allocation allows20job hours plus15minutes setup,
 inside$17.20; prior$0.07258259388618171, $6ancillary reserve and$0.50admission
 reserve keep the total bounded at$23.77258259388618171. Admission's full bill
-still requires settlement. No scientific seed has launched yet.
+still requires settlement. No scientific seed has launched yet. The5090 whole-cohort quotes now report
+no capacity; a4090 with20CPUs/62GB at$0.611111/hour is available at17:51UTC.
+The20-hour job plus15-minute setup costs$12.375 at that quote, inside$17.20.
+Its66,000-second learner watchdog leaves room for evaluation and teardown.
 
 Delete — do not maintain: removed the unexecuted per-replicate TrainingJob
 allocation and worker path in the same diff. Frozen CPU science and the executed
