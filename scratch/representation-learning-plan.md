@@ -82,7 +82,7 @@ That measured throughput invalidated the initial two-hour-per-replicate
 allocation before any scientific seed launched. Revision8c7712bc9 is the last
 per-replicate declaration, not an executed comparison. The prospective revision
 colocates eight independently seeded ordinary execute_regime learners on one
-5090 (>=16CPUs,128GBhost RAM). Each gets8GiBhost and10%CUDA allocator limits;
+5090 (>=16CPUs,60GBhost RAM). Each gets6GiBhost and10%CUDA allocator limits;
 no weights/optimizer/RNG are shared. Training precedes evaluation, with only
 two evaluators at once. One Etude allocation, deadline and guardian own all
 children, and any child failure reaps its siblings. Timing is concurrent-use
@@ -101,7 +101,9 @@ Check: seven focused study tests passed (CPU identities, GPU declaration,
 positive learning rates, bounded plateau evidence and sibling cleanup after
 failure). Gate owns broader suites. Remaining: final source freeze, current
 whole-cohort quote/acquisition, actual eight-run GPU learning and curves,
-accounting/artifact publication and provider teardown. No model promotion.
+accounting/artifact publication and provider teardown. No model promotion. The128GB-host quote had no capacity;6GiBper learner
+bounds all eight at48GiB, leaving host overhead within a60GB allocation.
+This prospective resource correction preserves the scientific treatment.
 
 The historical sections below describe the completed CPU cohort, not the new
 continuation's authorization or acceptance criteria.

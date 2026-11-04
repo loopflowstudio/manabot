@@ -20,8 +20,8 @@ Four fresh paired seeds 74201–74204, alternating treatment order within seed.
 32 streams, one complete game per stream per update, both seats, cross-balanced
 curriculum. Target 2,048 updates: 65,536 games per replicate, sixteen times the
 previous horizon. Record actual decisions, optimizer exposure and completion.
-CUDA float32 training only, 8 GiB host-memory watchdog per learner. Eight independent
-processes share one RTX5090 with at least128 GB host RAM and16 CPUs. Each CUDA
+CUDA float32 training only, 6 GiB host-memory watchdog per learner. Eight independent
+processes share one RTX5090 with at least60 GB host RAM and16 CPUs. Each CUDA
 caching allocator is capped at10% of device memory, leaving20% for contexts and
 external workspaces. No CPU substitution. The same sharing applies to both arms;
 wall-time contrasts are concurrent-use measurements, not isolated speed claims.

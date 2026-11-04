@@ -94,7 +94,7 @@ def recipe(arm: Arm) -> TrainingRegime:
     stage.updates = UPDATES
     stage.learning = move_learning()
     stage.execution.device = "cuda"
-    stage.execution.memory_bytes = 8 * 1024**3
+    stage.execution.memory_bytes = 6 * 1024**3
     stage.execution.wall_seconds = 42000
     regime.wall_seconds = 42000
     return TrainingRegime.model_validate(regime.model_dump())
