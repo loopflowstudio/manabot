@@ -1,0 +1,345 @@
+{
+  "scope": "current tabletop Standard set entries, before legality reconciliation",
+  "sets": [
+    {
+      "code": "fdn",
+      "priority": "surviving",
+      "input_identities": 517,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Afdn&unique=cards&order=set",
+          "sha256": "795c4c771507b48f4b9f4cf9b566022d615b2d03b8ee1ff49177af33a95a573c",
+          "retrieved_utc": "2026-11-04T19:07:08.402069+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Afdn&unique=cards",
+          "sha256": "cc3b00e9bd7c14da1174b04f79abddb6200bce45195273b6625ad34d78232037",
+          "retrieved_utc": "2026-11-04T19:07:09.248932+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=3&q=e%3Afdn&unique=cards",
+          "sha256": "b0945bfcd5f2b264f3dbeda51e66a415fb0bfb0a68fec7f4220068c52cbdaa50",
+          "retrieved_utc": "2026-11-04T19:07:09.837182+00:00"
+        }
+      ]
+    },
+    {
+      "code": "dft",
+      "priority": "surviving",
+      "input_identities": 276,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Adft&unique=cards&order=set",
+          "sha256": "0186c0bc4faf32e3d5048375cf717acc6f6e3233baeed93bd4899e2a05d0304a",
+          "retrieved_utc": "2026-11-04T19:07:10.842186+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Adft&unique=cards",
+          "sha256": "1846a3cda4d2f156433de3333eccd29bb8ac0a69c42f1dd278fabb623f9ab526",
+          "retrieved_utc": "2026-11-04T19:07:11.602265+00:00"
+        }
+      ]
+    },
+    {
+      "code": "tdm",
+      "priority": "surviving",
+      "input_identities": 276,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Atdm&unique=cards&order=set",
+          "sha256": "1e154b9b6ff20d916d7e4397265378b93107aadc7445d38d74dbb95074402ec6",
+          "retrieved_utc": "2026-11-04T19:07:13.289874+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Atdm&unique=cards",
+          "sha256": "dbe8d6c1556d6c689de4f8d8ea1b50c0e686ccf672da7dde661db810e505fc8f",
+          "retrieved_utc": "2026-11-04T19:07:14.107769+00:00"
+        }
+      ]
+    },
+    {
+      "code": "fin",
+      "priority": "surviving",
+      "input_identities": 312,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Afin&unique=cards&order=set",
+          "sha256": "50f43407e65998036272b967db716c16897712c688eaf237976522801d6e686b",
+          "retrieved_utc": "2026-11-04T19:07:14.410550+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Afin&unique=cards",
+          "sha256": "cbc35a9f3ee37448892ab930a6231e6ab84f73e2efe13714563c637d66971561",
+          "retrieved_utc": "2026-11-04T19:07:14.907901+00:00"
+        }
+      ]
+    },
+    {
+      "code": "eoe",
+      "priority": "surviving",
+      "input_identities": 266,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Aeoe&unique=cards&order=set",
+          "sha256": "030ab77f4bc549d002a61a70d74323e9ef75ba7638fa501a04b0475de0c39fba",
+          "retrieved_utc": "2026-11-04T19:07:16.076370+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Aeoe&unique=cards",
+          "sha256": "decdbf9ea9b5200cb6568a94d2ae1d3e48ca9884f3b8ab4d1f8600dc62cc66b0",
+          "retrieved_utc": "2026-11-04T19:07:16.893345+00:00"
+        }
+      ]
+    },
+    {
+      "code": "spm",
+      "priority": "surviving",
+      "input_identities": 193,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Aspm&unique=cards&order=set",
+          "sha256": "560cd84f7495aa8bb3ecae3254fad738eced7455d49f116cb892d797f5d43580",
+          "retrieved_utc": "2026-11-04T19:07:18.327644+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Aspm&unique=cards",
+          "sha256": "48a6ed309c5864f292498f93e8287d2a9573f7743ab36477d3b06a321c924477",
+          "retrieved_utc": "2026-11-04T19:07:18.662477+00:00"
+        }
+      ]
+    },
+    {
+      "code": "tla",
+      "priority": "surviving",
+      "input_identities": 286,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Atla&unique=cards&order=set",
+          "sha256": "1cfd362edc87a6c4d49c0a590171d4f99a3338ed8336dc3939471c93c969e21f",
+          "retrieved_utc": "2026-11-04T19:07:19.693630+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Atla&unique=cards",
+          "sha256": "a005e989b71d568632accf9f0bd7a0cf18d474fd5daefd53d1455ddcc6b4148a",
+          "retrieved_utc": "2026-11-04T19:07:20.711885+00:00"
+        }
+      ]
+    },
+    {
+      "code": "ecl",
+      "priority": "surviving",
+      "input_identities": 273,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Aecl&unique=cards&order=set",
+          "sha256": "d8f0e1641c36b78fa51902c6577d03857f419e23c7b092b515c2927a835715fd",
+          "retrieved_utc": "2026-11-04T19:07:21.806890+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Aecl&unique=cards",
+          "sha256": "7c2137f080feeea015156c8f1736b34ced4e69767e553f8fd742bb2044bd0d62",
+          "retrieved_utc": "2026-11-04T19:07:22.741701+00:00"
+        }
+      ]
+    },
+    {
+      "code": "tmt",
+      "priority": "surviving",
+      "input_identities": 195,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Atmt&unique=cards&order=set",
+          "sha256": "15ee5bc2bf62177b7b0ae0a8c75ea887ab79449606b89ed277f2380fd7ec3e66",
+          "retrieved_utc": "2026-11-04T19:07:24.332987+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Atmt&unique=cards",
+          "sha256": "450dbc773eb69f0a0c4c01df4116f1e27214ca23fd316ba787b24176aadcc301",
+          "retrieved_utc": "2026-11-04T19:07:25.161918+00:00"
+        }
+      ]
+    },
+    {
+      "code": "sos",
+      "priority": "surviving",
+      "input_identities": 271,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Asos&unique=cards&order=set",
+          "sha256": "55926d2c452bed3d7fa90bf02ba1c6e48154bd7b859835d1e296b22a14cebdfa",
+          "retrieved_utc": "2026-11-04T19:07:25.720714+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Asos&unique=cards",
+          "sha256": "f4ad7803c09b4a1427e537be4e9e17eba1dcdc8ec9cef33df90f8c15d5e9bc1f",
+          "retrieved_utc": "2026-11-04T19:07:26.311674+00:00"
+        }
+      ]
+    },
+    {
+      "code": "msh",
+      "priority": "surviving",
+      "input_identities": 281,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Amsh&unique=cards&order=set",
+          "sha256": "84f00c4a27a066d87a7cee39476e67660a79cc14fe94ca2fa54faf47646e0ba7",
+          "retrieved_utc": "2026-11-04T19:07:27.316600+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Amsh&unique=cards",
+          "sha256": "ec83a29bff64e571d6fbe272a25e51fd5dc4e9d3aea5bbf2f893f9024389c3a1",
+          "retrieved_utc": "2026-11-04T19:07:28.116210+00:00"
+        }
+      ]
+    },
+    {
+      "code": "hob",
+      "priority": "surviving",
+      "input_identities": 193,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Ahob&unique=cards&order=set",
+          "sha256": "cbe123363598303cb13b7426101f55f6b7896c92d6329b96c1f9b1e0cabec349",
+          "retrieved_utc": "2026-11-04T19:07:29.076607+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Ahob&unique=cards",
+          "sha256": "d2328be0ac251c27d2027fef39617406b588e56f8382a3f30bd2c701f527d578",
+          "retrieved_utc": "2026-11-04T19:07:29.454995+00:00"
+        }
+      ]
+    },
+    {
+      "code": "fra",
+      "priority": "surviving",
+      "input_identities": 285,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Afra&unique=cards&order=set",
+          "sha256": "787b7e81ee2eb577b52b19c10109e8aa40ee05db04b50bc7953e4706a4384ed1",
+          "retrieved_utc": "2026-11-04T19:07:29.939965+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Afra&unique=cards",
+          "sha256": "98a993122bc09a625814a3328957663aa3e2554b780038b5488b12452bb5b2d6",
+          "retrieved_utc": "2026-11-04T19:07:30.290142+00:00"
+        }
+      ]
+    },
+    {
+      "code": "woe",
+      "priority": "rotating",
+      "input_identities": 281,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Awoe&unique=cards&order=set",
+          "sha256": "bd1738fba9667a941e9748bd3a86a533bad15434619cf09f777d5c6f3f4d5484",
+          "retrieved_utc": "2026-11-04T19:07:32.059365+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Awoe&unique=cards",
+          "sha256": "ae853e85c614661b4df0e0f361f7362c4c090f8652131a120e8c9189eccd7fd8",
+          "retrieved_utc": "2026-11-04T19:07:33.293560+00:00"
+        }
+      ]
+    },
+    {
+      "code": "lci",
+      "priority": "rotating",
+      "input_identities": 291,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Alci&unique=cards&order=set",
+          "sha256": "1bdb85b5c5b30f9f648e827c7be7972531dda26480c7e8966d4ed4ec222cd3df",
+          "retrieved_utc": "2026-11-04T19:07:34.359763+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Alci&unique=cards",
+          "sha256": "336e29505db50f309b7291463bd2a643a9e33285a694a4a54f92c6fd134a9da7",
+          "retrieved_utc": "2026-11-04T19:07:35.882426+00:00"
+        }
+      ]
+    },
+    {
+      "code": "mkm",
+      "priority": "rotating",
+      "input_identities": 279,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Amkm&unique=cards&order=set",
+          "sha256": "a2e42e48857d773fa458c851c2151baa317d7de3537bee8b8caae75040bf0f64",
+          "retrieved_utc": "2026-11-04T19:07:37.181187+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Amkm&unique=cards",
+          "sha256": "dc27f20a201ad3b9080b354c7070a34d3674b12b163c9fcdaee024a995545bef",
+          "retrieved_utc": "2026-11-04T19:07:38.275258+00:00"
+        }
+      ]
+    },
+    {
+      "code": "otj",
+      "priority": "rotating",
+      "input_identities": 276,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Aotj&unique=cards&order=set",
+          "sha256": "c99e38604fd712a997903b2ef201922185d5520e9d4e5c007f0b9a26dbfdd609",
+          "retrieved_utc": "2026-11-04T19:07:39.385890+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Aotj&unique=cards",
+          "sha256": "6e1b194fadaba86482c943756622f254b73096b55d28cb4969659168d8ed3506",
+          "retrieved_utc": "2026-11-04T19:07:40.090951+00:00"
+        }
+      ]
+    },
+    {
+      "code": "big",
+      "priority": "rotating",
+      "input_identities": 30,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Abig&unique=cards&order=set",
+          "sha256": "d60256b78eff3df3cb131496935bf2a27b2f1bda6fd4095eb0b50284c7e01e38",
+          "retrieved_utc": "2026-11-04T19:07:40.594656+00:00"
+        }
+      ]
+    },
+    {
+      "code": "blb",
+      "priority": "rotating",
+      "input_identities": 279,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Ablb&unique=cards&order=set",
+          "sha256": "faf61707193941da2ce7189c09f761d438b6c2ea7f13d17eb787e1d7de56caeb",
+          "retrieved_utc": "2026-11-04T19:07:41.420504+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Ablb&unique=cards",
+          "sha256": "bd797950836b9e761988d13f460f39acc09da6b6797cd7198fd0e05a02e1c76e",
+          "retrieved_utc": "2026-11-04T19:07:42.472228+00:00"
+        }
+      ]
+    },
+    {
+      "code": "dsk",
+      "priority": "rotating",
+      "input_identities": 276,
+      "sources": [
+        {
+          "url": "https://api.scryfall.com/cards/search?q=e%3Adsk&unique=cards&order=set",
+          "sha256": "8d75bd78efd882e50d57f433b337c93eeb609f659ea5d4df2b4795f6385b7f36",
+          "retrieved_utc": "2026-11-04T19:07:43.578496+00:00"
+        },
+        {
+          "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=set&page=2&q=e%3Adsk&unique=cards",
+          "sha256": "8fc2eba6ac555950ac60638b9c7252bac4579e65c9699f7ebbd5ae4d4940be9b",
+          "retrieved_utc": "2026-11-04T19:07:44.288253+00:00"
+        }
+      ]
+    }
+  ]
+}
