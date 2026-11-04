@@ -255,8 +255,9 @@ buffer fits all actions, while frozen native code still enforces 64. Success
 on CUDA admission and earlier collections does not establish every reachable
 capacity. The primary operator selected the routine configured-axis repair on
 2026-11-04 under Jack Heart's existing enabling-fix authorization (bbc34e15),
-including inspection of the other configurable native axes. No actions may be
-truncated or decks excluded. A prospective identity and fresh initialization
+including inspection of the other configurable native axes. That operator's
+no-truncation restriction was superseded by Jack Heart's explicit first-64
+pilot decision below; deck exclusions remain unchanged. A prospective identity and fresh initialization
 and evaluation are required; executed v5 and missing evaluation slots stay
 frozen. Remaining acceptance lives in scratch/tla-pilot-verify.md.
 
@@ -289,14 +290,47 @@ transport-only boundary fixture, never a requirement to generate illegal
 actions. A capacity failure can expose a rules defect as well as a buffer bug;
 larger allocations alone do not establish a correct action contract.
 
-Unsubmitted pilot v6 was superseded by prospective pilot v7, still using policy
-input v7, the same 134 decks, recipe and evaluation schedule. The prepared v7
-Run binds source `b5406bb33abd98870af6ca07c3beed63a92b7c1c`; later code
-simplification does not rebind it. The 18:44:18 UTC preflight found no rentals
-or unsettled hardware, but Vast refused the price ceiling and RunPod L4 refused
-actual capacity. No new spending or scoring followed. These dated refusals do
-not establish current availability. The plan owns launch, delivery and remaining
-checkpoint/evaluation acceptance within the unchanged $1 allocation/$10 total.
+Jack Heart explicitly required direct unavailable-X rejection without committed
+costs or state advancement (f61beeb7). Directed native tests submit current-bound
+Commands and compare the full search-state witness, including costs, decisions,
+events, RNG and both viewers. Seven untapped basics with no floating mana offer
+and pay exactly X=0..5 for {X}{U}{U}; X=6/255 reject unchanged. Airbend and
+any-type-mana cases also reject unavailable X. Retained-prefix scalar/vector
+tests reject the old index 255, preserve frames/buffers and agree with Python
+after a subsequent legal step. These are separate semantic-command and buffer
+boundary witnesses, not proof that every card's legality is correct.
+
+Jack Heart's later explicit decision (3b0f8826, 2026-11-04) selects 64 slots
+and deterministic first-64 legal actions with overflow diagnostics for this
+pilot. It supersedes the operator's no-truncation recommendation and prepared
+512-action pilots v6/v7. Pilot v8 retains input-v7 shared effects, card128,
+all 134 decks, recipe and budgets. `action_overflow=first-legal` is serialized
+in the prospective regime/protocol/checkpoints; omitted policy still means
+error for frozen configurations. Native authority and Academy keep all legal
+choices. One native prefix-count helper governs scalar/vector/Python encoding
+before bounded writes; retained row i keeps native action/Command i. Padding
+is masked, and one categorical distribution covers retained support. There is
+no pagination. Later legal actions receive zero probability on overflow, so
+ordering can affect outcomes; this is an accepted pilot approximation, not
+evidence that the omitted choices are strategically redundant.
+
+Training and learned-policy evaluation share the cutoff. The fixed heuristic
+anchor retains its existing full-native policy, an explicit engineering
+interpretation. Diagnostics aggregate consumed decisions, overflow frequency
+by kind and dropped counts, with up to four replay-linked seed/deck/prefix
+samples; powers-of-two console summaries avoid floods and close flushes exact
+totals, including zero overflow. Evaluation receipts retain these reports.
+Cutoff diagnostics are distinct from fatal observation or game truncation.
+
+Prepared v6/v7 Runs remain unsubmitted and superseded. V8 Run `f47be2d3c0d8`
+binds source `900c207502bd28757d7cf66196bd464458e39402`; later collector/capture
+simplification requires a successor source freeze, never rebinding that Run.
+The 19:10–19:12 UTC v8 quotes refused RTX5090 price and L4/RTX3090 capacity;
+the final 19:11:43 inventory found no rentals or unsettled hardware. No new
+spending, checkpoint or evaluation followed. These dated refusals establish
+no future availability. The plan owns remaining source selection, fresh
+inventory/billing/quote reconciliation, bounded execution and checkpoint/
+evaluation acceptance within the unchanged $1 allocation/$10 total.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MTG-213 · TLA pilot concept review</title>
+  <style>
+    :root { color-scheme: light dark; --ink:#252724; --paper:#faf9f5; --muted:#5b625a; --line:#c7cdc3; --accent:#245c4b; }
+    @media (prefers-color-scheme: dark) { :root { --ink:#e7e9e1; --paper:#171c19; --muted:#adb8ae; --line:#4c5c50; --accent:#9ed4b7; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.6 system-ui,sans-serif; }
+    main { max-width:820px; padding:48px 24px 72px; margin:auto; }
+    header { color:var(--muted); font-size:.85rem; }
+    h1 { font-size:clamp(1.8rem,5vw,2.6rem); line-height:1.15; letter-spacing:-.035em; margin:22px 0; }
+    h2 { margin:38px 0 12px; font-size:1.25rem; }
+    p { margin:12px 0; }
+    code { font-size:.88em; overflow-wrap:anywhere; }
+    .decision { border-left:3px solid var(--accent); padding-left:20px; margin:28px 0; }
+    .flow { margin:0; padding:0; list-style:none; }
+    .flow li { padding:17px 0; border-bottom:1px solid var(--line); }
+    .flow strong { display:block; }
+    .flow span { display:block; color:var(--muted); }
+    dt { font-weight:650; margin-top:18px; }
+    dd { margin:4px 0 0; }
+    details { margin-top:16px; font-size:.85rem; }
+    summary { cursor:pointer; }
+    a { color:var(--accent); }
+    li { margin:8px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    MTG-213 · concept-review · 2026-11-04 · headless Graph review
+    <details>
+      <summary>Files and accepted direction used</summary>
+      <p><code>scratch/tla-pilot-verify.md</code>, <code>scratch/questions.md</code>,
+      <code>.lf/wave/training/MEMORY.md</code>, <code>experiments/tla-trophy-pilot.md</code>,
+      <code>experiments/protocols/tla-trophy-213-v8.md</code>, <code>experiments/tla_pilot_v8.py</code>,
+      <code>manabot/infra/config.py</code>, <code>manabot/env/observation.py</code>,
+      <code>manabot/env/failures.py</code>, <code>manabot/sim/native_game.py</code>,
+      <code>managym/src/agent/observation_encoder.rs</code>,
+      <code>managym/src/flow/play.rs</code>, <code>managym/src/flow/cast_permission.rs</code>,
+      <code>tests/training/test_action_cutoff.py</code>,
+      <code>tests/verify/test_native_buffer_capacities.py</code>,
+      <code>managym/cards/tests/cards/tla.rs</code>.</p>
+      <p>Jack Heart's accepted direction: native payability (f61beeb7), explicit
+      first-64 legal cutoff (3b0f8826), fixed 134-deck population and USD1 per
+      allocation / USD10 cumulative limits. Historical source and results stay frozen.</p>
+    </details>
+  </header>
+  <h1>No new product decision is needed.</h1>
+  <p>The accepted pilot has a coherent interaction: train one policy on randomly
+  paired trophy decks, evaluate its checkpoints on the same frozen population,
+  and report both learning evidence and the choices the policy could not consider.</p>
+  <div class="decision">
+    <strong>The consequential distinction: legal actions ≠ policy support.</strong>
+    <p>Managym decides what can be done. This pilot explicitly scores only the first
+    64 legal choices. Academy still exposes the complete native decision.
+    An omitted legal choice is not an illegal choice.</p>
+  </div>
+
+  <h2>Before → accepted and implemented</h2>
+  <dl>
+    <dt>Before: 256 offers, 64 slots, failed collection.</dt>
+    <dd>The retained v5 failure offered X=0…255 for an airbend cast with fixed
+    cost {2}. Those were unavailable choices; a larger tensor alone could not
+    repair that rules error.</dd>
+    <dt>Now: payable choices first; explicit policy cutoff second.</dt>
+    <dd>Airbend fixes printed X to zero. An ordinary {X}{U}{U} cast with seven
+    untapped basics offers X=0…5; unavailable direct submissions reject unchanged.
+    For a genuinely legal 70-choice decision, the pilot retains indices 0…63 and
+    records six dropped choices. Row 63 still executes native action 63.</dd>
+  </dl>
+  <p><strong>Existing implementation, empirical acceptance pending.</strong>
+  No redesign is proposed. The protocol already documents
+  <code>max_actions=64</code> with <code>action_overflow=first-legal</code>.
+  Omitted overflow configuration retains the historical error behavior.</p>
+
+  <h2>Actions → concepts → APIs</h2>
+  <ol class="flow">
+    <li><strong>Start the bounded pilot → frozen experiment and source-bound Run</strong>
+      <span><code>frozen()</code> → <code>runs(revision)</code> →
+      <code>TrainingJob</code> → existing Etude launch owner.</span></li>
+    <li><strong>Choose → complete native decision and declared policy support</strong>
+      <span>Shared selected-cost calculation → <code>policy_action_count</code> →
+      native/Python encoding → original Command. Padding is masked; no page action.</span></li>
+    <li><strong>Inspect learning → checkpoint and expected paired comparisons</strong>
+      <span><code>comparison_schedule</code> → <code>eval</code>/<code>play</code> →
+      shared <code>evaluate</code> → qualified analysis. Existing capture/game
+      receipts retain cutoff counts and bounded replay samples.</span></li>
+    <li><strong>Recover → retained attempt and explicitly sourced successor</strong>
+      <span>Capture → reconcile rental/cost → freeze changed source. Historical
+      missing results stay missing; a prepared Run cannot be rebound to edits.</span></li>
+  </ol>
+
+  <h2>Challenge the contract</h2>
+  <p><strong>Normal:</strong> six legal actions produce six valid rows. Candidates
+  and their initialization anchor use the same cutoff; the documented heuristic
+  baseline keeps its full native semantics.</p>
+  <p><strong>Failure:</strong> an unaffordable X rejects without committing costs
+  or changing state. An oversized card/effect block still fails. The action cutoff
+  grants no general permission to discard observation information.</p>
+  <p><strong>Recovery:</strong> preserve source/world, decks, seeds, configuration,
+  Commands, attempt costs and the expected evaluation schedule. A refused quote
+  creates no learner result; three v5 learner updates without a trained export
+  create no admitted trained checkpoint. No GPU process-recovery guarantee follows.</p>
+  <p><strong>Counterexample that survives:</strong> the winning move may be action
+  65. Its zero probability is an accepted pilot approximation. Overflow logs
+  measure frequency; they do not prove that the omitted strategies are redundant.</p>
+
+  <h2>Review questions — settled, no response required</h2>
+  <ol>
+    <li><strong>Should this change Academy's choices?</strong> No. Complete native
+    legality and the browser's shared decision surface remain authoritative.</li>
+    <li><strong>Is another representation or selection decision needed?</strong>
+    No. Shared effects, 128 card rows and first-64 legal selection are accepted.
+    No pagination or automatic expansion is selected.</li>
+    <li><strong>What proof remains?</strong> Required gate checks, then a bounded
+    allocation from a fresh compatible quote and correctly frozen source, an admitted
+    trained checkpoint, paired evaluation and qualified learning analysis.</li>
+  </ol>
+</main>
+</body>
+</html>

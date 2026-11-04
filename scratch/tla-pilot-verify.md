@@ -8,7 +8,7 @@ paired evaluation and Elemental-relative analysis remain outstanding.
 
 ## Current accepted design
 
-Steer 3b0f8826 explicitly selects deterministic first-64 **legal** actions with
+Jack Heart's accepted 2026-11-04 steer 3b0f8826 selects deterministic first-64 **legal** actions with
 logging and cutoff, superseding the 512-action pilot. Steer f61beeb7 separately
 requires native legality/payability and direct unavailable-X rejection without
 state changes. Neither cutoff nor tensor capacity can legalize an invalid action.
@@ -43,13 +43,11 @@ retains the report in game receipts. Deliberate cutoff is distinct from a fatal
 observation/game truncation. Scalar, native vector and sharded collectors use
 the same path; no policy mask or browser filter duplicates legality.
 
-Delete — do not maintain (completed): active `tla_pilot_v7.py` launcher and active
-analysis/discovery imports, replaced by `tla_pilot_v8.py`; earlier completed cuts
-removed `event_buffer_config`, buffer default overrides and printed-cost-only
-X announcement. This pass also removes the separately maintained overflow total
-(derive it from per-kind counts), duplicate buffer-policy dispatch and repeated
-scalar/vector/Python parity loops. Frozen v1–v8 protocols, regimes and evidence
-remain unchanged. No remaining deletion target is identified.
+The active launcher and analysis/discovery imports select `tla_pilot_v8.py`.
+Completed simplification removed buffer default overrides and printed-cost-only
+X announcement; overflow totals derive from per-kind counts, collection uses
+one buffer-policy dispatch and parity tests share one comparison helper. Frozen
+v1–v8 protocols, regimes and evidence remain unchanged.
 
 ## Frozen execution and spending
 
@@ -83,14 +81,17 @@ checks. The exact v8 source freeze and subsequent refusals are recorded below.
 
 ## Validation and remaining work
 
-Applicable native evidence: directed debug `wan_shi_tong` 5 tests and
-`first_legal_policy_prefix` 1 test pass; rebuilt release extension. No Rust changed
-in this simplification. Existing protocol/discovery checks remain applicable.
+Retained implementation evidence: five directed debug `wan_shi_tong` tests and
+one `first_legal_policy_prefix` test passed, followed by a rebuilt release
+extension. The buffer/cutoff suites passed 61 tests; collection/automatic-capture
+suites passed 41 after simplification. Protocol/discovery and Ruff checks remain
+applicable. Inspection confirms the earlier feedback's missing rejection tests
+are implemented, including full-state witnesses and actual payment for each
+offered X. No executable change or paid execution occurred during reconciliation.
+Gate owns broader affected suites, full debug/Clippy, current-world admission and
+publication/delivery; these focused receipts do not replace those checks.
 
-`uv run --extra dev --extra artifacts pytest tests/verify/test_native_buffer_capacities.py tests/training/test_action_cutoff.py -q` — 61 passed.
-`uv run --extra dev --extra artifacts pytest tests/training/test_collection.py tests/training/test_automatic_game_capture.py -q` — 41 passed.
-Ruff check/format and `git diff --check` pass for this diff. Gate owns broader
-affected suites, full debug/Clippy, current-world admission and publication/delivery.
+Reconciliation check: `git diff --check` — passed (plan and Training memory only).
 
 Remaining: reconcile/quote for the selected frozen source, execute one bounded
 GPU allocation, retain actual learner/checkpoint evidence and teardown/billing,
@@ -101,8 +102,8 @@ approval is outstanding; compatible supply remains an external uncertainty.
 Earlier continuation detail is retained at
 `ebb42d0df85c6638d47a160f1f888e021622c102:scratch/tla-pilot-verify.md`;
 uncommitted notes immediately before v8 consolidation are preserved under
-`.runs/mtg213/pre-v8-notes/`. Wave memory is read-only in this implementation
-step; its pre-existing unstaged changes are preserved.
+`.runs/mtg213/pre-v8-notes/`. Training memory records the accepted cutoff,
+rejection evidence and dated v8 preflight.
 
 ## V8 preflight settlement — 19:12 UTC
 
@@ -122,8 +123,73 @@ hardware. Accounted cost and conservative reservations remain unchanged.
 Receipts and the exact prepared Run are retained under
 `experiments/data/mtg213/gpu-v8-preflight-20261104/` with artifact publication.
 
-The next dependent step needs a fresh compatible quote. Run `f47be2d3c0d8`
-remains bound to its original source; never rebind it to subsequent code or notes.
-To execute the simplified capture/collector code in this checkout, freeze a
-successor Run first and retain the prepared v8 Run unchanged. Broader gate and
-delivery remain outstanding, alongside the empirical pilot acceptance.
+Execution needs a fresh compatible quote. Run `f47be2d3c0d8` remains bound to
+its original source. Execution of the simplified capture/collector code requires
+a successor Run with a fresh source freeze; the prepared v8 Run remains evidence.
+Broader gate and delivery remain outstanding, alongside the empirical pilot
+acceptance.
+
+## Concept review — 2026-11-04
+
+Outcome: **nothing to change and no open product choice**. This review does not
+select Graph navigation or claim pilot completion. Jack Heart's accepted
+first-64 direction (3b0f8826), native payability requirement (f61beeb7), shared
+effects and fixed-corpus/budget decisions already settle the experience. No
+additional implementation direction or product approval is needed.
+
+The consequential distinction is **legal actions versus policy support**.
+Managym owns the complete payable action set and rejects unavailable Commands;
+the pilot selects a prefix of that set for learned policies. Padding contributes
+no probability. A cutoff is diagnostic information, not a failed game or proof
+that omitted strategies are redundant. Academy retains the complete shared
+decision surface. These concepts have separate jobs; merging them would hide
+legal choices or misclassify valid pilot games.
+
+The existing usage contract in `experiments/protocols/tla-trophy-213-v8.md`
+already makes the interaction concrete: train with `max_actions=64` and explicit
+`action_overflow=first-legal`; evaluate learned checkpoints with that same
+configuration; inspect cutoff frequency and replay samples alongside outcomes.
+The fixed heuristic remains the documented full-native baseline. No usage-doc
+or skill rewrite is needed. This is implemented behavior, with empirical pilot
+acceptance still pending, rather than a proposed redesign.
+
+Actions → concepts → APIs:
+
+- Start one bounded pilot → frozen corpus, regime/protocol and source-bound Run
+  → `frozen()`, `runs(revision)`, `TrainingJob` and the existing Etude owner.
+- Choose an action → complete native decision and explicit learned-policy
+  support → shared selected-cost calculation, `policy_action_count`, native
+  buffered/Python encoding and original Command binding. No second legality
+  filter or page-navigation lifecycle is needed.
+- Inspect learning → admitted checkpoint and expected paired comparisons
+  → `comparison_schedule`, `eval`/`play`, shared `evaluate`, and the companion
+  analysis. Cutoff reports belong to existing capture/game receipts, not a new
+  experiment or a successful-learning status.
+- Recover → retained failed attempt plus an explicitly sourced successor
+  → existing capture, source freeze and rental reconciliation. A prepared Run
+  cannot be rebound to later edits; historical missing comparisons remain missing.
+
+Normal-path check: six legal actions remain six valid rows; 70 legal actions
+yield rows 0–63 with six dropped, and selected row 63 executes native action 63.
+Candidates and their initialization anchor use the same declared policy support.
+Failure check: an unaffordable X must reject with state unchanged even if its
+numeric index would fit 64 slots; increasing capacity cannot repair legality.
+Recovery check: a capacity failure, absent checkpoint or refused quote supplies
+no completed comparison. Preserve source/world, corpus, configuration, Commands,
+attempt costs and expected schedule; use a fresh source identity for changed
+code while keeping the original USD1/USD10 limits. No GPU process-recovery
+capability is inferred from this workflow.
+
+Counterexamples retained: a strategically necessary legal action can occur
+after row 63 (accepted approximation, not redundancy); an over-capacity card or
+effect block must still fail (action cutoff is not general observation loss);
+and v5's learner updates without a trained export do not satisfy checkpoint or
+learning acceptance. No new UI, resampling, automatic capacity expansion or
+retry machinery follows from these cases.
+
+Next proof remains the existing gate and execution work: preserve the directed
+legality/prefix/parity/diagnostic witnesses, then use a fresh compatible quote
+and correctly frozen source for bounded GPU execution, checkpoint admission,
+paired evaluation and qualified analysis. This review ran no games, training,
+provider queries or code tests. The companion page is
+`scratch/concept-review.html`; no unresolved product questions are recorded.
