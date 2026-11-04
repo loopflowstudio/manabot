@@ -53,5 +53,5 @@ on 2026-11-02, targeting main. Their code is now integrated; MTG-238
 precedence is fulfilled. MTG-239 (#415) also landed and supplies the corrected
 admission, library ordering and Rallier traces. These integrations do not
 settle the related Tasks' independent empirical acceptance. T6's PR #417
-is open for review at `5c254fd57`, including the audit and checkpoint-fixture repairs;
+is open at `a82a963aa`, including the audit and checkpoint-fixture repairs and simplification;
 its remaining validation and review are tracked in the current plan.

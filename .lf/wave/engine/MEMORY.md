@@ -467,6 +467,13 @@ preserves accepted decisions, dated proof limits and source history.
   exposed this distinction: loading the original v5/64-action inputs preserves
   the retained architecture hash. Fresh-checkpoint tests separately expect 512;
   neither proof admits an old trained checkpoint under the changed world.
+  A new save must also use the agent's actual observation space: the compound
+  replay fixture supplied fresh 512-action metadata for an explicit 64-action
+  agent, and receipt validation correctly rejected it. Saving
+  `agent.observation_space` and checking configuration equality after the final
+  sampler reload repairs the fixture without weakening validation. Both uniform
+  and learned samplers have focused save/reload/payment-replay proof; this does
+  not establish full-head CI or retained-checkpoint compatibility.
 
 ## Open tensions
 

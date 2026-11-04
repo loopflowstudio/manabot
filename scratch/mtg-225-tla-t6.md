@@ -1,6 +1,6 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (2026-11-03): all 16 cards and the accepted one-catalog change are implemented. Rules repairs are in `854d5e282`, compression in `ecba733ca`, and sync in `64b79d895` on main `c823c9c8f`, including MTG-235/238/239. Audit and checkpoint-fixture repairs through `fc9eb76b9` are published in [PR #417](https://github.com/loopflowstudio/manabot/pull/417), open for review at `5c254fd57`. Jack Heart's 2026-11-03 repair steer (`b77a8b6d-6066-48d4-be08-3007994aeb33`) retains one cohesive PR for review. Broad acceptance is pending; no auto-merge or landing is authorized.
+Status (2026-11-03): all 16 cards and the accepted one-catalog change are implemented. Rules repairs are in `854d5e282`, compression in `ecba733ca`, and sync in `64b79d895` on main `c823c9c8f`, including MTG-235/238/239. Audit and checkpoint-fixture repairs through `fc9eb76b9`, plus fixture simplification in `a82a963aa`, are published in [PR #417](https://github.com/loopflowstudio/manabot/pull/417), open at `a82a963aa`. Jack Heart's 2026-11-03 repair steer (`b77a8b6d-6066-48d4-be08-3007994aeb33`) retains one cohesive PR for review. Broad acceptance is pending; no auto-merge or landing is authorized.
 
 The accepted outcome is correct play for humans and bots through the shared native rules authority, with directed debug tests for every obligation, complete viewer-safe choices and policy/text observations. `scratch/t6-direction.md` retains Jack Heart's 2026-11-02 scope decisions. Full earlier implementation, integration and publication history is retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/mtg-225-tla-t6.md` and `:scratch/questions.md`.
 
@@ -105,14 +105,17 @@ Historical command/result details and contrary evidence are retained at `5c254fd
 
 The sync at `64b79d895` refreshed mutable w17 kernel, authored/parity receipts, Academy demos/navigation/trigger order and belief-v3 pins. It retains main's corrected 135 authored Commands, explicit ordering prefixes and offer ids, with 66 public commitments and no parity gaps. Main's decision code 23 and counter ordinals 7/8 remain fixed; T6 appends payment/search at 24/25, choose-to-exile at 26 and lore at 9. Historical receipts, retained checkpoints and frozen worlds stay untouched. Regenerate current receipts only if inputs change or validation identifies a mismatch.
 
-CI `41744841447` passed the debug Rust suite (935 tests, two ignored), protocol/semantic checks, Academy UI, clean-machine play, long integration and Engine Budget. Its failures exposed stale audit anchors, a fresh-checkpoint test expecting 64 actions, a frozen architecture fixture using fresh defaults and an incorrect Foggy Swamp Visions heuristic expectation. Subsequent fixes preserve pinned audit dispositions/source hashes, reconstruct the frozen v5 configuration through `from_checkpoint`, and leave the graveyard-copy heuristic unrated. CI `41746278124` at `454666106` then exposed two compound fixture failures: a 64-action agent was saved with a separate fresh 512-action space. `fc9eb76b9` removes that contradiction; receipt validation was correctly rejecting it. Unaffected successful CI checks remain reusable, but full repaired-head acceptance is still verification's responsibility.
+CI `41744841447` passed the debug Rust suite (935 tests, two ignored), protocol/semantic checks, Academy UI, clean-machine play, long integration and Engine Budget. Its failures exposed stale audit anchors, a fresh-checkpoint test expecting 64 actions, a frozen architecture fixture using fresh defaults and an incorrect Foggy Swamp Visions heuristic expectation. Subsequent fixes preserve pinned audit dispositions/source hashes, reconstruct the frozen v5 configuration through `from_checkpoint`, and leave the graveyard-copy heuristic unrated. CI `41746278124` at `454666106` then exposed two compound fixture failures: a 64-action agent was saved with a separate fresh 512-action space. `fc9eb76b9` removes that contradiction; receipt validation was correctly rejecting it. The negative reproduction and four passing scalar/compound × uniform/learned cases are retained in `compound-checkpoint-before.log` and `compound-checkpoint-repair.log` under `.runs/t6-publication/`. The later simplification in `a82a963aa` checks configuration equality after the final sampler reload. This resolves the supplied iteration feedback's implementation request without changing production defaults or receipt validation.
+
+At reconciliation on 2026-11-03, run `41746278124` had finished with the Academy failure above and cancelled main/long integration jobs; its Rust, Python unit, protocol, semantic, Academy UI, clean-machine and Engine Budget jobs passed. Run `41747455801` at `5c254fd57` remained in progress with Academy UI cancelled. Published head `a82a963aa` has pending CI `41747957440` and release run `41747957342`. Unaffected successful checks remain reusable, but these partial/cancelled runs do not establish repaired-head acceptance. Verification still owns combined-head CI, the retained-session search recovery proof below, and refreshing PR validation copy before Jack Heart's review.
 
 Check: `uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/sim/test_local_update_compound.py -q` — 25 passed; changed-file Ruff, formatting and `git diff --check` passed. This includes scalar/compound save, reload and payment replay with both samplers. Verification owns remaining combined-head CI, the retained-session search recovery proof below, and PR validation copy before Jack Heart's review. Engine Budget remains CI-owned: any reference adoption requires this PR's own same-runner artifact and an explicit reason; no local speed or playing-strength claim follows. No merge or auto-merge is authorized.
 
 ## Concept review — 2026-11-03
 
 Outcome: **nothing to change and no open product choice**. This headless review
-of `454666106` leaves Jack Heart's accepted experience and model unchanged.
+of `a82a963aa` rechecks the earlier `454666106` review and leaves Jack Heart's
+accepted experience and model unchanged.
 It does not establish broad acceptance, complete CI, or authorize landing.
 The current review page is `scratch/concept-review.html`; the older preserved
 page remains historical proposal evidence.
@@ -143,6 +146,17 @@ restriction. These are native facts, not parallel Academy state. Existing
 usage docs already describe the one-catalog contract, so no replacement docs
 or skill instructions are proposed. Historical vocabulary labels and saved
 observation defaults remain compatibility inputs, not additional live packs.
+
+The intervening checkpoint-fixture repair follows the same ownership rule:
+save the agent with its actual observation configuration, then restore that
+configuration when loading it, including through the learned sampler. A fresh
+default is not a description of an existing agent. The inspected change uses
+`save_checkpoint(agent, agent.observation_space, ...)` and checks configuration
+equality after the final reload; it changes neither production defaults nor
+receipt validation. It supplies no migration for old authored-pack weights.
+No new checkpoint lifecycle, compatibility shim, usage-doc change or implement
+direction is needed. This pass inspected source and the saved evidence; it did
+not rerun tests or refresh CI status.
 
 Counterexamples to preserve are a target leaving after payment, stopping a
 search before four matches, an unchosen nonmatching hand card remaining known,

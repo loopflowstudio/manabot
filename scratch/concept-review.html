@@ -18,7 +18,7 @@
   .muted { color: light-dark(#555, #bcbcbc); }
 </style>
 <header>
-  <small>MTG-225 · concept-review · 2026-11-03 · source head 454666106</small>
+  <small>MTG-225 · concept-review · 2026-11-03 · source head a82a963aa</small>
   <h1>The choices are part of the rules.</h1>
   <p><strong>No new product decision is needed.</strong> The repaired model follows
   the accepted T6 experience. This review proposes no redesign and supplies no
@@ -28,7 +28,8 @@
   <code>managym/cards/src/tla.rs</code>, <code>managym/src/flow/{decision,resolution}.rs</code>,
   <code>managym/src/cards/content_pack.rs</code>, their directed card tests,
   <code>manabot/managym/experience_projection.py</code>, and
-  <code>tests/semantic/test_text_observation.py</code>.</p>
+  <code>tests/semantic/test_text_observation.py</code>, and
+  <code>tests/sim/test_local_update_compound.py</code>.</p>
 </header>
 <main>
   <h2>Before: the publication failure</h2>
@@ -78,11 +79,18 @@
   these facts without owning a second rules lifecycle.</p>
   <p>Historical vocabulary labels and omitted saved observation defaults remain
   compatibility inputs. Old authored-pack checkpoint migration is not claimed.</p>
+  <p><strong>Save and reload an agent:</strong> its actual observation configuration
+  → checkpoint input identity → <code>save_checkpoint(agent,
+  agent.observation_space, ...)</code>. The repaired fixture verifies that identity
+  after the final sampler reload. Fresh defaults do not redefine an existing
+  agent. This preserves the accepted contract without a new compatibility layer.</p>
 
   <h2>Review result</h2>
   <p><strong>Nothing to change; no open product choice.</strong> No proposed
   behavior replaces the accepted design. Preserve the target-departure,
   early-search-stop, retained-knowledge and intervening-transform counterexamples.</p>
+  <p class="muted">This pass rechecked source and saved evidence at the current
+  head. It did not rerun tests or refresh CI status.</p>
   <p>Next proof: retained-session search recovery with stale resubmission, then
   the outstanding acceptance checks recorded in the working design. Jack Heart's
   PR review remains required. This page does not choose the Graph's next step.</p>
