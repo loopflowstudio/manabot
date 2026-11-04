@@ -308,6 +308,7 @@ impl Game {
         let agent_obs = AgentObservation::for_player(self, viewer);
         if !agent_obs.opponent_cards.iter().all(|card| {
             card.zone != ZoneType::Hand
+                || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
         }) {
             return Err(SemanticError::ViewerSafetyViolation);

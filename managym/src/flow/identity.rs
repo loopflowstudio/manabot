@@ -161,6 +161,52 @@ impl Game {
             .unwrap_or(PlayerId(0))
     }
 
+    /// Public schedules in creation order, including overridden controls.
+    pub fn player_control_views(&self) -> Vec<crate::experience::PlayerControlView> {
+        self.state
+            .turn
+            .player_controls
+            .iter()
+            .enumerate()
+            .map(|(index, control)| crate::experience::PlayerControlView {
+                player: control.player.0 as u8,
+                controller: control.controller.0 as u8,
+                whole_turn: control.duration
+                    == crate::state::ability::PlayerControlDuration::NextTurn,
+                active: control.active,
+                effective: control.active
+                    && !self.state.turn.player_controls[index + 1..]
+                        .iter()
+                        .any(|later| later.active && later.player == control.player),
+            })
+            .collect()
+    }
+
+    /// Who chooses for `player`. Actions and costs still belong to `player`.
+    pub fn decision_controller(&self, player: PlayerId) -> PlayerId {
+        self.state
+            .turn
+            .player_controls
+            .iter()
+            .rev()
+            .find(|control| control.player == player && control.active)
+            .map_or(player, |control| control.controller)
+    }
+
+    /// A controller sees what the controlled player may see in the game.
+    /// Outside-game cards are deliberately excluded at their own authority.
+    pub(crate) fn shares_information(&self, viewer: PlayerId, player: PlayerId) -> bool {
+        viewer == player || self.decision_controller(player) == viewer
+    }
+
+    pub(crate) fn remember_controlled_hands(&mut self) {
+        for player in [PlayerId(0), PlayerId(1)] {
+            if self.decision_controller(player) != player {
+                self.remember_hand(player);
+            }
+        }
+    }
+
     pub fn players_starting_with_active(&self) -> [PlayerId; 2] {
         [self.active_player(), self.non_active_player()]
     }

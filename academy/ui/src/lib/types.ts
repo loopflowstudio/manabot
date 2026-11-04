@@ -233,7 +233,16 @@ export interface StackEntryView {
   x?: number;
 }
 
+export interface PlayerControlView {
+  player: number;
+  controller: number;
+  whole_turn: boolean;
+  active: boolean;
+  effective: boolean;
+}
+
 export interface Observation {
+  player_controls?: PlayerControlView[];
   stack_objects?: StackEntryView[];
   decision_context?: DecisionContextView;
   definition_names?: Record<string, string>;

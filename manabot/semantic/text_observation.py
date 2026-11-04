@@ -519,7 +519,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -529,6 +529,18 @@ class _Renderer:
             details.append(f"may exile up to {relation.mode} more cards")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
+        elif relation.kind in (13, 14):
+            player = (
+                self.fact_reference(relation.context)
+                if relation.context is not None
+                else "unavailable player"
+            )
+            if relation.kind == 13:
+                duration = "combat phase" if relation.decision == 1 else "turn"
+                interval = "this" if relation.mode == 1 else "their next"
+                details.append(f"controls {player} during {interval} {duration}")
+            else:
+                details.append(f"chooses for {player} using that player's resources")
         elif relation.kind == 12:
             details.append(
                 "current combat"
@@ -543,7 +555,7 @@ class _Renderer:
             details.append("kicker included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision:
+        if relation.decision and relation.kind != 13:
             details.append(_frame_decision(relation.kind, relation.decision))
         if relation.kind == 10 and relation.this_turn:
             details.append("ends at this turn's cleanup if it has not triggered")
@@ -902,6 +914,20 @@ class _Renderer:
             raise TextEncodingError("incomplete action/offer binding")
         if len({offer["id"] for offer in frame.offers}) != len(frame.offers):
             raise TextEncodingError("duplicate offer identity")
+        controls_opponent = (
+            next(
+                (
+                    relation.controller
+                    for relation in reversed(capture.frames)
+                    if relation.kind == 13
+                    and relation.mode == 1
+                    and relation.context is not None
+                    and relation.context.player == state.opponent.player_index
+                ),
+                state.opponent.player_index,
+            )
+            == state.agent.player_index
+        )
         searching_opponent = any(
             relation.kind == 6
             and relation.decision == 25
@@ -910,7 +936,7 @@ class _Renderer:
             and relation.context.player == state.opponent.player_index
             for relation in capture.frames
         )
-        if not searching_opponent and any(
+        if not (searching_opponent or controls_opponent) and any(
             card.zone == 1 for card in state.opponent_cards
         ):
             raise TextEncodingError("opponent hand identity in capture")

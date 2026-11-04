@@ -613,6 +613,13 @@ pub enum LinkedGrant {
     FlashAnyMana,
 }
 
+/// The next interval actually taken by a controlled player (CR 720).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum PlayerControlDuration {
+    NextCombat,
+    NextTurn,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
     /// A continuous effect from this resolution (CR 611): `modification`
@@ -791,6 +798,12 @@ pub enum Effect {
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
+    /// Control the selected player during their next actual turn or combat.
+    /// This changes decision authority, never ownership of their resources.
+    ControlPlayer {
+        what: ObjectSelector,
+        duration: PlayerControlDuration,
+    },
     /// "Transform [this]" (CR 701.27): the source permanent turns over and
     /// stays the same object (CR 701.27a). Nothing happens to a permanent that
     /// isn't a double-faced card (CR 701.27c).
@@ -1287,6 +1300,7 @@ impl Effect {
             | Effect::Destroy { what }
             | Effect::Airbend { what }
             | Effect::GainControl { what, .. }
+            | Effect::ControlPlayer { what, .. }
             | Effect::DealDamage { what, .. }
             | Effect::CounterSpell { what }
             | Effect::CounterAbility { what }
@@ -1445,6 +1459,7 @@ impl Effect {
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::ControlPlayer { .. }
             | Effect::AdditionalCombatPhase { .. }
             | Effect::EachPlayerChoosesToExile { .. }
             | Effect::MayExileTriggeringWithSource

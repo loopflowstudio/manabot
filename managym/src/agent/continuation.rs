@@ -85,7 +85,10 @@ pub struct ContinuationFrame {
     /// 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger,
     /// 8 trigger being placed, 9 two-pass placement cursor, 10 waiting
     /// delayed trigger (CR 603.7; `decision` names its event, see
-    /// [`delayed_event_code`]), 11 scheduled turn, 12 additional combat.
+    /// [`delayed_event_code`]), 11 scheduled turn, 12 additional combat,
+    /// 13 player control (context: controlled player, decision: 1 combat/2 turn,
+    /// mode: 0 pending/1 active; creation order), 14 delegated decision
+    /// (controller: chooser, context: player whose decision it is).
     pub kind: u8,
     /// Kind 6: the obligation's `decision_code`. Kinds 7 and 8: trigger
     /// ordering class (1 ordinary, 2 ability-triggered). Kind 9: placement
@@ -186,10 +189,11 @@ impl Game {
                     | ZoneType::Exile
                     | ZoneType::Command
             )
-        ) || (zone == Some(ZoneType::Hand) && card.owner == viewer)
+        ) || (zone == Some(ZoneType::Hand)
+            && self.shares_information(viewer, card.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
                 && self.searches_private_zones(viewer, card.owner));
-        if !visible {
+        if !visible || (self.is_foretold(card_id) && !self.shares_information(viewer, card.owner)) {
             return VisibleReference::default();
         }
         VisibleReference {
@@ -322,6 +326,39 @@ impl Game {
                 ..Default::default()
             });
         }
+        for control in &self.state.turn.player_controls {
+            frames.push(ContinuationFrame {
+                kind: 13,
+                controller: control.controller.0,
+                context: Some(VisibleReference {
+                    player: Some(control.player.0),
+                    ..Default::default()
+                }),
+                decision: match control.duration {
+                    crate::state::ability::PlayerControlDuration::NextCombat => 1,
+                    crate::state::ability::PlayerControlDuration::NextTurn => 2,
+                },
+                mode: Some(usize::from(control.active)),
+                ..Default::default()
+            });
+        }
+        if let Some((controller, action)) = self
+            .action_space()
+            .filter(|_| !self.is_game_over())
+            .and_then(|space| space.player.zip(space.actions.first()))
+        {
+            if action.player() != controller {
+                frames.push(ContinuationFrame {
+                    kind: 14,
+                    controller: controller.0,
+                    context: Some(VisibleReference {
+                        player: Some(action.player().0),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+            }
+        }
         frames
     }
 
@@ -379,7 +416,7 @@ impl Game {
                 .remaining
                 .iter()
                 .chain(placement.placing.iter())
-                .filter(|t| t.controller == viewer)
+                .filter(|t| self.decision_controller(t.controller) == viewer)
             {
                 let mut source = trigger
                     .source_ref
@@ -400,7 +437,7 @@ impl Game {
                         7
                     },
                     parent: Some(parent),
-                    controller: viewer.0,
+                    controller: trigger.controller.0,
                     source,
                     decision: match trigger.ordering_class {
                         crate::flow::trigger::TriggerOrderingClass::Ordinary => 1,
@@ -437,7 +474,7 @@ impl Game {
         let index = placement
             .remaining
             .iter()
-            .filter(|t| t.controller == viewer)
+            .filter(|t| self.decision_controller(t.controller) == viewer)
             .position(|t| t.id == *trigger_id)?;
         Some(
             self.state.stack_objects.len() + usize::from(self.pending_choice.is_some()) + 1 + index,
@@ -502,20 +539,25 @@ impl Game {
     fn announcement_frame(&self, pending: &PendingChoice, viewer: PlayerId) -> ContinuationFrame {
         let mut frame = ContinuationFrame {
             kind: 4,
-            controller: viewer.0,
+            controller: self
+                .current_action_space
+                .as_ref()
+                .and_then(|space| space.actions.first().map(|action| action.player()))
+                .expect("announcement has a player")
+                .0,
             ..ContinuationFrame::default()
         };
         match pending {
             PendingChoice::ManaPayment {
+                player,
                 payment,
                 sacrifice,
                 alternative,
-                ..
             } => {
                 self.payment_frame(payment, viewer, &mut frame);
                 frame.sacrifice =
                     sacrifice.map(|id| self.target_reference(Target::Permanent(id), viewer));
-                frame.cost(&self.payment_mana_cost(viewer, payment, alternative.as_ref()));
+                frame.cost(&self.payment_mana_cost(*player, payment, alternative.as_ref()));
             }
             PendingChoice::SacrificePayment { payment, .. } => {
                 self.payment_frame(payment, viewer, &mut frame)

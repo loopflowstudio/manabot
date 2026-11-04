@@ -219,7 +219,6 @@ pub enum AtomicCommand {
     },
     DeclarationSequence {
         binding: OfferSetBinding,
-        player: PlayerId,
         kind: ActionSpaceKind,
         actions: Vec<Action>,
     },
@@ -256,7 +255,6 @@ enum InternalOffer {
         declaration_order: Vec<ObjectRef>,
     },
     DeclareBlockers {
-        player: PlayerId,
         choices: Vec<BlockerChoice>,
     },
     Waterbend {
@@ -415,7 +413,7 @@ impl StructuredOfferSet {
                     attackers: selected_attackers,
                 })
             }
-            InternalOffer::DeclareBlockers { player, choices } => {
+            InternalOffer::DeclareBlockers { choices } => {
                 let mut answers = BTreeMap::new();
                 for ChoiceAnswer::Candidates { role, candidates } in &submission.answers {
                     if answers.insert(*role, candidates).is_some() {
@@ -450,7 +448,6 @@ impl StructuredOfferSet {
                 }
                 Ok(AtomicCommand::DeclarationSequence {
                     binding: self.binding,
-                    player: *player,
                     kind: ActionSpaceKind::DeclareBlocker,
                     actions,
                 })
@@ -489,7 +486,6 @@ impl StructuredOfferSet {
                 }
                 Ok(AtomicCommand::DeclarationSequence {
                     binding: self.binding,
-                    player: *player,
                     kind: ActionSpaceKind::Waterbend,
                     actions,
                 })
@@ -748,7 +744,11 @@ impl Game {
         let space = self
             .action_space()
             .ok_or(StructuredOfferError::NoActiveActionSpace)?;
-        let player = space.player.ok_or(StructuredOfferError::MissingActor)?;
+        let player = space
+            .actions
+            .first()
+            .map(|action| action.player())
+            .ok_or(StructuredOfferError::MissingActor)?;
         let combat = self
             .state
             .combat
@@ -832,7 +832,7 @@ impl Game {
         }
         let offer = InteractionOffer {
             id: OfferId(0),
-            actor: wire_player_id(player)?,
+            actor: wire_player_id(space.player.ok_or(StructuredOfferError::MissingActor)?)?,
             verb: OfferVerb::DeclareBlockers,
             public_commitment: None,
             source: None,
@@ -850,10 +850,7 @@ impl Game {
             binding: OfferSetBinding(self.decision_epoch),
             internal: BTreeMap::from([(
                 OfferId(0),
-                InternalOffer::DeclareBlockers {
-                    player,
-                    choices: bound,
-                },
+                InternalOffer::DeclareBlockers { choices: bound },
             )]),
         }))
     }
@@ -910,7 +907,11 @@ impl Game {
         }
         let offer = InteractionOffer {
             id: OfferId(0),
-            actor: wire_player_id(player)?,
+            actor: wire_player_id(
+                self.action_space()
+                    .and_then(|space| space.player)
+                    .ok_or(StructuredOfferError::MissingActor)?,
+            )?,
             verb: OfferVerb::PayWaterbend,
             public_commitment: None,
             source: None,
@@ -1042,7 +1043,7 @@ impl Game {
                     let id = next_offer_id(offers.len())?;
                     offers.push(InteractionOffer {
                         id,
-                        actor: wire_player_id(*player)?,
+                        actor: wire_actor,
                         verb: OfferVerb::PassPriority,
                         public_commitment: None,
                         source: None,
@@ -1099,7 +1100,7 @@ impl Game {
                     let id = next_offer_id(offers.len())?;
                     offers.push(InteractionOffer {
                         id,
-                        actor: wire_player_id(*player)?,
+                        actor: wire_actor,
                         verb: OfferVerb::Cast,
                         public_commitment: None,
                         source: Some(SubjectRef::Object {
@@ -1160,8 +1161,12 @@ impl Game {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
-        let (actor, declaration_order) = self.current_attacker_declaration()?;
-        let wire_actor = wire_player_id(actor)?;
+        let (player, declaration_order) = self.current_attacker_declaration()?;
+        let wire_actor = wire_player_id(
+            self.action_space()
+                .and_then(|space| space.player)
+                .ok_or(StructuredOfferError::MissingActor)?,
+        )?;
         let role = RoleId(1);
 
         let mut candidates = Vec::with_capacity(declaration_order.len());
@@ -1232,7 +1237,7 @@ impl Game {
             internal: BTreeMap::from([(
                 id,
                 InternalOffer::DeclareAttackers {
-                    player: actor,
+                    player,
                     role,
                     attackers: attacker_by_candidate,
                     declaration_order: declaration_order
@@ -1406,7 +1411,8 @@ impl Game {
                         .action_space()
                         .filter(|space| {
                             space.kind == ActionSpaceKind::DeclareAttacker
-                                && space.player == Some(*player)
+                                && space.actions.first().map(|action| action.player())
+                                    == Some(*player)
                         })
                         .ok_or(StructuredOfferError::WrongDecision)?;
                     let attack = selected.contains(&permanent);
@@ -1435,12 +1441,7 @@ impl Game {
                 }
                 Ok((done, actions))
             }
-            AtomicCommand::DeclarationSequence {
-                player,
-                kind,
-                actions,
-                ..
-            } => {
+            AtomicCommand::DeclarationSequence { kind, actions, .. } => {
                 let mut done = false;
                 let mut executed = 0;
                 for action in actions {
@@ -1466,11 +1467,11 @@ impl Game {
                             _ => {}
                         }
                     }
-                    // A changed kind/actor is never a continuation: do not
-                    // consume a reveal, priority window, or opponent choice.
+                    // Exact action equality includes its rules player. Keep
+                    // the decision kind too: never cross into another window.
                     let index = self
                         .action_space()
-                        .filter(|space| space.kind == *kind && space.player == Some(*player))
+                        .filter(|space| space.kind == *kind)
                         .and_then(|space| space.actions.iter().position(|legal| legal == action))
                         .ok_or(StructuredOfferError::WrongDecision)?;
                     done = self.record_compound_step(index, commands)?;
@@ -1731,8 +1732,10 @@ impl Game {
         if action_space.kind != ActionSpaceKind::DeclareAttacker {
             return Err(StructuredOfferError::WrongDecision);
         }
-        let actor = action_space
-            .player
+        let subject = action_space
+            .actions
+            .first()
+            .map(|action| action.player())
             .ok_or(StructuredOfferError::MissingActor)?;
 
         let mut current = None;
@@ -1748,9 +1751,9 @@ impl Game {
                     "declare-attacker prompt contains another action kind".to_string(),
                 ));
             };
-            if *player != actor {
+            if *player != subject {
                 return Err(StructuredOfferError::Invariant(
-                    "declare-attacker prompt contains another actor".to_string(),
+                    "declare-attacker prompt contains another rules player".to_string(),
                 ));
             }
             if current
@@ -1791,7 +1794,7 @@ impl Game {
                 "declare-attacker prompt repeats a permanent".to_string(),
             ));
         }
-        Ok((actor, declaration_order))
+        Ok((subject, declaration_order))
     }
 
     fn bind_target(&self, target: Target) -> Result<BoundTarget, StructuredOfferError> {

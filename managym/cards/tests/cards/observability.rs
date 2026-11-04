@@ -420,8 +420,9 @@ fn player_selector_witnesses() -> [PlayerSelector; 6] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 21] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
     let TurnState {
+        player_controls: _,
         active_player: _,
         turn_number: _,
         lands_played: _,
@@ -447,6 +448,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 21] {
         bent: _,
     } = history[0];
     [
+        ("player_controls", Seen::Via("v5 relations kind 13: controller, affected player, duration, active/pending, creation order")),
         ("active_player", Seen::Player(1, 2)),
         (
             "turn_number",
@@ -525,6 +527,7 @@ fn effect_token(effect: &Effect) -> &'static str {
     match effect {
         Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
         Effect::TransformSource => "Effect::TransformSource",
+        Effect::ControlPlayer { .. } => "Effect::ControlPlayer",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
         Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
         Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
@@ -612,7 +615,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 81;
+const EFFECT_VARIANTS: usize = 82;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -834,6 +837,10 @@ fn effect_witnesses() -> Vec<Effect> {
             then: vec![Effect::discard()],
         },
         Effect::TransformSource,
+        Effect::ControlPlayer {
+            what: ObjectSelector::Target(TargetSpec::Opponent),
+            duration: managym::state::ability::PlayerControlDuration::NextCombat,
+        },
         Effect::TakeExtraTurn,
         Effect::AdditionalCombatPhase {
             attackers: Some(CardPredicate::creature()),
@@ -4108,4 +4115,55 @@ fn library_order_and_any_target_are_distinct_learning_rules() {
     );
     let tokens = tokens_of(&card_definition("Lightning Strike"));
     assert!(tokens.contains(&(TokenKind::Variant, name_value("TargetSpec::AnyTarget"))));
+}
+
+/// Secret of Bloodbending's scheduled/active authority is public state in v5;
+/// the paid and unpaid durations have distinct rule tokens and tensor rows.
+#[test]
+fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
+    use managym::flow::turn::PlayerControl;
+    use managym::state::ability::PlayerControlDuration;
+    let mut s = five_color_setup(&["Secret of Bloodbending"]);
+    let baseline = encoded(&s, 0, 5);
+    let legacy = encoded(&s, 0, 4);
+    s.game_mut().state.turn.player_controls.push(PlayerControl {
+        player: PlayerId(1),
+        controller: PlayerId(0),
+        duration: PlayerControlDuration::NextCombat,
+        active: false,
+    });
+    let pending = encoded(&s, 0, 5);
+    assert_ne!(pending.relations, baseline.relations);
+    assert_eq!(encoded(&s, 0, 4).relations, legacy.relations);
+    s.game_mut().state.turn.player_controls[0].duration = PlayerControlDuration::NextTurn;
+    let whole_turn = encoded(&s, 0, 5);
+    assert_ne!(pending.relations, whole_turn.relations);
+    s.game_mut().state.turn.player_controls[0].active = true;
+    let active = encoded(&s, 0, 5);
+    assert_ne!(active.relations, whole_turn.relations);
+    let headers: Vec<_> = active
+        .relations
+        .chunks_exact(RELATION_DIM_V5)
+        .filter(|r| r[0] == 1.0 && r[3] == 13.0)
+        .collect();
+    assert_eq!(headers.len(), 1);
+    assert_eq!(
+        (headers[0][4], headers[0][7], headers[0][28]),
+        (1.0, 2.0, 2.0)
+    );
+    assert!(active
+        .relations
+        .chunks_exact(RELATION_DIM_V5)
+        .any(|r| r[0] == 3.0 && r[3] == 13.0 && r[25] == 2.0));
+    let tokens = tokens_of(&card_definition("Secret of Bloodbending"));
+    for variant in [
+        "Effect::ControlPlayer",
+        "PlayerControlDuration::NextCombat",
+        "PlayerControlDuration::NextTurn",
+    ] {
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
+    }
 }

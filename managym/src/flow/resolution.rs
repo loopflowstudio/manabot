@@ -978,6 +978,22 @@ impl Game {
                 self.state.turn.extra_turns.push(frame.controller);
                 None
             }
+            Effect::ControlPlayer { what, duration } => {
+                for affected in self.resolve_affected(what, frame) {
+                    if let Affected::Player(player) = affected {
+                        self.state
+                            .turn
+                            .player_controls
+                            .push(crate::flow::turn::PlayerControl {
+                                player,
+                                controller: frame.controller,
+                                duration: *duration,
+                                active: false,
+                            });
+                    }
+                }
+                None
+            }
             Effect::TransformSource => {
                 let id = self.source_permanent_id(frame)?;
                 // CR 701.27f: only if it hasn't turned over since this ability

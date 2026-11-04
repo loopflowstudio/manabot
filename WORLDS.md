@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (335 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (336 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -314,6 +314,21 @@ has 135 Commands and 66 public commitments: at decision 90 Rallier correctly
 excludes Suki with power above three, changing the subsequent game. The former
 142-Command tape remains at `22e4aab71:conformance/authored-match-w17-v1/`.
 Admission is availability, not a claim that a playable card is bug-free.
+
+Task MTG-226 (TLA batch T7, same open world) adds Secret of Bloodbending and
+scheduled next-combat/next-turn player control. The chooser is published in
+`ActionSpace.player`; native Decision and Action player fields retain the rules
+subject. Control shares permitted in-game information, including face-down
+foretold cards, but never private sideboards or outside-game selections.
+Ordered control schedules and delegated decisions use v5 relation kinds 13/14;
+widths and v1–v4 exclusions are unchanged. Definition-derived learning tokens,
+native/Python encoders, text and Academy expose the same authority. State hash
+contract 14 includes control schedules. The optional Academy `player_controls`
+projection distinguishes historical absence from a live empty list; protocol
+version 1 is unchanged. No frozen historical evidence is rewritten.
+The [full-file reconciliation](docs/rules/tla/acceptance.md) accounts for all
+286 identities / 294 faces and records concrete interaction coverage limits.
+Combined w17 evidence refresh follows the later published T6 completion at gate.
 
 ## w16: one card authority (superseded by w17)
 

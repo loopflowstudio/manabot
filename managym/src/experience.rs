@@ -623,9 +623,24 @@ pub struct DecisionObjectView {
     pub label: String,
 }
 
+/// Public player-control effects in creation order. Effective distinguishes
+/// the last-created active effect from another whose interval also runs now.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlayerControlView {
+    pub player: u8,
+    pub controller: u8,
+    pub whole_turn: bool,
+    pub active: bool,
+    pub effective: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyHeroObservation {
+    /// Absent in historical frames; present empty means no scheduled control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_controls: Option<Vec<PlayerControlView>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack_objects: Option<Vec<StackEntryView>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

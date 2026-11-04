@@ -409,13 +409,19 @@ impl HiddenHandConstraints {
             .map(|card| game.state.cards[*card].name.clone())
             .collect();
         let pool = name_counts(game, unseen);
-        let foretold = game.foretold_cards(opponent).len() as u32;
+        let foretold = if game.shares_information(viewer, opponent) {
+            0
+        } else {
+            game.foretold_cards(opponent).len() as u32
+        };
         let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
         let source_observation = game
             .semantic_observation(viewer)
             .expect("valid viewer has a semantic observation")
             .identity;
-        let known_hand = if game.searches_private_zones(viewer, opponent) {
+        let known_hand = if game.shares_information(viewer, opponent)
+            || game.searches_private_zones(viewer, opponent)
+        {
             name_counts(
                 game,
                 game.state
@@ -521,7 +527,9 @@ impl HiddenHandConstraints {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         // An active search exposes exact cards and their zones. Preserve
         // those physical witnesses, not merely the hand's name multiset.
-        if !source.searches_private_zones(self.viewer, opponent) {
+        if !source.searches_private_zones(self.viewer, opponent)
+            && !source.shares_information(self.viewer, opponent)
+        {
             // Group the opponent's unseen CardIds by name, sorted ascending so
             // the lowest CardIds of each name go to the hand deterministically.
             let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
@@ -561,10 +569,12 @@ impl HiddenHandConstraints {
                 .zones
                 .reassign_hidden(opponent, new_hand, new_library);
         }
-        branch
-            .state
-            .zones
-            .shuffle_canonical(ZoneType::Library, self.viewer, &mut rng);
+        if source.shares_information(self.viewer, opponent)
+            && !source.searches_private_zones(self.viewer, opponent)
+        {
+            branch.shuffle_private_library(opponent, &mut rng);
+        }
+        branch.shuffle_private_library(self.viewer, &mut rng);
         branch.repin_revealed_library_cards();
 
         // Fail closed: the realized hand name-multiset must equal the world.
@@ -579,19 +589,27 @@ impl HiddenHandConstraints {
                 .as_ref()
                 .is_some_and(|space| space.player == Some(opponent))
         {
-            let kind = branch
+            let space = branch
                 .current_action_space
                 .as_ref()
-                .map(|space| space.kind)
+                .ok_or(MaterializeError::UnsupportedActingPrompt)?;
+            let kind = space.kind;
+            let subject = space
+                .actions
+                .first()
+                .map(|action| action.player())
                 .ok_or(MaterializeError::UnsupportedActingPrompt)?;
             match kind {
-                ActionSpaceKind::Priority => branch.refresh_priority_actions(opponent),
+                ActionSpaceKind::Priority => branch.refresh_priority_actions(subject),
                 ActionSpaceKind::Learn
                 | ActionSpaceKind::LookAndSelect
                 | ActionSpaceKind::Discard => {
                     let refreshed = branch
                         .suspended_decision_action_space()
-                        .filter(|space| space.player == Some(opponent) && space.kind == kind)
+                        .filter(|space| {
+                            space.actions.first().map(|action| action.player()) == Some(subject)
+                                && space.kind == kind
+                        })
                         .ok_or(MaterializeError::UnsupportedActingPrompt)?;
                     branch.publish_action_space(refreshed);
                 }

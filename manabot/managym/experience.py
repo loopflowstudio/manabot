@@ -530,7 +530,18 @@ class StackEntryView(ProtocolModel):
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class PlayerControlView(ProtocolModel):
+    player: UInt8
+    controller: UInt8
+    whole_turn: bool
+    active: bool
+    effective: bool
+
+
 class LegacyHeroObservation(ProtocolModel):
+    player_controls: list[PlayerControlView] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     stack_objects: list[StackEntryView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

@@ -723,7 +723,7 @@ impl Game {
             .as_ref()
             .is_some_and(|suspended| {
                 matches!(suspended.decision, Decision::SearchNamed { player, owner: searched, .. }
-                if player == viewer && searched == owner)
+                if self.shares_information(viewer, player) && searched == owner)
             })
     }
 
@@ -1211,10 +1211,8 @@ impl Game {
             return Err(AgentError("no pending decision".to_string()));
         };
 
-        if let Some(player) = action_player(action) {
-            if player != suspended.decision.player() {
-                return Err(AgentError("wrong player for pending decision".to_string()));
-            }
+        if action.player() != suspended.decision.player() {
+            return Err(AgentError("wrong player for pending decision".to_string()));
         }
 
         // Validate while the full continuation is still attached, so the
@@ -2064,7 +2062,8 @@ impl Game {
     }
 
     fn eligible_lesson(&self, player: PlayerId, card: CardId) -> bool {
-        self.state.players[player.0].sideboard.contains(&card)
+        self.decision_controller(player) == player
+            && self.state.players[player.0].sideboard.contains(&card)
             && self.state.cards[card].owner == player
             && self.state.zones.zone_of(card).is_none()
             && self.state.cards[card]
@@ -2300,20 +2299,6 @@ impl Game {
             library.remove(index);
             library.insert(0, card);
         }
-    }
-}
-
-fn action_player(action: &Action) -> Option<PlayerId> {
-    match action {
-        Action::ScryCard { player, .. }
-        | Action::SelectCard { player, .. }
-        | Action::LearnDiscard { player, .. }
-        | Action::LearnTakeLesson { player, .. }
-        | Action::Decline { player }
-        | Action::WaterbendTap { player, .. }
-        | Action::PayCost { player }
-        | Action::ChooseMode { player, .. } => Some(*player),
-        _ => None,
     }
 }
 

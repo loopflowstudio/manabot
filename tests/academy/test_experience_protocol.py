@@ -31,6 +31,7 @@ STRUCT_MODELS = (
     "LegacyCardTypesView",
     "LegacyCardView",
     "LegacyHeroObservation",
+    "PlayerControlView",
     "LegacyPermanentView",
     "LegacyPlayerView",
     "LegacyTurnView",
