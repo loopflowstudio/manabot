@@ -938,10 +938,6 @@ impl CardDefinition {
         })
     }
 
-    pub fn has_static(&self, ability: &StaticAbility) -> bool {
-        self.statics.contains(ability)
-    }
-
     pub fn colors(&self) -> Colors {
         if let Some(colors) = &self.color_override {
             return colors.clone();

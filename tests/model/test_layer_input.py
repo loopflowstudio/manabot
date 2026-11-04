@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 import pytest
 import torch
 
+from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_CONTINUATION_PROGRAM,
     FACT_DETAIL_INDEX,
@@ -21,15 +22,60 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     ObservationSpace,
 )
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.eval.admission import register_checkpoint
+from manabot.eval.evaluate import validate_registered_player
+from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.facts import FactEncoder
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.state_records import SharedFactEncoder
+from manabot.recipes.local import local_smoke
 from manabot.semantic.text_observation import capture_text_decision, submit_response
+from manabot.training.regime import TrainingRegime
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 from manabot.verify.text_observation import priority_root
 import managym
+
+
+def test_v8_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> None:
+    """Exercise production selection/admission without launching an experiment."""
+    torch.set_num_threads(1)
+    recipe = local_smoke(steps=1)
+    recipe.observation = ObservationConfig(policy_input_version=8)
+    recipe = TrainingRegime.model_validate_json(recipe.model_dump_json())
+    space = ObservationSpace(recipe.observation)
+    collector = SeatRoutedCollector(
+        space,
+        Match(recipe.match),
+        Reward(RewardConfig()),
+        num_envs=1,
+        opponent_mode="self",
+        learning_seats="one",
+    )
+    try:
+        model = ActorCritic(space, recipe.agent)
+        batch = collector.collect(model, 1)
+        assert batch.obs["effect_details"].shape == (1, 1, 4096, 3)
+        assert batch.actions.size == 1
+        path = tmp_path / "explicit-v8.pt"
+        save_checkpoint(
+            model, space, path, player_configs=Match(recipe.match).to_rust()
+        )
+        admitted = register_checkpoint(
+            path,
+            match=recipe.match,
+            content_suite="layer-input-fixture",
+            player_id="v8-fixture",
+            display_name="v8 fixture",
+        )
+        paths, selected = validate_registered_player(admitted.registration, path)
+        assert paths["v8-fixture"] == str(path)
+        assert selected is not None and selected.encoder.config == recipe.observation
+        assert ObservationConfig().policy_input_version == 6
+    finally:
+        collector.close()
 
 
 def _assert_encoder_parity(
@@ -44,37 +90,13 @@ def _assert_encoder_parity(
     return reference
 
 
-def _kellan(hand: tuple[str, ...] = ()) -> managym.Env:
-    env = priority_root(hand, ("Kellan, Planar Trailblazer",) + ("Mountain",) * 5)
-    for step in range(16):
-        obs = env.observation_for_player(env.current_agent_index())
-        if any(r.effect.program for r in obs.shared_effects or []):
-            return env
-        decision = capture_text_decision(env)
-        actions = obs.action_space.actions
-        index = next(
-            i
-            for i, action in enumerate(actions)
-            if (step == 0 and action.ability_index == 0)
-            or (
-                step > 0
-                and (
-                    "pass" in decision.actions[i].description.lower()
-                    or "pay" in decision.actions[i].description.lower()
-                )
-            )
-        )
-        submit_response(env, decision, decision.actions[index].reference)
-    raise AssertionError("Kellan upgrade did not resolve")
-
-
 @pytest.mark.parametrize("state_encoder", ["rows", "typed_pool", "typed_gru"])
 def test_layer_input_native_python_text_forward_backward_and_reload(
     tmp_path: Path,
     state_encoder: Literal["rows", "typed_pool", "typed_gru"],
 ) -> None:
     torch.set_num_threads(1)
-    env = _kellan()
+    env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     assert any(
         r.effect.modification == "GrantTriggered" and r.effect.program
@@ -118,8 +140,30 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
         torch.testing.assert_close(expected, actual)
 
 
+@pytest.mark.parametrize("overflow", ["error", "first-legal"])
+def test_layer_admission_precedes_action_prefix_selection(
+    overflow: Literal["error", "first-legal"],
+) -> None:
+    env = kellan_upgrade_root()
+    obs = env.observation_for_player(env.current_agent_index())
+    count = len(obs.action_space.actions)
+    assert count > 1
+    space = ObservationSpace(
+        ObservationConfig(
+            policy_input_version=7, max_actions=1, action_overflow=overflow
+        )
+    )
+    with pytest.raises(ValueError, match="v7.*select v8"):
+        space.encode(obs)
+    buffers = space.encoder.allocate()
+    with pytest.raises(ValueError, match="v7.*select v8"):
+        env.encode_observation_into(obs, buffers, action_overflow=overflow)
+    assert all(not array.any() for array in buffers.values())
+    assert len(obs.action_space.actions) == count
+
+
 def test_layer_colors_counter_order_and_signed_program_payload_parity() -> None:
-    env = _kellan()
+    env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     payload = json.loads(obs.toJSON())
     permanent = payload["agent_permanents"][0]
@@ -169,7 +213,7 @@ def test_retained_input_architectures_keep_shapes_and_admit_representable_state(
 def test_v8_scalar_and_vector_buffers_select_the_explicit_schema() -> None:
     config = ObservationConfig(policy_input_version=8)
     space = ObservationSpace(config)
-    env = _kellan()
+    env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     buffers = space.encoder.allocate()
     env.encode_observation_into(obs, buffers)
@@ -212,20 +256,7 @@ def test_captured_continuation_program_reaches_native_python_and_policy(
     state_encoder: Literal["rows", "typed_pool", "typed_gru"],
 ) -> None:
     torch.set_num_threads(1)
-    env = _kellan(("Lightning Bolt",))
-    for _ in range(24):
-        obs = env.observation_for_player(env.current_agent_index())
-        if any(frame.program for frame in obs.continuation):
-            break
-        decision = capture_text_decision(env)
-        action = next(
-            a
-            for a in decision.actions
-            if a.description.startswith(("Pass priority", "Attack with"))
-        )
-        submit_response(env, decision, action.reference)
-    else:
-        raise AssertionError("Kellan's combat trigger did not reach the stack")
+    env = kellan_trigger_root(("Lightning Bolt",))
     for prefix, name in (("Cast ", "Lightning Bolt"), ("Target ", "Kellan")):
         decision = capture_text_decision(env)
         action = next(
@@ -326,6 +357,10 @@ def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() ->
         encode(_program_rows(1, 1, (0,))),
         encode(_program_rows(1, 1, (-4096,))),
     )
+    assert not torch.allclose(
+        encode(_program_rows(1, 1, (4096,))),
+        encode(_program_rows(1, 1, (8192,))),
+    )
     combined.square().sum().backward()
     assert encoder.program_sequence is not None
     assert encoder.program_sequence.weight_ih_l0.grad is not None
@@ -347,3 +382,92 @@ def test_local_program_rejects_broken_boundaries(malformed: str) -> None:
     encoder = FactEncoder(8, len(rows), kinds=FACT_KINDS_V8)
     with pytest.raises(ValueError, match="fact program"):
         encoder(rows[None], torch.zeros(1, 2, 8))
+
+
+def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients() -> (
+    None
+):
+    torch.set_num_threads(1)
+    torch.manual_seed(17)
+    encoder = SharedEffectEncoder(16, version=8)
+    objects = torch.randn(2, 4, 16, requires_grad=True)
+    headers = torch.zeros(2, 128, 18)
+    details = torch.zeros(2, 4096, 3)
+    members = torch.zeros(2, 2048, 2)
+    # Two independent records with explicit source/controller and target joins.
+    for i in range(2):
+        headers[:, i, 0] = i + 1
+        headers[:, i, 9] = i + 1
+        headers[:, i, 10] = 1
+        headers[:, i, 12] = i + 1
+        headers[:, i, 13:17] = torch.tensor([i * 2, 2, i, 1])
+        headers[:, i, 17] = 1
+        details[:, i * 2 : i * 2 + 2] = torch.tensor([[14, 0, 4096], [14, 0, 3 + i]])
+        members[:, i] = torch.tensor([i + 3, i + 1])
+    expected = encoder(headers, details, members, objects)
+    # Packed programs from different observations have no shared recurrent state.
+    for b in range(2):
+        torch.testing.assert_close(
+            expected[b : b + 1],
+            encoder(
+                headers[b : b + 1],
+                details[b : b + 1],
+                members[b : b + 1],
+                objects[b : b + 1],
+            ),
+        )
+    changed = details.clone()
+    changed[:, 0, 2] = 8192  # same embedding bucket, distinct magnitude
+    actual = encoder(headers, changed, members, objects)
+    assert not torch.allclose(actual[:, 2], expected[:, 2])
+    torch.testing.assert_close(actual[:, 3], expected[:, 3])
+    changed[:, :2] = details[:, :2].flip(1)
+    assert not torch.allclose(encoder(headers, changed, members, objects), expected)
+    for column in (9, 12):  # timestamp and source are strategically meaningful
+        changed_headers = headers.clone()
+        changed_headers[:, 0, column] += 1
+        assert not torch.allclose(
+            encoder(changed_headers, details, members, objects), expected
+        )
+    # Physical record order is immaterial after CSR slices move with the records.
+    swapped = headers.clone()
+    swapped[:, :2] = headers[:, :2].flip(1)
+    swapped[:, :2, 13:17] = headers[:, :2, 13:17]
+    swapped_details = details.clone()
+    swapped_details[:, :4] = details[:, :4].reshape(2, 2, 2, 3).flip(1).reshape(2, 4, 3)
+    swapped_members = members.clone()
+    swapped_members[:, :2] = members[:, :2].flip(1)
+    torch.testing.assert_close(
+        encoder(swapped, swapped_details, swapped_members, objects), expected
+    )
+    # Remap all public object addresses together.
+    remapped = headers.clone()
+    for column in (10, 12):
+        remapped[:, :2, column] = 5 - remapped[:, :2, column]
+    remapped_members = members.clone()
+    remapped_members[:, :2, 0] = 5 - remapped_members[:, :2, 0]
+    torch.testing.assert_close(
+        encoder(remapped, details, remapped_members, objects.flip(1)), expected.flip(1)
+    )
+    # Duplicate targets preserve multiplicity, not a mean over memberships.
+    duplicate_headers = headers.clone()
+    duplicate_headers[:, 1, 17] = 0
+    one = encoder(duplicate_headers, details, members, objects) - objects
+    duplicate_headers[:, 0, 16] = 2
+    duplicate_members = members.clone()
+    duplicate_members[:, 1, 0] = members[:, 0, 0]
+    torch.testing.assert_close(
+        encoder(duplicate_headers, details, duplicate_members, objects) - objects,
+        2 * one,
+    )
+    headers[:, 2:, :17] = float("nan")
+    details[:, 4:] = float("nan")
+    members[:, 2:] = float("nan")
+    torch.testing.assert_close(encoder(headers, details, members, objects), expected)
+    expected.square().sum().backward()
+    assert objects.grad is not None and objects.grad.abs().sum() > 0
+    assert encoder.detail_number.weight.grad is not None
+    assert encoder.detail_number.weight.grad.abs().sum() > 0
+    assert encoder.reducer.gru is not None
+    assert encoder.reducer.gru.weight_ih_l0.grad is not None
+    assert encoder.reducer.gru.weight_ih_l0.grad.abs().sum() > 0

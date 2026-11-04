@@ -23,6 +23,7 @@ from manabot.model.records import (
     RecordReduction,
     join_rows,
     masked_record_rows,
+    program_number,
     record_indexes,
 )
 
@@ -43,6 +44,30 @@ class SharedEffectEncoder(nn.Module):
         self.header = nn.Linear(8 + 2 * width, width)
         self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
 
+    def _route(
+        self,
+        records: list[torch.Tensor],
+        routes: list[torch.Tensor],
+        objects: torch.Tensor,
+    ) -> torch.Tensor:
+        """Reduce independent programs and sum each membership into [N,D] objects."""
+        encoded = self.reducer(records)
+        if self.version >= 8:
+            repeated = torch.repeat_interleave(
+                encoded,
+                torch.tensor([len(route) for route in routes], device=objects.device),
+                dim=0,
+            )
+        else:
+            repeated = torch.cat(
+                [encoded[i].expand(len(route), -1) for i, route in enumerate(routes)]
+            )
+        # Duplicate memberships accumulate; every target's gradient reaches the
+        # same payload. Retained v7 keeps its original expansion and reduction.
+        return objects + torch.zeros_like(objects).index_add(
+            0, torch.cat(routes), repeated
+        )
+
     def forward(
         self,
         headers: torch.Tensor,
@@ -59,6 +84,8 @@ class SharedEffectEncoder(nn.Module):
         ):
             raise ValueError("invalid shared effect buffer shape")
         results = list(objects.unbind(0))
+        all_records: list[torch.Tensor] = []
+        all_routes: list[torch.Tensor] = []
         for b in headers[..., 17].bool().any(-1).nonzero().flatten().tolist():
             live = headers[b, headers[b, :, 17].bool()]
             halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
@@ -116,7 +143,7 @@ class SharedEffectEncoder(nn.Module):
                     signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
                     numeric = ((kinds == 14) | (kinds == 15)).unsqueeze(-1)
                     encoded_details = encoded_details + self.detail_number(
-                        signed.to(objects.dtype).unsqueeze(-1) / 10
+                        program_number(signed.to(objects.dtype)).unsqueeze(-1)
                     ).masked_fill(~numeric, 0)
                 records.append(
                     torch.cat(
@@ -142,14 +169,15 @@ class SharedEffectEncoder(nn.Module):
             orders = torch.cat(member_orders)
             if len(orders.unique()) != len(orders):
                 raise ValueError("duplicate effect membership order")
-            encoded = self.reducer(records)
-            # index_add accumulates duplicate memberships and all target losses
-            # flow through the same encoded payload and shared encoder parameters.
-            repeated = torch.cat(
-                [encoded[i].expand(len(route), -1) for i, route in enumerate(routes)]
-            )
-            delta = torch.zeros_like(objects[b]).index_add(
-                0, torch.cat(routes), repeated
-            )
-            results[b] = objects[b] + delta
+            if self.version >= 8:
+                # Programs remain independent packed sequences. One reduction
+                # across the batch avoids a separate GRU dispatch per sample.
+                all_records.extend(records)
+                all_routes.extend(route + b * objects.shape[1] for route in routes)
+                continue
+            results[b] = self._route(records, routes, objects[b])
+        if self.version >= 8 and all_records:
+            return self._route(
+                all_records, all_routes, objects.flatten(0, 1)
+            ).reshape_as(objects)
         return torch.stack(results)

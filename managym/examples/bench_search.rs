@@ -7,28 +7,19 @@
 //! (`scripts/engine_budget.py`). Run in release:
 //! `cargo run --release --example bench_search --manifest-path managym/Cargo.toml`.
 mod curated;
+#[path = "curated/search.rs"]
+mod search;
 
-use managym::agent::env::{Env, FlatMcResult};
+use search::{best_action, digest_decision};
+
+use managym::agent::env::Env;
 use std::time::Instant;
 
 const WORLDS: usize = 16;
 const ROLLOUTS: usize = 4;
 const MAX_STEPS: usize = 2000;
 const DECISIONS: usize = 40;
-const SEEDS: [u64; 4] = [1, 2, 3, 244];
-
-/// Frame each decision with its action count, simulation count and chosen index,
-/// then hash every score in legal-action order. Fixed-width little-endian words
-/// and IEEE-754 bits avoid platform hashing and decimal rounding. Search-64's
-/// scores are exact multiples of 1/128; no floating-point tolerance is needed.
-fn digest_decision(digest: &mut blake3::Hasher, result: &FlatMcResult, best: usize) {
-    digest.update(&(result.scores.len() as u64).to_le_bytes());
-    digest.update(&result.simulations.to_le_bytes());
-    digest.update(&(best as u64).to_le_bytes());
-    for score in &result.scores {
-        digest.update(&score.to_bits().to_le_bytes());
-    }
-}
+const SEEDS: [u64; 3] = [1, 2, 3];
 
 fn scores_digest(digest: &blake3::Hasher) -> u64 {
     // Keep the budget's integer wire format, using the first 64 BLAKE3 bits.
@@ -36,17 +27,23 @@ fn scores_digest(digest: &blake3::Hasher) -> u64 {
 }
 
 fn main() {
+    let layers = std::env::args().any(|arg| arg == "--layers");
     let mut worst_overall: f64 = 0.0;
     let mut total_overall: f64 = 0.0;
-    for seed in SEEDS {
+    for &seed in if layers { &[244][..] } else { &SEEDS[..] } {
+        #[cfg(feature = "benchmark")]
+        managym::benchmark_layers::reset();
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
-        if seed == 244 {
+        if layers {
             curated::add_layer_board(&mut env);
         }
         let mut replies = Vec::new();
         let mut digest = blake3::Hasher::new();
-        for decision in 0..if seed == 244 { 8 } else { DECISIONS } {
+        let mut simulations = 0;
+        let mut cap_hits = 0;
+        let mut action_counts = Vec::new();
+        for decision in 0..if layers { 8 } else { DECISIONS } {
             let start = Instant::now();
             let result = env
                 .flat_mc_scores(
@@ -57,18 +54,10 @@ fn main() {
                 )
                 .unwrap();
             replies.push(start.elapsed().as_secs_f64());
-            let best = result
-                .scores
-                .iter()
-                .enumerate()
-                .fold((0, f64::NEG_INFINITY), |best, (i, &s)| {
-                    if s > best.1 {
-                        (i, s)
-                    } else {
-                        best
-                    }
-                })
-                .0;
+            simulations += result.simulations;
+            cap_hits += result.cap_hits;
+            action_counts.push(result.scores.len());
+            let best = best_action(&result);
             digest_decision(&mut digest, &result, best);
             let (_, _, terminated, truncated, _) = env.step(best as i64).unwrap();
             if terminated || truncated {
@@ -76,15 +65,26 @@ fn main() {
             }
         }
         let total: f64 = replies.iter().sum();
+        let samples = replies.clone();
         replies.sort_by(f64::total_cmp);
         let worst = *replies.last().unwrap();
         worst_overall = worst_overall.max(worst);
         total_overall += total;
         let scores_digest = scores_digest(&digest);
         println!(
-            "{{\"seed\":{seed},\"decisions\":{},\"worst_s\":{worst:.3},\"median_s\":{:.3},\"total_s\":{total:.3},\"digest\":{scores_digest}}}",
-            replies.len(),
-            replies[replies.len() / 2],
+            "{}",
+            serde_json::json!({
+                "seed": seed, "decisions": replies.len(), "worst_s": worst,
+                "median_s": replies[replies.len() / 2], "total_s": total,
+                "digest": scores_digest, "score_digest_blake3": digest.finalize().to_hex().as_str(),
+                "simulations": simulations, "cap_hits": cap_hits,
+                "action_counts": action_counts, "samples_s": samples,
+            })
+        );
+        #[cfg(feature = "benchmark")]
+        println!(
+            "{}",
+            serde_json::json!({"attribution_seed":seed, "layer_metrics":managym::benchmark_layers::snapshot()})
         );
     }
     println!("{{\"worst_overall_s\":{worst_overall:.3},\"total_overall_s\":{total_overall:.3}}}");
@@ -93,6 +93,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use managym::agent::env::FlatMcResult;
 
     fn result(scores: &[f64]) -> FlatMcResult {
         FlatMcResult {

@@ -39,6 +39,10 @@ required-features = ["benchmark"]
 name = "bench_search"
 test = true
 
+[[example]]
+name = "bench_layers"
+required-features = ["benchmark"]
+
 [dependencies]
 managym-cards = { path = "cards" }
 managym-state = { path = "state" }

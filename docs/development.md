@@ -541,3 +541,54 @@ inventory, migration counts and superseded procedures are in the pinned history:
 [validation](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/development/validation.md),
 [repository archive](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/repository-archive.md),
 [clean-machine play](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/clean-machine-play.md).
+
+### Bounded layer/input attribution
+
+Keep the default `bench_steps` (512 curated games) and `bench_search` (seeds
+1–3, 40 decisions each) separate from added positions. Their `--layers` option
+runs the overlapping-anthem fixture independently. Search receipts retain all
+reply samples, legal-action counts, simulation/cap counts and the full BLAKE3
+score digest, alongside the budget's historical 64-bit digest.
+
+For a genuine same-layer dependency, build and run the optional fixture:
+
+```bash
+cargo build --release -j 2 --manifest-path managym/Cargo.toml --features benchmark --example bench_layers
+managym/target/release/examples/bench_layers
+managym/target/release/examples/bench_layers --allocations
+```
+
+It asserts Moon/Urborg's dependency before 16 bounded games and eight Search-64
+replies. `--probe-only` limits execution to eight isolated pool writes and eight
+taps on cloned warmed boards. These probes use the production typed accessors;
+whole payment/action costs remain in the game traces. `benchmark` enables
+inclusive board/dependency/clone timers and counts; allocation traffic is measured
+in the separate `--allocations` run. Never sum overlapping timers or compare a
+counting run with an ordinary timing run. The fixture changes two physical cards
+locally, not the public catalog or frozen worlds. Older engines that fail the
+asserted dependency are not correctness-equivalent timing comparators.
+
+Full-policy input cost uses the actual baseline recipe's width-64, depth-2 model
+on CPU float32, one thread, batch 16, two warmups and eight measured calls:
+
+```bash
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 6 --state ordinary
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 7 --state ordinary
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 8 --state ordinary
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 6 --state shared
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 7 --state shared
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 8 --state shared
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 8 --state program
+```
+
+Run these sequentially on an otherwise idle runner. Receipts include each sample,
+model/input configuration, native/Python encoding parity, live detail/fact counts,
+observation and batch bytes, parameter bytes and process peak RSS. Programs include
+Kellan's live grant and captured combat trigger; `shared` uses a resolved Drill
+activation representable by all three inputs. No optimizer update or training
+experiment runs. Peak RSS includes imports and warmups, not just model allocator
+usage. CPU calls need no accelerator synchronization; these measurements establish
+neither accelerator performance nor learning efficacy. Clean comparative latency
+and the existing 10% Engine Budget remain required for performance acceptance.
+Use `--inventory` for parity, occupancy and storage counts without policy execution
+or timings when the host is busy; its process RSS covers construction only.

@@ -84,6 +84,9 @@ pub(super) struct LayerObject {
 pub(super) struct Context<'a> {
     game: &'a Game,
     pub objects: BTreeMap<PermanentId, LayerObject>,
+    /// Includes conditional nodes discovered in any layer, even when an earlier
+    /// condition short-circuits or a dependency later removes their source.
+    pub reads_mana: bool,
 }
 
 /// An effect keeps one identity across layers. `targets` is populated on its
@@ -181,9 +184,15 @@ fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
 
 impl<'a> Context<'a> {
     pub fn evaluate(game: &'a Game) -> Self {
+        #[cfg(feature = "benchmark")]
+        let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
+            m.boards += 1;
+            m.board_ns += ns;
+        });
         let mut context = Self {
             game,
             objects: BTreeMap::new(),
+            reads_mana: false,
         };
         let mut nodes = Vec::new();
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
@@ -285,6 +294,10 @@ impl<'a> Context<'a> {
                     for entry in &object.statics {
                         if known.insert(entry.key.clone()) {
                             if let Some(node) = context.node(id, entry) {
+                                context.reads_mana |= node
+                                    .condition
+                                    .as_ref()
+                                    .is_some_and(Condition::reads_mana_pools);
                                 nodes.push(node);
                             }
                         }
@@ -369,13 +382,30 @@ impl<'a> Context<'a> {
             return (0..pending.len()).min_by_key(timestamp_order).unwrap();
         }
         let mut dependencies = vec![vec![false; pending.len()]; pending.len()];
+        #[cfg(feature = "benchmark")]
+        let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
+            m.dependency_passes += 1;
+            m.dependency_ns += ns;
+        });
         for (b, &index) in pending.iter().enumerate() {
-            let mut after = self.clone();
+            let mut after = {
+                #[cfg(feature = "benchmark")]
+                let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
+                    m.contexts_cloned += 1;
+                    m.clone_ns += ns;
+                });
+                self.clone()
+            };
             after.apply(&nodes[index], &instructions[b]);
             for (a, &other) in pending.iter().enumerate() {
                 if a != b && nodes[other].cda == nodes[index].cda {
                     dependencies[a][b] = self.exists(&nodes[other]) != after.exists(&nodes[other])
                         || instructions[a] != after.instructions(&nodes[other], layer);
+                    #[cfg(feature = "benchmark")]
+                    crate::benchmark_layers::record(|m| {
+                        m.comparisons += 1;
+                        m.edges += u64::from(dependencies[a][b]);
+                    });
                 }
             }
         }

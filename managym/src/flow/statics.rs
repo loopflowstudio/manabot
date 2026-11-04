@@ -111,9 +111,15 @@ impl Characteristics {
 #[derive(Clone, Default)]
 pub(crate) struct DerivedCache {
     revisions: Revisions,
-    board: Option<Arc<BTreeMap<PermanentId, Arc<Characteristics>>>>,
+    board: Option<Arc<LayerBoard>>,
     characteristics: BTreeMap<PermanentId, Arc<Characteristics>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
+}
+
+#[derive(Debug, PartialEq)]
+struct LayerBoard {
+    objects: BTreeMap<PermanentId, Arc<Characteristics>>,
+    reads_mana: bool,
 }
 impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,14 +128,24 @@ impl std::fmt::Debug for DerivedCache {
 }
 impl DerivedCache {
     pub(super) fn at(&mut self, revisions: Revisions) -> &mut Self {
-        if self.revisions.characteristics != revisions.characteristics
-            || self.revisions.mana_pools != revisions.mana_pools
+        let mana_changed = self.revisions.mana_pools != revisions.mana_pools;
+        #[cfg(feature = "benchmark")]
+        if mana_changed {
+            crate::benchmark_layers::record(|m| m.mana_invalidations += 1);
+        }
+        let characteristics_changed = self.revisions.characteristics != revisions.characteristics;
+        if characteristics_changed
+            || (mana_changed && self.board.as_ref().is_some_and(|board| board.reads_mana))
         {
             self.board = None;
-            self.characteristics.clear();
-            self.trigger_index = None;
         }
-        if self.revisions.triggers != revisions.triggers {
+        // Activation finalization can read mana even when layers do not.
+        // Triggers conservatively refresh against the finalized abilities.
+        if characteristics_changed || mana_changed {
+            self.characteristics.clear();
+        }
+        if characteristics_changed || mana_changed || self.revisions.triggers != revisions.triggers
+        {
             self.trigger_index = None;
         }
         self.revisions = revisions;
@@ -137,14 +153,18 @@ impl DerivedCache {
     }
 }
 impl Game {
-    fn compute_board(&self) -> BTreeMap<PermanentId, Arc<Characteristics>> {
-        Context::evaluate(self)
-            .objects
-            .into_iter()
-            .map(|(id, object)| (id, Arc::new(object.view)))
-            .collect()
+    fn compute_board(&self) -> LayerBoard {
+        let context = Context::evaluate(self);
+        LayerBoard {
+            reads_mana: context.reads_mana,
+            objects: context
+                .objects
+                .into_iter()
+                .map(|(id, object)| (id, Arc::new(object.view)))
+                .collect(),
+        }
     }
-    fn layer_board(&self) -> Arc<BTreeMap<PermanentId, Arc<Characteristics>>> {
+    fn layer_board(&self) -> Arc<LayerBoard> {
         let revisions = self.state.revisions();
         let cached = self.derived.borrow_mut().at(revisions).board.clone();
         if let Some(board) = cached {
@@ -156,7 +176,11 @@ impl Game {
         board
     }
     pub(super) fn layer_view(&self, id: PermanentId) -> Arc<Characteristics> {
-        self.layer_board().get(&id).cloned().unwrap_or_default()
+        self.layer_board()
+            .objects
+            .get(&id)
+            .cloned()
+            .unwrap_or_default()
     }
     pub fn characteristics(&self, id: PermanentId) -> Arc<Characteristics> {
         let revisions = self.state.revisions();
@@ -169,13 +193,13 @@ impl Game {
             .cloned();
         if let Some(view) = cached {
             debug_assert_eq!(
-                *view,
+                view,
                 self.compute_characteristics(id),
                 "stale characteristics"
             );
             return view;
         }
-        let view = Arc::new(self.compute_characteristics(id));
+        let view = self.compute_characteristics(id);
         self.derived
             .borrow_mut()
             .at(revisions)
@@ -183,13 +207,18 @@ impl Game {
             .insert(id, view.clone());
         view
     }
-    fn compute_characteristics(&self, id: PermanentId) -> Characteristics {
-        let mut view = (*self.layer_view(id)).clone();
+    fn compute_characteristics(&self, id: PermanentId) -> Arc<Characteristics> {
+        let mut view = self.layer_view(id);
+        // Only activations need finalization. Every other view is already
+        // complete and can share the board's immutable allocation across reads.
+        if view.activated_abilities.is_empty() {
+            return view;
+        }
         let Some(permanent) = self.state.permanents.get(id.0).and_then(Option::as_ref) else {
             return view;
         };
         let purpose = ManaUse::ability(view.subtypes.iter().map(String::as_str));
-        for ability in &mut view.activated_abilities {
+        for ability in &mut Arc::make_mut(&mut view).activated_abilities {
             if let [effect] = ability.effects.as_slice() {
                 if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
                     ability.effects = vec![effect];
@@ -269,6 +298,7 @@ impl Game {
 
     pub(crate) fn static_sources(&self) -> Vec<(PermanentId, PlayerId, Arc<Characteristics>)> {
         self.layer_board()
+            .objects
             .iter()
             .filter(|(_, view)| !view.static_abilities.is_empty())
             .map(|(&id, view)| {
@@ -626,5 +656,91 @@ impl Game {
             return true;
         }
         permanent.damage >= characteristics.toughness
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use crate::state::{
+        ability::Effect,
+        card::{LayerValue, StaticContinuous},
+        effect::{EffectDuration, Modification},
+        mana::Mana,
+        player::PlayerConfig,
+    };
+
+    #[test]
+    fn mana_revision_reuses_independent_board_but_reprices_dynamic_outputs() {
+        let deck = [("Mountain".into(), 24), ("Gray Ogre".into(), 16)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        let id = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let raw = game.layer_view(id);
+        assert!(Arc::ptr_eq(&raw, &game.characteristics(id)));
+        *game.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R");
+        assert!(Arc::ptr_eq(&raw, &game.characteristics(id)));
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
+                effects: vec![Effect::If {
+                    condition: Condition::UnspentManaAtLeast { count: 2 },
+                    then: vec![Effect::add_mana(Mana::parse("RR"))],
+                    otherwise: vec![Effect::add_mana(Mana::parse("R"))],
+                }],
+                ..Default::default()
+            })),
+            EffectDuration::Indefinite,
+        );
+        let board = game.layer_board();
+        let before = game.characteristics(id);
+        let mut branch = game.clone();
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR");
+        let after = branch.characteristics(id);
+        assert!(Arc::ptr_eq(&board, &branch.layer_board()));
+        assert_ne!(before.activated_abilities, after.activated_abilities);
+        assert_eq!(
+            game.characteristics(id),
+            before,
+            "clone owns its mana and finalized view"
+        );
+
+        // A granted static whose nested condition reads mana must invalidate
+        // layers, including when the condition was previously false.
+        let affected = branch.affected_permanent(id).unwrap();
+        branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::AnyOf(vec![Condition::UnspentManaAtLeast {
+                    count: 3,
+                }])),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(2),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(branch.characteristics(id).pt(), (2, 2));
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR");
+        assert_eq!(branch.characteristics(id).pt(), (4, 4));
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default();
+        assert_eq!(branch.characteristics(id).pt(), (2, 2));
     }
 }

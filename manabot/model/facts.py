@@ -36,6 +36,7 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
 )
+from manabot.model.records import program_number
 
 
 class FactEncoder(nn.Module):
@@ -122,7 +123,9 @@ class FactEncoder(nn.Module):
         token_kind = rows[:, FACT_VALUE_INDEX]
         # TokenKind Integer (4) and Boolean (5) retain their numeric value.
         number = torch.where((token_kind == 4) | (token_kind == 5), signed, 0)
-        tokens = hidden[program] + self.program_numeric(number.unsqueeze(-1))
+        tokens = hidden[program] + self.program_numeric(
+            program_number(number).unsqueeze(-1)
+        )
         packed, _ = self.program_sequence(
             pack_sequence(list(tokens.split(lengths)), enforce_sorted=False)
         )
