@@ -16,12 +16,12 @@ before scoring and three restart admissions were unsuccessful. No replacement
 scientific cohort has launched. At the last retained provider read, all five
 relevant Vast instances were absent. No allocation is selected until accounting
 is reconciled and a complete two-arm admission demonstrates affordability.
-The current Graph step is compression, not another rental attempt.
+Reconciled against implementation and retained receipts on 2026-11-04;
+20:00 UTC accounting investigation is recorded below.
 
 Stop at results demo/review. No study merge, model/default promotion, temporal
 memory implementation or MTG-213 spending is approved. The repair's earlier
-“ship it” approval applied to PR419 only. Use the installed
-`/Applications/Loopflow.app/Contents/MacOS/lf` for Work commands.
+“ship it” approval applied to PR419 only.
 
 ## Surviving implementation and next proof
 
@@ -42,9 +42,10 @@ keep the authored Allies/Lessons population and other treatment dimensions
 fixed. No score selected this candidate, and lost admission output does not
 establish its speed, memory sufficiency or affordability.
 
-Before scientific execution:
+Remaining work before scientific execution:
 
-1. Reconcile bills/reservations and quote the entire proposed arrangement,
+1. Reconcile bills/reservations, release superseded unspent caps only against
+   authoritative settlement, and quote the entire proposed arrangement,
    including setup, idle time, evaluation, artifacts, failures and cleanup.
 2. Complete both ordinary admission learners. Measure their combined wall time,
    including startup and exports; project four paired seeds at the full horizon
@@ -52,7 +53,12 @@ Before scientific execution:
    Do not divide sequential time by assumed concurrency. Spare GPU memory does
    not prove compute throughput. No artificial load or automatic eight-context
    retry; MPS was investigated but neither enabled nor validated.
-3. Freeze affordable execution and scoring prospectively. Retain independent
+3. Implement the replacement scientific orchestration after admission. Current
+   `runs()`/`worker()` execute only admission; recipes, evaluation protocols and
+   `plateau()` exist, but no current entry point trains the eight scientific
+   learners, exports their curve checkpoints, or executes their evaluations.
+   This is substantial remaining implementation, not a launch-command choice.
+   Freeze affordable execution and scoring prospectively. Retain independent
    RNG/optimizers, initialization and 32-update curve checkpoints, separate
    final held-out deals, actual game/decision/optimizer exposure and uncertainty.
    Both arms' final three paired-seed gain intervals must each fit within
@@ -68,6 +74,9 @@ credentials use Doppler `etude/prd`, artifacts `manabot/prd`; nested injection
 supplies both without copying or printing keys. Task-local allocations remain
 separate from MTG-213. Frozen protocol and amendments:
 `experiments/protocols/state-representation-5da5f4-gpu.md`.
+Its original 32-stream/eight-process sections describe source `27a126422`;
+the later batched amendment describes the current candidate. The old allocation
+and seed IDs are not instructions for the current executable.
 
 ## Attempt denominator and accounting (2026-11-04 UTC)
 
@@ -98,8 +107,35 @@ admission $0.1146496; scientific cohort $0.15609933786798355; restart attempts
 $0.0187264764, $0.0581526294 and $0.0285087767. Billed-plus-estimated provider
 total: $0.4487194142. The $6 ancillary reserve remains pending. Conservative
 reservations, including prior unspent caps, total $24.9725825939: this is NOT
-money spent or proof that the scientific budget is consumed. Provider absence
-is not final invoicing. No further rental fits those unreconciled reservations.
+money spent or proof that the scientific budget is consumed.
+
+Fresh accounting investigation, 2026-11-04 19:55–19:57 UTC: all five provider
+instances remain absent and all five Etude runs are terminal. Released Etude
+0.2.14 returns no bills, but the authenticated full-UTC-day `/api/v0/charges`
+query returns all five Task rows (pagination exhausted). In table order above,
+reported charges are $0.168, $0.164, $0.003, $0.042 and $0.021: $0.398 total,
+or $0.47058259388618171 including the settled L4 bill. This is current provider
+charge evidence, not the earlier $0.4487194142 lifetime estimate and not final
+settlement. Both 5090 charges exceed their earlier lifetime estimates.
+
+The SDK has a reproducible query/coverage defect: `VastAPI.bill` starts its
+`day` filter at the instance's intra-day creation timestamp. Actual charge rows
+have `start == end == 1793750400` (UTC midnight on November 4), so that filter
+misses them. Even supplying the nonempty row through an offline transport returns
+`None`, because the coverage guard requires `instance.start_date < row.end`.
+The provider's [charge API](https://docs.vast.ai/api-reference/billing/show-charges)
+documents a UTC date-range query and per-contract GPU/disk/bandwidth charges;
+these daily dates cannot be treated as exact settled-through timestamps.
+
+Required settlement evidence is still missing: no charge finalization marker
+or authoritative coverage through teardown was supplied. Reservation release is
+$0, leaving $0.0274174061 unreserved; the $0.20 admission cannot be allocated.
+The dependency is Etude/provider billing reconciliation with correct daily
+semantics, not another approval or an architecture choice. Do not manufacture
+coverage or release the $17.20 cancelled-cohort reservation from these partial
+records. No new paid work or scientific score ran in this pass. Evidence and
+the offline reproduction are published in the `reconciliation/` artifact directory;
+prior `restart/final-accounting.json` and all failed receipts remain unchanged.
 
 Manifest-backed evidence: `experiments/data/state-representation-gpu-5da5f4/`,
 including `restart/`, compact receipts, all attempt inventories, quotes and final
@@ -132,31 +168,30 @@ limit inference. Full report/protocol/receipts remain in
 `experiments/state-representation-v7.md` and
 `experiments/data/state-representation-v7-5da5f4/`.
 
-Main sync `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` preserves main's catalog,
-scheduling/delayed-frequency relations, configurable cards and v5 pilot. It is
-not the scientific runtime. Pin original CPU recipe axes (64 actions); smoke
-uses today's native 512 actions. The earlier default drift changed both recipe
+Main sync `94b5bd38cabc44efe4b28afe9b8bdadff9e7baa3` integrates T7 at
+`4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`, following T6's catalog,
+scheduling/delayed-frequency relations, configurable cards and v5 pilot. T7
+adds player-control relation kinds 13/14 without widening columns; published
+`ActionSpace.player` owns the chooser and native inspection owns visibility.
+These upstream rules changes do not refresh scientific evidence. A replacement
+must pin and admit its actual source/native runtime; no unchanged-world claim
+follows from unchanged recipe hashes. Original CPU recipe axes remain pinned
+(64 actions); smoke uses today's native 512 actions. The earlier default drift changed both recipe
 hashes despite passing discovery checks; regression hashes and eight-endpoint
 read-only admission now protect retained identities. Re-execution needs archived
 source/native runtime, not rewritten evidence.
 
 ## Delete — do not maintain
 
-Completed removals: old v5 declaration/three-arm timing proof and canary launcher;
-unexecuted per-replicate GPU allocation; failed eight-context launcher, 10% CUDA
-cap, 20-hour allocation and exclusive evaluator orchestration. Source for the
-executed GPU predecessor is `27a126422`; CPU predecessor proofs are at `9dc32125f`.
-Native `source_effect_root`/`shared_effect_root` fixtures remain shared test inputs.
+No remaining deletion targets. Do not restore the failed eight-context launcher
+(`27a126422`) or the v5 three-arm timing/canary paths (`9dc32125f`); archived
+executions use their pinned source. The native `source_effect_root` and
+`shared_effect_root` fixtures still serve transport/model tests.
 
-Removed the leftover `_batch` multi-child supervisor and its sibling-failure test:
-the surviving sequential admission owns one child at a time, preserving deadline,
-stop, terminate/kill/reap, logs and exit receipts. Reused `ArmEvaluation` instead
-of the identical `CurvePoint` model; compute protocol/recipe identities once per
-analysis. Combined duplicate job-discovery checks. Removed the superseded
-`scratch/concept-review.html`; its CPU-only review choices and accounting are
-archived at `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/concept-review.html`.
-No remaining deletion targets after this cut. Scientific recipe/protocol hashes
-and all existing receipt bytes remain unchanged.
+The sequential admission owns one child and its deadline, stop, reap, log and
+exit receipt. `ArmEvaluation.score_for` owns complete-row and protocol/recipe
+admission for both analyses; each analysis owns its seed/update schedule and
+duplicate detection. Frozen identities and retained receipt bytes stay unchanged.
 
 ## Deferred questions and evidence references
 
@@ -181,4 +216,8 @@ No uncommitted evidence was discarded. Earlier publication validation and receip
 hash audits remain in that committed plan; gate owns broader acceptance and
 results demo/review owns scientific judgment. No rendering proof is claimed.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` → 15 passed before the final failed-start receipt check; rerunning the study module → 12 passed (four discovery passes reused). Ruff/format, `git diff --check` and `lf context` passed; read-only audits preserved GPU recipe/scoring identities, matched all 865 added artifact hashes/sizes and all 11,117 prior manifest entries. Gate owns broader suites; actual GPU admission/plateau execution remains outstanding, with no rental launched in this step.
+Historical validation: `c23aacd8f95f5cea16301653fd05df72ff3156cf:scratch/representation-learning-plan.md`.
+The manifest-backed `reconciliation/` evidence includes the offline Etude billing
+reproduction; runtime admission and scientific execution await settlement.
+
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` — 16 passed; read-only analysis reproduced all eight retained CPU endpoints exactly and rejected missing, duplicate, incomplete and wrong-identity inputs; Ruff and `git diff --check` passed. Gate owns broader acceptance; settlement and two-arm GPU admission remain prerequisites for scientific execution.

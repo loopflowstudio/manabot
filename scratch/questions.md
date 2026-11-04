@@ -7,18 +7,25 @@
   demo/review; no merge, model/default promotion or MTG-213 funds are approved.
 - Current outcome: cancelled eight-learner science and three unsuccessful restart
   admissions; no replacement scientific cohort or plateau. All five Vast rentals
-  were absent at the last retained read. Known/estimated provider total is
-  $0.4487194142; bills and $6 ancillary reserve remain unsettled. Conservative
-  reservations total $24.9725825939, not spending. Reconcile before allocating.
+  remain absent at the 19:55 UTC read. Full-day Vast charge records report
+  $0.398, or $0.4705825939 including the settled L4 bill; these supersede the
+  $0.4487194142 estimate as current reported charges, not final settlement.
+  Etude 0.2.14 incorrectly filters/interprets daily billing timestamps; offline
+  replay reproduces its missing-bill result. No final coverage is established.
+  Reservations remain $24.9725825939 including $6 ancillary, leaving $0.0274;
+  no new $0.20 admission fits until authoritative settlement permits release.
   Exact attempt denominator, evidence and remaining work are in
   [the plan](representation-learning-plan.md).
 - Operator batching assumption: 256 streams changes optimization, so it needs
   fresh paired seeds and a prospective identity, preserving the 65,536-game
   horizon and schedule by exposure. No admission score selects a treatment.
   The last machine loss establishes neither OOM nor batching affordability.
-- Compression assumption: remove obsolete concurrent-child machinery because
-  the selected admission is sequential; preserve child lifecycle/receipts,
-  scientific identities and frozen evidence. No new rental is part of this step.
+- Reconciliation (2026-11-04): the current executable supplies admission and
+  analysis only. Replacement scientific orchestration remains implementation
+  work after accounting and measured affordability; no architecture decision
+  follows from the CPU endpoint or partial GPU attempts. T7's merged rules and
+  chooser changes require prospective source/native admission, not relabeling
+  earlier receipts. No new product decision is required for that authorized work.
 - Broader history/memory, relation splitting and semantic coalescing remain
   deferred. MTG-240 owns the separate keyword timestamp defect; it does not
   justify deleting effect records. The plan retains the required counterexamples

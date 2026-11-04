@@ -190,6 +190,23 @@ class ArmEvaluation(BaseModel):
     arm: Arm
     result: MonitorResult
 
+    def score_for(self, protocol: MonitorProtocol, regime_digest: str) -> float:
+        """Recompute complete retained rows before admitting a study's identity.
+
+        Endpoint and curve analyses share this check; each owns its seed/update
+        schedule and duplicate detection.
+        """
+        result = self.result
+        result.validate_cohort()
+        if (
+            result.status != "completed"
+            or result.score is None
+            or result.protocol != protocol
+            or result.regime_digest != regime_digest
+        ):
+            raise ValueError("evaluation is incomplete or outside the frozen cohort")
+        return result.score.mean
+
 
 @dataclass(frozen=True)
 class PairedEstimate:
@@ -227,20 +244,11 @@ def compare(results: list[ArmEvaluation]) -> PairedEstimate:
     for item in results:
         result = item.result
         key = item.arm, result.training_seed
-        result.validate_cohort()
-        if (
-            key not in expected
-            or key in found
-            or result.status != "completed"
-            or result.protocol != protocol
-            or result.score is None
-            or result.regime_digest != recipe_digests[item.arm]
-            or result.coordinates.updates != UPDATES
-        ):
+        if key not in expected or key in found or result.coordinates.updates != UPDATES:
             raise ValueError(
                 "evaluation is duplicate, incomplete or outside the frozen cohort"
             )
-        found[key] = result.score.mean
+        found[key] = item.score_for(protocol, recipe_digests[item.arm])
     if set(found) != expected:
         raise ValueError("every declared arm and independent seed must be present")
     return paired_interval(

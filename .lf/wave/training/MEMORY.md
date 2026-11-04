@@ -38,7 +38,9 @@ within one observation and carries no game memory. Original v5 three-arm
 calibration remains v5 evidence. MTG-213 v4 subsequently passed v7 CUDA
 admission but failed collection before learning at a separate card-object
 capacity boundary. The separate representation study later completed eight CPU
-replicates; it establishes no v7 GPU learner update or MTG-213 result.
+replicates; those CPU receipts establish no GPU update or MTG-213 result.
+Later representation-only GPU admissions and a cancelled cohort did execute
+learner updates, as recorded below; they establish no complete comparison.
 Active-byte reduction does not imply padded-memory savings: default v7
 effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
 
@@ -65,7 +67,7 @@ initialization. Two balanced concurrent CPU batches also limit isolated speed
 claims. Hardware refusals and excluded calibrations remain in the attempt ledger.
 
 The deleted L4 calibration's provider bill is $0.07258259388618171, superseding
-the $0.07083924 estimate. The continuation acquired no rental; the $6 ancillary
+the $0.07083924 estimate. The CPU continuation acquired no rental; the $6 ancillary
 reserve remains pending invoices. These are retained accounting/teardown receipts,
 not a fresh provider inventory. Scientific evidence is published under
 `experiments/data/state-representation-v7-5da5f4/`, with its report and frozen
@@ -73,7 +75,38 @@ protocol in `experiments/`. The maintained runner's rename to
 `state_representation_v7.py` does not change its archived scientific source.
 Subsequent main catalog, rules and relation changes are not evidence about that
 frozen runtime. Results require demo/review; the repair's ship approval does not
-authorize automatic study promotion or additional training.
+authorize automatic study promotion. Jack Heart subsequently authorized longer
+GPU training and a viable restart within the ORIGINAL cumulative $25, including
+a necessary Etude SDK release and Vast use (2026-11-04). That direction supersedes
+the earlier no-further-training boundary, not the cap or results-review boundary.
+Etude 0.2.14 supplies the launcher capability; its identity remains separate from
+the locked 0.2.12 worker. No study merge, default/model promotion or MTG-213 spending
+is authorized.
+
+The first GPU admission completed four GRU updates, but the eight-learner
+scientific cohort `9c7c8e6841a4` was cancelled before scoring. Its first updates
+took 169–239 seconds versus the allocation's required 32.23 seconds/update;
+the isolated admission's 19.30 seconds/update did not predict aggregate pace.
+Memory headroom does not establish concurrent compute capacity. Three restart
+admissions then failed: startup loss; a pooled learner paused at 7/8 updates;
+and a 256-stream learner lost without a final output inventory. The last loss
+establishes neither zero exposure nor OOM. No complete two-arm throughput
+admission or replacement scientific cohort exists, and plateau remains unmet.
+
+Retained accounting at 2026-11-04 19:42:35 UTC confirms all five relevant Vast
+instances absent, with $0.4487194142 billed-plus-estimated provider cost. Vast
+bills and the $6 ancillary reserve remain unsettled. Conservative reservations
+of $24.9725825939 are not expenditure or proof that the allowance is consumed;
+they need reconciliation before another allocation. Evidence is manifest-backed
+under `experiments/data/state-representation-gpu-5da5f4/`, including `restart/`.
+
+Wider complete-game batches change gradient estimates and optimizer exposure;
+they require a prospective identity and fresh paired seeds, even at a matched
+65,536-game horizon. Schedule progress can follow game exposure without implying
+equivalent optimization. Admission must measure both arms' total elapsed time,
+including startup/exports, before projecting cohort cost. Preserve failed attempts,
+initialization, complete periodic evaluation, separate final scoring and explicit
+uncertainty; a noisy flat curve or poor flat play is not evidence of competence.
 
 Pin executed recipe capacities independently of fresh defaults. The main sync
 raised default `max_actions` from 64 to 512 and silently changed this study's

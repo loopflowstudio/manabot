@@ -324,18 +324,10 @@ def plateau(points: list[ArmEvaluation]) -> PlateauResult:
     scores: dict[tuple[Arm, int, int], float] = {}
     for item in points:
         result = item.result
-        result.validate_cohort()
         key = item.arm, result.training_seed, result.coordinates.updates
-        if (
-            key in scores
-            or key not in expected
-            or result.status != "completed"
-            or result.score is None
-            or result.protocol != protocol
-            or result.regime_digest != recipe_digests[item.arm]
-        ):
-            raise ValueError("incomplete, duplicate or undeclared curve point")
-        scores[key] = result.score.mean
+        if key in scores or key not in expected:
+            raise ValueError("duplicate or undeclared curve point")
+        scores[key] = item.score_for(protocol, recipe_digests[item.arm])
     if set(scores) != expected:
         return PlateauResult(False, len(scores), len(expected))
     intervals: list[PlateauInterval] = []
