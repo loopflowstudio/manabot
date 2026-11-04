@@ -2,6 +2,26 @@
 
 ## Current authorization and outcome
 
+Latest dependency direction, Jack Heart, 2026-11-04: switch Manabot to Etude's
+current source rather than requiring SDK releases. Use a Git-main uv source,
+lock its resolved commit for reproducible local/remote runs, and document the
+explicit refresh command. Reconcile all duplicated release pins and extras;
+validate isolated Etude/artifact integration and remote source accessibility.
+Preserve historical experimental locks and evidence. Source consumption does
+not publish the local Etude billing patch or resolve its settlement limitation.
+The live implementation owns this dependency change as part of the continuation.
+The four base/extras/play-runtime pins now use valid `>=0.2.14` package metadata.
+`tool.uv.sources` selects public Git main; `uv.lock` pins
+`64e9eaabf016f567cb9567280bcf8730f6f5d524`, the merged Etude PR82 billing repair.
+The registry-only lock entry is removed. `uv lock --upgrade-package etude-sdk`
+then `uv sync --locked` is the explicit update workflow, documented in
+`docs/development.md` and `docs/training.md`; no in-run branch resolution occurs.
+Anonymous Git access, installed launcher identity, a clean archive-style locked
+worker-dependency install and offline re-sync all agree on that commit. Linux
+locked dependency resolution passed as a dry-run only; no remote GPU or Linux
+native execution is claimed. Installed package metadata remains a normal index
+requirement. Historical source locks and receipts remain frozen.
+
 Jack Heart requested actual GPU learning to the beginning of a sustained plateau
 on 2026-11-04; the completed 128-update CPU comparison is insufficient for
 architecture selection. His subsequent “start it when you can” and “seems fine”
@@ -16,8 +36,11 @@ before scoring and three restart admissions were unsuccessful. No replacement
 scientific cohort has launched. At the last retained provider read, all five
 relevant Vast instances were absent. No allocation is selected until accounting
 is reconciled and a complete two-arm admission demonstrates affordability.
-Reconciled against implementation and retained receipts on 2026-11-04;
-20:00 UTC accounting investigation is recorded below.
+Reconciled against implementation and retained receipts on 2026-11-04.
+The latest accounting evidence is the repaired SDK read at 20:10 UTC below.
+Daily-charge retrieval now works; authoritative coverage through teardown is
+still unavailable. That external evidence, not product approval or another
+unchanged query, is required before releasing reservations.
 
 Stop at results demo/review. No study merge, model/default promotion, temporal
 memory implementation or MTG-213 spending is approved. The repair's earlier
@@ -44,9 +67,15 @@ establish its speed, memory sufficiency or affordability.
 
 Remaining work before scientific execution:
 
-1. Reconcile bills/reservations, release superseded unspent caps only against
-   authoritative settlement, and quote the entire proposed arrangement,
-   including setup, idle time, evaluation, artifacts, failures and cleanup.
+1. Obtain provider-confirmed final GPU, disk and bandwidth totals covering each
+   of the five contracts through its retained `ended_at`. The repaired SDK read
+   in `reconciliation-repaired/accounting.json` returns daily totals but no such
+   coverage. Stop paid execution until that evidence exists; do not repeat the
+   unchanged query or treat an SDK release as settlement. Reconcile against
+   `restart/final-accounting.json` and both reconciliation receipts, release
+   superseded unspent caps only against authoritative settlement, then quote the
+   entire arrangement including setup, idle time, evaluation, artifacts,
+   failures and cleanup.
 2. Complete both ordinary admission learners. Measure their combined wall time,
    including startup and exports; project four paired seeds at the full horizon
    with 50% extrapolation allowance, 90 minutes evaluation and 15 minutes setup.
@@ -68,8 +97,9 @@ Remaining work before scientific execution:
 4. Retain every attempt, supervised deadlines, complete teardown and costs.
    If capacity or budget prevents a credible plateau, report it as unmet.
 
-`execute_regime` owns learning; existing monitoring owns evaluation. The released
-0.2.14 launcher and locked 0.2.12 worker have distinct identities. Provider
+`execute_regime` owns learning; existing monitoring owns evaluation. Earlier attempts used a released
+0.2.14 launcher and locked 0.2.12 worker; those identities remain historical.
+Future jobs prepared from this branch use the exact Etude Git commit in its lock. Provider
 credentials use Doppler `etude/prd`, artifacts `manabot/prd`; nested injection
 supplies both without copying or printing keys. Task-local allocations remain
 separate from MTG-213. Frozen protocol and amendments:
@@ -137,6 +167,32 @@ records. No new paid work or scientific score ran in this pass. Evidence and
 the offline reproduction are published in the `reconciliation/` artifact directory;
 prior `restart/final-accounting.json` and all failed receipts remain unchanged.
 
+SDK repair and single follow-up read, 2026-11-04 20:10 UTC: Etude source
+`109fa4128052972699ec2a63fba5a3958fac430f` replaces the erroneous
+`VastAPI.bill` conversion with `VastAPI.charges`. The query includes the creation
+UTC day; typed results carry inclusive dates and observed time, never a fabricated
+settled-through timestamp. `VastMachines.bill` returns no settled coverage.
+The five Task contracts report $0.168/$0.164/$0.003/$0.042/$0.021, unchanged at
+$0.398, and all five remain absent. Including the settled L4 gives
+$0.47058259388618171 reported plus settled, not final expenditure. Reservations
+remain $24.97258259388618171 and released dollars remain zero. No rental,
+scientific implementation/launch or score followed the blocked accounting gate.
+
+The exact missing evidence is a provider-confirmed final GPU, disk and bandwidth
+total with coverage through each retained teardown timestamp (17:36:17,
+18:29:35, 19:11:26, 19:27:24 and 19:41:03 UTC). UTC dates, instance absence,
+pagination exhaustion and repeated identical totals do not establish it. The
+provider's documented charge API exposes no finalization watermark. Per the
+iteration boundary, execution stops here without polling unchanged charges.
+The SDK repair landed as [Etude PR82](https://github.com/loopflowstudio/etude/pull/82)
+at `64e9eaabf016f567cb9567280bcf8730f6f5d524`, after local, PR and merge-queue
+checks. Its tree matches the repaired source used for the accounting read.
+The dependency clone is under this checkout; other Etude checkouts remain
+unchanged. The SDK patch and read-only source remain with the reconciliation
+evidence. Jack Heart's subsequent source-consumption direction is implemented
+above; no PyPI release is needed or claimed. Source tracking cannot supply the
+missing provider coverage, and no new scientific attempt was launched.
+
 Manifest-backed evidence: `experiments/data/state-representation-gpu-5da5f4/`,
 including `restart/`, compact receipts, all attempt inventories, quotes and final
 accounting. The first cohort inventory names/hashes 116 outputs. Operational
@@ -181,10 +237,16 @@ hashes despite passing discovery checks; regression hashes and eight-endpoint
 read-only admission now protect retained identities. Re-execution needs archived
 source/native runtime, not rewritten evidence.
 
-## Delete — do not maintain
+## Retired implementation and surviving ownership
 
-No remaining deletion targets. Do not restore the failed eight-context launcher
-(`27a126422`) or the v5 three-arm timing/canary paths (`9dc32125f`); archived
+Delete — do not maintain: the SDK's `VastAPI.bill` timestamp-to-coverage
+conversion and its elapsed-interval fixture were removed in the dependency
+repair. Daily-charge, pagination and unknown-settlement behavior survive on
+`VastAPI.charges` and `VastMachines.bill`. The four 0.2.12 release pins and
+registry-only SDK lock entry are replaced coherently by the Git source and
+exact lock. No remaining deletion targets.
+The failed eight-context launcher (`27a126422`)
+and v5 three-arm timing/canary paths (`9dc32125f`) are retired; archived
 executions use their pinned source. The native `source_effect_root` and
 `shared_effect_root` fixtures still serve transport/model tests.
 
@@ -217,7 +279,13 @@ hash audits remain in that committed plan; gate owns broader acceptance and
 results demo/review owns scientific judgment. No rendering proof is claimed.
 
 Historical validation: `c23aacd8f95f5cea16301653fd05df72ff3156cf:scratch/representation-learning-plan.md`.
-The manifest-backed `reconciliation/` evidence includes the offline Etude billing
-reproduction; runtime admission and scientific execution await settlement.
+The manifest-backed `reconciliation/` evidence includes the original offline
+Etude reproduction; `reconciliation-repaired/` retains the corrected read.
+Runtime admission and scientific execution await authoritative settlement.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` — 16 passed; read-only analysis reproduced all eight retained CPU endpoints exactly and rejected missing, duplicate, incomplete and wrong-identity inputs; Ruff and `git diff --check` passed. Gate owns broader acceptance; settlement and two-arm GPU admission remain prerequisites for scientific execution.
+Prior implementation validation at `bdb567cc0`: 16 focused study/discovery tests
+passed; read-only analysis reproduced all eight retained CPU endpoints and
+rejected missing, duplicate, incomplete and wrong-identity inputs. This prose
+reconciliation does not require repeating learning or those tests.
+
+Check: final locked-source `uv run --isolated --locked --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q` — 28 passed; release staging/untracked-artifact checks — 2 passed. SDK network-isolated suite — 595 passed, 6 skipped, 3 deselected; mypy/Ruff plus PR and merge-queue CI passed. Source proof retained in `reconciliation-repaired/source-proof.json`; provider final coverage still blocks paid admission.

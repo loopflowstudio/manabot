@@ -28,6 +28,21 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
+Etude comes from its public Git `main` branch in source checkouts. `uv.lock`
+pins the exact commit for the launcher, extras and remote workers. Update it
+deliberately, then use the locked environment:
+
+```bash
+uv lock --upgrade-package etude-sdk
+uv sync --locked --python 3.12 --extra dev --extra artifacts
+```
+
+Commit both `pyproject.toml` and `uv.lock` before preparing a new experiment.
+Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
+Retained experiments keep their original source and lock. Published package
+metadata keeps a normal `etude-sdk>=0.2.14` requirement; uv's Git source override
+applies to this repository, not to downstream package installers.
+
 ## Validation by change area
 
 Polish and validate only the current branch scope. **NEVER intentionally induce

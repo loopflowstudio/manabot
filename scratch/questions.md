@@ -1,5 +1,19 @@
 # Decisions and open questions — 5da5f4
 
+- Dependency direction, Jack Heart, 2026-11-04: use latest Etude source instead
+  of waiting for released SDK versions ("i think that might be better long term
+  for now"). Adopt Etude Git main for Manabot's uv source with an exact commit
+  in uv.lock; refresh explicitly, never float dependencies inside a run. Cover
+  launcher, remote locked worker, extras and clean-environment integration.
+  Historical protocols/locks/receipts remain immutable. Local billing fixes
+  are not on main merely because source tracking is enabled; deliver them in
+  Etude and record their actual revision. This does not increase the budget.
+  Implemented: all four dependency declarations use valid `>=0.2.14` metadata;
+  public Git main resolves in `uv.lock` to `64e9eaabf016f567cb9567280bcf8730f6f5d524`
+  (merged Etude PR82). Launcher and clean locked worker dependencies match;
+  anonymous access and offline locked re-sync passed. Linux resolution is a
+  dry-run only, not paid remote admission.
+
 - Jack Heart's latest 2026-11-04 direction authorizes a viable GPU restart toward
   a sustained learning plateau within the ORIGINAL cumulative $25, including
   supported batching and necessary Etude SDK release/Vast use. Earlier CPU-only
@@ -7,11 +21,12 @@
   demo/review; no merge, model/default promotion or MTG-213 funds are approved.
 - Current outcome: cancelled eight-learner science and three unsuccessful restart
   admissions; no replacement scientific cohort or plateau. All five Vast rentals
-  remain absent at the 19:55 UTC read. Full-day Vast charge records report
+  remain absent at the repaired 20:10 UTC read. Full-day Vast charge records report
   $0.398, or $0.4705825939 including the settled L4 bill; these supersede the
   $0.4487194142 estimate as current reported charges, not final settlement.
-  Etude 0.2.14 incorrectly filters/interprets daily billing timestamps; offline
-  replay reproduces its missing-bill result. No final coverage is established.
+  Etude source repair now retrieves typed daily totals and removes the invalid
+  timestamp-to-settlement conversion. The corrected read still supplies no final
+  coverage through teardown; no SDK release or repeated query can invent it.
   Reservations remain $24.9725825939 including $6 ancillary, leaving $0.0274;
   no new $0.20 admission fits until authoritative settlement permits release.
   Exact attempt denominator, evidence and remaining work are in
@@ -51,3 +66,12 @@ T7's publication and no-experiment boundaries belong to that Task, not this
 representation study. Its complete decisions, demo references and historical
 sources remain at
 `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372:scratch/questions.md`.
+
+- Reversible implementation assumption (2026-11-04): repair the authorized SDK
+  dependency in `.runs/etude-billing`, based on released Etude 0.2.14, without
+  changing another Task's checkout or the study's locked worker. Preserve the
+  SDK patch and source identity with reconciliation evidence; the repair is
+  merged as https://github.com/loopflowstudio/etude/pull/82. No new SDK
+  release can supply the missing provider coverage. Loopflow's nested
+  checkout sync inherits this parent Task's branch binding; SDK delivery uses
+  its own GitHub branch without altering Manabot Task association.

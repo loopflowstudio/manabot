@@ -5,6 +5,17 @@ study. Jack Heart requested actual GPU learning toward a sustained plateau,
 within the original cumulative $25, and authorized a necessary Etude SDK release
 and Vast use. No winner promotion, merge or MTG-213 allocation is authorized.
 
+Reading scope, reconciled 2026-11-04: the original comparison and allocation
+sections below describe executed source `27a126422`, not the current launcher.
+The later batched amendment declares the replacement candidate; current
+`runs()`/`worker()` execute only excluded admission. Replacement scientific
+orchestration remains unimplemented and no replacement cohort has launched.
+The live plan is `scratch/representation-learning-plan.md`. Later retained
+accounting in `experiments/data/state-representation-gpu-5da5f4/reconciliation/`
+supersedes the estimates below as current reported charges, without establishing
+final settlement or releasing reservations. Historical amounts and failed
+attempts below retain their original meaning.
+
 ## Execution outcome — allocation invalidated
 
 Scientific source `27a12642200a35fc0cb436a9db69ce16c505016a`, Etude run
@@ -41,8 +52,8 @@ ancillary reserve remain; estimated cost is not settled billing.
 
 ## Frozen comparison
 
-`experiments/state_representation_gpu.py` is the executable declaration. Pin its
-source commit before launch. Both arms use current-world authored Allies/Lessons,
+`experiments/state_representation_gpu.py` at source `27a126422` is this executed
+comparison's declaration. Both arms use that source's authored Allies/Lessons,
 width64/depth2, policy FiLM, no recent events or temporal memory, v7 shared effects
 and explicit joins. Pool versus GRU changes effect and continuation reduction
 jointly, as in the CPU study. New source/rules and 512 action slots make this a
@@ -221,3 +232,28 @@ this Task is $0.4487194142, with Vast bills and the $6 ancillary reserve pending
 Conservative reservations remain $24.9725825939; this is not money spent.
 Receipts are manifest-backed under `state-representation-gpu-5da5f4/restart/`.
 The replacement study remains unlaunched and the plateau objective unmet.
+
+## Daily-charge repair and accounting stop (2026-11-04 20:10 UTC)
+
+The authorized SDK repair replaces elapsed-interval interpretation with typed
+inclusive UTC daily charge reports. A single corrected read at Etude source
+`109fa4128052972699ec2a63fba5a3958fac430f` confirms all five Task rentals absent
+and returns $0.398 in reported charges ($0.47058259388618171 including the prior
+settled L4 bill). No provider-confirmed final coverage through teardown is
+available. Reservation release is $0; $24.97258259388618171 remains reserved,
+not spent. The remaining $0.02741740611381829 cannot cover the $0.20 admission.
+
+This accounting gate stops execution before admission or replacement science.
+The missing evidence is final GPU, disk and bandwidth coverage through each
+retained `ended_at`, not another identical daily query or an SDK release.
+Repaired-read receipts and the SDK patch are retained in
+`experiments/data/state-representation-gpu-5da5f4/reconciliation-repaired/`.
+The frozen attempt denominator, scientific criteria and $25 ceiling are unchanged.
+
+Jack Heart's subsequent source-dependency direction is implemented prospectively:
+`tool.uv.sources` tracks Etude Git main and `uv.lock` pins
+`64e9eaabf016f567cb9567280bcf8730f6f5d524` (merged Etude PR82). Launcher and
+archive-style worker dependency installs verified that exact commit; Linux
+resolution was a dry-run, not remote admission. This changes future prepared
+source bundles only. Historical worker locks, attempts and receipt bytes remain
+unchanged; the source update neither settles charges nor launches science.

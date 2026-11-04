@@ -371,6 +371,10 @@ checkpoint at every milestone so Etude evaluation can follow. Setup installs
 Rust 1.98.1 with rustup and runs the locked `uv sync`, which builds the native
 engine. `validate_numerics=True` runs the CUDA numerics gate
 (`manabot.experiment.numerics`) first and refuses to train if it fails.
+The source checkout tracks Etude's public `main` branch, but the committed
+`uv.lock` selects one exact SDK commit for both the launcher and this setup.
+Refresh it only through the [explicit dependency update workflow](development.md#environment-and-commands)
+before freezing a new run; never upgrade dependencies inside a training attempt.
 
 `TrainingJob.continuation` (`LearnerContinuation`) continues another run's
 learner from its published `run.json` and raw/EMA/Adam exports, bound as a
