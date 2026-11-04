@@ -94,31 +94,21 @@ impl Game {
         let source = stacked.source_ref();
         let source_card = stacked.source_card();
         let self_target = stacked.as_target();
+        // Both distinctness and the shared mana-value budget apply only to
+        // the other targets of this clause, never to the slot being replaced.
+        let other_targets = targets
+            .iter()
+            .zip(&indices)
+            .enumerate()
+            .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
+            .map(|(_, (target, _))| *target);
         self.legal_targets_for_spec(&requirement.spec, controller)
             .into_iter()
             .filter(|target| Some(*target) != current && *target != self_target)
             .filter(|target| {
-                self.within_target_mana_budget(
-                    &requirement,
-                    x,
-                    targets
-                        .iter()
-                        .zip(&indices)
-                        .enumerate()
-                        .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
-                        .map(|(_, (target, _))| *target),
-                    *target,
-                )
+                self.within_target_mana_budget(&requirement, x, other_targets.clone(), *target)
             })
-            .filter(|target| {
-                !targets
-                    .iter()
-                    .zip(&indices)
-                    .enumerate()
-                    .any(|(other, (chosen, req))| {
-                        other != *slot && *req == indices[*slot] && chosen == target
-                    })
-            })
+            .filter(|target| !other_targets.clone().any(|chosen| chosen == *target))
             .filter(|target| {
                 !requirement.another
                     || !matches!((target, source), (Target::Permanent(id), Some(source))

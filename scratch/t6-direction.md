@@ -24,8 +24,8 @@ Accepted review feedback removes token-specific delayed timing. Capture an
 `ObjectSelector` at creation, retain exact incarnations separately from event
 context, then execute ordinary effects when the event arrives. Visions keeps
 controller-next-end-step timing; Trebuchet keeps any-next-end-step timing.
-The working design records the cutover, observation contract and remaining gate
-work. This is part of T6 on PR #417, with the same stop-for-review boundary.
+The working design records the implemented cutover, observation contract and
+remaining gate work. This is part of T6 on PR #417, with the same review boundary.
 
 ## Concept review (with Jack Heart, 2026-11-02)
 
@@ -72,12 +72,10 @@ Jack Heart launched MTG-235 effect vocabulary (#412), MTG-236 derived state
 on 2026-11-02, targeting main. Their code is now integrated; MTG-238
 precedence is fulfilled. MTG-239 (#415) also landed and supplies the corrected
 admission, library ordering and Rallier traces. These integrations do not
-settle the related Tasks' independent empirical acceptance. T6's PR #417
-is open at `7c790f78e`, including the audit/checkpoint repairs, schedule projection,
-composable delayed capture, independent lifetime composition and main's v6
-fact-capacity integration. Mutable w17 receipt refresh and combined validation
-are complete in the publication verification section of the current plan;
-old pending-CI and missing-recovery notes are superseded.
+settle the related Tasks' independent empirical acceptance. T6's PR #417 remains
+open. The [working design](mtg-225-tla-t6.md) owns its current head, validation
+and publication status; this direction records accepted scope, not a second
+delivery-status log.
 
 ## Accepted delayed-lifetime composition (Jack Heart, 2026-11-03)
 
@@ -88,5 +86,5 @@ separate event context, existing card semantics and exact death-watch retirement
 Do not migrate all printed triggers or add a second DSL/hypothetical cards.
 Use the accepted contract and proof cases in the working design. This resolves
 the headless review's open choice. The composition and focused proofs are now
-implemented; combined validation and mutable receipt refresh are complete, followed
-by publication of PR #417 and review, without merge authorization.
+implemented. Publication of PR #417 and review follow the current gate work,
+without merge authorization.

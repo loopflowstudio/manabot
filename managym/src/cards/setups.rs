@@ -16,7 +16,7 @@ use std::{
 use serde::Deserialize;
 
 use super::ContentError;
-use crate::state::player::PlayerConfig;
+use crate::state::{card::CardDefinition, player::PlayerConfig};
 
 const SETUPS: &str = include_str!("../../../content/semantic/current/setups.json");
 
@@ -85,9 +85,13 @@ pub fn authored_setups() -> Result<&'static [AuthoredSetup], ContentError> {
         .get_or_init(|| {
             let sources: BTreeMap<String, SetupSource> = serde_json::from_str(SETUPS)
                 .map_err(|error| ContentError(format!("setups.json: {error}")))?;
+            let by_key = managym_cards::catalog()
+                .iter()
+                .map(|definition| (definition.key, definition))
+                .collect();
             sources
                 .into_iter()
-                .map(|(preset, source)| build(preset, source))
+                .map(|(preset, source)| build(preset, source, &by_key))
                 .collect()
         })
         .as_deref()
@@ -102,11 +106,11 @@ pub fn authored_setup(name: &str) -> Result<&'static AuthoredSetup, ContentError
         .ok_or_else(|| ContentError(format!("unknown authored setup {name:?}")))
 }
 
-fn build(preset: String, source: SetupSource) -> Result<AuthoredSetup, ContentError> {
-    let by_key = managym_cards::catalog()
-        .iter()
-        .map(|definition| (definition.key, definition))
-        .collect::<BTreeMap<_, _>>();
+fn build(
+    preset: String,
+    source: SetupSource,
+    by_key: &BTreeMap<&str, &CardDefinition>,
+) -> Result<AuthoredSetup, ContentError> {
     let context = |message: String| ContentError(format!("setup {preset}: {message}"));
 
     let mut decks = Vec::new();

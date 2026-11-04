@@ -627,7 +627,7 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -
         obs, *_ = env.step(ranked[0])
     else:
         raise AssertionError(f"{card} trigger is not waiting")
-    for version in (4, 5, 6):
+    for version in (4, 5, 6, 7):
         expected = ObservationEncoder(
             ObservationConfig(policy_input_version=version)
         ).encode(obs)
@@ -650,7 +650,7 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -
             assert remembered[24] == watched[24] > 0
 
 
-@pytest.mark.parametrize("version", [4, 5, 6])
+@pytest.mark.parametrize("version", [4, 5, 6, 7])
 def test_t6_transform_parity_and_schedule_relation_versions(
     version: int,
 ) -> None:

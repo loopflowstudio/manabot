@@ -1,14 +1,29 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling
 
-Status (publication gate, 2026-11-03): all 16 cards, one catalog, Academy's
-accepted schedule projection, exact delayed capture and independent lifetime
-composition are implemented. Sync retained main `3b122de90` without conflicts;
-`16336f2a0` preserves the local review/reconciliation edits. Mutable w17 receipts
-are refreshed to hash contract 15 and combined validation is complete below.
-PR #417 remains the one cohesive delivery boundary. Final publication-head CI
-must still be checked; no auto-merge or landing is authorized.
+Status (2026-11-03): accepted T6 behavior and the frozen-pilot isolation repair
+are implemented locally. HEAD `920bbb52ae524fab1e5fd58f7958b24f9395e1f5`
+incorporates main `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` and its v7
+shared-effect projection. Gate owns combined validation, mutable receipt
+assessment, republication and final-head CI. Existing PR #417 remains one
+cohesive delivery; stop for Jack Heart's review. No merge or auto-merge authorized.
 
-The accepted outcome is correct play for humans and bots through the shared native rules authority, with directed debug tests for every obligation, complete viewer-safe choices and policy/text observations. `scratch/t6-direction.md` retains Jack Heart's 2026-11-02 scope decisions. Full earlier implementation, integration and publication history is retained at `a7ba7432c9d03188ec9affb50412dd2f3197ea61:scratch/mtg-225-tla-t6.md` and `:scratch/questions.md`.
+## Accepted direction
+
+Jack Heart accepted all 16 T6 cards plus the one-catalog simplification on
+2026-11-02. T5 and MTG-238 precedence are fulfilled. His 2026-11-03 repair
+steer requires correct choices, not merely the same final board. He selected
+1a for Academy's ordered public schedule ("1a1a"), then required composable
+delayed selector capture, and selected 1a for independent event/frequency/expiry.
+All are implemented; no product question remains. Details and attribution:
+[t6-direction.md](t6-direction.md), [questions.md](questions.md), and the preserved
+[scratch concept review](concept-review.html). HTML examples are illustrations,
+not browser captures. T7's independent direction stays in `t7-handoff.md`.
+
+The outcome is correct play for humans and bots through native rules authority,
+directed debug tests for every obligation, complete viewer-safe choices and
+native/Python/text/token observations. New input state preserves frozen versions;
+only mutable current-world evidence may be refreshed. Existing review edits and
+other contributions remain preserved.
 
 ## Publication findings and repairs
 
@@ -84,289 +99,149 @@ The refactor alone preserved content bytes and row ordering at `2c1ba169f`; late
 
 Authored presets retain their bypass of submitted-deck construction checks. Main `c823c9c8f` removes bug-based admission exclusions: every defined non-token, non-fixture front face is playable. `PlayerConfig.submitted` still selects construction validation. Review-visible consequences remain: edited setup metadata alone no longer fails checkpoint loading (execution checks actual decks), authored mirrors need no pack selection, and any pair of Elemental decks receives the roster binding by membership.
 
-## Schedule projection implementation — 2026-11-03
+## Public schedule and delayed abilities
 
-Implemented at `614afa3cd`, retained in `bf7631c6a`: native `TurnState.public_schedule` supplies typed `ScheduleView`
-through the live decision surface. Historical capture serialization, policy
-inputs and rules identity remain unchanged. Current combat is shown for every
-combat phase, including unrestricted combat; it requires no duplicate engine
-flag. The native retained `resume_with` is shown when present, never guessed.
+`TurnState.public_schedule` projects ordered extra turns and native `resume_with`,
+current combat (including ordinary unrestricted combat), and ordered pending
+combats with rules-derived attacker restrictions. `Schedule.svelte` renders it;
+`PlayerArea.svelte` no longer invents order from counts. Numeric protocol fields
+remain for retained captures and policy. No duplicate “is extra” engine flag is
+needed. Historical absence says “Schedule not recorded.” Experience, replay,
+Study and advice schemas and Academy usage docs carry this contract.
 
-Deleted Academy's count-derived extra-turn/additional-combat sentences in
-`PlayerArea.svelte`. Preserve the numeric protocol fields for retained captures
-and policy consumers; the current UI reads the ordered native schedule instead.
+`CreateDelayedTrigger` resolves an optional `ObjectSelector` at creation. Exact
+`ObjectRef`s travel through the watcher, pending occurrence, stack and suspended
+resolution as `Remembered`, separately from triggering-event context. Each
+`ForEachTarget` iteration captures its own copy; a later incarnation cannot
+replace it. Original controller and source/LKI behavior persist after departure.
+Visions watches its controller's end step; Trebuchet watches any end step.
 
-`Schedule.svelte` renders ordered extra turns and native resume, current combat
-and ordered pending combats with rules-derived attacker restrictions. Missing
-historical data says “Schedule not recorded.” Schemas for Experience, replay,
-Study and advice are regenerated; frozen capture bytes are untouched. Academy
-usage guidance is updated. The release cp312 extension was installed atomically.
+Event predicates, `DelayedFrequency::{Once, EachMatch}` and
+`DelayedExpiry::{ThisTurn, Never}` compose independently. `Once` consumes the
+watcher on the match even if the occurrence is countered or does nothing.
+Cleanup expires waiting records, never queued/stacked occurrences. Exact-object
+`Leaves` watchers retire on any departure independently of frequency/expiry;
+earthbend explicitly uses once/no expiry. All six authored creation sites keep
+their existing semantics. This is not a printed-trigger migration or second DSL.
 
-The real WebSocket proof in `tests/academy/test_schedule_recovery.py` plays Bumi,
-observes pending then current land-creature restriction with zero pending count,
-checks both closed-deck viewers, reconnects to the same frame and rejects a stale
-Command without changing state/events. Native progression covers opposite turn
-queues/resume and unrestricted combat after restricted combat; Svelte server
-rendering covers ordered lists, restrictions, seat labels and historical unknowns.
-No process-crash durability or browser-layout proof is claimed.
+Remembered references use v5+ relation kind 8; optional frequency uses kind 9,
+with absent historical frequency unknown. `this_turn` remains derived expiry.
+Scheduling uses frame kinds 11/12; transform/combat facts use kinds 9/10. Exact
+captures introduced hash contract 14, independent lifetime fields contract 15.
+`managym/README.md` owns the authoring contract. Native, Python, text and
+catalog-derived tokens carry these facts without changing v1–v4 exclusions.
 
-Recorded focused evidence covers native schedule progression, Bumi, Academy
-schedule recovery/protocol, Svelte rendering and schema conformance; Svelte
-checking and CI collection also passed. These headless checks establish order,
-restrictions and retained-session behavior, not browser geometry. Final combined
-validation remains outstanding. The interactive review artifacts and T7 handoff
-are preserved.
+## Integration and compatibility
 
-## Delayed-trigger composition — accepted correction, 2026-11-03
+Main's library-bottom ordering keeps decision code 23; T6 payment/search use
+24/25 and choose-to-exile 26. Loyalty/defense retain ordinals 7/8; lore appends 9.
+Current w17 inherits main's corrected 135-Command Rallier tape and explicit
+Accumulate Wisdom ordering, not the older 142-Command tape.
 
-Jack Heart's review rejects `NextEndStepForCreatedToken`: timing must not own
-object selection. `CreateDelayedTrigger` captures an optional `ObjectSelector`
-at creation; its effects use `ObjectSelector::Remembered`. Exact `ObjectRef`s
-travel with the delayed trigger, pending occurrence, stack ability and suspended
-resolution, separately from the triggering event's context. No selector is
-re-evaluated against a later incarnation. End-step timing retains the existing
-controller/any-player distinction. The adjacent target-death timing becomes
-selector-based too: the death event watches the captured subjects, through the
-existing native exact-object departure watcher.
-Ordinary death/spell/upkeep behavior and expiry are preserved.
+Main v6 (`3b122de90`, integrated at `bf7631c6a`) supplies configurable facts:
+fresh 512, v5 fixed 128. T6 fresh actions are independently 512; saved omitted
+version/actions retain v1/64 through `ObservationConfig.from_checkpoint`.
+Explicit saved values remain authoritative; timestamp rank normalization is /128.
+Main v7 (`fb5ad2c13`, integrated at `920bbb52a`) adds shared effects once while
+fresh inputs stay v6. T6 schedule/delayed parity now includes v7. The shared
+native effect constructor uses the catalog directly. No upstream experiment work
+or allocation is inherited.
 
-Observation projects remembered objects separately in v5/v6 relation rows (kind 8),
-with native/Python/text parity and catalog-derived tokens. Frozen v1–v4 widths
-and exclusions stay unchanged. That capture correction introduced hash contract 14; the subsequent lifetime
-composition uses 15. Only mutable current-world receipts may be refreshed. Each `ForEachTarget` iteration captures
-its own copy. Directed tests cover source departure/control change, separate
-cast-event context, hidden-hand projection, reentry both before firing and while
-resolution is suspended, exact hash sensitivity and deterministic choice forks.
-The concept page records the accepted correction and implemented schedule.
+Frozen pilot scheduling/analysis fixtures explicitly supply the protocol's
+compatible world identity, including the fresh-process real analysis CLI. They
+never run games, training or allocation. Unpatched `frozen`, run declaration and
+evaluation separately reject the actual changed runtime. Changed-input tests
+reach observation admission using temporary copies; frozen protocol/regime bytes
+stay intact. The production guard pins v6/256 facts/**64 actions**, not fresh
+512-action defaults. `AGENTS.md` records this isolation rule.
 
-Recorded debug evidence includes 430 TLA tests, 55 observability tests and 13
-resolution tests, with additional exact-identity/fork and hidden-hand cases.
-The rebuilt extension passed focused tensor/text and both Academy recovery
-checks; Clippy and changed-file Ruff passed. Logs remain under
-`.runs/t6-publication/delayed-*.log`. These results precede the v6 sync and are
-reusable only where inputs are unchanged.
+## Delete — do not maintain
 
-## Main v6 integration — 2026-11-03
+Completed cuts; no outstanding deletion target:
 
-Main `3b122de90` supplies configurable fact capacity through policy input v6.
-The merge at `bf7631c6a` retains fresh v6/512 facts and T6's fresh 512 actions;
-v5 remains fixed at 128 facts, and omitted saved inputs retain v1/64-action
-semantics through `ObservationConfig.from_checkpoint`. Explicit saved values
-remain authoritative. Timestamp normalization stays rank / 128 independently
-of capacity. These are distinct fact/action capacities, not a single limit.
-The release cp312 extension was rebuilt after the merge; the recorded sync
-suite passed 21 checks (`sync-v6-tests.log`). No T6 experiment execution or
-historical receipt migration follows from the upstream training work.
+- Authored pack multiplicity: `ContentPack::from_definitions(pack_key)`, per-game
+  content/pack selection, same-pack admission, `CardRegistry`, `pools()` and
+  `WORLD_POOL` storage. One catalog and authored decklists survive; the public
+  `"world"` name and frozen vocabulary/evidence labels remain.
+- Fused delayed variants `NextEndStepForCreatedToken`, `TargetDiesThisTurn`,
+  `DiesThisTurn`, `CreatureDiesThisTurn`, `YouNextCastThisTurn`, `NextEndStep` and
+  `NextUpkeep`; inferred runtime boolean expiry and event-specific consumption.
+  Selector capture, event matchers and independent lifetime fields replace them.
+- Count-derived Academy scheduling; empty `TOKENS_AWAITING_PRODUCER` exception;
+  duplicate `settle_until_modal` and Sozin catalog-to-mode logic; `jeong_configs`
+  and its obsolete pack-selection-only test. Shared helpers, actual offered
+  names and Academy's deck/sideboard/catalog coverage survive.
+- Synthetic pilot dependence on live-world compatibility and implicit fresh
+  action capacity. Runtime admission and historical scheduling/analysis remain.
 
-The merged transform/schedule fixture covers v4/v5/v6. Reconciliation extended
-the real Fatal Fissure delayed-capture parity case to v6 as well: native and
-Python agree on the waiting trigger's remembered object, while v4 excludes it.
-No production implementation change was needed.
+Surviving code uses `TargetRequirement::one` and existing token/exile constructors.
+Authored setups build one card-key index for all presets. Retargeting names the
+other targets of its clause once for both distinctness and mana-value budget.
+Python deck checking returns diagnosed issues directly, without a never-failing
+`Result` wrapper. The pilot subprocess fixture uses ordinary multiline Python.
+These reductions add no mechanics, identity or observation contract changes.
 
-## Accepted review decisions
+## Evidence, limitations and remaining gate
 
-- **Jack Heart, 2026-11-02:** all 16 T6 cards and the one-catalog simplification
-  belong in one PR. MTG-238 precedes T6; that integration is complete.
-- **Jack Heart, 2026-11-03, repair steer:** payment-before-reflexive-targeting,
-  optional exact named-card search and the other detected approximations are
-  acceptance work. A matching final board cannot replace the required choices.
-- **Jack Heart, 2026-11-03, option 1a ("1a1a"):** Academy must show native ordered
-  extra turns/resume and current/pending combats with public restrictions.
-  The former count-derived sentences are deleted. The schedule and usage text
-  are implemented, superseding the review's proposed/not-yet-implemented status.
-  Turns and combats remain separate; historical missing data means unknown.
-- **Jack Heart, 2026-11-03, delayed-trigger feedback:** timing, selector capture
-  and effects compose. Exact incarnations are captured at creation, separately
-  from event context. `NextEndStepForCreatedToken` and `TargetDiesThisTurn` are
-  deleted; generic timing, `Remembered` and ordinary effects replace them.
+The previous local publication gate at `d21fae20d` passed 948 debug Rust checks
+(two ignored), Clippy, 474 combined Python checks (one skipped) and the repaired
+54-test text module, 118 Academy checks, 41 launcher/verifier checks, 122 UI
+checks and isolated Playwright (25 passed, two skipped). A stale text assertion
+was corrected to event-only timing when historical frequency is unknown.
+Logs: `.runs/t6-publication/final-*.log`; full commands/results remain at
+`d21fae20d3ef0e65fa7814124785f08034d6741d:scratch/mtg-225-tla-t6.md`.
+These precede the v7 sync and do not certify the current combined head.
 
-The current concept page is `scratch/concept-review.html`; its examples are
-illustrations, not browser captures. The older preserved page remains proposal
-evidence. Full prior review text, implementation/delete inventory and publication
-chronology remain at
-`bf7631c6a1d229c1405ea800bd57e493aa66c45c:scratch/mtg-225-tla-t6.md`.
-No uncommitted review evidence was removed.
+That gate refreshed only mutable w17 evidence: kernel 14 cases/3,473 Commands;
+authored tape 135 Commands; live/headless/replay parity 816 viewer checks;
+public parity 66 commitments. Navigation preserves offer ids and labels.
+Frozen worlds, advice, experiments and checkpoints were untouched. Current
+content digest was `d44e9319815ff8724c2ed901a64976942be88b4a8c278a5170f0fc4db6b572d6`.
+Gate must assess any receipt refresh needed after v7 and the latest source edits.
 
-## Verification and remaining work
+Contrary evidence: final-head CI at that publication had **27 pilot failures,
+278 passes, one skip**; a world-admission failure was reproduced locally.
+The [headless demo note](t6-demo.md) records the failure, five passing recovery/
+parity checks, seven rendering checks and bounded repair direction. It explains
+why implementation iterated despite the earlier local gate. The repaired full
+pilot module passed 33 checks; v7 sync verification passed four native
+shared-effect checks, 16 parity/text checks and one exact discovery check.
+Logs: `.runs/t6-demo/{pilot-isolation,sync-v7-native,sync-v7-consumers,sync-v7-discovery}.log`.
+The extension was rebuilt and atomically installed (`sync-v7-extension.log`).
 
-The Sozin retained-session search proof is complete in
-`tests/academy/test_named_search_recovery.py`: one selection, reconnect with the
-remaining budget and private inspection, duplicate/stale rejection, then early
-stop without undoing the exile. Schedule recovery has its own real WebSocket
-proof. Both are wired into Academy Integration. Neither establishes
-process-crash durability. The earlier 77-test consumer pass is recorded in
-`search-recovery-suite.log`; recovery is no longer missing implementation work.
+Real WebSocket tests cover Bumi's pending-to-current restriction with zero
+pending count, both closed-deck viewers, reconnect and stale rejection;
+Fatal Fissure's waiting/expired watcher, exact capture/clone identity; and
+Sozin's one selection, remaining private search budget, duplicate/stale rejection
+and early stop retaining exile. Native tests cover opposite schedules/resume,
+unrestricted combat after restricted combat, once/repeat, expiry, countering,
+queued/stacked survival, source departure, exact reentry and hash/fork identity.
+They prove retained sessions, not process-crash durability. Svelte checks prove
+rendered schedule content, not browser geometry; there is no separate Bumi
+browser walkthrough. No strength, retained-checkpoint binary compatibility or
+new performance result is claimed. CI owns the same-runner Engine Budget;
+the reference and 10% tolerance are unchanged.
 
-Earlier CI failures identified stale audit anchors and contradictory checkpoint
-fixtures. Those repairs preserve audit dispositions/source hashes and save the
-agent's actual observation configuration, including after learned-sampler reload.
-The four scalar/compound × uniform/learned cases and 25-test fixture suite passed.
-Negative reproductions and detailed historical results remain in
-`.runs/t6-publication/` and at
-`5c254fd5732a42da0966e1f5badf490f3307b4f3:scratch/mtg-225-tla-t6.md`.
-They do not certify the subsequent schedule, capture and v6 changes.
+Local sync `lf sync --manual` / `--continue` completed at `920bbb52a` with no
+unresolved paths. GitHub's `CONFLICTING` response still names published
+`d21fae20d`; gate must recheck the authoritative base and mergeability before
+republication, then inspect final-head CI and stop for Jack Heart's review.
 
-Publication gate completed locally; remaining acceptance is final publication-head
-CI and Jack Heart's review. No implementation or product choice is deferred.
-Old authored-pack checkpoint migration/retained-binary compatibility remains
-unproven, and no process-crash durability or playing-strength claim is made.
-The dated verification below supersedes the earlier pending refresh/combined
-validation notes.
+Compression verification: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test
+--manifest-path managym/Cargo.toml -j 2` (setup, Sozin, Redirect Lightning and
+Jeong copy filters) — 11 debug checks passed; `uv run` pytest pilot,
+decklist-import and current-content modules — 60 passed. Release `maturin build`
+passed and the cp312 extension was installed atomically; rustfmt, Ruff and
+`git diff --check` passed. Logs: `.runs/t6-demo/compress-*.log`. `lf context`
+confirms both scratch and memory under their token/byte limits. Gate retains
+affected suites, mutable receipt assessment and publication; no merge authorized.
 
-## Wave memory
+## Retained history
 
-This is the selected code Graph's realign step. Engine memory records the
-accepted public schedule, captured-object and independent lifetime contracts,
-including v6 integration and evidence limits. The live gate work remains here. Engine has no immediate child directories or
-child memories in this checkout. Training's v6 capacity lesson was read as
-upstream evidence; its experiment decisions remain outside T6.
-
-## Accepted delayed-lifetime review — Jack Heart, 2026-11-03
-
-Jack Heart selected **1a**: independently compose event matching, firing
-frequency and expiry for existing delayed abilities within T6. The prior open
-choice and deferral alternative are superseded. The small typed API may reuse
-vocabulary only where its semantics match; migration of all printed triggers,
-a second DSL and hypothetical cards are outside this correction.
-
-The authoring contract is implemented in `managym/README.md`: selectors capture
-exact incarnations at creation; event context stays separate. A once-only watcher
-is consumed on its first match even if the occurrence is countered or its effects
-do nothing. Expiry removes waiting watchers, not queued or stacked occurrences.
-Original controller and exact death-watch retirement remain independent rules.
-Academy and policy consume viewer-safe projections of that native state.
-
-The accepted review page remains `scratch/concept-review.html`. The complete
-review sequence, including the superseded headless open-choice outcome and the
-received decision, is retained at
-`7c790f78e7008701c5d1bcb7903a8b83693bd093:scratch/mtg-225-tla-t6.md`.
-The implementation below and its recorded tests resolve those counterexamples;
-combined validation and review remain separate acceptance work.
-
-## Delayed lifetime implementation — 2026-11-03
-
-Removed: `DiesThisTurn`, `CreatureDiesThisTurn`,
-`YouNextCastThisTurn`, `NextEndStep`/`NextUpkeep` event names; inferred
-`this_turn` in resolution; event-arm-specific consumption; runtime boolean
-expiry. Event-only names, `DelayedFrequency::{Once, EachMatch}` and
-`DelayedExpiry::{ThisTurn, Never}` replace them on the existing authoring/runtime
-owner.
-Exact-object departure retirement, original controller, captures and existing
-card behaviors/tests remain on that path. Observation `this_turn` remains the
-derived expiry projection; an optional frequency code (unknown for historical
-captures) uses new relation row kind 9 without widening or repurposing frozen
-columns. No printed-trigger migration or new card definition.
-
-The matcher now only determines an occurrence and its event context. One shared
-frequency check consumes `Once` watchers before occurrences enter placement;
-cleanup reads only expiry. `Leaves` retains its separate exact-incarnation
-retirement. Earthbend explicitly authors once/no expiry. All six authored
-creation sites preserve their earlier semantics. No parallel runtime path remains.
-
-Compression uses `TargetRequirement::one` throughout the branch's affected set
-definitions and the existing token/exile constructors, keeping one owner for
-defaults. Lifetime proofs share only their life-gain setup; event, frequency and
-expiry remain explicit in each case. The relation encoder's v5/v6 fields share
-one guard, and empty watcher-consumption loops need no separate condition.
-
-Removed: `TOKENS_AWAITING_PRODUCER` and its empty
-exception path (all tokens now have creators); `settle_until_modal` (use shared
-`pass_until`); the Sozin test's duplicate catalog-to-mode algorithm (choose the
-actual offered name); and `jeong_configs` with its obsolete pack-selection test
-that only asserted two players. Academy's Jeong setup tests still cover deck,
-sideboard, asset and catalog identity in both seats. No deletion target remains.
-
-Native debug cases cover both frequencies and both expiries against the same
-upkeep/death matchers, hash sensitivity and deterministic forks; no-match expiry,
-countered first occurrence, queued/stacked survival, exact death-watch retirement,
-source departure/control change, hidden captures and captured reentry. Real
-Academy reconnect preserves the waiting Fatal Fissure record and expired absence,
-capture identity and stale rejection. Native/Python v4/v5/v6 parity covers once
-and repeating cards, and text covers explicit frequency, expiry and historical
-unknown frequency. Catalog-derived tokens cover both independent enum choices.
-The pre-existing vector test's removed `world` assignment migrated to `submitted`.
-
-Recorded evidence: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2` with `-p managym --lib`, `--test authored_match_tests`, and `-p managym-cards --test cards` filters `tla::`, `observability::`, `lea::`, `stx::` passed 136/2/430/56/4/19 checks; changed Koh/Sozin tests passed their focused reruns. `uv run --extra dev --extra play pytest tests/verify/test_observation_parity.py::test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4 -q` passed 2 checks. Release extension rebuilt/installed atomically; pre/post world and learning-catalog digests match; format and diff checks pass (`.runs/t6-compress/`). Earlier lifetime consumer evidence remains in `.runs/t6-publication/lifetime-*.log`. Gate owns combined affected suites, mutable w17 receipt refresh to hash 15/content identity and publication of PR #417 for Jack Heart's review; no merge or auto-merge is authorized.
-
-Reconciliation check: `git diff --check` — passed; existing focused logs reused, with combined validation and mutable-w17 refresh deferred to gate.
-
-## Concept-review outcome — 2026-11-03
-
-Reviewed the accepted experience against `7c790f78e` and the preserved local
-reconciliation. **Nothing to change; no open product choice.** Jack Heart's
-schedule and delayed-lifetime decisions are implemented, not proposals awaiting
-another answer. No new implementation direction or scope is introduced.
-
-The concrete interaction is Bumi's additional combat: read the committed
-restriction, advance into that combat, then reconnect before choosing attackers.
-The pending count becomes zero while the current restriction remains visible;
-the recovered frame and native offers still govern the choice. `TurnState`
-owns execution order and restrictions, `public_schedule` projects them, and
-Academy renders them without a second scheduler. A recording without that
-projection remains unknown. Equal counts with opposite turn orders and an empty
-queue during restricted combat remain the counterexamples to count-based UI.
-
-For delayed abilities, the important distinction is waiting versus already
-triggered. Creation captures exact objects; event matching creates an occurrence;
-frequency consumes the watcher; cleanup expires only waiting records. Countering
-the first occurrence cannot re-arm a once-only watcher, and reconnect or a fork
-cannot select a replacement incarnation. The small independent lifetime types
-and existing occurrence/resolution machinery express those contracts. Merging
-them back into an event name or a single generic duration would lose behavior.
-
-The one-catalog model likewise leaves deck selection as a deck choice, not a
-second world choice. Sozin's payment, reflexive targeting and private search
-remain deliberate native decisions; recovery retains committed payment or exile
-and the actual remaining choice. No browser cancellation or inferred authority
-is added. Existing `academy/README.md`, `managym/README.md` and shared-authority
-instructions already describe the accepted experience; no usage or skill edit
-is needed. Prior 16-card scope and compatibility limits remain in force.
-
-Next proof is the existing gate work above: refresh affected mutable-w17
-receipts, validate the combined head and return PR #417 for Jack Heart's review.
-This review inspected source, recovery tests and recorded focused logs; it did
-not rerun suites, render the page, establish crash durability, or certify CI.
-The following loop-or-next receives this outcome and selects navigation.
-
-## Publication verification — 2026-11-03
-
-`lf sync` completed without conflicts and preserved all review edits. The
-accepted scope and diff were inspected against actual PR base main. No Rust or
-production-rule change was needed in this pass; the installed release extension
-from compression matches content digest
-`d44e9319815ff8724c2ed901a64976942be88b4a8c278a5170f0fc4db6b572d6`.
-
-Refreshed only mutable w17 kernel, authored/parity, Academy and belief receipts.
-The kernel's 14 cases keep their command counts/outcomes (3,473 Commands).
-The authored receipt keeps all 135 Commands, semantic and presentation events;
-only state and command-receipt identities change. Live/headless/replay parity
-has 816 viewer checks and no divergence; public parity retains 66 commitments,
-the same command tape and zero provider gaps. Navigation adds native schedule
-projection and runtime identities; every retained offer id and label replays.
-Frozen worlds, advice, experiment evidence and checkpoints were not rewritten.
-
-Evidence is in `.runs/t6-publication/final-*.log`:
-
-- Complete debug Rust workspace: 948 passed, two ignored. Clippy all targets/
-  features and rustfmt passed.
-- Combined Python model, semantic, native/Python parity, belief, arena admission,
-  monitoring, active training, compound checkpoint/replay and package boundaries:
-  474 passed, one skipped, one stale text assertion failed. The assertion assumed
-  timing implied "next" despite historical frequency being unknown; updated it
-  to the event-only "controller's end step" contract. The complete text module
-  then passed all 54 checks. No behavior was weakened or production code changed.
-- Academy recovery/protocol/navigation/parity and CI configuration: 118 passed.
-  Server protocol: three passed. Launcher/clean-machine verifier unit checks:
-  41 passed.
-- Svelte checking: zero errors/warnings; 122 UI unit tests passed; build passed.
-  Isolated release Playwright: 25 passed, two skipped, including combat layout,
-  choice navigation, deck entry and trigger-order recovery. Its servers exited.
-  Schedule-specific evidence remains native progression, real WebSocket recovery
-  and Svelte rendering; no separate Bumi browser walkthrough was performed.
-- Changed-file Ruff and diff checks passed.
-
-Publication updates PR #417's description to include schedule, delayed capture,
-independent lifetime composition, v6 integration and these proof limits. Final-head
-CI, including same-runner Engine Budget, remains separate from local evidence.
-The existing performance reference and 10% tolerance are unchanged; no local
-speed claim or reference adoption is made. Stop for Jack Heart's review.
+Full pre-compression local plan (including uncommitted pilot/v7 repair evidence)
+is preserved at `.runs/t6-demo/pre-compress-plan.md`. Earlier accepted review,
+integration and negative reproductions are in the pinned plan at `d21fae20d`
+and its precise historical links (`a7ba7432c`, `bf7631c6a`, `7c790f78e`).
+`.runs/t6-publication/sozin-payment-order.log` preserves the original negative
+payment reproduction. Concept-review HTML remains unchanged. Engine memory is
+read-only in this step and within budget; realign owns reconciliation.

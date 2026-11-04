@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import subprocess
 import sys
+from textwrap import dedent
 from typing import Literal
 
 import duckdb
@@ -25,12 +26,74 @@ from etude.run.records import ArtifactRef, Clock
 from etude.train.run import track
 import pytest
 
+from experiments import tla_pilot_v3
 from experiments.tla_pilot_analysis import analyze
-from experiments.tla_pilot_v3 import ROOT, eval, frozen
+from experiments.tla_pilot_v3 import (
+    PROTOCOL,
+    ROOT,
+    Protocol,
+    RuntimeWorld,
+    eval,
+    frozen,
+)
 from manabot.eval.results import RateInterval
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+import managym
+
+
+@pytest.fixture
+def pilot_world(monkeypatch: pytest.MonkeyPatch) -> RuntimeWorld:
+    """Declare compatible identity for fixtures that never play or train.
+
+    Historical scheduling and controlled analysis outcomes must not depend on
+    the evolving native catalog. Runtime admission is tested without this seam.
+    """
+    world = Protocol.model_validate_json(PROTOCOL.read_bytes()).runtime_world
+    monkeypatch.setattr(managym, "world_identity", world.model_dump)
+    return world
+
+
+@pytest.mark.parametrize("entry", ["frozen", "runs", "eval"])
+def test_pilot_rejects_current_runtime_world(entry: str) -> None:
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    assert managym.world_identity() != protocol.runtime_world.model_dump()
+    with pytest.raises(ValueError, match="runtime world differs"):
+        if entry == "frozen":
+            frozen()
+        elif entry == "runs":
+            tla_pilot_v3.runs("HEAD")
+        else:
+            eval(_state())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("max_actions", 512), ("max_facts", 512), ("policy_input_version", 7)],
+)
+def test_pilot_rejects_changed_input_contract(
+    pilot_world: RuntimeWorld,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    field: str,
+    value: int,
+) -> None:
+    # Temporary copies keep the frozen bytes intact and pass the file-integrity
+    # guard so this check reaches observation admission under compatible identity.
+    regime = json.loads(tla_pilot_v3.REGIME.read_bytes())
+    regime["observation"][field] = value
+    regime_path = tmp_path / "regime.json"
+    regime_path.write_text(json.dumps(regime))
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes()).model_copy(
+        update={"regime_sha256": file_sha256(regime_path)}
+    )
+    protocol_path = tmp_path / "protocol.json"
+    protocol_path.write_text(protocol.model_dump_json())
+    monkeypatch.setattr(tla_pilot_v3, "REGIME", regime_path)
+    monkeypatch.setattr(tla_pilot_v3, "PROTOCOL", protocol_path)
+    with pytest.raises(ValueError, match="declared v6/256 input contract"):
+        frozen()
 
 
 def _checkpoint(update: int) -> Checkpoint:
@@ -46,6 +109,7 @@ def _checkpoint(update: int) -> Checkpoint:
     )
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None:
     regime, protocol = frozen()
     assert regime.deck_source is not None
@@ -65,7 +129,9 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert stage.execution.device == "cuda" and stage.behavior == "current-self"
     assert regime.observation.policy_input_version == 6
     assert regime.observation.max_facts == 256
+    assert regime.observation.max_actions == 64
     assert ObservationConfig().max_facts == 512
+    assert ObservationConfig().max_actions == 512
     assert protocol.allocation_usd == Decimal(1) < protocol.max_paid_usd == Decimal(10)
     rng = random.Random(protocol.deck_seed)
     assert [(p.first, p.second) for p in protocol.pairs] == [
@@ -75,6 +141,7 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     assert protocol.training_seed not in {p.deal for p in protocol.pairs}
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors() -> (
     None
 ):
@@ -100,6 +167,7 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
     assert eval(ExperimentState(experiment="tla_pilot_v3")) == []
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
     experiment = read_experiment(ROOT / "experiments/tla_pilot_v3.py")
     job = experiment.eval(_state((0,)))[0]
@@ -111,7 +179,7 @@ def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
 # Controlled outcomes exercise the analysis without running games or training.
 # This schema is Etude's public statsdb projection, including both participants.
 @pytest.fixture
-def pilot_db() -> Iterator[duckdb.DuckDBPyConnection]:
+def pilot_db(pilot_world: RuntimeWorld) -> Iterator[duckdb.DuckDBPyConnection]:
     with duckdb.connect() as db:
         db.execute("CREATE TABLE runs (run VARCHAR, environment VARCHAR)")
         db.execute(
@@ -359,6 +427,7 @@ def test_pilot_analysis_counts_failures_without_a_score_column(
 @pytest.mark.parametrize("with_failure_column", [True, False])
 def test_pilot_analysis_cli_reads_sealed_etude_results(
     pilot_db: duckdb.DuckDBPyConnection,
+    pilot_world: RuntimeWorld,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     with_failure_column: bool,
@@ -417,8 +486,23 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     result = subprocess.run(
         [
             sys.executable,
-            "-m",
-            "experiments.tla_pilot_analysis",
+            "-c",
+            # A fresh interpreter does not inherit pytest's identity fixture.
+            # Run the real CLI with the same explicit compatible identity; only
+            # synthetic sealed outcomes are read, with no game or training run.
+            dedent("""\
+                import json
+                import runpy
+                import sys
+                from unittest.mock import patch
+
+                world = json.loads(sys.argv.pop(1))
+                with patch("managym.world_identity", return_value=world):
+                    runpy.run_module(
+                        "experiments.tla_pilot_analysis", run_name="__main__", alter_sys=True
+                    )
+                """),
+            pilot_world.model_dump_json(),
             "--source",
             str(store),
             "--out",
@@ -450,6 +534,7 @@ def test_pilot_analysis_counts_draws_without_fabricating_wins(
     )
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_prospective_pilot_preserves_population_and_rejects_old_initialization() -> (
     None
 ):

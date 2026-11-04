@@ -300,8 +300,8 @@ fn decklist_error(py: Python<'_>, error: DecklistError) -> PyErr {
 /// Each deck's construction and eligibility issues in this world, in order,
 /// without allocating a game.
 #[pyfunction]
-fn check_decks(decks: Vec<Deck>) -> PyResult<Vec<Vec<DeckIssue>>> {
-    Ok(native_check_decks(&decks))
+fn check_decks(decks: Vec<Deck>) -> Vec<Vec<DeckIssue>> {
+    native_check_decks(&decks)
 }
 
 /// Admit labelled decklists, rejecting all of them with `DeckImportError`

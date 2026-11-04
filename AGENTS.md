@@ -197,6 +197,10 @@ checks required by the affected package and workflow.
   exposes `PyAgentError` / `PanicException`. Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+- Frozen experiment scheduling/analysis tests use an explicit compatible-world
+  fixture for synthetic outcomes, with separate real-runtime rejection tests.
+  Pin declared input capacities rather than inheriting fresh defaults; never
+  rebind frozen protocols or run games/training under the fixture identity.
 - Experiment results under `experiments/data/` live in the artifact store. Before
   committing new results or merging a branch that tracked them, publish their
   bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
