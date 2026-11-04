@@ -28,6 +28,11 @@ pub struct SpellOnStack {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityOnStack {
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub source_transforms: u32,
+    /// The definition lending the activated ability, fixed at activation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherited_from: Option<CardDefId>,
     pub id: ObjectId,
     pub controller: PlayerId,
     #[serde(rename = "source_card_registry_key")]
@@ -51,6 +56,11 @@ pub struct ActivatedAbilityOnStack {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
+    /// Exact subjects captured at delayed-trigger creation, independent of event context.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<ObjectRef>,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub source_transforms: u32,
     pub id: ObjectId,
     pub controller: PlayerId,
     pub source_card: CardId,

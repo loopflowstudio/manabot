@@ -133,7 +133,7 @@ def build(raw: bytes, metadata: Metadata, reviews: Reviews) -> list[Row]:
         if profile_id == "outside_formats":
             row.update(
                 status="not_applicable",
-                authority="managym/src/flow/setup.rs:Game::new_with_content",
+                authority="managym/src/flow/setup.rs:Game::construct",
                 dispersion="single admission boundary",
                 comments="exactly-two-player assertion; no format configuration",
                 gap="Unsupported format; do not treat as an admitted-play defect.",

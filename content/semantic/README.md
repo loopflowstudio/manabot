@@ -24,23 +24,23 @@ playability; playable does not mean bug-free. Rules tests are ordinary tests;
 they never gate support. See the [TLA notes](../../docs/rules/tla/README.md) for
 the open TLA work.
 
-## Packs and identity
+## The catalog and identity
 
-The default content pack registers every set-file definition plus the rules
-fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny), in name
-order. Each authored setup is a pack of exactly its decks'
-cards and the tokens they create, in key order
-([`cards/setups.rs`](../../managym/src/cards/setups.rs)); exact authored
-decklists, or an explicit `world`, select it. A pack's identity is its
-`content_digest`; its manifest also names its `pack_key` (absent for the default
-pack). `managym.content_pool(pack_key)` exposes native IDs, keys and eligibility
-without starting a game; `managym.set_cards(["tla", "lea"])` narrows the world
-pool (`world`, every defined card) to chosen sets.
+A world has one card list. The catalog registers every set-file definition plus
+the rules fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny),
+in name order, each double-faced card's back face right after its front; every
+match runs on it. Its identity is its `content_digest`, which is the world
+identity's card digest. Authored setups are decklists over it
+([`cards/setups.rs`](../../managym/src/cards/setups.rs)), named by preset or
+by the `pack_key` frozen evidence records; they are not packs.
+`managym.content_pool("world")` exposes the world pool's native IDs, keys and
+eligibility without starting a game; `managym.set_cards(["tla", "lea"])` narrows
+it to chosen sets.
 
 ## Learning projection
 
 Current execution uses world **w17** and `current/learning_schema.json` (schema
-**9**). `managym.learning_catalog(pack_key)` walks every definition of a pack
+**10**). `managym.learning_catalog()` walks every catalog definition
 with a `serde` serializer ([`cards/tokens.rs`](../../managym/src/cards/tokens.rs)):
 struct and variant boundaries, field names, `Effect::…` variants, integers,
 booleans and printed categories become tokens, so a new rules variant reaches

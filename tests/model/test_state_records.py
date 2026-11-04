@@ -152,6 +152,42 @@ def test_treatment_trains_with_existing_executor(tmp_path: Path, arm: Arm) -> No
 
 
 @pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize(
+    "frame_kind,edge_kind,column",
+    [(2, 7, 24), (10, 8, 24), (10, 9, 28), (11, 1, 7), (12, 1, 7)],
+    ids=("inherited", "remembered", "frequency", "turn-order", "combat-order"),
+)
+def test_t6_captures_lifetimes_and_schedules_reach_typed_context(
+    arm: Arm, frame_kind: int, edge_kind: int, column: int
+) -> None:
+    torch.manual_seed(73200)
+    encoder = TypedContinuationEncoder(8, arm)
+    objects = torch.randn(1, 2, 8, requires_grad=True)
+    definitions = torch.randn(1, 64, 2, 8, requires_grad=True)
+    rows = torch.zeros(1, 64, 49)
+    rows[0, 0, :7] = torch.tensor([1, 1, 0, frame_kind, 1, 1, 1])
+    rows[0, 0, 31] = 1
+    subject_row = 0 if edge_kind == 1 else 1
+    if subject_row:
+        rows[0, 1] = rows[0, 0]
+        rows[0, 1, 0] = edge_kind
+    rows[0, subject_row, column] = 1
+    summary, frames = encoder(rows, objects, definitions)
+    changed = rows.clone()
+    changed[0, subject_row, column] = 2
+    other_summary, other_frames = encoder(changed, objects, definitions)
+    assert not torch.allclose(summary, other_summary)
+    assert not torch.allclose(frames[:, 0], other_frames[:, 0])
+    # Moving storage rows preserves the frame and its joined subjects.
+    permuted = encoder(rows.flip(1), objects, definitions.flip(1))
+    torch.testing.assert_close(summary, permuted[0])
+    torch.testing.assert_close(frames, permuted[1])
+    summary.sum().backward()
+    assert objects.grad is not None and objects.grad.abs().sum() > 0
+    assert definitions.grad is not None and definitions.grad.abs().sum() > 0
+
+
+@pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
 def test_frame_and_object_relabeling_preserves_joins(arm: Arm) -> None:
     torch.manual_seed(73200)
     encoder = TypedContinuationEncoder(8, arm)

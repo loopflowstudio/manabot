@@ -21,10 +21,10 @@ and `elemental_bg`. UG is the accepted Temur Lessons list, including Iroh,
 Grand Lotus and Ran and Shaw. BG retains landfall and sacrifice.
 
 `managym.authored_deck_keys(pack_key)` discovers the native roster;
-`managym.authored_deck_setup(pack_key, deck_key)` returns a complete main deck,
-sideboard and explicit compiled pack identity. Any two admitted setups,
-including mirrors, run through the same engine. Native admission rejects an
-unknown pack, a missing seat binding or a changed main deck/sideboard.
+`managym.authored_deck_setup(pack_key, deck_key)` returns a complete main deck
+and sideboard. Any two setups, including mirrors, run through the same engine
+on the world's one catalog; a checkpoint bound to the roster rejects a changed
+main deck/sideboard.
 No per-matchup rules implementation or human-only action is introduced.
 
 Academy's schema-2 presentation manifest has a roster plus a default pair
@@ -36,10 +36,10 @@ they do not invent Oracle UUIDs or fetch third-party artwork. The earlier
 schema-1 pair manifests and their exact treatments remain unchanged.
 
 Both browser deck selectors include all ten names. The server preserves their
-Lesson pools and explicit pack through new games and recorded root rebuilds.
-A named Elemental setup paired with an outside setup is rejected, so it cannot
-silently run the generic registry. Human and bot Commands still use the same
-native legal offers, revision checks and information boundary.
+Lesson pools through new games and recorded root rebuilds.
+Academy requires both named decks to belong to the Elemental roster when either
+one does. Human and bot Commands use the same native legal offers, revision
+checks and information boundary.
 
 Training uses the ordinary APIs, for example:
 

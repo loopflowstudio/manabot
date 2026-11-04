@@ -19,12 +19,6 @@ use crate::{
     state::game_object::PlayerId,
 };
 
-#[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::cards::content_pack::ContentPack;
-
 #[derive(Debug)]
 struct RolloutSlot {
     game: Game,
@@ -293,11 +287,6 @@ impl RolloutPool {
             .map(|total| total / self.denominator)
             .collect();
         (scores, self.simulations, self.cap_hits)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn content_pack_contract_refs(&self) -> impl Iterator<Item = &Arc<ContentPack>> {
-        self.slots.iter().map(|slot| &slot.game.state.content)
     }
 }
 

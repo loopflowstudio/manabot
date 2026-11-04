@@ -33,3 +33,21 @@
   `3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md`.
 - Scope assumption for this pass: compare against shipped PR419's tree, not the
   pre-squash merge base. Later unrelated main changes are outside this cleanup.
+
+## Main sync — 2026-11-04
+
+Reconcile main `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f` with the completed
+v7 study cleanup. Keep main's single catalog, schedule/remembered-subject/delayed
+frequency relation kinds, configurable card buffers, and v5 pilot entry point.
+Keep this branch's v7 study runner, completed receipts and removal of the
+obsolete v5 representation prototype. The study remains bound to its retained
+scientific source; main's subsequent rules/catalog changes do not authorize
+rerunning or rebinding historical evidence. Main's T6 decisions remain at
+`5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f:scratch/questions.md`.
+
+Focused sync proof: rebuilt and atomically installed the native extension;
+19 Python checks passed for typed T6 relations, retained scalar/vector shared
+effects, source identity, experiment discovery and the completed study contract.
+The debug Rust exact-source/zone-change shared-effect test passed. Both manifest
+parents' entries compare equal in the merged manifest (11,940 entries). No push
+or additional training was performed; the sync caller owns publication.

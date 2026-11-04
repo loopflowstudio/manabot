@@ -8,7 +8,7 @@ import managym
 def test_both_payment_branches_reach_policy_input() -> None:
     """The current card's paid and declined continuations are both tokens."""
     pack = bind_policy_catalog("elemental-world-v2")
-    pool = managym.content_pool("elemental-world-v2")
+    pool = managym.content_pool("world")
     card_def_id = next(
         row["card_def_id"]
         for row in pool["definitions"]

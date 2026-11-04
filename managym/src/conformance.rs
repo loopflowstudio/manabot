@@ -17,7 +17,6 @@ use std::{
     fs,
     panic::{catch_unwind, AssertUnwindSafe},
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use rand::{Rng, SeedableRng};
@@ -27,8 +26,8 @@ use serde_json::Value;
 
 use crate::{
     cards::{
-        content_pack::{default_content_pack, ContentPack},
-        setups::{authored_pack, AuthoredPack},
+        content_pack::default_content_pack,
+        setups::{authored_setup, AuthoredSetup},
     },
     flow::{game::Game, search::mix_seed},
     state::player::PlayerConfig,
@@ -60,7 +59,7 @@ pub enum Orientation {
 
 impl Orientation {
     /// The authored setup in `setups.json` that holds both seats' decks.
-    fn setup(self) -> Result<&'static AuthoredPack, String> {
+    fn setup(self) -> Result<&'static AuthoredSetup, String> {
         let preset = match self {
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => "optional_payments",
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => "temur",
@@ -68,13 +67,7 @@ impl Orientation {
             Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => "elemental",
             Self::UrLessonsVsGwAllies | Self::GwAlliesVsUrLessons => "two_deck",
         };
-        authored_pack(preset).map_err(|error| error.to_string())
-    }
-    fn content(self) -> Result<Arc<ContentPack>, String> {
-        match self {
-            Self::UrLessonsVsGwAllies | Self::GwAlliesVsUrLessons => Ok(default_content_pack()),
-            _ => Ok(Arc::clone(&self.setup()?.content)),
-        }
+        authored_setup(preset).map_err(|error| error.to_string())
     }
     fn seat_keys(self) -> (&'static str, &'static str) {
         match self {
@@ -284,13 +277,8 @@ struct ConformancePair {
 impl ConformancePair {
     fn new(orientation: Orientation, game_seed: u64) -> Result<Self, String> {
         let configs = player_configs(orientation)?;
-        // Inherited matchup cases retain the general native allocation.
-        // Elemental orientations bind their compiled catalog entry explicitly;
-        // each tape records its own source and content fingerprints.
-        let content = orientation.content()?;
-        let mut reference =
-            Game::new_with_content(configs.clone(), game_seed, false, Arc::clone(&content));
-        let optimized = Game::new_with_content(configs, game_seed, true, content);
+        let mut reference = Game::new(configs.clone(), game_seed, false);
+        let optimized = Game::new(configs, game_seed, true);
         normalize_reference(&mut reference)?;
         let pair = Self {
             reference,
@@ -490,7 +478,7 @@ fn generate_case_internal(
         contract_id: CONTRACT_ID.to_string(),
         case_id: spec.id.clone(),
         matchup_pack_key: setup.pack_key.clone(),
-        content_digest: spec.orientation.content()?.content_digest(),
+        content_digest: default_content_pack().content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
         orientation: spec.orientation,
@@ -515,7 +503,7 @@ pub fn replay_case(case: &ReplayCase) -> Result<(), String> {
             case.case_id
         ));
     }
-    if case.content_digest != case.orientation.content()?.content_digest() {
+    if case.content_digest != default_content_pack().content_digest() {
         return Err(format!("{} content digest drift", case.case_id));
     }
     if case.matchup_pack_key != case.orientation.setup()?.pack_key {
@@ -733,7 +721,6 @@ fn build_evidence(manifest: &Manifest, cases: &[ReplayCase], matrix: &PhaseMatri
         ],
         metamorphic_checks: vec![
             "explicit_singletons_equal_trivial_step_collapse".to_string(),
-            "equal_content_pack_reallocation_preserves_trace".to_string(),
             "compatibility_card_renames_preserve_trace".to_string(),
             "fresh_and_cloned_roots_preserve_trace".to_string(),
         ],
@@ -871,7 +858,7 @@ fn persist_fuzz_failure(
     let receipt = FailureReceipt {
         schema_version: SCHEMA_VERSION,
         contract_id: CONTRACT_ID.to_string(),
-        content_digest: spec.orientation.content()?.content_digest(),
+        content_digest: default_content_pack().content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
         orientation: spec.orientation,
@@ -963,7 +950,7 @@ fn replay_failure_receipt(path: &Path, receipt: &FailureReceipt) -> Result<Strin
     if receipt.schema_version != SCHEMA_VERSION || receipt.contract_id != CONTRACT_ID {
         return Err("unsupported failure receipt contract".to_string());
     }
-    if receipt.content_digest != receipt.orientation.content()?.content_digest()
+    if receipt.content_digest != default_content_pack().content_digest()
         || receipt.reference != REFERENCE_ID
         || receipt.optimized != OPTIMIZED_ID
     {
@@ -1051,12 +1038,6 @@ fn rename_compatibility_cards(pair: &mut ConformancePair) {
     }
 }
 
-fn reallocate_content(pair: &mut ConformancePair) {
-    for game in [&mut pair.reference, &mut pair.optimized] {
-        game.state.content = Arc::new((*game.state.content).clone());
-    }
-}
-
 pub fn verify_metamorphic(
     orientation: Orientation,
     game_seed: u64,
@@ -1066,11 +1047,7 @@ pub fn verify_metamorphic(
     let mut baseline = ConformancePair::new(orientation, game_seed)?;
     let mut renamed = baseline.clone();
     rename_compatibility_cards(&mut renamed);
-    let mut reallocated = baseline.clone();
-    reallocate_content(&mut reallocated);
-    if baseline.checkpoint()? != renamed.checkpoint()?
-        || baseline.checkpoint()? != reallocated.checkpoint()?
-    {
+    if baseline.checkpoint()? != renamed.checkpoint()? {
         return Err("metamorphic initial checkpoint changed".to_string());
     }
     let mut rng = ChaCha8Rng::seed_from_u64(choice_seed);
@@ -1088,8 +1065,7 @@ pub fn verify_metamorphic(
         let action = selected_action(&baseline.optimized, index)?.2;
         let expected = baseline.apply_semantic_action(&action)?;
         let renamed_checkpoint = renamed.apply_semantic_action(&action)?;
-        let reallocated_checkpoint = reallocated.apply_semantic_action(&action)?;
-        if expected != renamed_checkpoint || expected != reallocated_checkpoint {
+        if expected != renamed_checkpoint {
             return Err(format!("metamorphic trace diverged at step {step}"));
         }
     }

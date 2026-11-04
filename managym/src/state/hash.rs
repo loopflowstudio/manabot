@@ -6,6 +6,7 @@ use rand::RngCore;
 use serde::Serialize;
 
 use crate::{
+    cards::content_pack::{default_content_pack, ContentPack},
     flow::{combat::CombatState, game::GameState, turn::TurnState},
     state::{
         card::CardDefId,
@@ -20,7 +21,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 12;
+pub const MATCH_STATE_HASH_VERSION: u32 = 15;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -70,6 +71,14 @@ struct CanonicalTurn {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    extra_turns: Vec<PlayerId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resume_with: Option<PlayerId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    additional_combats: Vec<crate::flow::turn::AdditionalCombat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    combat_attackers: Option<crate::state::predicate::CardPredicate>,
     current_phase: usize,
     current_step: usize,
     step_initialized: bool,
@@ -95,6 +104,10 @@ impl From<&TurnState> for CanonicalTurn {
                 .iter()
                 .map(|(&(card, ability), &count)| (card, ability, count))
                 .collect(),
+            extra_turns: turn.extra_turns.clone(),
+            resume_with: turn.resume_with,
+            additional_combats: turn.additional_combats.clone(),
+            combat_attackers: turn.combat_attackers.clone(),
             current_phase: turn.current_phase,
             current_step: turn.current_step,
             step_initialized: turn.step_initialized,
@@ -165,8 +178,8 @@ fn no_cast_permissions(value: &&crate::flow::cast_permission::CastPermissions) -
     value.is_empty()
 }
 
-impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
-    fn from(state: &'a GameState) -> Self {
+impl<'a> CanonicalMatchState<'a> {
+    fn new(state: &'a GameState, content: &ContentPack) -> Self {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
@@ -195,7 +208,6 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_enqueue_counter,
             rng,
             id_gen,
-            content,
         } = state;
 
         let cards = cards
@@ -255,7 +267,7 @@ impl GameState {
     /// Canonical logical JSON used by higher-level state contracts that add
     /// authority outside `GameState` (for example, the current legal offer).
     pub(crate) fn deterministic_hash_value(&self) -> serde_json::Value {
-        serde_json::to_value(CanonicalMatchState::from(self))
+        serde_json::to_value(CanonicalMatchState::new(self, default_content_pack()))
             .expect("canonical match state contains only serializable values")
     }
 
@@ -265,7 +277,13 @@ impl GameState {
     /// and sorted entries from ordered maps. It never observes allocations,
     /// copied card definitions, compatibility card names, or formatting output.
     pub fn deterministic_hash(&self) -> MatchStateHash {
-        let canonical = CanonicalMatchState::from(self);
+        self.deterministic_hash_over(default_content_pack())
+    }
+
+    /// The hash this state would have in a world with `content`: the proof that
+    /// the hash binds the catalog's schema and digest, not its allocation.
+    pub fn deterministic_hash_over(&self, content: &ContentPack) -> MatchStateHash {
+        let canonical = CanonicalMatchState::new(self, content);
         let bytes = serde_json::to_vec(&canonical)
             .expect("canonical match state contains only serializable values");
         MatchStateHash {

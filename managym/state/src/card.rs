@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 use super::{
     ability::{
         effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec,
+        TargetRequirement, TargetSpec, TriggerCondition,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -707,6 +707,13 @@ pub enum StaticAbility {
     /// A triggered ability this card grants while on the battlefield
     /// ("Other Allies you control have prowess").
     TriggeredGrant(StaticTriggeredGrant),
+    /// "Spells you cast cost [mana] less to cast" (CR 118.7c): each colored
+    /// symbol reduces that color, or generic mana when the cost has none of
+    /// it ("This can reduce generic costs").
+    SpellsCostLessMana(ManaCost),
+    /// "Untap this during each other player's untap step" (CR 502.3): it
+    /// untaps in its controller's opponents' untap steps as well as theirs.
+    UntapsDuringOtherUntapSteps,
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -787,9 +794,48 @@ pub struct CardDefinition {
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
+    /// The back face of a transforming double-faced card (CR 712.1): its own
+    /// characteristics, registered by the content pack as its own row after
+    /// this one. Serialized as its name, a reference to that row, so the
+    /// front's digest and tokens name it without repeating it.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_back_face"
+    )]
+    pub back_face: Option<Box<CardDefinition>>,
+}
+
+fn serialize_back_face<S: serde::Serializer>(
+    face: &Option<Box<CardDefinition>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match face {
+        Some(face) => serializer.serialize_some(&face.name),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl CardDefinition {
+    /// A Saga (CR 714.1): an enchantment with the Saga subtype.
+    pub fn is_saga(&self) -> bool {
+        self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
+    }
+
+    /// Its final chapter number (CR 714.2d): the greatest of its chapter
+    /// abilities' numbers.
+    pub fn final_chapter(&self) -> Option<u8> {
+        self.abilities
+            .iter()
+            .filter_map(|ability| match ability {
+                Ability::Triggered {
+                    condition: TriggerCondition::Chapter { chapter },
+                    ..
+                } => Some(*chapter),
+                _ => None,
+            })
+            .max()
+    }
+
     /// The optional additional cost a cast may choose to pay: kicker or an
     /// optional waterbend, which both mark the spell kicked.
     pub fn optional_cost(&self) -> Option<&ManaCost> {
@@ -966,6 +1012,9 @@ pub struct Card {
     /// definition is then the copiable values that effect produced.
     pub copy: Option<crate::effect::CopyEffect>,
     definition: Arc<CardDefinition>,
+    /// The front face's row while the back face is up (CR 712.8): set by
+    /// [`Card::turn_back_face_up`], cleared by [`Card::turn_front_face_up`].
+    front: Option<(CardDefId, Arc<CardDefinition>)>,
 }
 
 impl Card {
@@ -982,6 +1031,54 @@ impl Card {
             owner,
             copy: None,
             definition,
+            front: None,
+        }
+    }
+
+    /// Its mana cost for mana value: a transformed permanent's is its front
+    /// face's (CR 712.8e).
+    pub fn mana_value_cost(&self) -> Option<&ManaCost> {
+        match &self.front {
+            Some((_, front)) => front.mana_cost.as_ref(),
+            None => self.mana_cost.as_ref(),
+        }
+    }
+
+    /// Whether its back face is up (CR 712.8).
+    pub fn is_transformed(&self) -> bool {
+        self.front.is_some()
+    }
+
+    /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
+    pub fn turn_back_face_up(&mut self, (id, definition): (CardDefId, Arc<CardDefinition>)) {
+        let front = (self.definition_id, Arc::clone(&self.definition));
+        self.show(id, definition);
+        self.front = Some(front);
+    }
+
+    /// Show the front face, if the back face is up.
+    pub fn turn_front_face_up(&mut self) {
+        if let Some((id, definition)) = self.front.take() {
+            self.show(id, definition);
+        }
+    }
+
+    /// Show one face. A token is a double-faced token on either face, and a
+    /// copy's exceptions are in the copiable values of each (CR 707.8a, 707.9b).
+    fn show(&mut self, id: CardDefId, definition: Arc<CardDefinition>) {
+        let token = self.is_token;
+        self.definition_id = id;
+        self.registry_key = ObjectId(id.0);
+        self.definition = definition;
+        if token && !self.is_token {
+            self.is_token = true;
+        }
+        if let Some(mut copy) = self.copy.take() {
+            copy.of = id;
+            for exception in &copy.exceptions {
+                exception.apply_copiable(self);
+            }
+            self.copy = Some(copy);
         }
     }
 

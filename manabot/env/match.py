@@ -10,6 +10,7 @@ from typing import Dict
 # Local imports
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
+from managym import WORLD_SETUP
 
 
 @dataclass
@@ -37,12 +38,17 @@ class Match:
         self.hero_sideboard = deepcopy(config.hero_sideboard)
         self.villain_sideboard = deepcopy(config.villain_sideboard)
 
+    @property
+    def _submission(self) -> str | None:
+        """Only a world submission reaches the engine; authored labels run as given."""
+        return WORLD_SETUP if self.config.world == WORLD_SETUP else None
+
     def to_rust_hero(self) -> "managym.PlayerConfig":
         return managym.PlayerConfig(
             self.hero,
             self.hero_deck,
             self.hero_sideboard,
-            self.config.world,
+            self._submission,
             self.config.decklists,
         )
 
@@ -51,7 +57,7 @@ class Match:
             self.villain,
             self.villain_deck,
             self.villain_sideboard,
-            self.config.world,
+            self._submission,
             self.config.decklists,
         )
 

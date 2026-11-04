@@ -40,7 +40,7 @@ def test_exact_environment_manifest_binds_the_selected_matchup():
 
     assert manifest["schema_version"] == pack.content_pack_schema_version
     assert manifest["content_digest"] == pack.content_pack_hash
-    assert manifest["pack_key"] == pack.pack_key == "ur-lessons-vs-gw-allies"
+    assert "pack_key" not in manifest
     assert len(manifest["definitions"]) == pack.definition_count
     assert len(pack.definition_row_by_card_def_id) == pack.definition_count
 
@@ -64,7 +64,7 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
 
     rows = {
         row["registry_name"]: row["card_def_id"]
-        for row in managym.content_pool("ur-lessons-vs-gw-allies")["definitions"]
+        for row in managym.content_pool("world")["definitions"]
     }
     (program_row,) = pack.program_rows(rows["Invasion Reinforcements"])
     ally_row = pack.definition_row(rows["Ally"])

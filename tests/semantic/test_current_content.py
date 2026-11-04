@@ -1,7 +1,7 @@
-"""Current packs bind learning catalogs and the world pool reports support.
+"""The world's one catalog binds learning projections and the world pool reports support.
 
-Setup and token-closure rejection are native tests in
-`managym/src/cards/setups.rs`; these checks cover the Python consumers.
+Setup rejection is a native test in `managym/src/cards/setups.rs`; these
+checks cover the Python consumers.
 """
 
 import json
@@ -11,7 +11,7 @@ from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
-from manabot.semantic.learning import CURRENT_PACK_KEYS, BoundSemanticPack
+from manabot.semantic.learning import FROZEN_VOCABULARY_LABELS, BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -19,12 +19,11 @@ CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic"
 SETUPS = json.loads((CONTENT_ROOT / "current/setups.json").read_text())
 
 
-def _manifest(pack_key: str) -> dict:
-    pool = managym.content_pool(pack_key)
+def _manifest() -> dict:
+    pool = managym.content_pool("world")
     return {
         "schema_version": 1,
         "content_digest": pool["content_digest"],
-        "pack_key": pack_key,
         "definitions": [
             {"card_def_id": row["card_def_id"], "registry_name": row["registry_name"]}
             for row in pool["definitions"]
@@ -32,26 +31,33 @@ def _manifest(pack_key: str) -> dict:
     }
 
 
-def test_all_current_packs_bind_learning_projections() -> None:
+def test_the_catalog_binds_learning_projections() -> None:
     pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"world"}
-    assert CURRENT_PACK_KEYS <= pack_keys
-    for pack_key in sorted(pack_keys):
-        manifest = _manifest(pack_key)
-        bound = BoundSemanticPack.bind(manifest)
-        assert bound.pack_key == pack_key
-        assert bound.definition_count == len(manifest["definitions"])
-        assert len(bound.definition_row_by_card_def_id) == bound.definition_count
+    assert FROZEN_VOCABULARY_LABELS <= pack_keys
+    manifest = _manifest()
+    bound = BoundSemanticPack.bind(manifest)
+    assert bound.definition_count == len(manifest["definitions"])
+    assert bound.definition_count == managym.CARD_DEFINITION_COUNT
+    assert len(bound.definition_row_by_card_def_id) == bound.definition_count
+
+
+def test_retired_authored_pack_manifests_do_not_bind() -> None:
+    manifest = {**_manifest(), "pack_key": "tla-baseline-v1"}
+    with pytest.raises(ValueError, match="retired"):
+        BoundSemanticPack.bind(manifest)
+    assert BoundSemanticPack.bind({**_manifest(), "pack_key": None})
 
 
 def test_catalog_must_match_the_live_pack_digest() -> None:
-    manifest = {**_manifest("tla-baseline-v1"), "content_digest": "0" * 64}
+    manifest = {**_manifest(), "content_digest": "0" * 64}
     with pytest.raises(ValueError, match="differs from the live pack"):
         BoundSemanticPack.bind(manifest)
 
 
-def test_unknown_pack_has_no_learning_catalog() -> None:
-    with pytest.raises(ValueError, match="unknown content pool"):
-        managym.learning_catalog("missing-pack")
+def test_the_world_is_the_only_content_pool() -> None:
+    for name in ("missing-pack", "tla-baseline-v1"):
+        with pytest.raises(ValueError, match="unknown content pool"):
+            managym.content_pool(name)
 
 
 @pytest.mark.parametrize(
@@ -130,9 +136,8 @@ def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_acad
     bound = BoundSemanticPack.from_env(env)
     policy = bind_policy_catalog("tla-baseline-v1")
     assert bound.semantic_pack_hash == policy.semantic_pack_hash
-    full_pool = bind_policy_catalog("world")
-    assert full_pool.pack_key == "world"
-    pool = managym.content_pool("tla-baseline-v1")
+    assert bind_policy_catalog("world").semantic_pack_hash == bound.semantic_pack_hash
+    pool = managym.content_pool("world")
     assert pool["content_digest"] == env.content_pack_manifest()["content_digest"]
     assert (
         next(

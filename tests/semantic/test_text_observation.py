@@ -15,6 +15,7 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ObservationConfig
+from manabot.managym.experience_projection import decision_surface_view
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -510,6 +511,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "abilities_lost": "has lost all abilities",
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
+        "transforms": "transformed N times",
     },
     managym.Card: {
         "id": "the card's alias",
@@ -551,6 +553,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "permanents_sacrificed": "sacrificed",
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
+        "bent": "bent",
     },
     managym.Player: {
         "id": "the player's alias",
@@ -571,6 +574,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
+        "extra_turns": "extra turn",
+        "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
@@ -639,6 +644,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     state["agent"] |= {
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
+        "extra_turns": 1,
         "turn_history": {
             "attacked": True,
             "permanents_sacrificed": 2,
@@ -654,6 +660,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     )
     assert "Keeps unspent red mana until end of turn." in text
     assert "Has no maximum hand size for the rest of the game." in text
+    assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
         "their control; drew 1 card." in text
@@ -771,10 +778,14 @@ def test_continuous_effect_records_are_stated_in_order_with_duration(
         assert absent not in decision.text
 
 
-def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None:
+@pytest.mark.parametrize("frequency", [None, 1, 2])
+@pytest.mark.parametrize("this_turn", [False, True])
+def test_waiting_delayed_trigger_relation_names_its_event_and_duration(
+    frequency: int | None, this_turn: bool
+) -> None:
     env = priority_root((), ("Mountain", "Gray Ogre"))
     payload = json.loads(capture_text_decision(env).capture_json)
-    _, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
+    mountain, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
     viewer = payload["observation"]["viewer_state"]["agent"]["player_index"]
     payload["frames"].append(
         {
@@ -805,16 +816,70 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
             "can_decline": False,
             "mana_outputs": [],
             "resolutions_this_turn": 0,
-            "this_turn": True,
+            "this_turn": this_turn,
+            "delayed_frequency": frequency,
+            "remembered": [
+                {
+                    "object": mountain["id"],
+                    "definition": mountain["registry_key"],
+                    "player": None,
+                }
+            ],
         }
     )
+    if frequency is None:
+        del payload["frames"][-1]["delayed_frequency"]
+    if not this_turn:
+        del payload["frames"][-1]["this_turn"]
     text = render_decision(_redigest(payload)).text
     relation = next(
         line for line in text.splitlines() if "waiting delayed trigger" in line
     )
     assert "waits for the watched object to die" in relation
     assert "watching C" in relation and "(Gray Ogre)" in relation
-    assert "ends at this turn's cleanup if it has not triggered" in relation
+    assert "remembered C" in relation and "(Mountain)" in relation
+    assert (
+        "waiting ends at this turn's cleanup" if this_turn else "no stated expiry"
+    ) in relation
+    if frequency is None:
+        assert "fires once" not in relation and "fires on each" not in relation
+    else:
+        assert (
+            "fires once" if frequency == 1 else "fires on each matching event"
+        ) in relation
+
+
+@pytest.mark.parametrize("frequency,kind", [(0, 10), (3, 10), (1, 3)])
+def test_delayed_frequency_rejects_invalid_capture_codes(
+    frequency: int, kind: int
+) -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    frame = {
+        "kind": kind,
+        "decision": 1 if kind == 10 else 0,
+        "parent": None,
+        "controller": 0,
+        "source": {"object": None, "definition": None, "player": None},
+        "mode": None,
+        "ability": None,
+        "kicked": False,
+        "active_clause": None,
+        "targets": [],
+        "context": None,
+        "sacrifice": None,
+        "cost": None,
+        "hybrid": [],
+        "lesson": False,
+        "waterbend": False,
+        "can_decline": False,
+        "mana_outputs": [],
+        "resolutions_this_turn": 0,
+        "delayed_frequency": frequency,
+    }
+    payload["frames"].append(frame)
+    with pytest.raises(ValueError, match="invalid continuation frame relationship"):
+        managym.parse_continuation_frames_json(json.dumps(payload["frames"]))
 
 
 def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
@@ -931,6 +996,133 @@ def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
     text = capture_text_decision(env).text
     assert "; copy of D" in text
     assert "This turn: sacrificed 1 permanent." in text
+
+
+def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["transforms"] = 2
+    source = {"object": ogre["id"], "definition": ogre["registry_key"], "player": None}
+    frame: dict[str, object] = {
+        "kind": 3,
+        "decision": 0,
+        "parent": None,
+        "controller": state["agent"]["player_index"],
+        "source": source,
+        "mode": None,
+        "ability": 1,
+        "kicked": False,
+        "active_clause": None,
+        "targets": [],
+        "context": None,
+        "sacrifice": None,
+        "cost": None,
+        "hybrid": [],
+        "lesson": False,
+        "waterbend": False,
+        "can_decline": False,
+        "mana_outputs": [],
+        "resolutions_this_turn": 0,
+    }
+    payload["frames"] = [
+        frame | {"x": 6, "source_transforms": 1, "inherited_from": source},
+        frame | {"kind": 6, "decision": 24, "can_decline": True},
+        frame | {"kind": 6, "decision": 25, "mode": 2, "can_decline": True},
+        frame | {"kind": 10, "decision": 7},
+        frame | {"kind": 11, "mode": 0},
+        frame | {"kind": 12, "mode": 1, "attackers": "land creatures"},
+    ]
+    text = render_decision(_redigest(payload)).text
+    for meaning in (
+        "X = 6",
+        "transformed 2 times",
+        "source inherits abilities from",
+        "choose optional payment X",
+        "may exile up to 2 more cards",
+        "controller's end step",
+        "scheduled turn 1",
+        "only land creatures may attack",
+    ):
+        assert meaning in text
+
+
+def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None:
+    env = priority_root(("The Rise of Sozin",), ("Swamp",) * 6, opponent=("Gray Ogre",))
+    raw = env.scenario_refresh()
+    casted = False
+    for _ in range(100):
+        actions = raw.action_space.actions
+        name = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.description == "Name Gray Ogre"
+            ),
+            None,
+        )
+        if name is not None:
+            decision = capture_text_decision(env)
+            assert len(decision.actions) == len(actions) > 64
+            submit_response(env, decision, decision.actions[name].reference)
+            break
+        cast = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if not casted
+                and action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+            ),
+            None,
+        )
+        target = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == managym.ActionEnum.CHOOSE_TARGET
+                and raw.opponent.id in action.focus
+            ),
+            None,
+        )
+        quiet = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type
+                in (
+                    managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+                    managym.ActionEnum.DECLINE_CHOICE,
+                )
+            ),
+            0,
+        )
+        casted |= cast is not None
+        raw, *_ = env.step(
+            cast if cast is not None else target if target is not None else quiet
+        )
+    else:
+        raise AssertionError("Sozin's name choice was not reached")
+    viewer = env.current_agent_index()
+    raw = env.observation_for_player(viewer)
+    decision = capture_text_decision(env)
+    assert "search named cards" in decision.text
+    inspected_ids = {card.id for card in raw.opponent_cards if int(card.zone) in (0, 1)}
+    assert inspected_ids
+    projection = decision_surface_view(env, viewer)
+    assert {card["id"] for card in projection["agent"]["inspected"]} == inspected_ids
+    assert not projection["opponent"]["hand"]
+    assert not decision_surface_view(env, 1 - viewer)["agent"].get("inspected")
+    expected = ObservationSpace().encode(raw)
+    for key, actual in env.encode_observation(raw).items():
+        np.testing.assert_array_equal(actual, expected[key], err_msg=key)
+    stop = next(
+        action
+        for action in decision.actions
+        if "Stop searching and shuffle" in action.description
+    )
+    submit_response(env, decision, stop.reference)
+    assert not decision_surface_view(env, viewer)["agent"].get("inspected")
 
 
 def _assert_native_observation_parity(

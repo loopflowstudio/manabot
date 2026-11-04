@@ -77,9 +77,9 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Shipped substrate
 
-- Immutable versioned `ContentPack` definitions are separated from compact
-  mutable match facts. Environments and branches share definitions without
-  copying card content.
+- The process-wide `ContentPack` catalog separates immutable definitions from
+  compact mutable match facts. Environments and branches share definitions
+  without copying card content; authored presets are decklists over that catalog.
 - Stable `CardDefId` values and deterministic state witnesses reproduce seeded
   traces without allocation-address or debug-format identity.
 - Card content is the engine's own `CardDefinition` written in its rules
@@ -324,13 +324,17 @@ preserves accepted decisions, dated proof limits and source history.
   An unchanged Command tape/game outcome does not imply unchanged object ids:
   earthbend's continuous-effect records allocate ids. Broad proof belongs to
   its tested tree; it does not establish correctness after another engine sync.
-- Crate moves also relocate live rules-audit authorities and behavioral-test
+- Crate moves and constructor consolidation also relocate live rules-audit authorities and behavioral-test
   anchors in `reviews.json` and its generated `index.jsonl`. Move both together
   while preserving rule dispositions, source spans/digests and frozen receipts;
   keep validation strict. PR #414's first Python Unit Tests run exposed this
   omitted consumer despite its earlier broad engine/Academy checks. The exact
   CI command, including infrastructure and deployment tests, covers a different
-  boundary than the engine suite.
+  boundary than the engine suite. T6's catalog consolidation exposed the same
+  boundary at `Game::new_with_content`: the surviving authority is
+  `Game::construct`, and generator defaults must move with reviewed anchors.
+  Regeneration against the exact pinned source preserved all 3,322 dispositions,
+  spans and hashes; repairing live references supplies no new rules coverage.
 - Cache-preserving writes and generic continuous effects must compose: allocate
   timestamps through the typed ID accessor, return before a tracked mutation
   for an empty batch, and retain full invalidation for nonempty effect records.
@@ -417,6 +421,120 @@ preserves accepted decisions, dated proof limits and source history.
   no other Python-visible source (the pack manifest carries ids and names
   only), so restoring it needs an engine accessor, a decision Jack Heart
   has not made.
+
+## T6 lessons (2026-11-03; pending review)
+
+- Jack Heart accepted the one-catalog simplification into T6 on 2026-11-02:
+  `ContentPack` owns stable name-ordered definition rows and content identity;
+  authored presets are decklists, not separate worlds. Back-face rows follow
+  their fronts. The refactor alone preserved content bytes at `2c1ba169f`;
+  later card/rules changes intentionally moved the digest. Historical labels
+  stay readable, but former authored-pack checkpoint manifests are not
+  migrated, and no retained checkpoint binary has established compatibility.
+- A shared consumer trace can agree while the rules are wrong. T6's first
+  publication gate reproduced targets-before-payment and automatic named-card
+  exile despite earlier green suites. Optional X payment must complete before
+  a distinct reflexive trigger chooses targets within its retained budget and
+  offers priority. A search's optional zero-through-four selection is a real
+  native decision; matching the final state is insufficient evidence.
+- Private zone search grants temporary physical visibility to its chooser,
+  including nonmatching cards, while inspected hand definitions remain known
+  afterward. Observation, text, Academy projection and both search samplers
+  must consume that same permission. The searched library's owner acquires no
+  extra visibility, and replay/Study redaction remains viewer-relative.
+- Future behavior depends on history as well as the visible face: a transform
+  count detects an intervening round trip; stacked inherited abilities retain
+  their lending definition across source departure or replacement; departure
+  triggers use LKI. Ordered extra turns/combats and their restrictions need
+  both deterministic identity and shared policy/text observation. T6 represents
+  them in v5/v6 frames/facts and definition-derived tokens, preserving v1–v4
+  widths and exclusions. Hash contract 13 moved to 14 for delayed-object captures
+  and 15 for independent lifetime fields; mutable receipts must follow those
+  changes, while frozen evidence stays fixed.
+- Jack Heart accepted Academy's public schedule completion in T6 on
+  2026-11-03 (option 1a). Equal per-player counts can conceal opposite turn
+  orders, and zero pending combats can conceal an active restriction. Native
+  `TurnState.public_schedule` supplies ordered turns/resume and current/pending
+  combats directly; policy continuation frames are a parallel projection, not
+  a client scheduling API. Missing historical data is unknown. Current combat
+  includes ordinary combat without a new persisted extra-combat flag. Native,
+  Svelte and retained-session WebSocket proofs cover these distinctions; they
+  establish neither browser geometry nor process-crash durability.
+- Jack Heart's 2026-11-03 delayed-trigger correction separates event timing,
+  captured subjects and effects. `CreateDelayedTrigger` resolves an optional
+  selector immediately; exact `ObjectRef`s travel through the waiting trigger,
+  occurrence, stack and suspended resolution as `Remembered`, separately from
+  event context. Later incarnation changes cannot redirect the effect. Generic
+  end-step timing retains controller-only versus any-player behavior; captured
+  death watchers share the same path. Focused debug proofs cover independent
+  captures, source departure/control change, reentry, forks and hidden subjects.
+  Definition-derived tokens and viewer-safe native/Python/text projection carry
+  the state. This changes content/hash identity, so old green receipts are not
+  evidence for the corrected engine; frozen evidence remains untouched.
+- Jack Heart accepted independent delayed-event matching, firing frequency and
+  expiry on 2026-11-03 (option 1a), superseding the earlier open scope choice.
+  `DelayedFrequency::{Once, EachMatch}` and `DelayedExpiry::{ThisTurn, Never}`
+  compose with event predicates. A once-only watcher is consumed on its match,
+  not successful resolution; cleanup removes waiting records, never existing
+  occurrences. Exact-object death watchers retire on departure even with no
+  stated expiry or repeating frequency. Captured references and event context
+  retain separate identities and the original controller. V5/v6 relation kind 9
+  carries frequency without changing widths; absent historical frequency stays
+  unknown. Focused debug, hash/fork, native/Python/text/token and retained-session
+  proofs support this slice, not crash persistence or combined-head acceptance.
+  This correction introduces no general printed-trigger migration or second DSL.
+- Main's v6 integration (`3b122de90`, merged into T6 at `bf7631c6a`) makes fact
+  capacity configurable, fresh default 512, independently of T6's 512-action
+  capacity. Frozen v5 remains 128 facts; omitted saved action capacity stays
+  64. Timestamp rank normalization remains /128 for either fact capacity.
+  Training's retained 140-fact failure demonstrates why deck admission and
+  encoder capacity are separate questions; a larger capacity repairs that
+  counterexample, not every reachable position. T6's focused v6 parity and
+  retained-session proofs do not certify training results or combined-head CI.
+- Concurrent vocabulary additions need explicit ordinal reconciliation.
+  Main's library ordering keeps decision code 23 and loyalty/defense keep
+  counter ordinals 7/8; unpublished T6 payment/search use 24/25, choose-to-exile
+  uses 26 and lore appends at 9. Combined receipts inherit main's corrected
+  135-Command trace, not the older 142-Command tape. Regeneration and focused
+  parity at `64b79d895` do not establish full-suite or review acceptance.
+- Referenced-row training avoids encoding unused catalog programs while
+  retaining gradients; serving keeps the full cached table because subset GRU
+  execution is not bitwise identical. Focused behavioral/gradient evidence
+  does not prove retained-checkpoint compatibility, strength or a new runtime
+  budget. Fresh action capacity is 512; omitted saved capacity remains 64,
+  and overflow must fail explicitly rather than hide legal choices.
+- Frozen architecture checks must reconstruct the recorded observation
+  configuration through `ObservationConfig.from_checkpoint`, including its
+  policy-input version, rather than using fresh defaults. T6's capacity change
+  exposed this distinction: loading the original v5/64-action inputs preserves
+  the retained architecture hash. Fresh-checkpoint tests separately expect 512;
+  neither proof admits an old trained checkpoint under the changed world.
+  A new save must also use the agent's actual observation space: the compound
+  replay fixture supplied fresh 512-action metadata for an explicit 64-action
+  agent, and receipt validation correctly rejected it. Saving
+  `agent.observation_space` and checking configuration equality after the final
+  sampler reload repairs the fixture without weakening validation. Both uniform
+  and learned samplers have focused save/reload/payment-replay proof; this does
+  not establish full-head CI or retained-checkpoint compatibility.
+
+- Frozen experiment scheduling/analysis fixtures must isolate historical
+  identity from live-runtime admission. T6's published CI exposed 27 pilot
+  failures at the world guard despite passing focused gameplay proofs. An
+  opt-in compatible-world fixture (also explicit in the fresh-process analysis
+  CLI) exercises synthetic outcomes without games, training or allocation;
+  separate unpatched checks retain rejection through frozen loading, run
+  declaration and evaluation. Pin every declared input capacity: v3's v6/256
+  facts contract also requires 64 actions, independent of fresh 512 defaults.
+  Temporary changed-input fixtures exercise admission without rewriting frozen
+  protocol/regime bytes. The repaired 33-case module passes; this is test
+  isolation evidence, not historical-runtime compatibility or full-head CI.
+- Main's explicit v7 shared-effect projection (`fb5ad2c13`, integrated into
+  T6 at `920bbb52a`) coexists with T6 schedule/capture/lifetime projections;
+  fresh inputs remain v6. Constructors use the single catalog, and consumer
+  parity must include the selected version rather than a global default shape.
+  Focused native, Python/text and discovery checks passed after integration;
+  pre-sync green receipts still do not certify the combined source or imply
+  acceptance of unrelated experiment work.
 
 ## Open tensions
 

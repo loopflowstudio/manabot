@@ -49,6 +49,16 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// The inner condition only while the source permanent is attacking
+    /// ("whenever you cast a spell while Fire Lord Azula is attacking").
+    WhileSourceAttacking {
+        condition: Box<TriggerCondition>,
+    },
+    /// "Whenever you cast your Nth spell each turn" (CR 603.2): the spell is
+    /// the Nth its controller cast this turn.
+    YouCastNthSpellThisTurn {
+        n: u32,
+    },
     /// "Whenever a player casts a [predicate] spell": any player, including
     /// you. The caster is the trigger context ("they").
     PlayerCastsSpell {
@@ -118,6 +128,11 @@ pub enum TriggerCondition {
     },
     /// "At the beginning of your upkeep."
     BeginningOfYourUpkeep,
+    /// "At the beginning of each upkeep."
+    BeginningOfEachUpkeep,
+    /// "Whenever you waterbend, earthbend, firebend, or airbend": once per
+    /// bending instruction or waterbend payment.
+    YouBend,
     BeginningOfYourCombat,
     BeginningOfYourEndStep,
     /// "Whenever a creature you control attacking causes a triggered ability
@@ -126,6 +141,12 @@ pub enum TriggerCondition {
     YourAttackingCreatureTriggers,
     /// "At the beginning of your first main phase" (the precombat main).
     BeginningOfYourFirstMainPhase,
+    /// A Saga's chapter ability (CR 714.2b): triggers as lore counters put
+    /// on this Saga bring their number from below `chapter` to at least it.
+    /// Abilities printed "I, II" are one ability per chapter.
+    Chapter {
+        chapter: u8,
+    },
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `PlayerTurnHistory::cards_drawn`).
     YouDrawNthCardThisTurn {
@@ -195,6 +216,9 @@ pub enum Condition {
     AttackedThisTurn,
     /// "if a land entered the battlefield under your control this turn".
     LandEnteredThisTurn,
+    /// "if you've done all four this turn": waterbent, earthbent, firebent
+    /// and airbent.
+    BentAllFourThisTurn,
     /// "if you've sacrificed `count` or more permanents this turn".
     SacrificedThisTurnAtLeast {
         count: u32,
@@ -293,6 +317,7 @@ impl Condition {
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
+            | Condition::BentAllFourThisTurn
             | Condition::SacrificedThisTurnAtLeast { .. } => false,
         }
     }
@@ -309,6 +334,8 @@ pub enum TriggerSubject {
     AnyYouControl(CardPredicate),
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// "another [predicate]", whoever controls it.
+    Another(CardPredicate),
 }
 
 /// The players an effect affects, relative to its controller.
@@ -385,6 +412,11 @@ pub enum EffectValue {
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
+    /// The greatest power among creatures `controller` controls (0 with
+    /// none).
+    GreatestPowerYouControl,
+    /// Cards in `controller`'s hand.
+    CardsInHand,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -421,6 +453,9 @@ pub enum ObjectSelector {
     /// The permanent whose event fired the trigger ("that creature", "that
     /// token"), which the trigger keeps as its context.
     Triggering,
+    /// Objects captured when a delayed trigger was created, still in the same
+    /// incarnation; separate from the object supplied by its triggering event.
+    Remembered,
     /// The object the source Aura or Equipment is attached to.
     Attached,
     /// The token this resolution created last ("that token").
@@ -534,6 +569,7 @@ impl ObjectSelector {
             | Self::Triggering
             | Self::Attached
             | Self::CreatedThisWay
+            | Self::Remembered
             | Self::Grantor
             | Self::Moved
             | Self::You
@@ -628,6 +664,9 @@ pub enum Effect {
         to: ZoneType,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped: bool,
+        /// Enter with the back face up; a card without one stays where it is.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        transformed: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         under: Option<PlayerSelector>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -641,14 +680,19 @@ pub enum Effect {
     Untap { what: ObjectSelector },
     /// Remove every counter from each permanent `from` names.
     RemoveAllCounters { from: ObjectSelector },
-    /// Create a token that's a copy of the source (CR 707.2, 111.1). The
-    /// token copies the source's copiable values: its definition, including
-    /// any copy effect already applied to it, and never its counters, damage,
-    /// tapped state or non-copy effects. A source that has left the
-    /// battlefield is copied as it last existed there. `exceptions` ("except
-    /// it's not legendary") become part of the token's own copiable values
-    /// (CR 707.9b), so a copy of it inherits them.
+    /// Create a token that's a copy of the source, or of the target `of`
+    /// names (CR 707.2, 111.1). The token copies the copiable values: the
+    /// definition of the face that's up, including any copy effect already
+    /// applied, and never counters, damage, tapped state or non-copy
+    /// effects. A copy of a double-faced permanent has both faces and enters
+    /// transformed if that permanent is (CR 707.8a). An object that has left
+    /// its zone is copied as it last existed there ("a copy of it" after
+    /// exiling it). `exceptions` ("except it's not legendary") become part of
+    /// the token's own copiable values (CR 707.9b), so a copy of it inherits
+    /// them.
     CreateTokenCopy {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        of: Option<TargetSpec>,
         exceptions: Vec<Modification<EffectValue>>,
     },
     OptionalPayment {
@@ -718,6 +762,43 @@ pub enum Effect {
     /// Airbend (CR 701.65) each permanent `what` names: exile it; its owner
     /// may cast that exact exiled card for {2} rather than its mana cost.
     Airbend { what: ObjectSelector },
+    /// "After this phase, there is an additional combat phase [in which
+    /// only `attackers` can attack]" (CR 500.8).
+    AdditionalCombatPhase {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attackers: Option<CardPredicate>,
+    },
+    /// "Starting with you, each player chooses up to one [predicate]
+    /// permanent from among permanents your opponents control. Exile those
+    /// permanents."
+    EachPlayerChoosesToExile { predicate: CardPredicate },
+    /// "Choose a card name. Search [the target player]'s graveyard, hand and
+    /// library for up to `count` cards with that name and exile them. Then
+    /// that player shuffles." The name is a resolution choice among the
+    /// world's card names (one mode each, `ExileNamed`).
+    NameAndExileFromTargetPlayer { count: usize },
+    /// Privately search the target player's graveyard, hand and library,
+    /// choosing zero through `count` cards named `name` to exile; then shuffle.
+    ExileNamed { name: String, count: usize },
+    /// Choose X and optionally pay that much generic mana during resolution.
+    /// The paid branch reads X from the frame; `WhenYouDo` retains it.
+    OptionalManaPaymentX { if_paid: Vec<Effect> },
+    /// "You may exile it": the card the triggering creature became in its
+    /// graveyard, exiled with this ability's source (CR 607.2a).
+    MayExileTriggeringWithSource,
+    /// "Choose a [predicate] card exiled with [this]": one mode per such
+    /// card, each `HaveAbilitiesOf` it.
+    ChooseExiledWithSource { predicate: CardPredicate },
+    /// The source permanent has all activated and triggered abilities of
+    /// `definition` from now on, until a later choice (CR 613.1f).
+    HaveAbilitiesOf { definition: crate::card::CardDefId },
+    /// "Take an extra turn after this one" (CR 500.7): the resolving
+    /// player's, before any extra turn created earlier.
+    TakeExtraTurn,
+    /// "Transform [this]" (CR 701.27): the source permanent turns over and
+    /// stays the same object (CR 701.27a). Nothing happens to a permanent that
+    /// isn't a double-faced card (CR 701.27c).
+    TransformSource,
     /// "[player] gains control of [what]" for `duration` (CR 613.1b).
     GainControl {
         player: PlayerSelector,
@@ -727,8 +808,9 @@ pub enum Effect {
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
     OpponentsCastOnlyFromHand,
-    /// "Exile the top card of your library. You may play that card this turn."
-    ExileTopCardPlayThisTurn,
+    /// "Exile the top `count` cards of your library. You may play them
+    /// [`until`]."
+    ExileTopCardsToPlay { count: usize, until: PlayWindow },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
         chooser: LinkedChooser,
@@ -849,6 +931,12 @@ pub enum Effect {
     /// are chosen as the delayed ability is put on the stack.
     CreateDelayedTrigger {
         event: DelayedEvent,
+        frequency: DelayedFrequency,
+        expiry: DelayedExpiry,
+        /// Resolve this selector now, not when the delayed ability resolves.
+        /// Its exact objects become `ObjectSelector::Remembered` there.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remember: Option<ObjectSelector>,
         effects: Vec<Effect>,
     },
     /// Resolving player gains `amount` life, read as the instruction
@@ -874,6 +962,9 @@ pub enum Effect {
         random_order: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
+        /// Selected cards go onto the battlefield instead of into the hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
         look: EffectValue,
         min_select: usize,
         max_select: usize,
@@ -968,20 +1059,43 @@ pub enum Effect {
     ForEachTarget { effects: Vec<Effect> },
 }
 
+/// How long a player may play cards an effect exiled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum PlayWindow {
+    /// "this turn".
+    ThisTurn,
+    /// "until the end of your next turn".
+    ThroughYourNextTurn,
+}
+
 /// The event a delayed triggered ability created by
 /// [`Effect::CreateDelayedTrigger`] waits for (CR 603.7).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DelayedEvent {
-    /// "When that creature dies this turn": the frame's primary target.
-    TargetDiesThisTurn,
-    /// "Whenever a creature dies this turn."
-    CreatureDiesThisTurn,
-    /// "At the beginning of the next end step", about the token the
-    /// resolution created last ("sacrifice that token").
-    NextEndStepForCreatedToken,
-    /// "When you next cast a [predicate] spell this turn"; that spell is
-    /// the delayed ability's context.
-    YouNextCastThisTurn(CardPredicate),
+    /// Watch each captured object's death during that exact battlefield stint.
+    Dies,
+    CreatureDies,
+    EndStep {
+        your_turn: bool,
+    },
+    /// The matching spell supplies event context, separate from captured subjects.
+    YouCastSpell(CardPredicate),
+    Upkeep,
+}
+
+/// Whether a matching event consumes the watcher, independently of resolution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DelayedFrequency {
+    Once,
+    EachMatch,
+}
+
+/// When to stop waiting. Expiry never removes an already-created occurrence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DelayedExpiry {
+    ThisTurn,
+    /// No stated expiry; exact-object watchers still retire when that object leaves.
+    Never,
 }
 
 /// Effects that run when any card milled by the same instruction matches.
@@ -1030,6 +1144,10 @@ pub enum TargetSpec {
     GraveyardCard {
         predicate: CardPredicate,
     },
+    /// "[predicate] card from that player's graveyard": an opponent's.
+    GraveyardCardOpponentOwns {
+        predicate: CardPredicate,
+    },
     Player,
     Opponent,
     Permanent {
@@ -1048,6 +1166,8 @@ pub enum TargetSpec {
     SpellOrPermanent {
         min_mana_value: u8,
     },
+    /// "target creature or spell".
+    CreatureOrSpell,
     /// "target creature you control" — relative to the caster/controller.
     CreatureYouControl,
     /// "target creature an opponent controls".
@@ -1075,9 +1195,13 @@ pub struct TargetRequirement {
     /// "other target": the ability's own source object is not a candidate.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub another: bool,
-    /// "Up to X targets": the announced X replaces `max` (CR 601.2c).
+    /// The announced X replaces `max` (CR 601.2c): "up to X targets" with
+    /// `min` 0, or "X targets", exactly X, with any other `min`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub max_x: bool,
+    /// The targets in this clause have total mana value at most X.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub total_mana_value_x: bool,
 }
 
 impl TargetRequirement {
@@ -1093,6 +1217,21 @@ impl TargetRequirement {
             max: 1,
             another: false,
             max_x: false,
+            total_mana_value_x: false,
+        }
+    }
+
+    /// Whether X must equal the number of targets ("X targets").
+    pub fn exact_x(&self) -> bool {
+        self.max_x && self.min > 0
+    }
+
+    /// The fewest targets this requirement allows with X announced as `x`.
+    pub fn min_for(&self, x: u8) -> usize {
+        if self.exact_x() {
+            usize::from(x)
+        } else {
+            self.min
         }
     }
 
@@ -1144,6 +1283,7 @@ impl Effect {
             return true;
         }
         match self {
+            Effect::MayExileTriggeringWithSource => true,
             Effect::Earthbend { count: value, .. }
             | Effect::MillCards { count: value, .. }
             | Effect::DrawCards { count: value }
@@ -1158,6 +1298,7 @@ impl Effect {
     /// other effect.
     pub fn selectors(&self) -> Vec<&ObjectSelector> {
         match self {
+            Effect::CreateDelayedTrigger { remember, .. } => remember.iter().collect(),
             Effect::PutCounters { on, .. } => vec![on],
             Effect::PutCountersFrom { from, on } => vec![from, on],
             Effect::ApplyContinuous { affected: what, .. }
@@ -1212,6 +1353,8 @@ impl Effect {
             Effect::TargetClause { effects, .. } => {
                 effects.iter().any(Effect::asks_triggering_spell)
             }
+            // "Copy that spell": the cast spell is the context.
+            Effect::CopyTriggeringObject => true,
             _ => false,
         }
     }
@@ -1287,6 +1430,7 @@ impl Effect {
             | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
+            Effect::CreateTokenCopy { of, .. } => of.as_ref(),
             Effect::PutCounters { .. }
             | Effect::PutCountersFrom { .. }
             | Effect::Sacrifice { .. }
@@ -1309,9 +1453,8 @@ impl Effect {
             | Effect::ApplyContinuous { .. }
             | Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
-            | Effect::CreateTokenCopy { .. }
             | Effect::OpponentsCastOnlyFromHand
-            | Effect::ExileTopCardPlayThisTurn
+            | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
@@ -1322,6 +1465,16 @@ impl Effect {
             | Effect::SearchLandsOpponentSplits { .. }
             | Effect::DrawCards { .. }
             | Effect::CreateToken { .. }
+            | Effect::TransformSource
+            | Effect::TakeExtraTurn
+            | Effect::AdditionalCombatPhase { .. }
+            | Effect::EachPlayerChoosesToExile { .. }
+            | Effect::MayExileTriggeringWithSource
+            | Effect::ChooseExiledWithSource { .. }
+            | Effect::HaveAbilitiesOf { .. }
+            | Effect::NameAndExileFromTargetPlayer { .. }
+            | Effect::ExileNamed { .. }
+            | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
             | Effect::ReturnMilledThisWay { .. }
@@ -1442,6 +1595,7 @@ impl Effect {
             what,
             to,
             tapped: false,
+            transformed: false,
             under: None,
             with_counter: None,
             linked: None,
@@ -1465,6 +1619,7 @@ impl Effect {
             what,
             to: ZoneType::Battlefield,
             tapped,
+            transformed: false,
             under: None,
             with_counter: None,
             linked: None,
@@ -1477,6 +1632,7 @@ impl Effect {
             what,
             to: ZoneType::Exile,
             tapped: false,
+            transformed: false,
             under: None,
             with_counter: None,
             linked: Some(linked),

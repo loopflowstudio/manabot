@@ -847,6 +847,12 @@ acting viewer receives private continuation; overflow fails rather than
 truncating. Transport IDs are joins to the card catalog and object table,
 never numeric features. At `Decision::ManaChoice` the activation source is
 unavailable because rules state has discarded it.
+Waiting delayed abilities (frame kind 10) carry event codes independently of
+frequency and expiry. In v5/v6, relation row kind 9 carries frequency in column
+28 (1 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
+objects remain kind-8 reference rows, separate from event context. Historical
+captures without a frequency field retain unknown frequency rather than
+inferring it from the event. V1–v4 omit these delayed facts.
 
 Encode-only benchmark: `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`.
 Matched full-vector benchmarks use `scripts/bench_breakdown.py --matched-corpus`

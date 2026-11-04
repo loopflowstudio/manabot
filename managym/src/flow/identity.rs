@@ -3,6 +3,7 @@
 
 use crate::{
     agent::action::ActionSpace,
+    cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::CardDefinition,
@@ -75,6 +76,8 @@ impl Game {
         let definition = &self.state.cards[card];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            transforms: permanent.transforms,
+            inherited_from: self.inherited_definition_id(permanent_id),
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
@@ -132,7 +135,7 @@ impl Game {
     /// clone.
     pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&CardDefinition> {
         let lki = self.object_lki(object_ref)?;
-        self.state.content.definition(lki.definition_id)
+        default_content_pack().definition(lki.definition_id)
     }
 
     pub(crate) fn record_object_lki(&mut self, lki: ObjectLki) {

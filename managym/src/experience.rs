@@ -331,6 +331,9 @@ pub struct LegacyCastPermissionView {
     pub cost: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
+    /// Ends in the cleanup step of the permitted player's next turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub through_next_turn: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
     /// Usable only on a turn numbered after this one.
@@ -391,6 +394,8 @@ pub struct ContinuousEffectView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub types: Option<LegacyCardTypesView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -531,6 +536,12 @@ pub struct LegacyPlayerView {
     /// What this player has done this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: crate::flow::turn::PlayerTurnHistory,
+    /// Extra turns this player will take after this one.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub extra_turns: u32,
+    /// Additional combat phases still to come this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub additional_combats: u32,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,
@@ -612,9 +623,34 @@ pub struct DecisionObjectView {
     pub label: String,
 }
 
+/// Public committed scheduling only; absent on historical projections that
+/// did not record it. Order is execution order, independently in each domain.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScheduleView {
+    pub extra_turns: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_with: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_combat: Option<CombatView>,
+    pub additional_combats: Vec<CombatView>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CombatView {
+    pub player_index: u32,
+    /// Rules-derived predicate description. Absent means no extra restriction;
+    /// ordinary native attack legality still applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attackers: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyHeroObservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<ScheduleView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack_objects: Option<Vec<StackEntryView>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

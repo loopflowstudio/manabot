@@ -71,6 +71,7 @@
     const who = permission.player_id === player.id ? 'its owner' : 'the other player';
     const terms = [permission.cost ? `may be cast by ${who} for ${permission.cost}` : `may be played by ${who}`];
     if (permission.this_turn) terms.push('this turn');
+    if (permission.through_next_turn) terms.push('until the end of their next turn');
     if (permission.own_turn_only) terms.push('during their turn');
     if (permission.after_turn !== undefined) terms.push(`after turn ${permission.after_turn}`);
     if (permission.source_permanent_id !== undefined) terms.push('while they control the card that exiled it');
@@ -169,6 +170,7 @@
         history.permanents_sacrificed && `sacrificed ${history.permanents_sacrificed} permanent${history.permanents_sacrificed === 1 ? '' : 's'}`,
         history.land_entered && 'a land entered',
         history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
+        history.bent && `bent ${['water', 'earth', 'fire', 'air'].filter((_, index) => (history.bent ?? 0) & (1 << index)).join(', ')}`,
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}

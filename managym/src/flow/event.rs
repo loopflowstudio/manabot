@@ -130,12 +130,19 @@ pub enum GameEvent {
         target: EventSubject,
         amount: u32,
     },
-    /// `by` put `count` (> 0) `kind` counters on a permanent (CR 122.6).
+    /// `by` put `count` (> 0) `kind` counters on a permanent (CR 122.6),
+    /// leaving `total` of that kind on it.
     CountersPut {
         permanent: PermanentId,
         kind: CounterKind,
         count: i32,
+        total: i32,
         by: PlayerId,
+    },
+    /// A player bent (waterbend, earthbend, firebend or airbend).
+    Bent {
+        player: PlayerId,
+        kind: crate::flow::turn::Bending,
     },
     /// A player scried (CR 701.22).
     Scried {
@@ -185,6 +192,7 @@ pub enum EventKind {
     BlockersDeclared,
     CombatDamageDealt,
     CountersPut,
+    Bent,
     Scried,
     LibrarySearched,
     CombatDamageToPlayers,
@@ -214,6 +222,7 @@ impl GameEvent {
             GameEvent::BlockersDeclared { .. } => EventKind::BlockersDeclared,
             GameEvent::CombatDamageDealt { .. } => EventKind::CombatDamageDealt,
             GameEvent::CountersPut { .. } => EventKind::CountersPut,
+            GameEvent::Bent { .. } => EventKind::Bent,
             GameEvent::Scried { .. } => EventKind::Scried,
             GameEvent::LibrarySearched { .. } => EventKind::LibrarySearched,
             GameEvent::CombatDamageToPlayers { .. } => EventKind::CombatDamageToPlayers,

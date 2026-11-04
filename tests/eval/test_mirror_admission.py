@@ -30,13 +30,13 @@ def test_selected_leg_layout_preserves_cross_setups() -> None:
         else:
             deck = "ur_lessons" if leg < 6 else "gw_allies"
             assert decks == (deck, deck)
-            assert actual.world == "ur-lessons-vs-gw-allies"
+            assert actual.world is None
     for leg in (-1, 8):
         with pytest.raises(ValueError, match="leg"):
             selected_decks(leg)
 
 
-def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
+def test_authored_mirrors_keep_the_catalog_manifest_and_strict_roster() -> None:
     base = Match(selected_match())
     binding = checkpoint_world(base.to_rust(), ObservationSpace())
     agent = SimpleNamespace(world_binding=binding)
@@ -52,13 +52,6 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
         assert engine.content_pack_manifest() == expected
         engine.reset(mirror.swapped().to_rust())
         assert engine.content_pack_manifest() == expected
-
-        configs = mirror.to_rust()
-        configs[0].world = None
-        with pytest.raises(RuntimeError, match="explicit pack"):
-            engine.reset(configs)
-        with pytest.raises(ValueError, match="explicit content pack"):
-            validate_agent_setup(agent, configs, allow_deck_repetition=True)
 
         changed = mirror.config.model_copy(deep=True)
         changed.hero_deck["Island"] = changed.hero_deck.get("Island", 0) + 1

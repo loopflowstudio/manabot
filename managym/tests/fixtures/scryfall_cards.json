@@ -236,6 +236,38 @@
       "W"
     ]
   },
+  "Avatar Kuruk": {
+    "name": "Avatar Kuruk",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Exhaust",
+      "Waterbend"
+    ],
+    "oracle_text": "Whenever you cast a spell, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"\nExhaust — Waterbend {20}: Take an extra turn after this one. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)",
+    "colors": []
+  },
+  "Avatar Kyoshi": {
+    "name": "Avatar Kyoshi",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Lands you control have trample and hexproof.\n{T}: Add X mana of any one color, where X is the greatest power among creatures you control.",
+    "colors": []
+  },
+  "Avatar Roku": {
+    "name": "Avatar Roku",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 4 (Whenever this creature attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)\n{8}: Create a 4/4 red Dragon creature token with flying and firebending 4.",
+    "colors": []
+  },
   "Avatar's Wrath": {
     "name": "Avatar's Wrath",
     "mana_cost": "{2}{W}{W}",
@@ -2108,6 +2140,19 @@
       "W"
     ]
   },
+  "Leaves from the Vine": {
+    "name": "Leaves from the Vine",
+    "mana_cost": "{1}{G}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [
+      "Food",
+      "Mill"
+    ],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Mill three cards, then create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nII — Put a +1/+1 counter on each of up to two target creatures you control.\nIII — Draw a card if there's a creature or Lesson card in your graveyard.",
+    "colors": [
+      "G"
+    ]
+  },
   "Lightning Bolt": {
     "name": "Lightning Bolt",
     "mana_cost": "{R}",
@@ -3402,6 +3447,18 @@
       "G"
     ]
   },
+  "The Cave of Two Lovers": {
+    "name": "The Cave of Two Lovers",
+    "mana_cost": "{3}{R}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Create two 1/1 white Ally creature tokens.\nII — Search your library for a Mountain or Cave card, reveal it, put it into your hand, then shuffle.\nIII — Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "R"
+    ]
+  },
   "The Earth King": {
     "name": "The Earth King",
     "mana_cost": "{3}{G}",
@@ -3439,6 +3496,40 @@
       "Fight"
     ],
     "oracle_text": "Target creature you control fights target creature an opponent controls. If the creature the opponent controls is dealt excess damage this way, add that much {R}.\nUntil end of turn, you don't lose unspent red mana as steps and phases end.",
+    "colors": [
+      "R"
+    ]
+  },
+  "The Legend of Kuruk": {
+    "name": "The Legend of Kuruk",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI, II — Scry 2, then draw a card.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "U"
+    ]
+  },
+  "The Legend of Kyoshi": {
+    "name": "The Legend of Kyoshi",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Draw cards equal to the greatest power among creatures you control.\nII — Earthbend X, where X is the number of cards in your hand. That land becomes an Island in addition to its other types.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "The Legend of Roku": {
+    "name": "The Legend of Roku",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Exile the top three cards of your library. Until the end of your next turn, you may play those cards.\nII — Add one mana of any color.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
     "colors": [
       "R"
     ]
@@ -4251,6 +4342,216 @@
       "Surveil"
     ],
     "oracle_text": "{B}, {T}: Surveil 1. Create a token that's a copy of this creature, then sacrifice an artifact or creature. Activate only as a sorcery. (To surveil 1, look at the top card of your library. You may put it into your graveyard.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Bender's Waterskin": {
+    "name": "Bender's Waterskin",
+    "mana_cost": "{3}",
+    "type_line": "Artifact",
+    "keywords": [],
+    "oracle_text": "Untap this artifact during each other player's untap step.\n{T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Aang, Swift Savior": {
+    "name": "Aang, Swift Savior",
+    "mana_cost": "{1}{W}{U}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Airbend",
+      "Transform",
+      "Flash",
+      "Waterbend"
+    ],
+    "oracle_text": "Flash\nFlying\nWhen Aang enters, airbend up to one other target creature or spell. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWaterbend {8}: Transform Aang.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Aang and La, Ocean's Fury": {
+    "name": "Aang and La, Ocean's Fury",
+    "type_line": "Legendary Creature — Avatar Spirit Ally",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Reach",
+      "Trample"
+    ],
+    "oracle_text": "Reach, trample\nWhenever Aang and La attack, put a +1/+1 counter on each tapped creature you control.",
+    "colors": []
+  },
+  "Ember Island Production": {
+    "name": "Ember Island Production",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Sorcery",
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Create a token that's a copy of target creature you control, except it's not legendary and it's a 4/4 Hero in addition to its other types.\n• Create a token that's a copy of target creature an opponent controls, except it's not legendary and it's a 2/2 Coward in addition to its other types.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Foggy Swamp Visions": {
+    "name": "Foggy Swamp Visions",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Sorcery",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, waterbend {X}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nExile X target creature cards from graveyards. For each creature card exiled this way, create a token that's a copy of it. At the beginning of your next end step, sacrifice those tokens.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Bumi, Unleashed": {
+    "name": "Bumi, Unleashed",
+    "mana_cost": "{3}{R}{G}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Trample",
+      "Earthbend"
+    ],
+    "oracle_text": "Trample\nWhen Bumi enters, earthbend 4.\nWhenever Bumi deals combat damage to a player, untap all lands you control. After this phase, there is an additional combat phase. Only land creatures can attack during that combat phase.",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Aang, at the Crossroads": {
+    "name": "Aang, at the Crossroads",
+    "mana_cost": "{2}{G}{W}{U}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Transform"
+    ],
+    "oracle_text": "Flying\nWhen Aang enters, look at the top five cards of your library. You may put a creature card with mana value 4 or less from among them onto the battlefield. Put the rest on the bottom of your library in a random order.\nWhen another creature you control leaves the battlefield, transform Aang at the beginning of the next upkeep.",
+    "colors": [
+      "G",
+      "U",
+      "W"
+    ]
+  },
+  "Aang, Destined Savior": {
+    "name": "Aang, Destined Savior",
+    "type_line": "Legendary Creature — Avatar Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Earthbend"
+    ],
+    "oracle_text": "Flying\nLand creatures you control have vigilance.\nAt the beginning of combat on your turn, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": []
+  },
+  "The Legend of Yangchen": {
+    "name": "The Legend of Yangchen",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Starting with you, each player chooses up to one permanent with mana value 3 or greater from among permanents your opponents control. Exile those permanents.\nII — You may have target opponent draw three cards. If you do, draw three cards.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Avatar Yangchen": {
+    "name": "Avatar Yangchen",
+    "type_line": "Legendary Creature — Avatar",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Airbend"
+    ],
+    "oracle_text": "Flying\nWhenever you cast your second spell each turn, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)",
+    "colors": []
+  },
+  "Fire Lord Azula": {
+    "name": "Fire Lord Azula",
+    "mana_cost": "{1}{U}{B}{R}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhenever you cast a spell while Fire Lord Azula is attacking, copy that spell. You may choose new targets for the copy. (A copy of a permanent spell becomes a token.)",
+    "colors": [
+      "B",
+      "R",
+      "U"
+    ]
+  },
+  "The Rise of Sozin": {
+    "name": "The Rise of Sozin",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Enchantment — Saga",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter.)\nI — Destroy all creatures.\nII — Choose a card name. Search target opponent's graveyard, hand, and library for up to four cards with that name and exile them. Then that player shuffles.\nIII — Exile this Saga, then return it to the battlefield transformed under your control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Lord Sozin": {
+    "name": "Fire Lord Sozin",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Firebending",
+      "Menace"
+    ],
+    "oracle_text": "Menace, firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\nWhenever Fire Lord Sozin deals combat damage to a player, you may pay {X}. When you do, put any number of target creature cards with total mana value X or less from that player's graveyard onto the battlefield under your control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Avatar Aang": {
+    "name": "Avatar Aang",
+    "mana_cost": "{R}{G}{W}{U}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Transform",
+      "Firebending"
+    ],
+    "oracle_text": "Flying, firebending 2\nWhenever you waterbend, earthbend, firebend, or airbend, draw a card. Then if you've done all four this turn, transform Avatar Aang.",
+    "colors": [
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Aang, Master of Elements": {
+    "name": "Aang, Master of Elements",
+    "type_line": "Legendary Creature — Avatar Ally",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nSpells you cast cost {W}{U}{B}{R}{G} less to cast. (This can reduce generic costs.)\nAt the beginning of each upkeep, you may transform Aang, Master of Elements. If you do, you gain 4 life, draw four cards, put four +1/+1 counters on him, and he deals 4 damage to each opponent.",
+    "colors": []
+  },
+  "Koh, the Face Stealer": {
+    "name": "Koh, the Face Stealer",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Legendary Creature — Shapeshifter Spirit",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "When Koh enters, exile up to one other target creature.\nWhenever another nontoken creature dies, you may exile it.\nPay 1 life: Choose a creature card exiled with Koh.\nKoh has all activated and triggered abilities of the last chosen card.",
     "colors": [
       "B"
     ]

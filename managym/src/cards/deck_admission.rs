@@ -6,12 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{content_pool, pool_content, ContentError, ContentPool, Eligibility};
-use crate::{
-    cards::content_pack::ContentPack,
-    state::{deck::Deck, player::PlayerConfig},
-    world::WORLD_POOL,
-};
+use super::{world_pool, ContentError, ContentPool, Eligibility};
+use crate::state::{deck::Deck, player::PlayerConfig};
 
 pub const DEVELOPMENT_RULESET: &str = "development-v1";
 /// Operational allocation bound, not a tournament construction rule.
@@ -98,29 +94,24 @@ fn construction_issues(deck: &Deck) -> Vec<DeckIssue> {
 
 /// Return actionable construction/content issues without allocating a game.
 /// Env setup invokes this same admission for every deck submitted to the world.
-pub fn admit_deck(deck: &Deck) -> Result<Vec<DeckIssue>, ContentError> {
-    Ok(check_decks(std::slice::from_ref(deck))?.remove(0))
+pub fn admit_deck(deck: &Deck) -> Vec<DeckIssue> {
+    check_decks(std::slice::from_ref(deck)).remove(0)
 }
 
 /// Each deck's issues in this world, in input order; an empty entry admits.
 /// One cheap upfront check for a batch: the world is read once, no game is
 /// allocated, and game creation still admits every deck again.
-pub fn check_decks(decks: &[Deck]) -> Result<Vec<Vec<DeckIssue>>, ContentError> {
-    let descriptor = content_pool(WORLD_POOL)?;
-    let content = pool_content(WORLD_POOL)?;
-    Ok(decks
+pub fn check_decks(decks: &[Deck]) -> Vec<Vec<DeckIssue>> {
+    decks
         .iter()
-        .map(|deck| admit_in_world(&descriptor, &content, deck))
-        .collect())
+        .map(|deck| admit_in_world(world_pool(), deck))
+        .collect()
 }
 
-/// Admission against the world's descriptor and the runtime content it
-/// describes; tests substitute descriptors to reach ambiguous names.
-pub(crate) fn admit_in_world(
-    pool: &ContentPool,
-    content: &ContentPack,
-    deck: &Deck,
-) -> Vec<DeckIssue> {
+/// Admission against the world's descriptor, whose rows mark tokens and every
+/// other non-deck definition ineligible; tests substitute descriptors to reach
+/// ambiguous names.
+pub(crate) fn admit_in_world(pool: &ContentPool, deck: &Deck) -> Vec<DeckIssue> {
     let mut issues = construction_issues(deck);
     for (section, cards) in [
         (DeckSection::Main, &deck.main),
@@ -133,23 +124,13 @@ pub(crate) fn admit_in_world(
                 .filter(|row| &row.registry_name == name);
             let (code, reason) = match (rows.next(), rows.next()) {
                 (None, _) => ("unknown", "card is not defined in this world"),
-                (Some(row), None) if row.eligibility != Eligibility::Eligible => (
+                (Some(row), None) if row.eligibility == Eligibility::Eligible => continue,
+                (Some(row), None) => (
                     "unsupported",
                     row.reason
                         .as_deref()
                         .unwrap_or("card is not supported in this world"),
                 ),
-                (Some(row), None) => {
-                    let definition = content.definition(row.card_def_id);
-                    match definition {
-                        Some(definition) if !definition.is_token => continue,
-                        Some(_) => ("format", "tokens cannot be submitted in main or sideboard"),
-                        None => (
-                            "unsupported",
-                            "supported definition is missing from runtime content",
-                        ),
-                    }
-                }
                 _ => ("ambiguous", "card name identifies multiple definitions"),
             };
             issues.push(DeckIssue {
@@ -166,15 +147,26 @@ pub(crate) fn admit_in_world(
 
 /// Why a player's submitted deck fails development admission, or `None` when it
 /// passes. Game creation and training-deck replacement share this rejection.
-pub fn development_rejection(player: &PlayerConfig) -> Result<Option<String>, ContentError> {
-    let issues = admit_deck(&player.deck)?;
-    Ok((!issues.is_empty()).then(|| {
+pub fn development_rejection(player: &PlayerConfig) -> Option<String> {
+    let issues = admit_deck(&player.deck);
+    (!issues.is_empty()).then(|| {
         issues
             .iter()
             .map(|issue| issue.message.as_str())
             .collect::<Vec<_>>()
             .join("; ")
-    }))
+    })
+}
+
+/// Admit every deck submitted to the world ([`PlayerConfig::submitted`]);
+/// other decks are fixed setups or tests and run as given on the catalog.
+pub fn admit_submitted(player_configs: &[PlayerConfig]) -> Result<(), ContentError> {
+    for player in player_configs.iter().filter(|player| player.submitted) {
+        if let Some(message) = development_rejection(player) {
+            return Err(ContentError(message));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -197,11 +189,11 @@ mod tests {
         .map(|name| (name.into(), 1))
         .into();
         let deck = Deck::new(main.clone(), sideboard);
-        assert!(admit_deck(&deck).unwrap().is_empty());
+        assert!(admit_deck(&deck).is_empty());
         let unsupported = Deck::new(main, BTreeMap::from([("Ally".into(), 1)]));
-        let checked = check_decks(&[deck, unsupported.clone()]).unwrap();
+        let checked = check_decks(&[deck, unsupported.clone()]);
         assert!(checked[0].is_empty());
-        assert_eq!(checked[1], admit_deck(&unsupported).unwrap());
+        assert_eq!(checked[1], admit_deck(&unsupported));
         let issues = &checked[1];
         assert!(issues
             .iter()

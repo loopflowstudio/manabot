@@ -265,16 +265,15 @@ class CuratedPack:
         }
 
     def player_config(self, deck_id: str, name: str) -> managym.PlayerConfig:
-        """Resolve a complete setup from this pack's compiled authority."""
+        """Resolve a complete setup from the authored setup this pack names.
+
+        `semantic_pack_key` in frozen manifests names that setup; its decks run
+        on the world's one catalog like any other match.
+        """
         if deck_id not in self.deck_ids:
             raise ValueError(f"Deck {deck_id!r} is not in pack {self.pack_id!r}")
         setup = managym.authored_deck_setup(self.semantic_pack_key, deck_id)
-        return managym.PlayerConfig(
-            name,
-            setup.decklist,
-            setup.sideboard,
-            self.semantic_pack_key if "roster" in self.manifest else None,
-        )
+        return managym.PlayerConfig(name, setup.decklist, setup.sideboard)
 
 
 def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:

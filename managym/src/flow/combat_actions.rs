@@ -270,6 +270,12 @@ impl Game {
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
             && self.combat_condition_met(permanent_id)
+            && self
+                .state
+                .turn
+                .combat_attackers
+                .as_ref()
+                .is_none_or(|attackers| self.permanent_matches_predicate(permanent_id, attackers))
     }
 
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {

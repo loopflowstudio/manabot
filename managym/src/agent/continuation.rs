@@ -12,7 +12,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        ability::PaymentCost,
+        ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
         mana::ManaCost,
         stack_object::StackObject,
@@ -71,15 +71,28 @@ pub struct ManaOutput {
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
+    /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remembered: Vec<VisibleReference>,
+    /// Source's captured ability lender, retained after source departure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inherited_from: Option<VisibleReference>,
+    /// The public attacker restriction of a scheduled/current extra combat.
+    /// Its token is a fact; its readable form comes from the rules predicate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attackers: Option<String>,
+    /// Transform count captured for this ability's source (CR 701.27f).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub source_transforms: u32,
     /// 1 spell, 2 activated stack ability, 3 triggered stack ability,
     /// 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger,
     /// 8 trigger being placed, 9 two-pass placement cursor, 10 waiting
     /// delayed trigger (CR 603.7; `decision` names its event, see
-    /// [`delayed_event_code`]).
+    /// [`delayed_event_code`]), 11 scheduled turn, 12 additional combat.
     pub kind: u8,
     /// Kind 6: the obligation's `decision_code`. Kinds 7 and 8: trigger
     /// ordering class (1 ordinary, 2 ability-triggered). Kind 9: placement
-    /// group plus one. Zero otherwise.
+    /// group plus one. Kind 10: delayed event code. Zero otherwise.
     pub decision: u8,
     pub parent: Option<usize>,
     pub controller: usize,
@@ -108,15 +121,21 @@ pub struct ContinuationFrame {
     /// in `KeywordData` field order.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_keywords: [bool; KEYWORD_COUNT],
-    /// A waiting delayed trigger that ends in this turn's cleanup step if it
-    /// has not fired.
+    /// Waiting frequency: 1 once, 2 each match. Missing historical data is unknown.
+    /// V5/v6 encode it as a kind-9 relation row with the code in column 28.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delayed_frequency: Option<u8>,
+    /// A waiting delayed trigger that ends in this turn's cleanup step.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
 }
 
+pub const MAX_DELAYED_EVENT_CODE: u8 = 7;
+
 /// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
-/// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the next end
-/// step, 5 its controller next casts a matching spell.
+/// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the end
+/// step, 5 its controller casts a matching spell, 6 upkeep,
+/// 7 its controller's end step. Frequency is projected separately.
 pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     match event {
         DelayedTriggerEvent::Leaves {
@@ -126,8 +145,14 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
             or_exiled: true, ..
         } => 2,
         DelayedTriggerEvent::CreatureDies => 3,
-        DelayedTriggerEvent::NextEndStep { .. } => 4,
+        DelayedTriggerEvent::EndStep {
+            your_turn: false, ..
+        } => 4,
+        DelayedTriggerEvent::EndStep {
+            your_turn: true, ..
+        } => 7,
         DelayedTriggerEvent::YouCastSpell(_) => 5,
+        DelayedTriggerEvent::Upkeep => 6,
     }
 }
 
@@ -167,7 +192,9 @@ impl Game {
                     | ZoneType::Exile
                     | ZoneType::Command
             )
-        ) || (zone == Some(ZoneType::Hand) && card.owner == viewer);
+        ) || (zone == Some(ZoneType::Hand) && card.owner == viewer)
+            || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
+                && self.searches_private_zones(viewer, card.owner));
         if !visible {
             return VisibleReference::default();
         }
@@ -259,6 +286,48 @@ impl Game {
                 .iter()
                 .map(|trigger| self.delayed_trigger_frame(trigger, viewer)),
         );
+        // Scheduled phases/turns are public. Newest insertions happen first;
+        // mode is the ordinal, not a raw object identity. A resume turn is
+        // retained after queued extra turns, and current combat uses mode 0.
+        for (index, player) in self
+            .state
+            .turn
+            .extra_turns
+            .iter()
+            .rev()
+            .chain(self.state.turn.resume_with.iter())
+            .enumerate()
+        {
+            frames.push(ContinuationFrame {
+                kind: 11,
+                controller: player.0,
+                mode: Some(index),
+                ..Default::default()
+            });
+        }
+        if let Some(attackers) = &self.state.turn.combat_attackers {
+            frames.push(ContinuationFrame {
+                kind: 12,
+                controller: self.active_player().0,
+                mode: Some(0),
+                attackers: Some(super::ability_description::predicate_description(
+                    attackers,
+                    "creatures",
+                )),
+                ..Default::default()
+            });
+        }
+        for (index, combat) in self.state.turn.additional_combats.iter().rev().enumerate() {
+            frames.push(ContinuationFrame {
+                kind: 12,
+                controller: self.active_player().0,
+                mode: Some(index + 1),
+                attackers: combat.attackers.as_ref().map(|predicate| {
+                    super::ability_description::predicate_description(predicate, "creatures")
+                }),
+                ..Default::default()
+            });
+        }
         frames
     }
 
@@ -278,20 +347,36 @@ impl Game {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
             }
-            DelayedTriggerEvent::NextEndStep { context } => {
-                context.map(|t| self.target_reference(t, viewer))
-            }
-            DelayedTriggerEvent::CreatureDies | DelayedTriggerEvent::YouCastSpell(_) => None,
+            DelayedTriggerEvent::EndStep { .. }
+            | DelayedTriggerEvent::CreatureDies
+            | DelayedTriggerEvent::YouCastSpell(_)
+            | DelayedTriggerEvent::Upkeep => None,
         };
         ContinuationFrame {
+            remembered: self.remembered_references(&trigger.remembered, viewer),
             kind: 10,
             decision: delayed_event_code(&trigger.event),
             controller: trigger.controller.0,
             source,
             context,
-            this_turn: trigger.this_turn,
+            delayed_frequency: Some(match trigger.frequency {
+                DelayedFrequency::Once => 1,
+                DelayedFrequency::EachMatch => 2,
+            }),
+            this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
             ..ContinuationFrame::default()
         }
+    }
+
+    fn remembered_references(
+        &self,
+        objects: &[ObjectRef],
+        viewer: PlayerId,
+    ) -> Vec<VisibleReference> {
+        objects
+            .iter()
+            .map(|object| self.visible_reference(*object, viewer))
+            .collect()
     }
 
     /// The acting viewer's announcement, resolution and placement frames.
@@ -342,12 +427,15 @@ impl Game {
                         crate::flow::trigger::TriggerOrderingClass::AbilityTriggered => 2,
                     },
                     ability: Some(trigger.ability_index),
+                    x: trigger.x,
+                    source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
                     active_clause: Some(trigger.requirement_index),
                     targets: self.clause_targets(
                         &trigger.targets,
                         &trigger.target_req_indices,
                         viewer,
                     ),
+                    remembered: self.remembered_references(&trigger.remembered, viewer),
                     context: trigger.context.map(|t| self.target_reference(t, viewer)),
                     ..ContinuationFrame::default()
                 });
@@ -399,14 +487,30 @@ impl Game {
                 frame.kind = 2;
                 frame.source = self.visible_reference(ability.source_ref, viewer);
                 frame.x = ability.x;
+                frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
+                    definition: Some(id.0),
+                    ..Default::default()
+                });
+                frame.source_transforms = ability.source_transforms;
                 &[]
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
+                frame.inherited_from = ability
+                    .source_lki
+                    .as_ref()
+                    .and_then(|lki| lki.inherited_from)
+                    .map(|id| VisibleReference {
+                        definition: Some(id.0),
+                        ..Default::default()
+                    });
+                frame.x = ability.x;
+                frame.source_transforms = ability.source_transforms;
                 frame.source = ability
                     .source_ref
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
+                frame.remembered = self.remembered_references(&ability.remembered, viewer);
                 frame.context = ability.context.map(|t| self.target_reference(t, viewer));
                 &ability.target_req_indices
             }
@@ -542,7 +646,12 @@ impl Game {
                         .unwrap_or_default()
                 }),
             kicked: effect.kicked,
+            inherited_from: effect.inherited_from.map(|id| VisibleReference {
+                definition: Some(id.0),
+                ..Default::default()
+            }),
             x: effect.x,
+            source_transforms: effect.source_transforms,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
             targets: effect
@@ -554,6 +663,7 @@ impl Game {
                     legal_at_resolution_start: Some(slot.legal),
                 })
                 .collect(),
+            remembered: self.remembered_references(&effect.remembered, viewer),
             context: effect
                 .context_target
                 .map(|t| self.target_reference(t, viewer)),
@@ -573,6 +683,18 @@ impl Game {
             };
             frame.decision = decision_code(decision);
             let resume = match decision {
+                Decision::ChoosePaymentX { .. } => {
+                    frame.can_decline = true;
+                    None
+                }
+                Decision::SearchNamed {
+                    owner, remaining, ..
+                } => {
+                    frame.can_decline = true;
+                    frame.mode = Some(*remaining);
+                    frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
+                    None
+                }
                 Decision::Payment(progress) => {
                     frame.cost(&progress.remaining.mana_cost());
                     frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
@@ -658,13 +780,15 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 23;
+pub const MAX_DECISION_CODE: u8 = 26;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
 /// new ones, never renumber.
 pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
+        Decision::ChoosePaymentX { .. } => 24,
+        Decision::SearchNamed { .. } => 25,
         Decision::Payment(_) => 1,
         Decision::ManaUpfront { .. } => 2,
         Decision::ManaChoice { .. } => 3,
@@ -688,6 +812,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::Retarget { .. } => 21,
         Decision::Surveil { .. } => 22,
         Decision::OrderLibraryBottom { .. } => 23,
+        Decision::ChooseToExile { .. } => 26,
     }
 }
 
@@ -710,14 +835,14 @@ pub fn encode_into(
             actual: out.len(),
         });
     }
-    // Waiting delayed triggers are v5 facts; frozen v2-v4 inputs keep their
+    // Delayed triggers and scheduling are v5 facts; frozen v2-v4 inputs keep their
     // rows. They follow every other frame, so no index moves.
     let frames = if dim == RELATION_DIM_V5 {
         frames
     } else {
         let shown = frames
             .iter()
-            .position(|f| f.kind == 10)
+            .position(|f| f.kind >= 10)
             .unwrap_or(frames.len());
         &frames[..shown]
     };
@@ -727,6 +852,13 @@ pub fn encode_into(
             1 + f.targets.len()
                 + usize::from(f.context.is_some())
                 + usize::from(f.sacrifice.is_some())
+                + if dim == RELATION_DIM_V5 {
+                    usize::from(f.inherited_from.is_some())
+                        + f.remembered.len()
+                        + usize::from(f.delayed_frequency.is_some())
+                } else {
+                    0
+                }
                 + f.hybrid.len()
                 + 2 * f.mana_outputs.len()
         })
@@ -815,6 +947,20 @@ pub fn encode_into(
         }
         if let Some(target) = frame.sacrifice {
             reference_row(4.0, target, 0, 0, None);
+        }
+        if dim == RELATION_DIM_V5 {
+            if let Some(definition) = frame.inherited_from {
+                reference_row(7.0, definition, 0, 0, None);
+            }
+            for (ordinal, reference) in frame.remembered.iter().enumerate() {
+                reference_row(8.0, *reference, 0, ordinal, None);
+            }
+            if let Some(frequency) = frame.delayed_frequency {
+                let row = rows.next().unwrap();
+                row.copy_from_slice(&header);
+                row[0] = 9.0;
+                row[28] = f32::from(frequency);
+            }
         }
         for pair in &frame.hybrid {
             let row = rows.next().unwrap();
@@ -926,6 +1072,16 @@ mod tests {
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
         let decisions = [
+            Decision::ChoosePaymentX {
+                player,
+                if_paid: Vec::new(),
+            },
+            Decision::SearchNamed {
+                player,
+                owner: player,
+                name: "Gray Ogre".into(),
+                remaining: 4,
+            },
             Decision::Payment(PaymentProgress::new(
                 player,
                 PaymentCost::Waterbend { generic: 1 },
@@ -999,6 +1155,7 @@ mod tests {
                 remaining: vec![],
             },
             Decision::LookAndSelect {
+                to_battlefield: false,
                 random_order: true,
                 reveal: false,
                 player,
@@ -1057,6 +1214,12 @@ mod tests {
                 player,
                 max_total_power: 0,
                 kept: vec![],
+            },
+            Decision::ChooseToExile {
+                player,
+                controller: player,
+                predicate: CardPredicate::default(),
+                chosen: vec![],
             },
             Decision::Retarget {
                 player,
