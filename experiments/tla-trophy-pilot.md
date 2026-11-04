@@ -1,4 +1,72 @@
-# TLA trophy pilot: v9 prepared, GPU capacity unavailable
+# TLA trophy pilot: v9 learned, permanent capacity stopped the run
+
+V9 Run **2171156493ca** executed the frozen source
+`6da60684cb628ec9b431dbbb9d7dc91348743622` on a Vast RTX 5090 on
+2026-11-04. CUDA numerical admission passed. It completed **5 learner updates,
+983 optimizer minibatch steps, 251,040 learner transitions and 1,291 games**,
+then failed during collection at **41 agent permanents against capacity 40**.
+The [training receipt](data/mtg213/gpu-v9-20261104/training/run.json) retains
+394.18 stage seconds: 273.48 collecting and 119.87 learning. These clocks
+exclude part of the rental. No trained checkpoint exported before failure;
+only initialization is retained. MTG-213 remains incomplete.
+
+The [exact replay](data/mtg213/gpu-v9-20261104/capacity-replay.json) identifies
+stream 43, seed 32624, after 371 actions, with a matching pre-command frame.
+Scalar native, vector native and Python encoding reject the same 41-permanent
+position. It contains 25 Phoenix Fleet Airships, 11 lands and five other
+permanents. The Airship definition has a conditional end-step token-copy
+ability; this capacity witness alone establishes no rules defect. A diagnostic
+64-permanent allocation encodes all 41 with scalar native/Python equality.
+That is a repair witness, not a universal bound or a changed v9 protocol.
+Continue with a prospective capacity repair and fresh initialization; never
+rewrite v9 or infer a checkpoint from its progress counters.
+
+[Paired evaluation](data/mtg213/gpu-v9-20261104/analysis.json) completed all
+32 initialization games against the matched-support heuristic: **7 wins,
+25 losses**, no failed or truncated games. Score .21875, 95% whole-pair
+bootstrap interval [.125, .3125]. The frozen 288-game schedule retains
+**256 missing games**, `complete=false`, `success=null`. A final evaluation
+pass found no additional playable comparisons. No trained-policy gain or
+Elemental-relative learning pace is established. MTG-183's .065 → .304 at
+update 50 and .441 at 100 remain historical context: different rules,
+observations, populations, anchors, hardware and variable complete-game batch
+sizes prevent a controlled pace comparison. There is no trained TLA score to
+compare at a matched decision coordinate.
+
+The [cutoff receipt](data/mtg213/gpu-v9-20261104/training/failures/action-cutoff-00c266bf52a9409b91a4aa72a926c44d.json)
+records 302,941 consumed decisions, including the failed collection, and zero
+action overflows/dropped actions. It is an aggregate across participating
+policies, not a learner-only count. This run's stopping error is permanent
+capacity, separate from the accepted action cutoff.
+
+The [launch](data/mtg213/gpu-v9-20261104/launch/launch-20261104-220427.json)
+used 32 vCPUs, 255GB RAM and USD0.962962963/hour. Jack Heart's accepted
+USD1.25 allocation/USD0.97-hour placement amendment replaced the earlier
+USD1 limit; cumulative USD10 remained unchanged. Etude also checks the job's
+spending ceiling against setup plus execution, so the placement copy raised
+`Job.max_usd` to USD1.25. SDK `job_identity`, Run ID, source, configuration,
+recipe and schedule remained equal to the original prepared Run. The quote
+reserved USD1.187654321. No source was frozen again.
+
+[Settlement](data/mtg213/gpu-v9-20261104/settlement.json) confirms the pilot
+rental ended at **22:13:47 UTC** and instance 59168321 is absent. The final
+inventory identifies an unrelated `state_representation_gpu` rental, which was
+left untouched. Whole-rental estimated cost is **USD0.148237115**;
+cumulative billed-plus-estimated cost is **USD0.475343889**, with conservative
+reservations **USD5.101645926 of USD10**. Vast billing remains unavailable;
+these estimates are not final invoices. All available outputs were fetched;
+`etude-result.json` is absent because the training command failed.
+
+Verification on main `3de3a0ebf7b20ae764e0b423089730c5bc710cb6` found only
+documentation changes after merged PR #423; executable code and the frozen
+protocol match. The 106 focused checks passed, as did real local v9 runtime
+admission. The GPU failure is new evidence and a concrete **fix-forward** gap:
+ship a prospective permanent-capacity repair, retain this failed attempt and
+complete trained-export/evaluation acceptance. See the
+[summary receipt](data/mtg213/gpu-v9-20261104/summary.json).
+
+## V9 preflight history
+
 
 V9 Run **2171156493ca** freezes merged source
 `6da60684cb628ec9b431dbbb9d7dc91348743622`, the original 134 decks and matched
@@ -24,7 +92,7 @@ cap is unchanged. V9 still needs GPU execution, an admitted trained checkpoint,
 paired evaluation and the qualified Elemental comparison. A new capacity signal
 is needed before another unchanged launch attempt.
 
-## Last executed pilot: v5
+## Previous executed pilot: v5
 
 V5 Run **e8c76bc2c06f**, frozen source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, ran on a Vast **RTX 5090** on

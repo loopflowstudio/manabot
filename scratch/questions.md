@@ -3,8 +3,13 @@
 Execution status and remaining acceptance: `scratch/tla-pilot-postmerge-verify.md`.
 Results, costs and retained receipts: `experiments/tla-trophy-pilot.md`.
 Current contract: `experiments/protocols/tla-trophy-213-v9.md` and its JSON/regime.
-V9 Run `2171156493ca` is frozen and unsubmitted; provider quotes refused capacity
-or price. No trained endpoint exists. Shipping PR #423 did not complete MTG-213.
+V9 Run `2171156493ca` executed on the accepted Vast allocation and failed after
+5 updates at 41 permanents against capacity 40. No trained endpoint exists.
+Its 32 initialization games are complete; 256 scheduled games remain missing.
+Verification selects a prospective permanent-capacity repair (64 rows passed
+the retained scalar/Python diagnostic, not a universal bound). Preserve v9 and
+initialize a successor; unchanged GPU retries are not selected. Full evidence,
+cost accounting and teardown are in the report. PR #423 did not complete MTG-213.
 
 ## Accepted direction and ownership
 
@@ -14,7 +19,15 @@ authorizes GPUs under a hard USD10 cumulative cap and shipping enabling fixes
 after checks. Comment d2108241 requires reporting actual GPU learner updates
 with job/GPU/progress/rate/deadline evidence. V5 reached that milestone but
 stopped before exporting a trained checkpoint; quotes and CPU proofs do not
-satisfy it. A new allocation remains capped at USD1, including setup and teardown.
+satisfy it. On 2026-11-04 at about 22:00 UTC, Jack Heart accepted the newly
+available Vast RTX5090 offer at about USD0.963/hour and roughly USD1.19 for
+setup plus the planned run ("that seems fine"). This supersedes the USD1
+per-allocation stop for this attempt; the operator uses USD1.25 as the rounded
+whole-rental ceiling and USD0.97/hour as its offer ceiling. The cumulative USD10
+cap remains unchanged, including failures, setup and teardown. Reconcile current
+inventory and outstanding reservations before submitting the existing v9 Run;
+preserve its source, recipe and schedule. Do not replay implementation or freeze
+a replacement merely to change the external placement allowance.
 
 Comment 42a12145 approved shared-effect fixed tensors, encoding each effect
 once and routing it to affected object embeddings before attention. Task 5da5f4
@@ -106,3 +119,7 @@ Inherited T6/T7 notes remain at
 they do not replace MTG-213's direction. Cleared demo/verification plans remain
 at `d2ff60e6a^:scratch/tla-pilot-demo.md` and
 `d2ff60e6a^:scratch/tla-pilot-verify.md`.
+
+## Approved placement envelope — 2026-11-04 22:04 UTC
+
+Etude 0.2.14 includes setup in the job-dollar check, so raising only the supply/cohort ceiling refused launch with “job dollars do not cover the hours.” Apply the already approved USD1.25 to `Job.max_usd` in a separate placement copy; SDK `job_identity` explicitly excludes limits. Assert unchanged identity, Run 2171156493ca, source, scientific config and schedule; retain the original prepared-run.json. This is the simpler launch-only interpretation of the accepted placement amendment, not a new scientific Run.
