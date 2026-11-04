@@ -17,7 +17,7 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import Field
 
-from experiments.tla_pilot_v3 import (
+from experiments.tla_pilot_v4 import (
     EXPERIMENT,
     GAMES_PER_PAIR,
     PROTOCOL,

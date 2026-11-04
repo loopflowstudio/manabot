@@ -70,3 +70,5 @@ Uncommitted continuation notes before consolidation are preserved in
 the continuation note. The manifest retains all 120 added v3 evidence entries.
 
 Shared-effect owner decisions remain at `fb5ad2c1372f9c967b550f0b8ae0f84883f75563:scratch/questions.md`; its memory section was preserved during integration.
+
+Prospective v4 uses delivered v7 defaults explicitly: 128 local facts, 128 × 18 effect headers, 512 × 3 details, 2048 × 2 memberships. Protocol schema 3 serializes every ObservationSpace shape and checks it at runtime; capacities remain bounded engineering choices, not universal coverage. This is a new initialization, preserving the prior recipe and all 134 entries.

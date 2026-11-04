@@ -1,5 +1,15 @@
 # TLA trophy pilot: capacity failures before learning
 
+Prospective **v4** now consumes delivered PR #419's v7 shared-effect inputs.
+The [new contract](protocols/tla-trophy-213-v4.md) binds all tensor capacities,
+fresh initialization and the unchanged 134-entry population. Retained 140/270
+positions pass native scalar/vector/Python parity; compatibility and overflow
+checks pass. This preparation does not establish GPU learning. At 05:59 UTC,
+all three earlier pilot rentals are ended, provider inventory is empty, and
+fresh bills total **$0.17054831** (v3: $0.09962018). Conservatively retain the
+prior **$2.2125** reservations until the next launch is reconciled.
+
+
 The latest **v3/256 GPU attempt also failed before its first learner update**.
 Nine Fire Nation Drill activations over fifteen permanents produced **270 distinct
 fact rows**, exceeding 256. The rental is terminated. The fresh initialization

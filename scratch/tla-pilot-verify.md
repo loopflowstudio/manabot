@@ -78,22 +78,21 @@ object embeddings before attention. Task 5da5f4 owns implementation and landing;
 the repair choice is settled. Do not duplicate its work or substitute generic
 v6's 512 default as the next pilot contract.
 
-The latest recorded dependency read, 05:51 UTC, found
-[PR #419](https://github.com/loopflowstudio/manabot/pull/419) open at head
-`4b4656d33d872bf0f0211304bfe1a65d50e833a5`, main integration still running,
-and the existing Task Graph at `land --wait-and-fix`. Rust, Python unit, long
-integration, Academy, conformance, engine budget and package checks had passed.
-This supersedes the earlier no-PR status but does not establish delivery on main.
-Recheck delivery before adopting the contract; no prospective binding or paid
-allocation has been made pending that delivery.
+PR #419 merged at 2026-11-04T05:55:57Z as `fb5ad2c1372f9c967b550f0b8ae0f84883f75563`, with all executed CI checks passing. Its delivered implementation is integrated in this checkout.
 
 The reviewed PR description requires explicit `policy_input_version=7`; fresh
 defaults remain v6. Retained cases use 7/9 complete payloads and 70/135 memberships,
-with bounded overflow still fatal. Pin delivered serialized capacities. Lossless
+with bounded overflow still fatal. The prospective binding must include the
+delivered serialized capacities. Lossless
 factoring preserves payloads, memberships and multiplicity; redundant-activation
 merging needs separate proof of identical future behavior, including expiry,
 source dependencies and intervening effects. CPU learner/export checks do not
-establish CUDA behavior.
+establish CUDA behavior. The PR reports 37,888 padded input bytes at v7 defaults
+versus 12,288 for v6/256; factoring alone does not establish lower memory use or
+faster learning. It also retains an existing keyword grant/removal ordering
+defect. The repair preserves distinct records rather than proving that redundant
+activations can be merged; that limitation remains relevant to interpretation
+of pilot outcomes, without changing the frozen deck population.
 
 ## Remaining acceptance
 
@@ -111,20 +110,25 @@ establish CUDA behavior.
 4. Report learning gains, uncertainty, errors, total cost and Elemental-relative
    pace limits. Shipping code or green tests alone do not complete this outcome.
 
-## Delete — do not maintain
+## Prospective migration scope
 
-Remove duplicate verification chronology from this note; keep dated evidence
-beside the result or dependency it establishes. At prospective binding, replace
-active v3 imports in `experiments/tla_pilot_analysis.py` and
-`tests/eval/test_tla_pilot.py`, and update the inventory in
-`tests/eval/test_experiment_files.py` together. Preserve schedule completeness
-and missing-result accounting. No frozen protocol, regime, runner, receipt or
-compatibility test is a deletion target. Reuse the trainer, evaluator and rental
-owner; Task 5da5f4 controls the representation's deletion cut.
+The analysis and pilot tests still import v3, and experiment discovery still
+lists it. Adoption therefore includes coordinated changes to
+`experiments/tla_pilot_analysis.py`, `tests/eval/test_tla_pilot.py` and
+`tests/eval/test_experiment_files.py`, retaining schedule completeness and
+missing-result accounting. Frozen protocols, regimes, runners, receipts and
+compatibility tests remain historical inputs. The trainer, evaluator and rental
+owner remain shared; Task 5da5f4 owns the representation implementation.
 
 Earlier committed context is at
 `c10fba26a790aa0286d7ea84b1e45edd2b4a9c06:scratch/tla-pilot-verify.md`.
 The complete uncommitted verification/implementation notes are preserved at
 `.runs/mtg213/context-before-compress/verify-before-compress-20261104-0551.md`.
 
-Check: `git diff --check` passed; documentation-only reduction reuses the 120-file verification, artifact-tracking test and 38-test result. Gate owns prospective contract checks after Task 5da5f4 delivers; `lf context` confirms memory and scratch within both limits.
+Check: rebuilt native extension; 17 shared-transport tests (retained 140/270 parity, v1–v6 compatibility and all shared capacities), 28 pilot tests and exact discovery inventory pass. Initial identity errors were resolved by admitting new source paths to git tracking. Full affected suites remain with gate; paid execution retains the ordinary CUDA numerical gate.
+
+## Delete — do not maintain
+
+Replace the active `experiments/tla_pilot_v3.py` runner with v4 and move analysis/discovery/tests/docs together. V3 execution and analysis remain reproducible from `3b122de9078c985f846a0f3c5a3a42ebca3b1182`; preserve all v1/v2/v3 protocol/regime bytes and evidence. No representation implementation is replaced here.
+
+V4 implementation now binds input v7 and all serialized shapes; population/recipe/schedule are preserved and predecessor rejection covers v1–v3. Fresh 05:59 UTC inventory confirms all three pilot rentals ended and no provider pods; final prior bills total $0.17054830933921039. Conservatively keep $2.2125 of prior reservations held; the next reservation must fit $1 and cumulative $10. The only unsettled session is the unrelated non-rented `mini` session.

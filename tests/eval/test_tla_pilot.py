@@ -25,8 +25,9 @@ from etude.run.records import ArtifactRef, Clock
 from etude.train.run import track
 import pytest
 
+from experiments import tla_pilot_v4
 from experiments.tla_pilot_analysis import analyze
-from experiments.tla_pilot_v3 import ROOT, eval, frozen
+from experiments.tla_pilot_v4 import ROOT, eval, frozen
 from manabot.eval.results import RateInterval
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
@@ -36,7 +37,7 @@ from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainS
 def _checkpoint(update: int) -> Checkpoint:
     return Checkpoint(
         run="fixture-training",
-        experiment="tla_pilot_v3",
+        experiment="tla_pilot_v4",
         ordinal=update + 1,
         artifact=ArtifactRef(
             uri=f"file:///fixture/u{update}.pt", sha256="a" * 64, size_bytes=1
@@ -63,8 +64,12 @@ def test_pilot_pins_independent_population_and_elemental_learning_rule() -> None
     )
     assert (stage.streams, stage.transitions, stage.learning_seats) == (256, 64, "both")
     assert stage.execution.device == "cuda" and stage.behavior == "current-self"
-    assert regime.observation.policy_input_version == 6
-    assert regime.observation.max_facts == 256
+    assert regime.observation.policy_input_version == 7
+    assert regime.observation.max_facts == 128
+    assert protocol.observation_shapes["facts"] == (128, 12)
+    assert protocol.observation_shapes["effects"] == (128, 18)
+    assert protocol.observation_shapes["effect_details"] == (512, 3)
+    assert protocol.observation_shapes["effect_members"] == (2048, 2)
     assert ObservationConfig().max_facts == 512
     assert protocol.allocation_usd == Decimal(1) < protocol.max_paid_usd == Decimal(10)
     rng = random.Random(protocol.deck_seed)
@@ -97,14 +102,14 @@ def test_pilot_evaluates_initial_milestones_and_endpoint_against_fixed_anchors()
         assert matchup.games == 4 and len(matchup.conditions) == 8
         if "initial" in matchup.tags:
             assert matchup.players[1].checkpoint.key.name == "u0.pt"
-    assert eval(ExperimentState(experiment="tla_pilot_v3")) == []
+    assert eval(ExperimentState(experiment="tla_pilot_v4")) == []
 
 
 def test_pilot_cli_discovery_keeps_evaluation_callback_importable() -> None:
-    experiment = read_experiment(ROOT / "experiments/tla_pilot_v3.py")
+    experiment = read_experiment(ROOT / "experiments/tla_pilot_v4.py")
     job = experiment.eval(_state((0,)))[0]
     callback = evaluation_spec(job).play
-    assert callback.module == "experiments.tla_pilot_v3"
+    assert callback.module == "experiments.tla_pilot_v4"
     assert callable(callback.load(job.repo))
 
 
@@ -132,11 +137,11 @@ def _state(
     status: Literal["running", "finished", "failed"] = "finished",
 ) -> ExperimentState:
     return ExperimentState(
-        experiment="tla_pilot_v3",
+        experiment="tla_pilot_v4",
         runs=(
             TrainingRun(
                 name="fixture-training",
-                experiment="tla_pilot_v3",
+                experiment="tla_pilot_v4",
                 state=status,
                 checkpoints=Checkpoints(_checkpoint(update) for update in updates),
             ),
@@ -369,7 +374,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
     state = _state()
     store = tmp_path / "store"
     with track(
-        experiment="tla_pilot_v3",
+        experiment="tla_pilot_v4",
         run="fixture-training",
         directory=store,
         clocks=(Clock(name="updates", kind="step", meaning="Learner updates"),),
@@ -382,7 +387,7 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
         pilot_db.execute("ALTER TABLE games DROP COLUMN failure")
     tournament = evaluation_spec(eval(state)[0]).tournament
     declared = declare(
-        experiment="tla_pilot_v3",
+        experiment="tla_pilot_v4",
         run="fixture-eval",
         kind="evaluation",
         clocks=(),
@@ -466,12 +471,26 @@ def test_prospective_pilot_preserves_population_and_rejects_old_initialization()
     assert protocol.corpus_sha256 == old_protocol["corpus_sha256"]
     assert protocol.milestones == tuple(old_protocol["milestones"])
     previous = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/tla-trophy-213-v2.json").read_bytes()
+        (ROOT / "experiments/regimes/tla-trophy-213-v3.json").read_bytes()
     )
-    assert regime == previous.model_copy(update={"id": regime.id})
+    assert regime == previous.model_copy(
+        update={"id": regime.id, "observation": regime.observation}
+    )
     assert protocol.predecessor_protocol_sha256 == file_sha256(
-        ROOT / "experiments/protocols/tla-trophy-213-v2.json"
+        ROOT / "experiments/protocols/tla-trophy-213-v3.json"
     )
-    for experiment in ("tla_pilot", "tla_pilot_v2"):
-        with pytest.raises(ValueError, match="fresh v3"):
+    for experiment in ("tla_pilot", "tla_pilot_v2", "tla_pilot_v3"):
+        with pytest.raises(ValueError, match="fresh v4"):
             eval(ExperimentState(experiment=experiment))
+
+
+def test_pilot_rejects_changed_tensor_capacities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    protocol = json.loads(tla_pilot_v4.PROTOCOL.read_bytes())
+    protocol["observation_shapes"]["effect_members"][0] += 1
+    path = tmp_path / "protocol.json"
+    path.write_text(json.dumps(protocol))
+    monkeypatch.setattr(tla_pilot_v4, "PROTOCOL", path)
+    with pytest.raises(ValueError, match="tensor capacities differ"):
+        frozen()
