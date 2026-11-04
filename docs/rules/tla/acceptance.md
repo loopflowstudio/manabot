@@ -70,15 +70,19 @@ No absent witness removes a defined card from play.
 T6's schedule-presentation, delayed-selector capture and separation of
 delayed-event matching, firing frequency and expiry are integrated from
 published `7c790f78e` at `cd412daa3`. No dirty parent checkout was copied.
-Publication validation refreshed the mutable w17 kernel, authored-match and
+Historical publication validation refreshed the mutable w17 kernel, authored-match and
 parity corpora, Academy fixtures and current belief pins. The 14 kernel cases
 retain their command counts and outcomes (3,473 Commands total); the authored
 tape retains all 135 Commands, 66 public commitments and presentation hashes.
 Changed event definition IDs follow Bloodbending's insertion in the name-ordered
 catalog. The combined Academy/training/admission/monitoring suite passed 86
 checks. Frozen historical evidence and checkpoints remain unchanged.
-CI Engine Budget and browser layout/interaction evidence remain pending; these
-headless proofs do not establish either or certify all cross-card combinations.
+The resumed tree integrates merged T6 `5dd11cec4` at `d10f4bc71`, followed by
+the accepted presentation correction at `f052be4ad`. The counts above describe
+earlier publication evidence, not fresh combined-tree certification. Affected
+broad suites, mutable source fingerprints and final CI/Engine Budget remain
+with gate; browser layout/interaction evidence remains with demo/review. These
+headless proofs do not certify all cross-card combinations.
 
 ## Faces, obligations and witnesses
 

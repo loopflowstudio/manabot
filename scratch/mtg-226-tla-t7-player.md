@@ -1,23 +1,14 @@
 # MTG-226 — TLA T7 implementation plan
 
-## Resume implementation — 2026-11-04
+## Reconciled implementation — 2026-11-04
 
 Main `5dd11cec4` is integrated at `d10f4bc71` through `lf ops sync --manual`; merged T6
 supplies the pilot fixture isolation repair. Synthetic scheduling/analysis uses
-frozen v5 identity and widths; actual runtime and schema rejection stay strict.
+experiment protocol v5's identity and widths (policy input v7, 128 facts,
+64 actions, 128 cards per player); actual runtime and schema rejection stay strict.
 No frozen protocol, regime or experiment evidence is rewritten.
 
-### Delete — do not maintain
-
-- Removed `private_search`'s viewer-owned library heading; use “Search cards”
-  and preserve native instructions/subjects for specificity.
-- Removed inspection-container ownership from `visibleCardLabel` and bare-name
-  inspection buttons. Native `owner_id`/`zone` describe private cards; keep
-  board regions viewer-relative and ordinary battlefield controller labels.
-- Retained main's deletion of inherited T6 scratch. Exact pre-sync history is
-  at `02241d414:scratch/`; accepted T7 review edits remain in this checkout.
-
-Implemented accepted option 1a: neutral search heading and inspected-card labels
+Implementation checkpoint `f052be4ad` contains accepted option 1a: neutral search heading and inspected-card labels
 from native owner/zone, with unchanged viewer orientation and native delegation
 instructions. Directed Islandcycling tests cover both seats/durations, intervening
 own-player priority, exact search forks and library-inspection expiry. Svelte
@@ -26,11 +17,22 @@ existing WebSocket test covers retained cleanup recovery and duplicate/stale
 Commands; no search WebSocket recovery or browser geometry claim is added.
 The release cp312 extension was rebuilt and installed atomically after sync.
 
-Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 -p managym-cards --test cards secret_of_bloodbending` — 10 passed; release maturin build and atomic cp312 install passed; `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_player_control.py tests/academy/test_player_control_session.py -q` — 8 passed; focused Vitest — 13 passed; Svelte check, Ruff and diff checks passed. Logs: `/tmp/mtg226-compress-*.log`. Prior resume's unchanged pilot fixture check passed (39 tests); gate owns broad suites and mutable source fingerprints, demo owns browser geometry.
+Check: `git diff --check` — passed for this documentation reconciliation; reused `/tmp/mtg226-compress-*.log`: focused debug Rust 10 passed, Python control/session 8 passed, Vitest 13 passed, Svelte check and release build passed; `/tmp/mtg226-resume-consumers.log` records 41 consumer/pilot passes. Broad suites, mutable source fingerprints and final CI remain with gate; browser geometry remains with demo.
 
-Remaining: gate owns affected suites, mutable parity source fingerprints and
-final CI. Demo owns browser geometry; publication remains a separate Graph step.
-No merge, auto-merge, Task completion or experiment execution is authorized.
+Remaining work:
+
+- Gate: affected suites from `docs/development.md`, mutable parity source
+  fingerprints, final CI and Engine Budget for the resumed combined tree.
+- Demo/review: both seats and durations in a browser, search, alternating own
+  and delegated decisions, reconnect and expiry. Existing headless proofs cover
+  behavior and rendering, not browser layout or search WebSocket recovery.
+- Publication: return the repaired change for review through MTG-226's delivery
+  history. On 2026-11-04, GitHub reports #418 CLOSED at `02241d414`, still based
+  on the former T6 branch; Task status reports its PR phase as open. Delivery
+  still needs to reconcile the closed PR and base. T6 #417 merged as `5dd11cec4`.
+
+No product decision remains. Jack Heart's review is required before merge;
+merge, auto-merge, Task completion and experiment execution are not authorized.
 
 ## Outcome and acceptance
 
@@ -115,12 +117,24 @@ superseded: `private_search` also describes other players' zones, so “Search
 your library” made an unsupported ownership claim. Use “Search cards” and native
 instructions; inspected-container placement grants permission, not ownership.
 Option 1b (switching board perspective) was not selected. The accepted review
-artifact `scratch/concept-review.html` remains unchanged as dated evidence.
+artifact `scratch/concept-review.html` remains unchanged as dated evidence;
+its “not yet implemented” captions describe that earlier review, not this tree.
 
 Usage: Your board stays in place while you control another player. Academy names
 who you choose for. Use their cards/resources and inspect only what the engine
 reveals. Reconnect resumes the actual pending choice; retry cannot commit twice.
 No new identity, browser control lifecycle or recovery service is needed.
+
+Headless concept review, 2026-11-04: no design change or open product choice.
+The implemented search heading, owner/zone labels and Academy usage text agree
+with Jack Heart's option 1a. Following delegated Islandcycling through an own
+priority response preserves the distinction between chooser, rules player and
+turn owner without a second identity or browser lifecycle. The retained cleanup
+recovery witness covers reconnect, duplicate acknowledgment and stale rejection;
+it does not establish search reconnect or crash recovery. Existing counterexamples
+and the browser proof below remain required; this source review adds no execution
+evidence. Preserve the dated accepted HTML review unchanged, as requested in the
+resume direction. No further implement direction follows from this review.
 
 ## Evidence and remaining boundaries
 
@@ -150,8 +164,7 @@ Those results do not certify the resumed combined tree or a retained checkpoint.
 Current cleanup keeps inspection ordering and native permissions intact while
 flattening pending-decision collection, reads UI owner IDs directly and expresses
 the training proof's action preferences once. No obsolete runtime path remains
-to delete. Gate owns broad suites, changed mutable source fingerprints and final
-CI/Engine Budget; demo owns browser geometry; publication is a later Graph step.
+to delete. Remaining validation and publication are listed above.
 
 ## Historical sources
 
@@ -167,29 +180,16 @@ satisfied by merged T6, not permission to merge T7.
 ## Resume direction — Jack Heart, 2026-11-04
 
 Jack Heart explicitly requested resume after being informed that PR #418 had
-closed without merging and T6 #417 had merged. Resume the existing Task in this
-checkout, preserve the accepted concept-review edits, and return the remaining
-work to review. The prior concept-review-only boundary no longer prevents
-implementation. No merge or auto-merge is authorized.
+closed without merging and T6 #417 had merged. This authorized implementation
+of accepted option 1a, integration with main, pilot CI repair and publication
+for review in the existing Task. It superseded the concept-review-only boundary;
+it did not authorize merge, auto-merge or experiment execution.
 
-Apply accepted option 1a: stable viewer perspective, neutral search heading
-("Search cards"), explicit native player/resource context, no new identity
-aliases. Complete the planned presentation proof with scoped existing browser
-fixtures where feasible; retain honest coverage limits.
-
-Use supported Loopflow sync to reconcile against main after T6's merge, preserving
-T7's changes and frozen evidence. The last observed PR #418 head is `02241d414`.
-Its later main-integration run 41789025455 / job 126437843412 fails 27 tests in
+The earlier main-integration run 41789025455 / job 126437843412 failed 27 tests in
 `tests/eval/test_tla_pilot.py` with "pilot runtime world differs from the
 prospective protocol" (278 passed, one skipped). The earlier heuristic inventory
-failure is already repaired. Read `/tmp/mtg226-ci-current-failed.log` or fetch
-that job's logs. Diagnose the pilot contract against current main; do not weaken
-world admission or rewrite frozen protocol/checkpoint/experiment evidence to
-make CI pass. All other observed checks, including Engine Budget, passed on
-that head; they do not prove the resumed combined tree.
-
-Publish the repaired change through this Task's existing delivery history and
-stop for review. PR closure is now superseded by explicit resume authorization.
-Do not replay completed implementation wholesale: implement the accepted review
-correction, repair integration, verify affected paths, and publish. Reconcile
-the closed PR/base through Loopflow's supported delivery operations.
+failure was repaired at `02241d414`. Merged T6 supplies the compatible-world
+fixture for synthetic pilot outcomes, with separate runtime/schema rejection
+tests; no further runtime repair was needed. All other observed checks,
+including Engine Budget, passed on the historical head. Neither those results
+nor the focused resume checks certify the resumed combined tree's full CI.

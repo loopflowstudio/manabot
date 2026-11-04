@@ -422,7 +422,7 @@ preserves accepted decisions, dated proof limits and source history.
   only), so restoring it needs an engine accessor, a decision Jack Heart
   has not made.
 
-## T6 lessons (2026-11-03; pending review)
+## T6 lessons (2026-11-03; merged 2026-11-04 at `5dd11cec4`)
 
 - Jack Heart accepted the one-catalog simplification into T6 on 2026-11-02:
   `ContentPack` owns stable name-ordered definition rows and content identity;
@@ -526,8 +526,13 @@ preserves accepted decisions, dated proof limits and source history.
   declaration and evaluation. Pin every declared input capacity: v3's v6/256
   facts contract also requires 64 actions, independent of fresh 512 defaults.
   Temporary changed-input fixtures exercise admission without rewriting frozen
-  protocol/regime bytes. The repaired 33-case module passes; this is test
-  isolation evidence, not historical-runtime compatibility or full-head CI.
+  protocol/regime bytes. The repaired 33-case module passed at that stage;
+  subsequent main integrates experiment protocol v5 with policy input v7,
+  128 facts, 64 actions and 128 cards per player. Experiment protocol numbers
+  and policy-input versions are separate contracts. Synthetic shape isolation
+  must remain off encoding and gameplay paths; unpatched identity/schema
+  rejection checks preserve strict admission. These are test-isolation proofs,
+  not historical-runtime compatibility or full-head CI.
 - Main's explicit v7 shared-effect projection (`fb5ad2c13`, integrated into
   T6 at `920bbb52a`) coexists with T6 schedule/capture/lifetime projections;
   fresh inputs remain v6. Constructors use the single catalog, and consumer
@@ -536,7 +541,7 @@ preserves accepted decisions, dated proof limits and source history.
   pre-sync green receipts still do not certify the combined source or imply
   acceptance of unrelated experiment work.
 
-## Player control and shared projections (2026-11-03; pending review)
+## Player control and shared projections (2026-11-03/04; pending review)
 
 - Jack Heart's final MTG-226 clarification makes `ActionSpace.player` the
   authoritative chooser. Native `Decision.player()` and `Action.player()`
@@ -567,12 +572,16 @@ preserves accepted decisions, dated proof limits and source history.
   do not establish all pairwise TLA interactions, process-crash durability,
   training strength or final-head CI. Catalog completeness and behavior
   witnesses remain separate claims in `docs/rules/tla/acceptance.md`.
-- Jack Heart accepted separating delayed-event matching, once/repeat frequency
-  and expiry in T6 on 2026-11-03 (comment `55355aab`). Creation-time exact
-  selector capture and distinct event context remain required. This is a
-  resolved parent design decision; the published `bf7631c6a` integration does
-  not yet contain that later completion. Its acceptance cannot be inferred
-  from the earlier schedule/capture proofs.
+- Jack Heart selected stable viewer perspective (option 1a) on 2026-11-03.
+  “You” stays anchored to the viewer, including intervening own-player
+  decisions during control. Inspection-container placement is permission,
+  not ownership: private labels use native owner/zone, and a generic search
+  heading cannot infer whose library is searched. Native instructions name
+  whose choices and resources apply. The 2026-11-04 correction has both-seat,
+  both-duration Islandcycling projection/fork/expiry and Svelte-rendering
+  evidence; retained cleanup recovery remains separate from search recovery
+  and browser geometry. The historical concept-review illustration predates
+  implementation and is not a browser capture.
 
 ## Open tensions
 
