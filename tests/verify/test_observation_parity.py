@@ -563,7 +563,8 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         header = relations[waiting & (relations[:, 0] == 1)][0]
         watched = relations[waiting & (relations[:, 0] == 3)][0]
         assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
-        assert watched[24] > 0
+        remembered = relations[waiting & (relations[:, 0] == 8)][0]
+        assert remembered[24] == watched[24] > 0
 
 
 @pytest.mark.parametrize("version", [4, 5])

@@ -78,7 +78,78 @@ The refactor alone preserved content bytes and row ordering at `2c1ba169f`; late
 
 Authored presets retain their bypass of submitted-deck construction checks. Main `c823c9c8f` removes bug-based admission exclusions: every defined non-token, non-fixture front face is playable. `PlayerConfig.submitted` still selects construction validation. Review-visible consequences remain: edited setup metadata alone no longer fails checkpoint loading (execution checks actual decks), authored mirrors need no pack selection, and any pair of Elemental decks receives the roster binding by membership.
 
+## Schedule projection implementation — 2026-11-03
+
+Implemented locally: native `TurnState.public_schedule` supplies typed `ScheduleView`
+through the live decision surface. Historical capture serialization, policy
+inputs and rules identity remain unchanged. Current combat is shown for every
+combat phase, including unrestricted combat; it requires no duplicate engine
+flag. The native retained `resume_with` is shown when present, never guessed.
+
+Deleted Academy's count-derived extra-turn/additional-combat sentences in
+`PlayerArea.svelte`. Preserve the numeric protocol fields for retained captures
+and policy consumers; the current UI reads the ordered native schedule instead.
+
+`Schedule.svelte` renders ordered extra turns and native resume, current combat
+and ordered pending combats with rules-derived attacker restrictions. Missing
+historical data says “Schedule not recorded.” Schemas for Experience, replay,
+Study and advice are regenerated; frozen capture bytes are untouched. Academy
+usage guidance is updated. The release cp312 extension was installed atomically.
+
+The real WebSocket proof in `tests/academy/test_schedule_recovery.py` plays Bumi,
+observes pending then current land-creature restriction with zero pending count,
+checks both closed-deck viewers, reconnects to the same frame and rejects a stale
+Command without changing state/events. Native progression covers opposite turn
+queues/resume and unrestricted combat after restricted combat; Svelte server
+rendering covers ordered lists, restrictions, seat labels and historical unknowns.
+No process-crash durability or browser-layout proof is claimed.
+
+Check: focused debug `public_schedule` (2) and Bumi (1), Python schedule recovery
+(1) and experience protocol (14), Vitest GameBoard (7) and protocol (5) all passed;
+Svelte check, changed-file Ruff, formatting, CI test collection and diff checks
+passed. Gate owns affected combined suites, browser layout/interaction checks and
+final-head CI; publication remains the selected Graph's existing PR #417 step.
+No merge or auto-merge is authorized. The supplied interactive review edits and
+concurrently added `scratch/t7-handoff.md` are preserved.
+
+## Delayed-trigger composition — accepted correction, 2026-11-03
+
+Jack Heart's review rejects `NextEndStepForCreatedToken`: timing must not own
+object selection. `CreateDelayedTrigger` captures an optional `ObjectSelector`
+at creation; its effects use `ObjectSelector::Remembered`. Exact `ObjectRef`s
+travel with the delayed trigger, pending occurrence, stack ability and suspended
+resolution, separately from the triggering event's context. No selector is
+re-evaluated against a later incarnation. End-step timing retains the existing
+controller/any-player distinction. The adjacent target-death timing becomes
+selector-based too: the death event watches the captured subjects, through the
+existing native exact-object departure watcher.
+Ordinary death/spell/upkeep behavior and expiry are preserved.
+
+Observation projects remembered objects separately in v5 relation rows (kind 8),
+with native/Python/text parity and catalog-derived tokens. Frozen v1–v4 widths
+and exclusions stay unchanged. Hash contract is now 14; only mutable
+current-world receipts may be refreshed. Each `ForEachTarget` iteration captures
+its own copy. Directed tests cover source departure/control change, separate
+cast-event context, hidden-hand projection, reentry both before firing and while
+resolution is suspended, exact hash sensitivity and deterministic choice forks.
+The concept page records the accepted correction and implemented schedule.
+
+Check: `cargo test` filters `tla::` (430), `observability::` (55),
+`resolution_tests` (13) plus the added privacy case pass in debug; rebuilt cp312
+extension + focused tensor/text and both Academy recovery tests (4), all-target /
+all-feature Clippy, changed-file Ruff and diff checks pass. Logs:
+`.runs/t6-publication/delayed-*.log`. Gate owns the now-required mutable w17
+receipt refresh, full affected suites and final-head CI before PR #417
+publication; historical evidence is unchanged and no merge is authorized.
+
 ## Delete — do not maintain
+
+Completed in this cut: removed `DelayedEvent::NextEndStepForCreatedToken`,
+`DelayedEvent::TargetDiesThisTurn` and end-step `context` plumbing. Both cards
+use generic timing + capture + ordinary sacrifice. Observability witnesses use
+the surviving path; timing/death/upkeep behavior tests remain. The shared
+inline-trigger constructor returns its created occurrence, removing three
+separate last-trigger lookups. No remaining deletion targets in these paths.
 
 Live audit references to removed
 `Game::new_with_content` in `reviews.json`, `index.jsonl` and
@@ -170,6 +241,74 @@ and verify the remaining offers and viewer permissions. This is verification
 of the accepted contract, not a new product decision or a new persistence
 design. Existing gate/CI work and Jack Heart's review remain the next
 acceptance boundary; this review changes no implementation direction.
+
+## Interactive concept review — 2026-11-03, head `01ed2fbcb`
+
+This review, requested by Jack Heart, supersedes the earlier headless conclusion
+of “nothing to change” for the presentation of scheduled turns and combats.
+It does not change implementation, authorize shipping, or restart the Graph.
+The existing Sozin recovery test now supplies the previously missing retained
+session proof; process-crash persistence remains outside that proof.
+
+**Accepted experience:** the human can understand the acting agent's public
+observation and complete legal actions. One catalog, immediate committed search
+choices, separate payment/reflexive-trigger decisions, and preserved historical
+checkpoint defaults remain accepted. No alternative rules lifecycle is proposed.
+
+**Mismatch found by source inspection:** `TurnState.extra_turns`, `resume_with`,
+`additional_combats` and `combat_attackers` retain ordered scheduling and attacker
+restrictions. `Game::continuation_frames` projects these publicly as kinds 11/12,
+including order and a rules-derived attacker description. Academy's
+`PlayerArea.svelte` instead renders per-player counts from `PlayerView`; its
+turn sentence says each player takes their extra turns “after this one”. Counts
+cannot distinguish opposing extra-turn orders. The additional-combat count does
+not explain Bumi's land-creature restriction, and reaches zero during the last
+extra combat even while that restriction remains active. This is a presentation
+gap, not evidence that execution offers illegal attacks. No browser reproduction
+was run in this review.
+
+**Proposed completion of the accepted contract (not yet implemented):** show
+the committed upcoming turn order and current/pending additional combats with
+their public restrictions. Derive a typed, viewer-safe schedule projection from
+the native authority for ExperienceFrame and Academy; do not infer order from
+counts, parse card text, copy the scheduler into the client, or expose private
+continuation frames. Keep turns and combats separate: they are different timing
+domains, not a guessed unified future-game timeline. Describe only scheduled
+events, not predictions about unresolved spells or triggers. Existing frozen
+captures without this data mean unknown, not an empty schedule.
+
+**Usage-doc draft, proposed for Academy guidance:** “Before choosing an action,
+read the scheduled turns and extra combats. The list shows events already
+scheduled, in their execution order; later effects can change it. A restricted
+combat states which creatures may attack, and ordinary attack offers remain
+authoritative. After reconnecting, the list comes from the recovered game state.”
+The existing one-catalog README guidance and agent skill instructions stay
+unchanged; they already require shared authority and viewer-safe recovery.
+
+**Walkthrough and counterexamples:** Bumi schedules a land-creature-only combat;
+the person sees that restriction before the next decision, enters that combat,
+and still sees it after its pending count becomes zero. Reconnecting restores
+the same current restriction and remaining schedule. Two positions with one
+extra turn per player but opposite queue order must display different sequences.
+A newly scheduled turn may change the order. A stale Command cannot mutate the
+schedule. An unrestricted extra combat must not inherit an earlier restriction.
+
+**Consequences and next proof:** native state remains the only owner; projection
+and schema carry explicit public data, UI renders it read-only, and recovery uses
+the existing retained-session frame. Policy tensors and frozen receipts keep
+their contracts. Verify reversed queues, current versus pending restrictions,
+unrestricted combat, viewer privacy and reconnect through the real consumer path.
+No new persistence service or scheduling operation is needed. Source inspection
+supports the gap; these proposed presentation checks have not been executed.
+
+**Decision accepted by Jack Heart, 2026-11-03:** selected 1a ("1a1a"). Complete
+the schedule projection and recovery proof within T6 before landing. The
+proposed completion and usage text above are now accepted implementation
+direction, not implemented behavior. Preserve the existing PR #417 and all
+other accepted T6 work; return to review after publication. No merge or
+auto-merge is authorized. This is a small completion of the shared-observation
+promise, not a redesign of the whole turn UI. The page at
+`scratch/concept-review.html` is the review surface.
 
 ## Wave memory
 

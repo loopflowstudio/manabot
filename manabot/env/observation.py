@@ -657,6 +657,12 @@ class ObservationEncoder:
                 inherited[0], inherited[22], inherited[29] = 7, 1, 1
                 _reference(inherited, frame.inherited_from)
                 rows.append(inherited)
+            if self.shows_everything:
+                for ordinal, reference in enumerate(frame.remembered, 1):
+                    remembered = row.copy()
+                    remembered[0], remembered[22], remembered[29] = 8, 1, ordinal
+                    _reference(remembered, reference)
+                    rows.append(remembered)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1

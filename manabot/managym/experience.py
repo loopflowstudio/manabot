@@ -530,7 +530,28 @@ class StackEntryView(ProtocolModel):
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class CombatView(ProtocolModel):
+    player_index: UInt32
+    attackers: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class ScheduleView(ProtocolModel):
+    """Committed native scheduling, in execution order within each domain."""
+
+    extra_turns: list[UInt32]
+    resume_with: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    current_combat: CombatView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    additional_combats: list[CombatView]
+
+
 class LegacyHeroObservation(ProtocolModel):
+    schedule: ScheduleView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     stack_objects: list[StackEntryView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

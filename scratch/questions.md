@@ -38,3 +38,12 @@ remain untouched.
 Main supersedes the old 142-Command tape with 135 Commands after Rallier
 correctly excludes Suki with power above three. Preserve that accepted trace
 and the explicit Accumulate Wisdom ordering Commands in navigation prefixes.
+
+## Schedule projection assumption — 2026-11-03
+
+Current combat is displayed for both ordinary and extra combat, with the native
+restriction if any. This avoids inventing a persisted “is extra” flag that the
+accepted display does not need. `resume_with` is shown only when native state
+retains it; the client does not predict the next normal turn from counts.
+Missing historical schedule data remains unknown. These reversible presentation
+choices preserve Jack Heart's accepted 1a direction.

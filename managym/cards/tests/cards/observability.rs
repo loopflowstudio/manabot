@@ -350,6 +350,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
+        ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::You => "ObjectSelector::You",
@@ -358,13 +359,14 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 10] {
+fn selector_witnesses() -> [ObjectSelector; 11] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
+        ObjectSelector::Remembered,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
         ObjectSelector::You,
@@ -818,6 +820,7 @@ fn effect_witnesses() -> Vec<Effect> {
             count: 3,
         },
         Effect::CreateDelayedTrigger {
+            remember: None,
             event: DelayedEvent::CreatureDiesThisTurn,
             effects: vec![Effect::gain_life(1)],
         },
@@ -2601,6 +2604,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        remembered => [Rows("v5 captured object reference relations, kind 8")],
         inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
         attackers => [Fact(FactKind::CombatRestriction)],
         source_transforms => [Rows("Transforms fact rows, id = frame index + 1")],
@@ -3393,9 +3397,7 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
             or_exiled: true, ..
         } => (2, true),
         DelayedTriggerEvent::CreatureDies => (3, false),
-        DelayedTriggerEvent::NextEndStep { context, your_turn } => {
-            (if *your_turn { 7 } else { 4 }, context.is_some())
-        }
+        DelayedTriggerEvent::NextEndStep { your_turn } => (if *your_turn { 7 } else { 4 }, false),
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
         DelayedTriggerEvent::NextUpkeep => (6, false),
     }
@@ -3418,11 +3420,9 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
         },
         DelayedTriggerEvent::CreatureDies,
         DelayedTriggerEvent::NextEndStep {
-            context: None,
             your_turn: false,
         },
         DelayedTriggerEvent::NextEndStep {
-            context: None,
             your_turn: true,
         },
         DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
@@ -3472,6 +3472,11 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
             (if viewer == 0 { 1.0 } else { 2.0 }, 1.0, 1.0)
         );
         assert!(watched > 0.0, "the watched creature is joined");
+        let observation = encoded(&s, viewer, 5);
+        let remembered = observation.relations.as_chunks::<RELATION_DIM_V5>().0.iter()
+            .find(|row| row[0] == 8.0 && row[3] == 10.0).expect("captured subject row");
+        assert_eq!(remembered[24], watched, "capture and event watch are distinct relations");
+        assert!(!encoded(&s, viewer, 4).relations.as_chunks::<33>().0.iter().any(|row| row[0] == 8.0));
         assert!(
             definitions_seen(&s, viewer).contains(&s.game().state.cards[fissure].definition_id.0)
         );

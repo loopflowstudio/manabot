@@ -697,7 +697,7 @@ def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
 def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None:
     env = priority_root((), ("Mountain", "Gray Ogre"))
     payload = json.loads(capture_text_decision(env).capture_json)
-    _, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
+    mountain, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
     viewer = payload["observation"]["viewer_state"]["agent"]["player_index"]
     payload["frames"].append(
         {
@@ -729,6 +729,13 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
             "mana_outputs": [],
             "resolutions_this_turn": 0,
             "this_turn": True,
+            "remembered": [
+                {
+                    "object": mountain["id"],
+                    "definition": mountain["registry_key"],
+                    "player": None,
+                }
+            ],
         }
     )
     text = render_decision(_redigest(payload)).text
@@ -737,6 +744,7 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
     )
     assert "waits for the watched object to die" in relation
     assert "watching C" in relation and "(Gray Ogre)" in relation
+    assert "remembered C" in relation and "(Mountain)" in relation
     assert "ends at this turn's cleanup if it has not triggered" in relation
 
 

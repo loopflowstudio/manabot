@@ -169,6 +169,7 @@ impl Game {
         };
 
         let frame = EffectFrame {
+            remembered: Vec::new(),
             source: Some(card),
             source_ref: self.current_object_ref(card),
             inherited_from: None,
@@ -285,6 +286,7 @@ impl Game {
         let source_ref = Some(ability.source_ref);
 
         let frame = EffectFrame {
+            remembered: Vec::new(),
             source: Some(ability.source_card),
             source_ref,
             inherited_from: ability.inherited_from,
@@ -377,6 +379,7 @@ impl Game {
         let resolutions_this_turn = *count;
 
         let frame = EffectFrame {
+            remembered: triggered.remembered,
             source: Some(source_card),
             source_ref: triggered.source_ref,
             inherited_from: triggered
@@ -384,7 +387,7 @@ impl Game {
                 .as_ref()
                 .and_then(|lki| lki.inherited_from),
             source_transforms: triggered.source_transforms,
-            controller: source_controller,
+            controller: triggered.controller,
             resolutions_this_turn,
             kicked: false,
             x: triggered.x,
@@ -1363,18 +1366,14 @@ impl Game {
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
-                self.enqueue_inline_trigger(
+                let trigger = self.enqueue_inline_trigger(
                     frame.source?,
                     frame.source_ref,
                     frame.controller,
                     effects.clone(),
                     frame.context_target,
                 );
-                let trigger = self
-                    .state
-                    .pending_triggers_mut()
-                    .last_mut()
-                    .expect("enqueued trigger");
+                trigger.remembered = frame.remembered.clone();
                 trigger.x = frame.x;
                 trigger.player = frame.triggering_player;
                 None
@@ -1583,42 +1582,53 @@ impl Game {
             Effect::EachPlayerKeepsCreatures { max_total_power } => {
                 self.keep_creatures(self.active_player(), *max_total_power, Vec::new())
             }
-            Effect::CreateDelayedTrigger { event, effects } => {
-                let (event, this_turn) = match event {
-                    DelayedEvent::TargetDiesThisTurn => {
-                        let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
-                            return None;
-                        };
-                        let watched = self.permanent_object_ref(id)?;
-                        (
-                            DelayedTriggerEvent::Leaves {
+            Effect::CreateDelayedTrigger {
+                event,
+                remember,
+                effects,
+            } => {
+                let remembered = remember
+                    .as_ref()
+                    .map_or_else(Vec::new, |what| self.select(what, frame));
+                let (events, this_turn) = match event {
+                    DelayedEvent::DiesThisTurn => (
+                        remembered
+                            .iter()
+                            .copied()
+                            .filter(|object| self.lookup_current_permanent(*object).is_ok())
+                            .map(|watched| DelayedTriggerEvent::Leaves {
                                 watched,
                                 or_exiled: false,
-                            },
-                            true,
-                        )
+                            })
+                            .collect(),
+                        true,
+                    ),
+                    DelayedEvent::CreatureDiesThisTurn => {
+                        (vec![DelayedTriggerEvent::CreatureDies], true)
                     }
-                    DelayedEvent::CreatureDiesThisTurn => (DelayedTriggerEvent::CreatureDies, true),
-                    DelayedEvent::NextEndStepForCreatedToken { your_turn } => (
-                        DelayedTriggerEvent::NextEndStep {
-                            context: frame.created.map(Target::Permanent),
+                    DelayedEvent::NextEndStep { your_turn } => (
+                        vec![DelayedTriggerEvent::NextEndStep {
                             your_turn: *your_turn,
-                        },
+                        }],
                         false,
                     ),
-                    DelayedEvent::YouNextCastThisTurn(predicate) => {
-                        (DelayedTriggerEvent::YouCastSpell(predicate.clone()), true)
-                    }
-                    DelayedEvent::NextUpkeep => (DelayedTriggerEvent::NextUpkeep, false),
+                    DelayedEvent::YouNextCastThisTurn(predicate) => (
+                        vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())],
+                        true,
+                    ),
+                    DelayedEvent::NextUpkeep => (vec![DelayedTriggerEvent::NextUpkeep], false),
                 };
-                self.add_delayed_trigger(DelayedTrigger {
-                    event,
-                    controller: frame.controller,
-                    source_card: frame.source?,
-                    source_ref: frame.source_ref,
-                    effects: effects.clone(),
-                    this_turn,
-                });
+                for event in events {
+                    self.add_delayed_trigger(DelayedTrigger {
+                        remembered: remembered.clone(),
+                        event,
+                        controller: frame.controller,
+                        source_card: frame.source?,
+                        source_ref: frame.source_ref,
+                        effects: effects.clone(),
+                        this_turn,
+                    });
+                }
                 None
             }
             Effect::GainLife { amount } => {
@@ -1771,6 +1781,7 @@ impl Game {
                     // Delayed trigger: when it dies or is exiled, return it to
                     // the battlefield tapped (CR 603.7 one-shot).
                     self.add_delayed_trigger(DelayedTrigger {
+                        remembered: Vec::new(),
                         event: DelayedTriggerEvent::Leaves {
                             watched,
                             or_exiled: true,
@@ -1819,6 +1830,7 @@ impl Game {
                 // target as the primary. Inner effects must not suspend.
                 for target in frame.active_targets() {
                     let mut sub = EffectFrame {
+                        remembered: frame.remembered.clone(),
                         source: frame.source,
                         source_ref: frame.source_ref,
                         inherited_from: frame.inherited_from,
@@ -1907,14 +1919,19 @@ impl Game {
                 .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())
                 .into_iter()
                 .collect(),
-            ObjectSelector::Moved => frame
-                .moved
+            ObjectSelector::Moved | ObjectSelector::Remembered => {
+                (if matches!(what, ObjectSelector::Moved) {
+                    &frame.moved
+                } else {
+                    &frame.remembered
+                })
                 .iter()
                 .copied()
                 .filter(|object| {
                     self.current_object_ref(CardId::from(object.entity)) == Some(*object)
                 })
-                .collect(),
+                .collect()
+            }
             ObjectSelector::You => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");

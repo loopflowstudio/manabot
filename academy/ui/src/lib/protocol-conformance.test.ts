@@ -235,6 +235,8 @@ describe('experience protocol v1 conformance', () => {
       CommandReceipt: 'CommandReceipt',
       DeckNames: 'DeckNames',
       ExperienceFrame: 'ExperienceFrame',
+      ScheduleView: 'ScheduleView',
+      CombatView: 'CombatView',
       InteractionOffer: 'InteractionOffer',
       DecisionContextView: 'DecisionContextView',
       StackEntryView: 'StackEntryView',

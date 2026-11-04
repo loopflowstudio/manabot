@@ -188,6 +188,36 @@ impl TurnState {
         PHASE_STEPS[self.current_phase][self.current_step]
     }
 
+    /// Public schedule projection: no object references, hidden zones or
+    /// unresolved effects. Current combat includes ordinary combat so an
+    /// unrestricted extra combat needs no new scheduling state to display.
+    pub fn public_schedule(&self) -> crate::experience::ScheduleView {
+        use crate::experience::{CombatView, ScheduleView};
+        let combat = |attackers: &Option<CardPredicate>| CombatView {
+            player_index: self.active_player.0 as u32,
+            attackers: attackers.as_ref().map(|predicate| {
+                crate::agent::ability_description::predicate_description(predicate, "creatures")
+            }),
+        };
+        ScheduleView {
+            extra_turns: self
+                .extra_turns
+                .iter()
+                .rev()
+                .map(|player| player.0 as u32)
+                .collect(),
+            resume_with: self.resume_with.map(|player| player.0 as u32),
+            current_combat: (self.current_phase_kind() == PhaseKind::Combat)
+                .then(|| combat(&self.combat_attackers)),
+            additional_combats: self
+                .additional_combats
+                .iter()
+                .rev()
+                .map(|pending| combat(&pending.attackers))
+                .collect(),
+        }
+    }
+
     pub fn can_cast_sorceries(&self) -> bool {
         // CR 117.1a, 307.1 — Sorcery timing is restricted to main phases.
         matches!(
@@ -248,5 +278,68 @@ impl TurnState {
             }
             None => self.resume_with.take().unwrap_or(after_this),
         }
+    }
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    use super::*;
+    use crate::state::card::CardType;
+
+    #[test]
+    fn public_schedule_preserves_opposite_queues_and_normal_resume() {
+        let mut turn = TurnState::new(PlayerId(0));
+        turn.extra_turns = vec![PlayerId(0), PlayerId(1)];
+        assert_eq!(turn.public_schedule().extra_turns, vec![1, 0]);
+        turn.extra_turns.reverse();
+        assert_eq!(turn.public_schedule().extra_turns, vec![0, 1]);
+        assert_eq!(turn.next_turn_player(), PlayerId(0));
+        let schedule = turn.public_schedule();
+        assert_eq!(schedule.extra_turns, vec![1]);
+        assert_eq!(schedule.resume_with, Some(1));
+        assert_eq!(turn.next_turn_player(), PlayerId(1));
+        assert!(turn.public_schedule().extra_turns.is_empty());
+        assert_eq!(turn.public_schedule().resume_with, Some(1));
+        assert_eq!(turn.next_turn_player(), PlayerId(1));
+        assert_eq!(turn.public_schedule().resume_with, None);
+    }
+
+    #[test]
+    fn public_schedule_keeps_current_restriction_then_clears_it_for_unrestricted_combat() {
+        let mut turn = TurnState::new(PlayerId(0));
+        turn.current_phase = PhaseKind::Combat as usize;
+        turn.current_step = 4; // End of combat.
+        turn.additional_combats = vec![
+            AdditionalCombat { attackers: None },
+            AdditionalCombat {
+                attackers: Some(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+            },
+        ];
+        let schedule = turn.public_schedule();
+        assert_eq!(
+            schedule.additional_combats[0].attackers.as_deref(),
+            Some("land creatures")
+        );
+        assert!(schedule.additional_combats[1].attackers.is_none());
+        turn.advance_step();
+        assert_eq!(
+            turn.public_schedule()
+                .current_combat
+                .unwrap()
+                .attackers
+                .as_deref(),
+            Some("land creatures")
+        );
+        turn.current_step = 4;
+        turn.advance_step();
+        let schedule = turn.public_schedule();
+        assert!(schedule.additional_combats.is_empty());
+        assert!(schedule.current_combat.unwrap().attackers.is_none());
+        turn.current_step = 4;
+        turn.advance_step();
+        assert!(turn.public_schedule().current_combat.is_none());
     }
 }

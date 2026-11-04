@@ -1,11 +1,31 @@
 # T6 direction (Jack Heart, 2026-11-02)
 
+## Accepted review completion (Jack Heart, 2026-11-03)
+
+Jack Heart selected 1a: complete Academy's native schedule projection in T6
+before landing. Display ordered scheduled turns and current/pending extra
+combats with their public attacker restrictions; per-player counts are
+insufficient. Keep native authority, viewer safety, historical unknowns and
+retained-session recovery. The concrete contract, counterexamples and proof
+are in the interactive concept-review section of `mtg-225-tla-t6.md`.
+Implement on the existing Task/PR #417, publish and return to review; no merge
+or auto-merge is authorized.
+
 - Original stacking decision: develop T6 on T5 (PR #405, Task a7234f / MTG-224),
   using its synced head rather than pre-sync `24b335fe0`. Fulfilled: T5 and the
   later MTG-235/238/239 work are integrated in T6 head `64b79d895` on main
   `c823c9c8f` (2026-11-03).
 - Follow the TLA PR brief: one cohesive PR covering all 16 T6 cards, then stop
   for Jack Heart's review. No merge without that review.
+
+## Delayed-trigger correction (Jack Heart, 2026-11-03)
+
+Accepted review feedback removes token-specific delayed timing. Capture an
+`ObjectSelector` at creation, retain exact incarnations separately from event
+context, then execute ordinary effects when the event arrives. Visions keeps
+controller-next-end-step timing; Trebuchet keeps any-next-end-step timing.
+The working design records the cutover, observation contract and remaining gate
+work. This is part of T6 on PR #417, with the same stop-for-review boundary.
 
 ## Concept review (with Jack Heart, 2026-11-02)
 

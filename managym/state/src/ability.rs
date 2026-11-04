@@ -453,6 +453,9 @@ pub enum ObjectSelector {
     /// The permanent whose event fired the trigger ("that creature", "that
     /// token"), which the trigger keeps as its context.
     Triggering,
+    /// Objects captured when a delayed trigger was created, still in the same
+    /// incarnation; separate from the object supplied by its triggering event.
+    Remembered,
     /// The object the source Aura or Equipment is attached to.
     Attached,
     /// The token this resolution created last ("that token").
@@ -566,6 +569,7 @@ impl ObjectSelector {
             | Self::Triggering
             | Self::Attached
             | Self::CreatedThisWay
+            | Self::Remembered
             | Self::Grantor
             | Self::Moved
             | Self::You
@@ -927,6 +931,10 @@ pub enum Effect {
     /// are chosen as the delayed ability is put on the stack.
     CreateDelayedTrigger {
         event: DelayedEvent,
+        /// Resolve this selector now, not when the delayed ability resolves.
+        /// Its exact objects become `ObjectSelector::Remembered` there.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remember: Option<ObjectSelector>,
         effects: Vec<Effect>,
     },
     /// Resolving player gains `amount` life, read as the instruction
@@ -1062,18 +1070,16 @@ pub enum PlayWindow {
 /// [`Effect::CreateDelayedTrigger`] waits for (CR 603.7).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DelayedEvent {
-    /// "When that creature dies this turn": the frame's primary target.
-    TargetDiesThisTurn,
+    /// "When it dies this turn": watch each captured object.
+    DiesThisTurn,
     /// "Whenever a creature dies this turn."
     CreatureDiesThisTurn,
-    /// "At the beginning of the next end step", about the token the
-    /// resolution created last ("sacrifice that token").
-    NextEndStepForCreatedToken { your_turn: bool },
+    /// "At the beginning of the next end step", optionally only yours.
+    NextEndStep { your_turn: bool },
     /// "When you next cast a [predicate] spell this turn"; that spell is
     /// the delayed ability's context.
     YouNextCastThisTurn(CardPredicate),
-    /// "At the beginning of the next upkeep", about the ability's source
-    /// ("transform Aang at the beginning of the next upkeep").
+    /// "At the beginning of the next upkeep".
     NextUpkeep,
 }
 
@@ -1277,6 +1283,7 @@ impl Effect {
     /// other effect.
     pub fn selectors(&self) -> Vec<&ObjectSelector> {
         match self {
+            Effect::CreateDelayedTrigger { remember, .. } => remember.iter().collect(),
             Effect::PutCounters { on, .. } => vec![on],
             Effect::PutCountersFrom { from, on } => vec![from, on],
             Effect::ApplyContinuous { affected: what, .. }

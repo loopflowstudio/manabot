@@ -13696,6 +13696,14 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
     assert_eq!(zone_of(&s, theirs), Some(ZoneType::Exile));
     assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
     assert_eq!(s.battlefield_permanents_named(0, "Craw Wurm").len(), 1);
+    let remembered: Vec<_> = s.game().state.delayed_triggers.iter()
+        .flat_map(|trigger| trigger.remembered.iter().copied()).collect();
+    assert_eq!(remembered.len(), 2);
+    assert_ne!(remembered[0], remembered[1], "each target iteration captured its own token");
+    for name in ["Gray Ogre", "Craw Wurm"] {
+        let token = s.battlefield_permanents_named(0, name)[0];
+        assert!(remembered.contains(&s.game().permanent_object_ref(token).unwrap()));
+    }
     s.advance_to_active_step(0, StepKind::End);
     settle(&mut s);
     assert!(s.battlefield_permanents_named(0, "Gray Ogre").is_empty());
@@ -13735,6 +13743,9 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
         },
         "the additional combat's declare attackers step".into(),
     );
+    let schedule = s.game().state.turn.public_schedule();
+    assert!(schedule.additional_combats.is_empty());
+    assert_eq!(schedule.current_combat.unwrap().attackers.as_deref(), Some("land creatures"));
     assert_eq!(s.active_player(), 0);
     let offered: Vec<PermanentId> = s
         .action_space()
@@ -14750,4 +14761,25 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     settle(&mut s);
     assert_eq!(zone_of(&s, card), Some(ZoneType::Hand));
     assert_eq!(s.game().card_power(card), 1);
+}
+
+
+#[test]
+fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step() {
+    let mut s = five_color_setup(&["Fire Navy Trebuchet", "Gray Ogre"]);
+    let trebuchet = s.force_permanent_on_battlefield(0, "Fire Navy Trebuchet");
+    let source = card_of(&s, trebuchet);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    attack_and_settle(&mut s, &[ogre], None);
+    let boulder = s.battlefield_permanents_named(0, "Ballistic Boulder")[0];
+    assert_eq!(s.game().state.delayed_triggers[0].remembered,
+        vec![s.game().permanent_object_ref(boulder).unwrap()]);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.game_mut().move_card(source, ZoneType::Graveyard);
+    // Controlled clock isolates any-player timing from the usual own-turn attack.
+    s.game_mut().state.turn.active_player = PlayerId(1);
+    s.advance_to_active_step(1, StepKind::End);
+    settle(&mut s);
+    assert!(s.game().state.permanents[boulder].is_none());
+    assert!(s.game().state.delayed_triggers.is_empty());
 }

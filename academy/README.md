@@ -14,6 +14,14 @@ offered them. Recovery envelopes make sessions reloadable — including fully
 offline. Schemas and three-language conformance fixtures live in
 [protocol/](../protocol/README.md).
 
+Before choosing an action, read the scheduled turns and extra combats beside
+the turn heading. These are already committed events in execution order;
+later effects can change them. Turns and combats are separate lists. A current
+or pending restricted combat states which creatures may attack; ordinary attack
+offers remain authoritative. After reconnecting, the schedule comes from the
+recovered game state. Older recordings without schedule data say “Schedule not
+recorded,” rather than claiming nothing is scheduled.
+
 ## Modules
 
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,

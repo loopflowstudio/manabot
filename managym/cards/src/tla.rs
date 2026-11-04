@@ -344,6 +344,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
                 },
                 effects: vec![Effect::CreateDelayedTrigger {
+                    remember: None,
                     event: DelayedEvent::NextUpkeep,
                     effects: vec![Effect::TransformSource],
                 }],
@@ -3430,7 +3431,8 @@ fn fatal_fissure() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         spell_effects: vec![Effect::CreateDelayedTrigger {
-            event: DelayedEvent::TargetDiesThisTurn,
+            remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
+            event: DelayedEvent::DiesThisTurn,
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(4),
                 what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -3790,9 +3792,10 @@ fn fire_navy_trebuchet() -> CardDefinition {
                     attach_source: false,
                 },
                 Effect::CreateDelayedTrigger {
-                    event: DelayedEvent::NextEndStepForCreatedToken { your_turn: false },
+                    remember: Some(ObjectSelector::CreatedThisWay),
+                    event: DelayedEvent::NextEndStep { your_turn: false },
                     effects: vec![Effect::Sacrifice {
-                        what: ObjectSelector::Triggering,
+                        what: ObjectSelector::Remembered,
                         optional: false,
                     }],
                 },
@@ -4201,9 +4204,10 @@ fn foggy_swamp_visions() -> CardDefinition {
                     exceptions: vec![],
                 },
                 Effect::CreateDelayedTrigger {
-                    event: DelayedEvent::NextEndStepForCreatedToken { your_turn: true },
+                    remember: Some(ObjectSelector::CreatedThisWay),
+                    event: DelayedEvent::NextEndStep { your_turn: true },
                     effects: vec![Effect::Sacrifice {
-                        what: ObjectSelector::Triggering,
+                        what: ObjectSelector::Remembered,
                         optional: false,
                     }],
                 },
@@ -5300,6 +5304,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
             effects: vec![
                 Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
                 Effect::CreateDelayedTrigger {
+                    remember: None,
                     event: DelayedEvent::YouNextCastThisTurn(CardPredicate::subtype("Lesson")),
                     effects: vec![Effect::CopyTriggeringObject],
                 },
@@ -7665,6 +7670,7 @@ fn ruinous_waterbending() -> CardDefinition {
             Effect::If {
                 condition: Condition::Kicked,
                 then: vec![Effect::CreateDelayedTrigger {
+                    remember: None,
                     event: DelayedEvent::CreatureDiesThisTurn,
                     effects: vec![Effect::gain_life(1)],
                 }],
