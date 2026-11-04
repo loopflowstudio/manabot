@@ -184,7 +184,6 @@ def test_real_interruption_restores_complete_learning_state(
         assert a.iteration == b.iteration == 3
         assert_learning_metrics_equal(whole, resumed, tmp_path)
         assert whole.stages[0].games == resumed.stages[0].games
-        assert whole.stages[0].games > 0
         transitions = whole.stages[0].learner_transitions
         assert transitions == resumed.stages[0].learner_transitions
         if seats == "one":
@@ -192,6 +191,8 @@ def test_real_interruption_restores_complete_learning_state(
         else:
             # Both seats finish their games past the quota; every native
             # decision becomes exactly one learner row, including the overshoot.
+            # One-seat quotas can instead end with every game still in progress.
+            assert whole.stages[0].games > 0
             assert transitions >= 192
             assert transitions == a.collector.stats.micro_steps
             assert a.collector.stats.opponent_decisions == 0

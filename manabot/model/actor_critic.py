@@ -264,7 +264,7 @@ class ActorCritic(nn.Module):
         if config.state_encoder != "rows":
             self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
         else:
-            self.facts = FactEncoder(embed_dim) if enc.shows_everything else None
+            self.facts = FactEncoder(embed_dim, enc.config.fact_rows) if enc.shows_everything else None
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the

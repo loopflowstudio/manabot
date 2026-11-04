@@ -216,7 +216,10 @@ read, not the printed card; off the battlefield it states the printed card.
 Legendary is a layered supertype: the legend rule and the card row both read
 it, so a `Nonlegendary` record exempts its permanent (CR 704.5j).
 
-Policy input **v5** is the default; v1–v4 keep their widths. In every widened
+Policy input **v6** is the default, with configurable fact capacity (512 by
+default). V5 stays at 128 rows; v1–v4 keep their widths. V6 changes no column
+meanings or timestamp normalization (rank / 128). A checkpoint binds the
+version and selected capacity independently of this open rules-world label. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the
 hand-only lock, no maximum hand size, turn number, seat, kept red mana and

@@ -94,7 +94,8 @@ PERMANENT_DIM = PERMANENT_DEALT_DAMAGE_INDEX + 2
 # V5 fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
-FACT_ROWS = 128
+# Frozen model numeric scale, independent of v6 row allocation.
+FACT_TIMESTAMP_SCALE = 128
 FACT_OBJECT_INDEX = 0
 FACT_KIND_INDEX = 1
 FACT_ID_INDEX = 2  # high, low
@@ -239,7 +240,11 @@ class ObservationEncoder:
                 if self.config.policy_input_version >= 2
                 else {}
             ),
-            **({"facts": (FACT_ROWS, FACT_DIM)} if self.shows_everything else {}),
+            **(
+                {"facts": (self.config.fact_rows, FACT_DIM)}
+                if self.shows_everything
+                else {}
+            ),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             **(
@@ -275,8 +280,9 @@ class ObservationEncoder:
         }
 
     def allocate(self, *leading_dims: int) -> Dict[str, np.ndarray]:
+        dtypes = self.dtypes
         return {
-            key: np.zeros((*leading_dims, *shape), dtype=self.dtypes[key])
+            key: np.zeros((*leading_dims, *shape), dtype=dtypes[key])
             for key, shape in self.shapes.items()
         }
 
@@ -515,10 +521,13 @@ class ObservationEncoder:
                     else []
                 ),
             ] or [0]
-            duration = {
-                "EndOfTurn": 1.0,
-                "WhileYouControlSource": 3.0,
-            }.get(effect.duration, 2.0)
+            match effect.duration:
+                case "EndOfTurn":
+                    duration = 1.0
+                case "WhileYouControlSource":
+                    duration = 3.0
+                case _:
+                    duration = 2.0
             provenance = (duration, effect.timestamp, effect.source_registry_key)
             for detail in details:
                 push(obj, kind, ident, values, detail, provenance)
@@ -543,11 +552,11 @@ class ObservationEncoder:
         for obj, effects in holders:
             for effect in effects:
                 push_modification(obj, FACT_EFFECT, effect)
-        if len(rows) > FACT_ROWS:
+        if len(rows) > self.config.fact_rows:
             raise ValueError(
-                f"observation capacity exceeded: facts {len(rows)} > {FACT_ROWS}"
+                f"observation capacity exceeded: facts {len(rows)} > {self.config.fact_rows}"
             )
-        out = np.zeros((FACT_ROWS, FACT_DIM), dtype=np.float32)
+        out = np.zeros((self.config.fact_rows, FACT_DIM), dtype=np.float32)
         if rows:
             out[: len(rows)] = rows
         return out

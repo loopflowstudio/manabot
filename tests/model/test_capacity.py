@@ -8,10 +8,11 @@ import torch
 
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity, architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.facts import FactEncoder
 from manabot.training.rollout.collection import SeatRoutedCollector
 
 
@@ -141,7 +142,7 @@ def test_invalid_expansion(fields: dict[str, object]) -> None:
 
 
 def test_world_selector_reads_and_hashes_its_frozen_key() -> None:
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=5))
     current = ModelConfig(world="elemental-world-v2", policy_film=True)
     frozen = ModelConfig.model_validate(
         {"semantic_pack": "elemental-world-v2", "policy_film": True}
@@ -151,3 +152,73 @@ def test_world_selector_reads_and_hashes_its_frozen_key() -> None:
     assert architecture_identity(current, space) == (
         "8ebdcf30559998e753b3afe514b1bcf975f45b745c97bd2304c12034baafe0d6"
     )
+
+
+@pytest.mark.parametrize(
+    ("version", "rows"), [(1, 0), (2, 0), (3, 0), (4, 0), (5, 128), (6, 512)]
+)
+def test_fact_capacity_checkpoint_contract(
+    tmp_path: Path, version: int, rows: int
+) -> None:
+    payload = {"policy_input_version": version} if version != 1 else {}
+    config = ObservationConfig.from_checkpoint(payload)
+    serialized = config.model_dump(mode="json")
+    assert ("max_facts" in serialized) == (version == 6)
+    assert ("policy_input_version" in serialized) == (version != 1)
+    assert config.fact_rows == rows
+    space = ObservationSpace(config)
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
+    path = tmp_path / "policy.pt"
+    save_checkpoint(agent, space, path, player_configs=Match().to_rust())
+    loaded, loaded_space = load_checkpoint(str(path))
+    assert loaded_space.encoder.config.model_dump(mode="json") == serialized
+    assert architecture_receipt(loaded) == architecture_receipt(agent)
+    if version == 6:
+        different = ActorCritic(
+            ObservationSpace(ObservationConfig(max_facts=256)), agent.config
+        )
+        assert (
+            architecture_receipt(different).identity
+            != architecture_receipt(agent).identity
+        )
+        assert (
+            architecture_receipt(different).parameters
+            == architecture_receipt(agent).parameters
+        )
+
+
+@pytest.mark.parametrize("capacity", [256, 512])
+def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) -> None:
+    torch.manual_seed(213)
+    old, larger = FactEncoder(4, 128), FactEncoder(4, capacity)
+    # Nonzero learned weights make numerical drift and dropped facts observable.
+    with torch.no_grad():
+        old.output.weight.fill_(0.25)
+        old.output.bias.fill_(0.1)
+    larger.load_state_dict(old.state_dict())
+    facts = torch.zeros(1, capacity, 12)
+    facts[0, :140, 0] = 1  # first object
+    facts[0, :140, 1] = 6  # effect
+    facts[0, :140, 9] = torch.arange(1, 141)
+    facts[0, :140, 11] = 1
+    objects = torch.zeros(1, 2, 4)
+    padded = facts.clone()
+    padded[:, 128:] = 0
+    torch.testing.assert_close(old(facts[:, :128], objects), larger(padded, objects))
+    facts.requires_grad_()
+    output = larger(facts, objects)
+    assert not torch.equal(output, larger(padded, objects))
+    output.sum().backward()
+    assert facts.grad is not None
+    assert (facts.grad[0, 128:140, 9] != 0).all()
+    assert facts.grad[0, 140:].count_nonzero() == 0
+    with pytest.raises(ValueError, match="expected"):
+        old(facts, objects)
+
+
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
+def test_legacy_fact_capacity_cannot_be_overridden(version: int) -> None:
+    with pytest.raises(ValueError, match="max_facts requires"):
+        ObservationConfig.model_validate(
+            {"policy_input_version": version, "max_facts": 512}
+        )

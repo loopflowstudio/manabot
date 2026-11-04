@@ -41,14 +41,14 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5] = Field(
-        default=5, exclude_if=lambda value: value == 1
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6] = Field(
+        default=6, exclude_if=lambda value: value == 1
     )
-
-    @classmethod
-    def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
-        """Missing version means the frozen input-v1 contract, never today's default."""
-        return cls(**{"policy_input_version": 1, **payload})
+    # Only v6 carries a configurable fact capacity. Omission on older inputs
+    # preserves their serialized architecture receipts, including v1 defaults.
+    max_facts: int | None = Field(
+        default=None, gt=0, exclude_if=lambda value: value is None
+    )
 
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
@@ -61,6 +61,29 @@ class ObservationConfig(BaseConfig):
     policy_history_version: Literal[0, 1] = Field(
         default=0, exclude_if=lambda value: value == 0
     )
+
+    @model_validator(mode="after")
+    def validate_fact_capacity(self) -> "ObservationConfig":
+        if self.policy_input_version >= 6:
+            if self.max_facts is None:
+                self.max_facts = 512
+        elif self.max_facts is not None:
+            raise ValueError("max_facts requires policy input v6")
+        return self
+
+    @property
+    def fact_rows(self) -> int:
+        if self.policy_input_version < 5:
+            return 0
+        if self.policy_input_version == 5:
+            return 128
+        assert self.max_facts is not None
+        return self.max_facts
+
+    @classmethod
+    def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
+        """Missing version means the frozen input-v1 contract, never today's default."""
+        return cls(**{"policy_input_version": 1, **payload})
 
 
 class MatchConfig(BaseConfig):
