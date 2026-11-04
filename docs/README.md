@@ -11,6 +11,7 @@ training loop, and who owns which truth. Experiment reports live in
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Packages, authorities and data flow across managym, manabot and Academy |
 | [development.md](development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
+| [workflows.md](workflows.md) | Wave ownership, Coverage loops, experiment lifecycle and migration receipts |
 | [training.md](training.md) | Regimes and stages, experiments, remote training, monitoring, numerical health, recovery, Ataraxos, policy inputs |
 | [evaluation.md](evaluation.md) | Arenas, shared inference, card data, checkpoint scenarios, frozen-policy attacks |
 | [experiment-metrics.md](experiment-metrics.md) | Metric definitions the experiment reports read |

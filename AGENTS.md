@@ -67,6 +67,11 @@ checkpoints or experiment evidence.
   `managym/README.md`). Avoid transient comments that denote changes; pay
   attention to file headers and README content; propose small, iterative
   changes.
+- Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
+  Compose builtin graphs; use narrowly named forks for domain review placement.
+  Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
+  A nested software verification step must not complete a parent experiment
+  before its scientific outcome; see [work boundaries](docs/workflows.md).
 
 ### Python structure and documentation
 

@@ -523,7 +523,7 @@ def analyze(
         health = _health(data, protocol, training_source)
         contrasts = []
         exports: dict[int, str | None] = {
-            u: None for u in (0, *protocol.budget.milestones, protocol.budget.updates)
+            update: None for update in protocol.budget.export_updates
         }
         for slot in comparisons(run, protocol):
             panel = slot.panel

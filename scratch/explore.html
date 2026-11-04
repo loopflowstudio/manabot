@@ -20,7 +20,7 @@
 </header>
 <section aria-labelledby="grounding">
 <h2 id="grounding">The ground we already have</h2>
-<p><strong>Existing:</strong> deterministic deck sampling, native deck admission, bounded training jobs, shared evaluation and private replayable failure receipts. The live implementation proposes a frozen mixture compiled into existing <code>UniformDecks</code>.</p>
+<p><strong>Implemented:</strong> the proxy manifest freezes authored decks and sampling tickets through <code>UniformDecks</code>. Offline analysis reconciles both declared seeds, exports, callbacks and all expected games, including a wholly absent run, and computes per-seed paired gains from sealed evidence. Controlled fixtures demonstrate reporting behavior; no games or training were launched.</p>
 <p><strong>Still unproved:</strong> which distribution teaches useful play across irregular expansions. Earlier simple-to-complex training showed no demonstrated benefit in its tested setting; that does not settle this choice.</p>
 <label for="batch">Preview the next card batch</label>
 <select id="batch"><option value="a">Batch A · Adventure / prepare</option><option value="b">Batch B · Add planeswalkers</option></select>
@@ -34,7 +34,7 @@
 <div class="panel" aria-live="polite">
 <h3 id="a-heading"></h3><dl id="a-content"></dl>
 <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
-<p class="small">Proposed per-seat mass: 50% retained · 30% new batch · 20% mixed</p>
+<p class="small">Exploration illustration: 50% retained · 30% new batch · 20% mixed. The executable proxy proposes 50/25/25; neither ratio is an accepted experimental setting.</p>
 <pre>manifest → integer tickets → UniformDecks
          → TrainingRegime → TrainingJob
          → checkpoint + fixed evaluation</pre>
@@ -106,60 +106,21 @@ next generation: new digest, never rewrite previous one</pre><p>Use a static-mix
 <p><strong>Two tempos:</strong> modest recurring checks of learning, throughput and failures; deeper strength and generalization studies after major expansions, first after full FDN. Task 04 executes the first pilot. This exploration supplies no results.</p>
 </section>
 <section aria-labelledby="workflow">
-<p class="eyebrow">Follow-on discussion · Three code loops selected; composition proposed</p>
-<h2 id="workflow">Make the batch a repeatable workflow</h2>
-<p>You suggested that validation could own deck creation, then asked about dedicated Loopflow Graphs and skills for growing the card file. A thin workflow can connect card delivery to measured validation while keeping those outcomes distinct.</p>
-<div class="panel"><pre>coherent mechanic batch
-  → WORKING: implement → check → review ↻
-  → SCALABLE: decompose → check → review ↻
-  → PERFORMANT: profile → optimize → verify ↻
-  → ordinary card delivery
-  → integrated snapshot + authored validation decks
-  → bounded experiment: training + fixed evaluation
-  → evidence review</pre></div>
-<p><strong>Three proposed skills:</strong> <code>card-batch</code> owns the rules and card handoff; <code>validation-decks</code> authors coherent lists and the frozen manifest; <code>pool-validation</code> runs the accepted protocol and reports the evidence. Reuse ordinary delivery and Etude.</p>
-<p>The validation Task can consume several integrated card Tasks. Card authors supply intended synergies and directed behavior tests; validation owns the actual decks and tiny training run.</p>
-<p><strong>Your direction, 4 November:</strong> each phase gets its own code loop. The working loop establishes correct shared behavior; the scalable loop finds reusable rules structures for future cards; the performance loop pursues measured gains while preserving behavior. Each converges before advancing. Separate loops do not yet imply separate PRs.</p>
-<p>Reuse built-in iteration and review machinery, with phase-specific acceptance. Correctness remains required throughout. Performance uses representative bounded workloads and same-hardware comparisons; passing the regression threshold alone is not the optimization goal.</p>
-<p class="cost"><strong>Cost / risk.</strong> Small reusable procedure, but another maintained workflow. Tiny runs can establish collection, updates and throughput while leaving learning gain inconclusive. That result must not become a per-card support gate. Execution budgets still need explicit authorization.</p>
-<p class="quiet">Recommendation: shape this as a separate workflow Task after agreeing the boundary. The current protocol implementation continues. No Graph has been installed or launched by this exploration.</p>
-</section>
-<section aria-labelledby="wave-graphs">
-<p class="eyebrow">Training / eval audit · 4 November 2026</p>
-<h2 id="wave-graphs">Compose around the built-ins</h2>
-<p>Your preference is to reuse Loopflow’s built-in code graphs. That fits the work: keep <code>code</code> for implementation and delivery, and add domain steps around it. The current built-in already composes <code>pursue</code> and <code>deliver</code>.</p>
-<div class="panel"><h3>One experiment graph, alongside card growth</h3><dl>
-<dt>Card growth</dt><dd>Batch plan → working loop → scalable loop → performance loop → delivery → authored validation decks → experiment.</dd>
-<dt>Experiment</dt><dd>Question → design and controls → review → code loop if needed → freeze → execute training/evaluation → analyze → evidence review.</dd>
-<dt>Infrastructure</dt><dd>Continue using builtin code. A trainer or serving fix does not automatically require a campaign.</dd>
-</dl></div>
-<p><strong>Revised after your correction:</strong> training and evaluation belong inside an experiment. The useful distinctions are the question, intervention and controls. MTG-213’s enabling code delivery and its unfinished empirical outcome illustrate why the shared experiment lifecycle needs explicit evidence stages.</p>
-<div class="panel"><h3>Three lenses for design and analysis</h3><dl>
-<dt>Architecture</dt><dd>Change model structure; fix regime and game distribution where possible. Compare learning, capacity and compute under an explicit matching clock.</dd>
-<dt>Regime</dt><dd>Fix the model; vary declared sampling, objectives, opponents or schedules. Track exposure, independent seeds and total compute.</dd>
-<dt>Card pool</dt><dd>Use the integrated expanded world and authored decks. Measure functional games, mechanic exposure, learning, retention and failures.</dd>
-</dl><p>A design step can consider every lens, then select the intervention. A combined experiment can study interactions with explicit controls. These are not three mandatory campaigns.</p></div>
-<p><strong>Possible fork:</strong> specialist design or review branches can contribute to one protocol, then rejoin the common execution and analysis path. Start with the lenses in shared skills; split out branches where they provide a useful independent judgment. Exact routing remains proposed.</p>
-<p><strong>Composition first.</strong> Add narrow domain skills around named built-in subgraphs. Make a separately named fork only when a domain check needs a different position inside the code cycle. Preserve interactive reviews. Here “fork” means a customized definition, not parallel agents.</p>
-<p class="cost"><strong>Setup findings.</strong> Training selects <code>iterate</code>, absent from the installed graph catalog; eval has no recorded Wave objective. Both need deliberate reconciliation before changing defaults. Existing captured Task graphs and live processes remain untouched.</p>
-<p class="quiet">Recommendation: pilot the unified experiment workflow with card-batch validation. These are proposed definitions, not installed workflows. Source evidence: fresh Wave status, both Wave memories, docs/training.md, docs/evaluation.md, and Loopflow’s installed help/local orchestration documentation.</p>
-</section>
-<section aria-labelledby="four-waves">
-<p class="eyebrow">Current organization proposal · 4 November 2026</p>
-<h2 id="four-waves">Four responsibilities, reusable workflows</h2>
-<p>You proposed Run experiment, Expand coverage, Optimize engine and Catchall infra. These are a coherent four-Wave structure for the core engine-and-learning program. Wave names can describe the responsibility; graphs describe how the work proceeds.</p>
-<div class="panel"><dl>
-<dt>Experiments</dt><dd>Answer questions about architectures, regimes and card pools. Own the protocol, training/evaluation runs, costs and scientific conclusion.</dd>
-<dt>Coverage</dt><dd>Add faithful cards and mechanics. Use three code loops: working → scalable → performant. Hand integrated batches to experimental validation.</dd>
-<dt>Engine performance</dt><dd>Improve shared engine algorithms, memory use, throughput and latency with measured behavior-preserving gains.</dd>
-<dt>Infrastructure</dt><dd>Keep training/evaluation systems, artifacts, CI, developer tools and operational plumbing reliable. Use builtin code.</dd>
-</dl></div>
-<p><strong>Boundary:</strong> Coverage optimizes the implementation it adds; Engine performance owns broader bottlenecks across the engine. Route Tasks by their intended outcome, even when they edit the same package.</p>
-<p class="quiet">No Wave migration has occurred. Academy remains a separate existing browser-product responsibility; this proposal does not retire it or silently place it in Infrastructure.</p>
+<p class="eyebrow">Accepted workflows · 4 November 2026</p>
+<h2 id="workflow">From card delivery to measured validation</h2>
+<div class="panel"><pre>Coverage: working loop → scalable loop → performance loop
+          → one delivery boundary → integrated batch handoff
+Experiment: design → review → optional software → freeze
+            → execution review → bounded run → analysis → evidence review</pre></div>
+<p>Seven repository graphs now compile through the installed Loopflow catalog. The <a href="../docs/workflows.md">work boundaries</a> document their composition and defaults. Validation authors functional decks on the integrated snapshot; card authors supply interaction and behavior evidence. Architecture, regime and card-pool questions share one experiment lifecycle. Infrastructure uses builtin code.</p>
+<p>Jack Heart accepted four core responsibilities: Experiments, Coverage, Engine performance and Infrastructure, with Academy separate. Coverage owns its implementation's optimization; Engine performance owns cross-cutting bottlenecks. Each Coverage phase has its own revision loop, with one delivery boundary for the batch.</p>
+<p class="quiet">The <a href="../docs/workflows/2026-11-04-migration.json">migration receipt</a> records Engine → Coverage with the same identity, two added Waves and preserved Task/PR/graph/memory identities. Training/Eval consolidation and consequential memberships remain for review; provider synchronization is pending. PR #421's Training memory remains in place. Graphs/defaults await ordinary delivery. No scientific campaign or spending was launched.</p>
+<p class="cost">Training exposure, exact lists, shares and budgets remain unresolved. Tiny runs may prove execution while leaving learning inconclusive. Workflow installation does not authorize those runs.</p>
 </section>
 <footer>
 <h2>Start with A</h2>
 <p><strong>The reference league is selected.</strong> The existing implementation continues toward authored decks, a frozen mixture and a runnable Task 04 handoff. Exposure reporting remains part of the original brief. B’s generator and C’s adaptive search remain future alternatives. No approach is established as the strongest learner.</p>
+<p class="cost"><strong>Unresolved acceptance decision:</strong> evaluation draws and committed action-type counts do not measure training per-card exposure, legal opportunities or effect resolutions. The original requirement remains open. Review must choose whether to extend shared capture before handoff or explicitly accept narrower first-handoff evidence. Selecting A did not authorize that reduction or deferral. A complete analysis report or favorable modest-check result does not close this gap; Task 04 still owns the integrated campaign and measured evidence.</p>
 <ol>
 <li><strong>Which world should we develop?</strong><br>1a · Reference league — selected by Jack Heart, 4 November 2026.<br>1b · Coverage workshop — future alternative.<br>1c · Discovering league — future alternative.</li>
 <li><strong>What should the first handoff optimize for?</strong><br>2a · Interpretable proof that ordinary training learns<br>2b · Broad evidence about mechanic exposure, accepting more setup</li>

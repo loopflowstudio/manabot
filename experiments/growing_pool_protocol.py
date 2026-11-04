@@ -410,13 +410,15 @@ class Budget(StrictModel):
         return len(self.seeds) * self.updates * self.streams * self.games_per_stream
 
     @property
+    def export_updates(self) -> tuple[int, ...]:
+        """Planned exports, retained in analysis even when training stops early."""
+        return (0, *self.milestones, self.updates)
+
+    @property
     def evaluation_rounds(self) -> tuple[EvaluationRound, ...]:
         """Scheduling, callback admission and game budgets share these contrasts."""
         return (
-            *(
-                EvaluationRound(update, "heuristic")
-                for update in (0, *self.milestones, self.updates)
-            ),
+            *(EvaluationRound(update, "heuristic") for update in self.export_updates),
             EvaluationRound(self.updates, "initial"),
         )
 

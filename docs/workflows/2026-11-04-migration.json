@@ -1,0 +1,849 @@
+{
+  "date": "2026-11-04",
+  "task": "MTG-245",
+  "authority": "Jack Heart, comment 24e51625-6fc2-4484-9a97-8521428af691",
+  "before": {
+    "training": {
+      "wave": {
+        "id": "54bc9162-c883-4574-bab1-af589526c1ad",
+        "name": "training",
+        "status": "ready",
+        "goal": "Make training reproducible and useful: produce versioned manabots for the selected matchup, establish full-game improvement at declared cost, and demonstrate a repeatable challenge to the User under a protocol fixed before scoring."
+      },
+      "default_graph": {
+        "source": "wave",
+        "value": "iterate"
+      },
+      "tasks": [
+        {
+          "id": "task_433ca909e72d4811a9bb26088b2b0772",
+          "identifier": "MTG-210",
+          "title": "Define behavior-version boundaries before asynchronous policy collection",
+          "state": "unstarted",
+          "pr": null
+        },
+        {
+          "id": "task_38d154a619604a0888d3430fc2d60a27",
+          "identifier": "MTG-211",
+          "title": "Prove managym contracts through controlled verifiers rollouts",
+          "state": "unstarted",
+          "pr": null
+        },
+        {
+          "id": "task_ee93863539114d4d96ae786184018430",
+          "identifier": "MTG-213",
+          "title": "Train self-play policies on sampled 17Lands TLA decks",
+          "state": "idle",
+          "pr": {
+            "number": 423,
+            "phase": "merged",
+            "url": "https://github.com/loopflowstudio/manabot/pull/423"
+          }
+        },
+        {
+          "id": "task_5da5f49cbce6492aa5d3af5bd399268d",
+          "identifier": "5da5f4",
+          "title": "Design effective-state observations with shared effects and agent memory",
+          "state": "idle",
+          "pr": {
+            "number": 421,
+            "phase": "open",
+            "url": "https://github.com/loopflowstudio/manabot/pull/421"
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "proj_9919ffad45af4e8480f6566f6c38d83b",
+          "name": "Training \u2014 Chapter 20260924T233419Z-042de726",
+          "slug": "training-chapter-20260924t233419z-042de726",
+          "current": true,
+          "status": "started",
+          "linear_id": "070d09f8-4430-4020-82b2-d91edf148101"
+        },
+        {
+          "id": "proj_3b30840d27cc489f8e59dd2262ef49c9",
+          "name": "Intelligence \u2014 Chapter 20260924-trained-challengers",
+          "slug": "intelligence-chapter-20260924-trained-challengers",
+          "current": false,
+          "status": "completed",
+          "linear_id": "a0c7eb95-741e-4b31-a5fb-098f67ccba54"
+        },
+        {
+          "id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+          "name": "Intelligence \u2014 Belief-Aware Play",
+          "slug": "intelligence-belief-aware-play",
+          "current": false,
+          "status": "completed",
+          "linear_id": "8ec95ad5-d084-4fbb-8281-d44ed471b46b"
+        },
+        {
+          "id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+          "name": "Intelligence \u2014 Trained Challengers",
+          "slug": "intelligence-trained-challengers",
+          "current": false,
+          "status": "completed",
+          "linear_id": "73884527-4c81-4682-aa52-25fb586f08f9"
+        },
+        {
+          "id": "proj_11bfb2260f10113003d52cefc6e34eea",
+          "name": "Intelligence \u2014 Semantic Policy Prototype",
+          "slug": "intelligence-semantic-policy-prototype",
+          "current": false,
+          "status": "completed",
+          "linear_id": "3f97924e-1bfe-41e9-8db2-cc27ac2117bb"
+        }
+      ]
+    },
+    "eval": {
+      "wave": {
+        "id": "6b12128f-ecde-4982-ab80-04210e4108f1",
+        "name": "eval",
+        "status": "ready",
+        "goal": ""
+      },
+      "default_graph": {
+        "source": "default",
+        "value": "code"
+      },
+      "tasks": [
+        {
+          "id": "task_1d7884cfc23443e488b0a07d69928b9d",
+          "identifier": "MTG-175",
+          "title": "Compare four curriculum adapters at $10 per arm, reusing MTG-183",
+          "state": "idle",
+          "pr": {
+            "number": 383,
+            "phase": "open",
+            "url": "https://github.com/loopflowstudio/manabot/pull/383"
+          }
+        },
+        {
+          "id": "task_513158b1874d4d16a9a7a82ca9935fa5",
+          "identifier": "513158",
+          "title": "Put MTG-183's checkpoint ratings on an anchored scale with fixed reference players",
+          "state": "unstarted",
+          "pr": null
+        }
+      ],
+      "projects": [
+        {
+          "id": "proj_0fcdcfd35437405db620b05e62337f83",
+          "name": "eval",
+          "slug": "eval",
+          "current": true,
+          "status": "started",
+          "linear_id": null
+        }
+      ]
+    },
+    "engine": {
+      "wave": {
+        "id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+        "name": "engine",
+        "status": "ready",
+        "goal": "Give human play and training one faithful, reproducible Allies versus Lessons world, supporting the intended card interactions and actual consumer workloads without divergent rules or hidden-state leakage."
+      },
+      "default_graph": {
+        "source": "default",
+        "value": "code"
+      },
+      "tasks": [
+        {
+          "id": "task_4ecdeff0a9a64221b6ced0e36691e3de",
+          "identifier": "MTG-227",
+          "title": "Clear deathtouch damage history when state-based actions check it (CR 704)",
+          "state": "unstarted",
+          "pr": null
+        },
+        {
+          "id": "task_4bb089c2e7914c6a9a089df79b4cc2b0",
+          "identifier": "MTG-228",
+          "title": "Track a land's new incarnation when earthbend returns it to the battlefield (CR 400.7e, 603.6, 603.7c)",
+          "state": "unstarted",
+          "pr": null
+        },
+        {
+          "id": "task_d04f8f5cab964aaeb8bdc1d603dd6ecc",
+          "identifier": "MTG-229",
+          "title": "Continue the rules audit over the 2,840 unknown CR index entries",
+          "state": "unstarted",
+          "pr": null
+        },
+        {
+          "id": "task_b60ff7cef53e453f909b01f88cbe76a9",
+          "identifier": "MTG-230",
+          "title": "Draft card Rust from Oracle text",
+          "state": "unstarted",
+          "pr": null
+        },
+        {
+          "id": "task_3be183a4a1ac40d9afdb5a1d123025e8",
+          "identifier": "MTG-231",
+          "title": "Transport opponent beliefs across cards revealed from library into hand",
+          "state": "unstarted",
+          "pr": null
+        }
+      ],
+      "projects": [
+        {
+          "id": "proj_adde0c054acb49da81969cb6065ee86b",
+          "name": "Rules \u2014 Chapter 20260924T233419Z-042de726",
+          "slug": "rules-chapter-20260924t233419z-042de726",
+          "current": false,
+          "status": "started",
+          "linear_id": "53b3851e-dd51-4bb1-90cb-d1969afe4385"
+        },
+        {
+          "id": "proj_61cc195f27b547cdaf37a5f67b01876b",
+          "name": "Rules \u2014 Chapter 20260924-trained-challengers",
+          "slug": "rules-chapter-20260924-trained-challengers",
+          "current": false,
+          "status": "completed",
+          "linear_id": "ce74bb65-b93c-4ec1-b971-790222a2c0bc"
+        },
+        {
+          "id": "proj_2d1578d31903053033f94d60aa647e33",
+          "name": "Rules \u2014 Faithful Play and Training",
+          "slug": "rules-faithful-play-and-training",
+          "current": false,
+          "status": "completed",
+          "linear_id": "35bbc647-c7e4-450b-9ef7-108628b39335"
+        },
+        {
+          "id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+          "name": "Rules \u2014 Playable Curated World",
+          "slug": "rules-playable-curated-world",
+          "current": false,
+          "status": "completed",
+          "linear_id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90"
+        },
+        {
+          "id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+          "name": "Rules \u2014 Semantic Programs and Choice ABI",
+          "slug": "rules-semantic-programs-and-choice-abi",
+          "current": false,
+          "status": "completed",
+          "linear_id": "ff4fced2-e6f6-45d3-8622-136aba616ecd"
+        },
+        {
+          "id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+          "name": "Rules \u2014 Runtime State Foundation",
+          "slug": "rules-runtime-state-foundation",
+          "current": false,
+          "status": "completed",
+          "linear_id": "94a7cb2d-f527-411a-9784-ceceb6617dac"
+        },
+        {
+          "id": "proj_095469d212fac9737691358cb80d91ab",
+          "name": "Rules \u2014 Identity and Event Semantics",
+          "slug": "rules-identity-and-event-semantics",
+          "current": false,
+          "status": "completed",
+          "linear_id": "1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa"
+        },
+        {
+          "id": "proj_13485bb3ef3a410a98cbb51c223923d1",
+          "name": "rules",
+          "slug": "rules",
+          "current": true,
+          "status": "started",
+          "linear_id": "13485bb3-ef3a-410a-98cb-b51c223923d1"
+        }
+      ]
+    }
+  },
+  "operations": [
+    {
+      "operation": "rename-coverage",
+      "receipt": {
+        "id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+        "from": "engine",
+        "to": "coverage",
+        "renamed": true,
+        "files": {
+          "state": "committed",
+          "commit": "da355b562bca9486dfa9212bb1130511057868f3"
+        },
+        "initiative": {
+          "initiative": "2b6f3d99-9176-4b77-af42-710f0f30fde9",
+          "title": "Coverage",
+          "error": "Linear rate limit reached; retry after epoch milliseconds 1793830536663"
+        },
+        "summary": [
+          "Linear Initiative 2b6f3d99-9176-4b77-af42-710f0f30fde9 kept its title: Linear rate limit reached; retry after epoch milliseconds 1793830536663. Repeat the original `lf wave rename` command to retry."
+        ]
+      }
+    },
+    {
+      "operation": "add-performance",
+      "receipt": {
+        "id": "fd9d235e-20f5-4870-ba2e-bbf1c2138510",
+        "name": "engine-performance",
+        "created": true,
+        "project": {
+          "id": "proj_727844493ba44a7eb89e9117ee5dfa62",
+          "summary": "",
+          "slug": "engine-performance",
+          "name": "engine-performance",
+          "description": "",
+          "krs": [],
+          "metric_targets": [],
+          "status": "started",
+          "linear_id": null,
+          "pm_snapshot_synced_at": null,
+          "wave_id": "fd9d235e-20f5-4870-ba2e-bbf1c2138510",
+          "created_at": "2026-11-04T21:52:51Z",
+          "updated_at": "2026-11-04T21:52:51Z"
+        },
+        "main_checkout": "/Users/jack/src/manabot",
+        "files": {
+          "state": "committed",
+          "commit": "41ceeaf1f797cfd99dc3037a8f43fb92037b1d05"
+        },
+        "summary": []
+      }
+    },
+    {
+      "operation": "add-infrastructure",
+      "receipt": {
+        "id": "8c4a50d4-a51e-4ceb-8944-446f9175c6fd",
+        "name": "infrastructure",
+        "created": true,
+        "project": {
+          "id": "proj_0fac57b9ad0a4f91b9ae82c9ccf0beb8",
+          "summary": "",
+          "slug": "infrastructure",
+          "name": "infrastructure",
+          "description": "",
+          "krs": [],
+          "metric_targets": [],
+          "status": "started",
+          "linear_id": null,
+          "pm_snapshot_synced_at": null,
+          "wave_id": "8c4a50d4-a51e-4ceb-8944-446f9175c6fd",
+          "created_at": "2026-11-04T21:53:08Z",
+          "updated_at": "2026-11-04T21:53:08Z"
+        },
+        "main_checkout": "/Users/jack/src/manabot",
+        "files": {
+          "state": "committed",
+          "commit": "78442f5419d4cda75baadaf3ba12ee4145f08647"
+        },
+        "summary": []
+      }
+    },
+    {
+      "command": "lf task move MTG-241 --wave coverage --json",
+      "response": "task_f9b3a6e80c9c4bbdb0d8e09c92efdb64: membership saved",
+      "fresh_state_before": {
+        "id": "task_f9b3a6e80c9c4bbdb0d8e09c92efdb64",
+        "identifier": "MTG-241",
+        "title": "Composable rules execution, selection and replacement decisions",
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        },
+        "pr": null
+      },
+      "provider_sync": "pending: Linear rate limit; local membership saved"
+    },
+    {
+      "command": "lf task move MTG-243 --wave coverage --json",
+      "response": "task_5898834b9608475f8e62955242990701: membership saved",
+      "fresh_state_before": {
+        "id": "task_5898834b9608475f8e62955242990701",
+        "identifier": "MTG-243",
+        "title": "Make catalog-wide naming decisions complete and scalable for policies",
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        },
+        "pr": {
+          "number": 424,
+          "url": "https://github.com/loopflowstudio/manabot/pull/424",
+          "phase": "open"
+        }
+      },
+      "provider_sync": "pending: Linear rate limit; local membership saved"
+    },
+    {
+      "command": "lf task move MTG-244 --wave coverage --json",
+      "response": "task_cb022716494b4f429292299f8331323c: membership saved",
+      "fresh_state_before": {
+        "id": "task_cb022716494b4f429292299f8331323c",
+        "identifier": "MTG-244",
+        "title": "Complete composable layer evaluation with concrete interaction witnesses",
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        },
+        "pr": null
+      },
+      "provider_sync": "pending: Linear rate limit; local membership saved"
+    }
+  ],
+  "unresolved": [
+    "Select surviving Training/Eval identity and chapter/memory consolidation for Experiments; no duplicate Wave created. Eval goal remains empty until that reviewed consolidation.",
+    "Review MTG-210/211 Infrastructure-versus-Coverage ownership, MTG-230 authoring tools and MTG-231 learned beliefs; retained memberships are not new execution direction.",
+    "MTG-245 remains unbound because protocol research and workflow infrastructure share its explicitly selected Task. Do not split it or infer a Wave merely to fill a field.",
+    "Linear Initiative title update and Task planning sync are rate-limited until 2026-11-04T22:15:36.663Z. Local effects are applied; remote synchronization is not claimed.",
+    "Historical Coverage charter/project retained rather than rewriting its memory or KRs. Accepted responsibility boundaries/defaults are in docs/workflows.md; new chapter planning is not performed here.",
+    "Training-exposure acceptance and proposed experimental lists/shares/budgets remain for authored review. Task 04 owns measured execution/results; Task 08 the later campaign."
+  ],
+  "protected_tasks": {
+    "241": {
+      "before": {
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "captured_graphs": [
+        {
+          "id": "22ee206e-3bc5-4ef3-bae2-1912bcfc2a09",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "current",
+          "cwd": "/Users/jack/src/manabot.mtg-241-composable-rules-execution",
+          "compiled_unchanged": true,
+          "state_after": "current"
+        }
+      ],
+      "after": {
+        "wave": "coverage",
+        "project": "rules",
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "graph_processes_after": [
+        {
+          "id": "22ee206e-3bc5-4ef3-bae2-1912bcfc2a09",
+          "state": "current",
+          "step": "implement \u00b7 loop 1 pass 4"
+        }
+      ],
+      "processes_present_immediately_before_move": [
+        "22ee206e-3bc5-4ef3-bae2-1912bcfc2a09"
+      ],
+      "identity": {
+        "id": "task_f9b3a6e80c9c4bbdb0d8e09c92efdb64",
+        "identifier": "MTG-241",
+        "title": "Composable rules execution, selection and replacement decisions",
+        "pr": null
+      }
+    },
+    "243": {
+      "before": {
+        "wave": null,
+        "project": null,
+        "state": "active",
+        "graph": {
+          "name": "code",
+          "step": "demo"
+        }
+      },
+      "captured_graphs": [
+        {
+          "id": "8e2c9a92-3b5d-455a-bda9-d29a150ba819",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "stopped",
+          "cwd": "/Users/jack/src/manabot.mtg-243-make-catalog-wide",
+          "compiled_unchanged": true,
+          "state_after": "stopped"
+        },
+        {
+          "id": "31d80e33-8ef2-4866-8fd7-1b26cbad8a96",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "completed",
+          "cwd": "/Users/jack/src/manabot.mtg-243-make-catalog-wide",
+          "compiled_unchanged": true,
+          "state_after": "completed"
+        }
+      ],
+      "after": {
+        "wave": "coverage",
+        "project": "rules",
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "graph_processes_after": [
+        {
+          "id": "8e2c9a92-3b5d-455a-bda9-d29a150ba819",
+          "state": "stopped",
+          "step": "sync"
+        },
+        {
+          "id": "31d80e33-8ef2-4866-8fd7-1b26cbad8a96",
+          "state": "completed",
+          "step": "pr-publish"
+        },
+        {
+          "id": "0cecd6ef-0673-44bd-a9e2-2c6ef1a31208",
+          "state": "current",
+          "step": "implement"
+        }
+      ],
+      "processes_present_immediately_before_move": [
+        "8e2c9a92-3b5d-455a-bda9-d29a150ba819",
+        "31d80e33-8ef2-4866-8fd7-1b26cbad8a96",
+        "0cecd6ef-0673-44bd-a9e2-2c6ef1a31208"
+      ],
+      "identity": {
+        "id": "task_5898834b9608475f8e62955242990701",
+        "identifier": "MTG-243",
+        "title": "Make catalog-wide naming decisions complete and scalable for policies",
+        "pr": {
+          "number": 424,
+          "url": "https://github.com/loopflowstudio/manabot/pull/424",
+          "phase": "open"
+        }
+      }
+    },
+    "244": {
+      "before": {
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "captured_graphs": [
+        {
+          "id": "072d81b1-4a32-459b-ab68-78490f036ed1",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "stopped",
+          "cwd": "/Users/jack/src/manabot.mtg-244-complete-composable-layer",
+          "compiled_unchanged": true,
+          "state_after": "stopped"
+        },
+        {
+          "id": "4cbd2580-0746-4fac-acf3-0adee3e01a0e",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "current",
+          "cwd": "/Users/jack/src/manabot.mtg-244-complete-composable-layer",
+          "compiled_unchanged": true,
+          "state_after": "current"
+        }
+      ],
+      "after": {
+        "wave": "coverage",
+        "project": "rules",
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "graph_processes_after": [
+        {
+          "id": "072d81b1-4a32-459b-ab68-78490f036ed1",
+          "state": "stopped",
+          "step": "loop-or-next"
+        },
+        {
+          "id": "4cbd2580-0746-4fac-acf3-0adee3e01a0e",
+          "state": "current",
+          "step": "compress"
+        }
+      ],
+      "processes_present_immediately_before_move": [
+        "072d81b1-4a32-459b-ab68-78490f036ed1",
+        "4cbd2580-0746-4fac-acf3-0adee3e01a0e"
+      ],
+      "identity": {
+        "id": "task_cb022716494b4f429292299f8331323c",
+        "identifier": "MTG-244",
+        "title": "Complete composable layer evaluation with concrete interaction witnesses",
+        "pr": null
+      }
+    },
+    "5da5f4": {
+      "before": {
+        "wave": "training",
+        "project": "Training \u2014 Chapter 20260924T233419Z-042de726",
+        "state": "idle",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "captured_graphs": [
+        {
+          "id": "a99f3518-4db1-4adf-be6a-bc691bf554f6",
+          "compiled_sha256": "d30ce246cf930f17503e4a8084458b7f20ea89213834f391c9553ffa8cc91b95",
+          "state_before": "completed",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "completed"
+        },
+        {
+          "id": "3b9d0eb5-3139-4ed3-b020-e0bce8d0466b",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "completed",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "completed"
+        },
+        {
+          "id": "1c595298-4e81-4aa6-afb4-848ee599a1af",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "completed",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "completed"
+        },
+        {
+          "id": "28297af4-cb37-4616-8f3c-5dc28ba7664d",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "completed",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "completed"
+        },
+        {
+          "id": "583d3438-d561-4566-b3b9-7bf71d2f949e",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "stopped",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "stopped"
+        },
+        {
+          "id": "a1ad3ebd-8d40-4ade-9649-8d5c3ab23375",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "stopped",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "stopped"
+        },
+        {
+          "id": "ff7208f3-8bf1-472d-bac6-e80ea8c85c2c",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "stopped",
+          "cwd": "/Users/jack/src/manabot.5da5f4-design-effective-state",
+          "compiled_unchanged": true,
+          "state_after": "stopped"
+        }
+      ],
+      "after": {
+        "wave": "training",
+        "project": "Training \u2014 Chapter 20260924T233419Z-042de726",
+        "state": "idle",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "graph_processes_after": [
+        {
+          "id": "a99f3518-4db1-4adf-be6a-bc691bf554f6",
+          "state": "completed",
+          "step": "kickoff"
+        },
+        {
+          "id": "3b9d0eb5-3139-4ed3-b020-e0bce8d0466b",
+          "state": "completed",
+          "step": "pr-publish"
+        },
+        {
+          "id": "1c595298-4e81-4aa6-afb4-848ee599a1af",
+          "state": "completed",
+          "step": "verify"
+        },
+        {
+          "id": "28297af4-cb37-4616-8f3c-5dc28ba7664d",
+          "state": "completed",
+          "step": "pr-publish"
+        },
+        {
+          "id": "583d3438-d561-4566-b3b9-7bf71d2f949e",
+          "state": "stopped",
+          "step": "implement"
+        },
+        {
+          "id": "a1ad3ebd-8d40-4ade-9649-8d5c3ab23375",
+          "state": "stopped",
+          "step": "loop-or-next \u00b7 loop 1 pass 3"
+        },
+        {
+          "id": "ff7208f3-8bf1-472d-bac6-e80ea8c85c2c",
+          "state": "stopped",
+          "step": "loop-or-next"
+        }
+      ],
+      "identity": {
+        "id": "task_5da5f49cbce6492aa5d3af5bd399268d",
+        "identifier": "5da5f4",
+        "title": "Design effective-state observations with shared effects and agent memory",
+        "pr": {
+          "number": 421,
+          "url": "https://github.com/loopflowstudio/manabot/pull/421",
+          "phase": "open"
+        }
+      }
+    },
+    "245": {
+      "before": {
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "captured_graphs": [
+        {
+          "id": "d70ef881-3587-4355-8fc5-b5fbef861965",
+          "compiled_sha256": "a65d26d71ac466b4f7443f942ee360b66d1db79ea1e3895dab2f8870e9ca5659",
+          "state_before": "current",
+          "cwd": "/Users/jack/src/manabot.mtg-245-design-training-and",
+          "compiled_unchanged": true,
+          "state_after": "current"
+        }
+      ],
+      "after": {
+        "wave": null,
+        "project": null,
+        "state": "moving",
+        "graph": {
+          "name": "code",
+          "step": null
+        }
+      },
+      "graph_processes_after": [
+        {
+          "id": "d70ef881-3587-4355-8fc5-b5fbef861965",
+          "state": "current",
+          "step": "implement \u00b7 loop 1 pass 3"
+        }
+      ],
+      "identity": {
+        "id": "task_af1330d001e4460f9eab6f9fef7400cc",
+        "identifier": "MTG-245",
+        "title": "Design training and evaluation for growing card pools",
+        "pr": null
+      }
+    }
+  },
+  "frozen_files_sha256": "041452cb8f3ad5bd7330f96f3abc2e7b0cbcb365f0025bb6532297a0e78cc737",
+  "frozen_file_count": 76,
+  "pr421": {
+    "headRefName": "jack-heart/5da5f4-design-effective-state",
+    "headRefOid": "bb88b783129e610eead7b52377e2397835790bb2",
+    "state": "OPEN",
+    "url": "https://github.com/loopflowstudio/manabot/pull/421",
+    "memory_sha256": "9cd34d3db150708ff1a06deb81e88993b692c06d6a29d1953b40ea43dbcd3311",
+    "head_and_identity_unchanged": true,
+    "live_memory_sha256_after": "e627a673a7f769592a31c6a7527564893b896eb5db3c7a552304c9595c8005c8",
+    "live_memory_note": "Uncommitted contributions remain in the original checkout/path; not copied or curated. The before hash refers to the PR head, not uncommitted bytes."
+  },
+  "scope": "Applied safe subset; Experiments identity consolidation remains for authored review.",
+  "source_revision": "190b0c603d70e790f2217c61c970c38f82544d08",
+  "after_waves": [
+    {
+      "id": "d97e0563-141d-4053-a174-953642dcfe0e",
+      "name": "academy",
+      "status": "ready",
+      "active_tasks": 0
+    },
+    {
+      "id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+      "name": "coverage",
+      "status": "ready",
+      "active_tasks": 8
+    },
+    {
+      "id": "fd9d235e-20f5-4870-ba2e-bbf1c2138510",
+      "name": "engine-performance",
+      "status": "ready",
+      "active_tasks": 0
+    },
+    {
+      "id": "6b12128f-ecde-4982-ab80-04210e4108f1",
+      "name": "eval",
+      "status": "ready",
+      "active_tasks": 2
+    },
+    {
+      "id": "8c4a50d4-a51e-4ceb-8944-446f9175c6fd",
+      "name": "infrastructure",
+      "status": "ready",
+      "active_tasks": 0
+    },
+    {
+      "id": "b1d0fc9d-8ada-4ec8-9a9c-bd5df0142bc6",
+      "name": "study",
+      "status": "abandoned",
+      "active_tasks": 0
+    },
+    {
+      "id": "54bc9162-c883-4574-bab1-af589526c1ad",
+      "name": "training",
+      "status": "ready",
+      "active_tasks": 4
+    }
+  ],
+  "memory_preservation": [
+    {
+      "before": ".lf/wave/academy/MEMORY.md",
+      "after": ".lf/wave/academy/MEMORY.md",
+      "sha256": "26fa621934d6362d5d0e7e0ea5dc993c7e185bb9265903261494ada50a6e32e5",
+      "branch_and_main_bytes_preserved": true
+    },
+    {
+      "before": ".lf/wave/engine/MEMORY.md",
+      "after": ".lf/wave/coverage/MEMORY.md",
+      "sha256": "c7ba4df8ae3bfd1393595ecab60821d2cbd8e964f36bd1aaa812014832ce9d40",
+      "branch_and_main_bytes_preserved": true
+    },
+    {
+      "before": ".lf/wave/eval/MEMORY.md",
+      "after": ".lf/wave/eval/MEMORY.md",
+      "sha256": "b4ccd67aca2f43f44c36d06f1915bfcadd1d6f3788bd8fb207fa6d9e74d503cd",
+      "branch_and_main_bytes_preserved": true
+    },
+    {
+      "before": ".lf/wave/training/MEMORY.md",
+      "after": ".lf/wave/training/MEMORY.md",
+      "sha256": "00d2781d20d0bcde40c0a0ea4d55f8b6c9ac95573489cfaa682938a799778af1",
+      "branch_and_main_bytes_preserved": true
+    }
+  ],
+  "frozen_bytes_unchanged": true,
+  "defaults_in_delivery_branch": {
+    "coverage": "coverage",
+    "engine-performance": "engine-performance",
+    "infrastructure": "code",
+    "training": "experiment",
+    "eval": "experiment",
+    "academy": "code (builtin fallback)"
+  },
+  "defaults_note": "Verified with lf wave graph show in MTG-245 checkout. New config/graph files await normal PR delivery; main only has supported lifecycle commits.",
+  "validation": {
+    "graphs": "Seven repository graphs compiled/discovered through installed lf; all skill references resolve; distinct Coverage loops, single delivery and experiment optional software/review boundaries passed.",
+    "controlled_fixtures": "Duplicate delivery, noninteractive demo and incorrect verify return target rejected.",
+    "preservation": "Protected Task/PR IDs, compiled graph hashes and checkout paths match; all four prior Wave memory byte strings and 76 frozen files match. MTG-243 had independently started another code process before its membership move.",
+    "execution": "No agents, games, training, allocations or spending launched by this implementation."
+  }
+}

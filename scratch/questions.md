@@ -1,8 +1,10 @@
 # MTG-245 — growing-pool protocol
 
-Updated 2026-11-04 from implementation at `6fcc65646503501ba698efc31207f3c3ca79fb72`,
-Jack Heart's accepted exploration choice, and related training/eval evidence.
-The Task has no Wave binding; related Wave memories remain read-only.
+Protocol baseline on 2026-11-04:
+`190b0c603d70e790f2217c61c970c38f82544d08`. Current working changes also contain
+the accepted workflow implementation and simplification.
+The Task has no Wave binding. Wave memory content is not curated; supported
+lifecycle operations preserve it during the accepted migration.
 
 ## Accepted outcome and constraints
 
@@ -41,13 +43,15 @@ proxy is not Standard or Validation A's eventual integrated snapshot.
 
 `growing_pool_protocol.py` admits native lists, checks the declared construction
 template and splits, and compiles existing training owners. Source admission
-rejects revisions missing selected protocol bytes. Both Run declarations were
-verified at the prior HEAD; this analysis change must be committed before its
-source-bound revision can be selected for a campaign.
+rejects revisions missing selected protocol bytes. Both Run declarations admitted
+the committed analysis revision above. Changed source must be committed and
+re-admitted before execution; declaration admission is separate from campaign
+authorization and experimental results.
 
 `growing_pool.py` supplies canonical Etude discovery and four policy/deck/seat
-legs per deal. It preserves missing export slots for each supplied TrainingRun
-and missing game slots for each returned evaluation result. Checkpoints require
+legs per deal. Its shared comparison schedule accepts an absent TrainingRun;
+the offline reader starts from both declared seeds, retaining missing runs,
+exports, callbacks and individual game slots. Checkpoints require
 the exact regime and raw/initial role as well as ordinary world/input admission.
 Fixed heuristic source identity excludes manifest edits.
 
@@ -55,29 +59,50 @@ Existing sealed card blobs provide actual evaluation opening/drawn copies;
 `growing_pool_exposure.py` adds committed choices by participant, decision kind
 and action type with replay links and explicit zero-choice participant totals.
 These are evaluation observations, not training exposure or mechanic resolution
-counts. No games, training or empirical learning result are established.
+counts.
 
-## What reconciliation changed
+`growing_pool_analysis.py` reconciles the full 800-game, 200-callback schedule
+against sealed Etude declarations, metrics, EvaluationResults and card/replay
+blobs. It validates source/export/registration/world/input/deck/trace identities
+and computes per-seed, per-panel whole-deal paired gains. The JSON binds bootstrap
+seed 2459001, 2,000 resamples and health metric coordinates, including sampled
+gradient/parameter changes at updates 1/25. The evaluator owns the 95% interval.
+The callback seals its existing EvaluationResult alongside replay/card blobs;
+analysis checks retained replay receipts without executing native replays.
 
-The earlier readiness wording conflated a runnable declaration with complete
-reporting, and the MTG-245 handoff with Task 04's eventual experimental outcome.
-The protocol now separates these boundaries and retains the gaps below.
+`complete` describes schedule and health-evidence completeness, not scientific
+acceptance or healthy values. `modest_check` separately applies the primary
+anchor criterion: insufficient primary/health evidence is unknown; complete
+evidence yields true/false. Missing secondary panels make reporting incomplete
+without adding a score gate. Every report retains the unresolved training-exposure
+boundary. Controlled sealed fixtures cover complete results, wholly absent runs,
+missing exports/callbacks/games/replays, identity contradictions and health failures.
+Their synthetic gains are software evidence only. No games, training or empirical
+learning result are established.
 
-Related evidence: Training memory's shared-effect and TLA-pilot sections at
-`8e8d702f8`, Eval memory, and `experiments/tla_pilot_analysis.py` distinguish
-paired seat/deck execution from paired checkpoint analysis. Descriptive curves
-cannot establish improvement; missing runs/matches must not shrink the exam.
-V7 capacity allocations likewise do not guarantee ordinary-game coverage.
-These lessons apply without adopting MTG-213's cutoff, frozen criterion or
-spending authority. The available `origin/main` reference matches this checkout's
-base; no newer upstream integration was established in this reconciliation.
+## Workflow state and retained evidence
 
-Jack Heart's subsequent 2026-11-04 steer accepts the workflow/Graph and four-Wave
-work inside MTG-245; `scratch/explore-design.md` records the complete accepted
-scope. This supersedes the earlier separate-Task proposal. Installation and
-migration remain unimplemented; the existing Graph owns that work. The exploration's
-50/30/20 example is illustrative; the executable proposal remains 50/25/25, with
-neither ratio accepted by Jack Heart.
+Training's shared-effect and TLA-pilot memory, Eval memory and
+`experiments/tla_pilot_analysis.py` informed the analysis boundary: descriptive
+curves are not paired gains, missing work cannot shrink the exam, and allocated
+input capacity does not guarantee ordinary-game coverage. This adopts none of
+MTG-213's cutoff, frozen criteria or spending authority. Detailed reconciliation
+is retained at `190b0c603d70e790f2217c61c970c38f82544d08:scratch/questions.md`.
+
+Jack Heart's 2026-11-04 steer accepts workflow installation and Wave migration
+inside MTG-245. Seven discoverable graphs and their domain skills now implement
+three Coverage revision loops, a reusable engine optimization loop, and one
+experiment lifecycle with optional software. Builtin code remains unchanged;
+experiment software verification cannot complete the empirical parent outcome.
+`docs/workflows.md` owns boundaries/defaults and links supported migration receipts.
+Engine → Coverage preserves its ID and memory; new Engine performance and
+Infrastructure Waves have supported creation receipts. Training/Eval consolidation
+still needs a surviving-identity decision; their memory paths, chapters and
+PR #421 contributions remain intact. Shared defaults are authored in this branch,
+not yet installed on main. Linear provider synchronization is rate-limited.
+
+The exploration's 50/30/20 example and executable proposal's 50/25/25 remain
+illustrative; neither ratio has been accepted by Jack Heart.
 
 ## Remaining work and decisions
 
@@ -96,51 +121,44 @@ neither ratio accepted by Jack Heart.
    tests but requires its own authored manifest. The table is a specification,
    not delivered batch support or executable probes. Runtime admission, actual
    learning, exposure, performance and failure evidence remain unmeasured.
-3. **Validation/review:** gate retains the regime/discovery suites required by
-   `docs/development.md`; demo reviews proposed lists, shares, budgets and the
-   exposure choice. Prior 26-test evidence is retained in this file at
-   `6fcc65646503501ba698efc31207f3c3ca79fb72`. Existing native sampler recovery/determinism tests
-   own seeded draws; the new protocol tests cover ticket serialization/order.
-4. **Accepted workflow implementation, MTG-245:** implement discoverable skills
-   and graphs with three Coverage code loops and one experiment lifecycle;
-   document the four core Wave boundaries/defaults, keeping Academy separate.
-   Refresh authoritative state before supported identity-preserving migration;
-   retain migration receipts, unresolved mappings and proof that live work,
-   Task/PR identities, captured graphs and frozen evidence survive. Preserve
-   PR #421's training-memory work and reserved empirical decisions. This is
-   outstanding implementation for the existing Graph, not a completed setup
-   or authority to launch scientific campaigns. Full scope/attribution is in
-   `scratch/explore-design.md#accepted-execution-scope--2026-11-04`.
+3. **Validation/review:** gate owns the remaining regime/discovery and affected
+   CI suites required by `docs/development.md`; demo reviews proposed lists,
+   shares, budgets and exposure acceptance. Prior CI collection found 370 tests
+   without collisions at the baseline revision. Existing native sampler tests
+   own seeded recovery/determinism; protocol tests cover ticket order. The
+   checkpoint schedule now has one owner, `Budget.export_updates`, shared by
+   scheduling and missing-export reporting; frozen JSON/identities are unchanged.
+4. **Workflow migration review:** choose the surviving Training/Eval identity
+   for Experiments and consequential cross-boundary memberships. Existing
+   Training/Eval IDs and paths remain unchanged; do not create a duplicate Wave.
+   The supported Engine → Coverage move and two new Waves are applied locally;
+   MTG-241/243/244 now belong to Coverage without replacing their graphs/PRs;
+   retain pending Linear sync/title updates in the receipt. Shared defaults and
+   graph files await this Task's normal delivery. No graph was launched to test
+   setup, no campaign ran, and existing Task graphs remain captured independently.
 
-## Analysis implementation cut — 2026-11-04
+## Retained implementation assumption
 
-Delete — do not maintain (completed): the inline evaluation bootstrap seed in
-`growing_pool.play`, obsolete “analysis unimplemented” notes, the fabricated
-missing-seed `TrainingRun`, and independently stored `Comparison.expected_games`.
-No exclusive fixtures need removal: absent-run tests exercise the surviving
-schedule directly. Required JSON parameters own bootstrap/health sampling;
-comparison slots carry their actual panel and derive the game count. Callback
-and analysis share policy-source identity, preserving its hash format. Replay
-validation consumes the outcome row directly. Keep descriptive Etude curves,
-the comparison schedule, frozen worlds and all prior evidence. No remaining
-protocol deletion targets; workflow migration targets require fresh inspection.
+Existing sealed Etude training metrics supply numerical health and parameter
+changes, keyed by declaration seed rather than display names. Missing metric
+coordinates remain unknown. This reversible engineering choice supplies no
+training per-card exposure and does not settle its acceptance boundary.
 
-Reversible assumption: consume existing sealed Etude training metrics directly
-for numerical health and parameter changes, using the declaration's seed (never
-parsing display names). Missing metric coordinates remain unknown. Seal the
-existing `EvaluationResult` alongside each callback's card blobs so offline
-analysis can validate registrations and replay outcomes through their owners.
-This adds no games or training and does not resolve training exposure acceptance.
+## Workflow implementation assumptions — 2026-11-04
 
-`growing_pool_analysis.py` now reconciles both declared seeds (including a wholly
-absent run), exports, callbacks and every game against sealed Etude evidence.
-The callback seals its existing EvaluationResult beside replay/card blobs;
-analysis validates source/export/registration/world/input/deck/trace identities,
-then computes per-seed, per-panel whole-deal paired gains. Training declarations
-and sealed numerical metrics supply health evidence, with sampled gradient and
-parameter deltas at updates 1/25. Complete reporting and the primary modest
-criterion are distinct; missing secondary panels are reported without becoming
-a new score gate. Every output retains the unresolved training-exposure boundary.
-No games, native replays, training, jobs or spending were launched.
+The unambiguous migration is Engine → Coverage (same Wave identity), plus new
+Engine performance and Infrastructure responsibilities. Training/Eval consolidation
+has no selected surviving identity. It is consequential because PR #421 still
+edits Training memory; retain both identities, chapters and memory paths for
+review rather than create a duplicate Experiments Wave. The authored experiment
+graph can serve both legacy memberships meanwhile. No backlog execution follows
+from membership changes. MTG-230's authoring tooling and MTG-231's learned-belief
+work cross boundaries; leave their membership for review.
 
-Check (2026-11-04): `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_analysis.py tests/training/test_growing_pool_protocol.py -q` → 48 passed; scoped Ruff and `git diff --check` passed. The earlier affected CI invocation collected 370 tests without collisions. `lf context` reports scratch within both limits. Gate owns the remaining affected suites; the existing Graph must return to implementation for the accepted workflow/migration scope before claiming that outcome ready.
+The active Delete — do not maintain list is in `scratch/explore-design.md`.
+Obsolete installation proposals were removed from ambient notes; the durable
+workflow documentation and dated receipt retain implementation and migration
+ownership. Workflow compilation and domain checks now have separate entry points,
+so controlled boundary fixtures need no CLI launch or shared-state mutation.
+
+Check (2026-11-04): `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py -q` → 48 passed; `uv run python scripts/check_loopflow_workflows.py` → seven graphs compiled with all references and boundaries valid; four controlled invalid delivery fixtures rejected; scoped Ruff and `git diff --check` passed. Gate owns remaining affected suites; demo owns exposure/settings and consequential migration judgments. `lf context` remains within both limits; no campaign ran.
