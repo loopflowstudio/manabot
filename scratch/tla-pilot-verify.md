@@ -193,3 +193,29 @@ and correctly frozen source for bounded GPU execution, checkpoint admission,
 paired evaluation and qualified analysis. This review ran no games, training,
 provider queries or code tests. The companion page is
 `scratch/concept-review.html`; no unresolved product questions are recorded.
+
+## Publication validation — 2026-11-04
+
+`lf sync` completed cleanly against main at `5dd11cec4`. The actual range includes
+the configurable-buffer and selected-cost X repairs, explicit first-64 support,
+prospective v6–v8 contracts and retained GPU/preflight evidence. Publication is
+for those enabling changes; no completed v8 execution or learning result is claimed.
+
+- Rust formatting and all-target/all-feature Clippy passed. The complete debug
+  workspace suite (`CARGO_PROFILE_DEV_OPT_LEVEL=1`, `-j 2`) passed 957 tests,
+  with two ignored. Clippy required the absolute root venv interpreter path;
+  its first relative-path invocation failed before checks ran.
+- Focused buffer/cutoff, pilot/discovery, active training/regimes, CI/release,
+  artifact-tracking, current-world admission/monitoring, choice separability
+  and package-boundary checks passed: 260 tests.
+- Collection, automatic capture, cutoff, CI selection and Academy navigation
+  checks passed: 105 tests (overlapping the first invocation).
+- Ruff passed for changed Python modules. The updated main integration shard
+  collected all 1,037 tests successfully. The new cutoff collector module is now
+  explicitly included in CI. `git diff --check` passed.
+
+Logs: `.runs/mtg213/publish-{cargo-test,python-tests,collection-tests,ci-collection}.log`.
+These checks establish local behavior, not Linux CI, engine-budget comparison,
+successful paid v8 execution, trained checkpoint admission or complete paired
+evaluation. The prepared Run remains bound to its original source; later edits
+require a successor source freeze before execution. No provider action occurred.
