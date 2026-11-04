@@ -98,7 +98,7 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
         assert job.milestones == gpu.POINTS[1:-1]
         assert (
             job.regime.wall_seconds + job.finalization_seconds
-            < run.job.max_hours * 3600
+            <= run.job.max_hours * 3600
         )
 
 

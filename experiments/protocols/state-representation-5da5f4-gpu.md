@@ -61,14 +61,15 @@ a prospective amendment before new scoring, within the same unspent allowance.
 ## Allocation and failure accounting
 
 Prior known provider bill $0.07258259388618171; keep the existing $6 ancillary
-reserve pending settlement. Maximum new scientific rental reservation $17 total
-(eight attempts, at most 2.5 hours and $2.125 each), plus at most $0.50 excluded
-CUDA admission: cumulative reservation $23.57258259388618171, leaving $1.4274.
+reserve pending settlement. Maximum new scientific rental reservation $17.20 total
+(eight attempts, two job hours plus the launcher's 15-minute setup reserve,
+and $2.15 each), plus at most $0.50 excluded
+CUDA admission: cumulative reservation $23.77258259388618171, leaving $1.2274.
 A quote above the scientific envelope is refused. Provider disk and transfer
 must be included; Vast offers must have free upload/download under the supported
 SDK selection. No network volumes. Jobs get a 6,000-second training watchdog,
 1,200-second evaluation/finalization reserve and remaining setup/cleanup time
-inside their 2.5-hour leases. Wall stops export learner state and are explicitly
+inside their 2.25-hour leases. Wall stops export learner state and are explicitly
 incomplete for this comparison. No failed-seed retries or survivor selection.
 
 Use task-local provider/storage configuration and the released Etude launcher;

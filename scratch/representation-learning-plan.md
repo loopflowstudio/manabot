@@ -77,17 +77,23 @@ $0.2474074/hour and seven5090 offers starting$0.8008741/hour, including disk and
 free transfers. These are dated quotes, not reservations. Receipts live under
 `.runs/representation/gpu-plateau/`. No new rental spend is known.
 
-Etude PR79 is merged. The authorized `lf release run patch` in Etude deferred
-because an existing owner already holds the release execution; PR80 proposes
-v0.2.14 and passed CI. Preserve that owner and verify its released client before
-Vast acquisition. The worker's scientific SDK remains locked independently.
+Etude PR79 and release PR80 are merged. The authorized `lf release run patch`
+deferred to an existing release owner. PyPI client0.2.14 is installed in an
+isolated overlay and successfully imports Vast; publication workflow41876921350
+was still running at the last read. The worker's scientific SDK remains locked
+independently. Released-client quotes found a5090 at$0.948148/hour; excluded
+seed74200 admission is launching under a$0.50 cap ($0.474 quote), with receipts
+under the same directory. Its four updates are feasibility evidence only.
 Existing $0.07258259388618171 bill and $6 ancillary reserve remain held. The new
-protocol reserves at most$17 scientific rentals and$0.50 admission, inside$25.
+protocol reserves at most$17.20 scientific rentals and$0.50 admission, inside$25.
+The launcher adds900seconds of setup per rental: scientific jobs use two job
+hours plus that reserve, capped at$2.15 each. No scientific seed has launched.
 
 Check: six focused study tests passed, including frozen CPU digests, GPU
 schedule/declaration and rejection of inconclusive plateau evidence. Gate owns
-broader affected suites. Remaining: released-client verification, CUDA admission,
-source freeze, all eight GPU runs/evaluation curves, cost settlement and teardown.
+broader affected suites. Remaining: CUDA admission, final source freeze, all eight GPU runs/evaluation
+curves, cost settlement and teardown. The first implementation checkpoint is
+35770e55b; the setup-accounting amendment is prospective, before scoring.
 
 The historical sections below describe the completed CPU cohort, not the new
 continuation's authorization or acceptance criteria.

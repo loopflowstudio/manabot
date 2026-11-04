@@ -104,8 +104,8 @@ def runs(revision: str) -> list[Run]:
         ).job(
             repo=Path(__file__).resolve().parents[1],
             revision=revision,
-            max_hours=2.5,
-            max_usd=Decimal("2.125"),
+            max_hours=2.0,
+            max_usd=Decimal("2.15"),
         )
         jobs[arm] = job.model_copy(
             update={
