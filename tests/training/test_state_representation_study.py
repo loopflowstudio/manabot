@@ -20,7 +20,12 @@ from experiments.state_representation_v7 import (
 from manabot.env.observation import ObservationConfig
 from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
-from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
+from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
+from manabot.training.regime import (
+    ArtifactReference,
+    DampedPolicyLearning,
+    TrainSelfPlay,
+)
 
 
 def test_paired_interval_uses_independent_seeds() -> None:
@@ -104,7 +109,7 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
     assert config.source_bundle.commit
     assert run.job.experiment == gpu.EXPERIMENT
     assert run.job.max_attempts == 1
-    assert run.job.max_usd == Decimal("0.20")
+    assert run.job.max_usd == Decimal("0.50")
     assert run.job.max_hours == 0.5
     assert run.job.until == "updates=4"
     assert gpu.ADMISSION_SEED not in gpu.SEEDS
@@ -182,3 +187,99 @@ def test_throughput_admission_projects_whole_cohort_cost() -> None:
         gpu.ThroughputAdmission(
             concurrency=1, elapsed_seconds=math.inf, updates_per_arm=4
         )
+
+
+def test_scientific_allocation_rejects_unaffordable_cohort(tmp_path: Path) -> None:
+    allocation = gpu.ScientificAllocation(
+        admission_sha256="a" * 64,
+        admission=gpu.ThroughputAdmission(
+            concurrency=1, elapsed_seconds=120, updates_per_arm=4
+        ),
+        hourly_usd=Decimal("0.60"),
+        max_usd=Decimal("16.50"),
+        hardware="fixture-gpu",
+    )
+    document = tmp_path / "allocation.json"
+    document.write_text(allocation.model_dump_json())
+    (run,) = read_job_file(
+        Path(gpu.__file__), ["--revision", "HEAD", "--allocation", str(document)]
+    )
+    spec = gpu.StudyJob.model_validate_json(run.job.config or "")
+    assert spec.allocation == allocation
+    assert run.job.until == "updates=256"
+    assert run.job.max_hours == allocation.work_hours
+    assert run.job.max_usd == Decimal("16.50")
+    for change in ({"max_usd": "0.10"}, {"max_usd": "18"}):
+        with pytest.raises(ValueError):
+            gpu.ScientificAllocation.model_validate(
+                {**allocation.model_dump(), **change}
+            )
+
+
+def _curve_run() -> TrainingRun:
+    regime = gpu.recipe("typed_pool")
+    artifact: ArtifactReference = {
+        "path": "/fixture.pt",
+        "sha256": "a" * 64,
+        "bytes": 1,
+    }
+    return TrainingRun(
+        id="synthetic-curve",
+        regime=regime,
+        regime_digest=canonical_sha256(regime.model_dump(mode="json")),
+        seed=gpu.SEEDS[0],
+        seed_streams={},
+        identities={},
+        status="completed",
+        stages=[
+            StageRecord(
+                id=regime.stages[0].id,
+                status="completed",
+                updates=gpu.UPDATES,
+                cumulative_seconds=100,
+                games=gpu.UPDATES * gpu.STREAMS,
+                artifacts={"initial_raw": artifact, "raw": artifact},
+            )
+        ],
+        monitoring_checkpoints=[
+            MonitoringCheckpoint(
+                stage_id=regime.stages[0].id,
+                ordinal=index,
+                updates=update,
+                training_seconds=update,
+                games=update * gpu.STREAMS,
+                artifact=artifact,
+            )
+            for index, update in enumerate(gpu.POINTS[1:-1])
+        ],
+    )
+
+
+def test_gpu_curve_requires_every_export_and_keeps_exposure() -> None:
+    run = _curve_run()
+    points = gpu.checkpoints(run)
+    assert tuple(point.coordinates.updates for point in points) == gpu.POINTS
+    assert tuple(point.coordinates.games for point in points) == tuple(
+        update * gpu.STREAMS for update in gpu.POINTS
+    )
+    run.monitoring_checkpoints.pop()
+    with pytest.raises(ValueError, match="missing, duplicate or undeclared"):
+        gpu.checkpoints(run)
+
+
+@pytest.mark.parametrize("failure", ("duplicate", "export", "paused"))
+def test_gpu_curve_refuses_failed_or_duplicate_endpoints(failure: str) -> None:
+    run = _curve_run()
+    if failure == "duplicate":
+        run.monitoring_checkpoints.append(run.monitoring_checkpoints[0])
+    elif failure == "export":
+        run.monitoring_checkpoints[0].error = "export failed"
+    else:
+        run.status = "paused"
+    with pytest.raises(ValueError):
+        gpu.checkpoints(run)
+
+
+def test_gpu_heldout_requires_all_seeds() -> None:
+    with pytest.raises(ValueError, match="every held-out"):
+        gpu.compare_heldout([])

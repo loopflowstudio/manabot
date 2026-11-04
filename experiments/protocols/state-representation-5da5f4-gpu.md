@@ -257,3 +257,37 @@ archive-style worker dependency installs verified that exact commit; Linux
 resolution was a dry-run, not remote admission. This changes future prepared
 source bundles only. Historical worker locks, attempts and receipt bytes remain
 unchanged; the source update neither settles charges nor launches science.
+
+## Operational restart amendment — 2026-11-04, after accounting release
+
+Jack Heart's “keep going” supersedes the final-settlement-only spending gate
+above. This does not assert settlement: the fresh locked-SDK read reports
+$0.47058259388618171 including the settled L4, and all five Vast instances are
+absent. Reserve $2 for all prior compute (including $1.52941740611381829
+uncertainty) and $6 ancillary; at most $17 remains for further compute.
+Historical quote reservations and receipts remain unchanged as dated evidence.
+
+The sequential 256-stream candidate, excluded seed 74200, four updates per arm,
+600-second learner bounds and 30-minute work window remain fixed. No qualifying
+3090 was available in the fresh catalog; a 4090 at $0.611111111111111/hour is the
+cheapest qualifying offer, including disk and free transfers. The new admission
+cap is $0.50 including 15-minute setup, leaving at most $16.50 for science even
+if that entire cap is consumed. No architecture score informs this choice.
+
+The runner now implements scientific orchestration in the existing module.
+Default discovery still launches only admission. An explicit `--allocation`
+JSON freezes `ScientificAllocation`: retained admission digest and total two-arm
+elapsed time, exact CUDA device name, hourly quote and remaining dollar cap.
+The complete eight-learner projection includes 50% training allowance, 90 minutes
+for evaluation and 15 minutes for setup. Etude's live quote must also fit. No
+scientific allocation has been admitted merely by adding this executable path.
+
+Science uses one learner at a time, balancing arm order across four paired
+seeds 74211–74214. Each independent ordinary executor exports initialization,
+32-update curve points and final raw weights at 256 updates/65,536 games. After
+all training, one evaluator at a time scores all 72 curve endpoints and the
+eight separate held-out endpoints through existing checkpoint admission and
+monitoring. Missing, duplicate, failed or wrong-identity results prevent a
+qualified comparison. The fixed final-window plateau criterion is unchanged.
+Child process groups are stopped on deadlines/cancellation and reaped; failures
+remain in the denominator. No retry, winner promotion or study merge is added.

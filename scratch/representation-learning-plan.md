@@ -2,6 +2,46 @@
 
 ## Current authorization and outcome
 
+### Current accounting decision — 2026-11-04
+
+After the primary conversation explained that the $24.97 hold was an
+operator-imposed deadlock rather than spending, Jack Heart said "keep going".
+Resume this Task. The requirement below to obtain a provider finalization
+watermark before releasing every unused rental allowance is superseded for
+operational budgeting. It was not a user requirement and the API supplies no
+such marker. Do not invent settlement, alter the SDK to claim it, or rewrite
+historical accounting receipts.
+
+Before another purchase, take one fresh read of task-owned instances and
+reported charges using the locked repaired Etude source. Reconcile each deleted
+rental's whole lifetime, quoted rate, disk/transfer terms and reported amount.
+Use a conservative operational estimate plus an explicit uncertainty reserve
+instead of holding the entire cancelled 20-hour quote indefinitely. Start with
+$2 reserved for ALL prior compute (last reported total $0.4705825939) and retain
+the separate $6 ancillary reserve. That leaves at most $17 for ALL further
+compute, including admission, setup, failed launches, idle time, evaluation and
+teardown, within the ORIGINAL $25. Increase the prior-cost reserve and reduce
+the new-compute allowance if fresh evidence requires it. Do not double-count
+the same charge under both actuals and reservations. Unknown live allocations
+still retain their full commitment until resolved.
+
+Record this as a new operational budget revision, with unsettled reported costs
+still labelled unsettled. The $2 choice is the operator's conservative reserve,
+not a provider guarantee or a new user allowance. Preserve the prior receipts
+and their dates. Exact final invoices can reconcile later; their unavailable
+watermark alone must not cause another implementation loop. Continue useful
+scientific orchestration while resolving execution constraints; accounting is
+not a reason to postpone all non-spending implementation. Finish an ordinary
+bounded two-arm throughput check and run the prospectively frozen replicated
+study when its total cost fits. Do not repeat the known eight-context failure,
+return to CPU-only evidence, silently reduce the learning objective, or stop
+at cleanup/publication as though the plateau experiment were complete.
+
+All older "stop until final coverage" instructions in this plan, the protocol,
+Wave memory and prior Graph summaries are historical and superseded by this
+current decision. Existing source tracking, original $25 cap, immutable failed
+evidence, separate MTG-213 budget and results-review boundary still apply.
+
 Jack Heart's 2026-11-04 dependency direction is implemented: source checkouts
 consume public Etude Git main, with `uv.lock` pinning merged PR82 at
 `64e9eaabf016f567cb9567280bcf8730f6f5d524`. All four dependency declarations use
@@ -28,10 +68,8 @@ scientific cohort has launched. At the last retained provider read, all five
 relevant Vast instances were absent. No allocation is selected until accounting
 is reconciled and a complete two-arm admission demonstrates affordability.
 Reconciled against implementation and retained receipts on 2026-11-04.
-The latest accounting evidence is the repaired SDK read at 20:10 UTC below.
-Daily-charge retrieval now works; authoritative coverage through teardown is
-still unavailable. That external evidence, not product approval or another
-unchanged query, is required before releasing reservations.
+The 20:37 UTC operational revision below supersedes the historical settlement
+gate. Final invoices remain unknown; they do not prevent bounded execution.
 
 Stop at results demo/review. No study merge, model/default promotion, temporal
 memory implementation or MTG-213 spending is approved. The repair's earlier
@@ -40,10 +78,10 @@ memory implementation or MTG-213 spending is approved. The repair's earlier
 ## Surviving implementation and next proof
 
 `experiments/state_representation_gpu.py` declares the 256-stream candidate and
-launches ONLY an excluded admission: four ordinary complete-game updates per
+defaults to an excluded admission: four ordinary complete-game updates per
 arm, sequentially, seed 74200, CUDA float32. Each learner has 600 seconds,
 24 GiB host allowance and 80% CUDA allocator allowance. The rental allows
-30 minutes plus 15 minutes setup, at most $0.20, on a compatible RTX 3090 with
+30 minutes plus 15 minutes setup, originally at most $0.20, on a compatible RTX 3090 with
 at least 32 GB host RAM, included disk and free transfers. These are retained
 candidate bounds, not permission to reuse its spent reservation.
 
@@ -58,35 +96,22 @@ establish its speed, memory sufficiency or affordability.
 
 Remaining work before scientific execution:
 
-1. Obtain provider-confirmed final GPU, disk and bandwidth totals covering each
-   of the five contracts through its retained `ended_at`. The repaired SDK read
-   in `reconciliation-repaired/accounting.json` returns daily totals but no such
-   coverage. Stop paid execution until that evidence exists; do not repeat the
-   unchanged query or treat an SDK release as settlement. Reconcile against
-   `restart/final-accounting.json` and both reconciliation receipts, release
-   superseded unspent caps only against authoritative settlement, then quote the
-   entire arrangement including setup, idle time, evaluation, artifacts,
-   failures and cleanup.
-2. Complete both ordinary admission learners. Measure their combined wall time,
-   including startup and exports; project four paired seeds at the full horizon
-   with 50% extrapolation allowance, 90 minutes evaluation and 15 minutes setup.
-   Do not divide sequential time by assumed concurrency. Spare GPU memory does
-   not prove compute throughput. No artificial load or automatic eight-context
-   retry; MPS was investigated but neither enabled nor validated.
-3. Implement the replacement scientific orchestration after admission. Current
-   `runs()`/`worker()` execute only admission; recipes, evaluation protocols and
-   `plateau()` exist, but no current entry point trains the eight scientific
-   learners, exports their curve checkpoints, or executes their evaluations.
-   This is substantial remaining implementation, not a launch-command choice.
-   Freeze affordable execution and scoring prospectively. Retain independent
-   RNG/optimizers, initialization and 32-update curve checkpoints, separate
-   final held-out deals, actual game/decision/optimizer exposure and uncertainty.
-   Both arms' final three paired-seed gain intervals must each fit within
-   ±0.05 (95% Student-t, df3); all 72 curve endpoints must complete. A noisy flat
-   point or nonsignificant slope alone is insufficient. Flat poor play does
-   not establish competence. No survivor or checkpoint selection.
-4. Retain every attempt, supervised deadlines, complete teardown and costs.
-   If capacity or budget prevents a credible plateau, report it as unmet.
+1. The operational budget revision is complete: fresh 20:37 UTC locked-SDK
+   read reports $0.4705825939; five instances absent, later complete Vast
+   inventory empty. $2 prior compute + $6 ancillary leaves $17 new compute.
+   Receipts are in `.runs/representation/gpu-resume/` pending artifact retention.
+2. Complete both ordinary admission learners and project total sequential cost
+   with 50% training allowance, 90 minutes evaluation and 15 minutes setup.
+   No qualifying 3090 offer is currently available; the cheapest compatible
+   4090 quote is $0.611111111111111/hour, disk included, free transfers. Admission
+   now has a $0.50 total cap; retain at most $16.50 for subsequent science.
+3. Scientific orchestration is implemented in `state_representation_gpu.py`:
+   explicit frozen allocation, sequential balanced seed/arm order, all exports,
+   existing checkpoint evaluation and strict full-cohort analysis. Validate and
+   run it only if the measured total arrangement fits. No completed GPU cohort
+   or plateau exists yet. Flat poor play does not establish competence.
+4. Retain every attempt, deadlines, teardown and costs. If capacity or measured
+   throughput prevents a credible plateau within the cap, report it as unmet.
 
 `execute_regime` owns learning; existing monitoring owns evaluation. Earlier attempts used a released
 0.2.14 launcher and locked 0.2.12 worker; those identities remain historical.
@@ -99,7 +124,10 @@ Its original 32-stream/eight-process sections describe source `27a126422`;
 the later batched amendment describes the current candidate. The old allocation
 and seed IDs are not instructions for the current executable.
 
-## Attempt denominator and accounting (2026-11-04 UTC)
+## Historical attempt denominator and accounting (2026-11-04 UTC)
+
+The final-coverage-only restrictions in this historical section are superseded
+by the operational revision above; retained receipts are not rewritten.
 
 | Run / source | Retained outcome |
 |---|---|
@@ -207,7 +235,8 @@ conversion and its elapsed-interval fixture were removed in the dependency
 repair. Daily-charge, pagination and unknown-settlement behavior survive on
 `VastAPI.charges` and `VastMachines.bill`. The four 0.2.12 release pins and
 registry-only SDK lock entry are replaced coherently by the Git source and
-exact lock. No remaining deletion targets.
+exact lock. No remaining deletion targets. The admission-only worker dispatch is replaced
+by explicit admission/science dispatch; both use the same child lifetime owner.
 The failed eight-context launcher (`27a126422`)
 and v5 three-arm timing/canary paths (`9dc32125f`) are retired; archived
 executions use their pinned source. The native `source_effect_root` and
@@ -246,13 +275,21 @@ results demo/review owns scientific judgment. No rendering proof is claimed.
 Historical validation: `c23aacd8f95f5cea16301653fd05df72ff3156cf:scratch/representation-learning-plan.md`.
 The manifest-backed `reconciliation/` evidence includes the original offline
 Etude reproduction; `reconciliation-repaired/` retains the corrected read.
-Runtime admission and scientific execution await authoritative settlement.
+Runtime admission and scientific execution follow the current operational budget.
 
 Prior implementation validation at `bdb567cc0`: 16 focused study/discovery tests
 passed; read-only analysis reproduced all eight retained CPU endpoints and
 rejected missing, duplicate, incomplete and wrong-identity inputs. This prose
 reconciliation does not require repeating learning or those tests.
 
-Check: final locked-source `uv run --isolated --locked --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q` — 28 passed; release staging/untracked-artifact checks — 2 passed. SDK network-isolated suite — 595 passed, 6 skipped, 3 deselected; mypy/Ruff plus PR and merge-queue CI passed. Source proof retained in `reconciliation-repaired/source-proof.json`; provider final coverage still blocks paid admission.
+Retained dependency validation: isolated locked-source artifact/Etude integration
+— 28 passed; release staging/untracked-artifact checks — 2 passed. SDK
+network-isolated suite — 595 passed, 6 skipped, 3 deselected; mypy/Ruff plus PR
+and merge-queue CI passed. Commands and source proof remain in
+`reconciliation-repaired/source-proof.json` and `sdk-validation.json`.
+This reconciliation updates Training memory's stale SDK and billing status;
+no frozen receipt changed. Two-arm admission and the actual scientific cohort
+remain outstanding; the sequential orchestration is now implemented.
 
-Context check: `lf context` and `git diff --check` — within token/byte targets and clean; prose-only reduction reuses the checks above. Gate owns broader suites; provider settlement still owns the paid-execution blocker.
+Check: focused study checks pending; gate owns broader suites. The operational
+budget permits admission; measured affordability must precede scientific launch.

@@ -1,5 +1,14 @@
 # Decisions and open questions — 5da5f4
 
+- Latest continuation, Jack Heart, 2026-11-04: "keep going" after the primary
+  explained the operator-created accounting deadlock. The current accounting
+  decision at the top of the plan supersedes the final-settlement-only gate
+  below. Reconcile deleted rentals with reported/lifetime costs and an explicit
+  conservative reserve, without pretending invoices are settled. Start with
+  $2 prior-compute reserve plus $6 ancillary, at most $17 further compute;
+  adjust downward if fresh costs require. Original $25 total remains binding.
+  Resume actual GPU study work; no new approval is needed for that scope.
+
 - Jack Heart's 2026-11-04 direction authorizes a viable GPU restart toward a
   sustained learning plateau within the ORIGINAL cumulative $25, including
   supported batching and necessary Etude SDK release/Vast use. Earlier CPU-only
@@ -9,18 +18,16 @@
   releases. This is implemented as Git main with an exact `uv.lock` commit;
   launcher and locked worker installs agree. Refresh only before freezing a
   new run. Historical protocols, locks and receipts remain immutable.
-- Execution is blocked on authoritative final billing coverage through teardown,
-  even after the merged SDK daily-charge repair. No replacement scientific cohort
-  or plateau exists. The [plan](representation-learning-plan.md) owns the exact
-  accounting, dependency revision, five-attempt denominator and remaining work;
-  repeated daily queries cannot supply missing settlement evidence.
+- The previous final-settlement-only gate is superseded. Fresh reported costs
+  fit within the $2 prior reserve. Scientific orchestration is implemented;
+  a complete two-arm admission and affordable actual cohort remain outstanding.
 - Operator batching assumption: 256 streams changes optimization, so it needs
   fresh paired seeds and a prospective identity, preserving the 65,536-game
   horizon and schedule by exposure. No admission score selects a treatment.
   The last machine loss establishes neither OOM nor batching affordability.
-- Reconciliation (2026-11-04): the current executable supplies admission and
-  analysis only. Replacement scientific orchestration remains implementation
-  work after accounting and measured affordability; no architecture decision
+- Reconciliation (2026-11-04): the executable now supplies sequential scientific
+  orchestration as well as admission and analysis; actual scientific execution
+  still requires measured affordability; no architecture decision
   follows from the CPU endpoint or partial GPU attempts. T7's merged rules and
   chooser changes require prospective source/native admission, not relabeling
   earlier receipts. No new product decision is required for that authorized work.
