@@ -20,6 +20,7 @@ from etude.report import Report
 from pydantic import BaseModel, ConfigDict
 
 from experiments.batched_baseline import batched_baseline
+from manabot.env.observation import ObservationConfig
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.experiment.checkpoint_evaluation import (
     evaluate_checkpoint,
@@ -51,8 +52,16 @@ def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
     regime.agent.state_encoder = arm
     regime.agent.policy_film = True
     regime.agent.recent_events = False
-    regime.observation.policy_input_version = 7
-    regime.observation.max_facts = 128
+    # Executed recipes retain their axes when fresh observation defaults grow.
+    regime.observation = ObservationConfig(
+        policy_input_version=7,
+        max_facts=128,
+        max_cards_per_player=60,
+        max_permanents_per_player=40,
+        max_actions=64,
+        max_focus_objects=2,
+        max_events=32,
+    )
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"

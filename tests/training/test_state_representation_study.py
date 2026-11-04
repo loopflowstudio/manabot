@@ -14,6 +14,7 @@ from experiments.state_representation_v7 import (
     recipe,
 )
 from manabot.experiment.job import TrainingJob
+from manabot.infra.identity import canonical_sha256
 from manabot.training.regime import TrainSelfPlay
 
 
@@ -48,6 +49,17 @@ def test_science_and_smoke_have_distinct_endpoints() -> None:
     assert protocol.legs == 4 and len(protocol.deal_seeds) == 32
     assert protocol.study_protocol_sha256 is not None
     assert protocol.purpose == "frozen-study-evaluation"
+
+
+def test_scientific_recipes_retain_executed_identities() -> None:
+    # TrainingRun receipts from source 92becff60, independently retained in the
+    # artifact manifest. Fresh defaults must not redefine completed experiments.
+    expected = {
+        "typed_pool": "600f73d3be9038c4d90fb2e439704d0b6dc250783eaacbc630cd85a34ff79b4e",
+        "typed_gru": "70aa7246bc3e99e77ccc378ff95d3da0e34489eacb0d7f1c18e0da857c142604",
+    }
+    for arm in state_representation_v7.ARMS:
+        assert canonical_sha256(recipe(arm).model_dump(mode="json")) == expected[arm]
 
 
 def test_declared_runs_are_visible_to_the_experiment_report() -> None:

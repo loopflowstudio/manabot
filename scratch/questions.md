@@ -31,8 +31,8 @@
 - Historical direction and evidence remain at `9dc32125f:scratch/`; earlier
   complete design/decisions at `8e6cc62df:scratch/`; inherited PR416 notes at
   `3b122de9078c985f846a0f3c5a3a42ebca3b1182:scratch/questions.md`.
-- Scope assumption for this pass: compare against shipped PR419's tree, not the
-  pre-squash merge base. Later unrelated main changes are outside this cleanup.
+- The cleanup compared against shipped PR419's tree, not the pre-squash merge
+  base. The subsequent main sync is reconciled below and in the current plan.
 
 ## Main sync — 2026-11-04
 
@@ -51,3 +51,17 @@ effects, source identity, experiment discovery and the completed study contract.
 The debug Rust exact-source/zone-change shared-effect test passed. Both manifest
 parents' entries compare equal in the merged manifest (11,940 entries). No push
 or additional training was performed; the sync caller owns publication.
+
+Reconciliation subsequently found default `max_actions` had grown from 64 to
+512, changing the study recipe hashes despite the focused sync passes. Explicit
+original observation axes restore the retained identities; a regression check
+now guards both hashes. All eight retained endpoints again pass the existing
+comparison admission and reproduce the published contrast without rewriting data.
+
+## Concept-review scope — 2026-11-04
+
+Treat the completed-cohort results boundary as the current scope, following
+Jack Heart's latest continuation direction. Broader memory/relation proposals
+remain deferred, not prerequisites or approved follow-up work. No unresolved
+product choice blocks this step. The existing working plan records the review,
+counterexamples and future questions; results acceptance remains with demo/review.

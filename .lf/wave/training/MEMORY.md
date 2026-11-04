@@ -37,27 +37,58 @@ V7 `rows` and `typed_pool` select the same reducer; `typed_gru` reduces tokens
 within one observation and carries no game memory. Original v5 three-arm
 calibration remains v5 evidence. MTG-213 v4 subsequently passed v7 CUDA
 admission but failed collection before learning at a separate card-object
-capacity boundary. No scientific replicate or v7 GPU learner update is
-established. Active-byte reduction does not imply padded-memory savings: default v7
+capacity boundary. The separate representation study later completed eight CPU
+replicates; it establishes no v7 GPU learner update or MTG-213 result.
+Active-byte reduction does not imply padded-memory savings: default v7
 effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
 
 Native source-A/B positions equal under v6 differ under v7 and diverge after
 one source leaves. Final characteristics alone therefore cannot replace active
 provenance. A separate observed keyword grant/removal timestamp defect remains
-in 5da5f4's questions: fixed-layer keyword subtraction can ignore grant order.
+as MTG-240: fixed-layer keyword subtraction can ignore grant order.
 It predates transport and does not justify semantic coalescing. Such merging
 requires identical future behavior across expiry, sources, intervening effects,
 affected sets and multiplicity, as Jack Heart explicitly required.
 
-The separate $25 representation allowance covers all attempts and ancillary
-costs; retained paid calibration estimates $0.07083924 with the rental deleted,
-not a settled invoice. Engineering runs do not satisfy replicated learning.
-A revised v7 study needs a prospective common-input protocol. Persistent memory
-and relation-table redesign remain proposals; native current effects/knowledge
+Jack Heart's separate $25 representation allowance covered the completed
+prospective study at `92becff6091912a3ec83ae8fdd4e1c2347ff1d45`. Four paired seeds
+each completed 128 updates and 4,096 games in both v7 arms; all 1,024 held-out
+evaluation games completed and replayed. GRU minus pooling was −0.98 percentage
+points (95% paired-seed interval [−10.13, +8.18]), with elapsed training ratio
+1.06. The declared advantage criterion failed: this is inconclusive, not
+equivalence, superiority of pooling, or permission to promote a default.
+Both effect and continuation reducers changed together; neither arm has temporal
+memory. Extra GRU parameters, four seeds, one authored matchup and the fixed
+short horizon limit attribution and generalization. With no initialization or
+no-update control, the endpoint comparison establishes no improvement over
+initialization. Two balanced concurrent CPU batches also limit isolated speed
+claims. Hardware refusals and excluded calibrations remain in the attempt ledger.
+
+The deleted L4 calibration's provider bill is $0.07258259388618171, superseding
+the $0.07083924 estimate. The continuation acquired no rental; the $6 ancillary
+reserve remains pending invoices. These are retained accounting/teardown receipts,
+not a fresh provider inventory. Scientific evidence is published under
+`experiments/data/state-representation-v7-5da5f4/`, with its report and frozen
+protocol in `experiments/`. The maintained runner's rename to
+`state_representation_v7.py` does not change its archived scientific source.
+Subsequent main catalog, rules and relation changes are not evidence about that
+frozen runtime. Results require demo/review; the repair's ship approval does not
+authorize automatic study promotion or additional training.
+
+Pin executed recipe capacities independently of fresh defaults. The main sync
+raised default `max_actions` from 64 to 512 and silently changed this study's
+recipe hashes, causing its historical comparison to reject all retained results.
+Explicit original axes restored both digests and the read-only eight-endpoint
+analysis. Successful discovery/scheduling tests alone did not detect that drift;
+retained recipe hashes now guard the experiment declaration.
+
+Persistent memory and relation-table redesign remain proposals; native current
+effects/knowledge
 cannot depend on a bounded history window. Any later recurrent design needs
 viewer/seat ownership, reset, replay/fork and exact restoration contracts.
-Evidence is published under `experiments/data/state-representation-5da5f4/`;
-the Task plan owns remaining acceptance and delivery. Filesystem inspection
+Earlier engineering evidence remains under
+`experiments/data/state-representation-5da5f4/`; the Task plan owns remaining
+acceptance and delivery. Filesystem inspection
 found no immediate Training child memory directories on 2026-11-04.
 
 ## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-04 UTC)
@@ -198,9 +229,9 @@ fixed tensors (comment 42a12145, relaying his 2026-11-03 decision): complete
 effects are encoded once and explicitly routed into affected object embeddings
 before attention. Task 5da5f4 owns that bounded prerequisite as well as the
 broader representation investigation. This resolves the immediate repair choice;
-the delivered contract is recorded above, while successful learning remains
-unestablished. Concrete layout and capacities are engineering choices for that
-owner. Lossless factoring preserves
+the delivered contract is recorded above, while successful MTG-213 learning
+remains unestablished in these receipts. Concrete layout and capacities are
+engineering choices for that owner. Lossless factoring preserves
 memberships, multiplicity, source, duration and ordering; semantic coalescing
 requires proof of identical future behavior. The retained 270-row projection
 roundtrips as nine complete payloads and 135 memberships, not nine independent

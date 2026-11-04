@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5da5f4 · Representation concept review</title>
+<style>
+:root { color-scheme: light dark; --paper: #faf8f3; --ink: #242b30; --muted: #555d65; --line: #b4b6b5; --accent: #805127; }
+@media (prefers-color-scheme: dark) { :root { --paper: #191c20; --ink: #eeeae2; --muted: #b9bec5; --line: #565d64; --accent: #e6b17e; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 18px/1.6 system-ui, sans-serif; }
+main { max-width: 780px; margin: auto; padding: 48px 24px 72px; }
+header { color: var(--muted); font-size: .8rem; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 36px 0 24px; }
+h2 { font-size: 1.4rem; line-height: 1.3; margin: 44px 0 16px; }
+p { margin: 16px 0; }
+code { font-size: .85em; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; padding: 20px 0; border-block: 1px solid var(--line); }
+.focus { border-left: 3px solid var(--accent); padding-left: 20px; }
+.small { color: var(--muted); font-size: .85rem; }
+li { margin: 16px 0; }
+strong { font-weight: 650; }
+</style>
+<main>
+<header>Task 5da5f4 · concept-review · 2026-11-04<br>
+Built from <code>scratch/representation-learning-plan.md</code>,
+<code>scratch/questions.md</code>, <code>manabot/README.md</code>,
+<code>manabot/env/shared_effects.py</code>, <code>manabot/model/shared_effects.py</code>,
+<code>experiments/state_representation_v7.py</code>,
+<code>experiments/state-representation-v7.md</code> and its frozen protocol.</header>
+
+<h1>Keep complete effects.<br>Review the learning result.</h1>
+<p><strong>Review outcome: no design change; no blocking product choice in the completed study.</strong>
+The next human decision is results acceptance at the already requested demo/review.
+This page selects no follow-up experiment, default or model.</p>
+
+<div class="focus">
+<p><strong>The consequential mismatch to avoid:</strong> exact effect transport is not exact neural understanding.
+Explicit memberships preserve which objects an effect affects. A pooled or GRU embedding can still lose distinctions.
+The completed experiment does not demonstrate a GRU advantage.</p>
+</div>
+
+<h2>One action, through the shared contract</h2>
+<p><strong>Existing behavior, approved by Jack Heart:</strong> the acting player chooses legal Drill activations.
+Native rules commit each effect. The next viewer-safe observation carries both effective characteristics
+and ongoing obligations. The model receives explicit object joins before attention.</p>
+<pre>Actions                  Concepts                  APIs / owners
+Choose legal activation → native effect records   → native rules
+Observe next decision   → payload + memberships   → encode_shared_effects
+Score legal choices     → affected object vectors → SharedEffectEncoder.forward
+Choose focus/target     → addressable objects     → object attention → action head
+
+Before: 9 activations × 15 objects × 2 keywords = 270 fragments
+After:  9 payloads + 18 keyword details + 135 membership edges
+        Separate timestamps and original record ordinals survive.</pre>
+<p>The fixed v7 allocation is <code>128 × 18</code> effect headers,
+<code>512 × 3</code> detail rows and <code>2,048 × 2</code> member rows.
+Header offsets and counts select slices. Each member stores a one-based public object join
+and its original record ordinal. Repeated edges contribute repeatedly.</p>
+<p>These bounds reject overflow. They are not a guarantee for every reachable game.
+Frozen v1–v6 retain their meanings; fresh defaults remain v6.</p>
+
+<h2>Review evidence without replaying execution</h2>
+<pre>Fetch retained artifacts → TrainingRun + endpoint receipts → manabot.data fetch
+Admit all eight endpoints → frozen recipe/protocol identities → compare
+Read the contrast         → four paired training seeds       → paired_interval
+Review the result         → accept evidence / discuss next study
+</pre>
+<p><strong>Completed:</strong> eight runs, 32,768 training games, 1,024 replayed evaluation games.
+GRU minus pooling: <strong>−0.98 points [−10.13, +8.18]</strong>; elapsed training-time ratio <strong>1.06</strong>.
+The advantage criterion failed. The interval establishes neither equivalence nor a pooling win.</p>
+<p>Both effect and continuation reduction changed together. Neither arm carries memory across decisions.
+One matchup, four seeds and no initialization/no-update control limit the conclusion.
+Training diagnostics and the scientific comparison retain their distinct purposes.</p>
+
+<h2>A failure must preserve the evidence</h2>
+<p><strong>Capacity or provenance failure:</strong> reject the observation. Do not drop memberships,
+guess an exact source from an old capture, or erase timestamps. Investigate through the retained command sequence
+and its bound runtime. Changed-runtime replay must be identified explicitly; a new capacity contract needs
+a prospective identity.</p>
+<p><strong>Completed-study recovery:</strong> current action defaults grew from 64 to 512 and changed recipe hashes.
+The existing repair pins the original axes so retained endpoints are admitted again.
+Fetching receipts recovers the analysis; today's catalog does not recreate the archived scientific execution.</p>
+<p>The original source, protocol, checkpoint hashes and failed attempts survive.
+The reported provider bill is $0.07258259388618171; the $6 ancillary reserve remains pending invoices
+under the $25 ceiling. No new computation is authorized by reading results.</p>
+
+<h2>Counterexamples that still govern the design</h2>
+<p>Two equal-looking boards can diverge when different sources leave or effects expire.
+A new permanent need not join an earlier fixed affected set. Two additive effects cannot be replaced by one.
+An obligation older than a history window must remain observable. The known MTG-240 keyword-ordering defect
+does not justify deleting records.</p>
+<p><strong>Proposed only:</strong> semantic coalescing with proof of identical future behavior,
+relation-table redesign, affected-set interning and persistent game memory.
+None is selected by the shipped repair or this comparison.</p>
+
+<h2>Questions reserved for results review</h2>
+<p class="small">Deferred choices, not pending input or blockers for this headless step.</p>
+<ol>
+<li>What should follow the inconclusive endpoint comparison?<br>
+<strong>1a.</strong> Accept the evidence without further study.<br>
+<strong>1b.</strong> Separately authorize and freeze a study isolating the reducers.</li>
+<li>Should a future agent retain memory across decisions?<br>
+<strong>2a.</strong> Keep the current stateless scope.<br>
+<strong>2b.</strong> Commission a memory design defining viewer/seat ownership, reset,
+eviction, replay/fork identity and exact restoration before implementation.</li>
+</ol>
+</main>
+</html>
