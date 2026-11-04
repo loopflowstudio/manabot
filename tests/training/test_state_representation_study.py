@@ -399,10 +399,10 @@ def test_admission_watchdog_distinguishes_startup_progress_and_cost(
     tmp_path: Path,
 ) -> None:
     limits = gpu.AdmissionLimits()
-    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0, 0)
+    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
     assert watch.observe(None, 179) is None
     assert watch.observe(None, 180) == "startup produced no ready training record"
-    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0, 0)
+    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
     assert watch.observe(_progress(0, 0), 10) is None
     assert watch.observe(_progress(1, 40), 50) is None
     assert watch.observe(_progress(2, 80), 90) is None
@@ -411,19 +411,20 @@ def test_admission_watchdog_distinguishes_startup_progress_and_cost(
         watch.observe(_progress(2, 80), 90 + limits.progress_seconds)
         == "no completed update within workload allowance"
     )
-    expensive = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0, 0)
+    expensive = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
     # One slow first update cannot choose a treatment or trigger the cost rule.
     assert expensive.observe(_progress(1, 400), 410) is None
     assert (
         expensive.observe(_progress(2, 800), 810)
         == "measured arm exceeds scientific allocation"
     )
-    misplaced = _progress(0, 0)
-    misplaced.stages[0].actual_device = "cpu"
-    assert (
-        watch.observe(misplaced, 10)
-        == "training differs from declared CUDA/thread placement"
-    )
+    for device in ("cpu", None):
+        misplaced = _progress(1, 40)
+        misplaced.stages[0].actual_device = device
+        assert (
+            watch.observe(misplaced, 50)
+            == "training differs from declared CUDA/thread placement"
+        )
 
 
 def test_arm_throughput_keeps_running_phase_costs_and_rejects_wrong_placement() -> None:
@@ -460,17 +461,22 @@ def test_supervisor_gives_cancelled_child_time_to_retain_evidence(
     assert not receipt["forced_termination"]
 
 
-def test_supervisor_reaps_child_that_ignores_graceful_stop(tmp_path: Path) -> None:
+@pytest.mark.parametrize("expired", (False, True))
+def test_supervisor_reaps_child_that_ignores_graceful_stop(
+    tmp_path: Path, expired: bool
+) -> None:
     stop = tmp_path / "cancel"
-    stop.touch()
-    limits = gpu.AdmissionLimits(grace_seconds=0.01)
-    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0, 0)
-    with pytest.raises(RuntimeError, match="cancelled"):
+    if not expired:
+        stop.touch()
+    # An expired rental cannot spend the configured grace period waiting.
+    limits = gpu.AdmissionLimits(grace_seconds=120 if expired else 0.01)
+    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
+    with pytest.raises(RuntimeError, match="cancelled or allocation expired"):
         gpu._run_child(
             [sys.executable, "-c", "import time; time.sleep(20)"],
             tmp_path,
             stop,
-            time.time() + 10,
+            time.time() - 1 if expired else time.time() + 10,
             watch=watch,
             child_stop=tmp_path / "child-stop",
         )

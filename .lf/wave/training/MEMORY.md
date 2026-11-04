@@ -87,15 +87,16 @@ Etude Git main for source checkouts (2026-11-04). `uv.lock` pins one exact commi
 for the launcher and worker; updates are explicit before preparing a new run,
 never branch resolution during training. Published package metadata retains an
 index requirement. The retained source-install proof covers launcher and clean
-archive-style dependency installation, but Linux only by resolution dry-run;
-it does not replace GPU/native admission. No study merge, default/model promotion
+archive-style dependency installation. The later 4090 admission also completed
+locked Linux installation, native build and CUDA numerics; this establishes
+runtime execution, not scientific completion. No study merge, default/model promotion
 or MTG-213 spending is authorized.
 
 The first GPU admission completed four GRU updates, but the eight-learner
 scientific cohort `9c7c8e6841a4` was cancelled before scoring. Its first updates
 took 169–239 seconds versus the allocation's required 32.23 seconds/update;
 the isolated admission's 19.30 seconds/update did not predict aggregate pace.
-Memory headroom does not establish concurrent compute capacity. Three restart
+Memory headroom does not establish concurrent compute capacity. The first three restart
 admissions then failed: startup loss; a pooled learner paused at 7/8 updates;
 and a 256-stream learner lost without a final output inventory. The last loss
 establishes neither zero exposure nor OOM. No complete two-arm throughput
@@ -109,8 +110,8 @@ Released Etude 0.2.14 filtered from intra-day creation while provider rows use U
 midnight; an offline reproduction also showed its coverage guard rejecting a row.
 An absent SDK bill therefore does not establish zero charges, and a daily charge
 date does not establish coverage through teardown. Both 5090 charges already
-exceed the corresponding lifetime estimates. Correct daily query semantics and
-authoritative final coverage are separate accounting requirements.
+exceed the corresponding lifetime estimates. Correct daily query semantics do
+not establish final settlement or require waiting for an unavailable watermark.
 
 Etude PR82 repaired daily-charge retrieval and removed the invalid conversion
 to settled billing coverage. The branch pins its merged source
@@ -121,16 +122,36 @@ observation time, repeated totals and deletion are not finalization watermarks.
 Provider-confirmed final GPU, disk and bandwidth totals through each retained
 teardown remain missing; another unchanged charge query cannot supply them.
 
-The $6 ancillary reserve remains pending. Conservative reservations of
-$24.9725825939 are not expenditure or proof that the allowance is consumed;
-no reservation was released on the available evidence. The remaining $0.0274
-cannot cover another $0.20 admission. Evidence is manifest-backed under
-`experiments/data/state-representation-gpu-5da5f4/`: `restart/final-accounting.json`
-retains the earlier accounting, `reconciliation/` the original SDK reproduction,
-and `reconciliation-repaired/` the corrected read, SDK validation and locked-source
-proof. These are dated reads, not a fresh provider balance. The executable still
-launches admission only; scientific orchestration and plateau acceptance remain
-outstanding after accounting and measured affordability.
+Jack Heart's 2026-11-04 “keep going” superseded the operator-created
+final-settlement-only gate. Cancelled quote caps are commitments, not charges;
+holding them indefinitely was not a user requirement. The operational revision
+reserved $2 for all preceding compute and $6 ancillary within the original $25.
+Unknown live commitments still retain their full reservation. Reconciliation
+uses reported charges, whole rental lifetimes and quoted disk/transfer terms,
+without double-counting reservations or asserting final invoices.
+
+The subsequent 4090 admission `886233843d34` completed three pooled updates:
+768 games, 143,076 learner decisions and 560 optimizer updates in 348.8849
+collection/learning seconds. It paused at predictive finalization under the
+600-second bound, so no GRU learner started. This fourth restart failure is a
+wall-budget failure, not OOM; all 23 outputs matched the worker inventory and
+the controller retained `failed`. Provider absence was confirmed at 21:00:59
+UTC. Reported-plus-settled compute was $0.6225825939, not final settlement.
+Keeping the additional $0.50 admission reserve leaves $16.50 uncommitted.
+Even the pooled half projects $20.22 before allowances, or $31.39 with the
+declared allowance and setup/evaluation reserve. That partial-arm projection
+does not qualify two-arm throughput or predict every future game length;
+it demonstrates why this measured arrangement cannot fund the whole cohort.
+
+Scientific orchestration now exists: sequential balanced seed/arm execution,
+initialization and periodic exports, checkpoint evaluation and strict complete
+cohort analysis. Default discovery remains admission-only; an explicit affordable
+allocation selects science. No replacement scientific cohort ran, and plateau
+remains unmet. Missing affordability, not a settlement watermark or missing
+orchestration, limits continuation. Evidence is manifest-backed under
+`experiments/data/state-representation-gpu-5da5f4/`, including `operational-restart/`;
+older accounting and failed receipts remain immutable. These are dated reads,
+not a fresh provider balance.
 
 Wider complete-game batches change gradient estimates and optimizer exposure;
 they require a prospective identity and fresh paired seeds, even at a matched
@@ -408,12 +429,17 @@ no pagination. Later legal actions receive zero probability on overflow, so
 ordering can affect outcomes; this is an accepted pilot approximation, not
 evidence that the omitted choices are strategically redundant.
 
-Training and learned-policy evaluation share the cutoff. The fixed heuristic
-anchor retains its existing full-native policy, an explicit engineering
-interpretation. Diagnostics aggregate consumed decisions, overflow frequency
+V8 shared the cutoff between training and learned-policy evaluation while its
+heuristic retained full-native support. Jack Heart superseded that asymmetric
+interpretation on 2026-11-04 (ffd29028): prospective v9 uses the same first-64
+prefix for heuristic, learned candidate and initialization anchor. It also binds
+T7's runtime and requires fresh initialization/evaluation; v8 evidence remains
+frozen. Native legality and Academy keep every choice. Diagnostics aggregate
+consumed decisions across participating policies, overflow frequency
 by kind and dropped counts, with up to four replay-linked seed/deck/prefix
 samples; powers-of-two console summaries avoid floods and close flushes exact
-totals, including zero overflow. Evaluation receipts retain these reports.
+totals, including zero overflow. These are not actor-specific rates, and abrupt
+termination can lose counts since the last flush. Evaluation receipts retain these reports.
 Cutoff diagnostics are distinct from fatal observation or game truncation.
 
 Prepared v6/v7 Runs remain unsubmitted and superseded. V8 Run `f47be2d3c0d8`

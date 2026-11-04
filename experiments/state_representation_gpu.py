@@ -7,6 +7,7 @@ GPU at a time. Monitoring exports and evaluation retain every scheduled point.
 """
 
 import argparse
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -63,6 +64,10 @@ ADMISSION_SEED = 74200
 # The outer child deadline also leaves time for export and process shutdown.
 ADMISSION_ARM_SECONDS = 1800
 ADMISSION_WORK_HOURS = 1.25
+SETUP_SECONDS = 900
+EVALUATION_SECONDS = 5400
+TEARDOWN_SECONDS = 120
+RENTAL_OVERHEAD_SECONDS = SETUP_SECONDS + EVALUATION_SECONDS + TEARDOWN_SECONDS
 CURVE_DEALS = tuple(range(85001, 85033))
 HELDOUT_DEALS = tuple(range(86001, 86065))
 SCORING = {
@@ -151,6 +156,10 @@ class ArmThroughput(BaseModel):
             self.collection_seconds + self.learning_seconds + self.bookkeeping_seconds
         )
 
+    @property
+    def elapsed_seconds(self) -> float:
+        return self.recurring_seconds + self.fixed_seconds + self.export_seconds
+
     @classmethod
     def from_run(cls, arm: Arm, run: TrainingRun, elapsed: float) -> "ArmThroughput":
         if len(run.stages) != 1:
@@ -189,12 +198,6 @@ class ArmThroughput(BaseModel):
         )
 
 
-SETUP_SECONDS = 900
-EVALUATION_SECONDS = 5400
-TEARDOWN_SECONDS = 120
-RENTAL_OVERHEAD_SECONDS = SETUP_SECONDS + EVALUATION_SECONDS + TEARDOWN_SECONDS
-
-
 class ThroughputAdmission(BaseModel):
     """Both arms' phase costs; fixed costs never scale with the update horizon."""
 
@@ -209,19 +212,13 @@ class ThroughputAdmission(BaseModel):
             raise ValueError("throughput requires both distinct arms")
         if any(item.updates != ADMISSION_UPDATES for item in self.arms):
             raise ValueError("throughput requires every admission update")
-        measured = sum(
-            arm.recurring_seconds + arm.fixed_seconds + arm.export_seconds
-            for arm in self.arms
-        )
+        measured = sum(arm.elapsed_seconds for arm in self.arms)
         if measured > self.elapsed_seconds + 0.01:
             raise ValueError("arm costs exceed admission elapsed time")
         return self
 
     def cohort_hours(self) -> float:
-        measured = sum(
-            arm.recurring_seconds + arm.fixed_seconds + arm.export_seconds
-            for arm in self.arms
-        )
+        measured = sum(arm.elapsed_seconds for arm in self.arms)
         orchestration = max(0, self.elapsed_seconds - measured) * len(SEEDS)
         return (
             sum(arm.cohort_seconds() for arm in self.arms)
@@ -267,19 +264,18 @@ class ProgressWatch:
     path: Path
     limits: AdmissionLimits
     started: float
-    last_progress: float
+    # None means no ready CUDA record has been observed yet.
+    last_progress: float | None = None
     updates: int = 0
-    ready: bool = False
 
     def observe(self, run: TrainingRun | None, now: float) -> str | None:
         if run is not None and run.stages:
             stage = run.stages[0]
-            if stage.actual_device is not None and (
+            if (stage.actual_device is not None or stage.updates > 0) and (
                 stage.actual_device != "cuda:0" or stage.actual_threads != 1
             ):
                 return "training differs from declared CUDA/thread placement"
-            if not self.ready and stage.actual_device is not None:
-                self.ready = True
+            if self.last_progress is None and stage.actual_device is not None:
                 self.last_progress = now
             if stage.updates < self.updates:
                 raise ValueError("training progress regressed")
@@ -300,9 +296,10 @@ class ProgressWatch:
                         > self.limits.scientific_usd
                     ):
                         return "measured arm exceeds scientific allocation"
-        if not self.ready and now - self.started >= self.limits.startup_seconds:
-            return "startup produced no ready training record"
-        if self.ready and now - self.last_progress >= self.limits.progress_seconds:
+        if self.last_progress is None:
+            if now - self.started >= self.limits.startup_seconds:
+                return "startup produced no ready training record"
+        elif now - self.last_progress >= self.limits.progress_seconds:
             return "no completed update within workload allowance"
         return None
 
@@ -341,6 +338,9 @@ class StudyJob(BaseModel):
     source_bundle: SourceBundle
     allocation: ScientificAllocation | None = None
     admission_limits: AdmissionLimits = Field(default_factory=AdmissionLimits)
+
+
+# Job declaration and independent learner/evaluator entry points.
 
 
 def runs(revision: str, allocation: str = "", admission_limits: str = "") -> list[Run]:
@@ -518,6 +518,9 @@ def compare_heldout(results: list[ArmEvaluation]) -> PairedEstimate:
     )
 
 
+# Sequential execution and child lifetime ownership.
+
+
 def scientific_cohort(out: Path, stop: Path, deadline: float) -> None:
     """Sequential balanced arm order; stop and retain the denominator on failure."""
     assignments = [
@@ -611,7 +614,6 @@ def admit_throughput(
             phase / arm / "training/run.json",
             limits,
             child_started,
-            child_started,
         )
         command = [
             sys.executable,
@@ -675,70 +677,62 @@ def _run_child(
         except OSError:
             atomic_json(out / "processes.json", {"exit_codes": []})
             raise
-    reason: str | None = None
-    requested: float | None = None
     grace = watch.limits.grace_seconds if watch else 120
     try:
         while child.poll() is None:
-            now = time.monotonic()
-            if reason is None:
-                if stop.exists() or time.time() >= deadline - (
-                    grace if child_stop else 0
-                ):
-                    reason = "worker cancelled or allocation expired"
-                elif watch is not None:
-                    run = (
-                        TrainingRun.model_validate_json(watch.path.read_bytes())
-                        if watch.path.exists()
-                        else None
+            reason = None
+            if stop.exists() or time.time() >= deadline - (grace if child_stop else 0):
+                reason = "worker cancelled or allocation expired"
+            elif watch is not None:
+                run = (
+                    TrainingRun.model_validate_json(watch.path.read_bytes())
+                    if watch.path.exists()
+                    else None
+                )
+                previous = (watch.last_progress, watch.updates)
+                reason = watch.observe(run, time.monotonic())
+                if run is not None and previous != (watch.last_progress, watch.updates):
+                    atomic_json(out / "progress.json", run.model_dump(mode="json"))
+                    stage = run.stages[0]
+                    print(
+                        f"admission: {watch.arm} updates={stage.updates} "
+                        f"games={stage.games} collection={stage.collection_seconds:.2f}s "
+                        f"learning={stage.learning_seconds:.2f}s "
+                        f"exports={stage.export_seconds:.2f}s",
+                        flush=True,
                     )
-                    previous = (watch.ready, watch.updates)
-                    reason = watch.observe(run, now)
-                    if run is not None and previous != (watch.ready, watch.updates):
-                        atomic_json(out / "progress.json", run.model_dump(mode="json"))
-                        stage = run.stages[0]
-                        print(
-                            f"admission: {watch.arm} updates={stage.updates} "
-                            f"games={stage.games} collection={stage.collection_seconds:.2f}s "
-                            f"learning={stage.learning_seconds:.2f}s "
-                            f"exports={stage.export_seconds:.2f}s",
-                            flush=True,
-                        )
-                if reason is not None:
-                    requested = now
-                    atomic_json(
-                        out / "supervision.json",
-                        {
-                            "reason": reason,
-                            "grace_seconds": grace,
-                            "updates": watch.updates if watch else None,
-                        },
-                    )
-                    if child_stop is None:
-                        raise RuntimeError(reason)
+            if reason is not None:
+                atomic_json(
+                    out / "supervision.json",
+                    {
+                        "reason": reason,
+                        "grace_seconds": grace,
+                        "updates": watch.updates if watch else None,
+                    },
+                )
+                if child_stop is not None:
                     child_stop.touch()
-            if requested is not None and (
-                now - requested >= grace or time.time() >= deadline
-            ):
+                    # Once stopped, only evidence flush and exit remain. Waiting
+                    # here avoids a second polling state and cannot extend the lease.
+                    with suppress(subprocess.TimeoutExpired):
+                        child.wait(timeout=max(0, min(grace, deadline - time.time())))
                 raise RuntimeError(reason)
             time.sleep(1)
-        if reason is not None:
-            raise RuntimeError(reason)
         if child.returncode != 0:
             raise RuntimeError(f"worker child failed: exit {child.returncode}")
     finally:
         forced = child.poll() is None
         if forced:
-            os.killpg(child.pid, signal.SIGTERM)
+            with suppress(ProcessLookupError):
+                os.killpg(child.pid, signal.SIGTERM)
         try:
             child.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            os.killpg(child.pid, signal.SIGKILL)
+            with suppress(ProcessLookupError):
+                os.killpg(child.pid, signal.SIGKILL)
             child.wait()
-        try:
+        with suppress(ProcessLookupError):
             os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
         atomic_json(
             out / "processes.json",
             {
@@ -770,6 +764,9 @@ def worker() -> None:
         scientific_cohort(out, stop, deadline)
     else:
         admit_throughput(out, stop, deadline, spec.admission_limits)
+
+
+# Complete-cohort analysis; no partial successes or checkpoint selection.
 
 
 @dataclass(frozen=True)
