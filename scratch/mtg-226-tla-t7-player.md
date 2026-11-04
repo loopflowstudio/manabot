@@ -17,19 +17,20 @@ existing WebSocket test covers retained cleanup recovery and duplicate/stale
 Commands; no search WebSocket recovery or browser geometry claim is added.
 The release cp312 extension was rebuilt and installed atomically after sync.
 
-Check: `git diff --check` — passed for this documentation reconciliation; reused `/tmp/mtg226-compress-*.log`: focused debug Rust 10 passed, Python control/session 8 passed, Vitest 13 passed, Svelte check and release build passed; `/tmp/mtg226-resume-consumers.log` records 41 consumer/pilot passes. Broad suites, mutable source fingerprints and final CI remain with gate; browser geometry remains with demo.
+Check: `git diff --check` — passed for the earlier documentation reconciliation; reused `/tmp/mtg226-compress-*.log`: focused debug Rust 10 passed, Python control/session 8 passed, Vitest 13 passed, Svelte check and release build passed; `/tmp/mtg226-resume-consumers.log` records 41 consumer/pilot passes. The publication, demo and gate records below now cover combined suites, mutable fingerprints, final CI and bounded browser geometry.
 
 Remaining work:
 
-- Gate: final CI and Engine Budget for the resumed combined tree; local
-  publication validation and mutable parity reconciliation are recorded below.
-- Demo/review: both seats and durations in a browser, search, alternating own
-  and delegated decisions, reconnect and expiry. Existing headless proofs cover
-  behavior and rendering, not browser layout or search WebSocket recovery.
-- Publication: return the repaired change for review through MTG-226's delivery
-  history. On 2026-11-04, GitHub reports #418 CLOSED at `02241d414`, still based
-  on the former T6 branch; Task status reports its PR phase as open. Delivery
-  still needs to reconcile the closed PR and base. T6 #417 merged as `5dd11cec4`.
+- Human review before merge. Publication is complete as PR #422 at `63ac7b693`,
+  based on merged main/T6; this supersedes the earlier closed-#418 delivery gap.
+- The 2026-11-04 [demo record](t7-player-control-demo.md) advances the accepted
+  presentation: eight runtime checks, two live cleanup/reload browser cases,
+  and four native-frame search presentation cases passed. Both widths and
+  both seats/durations have bounded presentation evidence. Live search
+  WebSocket recovery and process-crash durability remain unproven.
+- Current-head CI passed 18 checks, including Engine Budget and both
+  integration suites; release publishing was skipped. The demo record links
+  exact runs and keeps those results separate from historical validation.
 
 No product decision remains. Jack Heart's review is required before merge;
 merge, auto-merge, Task completion and experiment execution are not authorized.
@@ -215,3 +216,58 @@ fixture for synthetic pilot outcomes, with separate runtime/schema rejection
 tests; no further runtime repair was needed. All other observed checks,
 including Engine Budget, passed on the historical head. Neither those results
 nor the focused resume checks certify the resumed combined tree's full CI.
+
+## Gate plan — 2026-11-04
+
+Comparison: merged T6/main `5dd11cec4` to published `63ac7b693`, including the
+uncommitted demo notes and harness. Reviewed native control scheduling,
+action/offer ownership, observation/search privacy, Python/text projection,
+frontend labels, schema additions, tests, mutable receipts and acceptance docs.
+
+Validation mapping before execution:
+
+- `managym/{src,state/src,cards/src,cards/tests}`, native bindings and world
+  changes reach debug Rust, semantic conformance, Python consumers, model/world
+  admission, protocol, Academy, clean-machine and Engine Budget checks.
+- `manabot/{managym,semantic}`, `tests/{semantic,belief,sim,academy}`, Academy
+  parity code/fixtures and `conformance/` reach both integration jobs and
+  protocol/replay/privacy checks, including the frozen pilot rejection tests.
+- `academy/ui/src/` and `protocol/` reach Vitest, Svelte checking, builds and
+  release browser checks. The unchanged demo adds both-width live cleanup and
+  both-seat/duration native-frame search presentation evidence.
+- Docs and `scratch/` reach diff hygiene only. The untracked demo harness is
+  already exercised; no harness edit or runtime input change is planned.
+
+The repository's `.github/ci/select-tests.sh` selects all nine job families for
+this branch and none for the current scratch-only delta. It selects jobs rather
+than running or caching them. GitHub independently confirms all selected jobs
+passed on exact HEAD `63ac7b693` (18 successes, release publishing skipped).
+Runtime, test, fixture, schema, lock and build inputs have no changes since that
+head; retain those full-suite results and the completed demo rather than rerun
+unchanged suites. Inspect the existing local static-analysis logs, run scoped
+Ruff and rustfmt checks, and check documentation whitespace. Any substantive
+code fix would invalidate and rerun only its affected suites.
+
+### Gate result
+
+No runtime change was needed. Updated `docs/rules/tla/acceptance.md` to retain
+the exact-head CI and browser outcomes at their durable owner, including the
+investigated harness timeouts and unproven search-recovery/crash boundaries.
+The accepted concept-review HTML and prior demo harness remain unchanged.
+
+- `gh pr view 422 --json headRefOid,state,statusCheckRollup` — open at exact HEAD; 18 successful checks, release publish skipped; all nine selector families covered.
+- `cargo fmt --manifest-path managym/Cargo.toml --check` — passed.
+- `uv run --extra dev ruff check` on all 11 changed `.py` files and `manabot/managym/__init__.pyi` — passed.
+- `uv run --extra dev ruff format --check` on the 11 changed `.py` files — passed.
+- `uv run --extra dev ruff format --check manabot/managym/__init__.pyi` — flags two unchanged signatures; `--diff` and formatting the main version through `--stdin-filename` confirm identical pre-existing drift. The new method declaration needs no formatting. Left unrelated signatures unchanged; Ruff formatting is not a CI requirement.
+- Existing `cargo clippy --all-targets --all-features -- -D warnings`, Svelte check and production-build logs — passed for unchanged source; no new compile or display-dependent check deferred.
+- Existing demo logs — 8 runtime, 2 live browser and 4 corrected native-frame presentation cases passed. The five-second assertion timeouts targeted the wrong bot label or tried to restore revision 1 after revision 4; they were harness failures, not slow product paths. No timeout was waived.
+- `git diff --check origin/main...HEAD` and `git diff --check` — passed.
+
+The selector does not provide a cache. This pass retains actual prior exact-head
+CI and demo outcomes, not a claimed cache hit or new test execution. Only
+documentation changed during gate, and no server, watcher or background command
+was started. No new performance claim or Wave update is warranted by this
+presentation change; the production signal remains Command-to-frame latency,
+with the required engine cost check passing. Ready for the existing review
+boundary; no merge, auto-merge or Task completion performed.

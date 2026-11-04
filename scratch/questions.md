@@ -7,14 +7,17 @@ supersedes PR closure and the prior concept-review-only boundary. Publish for
 review through this Task; no merge, auto-merge or experiment execution.
 
 Headless presentation uses existing Svelte server rendering and real Academy
-session tests. Browser geometry stays with demo/CI. No perspective switch or
-new identity field is inferred from control.
+session tests. The [2026-11-04 demo](t7-player-control-demo.md) adds browser
+geometry at 390px/1500px, both-seat/duration native search presentation and live
+cleanup reload/expiry. Search WebSocket recovery remains unproven. No
+perspective switch or new identity field is inferred from control.
 
 Merged T6/main supplies one catalog, delayed-event/frequency/expiry separation,
 v6 capacity and explicit v7 shared effects. Preserve frozen input widths and
 saved omissions. Pilot fixtures isolate historical identity/capacity only for
 synthetic scheduling; actual runtime/schema rejection remains strict. Mutable
-parity tapes keep T7's complete Commands pending gate's fingerprint verification.
+parity tapes keep T7's complete Commands; exact-head CI and the seven focused
+parity rechecks verify the refreshed fingerprints.
 
 Contrary evidence worth retaining: green T6 suites once missed targets-before-
 payment and automatic-four-card search. Retained-session recovery never proved

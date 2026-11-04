@@ -94,9 +94,32 @@ unchanged. The public-commitment receipt changes only source provenance and
 observation-bound prior, posterior and history digests; its 135 Commands,
 66 commitments, support sizes, privacy and atomicity results are unchanged.
 All seven focused parity checks passed after the refresh. Frozen evidence was
-not rewritten. Final CI/Engine Budget remains with gate;
-browser layout/interaction evidence remains with demo/review. These headless
-proofs do not certify all cross-card combinations.
+not rewritten.
+
+Gate verified published head `63ac7b693` on 2026-11-04: all 18 checks passed,
+including debug Rust, both integration jobs, Academy integration, protocol and
+semantic conformance, Academy UI, clean-machine startup and Engine Budget
+([CI run](https://github.com/loopflowstudio/manabot/actions/runs/41888896399),
+[release validation](https://github.com/loopflowstudio/manabot/actions/runs/41888895902)).
+Release publishing was intentionally skipped. The subsequent gate changed only
+documentation, so these runtime results remain applicable.
+
+The same head's automated demo passed eight focused runtime checks, two live
+Chromium cleanup/reload cases at 390px and 1500px, and four native-frame search
+presentation cases covering both seats and durations at both widths. Live reload
+preserved the frame hash, legal offers and eight inspected opponent-hand cards;
+keyboard discard ended control and inspection. Those live cases had no horizontal
+overflow, page exceptions or axe violations. Search presentation retained viewer
+orientation and owner/zone labels, then removed library inspection after selection.
+Its frames came from the native engine but used a presentation transport fixture;
+this does not establish live search WebSocket recovery or process-crash durability.
+Initial five-second browser assertion timeouts were traced to harness assumptions:
+the bot label was “Search 64,” and replaying an older fixture revision was correctly
+rejected. Correcting those assertions and advancing frames monotonically produced
+the passing search cases; product behavior was unchanged.
+
+These checks do not certify all cross-card combinations or training strength.
+Jack Heart's review remains required before merge.
 
 ## Faces, obligations and witnesses
 
