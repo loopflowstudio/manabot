@@ -57,58 +57,63 @@ Execution direction for the continuation:
 - Deliver training/evaluation curves, per-seed outcomes, plateau evidence or
   its absence, exact costs and teardown receipts. Stop at results demo/review.
 
-## GPU implementation and current acquisition — 2026-11-04
+## GPU implementation and live allocation — 2026-11-04
 
 The prospective declaration is `experiments/state_representation_gpu.py`; protocol:
-`experiments/protocols/state-representation-5da5f4-gpu.md`. It keeps both joint
-treatments and authored decks, four fresh paired seeds,2,048CUDA updates,
-256-update curves and separate final held-out deals. Absolute LR/tau scheduling
-retains positive rates. The fixed final-window plateau rule requires all six
-paired-seed gain intervals inside+/-0.05; missing points cannot qualify.
+`experiments/protocols/state-representation-5da5f4-gpu.md`. Scientific source:
+`27a12642200a35fc0cb436a9db69ce16c505016a`. Both joint treatments retain the
+authored decks, four fresh paired seeds, 2,048 CUDA updates, 256-update curves
+and separate final held-out deals. Absolute LR/tau scheduling stays positive.
+All six final-window paired-seed gain intervals must lie inside +/-0.05; missing
+points cannot qualify. No scientific scores informed hardware selection.
 
-Etude PR79 and release PR80 are merged. The separately owned release operation
-published SDK0.2.14; its installed PyPI client imports Vast successfully. The
-scientific worker retains its locked0.2.12 environment. RunPod6000Ada/L40S/A100
-rentals refused before acquisition. Released-client Vast admitted excluded run
-edb504230b42 at source35770e55b, instance59138171/sessiond407636829cb. CUDA12.8
-numerics passed; four GRU updates completed128games and24,202learner decisions,
-with733optimizer updates. Collection47.50s plus learning29.70s, sampled RSS4.32GB.
-The job exited successfully; controller deletion was confirmed at17:36:17UTC and
-subsequent provider lookup confirmed absence. Storage polling briefly timed out;
-bounded controller polling recovered the receipts. All receipts are under
-`.runs/representation/gpu-plateau/`, including admission/run.json/run.json.
+Etude PR79 and release PR80 are merged; published SDK 0.2.14 controls Vast.
+The scientific worker retains locked SDK 0.2.12. RunPod 6000Ada/L40S/A100
+rentals refused before acquisition. Excluded Vast admission `edb504230b42`
+at source `35770e55b`, instance 59138171/session `d407636829cb`, passed CUDA
+12.8 numerics and four GRU updates: 128 games, 24,202 learner decisions and
+733 optimizer updates. Collection 47.50s plus learning 29.70s; sampled peak RSS
+4.32GB. Deletion was confirmed at 17:36:17 UTC, with subsequent provider absence.
+Full-rental estimate $0.1146496 is not a settled bill; retain $0.50 reservation.
+Receipts: `.runs/representation/gpu-plateau/admission/` and adjacent accounting.
 
-That measured throughput invalidated the initial two-hour-per-replicate
-allocation before any scientific seed launched. Revision8c7712bc9 is the last
-per-replicate declaration, not an executed comparison. The prospective revision
-colocates eight independently seeded ordinary execute_regime learners on one
-3090 (>=16CPUs,60GBhost RAM). Each gets6GiBhost and10%CUDA allocator limits;
-no weights/optimizer/RNG are shared. Training precedes evaluation, with only
-two evaluators at once. One Etude allocation, deadline and guardian own all
-children, and any child failure reaps its siblings. Timing is concurrent-use
-evidence, never isolated GPU speed. Four2,048-update seeds per arm remain the
-scientific target. The full allocation allows20job hours plus15minutes setup,
-inside$17.20; prior$0.07258259388618171, $6ancillary reserve and$0.50admission
-reserve keep the total bounded at$23.77258259388618171. Admission's full bill
-still requires settlement. No scientific seed has launched yet. The5090 whole-cohort quotes now report
-no capacity; a4090 with20CPUs/62GB at$0.611111/hour is available at17:51UTC.
-That quote also refused before acquisition. A fresh broad read found a3090
-with>=16CPUs/64GB at$0.179556/hour. The20-hour job plus15-minute setup costs
-$3.636 at that quote, inside$17.20.
-Its66,000-second learner watchdog leaves room for evaluation and teardown.
+Measured throughput invalidated the initial per-replicate two-hour allocation
+before any scientific seed launched. Revision `8c7712bc9` retains that unexecuted
+predecessor. Eight independent ordinary `execute_regime` learners now share one
+GPU, each bounded at 6 GiB host memory and 10% of the CUDA caching allocator.
+No weights, optimizer or RNG are shared. Training precedes evaluation, with two
+evaluators at once. One Etude guardian owns the allocation; any child failure
+reaps siblings. Timing describes concurrent use, never isolated GPU performance.
+The job allows 20 hours plus 15 minutes setup, at most $17.20. Prior known bill
+$0.07258259388618171, $6 ancillary reserve and $0.50 admission reserve bound the
+cumulative reservation at $23.77258259388618171. Learners have 66,000 seconds;
+evaluation retains a separate deadline reserve.
 
-Delete — do not maintain: removed the unexecuted per-replicate TrainingJob
-allocation and worker path in the same diff. Frozen CPU science and the executed
-excluded admission retain their historical sources. The shared execute_regime
-and monitor remain the learning/evaluation authorities.
+Acquisition evidence: 128GB-host and later 60GB 5090 quotes initially refused;
+4090 and 3090 offers appeared and disappeared before acquisition. Launch
+`ea36a15587b1` for prepared run `e4bc79b1e907` refused 3090 capacity without a
+rental or job execution. Source preparation originally downloaded all Git history;
+reusing local Git objects through `GIT_ALTERNATE_OBJECT_DIRECTORIES` preserved
+remote verification and completed it. Interrupted local fetches were reaped.
+A prospective amendment permits one 3090, 4090 or 5090 selected before execution,
+identically for every seed and both arms, within the unchanged cap.
+
+At 18:17 UTC, run `9c7c8e6841a4` acquired RTX 5090 / 32 vCPUs / 64GB on Vast,
+instance 59143644, session `d123328bc691`, machine
+`representation-5da5f4-cohort5090-60gb-d123328bc691`. Quote $0.77914074/hour,
+about $15.78 for the full 20.25 hours. Setup is in progress; no scientific
+completion or plateau is claimed. Prepared source, launch and live logs are in
+`.runs/representation/gpu-plateau/cohort-selected-*` and `cohort-live.log`.
+
+Delete — do not maintain: the unexecuted per-replicate TrainingJob allocation
+and worker path were removed together. Frozen CPU science and executed admission
+retain historical sources; `execute_regime` and monitor remain the authorities.
 
 Check: seven focused study tests passed (CPU identities, GPU declaration,
-positive learning rates, bounded plateau evidence and sibling cleanup after
-failure). Gate owns broader suites. Remaining: final source freeze, current
-whole-cohort quote/acquisition, actual eight-run GPU learning and curves,
-accounting/artifact publication and provider teardown. No model promotion. The128GB-host quote had no capacity;6GiBper learner
-bounds all eight at48GiB, leaving host overhead within a60GB allocation.
-This prospective resource correction preserves the scientific treatment.
+positive LR, bounded plateau evidence and sibling cleanup), plus focused discovery;
+Ruff and whitespace checks passed. Gate owns broader suites. Remaining: supervise
+all eight learners and evaluations, retain curves and plateau outcome, publish
+artifacts, reconcile costs and confirm teardown. No model promotion or merge.
 
 The historical sections below describe the completed CPU cohort, not the new
 continuation's authorization or acceptance criteria.
