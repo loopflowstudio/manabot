@@ -36,6 +36,11 @@ fn scores_digest(digest: &blake3::Hasher) -> u64 {
 }
 
 fn main() {
+    // Optional bounded attribution; CI retains DECISIONS and Search-64.
+    let decisions = std::env::args()
+        .nth(1)
+        .map_or(DECISIONS, |s| s.parse().expect("decision count"));
+    assert!(decisions > 0);
     let mut worst_overall: f64 = 0.0;
     let mut total_overall: f64 = 0.0;
     for seed in SEEDS {
@@ -43,7 +48,7 @@ fn main() {
         env.reset(curated::players()).unwrap();
         let mut replies = Vec::new();
         let mut digest = blake3::Hasher::new();
-        for decision in 0..DECISIONS {
+        for decision in 0..decisions {
             let start = Instant::now();
             let result = env
                 .flat_mc_scores(

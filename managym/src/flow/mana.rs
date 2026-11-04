@@ -15,6 +15,58 @@ use crate::{
     },
 };
 
+/// Opt-in, thread-local payment diagnostics. Normal builds compile out every
+/// counter write; measurements include all probes in the measured operation.
+#[cfg(feature = "benchmark")]
+pub mod measurement {
+    use super::*;
+    use std::cell::Cell;
+
+    #[derive(Clone, Copy, Default, Debug, serde::Serialize)]
+    pub struct Counters {
+        pub explored: u64,
+        pub deduplicated: u64,
+        pub pruned: u64,
+        pub dynamic_evaluations: u64,
+        pub game_clones: u64,
+        pub max_obligations: usize,
+        pub payment_remainders: usize,
+        pub max_remainders: usize,
+    }
+
+    thread_local! {
+        static COUNTERS: Cell<Counters> = Cell::new(Counters::default());
+    }
+
+    pub(super) fn update(f: impl FnOnce(&mut Counters)) {
+        COUNTERS.with(|cell| {
+            let mut counters = cell.get();
+            f(&mut counters);
+            cell.set(counters);
+        });
+    }
+
+    pub fn take() -> Counters {
+        COUNTERS.with(|cell| cell.replace(Counters::default()))
+    }
+
+    /// Search the ordinary payment model, retaining its exact last remainder.
+    pub fn payment(game: &Game, player: PlayerId, cost: &ManaCost) -> Option<Mana> {
+        let path = game.payment_model(player, None).plan(
+            game.pooled_mana(player),
+            vec![Obligation::Pay {
+                cost: cost.clone(),
+                waterbend: false,
+            }],
+            SourcePolicy::All,
+        )?;
+        match path.last() {
+            Some(PaymentStep::Spend(remainder)) => Some(remainder.clone()),
+            _ => unreachable!("payment witness ends in spending"),
+        }
+    }
+}
+
 /// One finite resource transition model. An activation is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
 /// cycles. Taps, departures, selected-object costs and usage limits remain
@@ -319,6 +371,11 @@ impl PaymentModel<'_> {
             .iter()
             .find(|ability| ability.ability_index == ability_index)?;
         let effect = ability.dynamic.as_ref()?;
+        #[cfg(feature = "benchmark")]
+        measurement::update(|c| {
+            c.dynamic_evaluations += 1;
+            c.game_clones += 1;
+        });
         let mut probe = self.game.clone();
         for (source, remaining) in self.sources.iter().zip(resources) {
             if remaining.departed {
@@ -461,15 +518,24 @@ impl PaymentModel<'_> {
         policy: SourcePolicy,
         visited: &mut std::collections::HashSet<PaymentSearchState>,
     ) -> Option<Vec<PaymentStep>> {
+        #[cfg(feature = "benchmark")]
+        measurement::update(|c| {
+            c.explored += 1;
+            c.max_obligations = c.max_obligations.max(state.obligations.len());
+        });
         if state.obligations.is_empty() {
             return Some(Vec::new());
         }
         if !self.can_cover(&state, policy) {
+            #[cfg(feature = "benchmark")]
+            measurement::update(|c| c.pruned += 1);
             return None;
         }
         // Only states that need exploration need an owned visited key. Terminal
         // success and the resource bound above require neither cloning nor hashing.
         if !visited.insert(state.clone()) {
+            #[cfg(feature = "benchmark")]
+            measurement::update(|c| c.deduplicated += 1);
             return None;
         }
         let PaymentSearchState {
@@ -582,7 +648,13 @@ impl PaymentModel<'_> {
                 }
             }
             Obligation::Pay { cost, waterbend } => {
-                for remainder in pool.payment_options(cost) {
+                let remainders = pool.payment_options(cost);
+                #[cfg(feature = "benchmark")]
+                measurement::update(|c| {
+                    c.payment_remainders += remainders.len();
+                    c.max_remainders = c.max_remainders.max(remainders.len());
+                });
+                for remainder in remainders {
                     if let Some(mut path) = self.witness(
                         PaymentSearchState {
                             resources: resources.clone(),

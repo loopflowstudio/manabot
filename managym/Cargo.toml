@@ -36,6 +36,10 @@ name = "bench_observation"
 required-features = ["benchmark"]
 
 [[example]]
+name = "bench_mana"
+required-features = ["benchmark"]
+
+[[example]]
 name = "bench_search"
 test = true
 

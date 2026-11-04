@@ -19,11 +19,19 @@ const GAMES: u64 = 512;
 const MAX_STEPS: usize = 2000;
 
 fn main() {
+    // An optional game count permits bounded same-runner attribution. CI
+    // omits it and retains the complete frozen workload.
+    let games = std::env::args()
+        .nth(1)
+        .map_or(GAMES, |s| s.parse().expect("game count"));
+    assert!(games > 0);
+    let mut game_seconds = Vec::new();
     let mut steps = 0u64;
     let mut digest = 0u64;
     let mut capped = 0u64;
     let start = Instant::now();
-    for seed in 0..GAMES {
+    for seed in 0..games {
+        let game_start = Instant::now();
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -44,10 +52,11 @@ fn main() {
         digest = digest
             .wrapping_mul(31)
             .wrapping_add(env.winner_index().map_or(2, |winner| winner as u64));
+        game_seconds.push(game_start.elapsed().as_secs_f64());
     }
     let elapsed = start.elapsed().as_secs_f64();
     println!(
-        "{{\"games\":{GAMES},\"capped\":{capped},\"steps\":{steps},\"elapsed_s\":{elapsed:.3},\"steps_per_s\":{:.1},\"digest\":{digest}}}",
+        "{{\"games\":{games},\"capped\":{capped},\"steps\":{steps},\"elapsed_s\":{elapsed:.3},\"steps_per_s\":{:.1},\"digest\":{digest},\"game_seconds\":{game_seconds:?}}}",
         steps as f64 / elapsed
     );
 }
