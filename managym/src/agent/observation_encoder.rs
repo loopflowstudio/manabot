@@ -649,6 +649,7 @@ pub fn encode_into(
     out.agent_permanents.fill(0.0);
     out.opponent_permanents.fill(0.0);
     out.actions.fill(0.0);
+    out.name_candidates.fill(0.0);
     out.events.fill(0.0);
     out.action_focus.fill(-1);
     out.agent_player_valid.fill(0.0);
@@ -838,24 +839,13 @@ pub fn encode_into(
 
     encode_actions(
         obs,
-        config.max_actions,
-        config.max_focus_objects,
+        config,
         out.actions,
         out.actions_valid,
         out.action_focus,
+        out.name_candidates,
         &object_to_index,
     );
-    out.name_candidates.fill(0.0);
-    if config.policy_input_version >= 8 {
-        for (index, action) in obs.action_space.actions.iter().enumerate() {
-            if let Some(name_index) = action.name_index {
-                out.name_candidates[2 * index] = (name_index + 1) as f32;
-                out.name_candidates[2 * index + 1] =
-                    action.name_definition.map_or(0.0, |id| (id + 1) as f32);
-                out.actions[index * ACTION_DIM + ACTION_MODE_INDEX] = 0.0;
-            }
-        }
-    }
 
     if config.policy_history {
         for (index, row) in
@@ -1400,20 +1390,15 @@ fn encode_facts(
 
 fn encode_actions(
     obs: &Observation,
-    max_actions: usize,
-    max_focus_objects: usize,
+    config: &ObservationEncoderConfig,
     out_actions: &mut [f32],
     out_valid: &mut [f32],
     out_focus: &mut [i32],
+    out_names: &mut [f32],
     object_to_index: &HashMap<i32, i32>,
 ) {
-    for (action_index, action) in obs
-        .action_space
-        .actions
-        .iter()
-        .take(max_actions)
-        .enumerate()
-    {
+    // encode_into has already checked every action and focus against capacity.
+    for (action_index, action) in obs.action_space.actions.iter().enumerate() {
         let action_start = action_index * ACTION_DIM;
         let action_end = action_start + ACTION_DIM;
         let row = &mut out_actions[action_start..action_end];
@@ -1423,7 +1408,20 @@ fn encode_actions(
             row[action_type_index] = 1.0;
         }
         row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
-        row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+        match action
+            .name_index
+            .filter(|_| config.policy_input_version >= 8)
+        {
+            Some(index) => {
+                // A name is categorical; its position is never a numeric mode feature.
+                out_names[2 * action_index] = (index + 1) as f32;
+                out_names[2 * action_index + 1] =
+                    action.name_definition.map_or(0.0, |id| (id + 1) as f32);
+            }
+            None => {
+                row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+            }
+        }
         row[ACTION_ABILITY_INDEX] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
         row[ACTION_CONTINUATION_INDEX] = action
             .continuation_index
@@ -1431,8 +1429,8 @@ fn encode_actions(
         row[ACTION_DIM - 1] = 1.0;
         out_valid[action_index] = 1.0;
 
-        let focus_start = action_index * max_focus_objects;
-        for (focus_index, focus_id) in action.focus.iter().take(max_focus_objects).enumerate() {
+        let focus_start = action_index * config.max_focus_objects;
+        for (focus_index, focus_id) in action.focus.iter().enumerate() {
             out_focus[focus_start + focus_index] =
                 object_to_index.get(focus_id).copied().unwrap_or(-1);
         }

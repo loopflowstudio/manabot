@@ -39,6 +39,12 @@ optional definition joins. Only the test fixture extends it today.
   tensors directly; copying a prepared observation loses its inference scope.
 - The temporary deduplication map in `ContentPack::name_candidates`:
   registration already rejects duplicate names; `NameVocabulary` sorts once.
+- The second action traversal for name joins in both encoders: action features,
+  candidate joins and focus now share one loop. Native capacity validation owns
+  rejection; the subsequent action loop needs no truncation.
+- The vector naming test's duplicate navigation: replay one recorded Command
+  trace through scalar and vector step APIs. Both must retain per-step events;
+  a cloned observation snapshot has already drained them and is not equivalent.
 
 These cuts are complete. No exclusive fixtures or deletion targets remain.
 
@@ -62,7 +68,7 @@ the authority's 135 Commands are byte-for-byte unchanged. Frozen evidence was
 untouched; the RUL-9 dependency was read from its artifact cache. Old semantic
 world bindings fail explicitly; historical tensor shapes/omissions remain fixed.
 
-Check: `uv run --extra dev pytest tests/model/test_catalog_naming.py tests/model/test_inference.py tests/model/test_agent.py tests/model/test_attachment_join.py tests/model/test_value_aggregation.py -q` — 56 passed; after the release rebuild/atomic extension install, naming + policy-FiLM + directed compound parity — 13 passed; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib naming_tests` — 2 passed; Ruff, rustfmt and diff checks passed. Prior Academy reconnect and frontend label results remain applicable. Gate owns full affected suites, current-world admission/monitoring, checkpoint compatibility, final parity source fingerprints and same-runner Engine Budget, once.
+Check: `uv run --extra dev pytest tests/model/test_catalog_naming.py tests/env/test_observation.py -q` — 60 passed; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib <filter>` with `naming_tests` and `agent::observation_encoder::tests` — 8 passed. Release rebuild/atomic extension install, Ruff, rustfmt and diff checks passed. Prior model/client results remain applicable (`1e7dc47d4:scratch/mtg-243-naming.md`). Gate owns full affected suites, current-world admission/monitoring, checkpoint compatibility, final parity source fingerprints and same-runner Engine Budget, once.
 
 Pre-reduction debug allocation attribution (not a speed threshold): catalog setup
 5,232 allocations / 1,863,512 bytes; naming decision 0 / 0; 928-action vector

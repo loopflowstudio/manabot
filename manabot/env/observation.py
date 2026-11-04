@@ -454,27 +454,7 @@ class ObservationEncoder:
             out[f"{key}_valid"] = out[key][..., -1].astype(np.float32)
 
         # Actionspace
-        out["actions"], out["action_focus"] = self._encode_actions(obs)
-        if self.config.policy_input_version >= 8:
-            candidates = np.zeros((self.max_actions, 2), dtype=np.float32)
-            for index, action in enumerate(obs.action_space.actions):
-                if action.name_definition is not None and (
-                    action.name_index is None
-                    or not 0 <= action.name_definition <= MAX_ACTION_SELECTOR
-                ):
-                    raise ValueError("invalid name candidate definition")
-                if action.name_index is not None:
-                    if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
-                        raise ValueError("observation capacity exceeded: name selector")
-                    candidates[index] = (
-                        action.name_index + 1,
-                        (action.name_definition + 1)
-                        if action.name_definition is not None
-                        else 0,
-                    )
-                    out["actions"][index, ACTION_MODE_INDEX] = 0
-            out["name_candidates"] = candidates
-        out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
+        out.update(self._encode_actions(obs))
         if self.config.policy_history_version == 1:
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
@@ -980,13 +960,16 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
     # -------------------------------------------------------------------------
-    def _encode_actions(
-        self, obs: managym.Observation
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _encode_actions(self, obs: managym.Observation) -> dict[str, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
         action_focus = np.full(
             (self.max_actions, self.max_focus_objects), -1, dtype=np.int32
+        )
+        candidates = (
+            np.zeros((self.max_actions, 2), dtype=np.float32)
+            if self.config.policy_input_version >= 8
+            else None
         )
         actions = obs.action_space.actions
         if len(actions) > self.max_actions:
@@ -1012,6 +995,24 @@ class ObservationEncoder:
                         )
                     arr[idx, column] = selector + 1
 
+            if candidates is not None:
+                if action.name_definition is not None and (
+                    action.name_index is None
+                    or not 0 <= action.name_definition <= MAX_ACTION_SELECTOR
+                ):
+                    raise ValueError("invalid name candidate definition")
+                if action.name_index is not None:
+                    if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name selector")
+                    candidates[idx] = (
+                        action.name_index + 1,
+                        (action.name_definition + 1)
+                        if action.name_definition is not None
+                        else 0,
+                    )
+                    # Names use categorical identity rather than a numeric mode.
+                    arr[idx, ACTION_MODE_INDEX] = 0
+
             if len(action.focus) > self.max_focus_objects:
                 raise ValueError("observation capacity exceeded: action focus")
             for focus_index, fid in enumerate(action.focus):
@@ -1022,7 +1023,14 @@ class ObservationEncoder:
                     )
                 action_focus[idx, focus_index] = index
 
-        return arr, action_focus
+        encoded = {
+            "actions": arr,
+            "action_focus": action_focus,
+            "actions_valid": arr[..., -1].astype(np.float32),
+        }
+        if candidates is not None:
+            encoded["name_candidates"] = candidates
+        return encoded
 
     def _encode_events(
         self, events: List[managym.EventData]

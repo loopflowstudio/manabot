@@ -1,5 +1,6 @@
 """Complete name support, native encoding parity and learned categorical scoring."""
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from time import perf_counter
@@ -9,7 +10,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ACTION_MODE_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
@@ -18,24 +19,33 @@ from manabot.semantic.text_observation import capture_text_decision
 import managym
 
 
+@dataclass(frozen=True)
+class NamingTrace:
+    root: managym.Env
+    actions: tuple[int, ...]
+
+
+def _players() -> list[managym.PlayerConfig]:
+    return [
+        managym.PlayerConfig(
+            "Hero", {"Swamp": 24, "The Rise of Sozin": 12}, disclosure="closed"
+        ),
+        managym.PlayerConfig(
+            "Villain", {"Plains": 20, "Gray Ogre": 20}, disclosure="closed"
+        ),
+    ]
+
+
 @pytest.fixture(scope="module")
-def naming_root() -> managym.Env:
+def naming_trace() -> NamingTrace:
     env = managym.Env(seed=165)
-    env.reset(
-        [
-            managym.PlayerConfig(
-                "Hero", {"Swamp": 24, "The Rise of Sozin": 12}, disclosure="closed"
-            ),
-            managym.PlayerConfig(
-                "Villain", {"Plains": 20, "Gray Ogre": 20}, disclosure="closed"
-            ),
-        ]
-    )
+    env.reset(_players())
+    actions: list[int] = []
     cast = False
     for ordinal in range(200):
         frame = json.loads(env.semantic_decision_frame_json())
         if any(offer["label"] == "Name Gray Ogre" for offer in frame["offers"]):
-            return env
+            return NamingTrace(env, tuple(actions))
         labels = ["Target Villain", "Play Swamp", "Play Plains"]
         if not cast:
             labels.append("Cast The Rise of Sozin")
@@ -50,6 +60,7 @@ def naming_root() -> managym.Env:
             frame["offers"][0],
         )
         cast |= offer["label"] == "Cast The Rise of Sozin"
+        actions.append(frame["offers"].index(offer))
         env.execute_semantic_command_json(
             json.dumps(
                 {
@@ -61,6 +72,11 @@ def naming_root() -> managym.Env:
             )
         )
     pytest.fail("naming decision was not reached")
+
+
+@pytest.fixture(scope="module")
+def naming_root(naming_trace: NamingTrace) -> managym.Env:
+    return naming_trace.root
 
 
 def _tensor(values: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
@@ -81,6 +97,7 @@ def test_catalog_naming_v8_scalar_parity_and_private_text(
         np.testing.assert_array_equal(into[key], native[key], err_msg=key)
     catalog = managym.naming_catalog()
     assert len(raw.action_space.actions) == len(catalog)
+    assert not reference["actions"][:, ACTION_MODE_INDEX].any()
     for index, candidate in enumerate(catalog):
         definition = candidate.definition
         assert reference["name_candidates"][index].tolist() == [
@@ -96,6 +113,10 @@ def test_catalog_naming_v8_scalar_parity_and_private_text(
     for version in (6, 7):
         legacy = naming_root.encode_observation(raw, policy_input_version=version)
         assert "name_candidates" not in legacy
+        np.testing.assert_array_equal(
+            legacy["actions"][: len(catalog), ACTION_MODE_INDEX],
+            np.arange(1, len(catalog) + 1),
+        )
     assert ObservationConfig.from_checkpoint({}).policy_input_version == 1
     assert "max_facts" not in ObservationConfig.from_checkpoint({}).model_dump()
 
@@ -261,14 +282,12 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
         torch.testing.assert_close(value, expected[1])
 
 
-def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice() -> None:
+def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
+    naming_trace: NamingTrace,
+) -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=8))
     vector = managym.VectorEnv(1, seed=165)
-    reference = managym.VectorEnv(1, seed=165)
-    players = [
-        managym.PlayerConfig("Hero", {"Swamp": 24, "The Rise of Sozin": 12}),
-        managym.PlayerConfig("Villain", {"Plains": 20, "Gray Ogre": 20}),
-    ]
+    scalar = managym.Env(seed=165)
     buffers = space.encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
@@ -276,34 +295,13 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice() -> 
         truncated=np.zeros(1, dtype=np.uint8),
     )
     vector.set_buffers(buffers)
-    vector.reset_all_into_buffers(players)
-    raw = reference.reset_all(players)[0][0]
-    cast = False
-    for _ in range(200):
-        frame_text = reference.semantic_decision_frames_json()[0]
-        assert frame_text is not None
-        frame = json.loads(frame_text)
-        if any(offer["label"] == "Name Gray Ogre" for offer in frame["offers"]):
-            break
-        labels = ["Target Villain", "Play Swamp", "Play Plains"]
-        if not cast:
-            labels.append("Cast The Rise of Sozin")
-        labels.extend(["Pass priority", "Decline"])
-        offer = next(
-            (
-                offer
-                for label in labels
-                for offer in frame["offers"]
-                if offer["label"] == label
-            ),
-            frame["offers"][0],
-        )
-        cast |= offer["label"] == "Cast The Rise of Sozin"
-        index = frame["offers"].index(offer)
-        raw = reference.step([index])[0][0]
+    vector.reset_all_into_buffers(_players())
+    raw = scalar.reset(_players())[0]
+    # Replay one Command trace through both step APIs so their per-step events
+    # have the same lifetime; observation_for_player omits already-drained events.
+    for index in naming_trace.actions:
+        raw = scalar.step(index)[0]
         vector.step_into_buffers([index])
-    else:
-        pytest.fail("vector naming decision not reached")
     assert buffers["name_candidates"][0, :, 0].max() == len(managym.naming_catalog())
     for key, expected in space.encode(raw).items():
         np.testing.assert_allclose(buffers[key][0], expected, atol=1e-6, err_msg=key)
@@ -312,7 +310,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice() -> 
         for i, action in enumerate(raw.action_space.actions)
         if action.description == "Name Gray Ogre"
     )
-    raw = reference.step([index])[0][0]
+    raw = scalar.step(index)[0]
     vector.step_into_buffers([index])
     assert not buffers["name_candidates"].any()
     for key, expected in space.encode(raw).items():
