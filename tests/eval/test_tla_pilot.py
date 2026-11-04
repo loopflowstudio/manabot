@@ -38,6 +38,7 @@ from experiments.tla_pilot_v5 import (
     eval,
     frozen,
 )
+from manabot.env import observation as observation_module
 from manabot.env.failures import read_failure
 from manabot.env.observation import ObservationEncoder
 from manabot.eval.results import RateInterval
@@ -54,8 +55,17 @@ def pilot_world(monkeypatch: pytest.MonkeyPatch) -> RuntimeWorld:
     Historical scheduling and controlled analysis outcomes must not depend on
     the evolving native catalog. Runtime admission is tested without this seam.
     """
-    world = Protocol.model_validate_json(PROTOCOL.read_bytes()).runtime_world
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    world = protocol.runtime_world
     monkeypatch.setattr(managym, "world_identity", world.model_dump)
+    # Synthetic scheduling also needs the historical schema. Never use these
+    # widths for encoding or playing; runtime shape rejection is tested below.
+    monkeypatch.setattr(
+        observation_module, "PLAYER_DIM", protocol.observation_shapes["agent_player"][1]
+    )
+    monkeypatch.setattr(
+        observation_module, "CARD_DIM", protocol.observation_shapes["agent_cards"][1]
+    )
     return world
 
 
@@ -70,6 +80,13 @@ def test_pilot_rejects_current_runtime_world(entry: str) -> None:
             tla_pilot_v5.runs("HEAD")
         else:
             eval(_state())
+
+
+def test_pilot_rejects_current_tensor_shapes(monkeypatch: pytest.MonkeyPatch) -> None:
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    monkeypatch.setattr(managym, "world_identity", protocol.runtime_world.model_dump)
+    with pytest.raises(ValueError, match="tensor capacities differ"):
+        frozen()
 
 
 @pytest.mark.parametrize(
@@ -510,8 +527,15 @@ def test_pilot_analysis_cli_reads_sealed_etude_results(
                 import sys
                 from unittest.mock import patch
 
+                from experiments.tla_pilot_v5 import PROTOCOL, Protocol
+
                 world = json.loads(sys.argv.pop(1))
-                with patch("managym.world_identity", return_value=world):
+                shapes = Protocol.model_validate_json(PROTOCOL.read_bytes()).observation_shapes
+                with (
+                    patch("managym.world_identity", return_value=world),
+                    patch("manabot.env.observation.PLAYER_DIM", shapes["agent_player"][1]),
+                    patch("manabot.env.observation.CARD_DIM", shapes["agent_cards"][1]),
+                ):
                     runpy.run_module(
                         "experiments.tla_pilot_analysis", run_name="__main__", alter_sys=True
                     )
@@ -604,13 +628,16 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
 ) -> None:
     evidence = read_failure(ROOT / "tests/fixtures/tla-pilot-card-capacity.jsonl")
     (game,) = evidence.games
-    # Replay uses the recorded allocation with the real current world, without
-    # pretending that the historical pilot runtime remains compatible.
+    # Replay uses the real current world and action capacity; the retained
+    # pilot's card-allocation boundary is the regression under test.
     regime = TrainingRegime.model_validate_json(tla_pilot_v5.REGIME.read_bytes())
+    replay_config = regime.observation.model_copy(
+        update={"max_actions": ObservationConfig().max_actions}
+    )
     # Both the exact occupied boundary and the pilot allocation retain every
     # generated token and sideboard card through scalar/vector/Python paths.
     encoder = ObservationEncoder(
-        regime.observation.model_copy(update={"max_cards_per_player": card_capacity})
+        replay_config.model_copy(update={"max_cards_per_player": card_capacity})
     )
     players = [player.native() for player in game.players]
     scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
@@ -646,7 +673,7 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
         np.testing.assert_array_equal(value, buffers[key][0], err_msg=key)
     # One fewer slot rejects rather than silently dropping an object.
     old = ObservationEncoder(
-        regime.observation.model_copy(update={"max_cards_per_player": 60})
+        replay_config.model_copy(update={"max_cards_per_player": 60})
     )
     with pytest.raises(ValueError, match="agent_cards plus sideboard"):
         old.encode(observation)
