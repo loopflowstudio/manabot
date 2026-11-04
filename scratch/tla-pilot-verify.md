@@ -3,7 +3,7 @@
 **Fix forward; incomplete.** Main at
 `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` contains PR #419's shared-effect
 contract but lacks the card-capacity repair. PR #416 merged at
-`3b122de9078c985f846a0f3c5a3a42ebca3b1182`; this Task has no later PR.
+`3b122de9078c985f846a0f3c5a3a42ebca3b1182`.
 The existing repair and prospective v5 runner passed publication checks and
 are published in PR #420, open and ready for review. GPU execution and learning
 acceptance remain outstanding; this publication step neither merges nor arms
