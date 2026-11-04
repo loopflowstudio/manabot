@@ -16,7 +16,16 @@ from typing import TypedDict
 import numpy as np
 import torch
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import (
+    FACT_ID_INDEX,
+    FACT_KIND_INDEX,
+    FACT_MANA_AMOUNT,
+    FACT_MANA_LOCATION,
+    FACT_VALID_INDEX,
+    FACT_VALUE_INDEX,
+    RELATION_MANA_TAPS_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.managym.enums import ActionEnum
 from manabot.model.actor_critic import ActorCritic
@@ -77,9 +86,11 @@ def mana_pairs(space: ObservationSpace) -> list[ManaPair]:
     reordered["facts"] = reordered["facts"][::-1].copy()
     renumbered = {key: value.copy() for key, value in base.items()}
     facts = renumbered["facts"]
-    mana = (facts[:, 1] >= 11) & (facts[:, 11] == 1)
+    mana = (facts[:, FACT_KIND_INDEX] >= FACT_MANA_AMOUNT) & (
+        facts[:, FACT_VALID_INDEX] == 1
+    )
     # IDs are joins, not quantity or strategic order. Swap their labels.
-    facts[mana, 3] = 3 - facts[mana, 3]
+    facts[mana, FACT_ID_INDEX + 1] = 3 - facts[mana, FACT_ID_INDEX + 1]
     pairs = [
         ManaPair("amount_assignment", base, swapped),
         ManaPair("purpose", base, purpose),
@@ -97,9 +108,12 @@ def mana_pairs(space: ObservationSpace) -> list[ManaPair]:
     )
     pending, *_ = pending_env.step(choice)
     output = space.encode(pending)
-    for name, column in (("output_mode", 7), ("output_frame", 6)):
+    for name, column in (
+        ("output_mode", FACT_VALUE_INDEX + 1),
+        ("output_frame", FACT_VALUE_INDEX),
+    ):
         altered = {key: value.copy() for key, value in output.items()}
-        locations = altered["facts"][:, 1] == 13
+        locations = altered["facts"][:, FACT_KIND_INDEX] == FACT_MANA_LOCATION
         altered["facts"][locations, column] += 1
         pairs.append(ManaPair(name, output, altered))
     tap_env = priority_root((), ("Supportive Parents", "Gray Ogre", "Gray Ogre"))
@@ -112,7 +126,8 @@ def mana_pairs(space: ObservationSpace) -> list[ManaPair]:
     pending, *_ = tap_env.step(choice)
     taps = space.encode(pending)
     fewer = {key: value.copy() for key, value in taps.items()}
-    fewer["relations"][fewer["relations"][:, 49] == 2, 49] = 1
+    remaining = fewer["relations"][:, RELATION_MANA_TAPS_INDEX]
+    remaining[remaining == 2] = 1
     pairs.append(ManaPair("remaining_taps", taps, fewer))
     return pairs
 
@@ -122,6 +137,15 @@ def tensor_batch(*observations: dict[str, np.ndarray]) -> dict[str, torch.Tensor
         key: torch.from_numpy(np.stack([obs[key] for obs in observations]))
         for key in observations[0]
     }
+
+
+def empty_fact_objects(model: ActorCritic, batch_size: int) -> torch.Tensor:
+    """Isolate the fact adapter using the model's configured object capacities."""
+    encoder = model.observation_space.encoder
+    count = 2 + 2 * encoder.cards_per_player + 2 * encoder.perms_per_player
+    return next(model.parameters()).new_zeros(
+        (batch_size, count, model.config.hidden_dim)
+    )
 
 
 def open_fact_adapter(model: ActorCritic) -> None:
@@ -161,18 +185,16 @@ def projection_costs(version: int) -> list[ProjectionCost]:
         native = env.encode_observation(obs, version)
         for key in encoded:
             np.testing.assert_array_equal(encoded[key], native[key])
-        samples: dict[str, list[float]] = {
-            "python_microseconds": [],
-            "native_microseconds": [],
-        }
+        python_times: list[float] = []
+        native_times: list[float] = []
         for _ in range(10):
             start = perf_counter()
             space.encode(obs)
-            samples["python_microseconds"].append((perf_counter() - start) * 1e6)
+            python_times.append((perf_counter() - start) * 1e6)
             start = perf_counter()
             env.encode_observation(obs, version)
-            samples["native_microseconds"].append((perf_counter() - start) * 1e6)
-        occupied = int(encoded["facts"][:, 11].sum())
+            native_times.append((perf_counter() - start) * 1e6)
+        occupied = int(encoded["facts"][:, FACT_VALID_INDEX].sum())
         results.append(
             {
                 "case": name,
@@ -180,8 +202,8 @@ def projection_costs(version: int) -> list[ProjectionCost]:
                 "fact_capacity": space.encoder.config.fact_rows,
                 "fact_bytes": encoded["facts"].nbytes,
                 "total_input_bytes": sum(row.nbytes for row in encoded.values()),
-                "python_microseconds": samples["python_microseconds"],
-                "native_microseconds": samples["native_microseconds"],
+                "python_microseconds": python_times,
+                "native_microseconds": native_times,
             }
         )
     return results
@@ -206,7 +228,7 @@ def compare_input_costs() -> list[InputCost]:
         if pair.name not in ("amount_assignment", "output_mode", "remaining_taps"):
             continue
         batch = tensor_batch(pair.left, pair.right)
-        objects = torch.zeros((2, 202, 16))
+        objects = empty_fact_objects(models[8], 2)
         with torch.no_grad():
             for model in models.values():
                 model(batch)
@@ -258,15 +280,7 @@ def main() -> None:
                 logits, values = model(batch)
                 times.append((perf_counter() - start) * 1e6)
             assert model.facts is not None
-            objects = torch.zeros(
-                (
-                    2,
-                    2
-                    + 2 * space.encoder.cards_per_player
-                    + 2 * space.encoder.perms_per_player,
-                    16,
-                )
-            )
+            objects = empty_fact_objects(model, 2)
             represented = model.facts(batch["facts"], objects)
         backward_times = []
         for _ in range(3):
@@ -296,7 +310,8 @@ def main() -> None:
                 .max()
                 .item(),
                 "fact_rows": [
-                    int(obs["facts"][:, 11].sum()) for obs in (pair.left, pair.right)
+                    int(obs["facts"][:, FACT_VALID_INDEX].sum())
+                    for obs in (pair.left, pair.right)
                 ],
                 "forward_microseconds_batch2": times,
                 "forward_backward_microseconds_batch2": backward_times,

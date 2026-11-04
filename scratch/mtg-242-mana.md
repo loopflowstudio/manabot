@@ -37,7 +37,11 @@ immutable inventory per enumeration. Only probe resources change; game and payer
 cannot disagree with the inventory. Initial search state and activation policy
 have single constructors/checks. Fixed output choices are borrowed, tap bonuses
 are evaluated once per set of choices, and inventories no longer implement Clone.
-This is local reuse, not a persistent cache or a performance acceptance claim.
+Inventory construction classifies fixed/variable output once; pending-cost probes
+borrow the ability and copy only its cost. Output transitions consume their owned
+resource state. This is local reuse, not a persistent cache or a performance claim.
+V8/v9 parity checks share one configured test path; policy probes derive object
+capacities from the model and use the projection's named field constants.
 
 ## Scope and checks
 
@@ -181,7 +185,7 @@ tests and seven projection/model tests passed after the release wheel rebuild
 and atomic extension installation; the validation-order repair selection had
 123 passes. These results are reused, not rerun for this notes-only reconciliation.
 
-Check (2026-11-04): focused debug mana/resource/card tests passed; rebuilt and atomically installed wheel; 13 focused Python projection/model/checkpoint checks passed, with four model checks rerun after the empty-class bypass; focused library/measurement Clippy, Rust formatting, Python Ruff and diff checks passed. Full gate acceptance remains deferred until completion/schema integration.
+Check (2026-11-04): debug `cargo test -j 2 --manifest-path managym/Cargo.toml` with `--lib flow::mana`, `--test rules_tests cr_106_mana` and `-p managym-cards --test cards -- supportive_parents scarecrow_guide white_lotus_tile prism` passed 24 tests; rebuilt/atomically installed the cp312 wheel; `uv run --extra dev pytest tests/model/test_mana_input.py tests/model/test_mana_separability.py tests/verify/test_mana_payment_projection.py -q` passed 13. Focused Clippy, formatting, Ruff and diff checks passed; gate owns broader suites/Engine Budget after completion/schema integration.
 
 ## Accepted risk measurement and mitigation — 2026-11-04
 
@@ -232,7 +236,8 @@ they do not establish RL learnability or playing-strength improvement.
 Baseline `e88f9b4062ed307aca6c60104d4e1c7bebb57b86` contains the opt-in
 instrumentation and final bounded fixtures, before payment optimization.
 `research/mana-risk-2026-11/engine-manifest.json` identifies both binaries and
-candidate source bytes. Receipts retain individual samples, counters, concrete
+candidate source bytes at `5e7b60047`; later clone/probe simplification makes no
+new timing claim. Receipts retain individual samples, counters, concrete
 remainders, Commands/fork traces, configurations and initial attempts. The first
 fixture accidentally consumed its hand spell while placing a same-named source;
 that attempt is retained separately, and final before/after fixtures both use a

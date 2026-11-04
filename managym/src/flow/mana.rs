@@ -634,7 +634,7 @@ impl PaymentModel<'_> {
                 ability_index,
                 sacrifice,
             } => {
-                let mut after_cost = resources.clone();
+                let mut after_cost = resources;
                 if let Some(index) = self
                     .sources
                     .iter()
@@ -1016,7 +1016,20 @@ impl Game {
                             && !source.activation_used(*index, ability)
                     })
                     .filter_map(|(index, ability)| {
-                        let mut outputs = self.mana_outputs(ability, player)?;
+                        // Classify once: fixed outputs need no retained effect;
+                        // variable outputs are evaluated again after costs.
+                        let (mut outputs, dynamic) = match ability.mana_choices() {
+                            Some(outputs) => (outputs, None),
+                            None => {
+                                let [effect] = ability.effects.as_slice() else {
+                                    return None;
+                                };
+                                (
+                                    self.current_mana_choices(effect, player)?,
+                                    Some(effect.clone()),
+                                )
+                            }
+                        };
                         if ability.tap_source {
                             let bonus = self.tap_mana_bonus(permanent, player);
                             for output in &mut outputs {
@@ -1029,10 +1042,7 @@ impl Game {
                             ability_index: index,
                             cost: ability.mana_cost.clone(),
                             outputs,
-                            dynamic: ability
-                                .mana_choices()
-                                .is_none()
-                                .then(|| ability.effects[0].clone()),
+                            dynamic,
                             life_cost: ability.life_cost,
                             limited: ability.once_each_turn || ability.exhaust,
                             tap_cost: ability.tap_cost.as_ref().map(|cost| {
@@ -1115,10 +1125,9 @@ impl Game {
                     resume,
                     ..
                 } => {
-                    let ability = game.characteristics(*permanent).activated_abilities
-                        [*ability_index]
-                        .clone();
-                    let mut outputs = game.mana_outputs(&ability, decision.player()).unwrap();
+                    let view = game.characteristics(*permanent);
+                    let ability = &view.activated_abilities[*ability_index];
+                    let mut outputs = game.mana_outputs(ability, decision.player()).unwrap();
                     if ability.tap_source {
                         let bonus = game.tap_mana_bonus(*permanent, decision.player());
                         for output in &mut outputs {
@@ -1127,12 +1136,12 @@ impl Game {
                     }
                     if *taps_remaining > 0 {
                         result.push(Obligation::Tap {
-                            candidates: game.tap_cost_candidates(decision.player(), &ability),
+                            candidates: game.tap_cost_candidates(decision.player(), ability),
                             remaining: *taps_remaining,
                         });
                     }
                     result.push(Obligation::Pay {
-                        cost: ability.mana_cost,
+                        cost: ability.mana_cost.clone(),
                         waterbend: false,
                     });
                     result.push(Obligation::Output {

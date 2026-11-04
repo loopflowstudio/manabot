@@ -9,7 +9,12 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.verify.mana_risk import mana_pairs, open_fact_adapter, tensor_batch
+from manabot.verify.mana_risk import (
+    empty_fact_objects,
+    mana_pairs,
+    open_fact_adapter,
+    tensor_batch,
+)
 import managym
 
 
@@ -34,7 +39,7 @@ def test_joined_mana_separates_meaning_and_preserves_class_permutations(
     pairs = mana_pairs(space)
     sample = tensor_batch(pairs[0].left, pairs[0].right)
     # At initialization the additive fact adapter is intentionally closed.
-    objects = torch.zeros((2, 202, 16))
+    objects = empty_fact_objects(model, 2)
     torch.testing.assert_close(model.facts(sample["facts"], objects), objects)
     _, values = model(sample)
     values.sum().backward()
@@ -93,7 +98,7 @@ def test_v8_class_label_sensitivity_is_retained_only_for_frozen_input() -> None:
     assert model.facts is not None and model.facts.mana_join is None
     pair = next(pair for pair in mana_pairs(space) if pair.name == "class_labels")
     batch = tensor_batch(pair.left, pair.right)
-    representations = model.facts(batch["facts"], torch.zeros((2, 202, 16)))
+    representations = model.facts(batch["facts"], empty_fact_objects(model, 2))
     assert (representations[0] - representations[1]).abs().max() > 0.1
     assert ObservationConfig().policy_input_version == 6
     assert ObservationConfig.from_checkpoint({}).policy_input_version == 1

@@ -13,10 +13,15 @@ from manabot.verify.text_observation import priority_root
 import managym
 
 
-def _parity(env: managym.Env, obs: managym.Observation) -> dict[str, np.ndarray]:
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=8))
+def _parity(
+    env: managym.Env,
+    obs: managym.Observation,
+    config: ObservationConfig | None = None,
+) -> dict[str, np.ndarray]:
+    config = config or ObservationConfig(policy_input_version=8)
+    encoder = ObservationEncoder(config)
     expected = encoder.encode(obs)
-    native = env.encode_observation(obs, 8)
+    native = env.encode_observation(obs, config.policy_input_version, config.fact_rows)
     buffered = {key: np.zeros_like(value) for key, value in expected.items()}
     env.encode_observation_into(obs, buffered)
     for key, value in expected.items():
@@ -86,12 +91,19 @@ def test_v8_chosen_output_preserves_restrictions_before_they_enter_the_pool() ->
     assert "only for Lesson spells" in capture_text_decision(env).text
 
 
-def test_v8_vector_buffers_select_the_same_layout() -> None:
+@pytest.mark.parametrize(
+    "config",
+    [
+        ObservationConfig(policy_input_version=8),
+        ObservationConfig(policy_input_version=9, max_facts=128),
+    ],
+)
+def test_mana_vector_buffers_match_python(config: ObservationConfig) -> None:
     configs = [
         managym.PlayerConfig(name, {"Mountain": 10, "Gray Ogre": 20})
         for name in ("a", "b")
     ]
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=8))
+    encoder = ObservationEncoder(config)
     buffers = encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
@@ -121,17 +133,11 @@ def test_v9_projection_is_byte_identical_and_capacity_remains_explicit() -> None
     count = int(expected["facts"][:, 11].sum())
     assert count > 1
     for capacity in (count, 512):
-        encoder = ObservationEncoder(
-            ObservationConfig(policy_input_version=9, max_facts=capacity)
+        encoded = _parity(
+            env, obs, ObservationConfig(policy_input_version=9, max_facts=capacity)
         )
-        encoded = encoder.encode(obs)
-        native = env.encode_observation(obs, 9, capacity)
-        buffered = {key: np.zeros_like(value) for key, value in encoded.items()}
-        env.encode_observation_into(obs, buffered)
-        for key, value in encoded.items():
-            np.testing.assert_array_equal(native[key], value, err_msg=key)
-            np.testing.assert_array_equal(buffered[key], value, err_msg=key)
-            if capacity == 512:
+        if capacity == 512:
+            for key, value in encoded.items():
                 np.testing.assert_array_equal(expected[key], value, err_msg=key)
     with pytest.raises(ValueError, match="facts"):
         env.encode_observation(obs, 9, count - 1)
@@ -139,26 +145,3 @@ def test_v9_projection_is_byte_identical_and_capacity_remains_explicit() -> None
         ObservationEncoder(
             ObservationConfig(policy_input_version=9, max_facts=count - 1)
         ).encode(obs)
-
-
-def test_v9_vector_buffers_match_python_without_a_new_wire_width() -> None:
-    configs = [
-        managym.PlayerConfig(name, {"Mountain": 10, "Gray Ogre": 20})
-        for name in ("a", "b")
-    ]
-    encoder = ObservationEncoder(
-        ObservationConfig(policy_input_version=9, max_facts=128)
-    )
-    buffers = encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
-    native = managym.VectorEnv(num_envs=1, seed=123, skip_trivial=True)
-    reference = managym.VectorEnv(num_envs=1, seed=123, skip_trivial=True)
-    native.set_buffers(buffers)
-    [(obs, _)] = reference.reset_all(configs)
-    native.reset_all_into_buffers(configs)
-    for key, value in encoder.encode(obs).items():
-        np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)

@@ -19,7 +19,7 @@ The version is explicit in saved observation/configuration identities. Fresh
 construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
 retain their meanings. Historical captures without shared provenance cannot be
 promoted to v7 by guessing a source/controller. Text representation
-`manabot-text-6` renders each native payload once with exact public source and
+`manabot-text-7` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
 
