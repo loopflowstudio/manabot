@@ -124,22 +124,27 @@ def test_supported_root_rollout_reaching_payment_replays(
     for _ in range(6):
         env.scenario_force_battlefield(0, "Water Tribe Rallier", ready=True)
     raw = env.scenario_refresh()
-    space = ObservationSpace()
     agent = (
         _agent()
         if compound
-        else ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+        else ActorCritic(
+            ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
+        )
     )
     path = tmp_path / "compound.pt"
     save_checkpoint(
         agent,
-        space,
+        agent.observation_space,
         path,
         player_configs=configs,
         extra={"value_semantic": "signed_outcome"},
     )
     config = LocalSearchConfig(depth=2, decision_seconds=20)
     teacher = LocalUpdateTeacher(path, file_sha256(path), config)
+    assert (
+        teacher.agent.observation_space.encoder.config
+        == agent.observation_space.encoder.config
+    )
     if learned:
         artifact = saved_sampler(teacher, tmp_path / "sampler.pt")
         teacher = LocalUpdateTeacher(
