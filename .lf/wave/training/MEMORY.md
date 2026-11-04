@@ -93,12 +93,24 @@ and a 256-stream learner lost without a final output inventory. The last loss
 establishes neither zero exposure nor OOM. No complete two-arm throughput
 admission or replacement scientific cohort exists, and plateau remains unmet.
 
-Retained accounting at 2026-11-04 19:42:35 UTC confirms all five relevant Vast
-instances absent, with $0.4487194142 billed-plus-estimated provider cost. Vast
-bills and the $6 ancillary reserve remain unsettled. Conservative reservations
-of $24.9725825939 are not expenditure or proof that the allowance is consumed;
-they need reconciliation before another allocation. Evidence is manifest-backed
-under `experiments/data/state-representation-gpu-5da5f4/`, including `restart/`.
+The 2026-11-04 19:55–19:57 UTC reconciliation found all five Vast instances
+absent and all five runs terminal. Full-day provider charge rows total $0.398;
+including the settled L4 bill gives $0.4705825939 in reported charges, superseding
+the earlier $0.4487194142 lifetime estimate. This is not final settlement.
+Etude 0.2.14 filters from intra-day creation while provider rows use UTC midnight;
+an offline reproduction also shows its coverage guard rejecting a returned row.
+An absent SDK bill therefore does not establish zero charges, and a daily charge
+date does not establish coverage through teardown. Both 5090 charges already
+exceed the corresponding lifetime estimates. Correct daily query semantics and
+authoritative final coverage are separate accounting requirements.
+
+The $6 ancillary reserve remains pending. Conservative reservations of
+$24.9725825939 are not expenditure or proof that the allowance is consumed;
+no reservation was released on the available evidence. The remaining $0.0274
+cannot cover another $0.20 admission. Evidence is manifest-backed under
+`experiments/data/state-representation-gpu-5da5f4/`: `restart/final-accounting.json`
+retains the earlier accounting and `reconciliation/` retains the later charges
+and SDK reproduction. These are dated reads, not a fresh provider balance.
 
 Wider complete-game batches change gradient estimates and optimizer exposure;
 they require a prospective identity and fresh paired seeds, even at a matched
