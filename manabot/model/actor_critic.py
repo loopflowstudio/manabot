@@ -25,6 +25,7 @@ from manabot.model.facts import FactEncoder
 from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
+from manabot.model.state_records import SharedFactEncoder, TypedContinuationEncoder
 from manabot.sim.action.structured import RaggedOfferBatch
 import managym
 
@@ -58,6 +59,8 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
+        if config.state_encoder != "rows" and enc.config.policy_input_version != 5:
+            raise ValueError("typed state experiment requires policy input v5")
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -226,11 +229,17 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
 
-        self.continuation = (
-            ContinuationEncoder(embed_dim, enc.relation_dim)
-            if enc.config.policy_input_version >= 2
-            else None
-        )
+        self.continuation: ContinuationEncoder | TypedContinuationEncoder | None
+        if config.state_encoder != "rows":
+            self.continuation = TypedContinuationEncoder(
+                embed_dim, config.state_encoder
+            )
+        else:
+            self.continuation = (
+                ContinuationEncoder(embed_dim, enc.relation_dim)
+                if enc.config.policy_input_version >= 2
+                else None
+            )
 
         # Policy input v5 links permanents to other objects: an Aura or
         # Equipment to its host, a blocker to the attacker it blocks. Each
@@ -251,7 +260,11 @@ class ActorCritic(nn.Module):
         # Policy input v5 fact rows (counter kinds, added subtypes, set
         # characteristics, spent abilities, continuous-effect records) join
         # their objects. Built last so earlier parameters keep their draws.
-        self.facts = FactEncoder(embed_dim) if enc.shows_everything else None
+        self.facts: FactEncoder | SharedFactEncoder | None
+        if config.state_encoder != "rows":
+            self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
+        else:
+            self.facts = FactEncoder(embed_dim) if enc.shows_everything else None
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -603,13 +616,18 @@ class ActorCritic(nn.Module):
                 if self.semantic_cards is not None and definitions is not None
                 else self._generic_definitions(ids)
             )
-            encoded_relations = self.continuation.encode_rows(
-                rows, objects, relation_definitions
-            )
-            continuation = encoded_relations.sum(1) / rows[
-                ..., RELATION_VALID_INDEX
-            ].sum(1, keepdim=True).clamp_min(1)
-            frame_context = self.continuation.frame_context(rows, encoded_relations)
+            if isinstance(self.continuation, TypedContinuationEncoder):
+                continuation, frame_context = self.continuation(
+                    rows, objects, relation_definitions
+                )
+            else:
+                encoded_relations = self.continuation.encode_rows(
+                    rows, objects, relation_definitions
+                )
+                continuation = encoded_relations.sum(1) / rows[
+                    ..., RELATION_VALID_INDEX
+                ].sum(1, keepdim=True).clamp_min(1)
+                frame_context = self.continuation.frame_context(rows, encoded_relations)
             shared_context = (
                 continuation
                 if shared_context is None

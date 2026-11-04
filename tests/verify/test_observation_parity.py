@@ -31,6 +31,7 @@ from manabot.env.observation import (
     ObservationEncoder,
 )
 from manabot.managym.enums import ActionEnum
+from manabot.verify.representation import source_effect_root
 from manabot.verify.text_observation import priority_root
 import managym
 
@@ -560,3 +561,19 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
         watched = relations[waiting & (relations[:, 0] == 3)][0]
         assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
         assert watched[24] > 0
+
+
+def test_v5_source_dependent_duration_matches_native_authority() -> None:
+    env = source_effect_root()
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    actor = env.current_agent_index()
+    assert actor is not None
+    for viewer in (actor, 1 - actor):
+        obs = env.observation_for_player(viewer)
+        native = env.encode_observation(obs, 5)
+        reference = encoder.encode(obs)
+        effects = native["facts"][native["facts"][:, FACT_KIND_INDEX] == FACT_EFFECT]
+        assert len(effects) == 1
+        assert effects[0, FACT_DURATION_INDEX] == 3
+        for key in native:
+            np.testing.assert_array_equal(native[key], reference[key], err_msg=key)

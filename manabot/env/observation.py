@@ -100,7 +100,7 @@ FACT_KIND_INDEX = 1
 FACT_ID_INDEX = 2  # high, low
 FACT_DETAIL_INDEX = 4  # high, low: a keyword, subtype or color an effect names
 FACT_VALUE_INDEX = 6  # amounts / 10: count, power or N; then toughness
-FACT_DURATION_INDEX = 8  # 1 until end of turn, 2 indefinite
+FACT_DURATION_INDEX = 8  # 1 until end of turn, 2 indefinite, 3 while controlling source
 FACT_ORDER_INDEX = 9  # timestamp rank (1-based)
 FACT_SOURCE_INDEX = 10  # source definition + 1
 FACT_VALID_INDEX = 11
@@ -515,7 +515,10 @@ class ObservationEncoder:
                     else []
                 ),
             ] or [0]
-            duration = 1.0 if effect.duration == "EndOfTurn" else 2.0
+            duration = {
+                "EndOfTurn": 1.0,
+                "WhileYouControlSource": 3.0,
+            }.get(effect.duration, 2.0)
             provenance = (duration, effect.timestamp, effect.source_registry_key)
             for detail in details:
                 push(obj, kind, ident, values, detail, provenance)

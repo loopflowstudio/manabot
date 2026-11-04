@@ -17,6 +17,8 @@ from pydantic import (
 
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
+StateEncoder = Literal["rows", "typed_pool", "typed_gru"]
+
 
 def _default_deck() -> dict[str, int]:
     return {
@@ -182,6 +184,11 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
+    # Experimental encoders of the same frozen v5 input. This selects model
+    # equations, never a larger observation capacity or temporal memory.
+    state_encoder: StateEncoder = Field(
+        default="rows", exclude_if=lambda value: value == "rows"
+    )
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
@@ -219,6 +226,8 @@ class ModelConfig(BaseConfig):
 
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":
+        if self.state_encoder != "rows" and self.compound_decisions:
+            raise ValueError("typed state experiment requires flat legal actions")
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
