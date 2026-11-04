@@ -1,5 +1,11 @@
 # TLA trophy pilot: capacity failures before learning
 
+V5 source is frozen as `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, prepared
+run `e8c76bc2c06f`. Its A6000 quote was refused; at 06:37:17 UTC L4, A4000
+and A4500 also reported no capacity. **V5 has not been submitted or rented**.
+No GPU learner update is yet established. All earlier rentals are ended.
+
+
 V4 run **baa8671d6480**, source `0b6c2bb854ba`, passed CUDA numerical admission
 on an RTX A6000 but failed before learning at **61 card objects plus sideboard
 against capacity 60**. Exact replay identifies stream 22 after 300 actions:

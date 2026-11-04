@@ -95,8 +95,11 @@ must fit the unchanged $1 ceiling. Exact receipts and scripts are under
 
 ## Remaining acceptance
 
-1. Freeze the exact verified v5 source, quote a currently available configured
-   GPU, retain allocation evidence, and execute through the ordinary CUDA gate.
+1. Prepared v5 run `e8c76bc2c06f` binds source
+   `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`. Its A6000 quote was refused;
+   fresh 06:37:17 UTC L4/A4000/A4500 reads all report unavailable. No v5
+   submission or rental occurred. Resume this prepared identity only after a
+   fresh inventory/budget/quote, then execute through the ordinary CUDA gate.
 2. Send the explicitly requested Task launch milestone only after observed GPU
    learner updates, with job/GPU/progress/rate/deadline evidence. Provisioning,
    CPU validation and initialization do not qualify.
@@ -106,5 +109,5 @@ must fit the unchanged $1 ceiling. Exact receipts and scripts are under
 
 Check: 30 pilot/discovery checks, 18 retained card/shared-transport checks and the
 128-card learner/export/reload proof pass; release rebuild, Ruff, rustfmt and diff
-checks pass. Full affected suites and debug validation remain with gate. Context
+checks pass. Full affected suites and debug validation remain with gate. All 110 published v4 files were hash/size verified. Context
 is within both limits. Older detailed context: `0b6c2bb854ba:scratch/tla-pilot-verify.md`.
