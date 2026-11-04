@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from managym.decision import SEMANTIC_DECISION_VERSION
 import numpy as np
 import pytest
 
@@ -53,7 +54,7 @@ def _assert_encoding_parity(
     return reference
 
 
-@pytest.mark.parametrize("version", range(1, 8))
+@pytest.mark.parametrize("version", range(1, 9))
 @pytest.mark.parametrize("history", [0, 1])
 def test_nondefault_axes_match_scalar_vector_and_python(
     version: int, history: int
@@ -135,8 +136,17 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
         assert isinstance(action, int)
         scalar.step(action)
         vector.step([action])
-    assert scalar.semantic_decision_frame_json() == game.frame
-    assert vector.semantic_decision_frames_json()[0] == game.frame
+    frame = scalar.semantic_decision_frame_json()
+    assert vector.semantic_decision_frames_json()[0] == frame
+    current = json.loads(frame)
+    retained = json.loads(game.frame)
+    # The retained schema-7 receipt stays frozen. Schema 8 changes the state
+    # fingerprint, but this prefix's complete decision and offer identities stay
+    # exact; it is a behavioral regression fixture, not current-world evidence.
+    assert retained.pop("schema_version") == 7
+    assert current.pop("schema_version") == SEMANTIC_DECISION_VERSION
+    assert current.pop("fingerprint") != retained.pop("fingerprint")
+    assert current == retained
     last = game.actions[-1]
     assert isinstance(last, int)
     obs, *_ = scalar.step(last)

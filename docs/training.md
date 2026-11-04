@@ -828,8 +828,11 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 shared-effect layouts and adds `name_candidates[A,2]`: one-based public name
 row and optional one-based definition reference (zero means absent). `A` is
 `max(max_actions, len(managym.naming_catalog()))`. Every installed candidate
-receives a legal row and a policy logit; excesses of other configured capacities
-still fail explicitly. No card/permanent row is fabricated for a name. V8
+receives a legal row and a policy logit, even when `max_actions` is smaller than
+the vocabulary. Other capacity excesses fail explicitly, except action overflow
+with the separately selected `action_overflow="first-legal"` policy. That policy
+retains the configured buffer's prefix; it does not reduce v8's vocabulary-derived
+action axis. No card/permanent row is fabricated for a name. V8
 suppresses the positional mode feature on these rows, so candidate identity
 comes from the categorical join, never from its magnitude.
 
@@ -845,8 +848,10 @@ returned logits. Buffer storage still grows linearly with the vocabulary.
 The checkpoint binding includes the ordered naming vocabulary and optional
 definition joins, in addition to tensor shapes and the content manifest.
 V1–v7 arrays, missing-checkpoint defaults and fresh v6 defaults are unchanged;
-using v8 is explicit. A historical fixed-capacity input still rejects an
-oversized naming decision. The new semantic observation/capture contracts are
+using v8 is explicit. A historical fixed-capacity input rejects an oversized
+naming decision under the default overflow policy. Explicit `first-legal` can
+truncate such legacy input and does not provide complete naming support.
+The new semantic observation/capture contracts are
 8/5, so earlier semantic world bindings are rejected for current execution.
 
 The default universe remains real non-token catalog names, including back faces.

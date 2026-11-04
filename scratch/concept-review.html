@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MTG-243 · Catalog naming concept review</title>
+  <style>
+    :root { color-scheme: light dark; --paper: #fcfaf5; --ink: #282b29; --muted: #62665f; --line: #c9cabe; --accent: #325e50; --sample: #f0f1e9; }
+    @media (prefers-color-scheme: dark) { :root { --paper: #1d211f; --ink: #eceee5; --muted: #b8bfb4; --line: #505b52; --accent: #a1cfb9; --sample: #282f2a; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 system-ui, sans-serif; }
+    main { max-width: 790px; margin: auto; padding: 44px 24px 64px; }
+    header, .note { color: var(--muted); font-size: .88rem; }
+    h1 { font-size: clamp(1.85rem, 5vw, 2.7rem); line-height: 1.15; margin: 18px 0; letter-spacing: -.025em; }
+    h2 { font-size: 1.25rem; margin: 38px 0 12px; }
+    p { margin: 12px 0; }
+    a { color: var(--accent); }
+    code { font: .87em ui-monospace, monospace; overflow-wrap: anywhere; }
+    .finding { border-left: 3px solid var(--accent); padding-left: 20px; margin: 26px 0; }
+    .sample { padding: 18px 22px; background: var(--sample); margin: 16px 0; }
+    .sample strong { display: block; }
+    .offer { border: 1px solid var(--line); padding: 10px 14px; margin-top: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+    th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 12px 10px 12px 0; overflow-wrap: anywhere; }
+    th { color: var(--muted); }
+    li { margin: 14px 0; }
+    @media (max-width: 540px) { main { padding: 26px 18px 44px; } table, tbody, tr, th, td { display: block; } thead { display: none; } tr { border-bottom: 1px solid var(--line); padding: 12px 0; } td { border: 0; padding: 4px 0; } td::before { content: attr(data-label) " · "; font-weight: 650; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>MTG-243 · concept-review · 2026-11-04<br>Headless review of the accepted directive and current checkout</header>
+  <h1>Keep naming one shared choice.</h1>
+  <p><strong>No new product decision is needed for this Task.</strong> The implemented design fits the authorized real-catalog scope. No design change is proposed; validation and interactive review remain pending.</p>
+  <div class="finding">
+    <p><strong>The consequential mismatch:</strong> “Name Gray Ogre” was represented by an owned effect branch for every possible name, while policy inputs had a fixed action capacity. A public name is a candidate identity, not a card object or a separate rules program.</p>
+  </div>
+
+  <h2>Before → implemented now</h2>
+  <p><strong>Before:</strong> choose an effect → generic modal branches containing every name → <code>ChooseMode</code> selects one branch. Oversized fixed policy inputs cannot represent the full support.</p>
+  <p><strong>Implemented:</strong> name a card → one shared <code>NameVocabulary</code> and pending <code>NameCard</code> → the same bound <code>ChooseMode</code> selects one candidate. Explicit v8 scores every installed name; only that selection constructs <code>ExileNamed</code>.</p>
+
+  <h2>One concrete interaction</h2>
+  <div class="sample" aria-label="Illustrative excerpt of existing Academy interaction">
+    <span class="note">Existing interaction · illustrative excerpt, not a live game</span>
+    <strong>Name a card</strong>
+    <p>Choose a card name from the installed naming vocabulary.</p>
+    <p>Find an action: <code>Gray Ogre</code></p>
+    <div class="offer">Name Gray Ogre</div>
+    <p class="note">Clearing the filter shows every choice. Typing does not submit a name.</p>
+    <p>After choosing the name: <strong>Search cards</strong></p>
+    <p>Inspect the searched zones. Choose a matching card to exile, or stop and shuffle.</p>
+    <div class="offer">Stop searching and shuffle</div>
+  </div>
+  <table>
+    <thead><tr><th>Action</th><th>Concept</th><th>Authority / API</th></tr></thead>
+    <tbody>
+      <tr><td data-label="Action">Find and choose a name</td><td data-label="Concept">Public candidate; one deliberate choice</td><td data-label="API"><code>ContentPack::name_candidates</code> → <code>Decision::NameCard</code> → bound Command / <code>execute_semantic_command</code></td></tr>
+      <tr><td data-label="Action">Select matching cards; stop early if desired</td><td data-label="Concept">Committed name, remaining selections, temporary inspection</td><td data-label="API">Suspended frame → one <code>ExileNamed</code> → existing <code>SearchNamed</code></td></tr>
+      <tr><td data-label="Action">Reconnect or retry</td><td data-label="Concept">The actual pending decision and committed effects</td><td data-label="API"><code>/ws/play</code> resume → recovery frame; Command identity / revision checks</td></tr>
+    </tbody>
+  </table>
+  <p>A disconnect before naming restores naming offers. A disconnect during search restores the remaining selections and authorized inspection. Duplicate submission does not repeat an exile; a new stale submission is rejected. Stopping search ends inspection and keeps exiled cards exiled.</p>
+
+  <h2>What must stay distinct</h2>
+  <p>A public name does not reveal that the opponent owns a card. Optional learning-definition joins do not make a name playable. The current universe remains real non-token catalog names, including back faces; broader name legality and deck admission are separate.</p>
+  <p>V8 binds ordered names and definition joins in checkpoints and derives capacity from the vocabulary. Fresh v6 and historical inputs keep their documented behavior. Explicit legacy <code>first-legal</code> truncation is not complete naming support. A mismatched checkpoint must fail admission rather than reinterpret its learned names.</p>
+
+  <h2>What would overturn this conclusion?</h2>
+  <p>A name beyond row 511 without a legal policy score; a lost Command binding after filtering or reconnect; leaked hidden membership; repeated or reversed committed exiles; or silently remapped checkpoint names. Directed checks address parts of these cases. A single end-to-end large-catalog proof, full checkpoint mismatch coverage and final performance evidence are not established by this review.</p>
+  <p class="note">Code and tests were inspected, not rerun. No rendering environment is available. Existing gate obligations remain in the working design. This step does not select Graph navigation or authorize publication, merge or training.</p>
+
+  <h2>Sources</h2>
+  <p class="note">Built from <code>scratch/mtg-243-naming.md</code>, the supplied Task directive, <code>docs/training.md</code>, <code>managym/src/cards/names.rs</code>, <code>managym/src/flow/{decision,resolution,naming_tests}.rs</code>, <code>manabot/model/{name_candidates,actor_critic,world}.py</code>, <code>academy/ui/src/lib/components/{ActionPanel,DecisionSurface}.svelte</code>, <code>tests/academy/test_named_search_recovery.py</code> and <code>tests/model/test_catalog_naming.py</code>.</p>
+
+  <h2>Review questions and disposition</h2>
+  <ol>
+    <li><strong>Does naming need a second game-level confirmation?</strong> No. The accepted shared atomic choice already supplies commitment; browser filtering remains navigation.</li>
+    <li><strong>Must this Task broaden production names or change the fresh default to v8?</strong> No. Both are future product choices outside the accepted explicit-version, real-catalog outcome; neither is approved here.</li>
+    <li><strong>Is a design change needed before further validation?</strong> None found. Keep the existing design and its stated proof obligations. No open product choice blocks this scope.</li>
+  </ol>
+</main>
+</body>
+</html>
