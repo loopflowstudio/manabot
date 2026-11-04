@@ -6,7 +6,7 @@ from pathlib import Path
 from etude.launch.job_file import read_job_file
 import pytest
 
-from experiments import state_representation_v7
+from experiments import state_representation_gpu as gpu, state_representation_v7
 from experiments.state_representation_v7 import (
     compare,
     evaluation_protocol,
@@ -16,7 +16,7 @@ from experiments.state_representation_v7 import (
 from manabot.env.observation import ObservationConfig
 from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
-from manabot.training.regime import TrainSelfPlay
+from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 
 
 def test_paired_interval_uses_independent_seeds() -> None:
@@ -74,3 +74,45 @@ def test_declared_runs_are_visible_to_the_experiment_report() -> None:
     assert len(runs) == 8
     assert {job.experiment for job in jobs} == {path.stem}
     assert sorted(run.seed for run in runs) == sorted([73201, 73202, 73203, 73204] * 2)
+
+
+def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
+    assert gpu.plateau([]).reached is False
+    assert set(gpu.evaluation_protocol().deal_seeds).isdisjoint(
+        gpu.evaluation_protocol(heldout=True).deal_seeds
+    )
+    for arm in gpu.ARMS:
+        stage = gpu.recipe(arm).stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        assert stage.execution.device == "cuda"
+        assert stage.updates == 2048 and stage.games_per_stream == 1
+        assert isinstance(stage.learning, DampedPolicyLearning)
+        assert stage.learning.iteration_schedule is None
+        assert stage.learning.rates(1)[0] == stage.learning.rates(2048)[0] == 1e-4
+    runs = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
+    assert len(runs) == 8
+    assert sorted(run.seed for run in runs) == sorted(list(gpu.SEEDS) * 2)
+    for run in runs:
+        job = TrainingJob.model_validate_json(run.job.config or "")
+        assert job.experiment == gpu.EXPERIMENT
+        assert job.milestones == gpu.POINTS[1:-1]
+        assert (
+            job.regime.wall_seconds + job.finalization_seconds
+            < run.job.max_hours * 3600
+        )
+
+
+def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None:
+    flat = gpu.PlateauInterval(
+        "typed_pool", 1792, 2048, paired_interval((0.0, 0.0, 0.0, 0.0))
+    )
+    improving = gpu.PlateauInterval(
+        "typed_pool", 1792, 2048, paired_interval((0.1, 0.1, 0.1, 0.1))
+    )
+    uncertain = gpu.PlateauInterval(
+        "typed_pool", 1792, 2048, paired_interval((-0.1, 0.1, -0.1, 0.1))
+    )
+    assert flat.bounded
+    assert not improving.bounded
+    assert uncertain.estimate.lower < 0 < uncertain.estimate.upper
+    assert not uncertain.bounded

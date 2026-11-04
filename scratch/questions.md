@@ -1,5 +1,20 @@
 # Decisions and open questions — 5da5f4
 
+- Provider direction, Jack Heart, 2026-11-04: "we can push an etude sdk release
+  and then use vast if necessary". A necessary SDK release and Vast use are
+  authorized for the GPU plateau continuation within the original $25 total.
+  Reuse existing Etude provider/release work; preserve runtime identity and
+  rental cleanup. This does not approve merging the representation-study PR.
+
+- Latest direction, Jack Heart, 2026-11-04: the 128-update CPU comparison is too
+  short for decision making; actual GPU training must at least reach the part
+  of the learning curve starting to plateau. Continue under the existing $25
+  total cap with independent paired seeds, initialization/periodic evaluation
+  and a prospective sustained-plateau rule. See the current direction at the
+  top of `representation-learning-plan.md`. This supersedes the earlier
+  restriction on further training below; historical evidence stays frozen.
+  No model/default promotion or automatic merge is approved.
+
 - Jack Heart's 2026-11-04 ship approval applied to the bounded shared-effect
   repair. PR419 merged as `fb5ad2c1372f9c967b550f0b8ae0f84883f75563` and passed
   final CI/Engine Budget and Linux/macOS package checks. Post-merge verification

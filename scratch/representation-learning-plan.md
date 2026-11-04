@@ -1,4 +1,96 @@
-# V7 learning comparison — completed, awaiting results review
+# V7 learning comparison — GPU plateau continuation
+
+## Current direction — Jack Heart, 2026-11-04
+
+Jack Heart reviewed the completed short CPU cohort in this conversation and
+said: "training on cpus doesnt seem long enough" and "we needt o at least get
+to the point of the gpu curve where were starting to hit a plateau".
+This supersedes the earlier stop at results review and restriction on further
+training. Continue this Task with actual GPU learning toward a sustained
+learning-curve plateau, under the existing $25 cumulative ceiling, not a new
+$25 allocation. The previous CPU study remains completed, frozen and
+inconclusive; do not rebind or overwrite its evidence. No merge, model/default
+promotion, temporal-memory implementation or MTG-213 spending is authorized.
+
+Provider follow-up from Jack Heart in the same conversation: "we can push an
+etude sdk release and then use vast if necessary". A necessary Etude SDK
+release and subsequent Vast GPU use are authorized for this continuation.
+Inspect the existing Etude work/release state and reuse supported provider
+implementation; do not duplicate work already underway. Coordinate any SDK
+release through its repository's release procedure and verify the released
+client before rental. This conditional release approval does not approve
+merging the representation-study PR or spending beyond $25 total. Record SDK
+and provider identities prospectively and retain the same accounting,
+deadline, cleanup and scientific-evidence requirements on Vast.
+
+Execution direction for the continuation:
+
+- Retain pooled versus GRU and at least four independent paired training seeds.
+  Use the existing authored blue-red Lessons / green-white Allies population
+  to address horizon without also changing the deck distribution. This is an
+  operator choice, not a user claim that these decks are sufficient for general
+  architecture selection. The user was told evaluation previously held out
+  deals, not decks, against a frozen heuristic.
+- Define and freeze a prospective GPU protocol before scoring: initialization
+  evaluation, periodic checkpoints, comparable learner-decision/game exposure,
+  a substantially longer supported horizon and a sustained-plateau criterion
+  across seeds and multiple checkpoints. Quantify uncertainty; a noisy flat
+  point or failure to reject a slope is not positive evidence of saturation.
+  Keep final held-out scoring separate from observations used for stopping.
+- Inspect the inherited learning-rate/optimizer schedule: extending execution
+  with an exhausted 128-update schedule must not manufacture a plateau. Bind
+  any schedule changes in the new identity, with consistent arms and fresh
+  initialization unless exact continuation is scientifically justified.
+- Quote available compatible GPUs broadly within the cumulative budget;
+  budget setup, idle time, evaluation, artifact transfer/storage, failures and
+  teardown. Reconcile the prior $0.07258259388618171 bill and $6 pending
+  ancillary reserve. Use configured provider access (Doppler etude/prd),
+  artifact access (manabot/prd), task-local allocations, and supported Etude
+  ownership/deadline/cleanup. Existing provider capabilities may be used;
+  account creation or a new provider integration is not a prerequisite.
+- GPU execution is now explicit direction: do not substitute another short CPU
+  cohort. Capacity admission and throughput calibration are sanity checks,
+  not study completion. If all compatible capacity is unavailable, report the
+  concrete capacity block; if the budget ends before a credible plateau, retain
+  all curves and report the plateau objective unmet. Never exceed the cap or
+  select successful seeds/checkpoints after seeing scores.
+- Deliver training/evaluation curves, per-seed outcomes, plateau evidence or
+  its absence, exact costs and teardown receipts. Stop at results demo/review.
+
+## GPU implementation and current acquisition — 2026-11-04
+
+The prospective declaration is `experiments/state_representation_gpu.py`; its
+protocol is `experiments/protocols/state-representation-5da5f4-gpu.md`.
+It keeps the joint treatments and authored decks, uses four fresh paired seeds,
+2,048 CUDA updates, 256-update curves and separate final held-out deals. Absolute
+LR/tau scheduling retains positive learning rates. Fixed final-window plateau
+requires all six paired-seed gain intervals inside +/-0.05; missing endpoints
+cannot qualify. No scientific GPU run or model choice has occurred yet.
+
+Delete — do not maintain: no predecessor is removed. The already executed CPU
+study and identities remain frozen; this is a new prospective experiment.
+
+At 17:10 UTC RunPod reported several LOW offerings, but actual rental requests
+for RTX6000 Ada, L40S and A100-SXM4 all refused before acquisition. Read-only
+Vast queries through merged SDK source92801e4 found one compatible3090 at
+$0.2474074/hour and seven5090 offers starting$0.8008741/hour, including disk and
+free transfers. These are dated quotes, not reservations. Receipts live under
+`.runs/representation/gpu-plateau/`. No new rental spend is known.
+
+Etude PR79 is merged. The authorized `lf release run patch` in Etude deferred
+because an existing owner already holds the release execution; PR80 proposes
+v0.2.14 and passed CI. Preserve that owner and verify its released client before
+Vast acquisition. The worker's scientific SDK remains locked independently.
+Existing $0.07258259388618171 bill and $6 ancillary reserve remain held. The new
+protocol reserves at most$17 scientific rentals and$0.50 admission, inside$25.
+
+Check: six focused study tests passed, including frozen CPU digests, GPU
+schedule/declaration and rejection of inconclusive plateau evidence. Gate owns
+broader affected suites. Remaining: released-client verification, CUDA admission,
+source freeze, all eight GPU runs/evaluation curves, cost settlement and teardown.
+
+The historical sections below describe the completed CPU cohort, not the new
+continuation's authorization or acceptance criteria.
 
 2026-11-04 · Task 5da5f4 · results stop at demo/review; no model promotion.
 
