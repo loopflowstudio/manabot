@@ -177,7 +177,10 @@ Distributed-RL research and the unexecuted bounded workload plan live in
 [the ETU-108 report](../docs/training.md#distributed-training); its benchmark supervisor was
 removed unexecuted and remains in git history.
 
-The prospective [GPU representation horizon study](protocols/state-representation-5da5f4-gpu.md)
+The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu.md)
 uses `state_representation_gpu.py`: four paired CUDA seeds, initialization and
 periodic evaluation, a sustained-plateau criterion, and separate held-out scoring.
-It preserves the completed CPU study; a declaration is not an executed result.
+Its first cohort was cancelled before scoring when measured concurrent GPU
+throughput invalidated the allocation budget. It establishes no plateau or
+architecture advantage; the completed CPU study remains frozen. The protocol
+records the failed attempt and the execution-design review boundary.

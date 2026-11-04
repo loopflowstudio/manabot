@@ -57,7 +57,7 @@ Execution direction for the continuation:
 - Deliver training/evaluation curves, per-seed outcomes, plateau evidence or
   its absence, exact costs and teardown receipts. Stop at results demo/review.
 
-## GPU implementation and live allocation — 2026-11-04
+## GPU implementation and stopped allocation — 2026-11-04
 
 The prospective declaration is `experiments/state_representation_gpu.py`; protocol:
 `experiments/protocols/state-representation-5da5f4-gpu.md`. Scientific source:
@@ -98,22 +98,50 @@ remote verification and completed it. Interrupted local fetches were reaped.
 A prospective amendment permits one 3090, 4090 or 5090 selected before execution,
 identically for every seed and both arms, within the unchanged cap.
 
-At 18:17 UTC, run `9c7c8e6841a4` acquired RTX 5090 / 32 vCPUs / 64GB on Vast,
+Run `9c7c8e6841a4` acquired RTX 5090 / 32 vCPUs / 64GB on Vast at 18:17 UTC,
 instance 59143644, session `d123328bc691`, machine
-`representation-5da5f4-cohort5090-60gb-d123328bc691`. Quote $0.77914074/hour,
-about $15.78 for the full 20.25 hours. Setup is in progress; no scientific
-completion or plateau is claimed. Prepared source, launch and live logs are in
-`.runs/representation/gpu-plateau/cohort-selected-*` and `cohort-live.log`.
+`representation-5da5f4-cohort5090-60gb-d123328bc691`. CUDA numerics passed and
+all eight scientific learners started. First-update collection/learning took
+169–239 seconds per learner; a measured second update took 151.24 seconds.
+The 66,000-second reserve requires 32.23 seconds/update. This invalidates the
+concurrent-allocation assumption, rather than establishing learning saturation.
+
+Operator decision, 2026-11-04: stop dependent execution and return this allocation
+to design review, following implement's architectural-counterexample boundary.
+The whole cohort was cancelled before evaluation; no score selected a seed,
+checkpoint or stopping point. Etude's terminal cancellation is 18:26:21 UTC.
+Last child manifests remain running snapshots; never rewrite them as successful
+or complete. The failed attempt remains in the evidence and no-retry denominator.
+
+Etude confirmed deletion at 18:29:35 UTC; Vast confirmed both this instance and
+the earlier admission absent at 18:30:30 UTC. Full-rental retained estimates:
+admission $0.1146496 and cohort $0.15609933786798355; neither bill has settled.
+Together with the prior known $0.07258259388618171, estimated provider total is
+$0.34333153175416525. Keep the original reservations and $6 ancillary reserve;
+provider absence is not a final invoice. Output inventory contains 116 retained
+files. Compact receipts live under
+`experiments/data/state-representation-gpu-5da5f4/`; the launcher's output inventory
+retains the complete artifact names and hashes. Local operational logs remain
+under `.runs/representation/gpu-plateau/`. Interrupted redundant SCP bytes there
+are partial, not admitted evidence.
+
+Draft execution discovery, not a selected replacement: independent CUDA contexts
+serialize GPU work; NVIDIA MPS can enable cooperative concurrent kernels
+([NVIDIA architecture](https://docs.nvidia.com/deploy/mps/architecture.html)).
+The rented host had the MPS control binary, but MPS was neither enabled nor
+validated. A replacement needs complete-cohort throughput admission before any
+new scientific launch, plus a prospective decision about the failed cohort and
+no-retry boundary. No new allocation, production promotion or merge is selected.
 
 Delete — do not maintain: the unexecuted per-replicate TrainingJob allocation
 and worker path were removed together. Frozen CPU science and executed admission
 retain historical sources; `execute_regime` and monitor remain the authorities.
 
-Check: seven focused study tests passed (CPU identities, GPU declaration,
-positive LR, bounded plateau evidence and sibling cleanup), plus focused discovery;
-Ruff and whitespace checks passed. Gate owns broader suites. Remaining: supervise
-all eight learners and evaluations, retain curves and plateau outcome, publish
-artifacts, reconcile costs and confirm teardown. No model promotion or merge.
+Check: focused study/discovery tests passed, plus the untracked-data policy test;
+all 23 published receipt entries match local size/SHA256, and every prior manifest
+entry is unchanged. Ruff and whitespace checks passed. Gate owns broader suites.
+Remaining: reconcile unsettled bills and review the invalidated allocation.
+The plateau objective remains unmet; no new scientific launch is selected.
 
 The historical sections below describe the completed CPU cohort, not the new
 continuation's authorization or acceptance criteria.

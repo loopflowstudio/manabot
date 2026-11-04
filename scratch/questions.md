@@ -1,5 +1,14 @@
 # Decisions and open questions — 5da5f4
 
+- Execution counterexample, 2026-11-04: the eight-learner RTX 5090 cohort
+  actually ran, but first updates took 169–239 seconds and a second took
+  151.24 seconds versus the required 32.23. All seeds were stopped before
+  scoring; preserve run `9c7c8e6841a4` as an unsuccessful attempt, not admission
+  or a completed comparison. Its no-retry rule remains in force. The plateau
+  outcome is unmet and the allocation returns to design review. Provider
+  deletion and absence are confirmed; invoices remain unsettled. See the plan
+  for evidence, reservations and the unselected MPS execution proposal.
+
 - Prospective allocation assumption, 2026-11-04: select one available RTX 3090,
   4090 or 5090 before scientific execution, identically for all eight learners.
   The 3090 launch refused before acquisition; fresh 4090/5090 offers fit the

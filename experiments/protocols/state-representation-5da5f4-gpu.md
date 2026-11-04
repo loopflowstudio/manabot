@@ -5,6 +5,40 @@ study. Jack Heart requested actual GPU learning toward a sustained plateau,
 within the original cumulative $25, and authorized a necessary Etude SDK release
 and Vast use. No winner promotion, merge or MTG-213 allocation is authorized.
 
+## Execution outcome — allocation invalidated
+
+Scientific source `27a12642200a35fc0cb436a9db69ce16c505016a`, Etude run
+`9c7c8e6841a4`, used one RTX 5090 with 32 vCPUs and 64 GB RAM. CUDA numerical
+admission passed and all eight learners started. Their first complete updates
+took 169–239 seconds each; the first observed second-update increment was
+151.24 seconds. The 66,000-second training reserve requires 32.23 seconds/update
+for 2,048 updates. These are actual collection/learning timings, not injected
+load or a model-quality comparison.
+
+The allocation assumption was invalidated before scoring. The whole cohort was
+cancelled at 2026-11-04 18:26:21 UTC, preserving every seed and partial receipt.
+Last manifests record 320 completed games and 57,258 learner decisions in total.
+No curve or held-out evaluation completed. This is an unsuccessful scientific
+attempt, not an excluded admission, completed comparison or plateau. Its child
+manifests retain their last running snapshots because the launcher terminated
+the process group; the launcher's terminal cancellation is authoritative.
+
+The eight-process allocation needs execution-design review before another
+cohort. A single-learner admission did not establish concurrent throughput.
+Any replacement must first demonstrate the declared complete-cohort pace and
+budget, preserve this failed denominator, and bind its execution and stopping
+rules prospectively. The existing no-retry rule is not waived by this result.
+No replacement implementation or new scientific launch is selected here.
+
+Compact receipts are published through `experiments/data.manifest.json` under
+`experiments/data/state-representation-gpu-5da5f4/`. The attempt inventory names
+and hashes all 116 launcher-retained outputs. Deletion was confirmed at
+18:29:35 UTC, and Vast confirmed both the admission and cohort instances absent
+at 18:30:30 UTC. Their full-rental estimates are $0.1146496 and $0.15609934;
+neither invoice has settled. Including the prior known $0.07258259 gives an
+estimated provider total of $0.34333153. Existing reservations and the $6 pending
+ancillary reserve remain; estimated cost is not settled billing.
+
 ## Frozen comparison
 
 `experiments/state_representation_gpu.py` is the executable declaration. Pin its
