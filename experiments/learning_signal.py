@@ -238,10 +238,12 @@ def play_deal(match: Match) -> Tables:
     # .1 s, so a game spends its 120 s limit there. Journal in memory and keep the
     # same files: a deal that dies is replayed whole, so nothing needs the journal.
     with TemporaryDirectory(dir=_journal_root()) as journal:
+        out_dir = Path(journal) / "deal"
         try:
-            result = _play(conditions, candidate, opponent, path, key, Path(journal))
+            result = _play(conditions, candidate, opponent, path, key, out_dir)
         finally:
-            shutil.copytree(journal, retained, dirs_exist_ok=True)
+            if out_dir.is_dir():
+                shutil.copytree(out_dir, retained, dirs_exist_ok=True)
     if result.error:
         raise ValueError(result.error)
     return evaluation_tables(result.rows)
