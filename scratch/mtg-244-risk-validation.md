@@ -163,6 +163,40 @@ by hash before atomic replacement; Python model/encoder sources did not change
 in this cut. All native workloads include matched choices/counts/digests, and
 ordinary step receipts retain the first 128 step samples.
 
+## Measured residual and final SBA cut
+
+Source-plan checkpoint `a7b0ddaff` CI `41955382680` passes long integration,
+including the previously failing tiny comparison. Engine Budget still fails:
+reference/candidate steps 7.339/8.112 s (10.54% slower), search 155.396/169.924 s,
+worst 4.567/5.007 s. Full digests/counts match. Artifact:
+`.cache/mtg-244-plan-ci-budget`. This improvement is not accepted as completion.
+
+A bounded one-second profile of the final ordinary workload found eager
+`snapshot_trigger_sources` calls on unchanged SBA checks. The final cut defers
+that snapshot until immediately before the first death/detachment/token-removal
+mutation, retaining one pre-batch source set for all simultaneous events.
+No rule read, choice, input capacity or debug assertion is suppressed.
+
+Compared with `beaacaa19`, final dependency-step allocations/bytes are
+563,724 / 113,331,651 (was 853,919 / 200,939,692); dependency-search totals are
+49,115,896 / 9,475,236,036 (was 77,885,256 / 18,067,547,041). Pool payments now
+use 436 allocations / 88,909 B, land payments 509 / 92,605 B, retaining all 16
+complete traces. Every ordinary/dependency/full-score digest and count matches.
+Local final search 58.861 s / 1.709 s worst and steps 3.050 s remain exploratory;
+contrary dependency timing (2.164→2.754 s despite lower allocation) confirms
+host variability. Per-target instructions and conservative full-board rebuilds
+remain costs; deeper invalidation adds dynamic membership/dependency complexity
+for a smaller remaining layer share. No promised speedup or budget exemption.
+
+Check: 11 focused debug CR704 cases pass, including simultaneous departures and
+fixpoints; exact tiny comparison passes again in 53.24 s with the optimized debug
+wheel. Release wheel rebuilt/installed atomically and all seven policy cases
+remeasured/matched. Exact final patch over `a7b0ddaff`, binary hashes, samples,
+profiles, policy receipts and CI artifact are gzip tar blob
+`6baa683f7ec901ea243538ec53e91108429f66ed`; local copy
+`.cache/mtg-244-lazy-sba-evidence.tar.gz`. This supplements the source-plan bundle,
+not its timing acceptance. Source-plan peak RSS above predates the lazy-SBA cut.
+
 ## Producer and remaining acceptance
 
 Reproduction: `docs/development.md#bounded-layerinput-attribution`.
@@ -172,9 +206,11 @@ nonfinite/incomplete samples, different configs/storage, incomplete seed/payment
 identities and changed semantic digests. Eighteen injected-receipt checks cover
 that contract. Inventory-only output cannot satisfy timing comparison.
 
-Required next evidence: isolated measurement of the source-plan cut, including
-original/dependency search, complete payments and all seven policy cases, then
-mitigation if still outside budget. `41952171271` establishes the predecessor's
+Required next evidence: publish the final lazy-SBA cut and inspect its isolated
+original/dependency search, complete payments and seven policy cases. Source-plan
+CI `41955382680` supplies the failed budget above; Layer Risk `41955382652`
+remains running for that earlier checkpoint. Mitigate any remaining regression;
+measurement checkpoint publication does not establish acceptance. `41952171271` establishes the predecessor's
 comparison only. The full-suite/CI boundary remains with Gate; successful
 measurement execution or a checkpoint publication does not establish acceptance.
 No baseline adoption, merge, training experiment or learning-quality claim.

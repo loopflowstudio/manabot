@@ -136,7 +136,10 @@ impl Game {
         // CR 704.3 — all applicable SBAs are one simultaneous event. Commits
         // have a deterministic ObjectRef order for replay, while every death
         // event sees the same pre-batch trigger-source snapshot.
-        let trigger_sources = self.snapshot_trigger_sources();
+        // An unchanged check emits no events and needs no LKI allocation.
+        // Retain one snapshot immediately before this batch's first mutation.
+        let mut trigger_sources =
+            (performed || !candidates.is_empty()).then(|| self.snapshot_trigger_sources());
         let mut died = Vec::new();
         for (object_ref, event_ref, controller, destroy) in candidates {
             let committed = if destroy {
@@ -172,6 +175,9 @@ impl Game {
                 }) && self.attached_creature(id).is_none()
             })
             .collect();
+        if !detached.is_empty() {
+            trigger_sources.get_or_insert_with(|| self.snapshot_trigger_sources());
+        }
         for permanent_id in detached {
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
@@ -194,6 +200,9 @@ impl Game {
                 Some(_) => tokens_to_remove.push((card_id, card.owner)),
             }
         }
+        if !tokens_to_remove.is_empty() {
+            trigger_sources.get_or_insert_with(|| self.snapshot_trigger_sources());
+        }
         for (card_id, owner) in tokens_to_remove {
             let from = self.state.zones.zone_of(card_id);
             self.state.zones.remove_card(card_id);
@@ -202,7 +211,9 @@ impl Game {
         }
 
         if performed {
-            self.process_game_events_with_sources(&trigger_sources);
+            self.process_game_events_with_sources(
+                &trigger_sources.expect("a changed SBA batch retained its source snapshot"),
+            );
         }
 
         // CR 714.4 — A Saga whose lore counters reach its final chapter is
