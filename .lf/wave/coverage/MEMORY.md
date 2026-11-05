@@ -387,22 +387,48 @@ preserves accepted decisions, dated proof limits and source history.
   ordinary-workload comparison. Separate workload results, retain complete
   action/score digests and counts, and attribute rebuild/dependency costs before
   choosing optimizations. Tap-state predicates require characteristic
-  invalidation. The subsequent implementation (`b2fb06cba`) retains the raw board
+  invalidation when discovered dependencies read them. The implementation
+  at `b2fb06cba` retains the raw board
   across mana writes unless a discovered layer condition reads mana, including
-  nested conditions and newly granted statics. Finalized activation outputs and
-  trigger indexes still refresh; debug recomputation remains the correctness
-  oracle. Eight warmed-board pool-write probes fell from 471 to 10 allocations
+  nested conditions and newly granted statics. At that revision, finalized
+  activation outputs and trigger indexes still refresh; debug recomputation
+  remains the correctness oracle. Eight warmed-board pool-write probes fell from 471 to 10 allocations
   each. Subsequent complete-payment attribution (`fb264f7c7`, retained bundle
   `88d6abd34d8b56a9606c3ec58696063955d08226`) preserves every legal action,
   selected action, resource, captured program and digest across eight pool-funded
   and eight land-funded Cadets activations. Allocations fall 1,176→510 and
   2,882→1,668 respectively; land payment retains both necessary tap rebuilds.
-  This closes payment attribution, not whole-game throughput acceptance.
+  This closes payment attribution for that mitigation, not subsequent cache
+  changes or whole-game throughput acceptance.
   Neither a digest refresh nor a component speedup waives the 10% Engine Budget.
   The standard CI budget runs only the original TLA workloads; added dependency
   and policy harnesses have a separate sequential `layer-risk.yml` producer.
-  Its presence establishes an execution path, not successful hosted execution
-  or comparative performance; no isolated artifact is yet retained.
+  Its first publication failed historical-source acquisition before timing.
+  A full branch checkout need not contain a squash-retained reference: verify
+  and fetch exact pinned commits, record provenance before acquisition and
+  retain partial artifacts even on failure, including hidden output paths.
+- MTG-244's first same-runner CI (`41933042842`, 2026-11-04) refutes engine
+  readiness despite component gains: search total 168.192→453.756 s, worst
+  reply 4.909→15.349 s, steps/s 12,817→5,654.8, with matching checked counts
+  and digests. No cost was accepted and the reference remains unchanged.
+  Later contended local measurements cannot supersede that regression.
+  Jack Heart subsequently directed more ambitious hot-path rethinking, aiming
+  to outperform the pre-layer engine; a green 10% budget is only a guard.
+  Candidate immutable plans, dependency partitioning and finer invalidation
+  remain proposals until supported and implemented. Exact rules, complete
+  choices, debug oracles and frozen inputs/evidence remain constraints.
+- The incremental repair at `1c3cf1819` separates tap revisions, retains fixed
+  activation views across unrelated pool/tap writes and invalidates trigger
+  kinds from the raw board rather than activation finalization. Nested reads,
+  granted statics and stun-counter removal still invalidate their dependencies.
+  Shared immutable scans avoid per-permanent whole-board debug recomputation
+  while preserving the raw-board oracle and independent finalization checks.
+  This repaired the retained tiny-comparison deadline locally; it establishes
+  no isolated release-speed result. Repaired Academy fixtures preserve Commands
+  and viewer projections after catalog-id resolution. Full suites and corrected
+  dependency/model measurements remain unaccepted at `beaacaa19`; measurement
+  checkpoint publication is not review readiness. Exact evidence is retained at
+  `1c3cf1819:scratch/mtg-244-ci-repair.md`.
 - Exact numeric transport does not guarantee meaningful model separation.
   V8 integers 4096/8192 shared an embedding bucket and saturated the raw numeric
   projection to identical local-program outputs. Signed log magnitudes repair

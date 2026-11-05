@@ -59,11 +59,11 @@ legal-action, simulation-count and step digests. Use the same-runner comparison
 and disclose memory/allocation tradeoffs. No capacity cuts, action suppression,
 fewer rollouts, disabled invariants or baseline resets to manufacture speed.
 
-The current repair run is live: steer it and let it finish its current step.
-Realign/loop-or-next should return to implement for this accepted redesign if
-needed, rather than publishing merely incremental changes as completion.
-Publishing a measurement checkpoint is allowed to obtain clean CI evidence,
-but is not review readiness. Keep the isolated producer operational, investigate
-results and iterate through the same Task until the accepted work is addressed.
-Use bounded normal workloads, no artificial load or contended local timing as
-acceptance. Preserve the existing risk-validation and CI-repair obligations.
+The implemented redesign uses shared immutable source plans/objects,
+conservative read/write pruning and lazy SBA snapshots (`614a38fc8`, `68ef4a63d`).
+Measurements and remaining acceptance live in the risk note. Incremental repairs and measurement checkpoint publication do
+not establish completion. The same Task retains the isolated producer,
+investigation and mitigation obligations until the accepted work is addressed.
+Evidence uses bounded normal workloads, with no artificial load or contended
+local timing as acceptance. Existing risk-validation and CI-repair obligations
+remain in force.

@@ -30,11 +30,16 @@ Implementation assumptions:
 - Local timing receipts under contention are exploratory. Complete-payment
   allocation/operation attribution is retained. Clean ordinary/dependency and
   full-policy comparisons require the dedicated `layer-risk.yml` producer;
-  standard Engine Budget runs only the original TLA step/search pair.
+  standard Engine Budget runs only the original TLA step/search pair. At the
+  2026-11-04 implementation pass, `beaacaa19` CI `41952171449` again fails
+  Engine Budget and the tiny-comparison wall deadline. Layer Risk `41952171271`
+  completed with matched receipts. Source-plan checkpoint `a7b0ddaff` passes
+  hosted long integration but still fails the step budget by 10.54%. Final
+  lazy-SBA head `68ef4a63d` is pushed; CI `41956687926` / Layer Risk `41956688122`
+  are pending/running. Publication does not establish acceptance.
 - Historical source archives are measurement inputs, not Task worktrees or
   compatibility paths. The pinned before revision receives instrumentation and
-  identical fixtures only. Publication belongs to the later Graph step and
-  enables the workflow's first PR-triggered run; adding the workflow does not
+  identical fixtures only. Measurement checkpoint publication does not
   establish acceptance or approve a regression.
 
 Historical context: parent T7 decisions remain at

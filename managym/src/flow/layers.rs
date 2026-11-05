@@ -111,9 +111,7 @@ struct SourcePlan {
     scope: StaticScope,
     condition: Option<Condition>,
     parts: Vec<(Layer, Operation)>,
-    reads: u8,
-    reads_mana: bool,
-    reads_tapped: bool,
+    reads: ReadSet,
 }
 
 impl std::ops::Deref for Node {
@@ -134,116 +132,124 @@ pub(super) struct SourceSeed {
     nodes: Vec<Node>,
 }
 
-impl SourcePlan {
-    /// Dependencies inspect the same scope/condition/value predicates used to
-    /// resolve instructions. Recurse through alternatives once at this owner.
-    fn reads_predicate(&self, reads: fn(&CardPredicate) -> bool) -> bool {
-        fn predicate_reads(p: &CardPredicate, reads: fn(&CardPredicate) -> bool) -> bool {
-            reads(p) || p.any_of.iter().any(|p| predicate_reads(p, reads))
+/// Conservative reads used for both dependency pruning and cache invalidation.
+/// Walk each predicate/condition once, including nested alternatives.
+#[derive(Clone, Copy, Default)]
+struct ReadSet {
+    fields: u8,
+    mana: bool,
+    tapped: bool,
+}
+
+impl ReadSet {
+    fn predicate(&mut self, p: &CardPredicate) {
+        if p.namesake {
+            self.fields |= NAME;
         }
-        fn condition_reads(c: &Condition, reads: fn(&CardPredicate) -> bool) -> bool {
-            match c {
-                Condition::ControlsAtLeast { predicate, .. }
-                | Condition::SourceMatches(predicate) => predicate_reads(predicate, reads),
-                Condition::AnyOf(conditions) => {
-                    conditions.iter().any(|c| condition_reads(c, reads))
-                }
-                _ => false,
+        if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
+            self.fields |= CARD_TYPES;
+        }
+        if p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
+            self.fields |= SUBTYPES;
+        }
+        if p.supertype.is_some() {
+            self.fields |= SUPERTYPES;
+        }
+        if p.flying {
+            self.fields |= KEYWORDS;
+        }
+        if p.min_power.is_some() || p.max_power.is_some() {
+            self.fields |= POWER;
+        }
+        self.tapped |= p.tapped;
+        for alternative in &p.any_of {
+            self.predicate(alternative);
+        }
+    }
+
+    fn condition(&mut self, condition: &Condition) {
+        match condition {
+            Condition::ControlsAtLeast { predicate, .. } | Condition::SourceMatches(predicate) => {
+                self.predicate(predicate);
             }
+            Condition::AnyOf(conditions) => {
+                for condition in conditions {
+                    self.condition(condition);
+                }
+            }
+            Condition::SourceTapped => self.tapped = true,
+            _ => self.mana |= condition.reads_mana_pools(),
         }
-        let scope_reads = match &self.scope {
+    }
+}
+
+impl SourcePlan {
+    fn summarize(mut self) -> Self {
+        let mut reads = ReadSet::default();
+        match &self.scope {
             StaticScope::All(p)
             | StaticScope::Other(p)
             | StaticScope::OtherYouControl(p)
             | StaticScope::YouControl(p)
-            | StaticScope::SpellsYouControl(p) => predicate_reads(p, reads),
-            StaticScope::This | StaticScope::Attached => false,
-        };
-        scope_reads
-            || self
-                .condition
-                .as_ref()
-                .is_some_and(|c| condition_reads(c, reads))
-            || self.parts.iter().any(|(_, op)| match op {
-                Operation::Buff(buff) => {
-                    buff.per_color_among
-                        .as_ref()
-                        .is_some_and(|p| predicate_reads(p, reads))
-                        || buff
-                            .per_graveyard_matching
-                            .as_ref()
-                            .is_some_and(|p| predicate_reads(p, reads))
-                }
-                Operation::Power(cda) => match cda.as_ref() {
-                    PowerCda::GraveyardMatching(p) => predicate_reads(p, reads),
-                    _ => false,
-                },
-                _ => false,
-            })
-    }
-
-    fn summarize(mut self) -> Self {
-        self.reads_mana = self
-            .condition
-            .as_ref()
-            .is_some_and(Condition::reads_mana_pools);
-        self.reads_tapped = self.reads_tapped();
-        self.reads = 0;
-        if self.reads_predicate(|p| p.namesake) {
-            self.reads |= NAME;
+            | StaticScope::SpellsYouControl(p) => reads.predicate(p),
+            StaticScope::This | StaticScope::Attached => {}
         }
-        if self.reads_predicate(|p| {
-            p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty()
-        }) {
-            self.reads |= CARD_TYPES;
-        }
-        if self.reads_predicate(|p| {
-            p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty()
-        }) {
-            self.reads |= SUBTYPES;
-        }
-        if self.reads_predicate(|p| p.supertype.is_some()) {
-            self.reads |= SUPERTYPES;
-        }
-        if self.reads_predicate(|p| p.flying) {
-            self.reads |= KEYWORDS;
-        }
-        if self.reads_predicate(CardPredicate::reads_power) {
-            self.reads |= POWER;
+        if let Some(condition) = &self.condition {
+            reads.condition(condition);
         }
         for (_, operation) in &self.parts {
             match operation {
                 Operation::Buff(buff) => {
                     if buff.per_creature_type_max.is_some() {
-                        self.reads |= SUBTYPES;
+                        reads.fields |= SUBTYPES;
                     }
-                    if buff.per_color_among.is_some() {
-                        self.reads |= COLORS;
+                    if let Some(predicate) = &buff.per_color_among {
+                        reads.fields |= COLORS;
+                        reads.predicate(predicate);
+                    }
+                    if let Some(predicate) = &buff.per_graveyard_matching {
+                        reads.predicate(predicate);
                     }
                 }
-                Operation::Power(cda)
-                    if matches!(
-                        cda.as_ref(),
-                        PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl
-                    ) =>
-                {
-                    self.reads |= CARD_TYPES;
-                }
+                Operation::Power(cda) => match cda.as_ref() {
+                    PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl => {
+                        reads.fields |= CARD_TYPES;
+                    }
+                    PowerCda::GraveyardMatching(predicate) => reads.predicate(predicate),
+                },
                 _ => {}
             }
         }
+        self.reads = reads;
         self
     }
+}
 
-    fn reads_tapped(&self) -> bool {
-        fn condition_reads(c: &Condition) -> bool {
-            match c {
-                Condition::SourceTapped => true,
-                Condition::AnyOf(conditions) => conditions.iter().any(condition_reads),
-                _ => false,
-            }
+impl Node {
+    /// Counters and resolved records already bind one affected object; their
+    /// existence and membership no longer depend on a generating static ability.
+    fn resolved(
+        source: PermanentId,
+        key: Vec<usize>,
+        timestamp: ObjectId,
+        part: (Layer, Operation),
+    ) -> Self {
+        Self {
+            source,
+            key,
+            timestamp,
+            targets: Some(vec![source]),
+            plan: Arc::new(
+                SourcePlan {
+                    reads: ReadSet::default(),
+                    cda: false,
+                    scope: StaticScope::This,
+                    condition: None,
+                    parts: vec![part],
+                }
+                .summarize(),
+            ),
         }
-        self.reads_predicate(|p| p.tapped) || self.condition.as_ref().is_some_and(condition_reads)
     }
 }
 
@@ -424,75 +430,43 @@ impl<'a> Context<'a> {
             context.objects.insert(id, seed.object.clone());
             known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
             for node in &seed.nodes {
-                context.reads_mana |= node.reads_mana;
-                context.reads_tapped |= node.reads_tapped;
+                context.reads_mana |= node.reads.mana;
+                context.reads_tapped |= node.reads.tapped;
                 nodes.push(node.clone());
             }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
-                    nodes.push(Node {
-                        source: id,
-                        key: vec![slot, usize::MAX - 1, kind as usize],
-                        timestamp: p
-                            .keyword_counter_timestamps
+                    nodes.push(Node::resolved(
+                        id,
+                        vec![slot, usize::MAX - 1, kind as usize],
+                        p.keyword_counter_timestamps
                             .get(&kind)
                             .copied()
                             .unwrap_or(p.timestamp),
-                        targets: Some(vec![id]),
-                        plan: Arc::new(
-                            SourcePlan {
-                                reads: 0,
-                                reads_mana: false,
-                                reads_tapped: false,
-                                cda: false,
-                                scope: StaticScope::This,
-                                condition: None,
-                                parts: vec![(
-                                    Layer::Ability,
-                                    Operation::Modify(Modification::AddKeywords(Keywords::of(&[
-                                        keyword,
-                                    ]))),
-                                )],
-                            }
-                            .summarize(),
+                        (
+                            Layer::Ability,
+                            Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
                         ),
-                    });
+                    ));
                 }
             }
             for (i, record) in game.effects_on(id).enumerate() {
-                let Some(l) = layer(&record.modification) else {
+                let Some(layer) = layer(&record.modification) else {
                     continue;
                 };
-                nodes.push(Node {
-                    source: id,
-                    key: vec![slot, usize::MAX, i],
-                    timestamp: record.timestamp,
-                    targets: Some(vec![id]),
-                    plan: Arc::new(
-                        SourcePlan {
-                            reads: 0,
-                            reads_mana: false,
-                            reads_tapped: false,
-                            cda: false,
-                            scope: StaticScope::This,
-                            condition: None,
-                            parts: vec![(
-                                l,
-                                if record.modification == Modification::HasAbilitiesOfSource {
-                                    Operation::Inherit
-                                } else {
-                                    Operation::Modify(
-                                        record.modification.map_amount(|n| LayerValue::Fixed(*n)),
-                                    )
-                                },
-                            )],
-                        }
-                        .summarize(),
-                    ),
-                });
+                let operation = if record.modification == Modification::HasAbilitiesOfSource {
+                    Operation::Inherit
+                } else {
+                    Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
+                };
+                nodes.push(Node::resolved(
+                    id,
+                    vec![slot, usize::MAX, i],
+                    record.timestamp,
+                    (layer, operation),
+                ));
             }
         }
-        context.discover(&mut nodes, &mut known);
         if !retain_sources {
             seeds.clear();
         }
@@ -592,8 +566,8 @@ impl<'a> Context<'a> {
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(id, entry) {
-                        self.reads_mana |= node.reads_mana;
-                        self.reads_tapped |= node.reads_tapped;
+                        self.reads_mana |= node.reads.mana;
+                        self.reads_tapped |= node.reads.tapped;
                         nodes.push(node);
                     }
                 }
@@ -612,6 +586,9 @@ impl<'a> Context<'a> {
         instructions: &[Vec<Instruction>],
         layer: Layer,
     ) -> Vec<usize> {
+        if pending.len() == 1 {
+            return vec![0];
+        }
         let timestamp_order = |&a: &usize| {
             let node = &nodes[pending[a]];
             (!node.cda, node.timestamp, &node.key)
@@ -625,7 +602,7 @@ impl<'a> Context<'a> {
             .collect();
         let plausible = |a: usize, b: usize| {
             let node = &nodes[pending[a]];
-            let reads = node.reads | if node.targets.is_none() { ABILITIES } else { 0 };
+            let reads = node.reads.fields | if node.targets.is_none() { ABILITIES } else { 0 };
             a != b && node.cda == nodes[pending[b]].cda && reads & writes[b] != 0
         };
         let independent = !(0..pending.len()).any(|a| (0..pending.len()).any(|b| plausible(a, b)))
@@ -638,7 +615,7 @@ impl<'a> Context<'a> {
             order.sort_by_key(timestamp_order);
             order
         };
-        if pending.len() == 1 || (independent && !cfg!(debug_assertions)) {
+        if independent && !cfg!(debug_assertions) {
             return ordered();
         }
         let mut dependencies = vec![vec![false; pending.len()]; pending.len()];
@@ -886,24 +863,22 @@ impl<'a> Context<'a> {
         )
     }
     fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
-        let mut node = SourcePlan {
-            reads: 0,
-            reads_mana: false,
-            reads_tapped: false,
+        let mut plan = SourcePlan {
+            reads: ReadSet::default(),
             cda: false,
             scope: StaticScope::This,
             condition: None,
             parts: Vec::new(),
         };
-        let mut add = |l, m| node.parts.push((l, Operation::Modify(m)));
+        let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
             StaticAbility::Continuous(effect) => {
-                node.scope = effect.scope.clone();
-                node.condition = effect.condition.clone();
-                node.cda = effect.characteristic_defining;
+                plan.scope = effect.scope.clone();
+                plan.condition = effect.condition.clone();
+                plan.cda = effect.characteristic_defining;
                 for m in &effect.modifications {
                     if let Some(l) = layer(m) {
-                        let layer = if node.cda && l == Layer::BasePower {
+                        let layer = if plan.cda && l == Layer::BasePower {
                             Layer::CharacteristicPower
                         } else {
                             l
@@ -913,38 +888,38 @@ impl<'a> Context<'a> {
                 }
             }
             StaticAbility::TypeGrant(g) => {
-                node.scope = g.scope.clone();
-                node.condition = g.condition.clone();
+                plan.scope = g.scope.clone();
+                plan.condition = g.condition.clone();
                 add(Layer::Type, Modification::AddTypes(g.types.clone()));
                 add(Layer::Type, Modification::AddSubtypes(g.subtypes.clone()));
             }
             StaticAbility::KeywordGrant(g) => {
-                node.scope = g.scope.clone();
-                node.condition = g.condition.clone();
+                plan.scope = g.scope.clone();
+                plan.condition = g.condition.clone();
                 add(Layer::Ability, Modification::AddKeywords(g.keywords));
             }
             StaticAbility::PtBuff(b) => {
-                node.scope = b.scope.clone();
-                node.condition = b.condition.clone();
-                node.parts
+                plan.scope = b.scope.clone();
+                plan.condition = b.condition.clone();
+                plan.parts
                     .push((Layer::ModifyPower, Operation::Buff(Box::new(b.clone()))));
             }
             StaticAbility::CharacteristicPower(cda) => {
-                node.cda = true;
-                node.parts.push((
+                plan.cda = true;
+                plan.parts.push((
                     Layer::CharacteristicPower,
                     Operation::Power(Box::new(cda.clone())),
                 ));
             }
             StaticAbility::SetsLandType(set) => {
-                node.scope = StaticScope::All(set.predicate.clone());
-                node.condition = Some(set.condition.clone());
-                node.parts
+                plan.scope = StaticScope::All(set.predicate.clone());
+                plan.condition = Some(set.condition.clone());
+                plan.parts
                     .push((Layer::Type, Operation::LandType(set.subtype.clone())));
             }
             StaticAbility::AttachedSetsCharacteristics(set) => {
-                node.scope = StaticScope::Attached;
-                node.parts = vec![
+                plan.scope = StaticScope::Attached;
+                plan.parts = vec![
                     (Layer::Name, Operation::Name(set.named.clone())),
                     (
                         Layer::Type,
@@ -966,7 +941,7 @@ impl<'a> Context<'a> {
                 ];
             }
             StaticAbility::AttachedHas(ability) => {
-                node.scope = StaticScope::Attached;
+                plan.scope = StaticScope::Attached;
                 let card = &self.game.state.cards
                     [self.game.state.permanents[source].as_ref().unwrap().card];
                 let index = card
@@ -984,14 +959,14 @@ impl<'a> Context<'a> {
                 );
             }
             StaticAbility::TriggeredGrant(grant) => {
-                node.scope = grant.scope.clone();
-                node.parts.push((
+                plan.scope = grant.scope.clone();
+                plan.parts.push((
                     Layer::Ability,
                     Operation::CatalogTrigger(grant.ability.clone()),
                 ));
             }
             StaticAbility::GrantsAnyColorManaAbility(predicate) => {
-                node.scope = StaticScope::YouControl(predicate.clone());
+                plan.scope = StaticScope::YouControl(predicate.clone());
                 add(
                     Layer::Ability,
                     Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
@@ -1008,7 +983,7 @@ impl<'a> Context<'a> {
             key: entry.key.clone(),
             timestamp: entry.timestamp,
             targets: None,
-            plan: Arc::new(node.summarize()),
+            plan: Arc::new(plan.summarize()),
         })
     }
     fn apply(&mut self, node: &Node, instructions: &[Instruction]) {

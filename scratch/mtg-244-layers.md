@@ -6,11 +6,14 @@ one PR for review; no merge, world freeze or training launch. Jack Heart approve
 a successor policy input the same day: "new input version is totally fine".
 Explicit v8 is implemented; fresh v6 and frozen saved versions remain unchanged.
 
-Status: PR #427 published; first CI found a large engine regression and stale
-current-world Academy fixtures. Repair is in progress; isolated risk receipts
-and combined-head Gate checks remain outstanding. No human decision is
-missing. [Risk validation](mtg-244-risk-validation.md) owns measured results,
-configurations, exact sources and limitations; remaining acceptance is listed below.
+Status, 2026-11-04: published head `68ef4a63d` includes reusable source
+plans, conservative dependency pruning and lazy pre-mutation SBA snapshots.
+Its long integration passes in CI `41956687926`; the budget, Rust/main
+integration and Layer Risk `41956688122` are still running; the
+preceding `a7b0ddaff` checkpoint failed the unchanged step budget by 10.54%.
+[Risk validation](mtg-244-risk-validation.md) owns measurements/limits and
+[CI repair](mtg-244-ci-repair.md) retains earlier failures. No product decision
+is missing and publication does not establish acceptance.
 
 Accepted outcome: one `Game::characteristics` authority composes types, colors,
 abilities and power/toughness for rules and policy consumers, preserving a cheap
@@ -20,23 +23,12 @@ replacement proposals and contextual source/entry callers; mana consumes the
 layered abilities, and naming owns large choices. Those adjacent refactors are
 not prerequisites for unrelated simple card definitions.
 
-The earlier draft could not add program kinds to frozen v5–v7 embeddings
-without changing saved parameter shapes and meanings. Explicit v8 resolves that
-counterexample; tensor parity alone never established model admission. The full
-prior plan is git blob `f8ff5bc693386baa3e247936684437da3ca0443d`.
-
 ## Approved successor input; implementation design
 
-Implemented versioned policy representation:
-structured granted abilities, effective colors and keyword-counter timestamps
-must reach model inference as well as native/Python/text projections. Preserve
-v1–v7's widths, omitted fields, parameter shapes and timestamp normalization.
-Use an explicit successor input (v8), with fresh construction
-still v6. This is the operator's implementation choice following approval of
-a new version, preserving the standing default; no default migration was
-requested. Layer-capable callers select the successor explicitly. Account for
-ordinary default callers encountering unrepresentable state through the shared
-input rejection contract below, and exercise the successor end to end.
+Structured grants, effective colors and keyword-counter timestamps reach
+native/Python/text projections and model inference. Explicit v8 is the chosen
+successor; fresh v6 and all frozen v1–v7 widths, omissions, parameter shapes
+and timestamp normalization remain unchanged. No default migration was requested.
 
 V8 retains v7 object/relation/header/member widths. Its effect details are
 4096 × 3: kinds 11–19 carry the shared vocabulary's token kinds 1–9, with exact
@@ -94,11 +86,9 @@ mana, including nested conditions and granted statics. Tap-state reads have the
 same explicit revision treatment. Fixed activations retain finalized views;
 conditional outputs and cost reductions refresh. Trigger event kinds follow raw
 layer dependencies, while matching reads current LKI. Debug recomputation checks
-all cached views and indexes. The earlier isolated pool-write mitigation reduced
-471 allocations to 10; the CI repair also removes independent tap rebuilds.
-These component changes do not establish whole-game throughput acceptance.
+all cached views and indexes.
 
-## Implementation correction — 2026-11-04
+## Captured programs
 
 The copy/grant/loss witness found an activation offered and paid from the
 layered list but silently discarded by printed-definition lookup at resolution.
@@ -112,18 +102,12 @@ layer-consumer interface, not a redesign of the adjacent execution Task.
 
 ## Implemented witnesses and evidence limits
 
-Directed witnesses cover all eleven supplied pairs: Beorn/Kellan; Moon/Urborg;
-Sun/Urborg; Moon/Saga after chapters I/II; Dress Down/Magus, Tarmogoyf and
-Opalescence; Humility/Opalescence; Ygra/Imprisoned; Lattice/March;
-Painter/Dress Down. Include relevant timestamp orders, dependency loops,
-removal/re-entry, copy/grant/loss, real decision cloning, event-driven cache
-invalidation, combat, targeting, payment and native/Python/text/policy agreement.
-Beorn and Kellan have verified definitions, real payment/combat/trigger tests
-and catalog/Scryfall snapshot integration. Historical fixtures do not register a
-card pool. The Saga chapter-II fixture uses the existing Ballistic Boulder
-Construct token as a marker for its retained creation program; Saga token sizing
-is not a layer assertion. Generic grant/copy and sacrifice/suspension fixtures
-also execute the captured activation programs.
+Directed witnesses include timestamp orders, dependency loops, removal/re-entry,
+copy/grant/loss, real-decision forks and event-driven invalidation. Rules consumers
+and native/Python/text/policy inputs use the same derived view. Beorn/Kellan are
+real definitions with payment/combat/trigger and Scryfall checks; historical
+fixtures do not register a pool. The Saga chapter-II fixture uses Ballistic
+Boulder as an existing Construct marker; it makes no Saga-token sizing claim.
 
 The supplied brief's expected outcomes are independently asserted. The preserved primary rules and card responses anchor their tests:
 
@@ -144,162 +128,117 @@ The supplied brief's expected outcomes are independently asserted. The preserved
 The optional Trickster/Dryad witness distinguishes removed additional-land
 permission from retained basic land types. It does not replace any required pair.
 
-Risk evidence required by Jack Heart remains open before review readiness; see
-[mtg-244-risk-validation.md](mtg-244-risk-validation.md). The native wheel was rebuilt from the root
-and installed atomically; the focused Python module covers v8 rows/typed forward/backward,
-checkpoint reload, native/Python parity, scalar/vector schema selection, retained
-v5–v7 architectures and the live Kellan trigger after its source dies. The new
-`semantic-kernel-w17-v2` corpus records 14 cases / 3,473 commands / 15 Phase rows.
-The old corpus remains unchanged because w17 is open, not frozen. The common release P/T path skips
-pairwise dependency clones when no instruction reads power; debug compares it
-against the dependency computation.
+The focused Python module covers v8 forward/backward, checkpoint reload,
+scalar/vector and native/Python parity, retained v5–v7 architectures and Kellan's
+trigger after source death. `semantic-kernel-w17-v2` records 14 cases, 3,473
+commands and 15 Phase rows; v1 remains unchanged. These checks establish neither
+full-head acceptance nor the still-required isolated performance outcome.
 
-## Delete — do not maintain
+## Hot-path design — 2026-11-04
 
-Completed cuts and current CI repair:
+Selected implementation: retain immutable copiable source objects and static
+plans per permanent incarnation across revision rebuilds and search forks.
+Copy-on-write intermediate objects let dependency probes copy only modified
+objects. Conservative read/write summaries rule out impossible dependency pairs;
+plausible pairs retain exact instruction/existence comparison and reevaluation.
+Debug evaluates from fresh source plans and checks skipped pairs independently.
 
-- Replace repeated per-effect discovery scans and independent-effect suffix
-  comparisons with initial/grant-triggered discovery and one ordered independent
-  batch. Preserve dependency reevaluation and the complete debug pairwise oracle.
-- Replace unconditional tap-driven board eviction with a tap revision and
-  discovered reads; preserve dynamic activation refresh, layer-dependent trigger
-  kinds, stun counters, nested predicates and cloned-game isolation.
-- Replace BTreeMap-backed derived lookups with permanent-slot vectors, matching
-  the existing native identity convention. Keep immutable Arc views and holes.
-- Box the large expression/trigger variants of private layer operations so every
-  resolved per-target instruction need not reserve space for an 840-byte buff.
-  Rules payloads and serialized inputs are unchanged.
-- Replace per-permanent whole-board recomputation in trigger, mana, SBA and
-  observation scans with immutable batch reads. Keep scan order, the raw-board
-  oracle on every cache read and independent finalized-view debug comparisons;
-  singular reads retain their existing cache path.
-- Replace repeated board reads in CDA counts, shared-creature-type counts,
-  fixed mana totals and static play permissions/costs with the same batch API.
-  Entry replacements borrow layered abilities and retain their original indexes;
-  remove the cloned ability lists and reuse the play-permission helper for
-  flashback. These readers need no activation finalization. No exclusive tests
-  or fixtures are removed, and no deletion target remains from this cut.
+Alternatives: merely widening independent batches leaves repeated definition
+construction and whole-board cloning. Per-object invalidation could avoid more
+work but needs complete dynamic scope/value dependency tracking; defer that
+higher-risk change until this cut's measured residual cost justifies it. Existing
+attribution (368,743 boards, 178,899 context clones, no ordinary dependency edges)
+and payment allocation traffic support sharing plans and avoiding impossible
+probes first. Local timing under contention is not acceptance.
 
-Earlier completed cuts:
+Delete — do not maintain (implemented cuts; no remaining deletion target):
+- `ScopeView`, `LayerBasis`, `StaticIndex` and their staged characteristic
+  readers: the explicit layer context is the surviving authority.
+- `stacked_activated_ability`: resolve the effects captured at activation;
+  catalog lookup is only observation provenance.
+- Per-revision source construction, deep whole-board dependency clones and
+  blanket release probes: immutable seeds, copy-on-write objects and conservative
+  read/write summaries replace them. Preserve the fresh debug oracle.
+- Eager trigger snapshots in unchanged `perform_state_based_batch` calls:
+  retain one pre-batch snapshot immediately before its first relevant mutation.
+- Repeated `SourcePlan::reads_predicate`/`reads_tapped` walks: one `ReadSet`
+  traversal gathers characteristic, mana and tap reads, including alternatives.
+- Duplicate counter/record node assembly: `Node::resolved` owns their fixed
+  membership. Seeds already discover their statics, so the initial redundant
+  `Context::discover` is gone; grants still rediscover. Singleton pending sets
+  need no write-summary allocation or dependency scan.
+- Temporary `static_sources` vectors: stream the existing immutable board
+  iterator in the same order, retaining one debug validation per scan.
 
-- `LayerBasis`, `ScopeView`, recursive stage readers and final-loss-filtered
-  discovery are replaced by `layers::Context`. Unused `CardDefinition::has_static`
-  and `CardPredicate::reads_types` are removed; no exclusive fixtures remain.
-- Combined TLA/added-board benchmark totals are replaced by explicit `--layers`
-  runs. Shared search selection/digest helpers retain the original tie order and
-  full-score wire identity; both benchmarks use them.
-- Unconditional mana eviction is replaced by discovered condition dependencies,
-  using the existing `Condition::reads_mana_pools`. Finalization reuses the raw
-  immutable view when it has no activations; only activation pricing needs a copy.
-- Whole-buffer v8 program recurrence and raw saturating integer projection are
-  replaced by packed independent programs and signed log magnitudes. Shared
-  membership routing has one implementation; v7 retains its original reduction.
-- Glob-discovered policy cases and count-only receipt completeness are removed;
-  the producer/comparator share exact case identities. No exclusive fixtures remain.
-- The unqualified v7 complete-effect claim and stale 67/55 object widths in
-  usage docs are replaced by explicit v8 selection/recovery and selected-space
-  layouts; retained inputs and their compatibility boundaries remain documented.
-- `SHARED_EFFECT_SHAPES` and its copy/override path are removed; the selected
-  version's `shared_effect_shapes` owns the layout directly. Local program
-  unpacking uses Torch's `unpack_sequence`; independent program ordering,
-  parameter shapes and gradients retain their existing regression witnesses.
-- Duplicate Kellan walkers in tests and the policy benchmark are replaced by
-  `verify.representation::{kellan_upgrade_root,kellan_trigger_root}`. Commands,
-  bounded prefixes, retained inputs, program ownership and gradients are preserved.
+No public rules type, saved input, choice or behavior test is removed. Seeds
+validate definition identity/incarnation/timestamp; copy/transform detaches.
+Whole-board invalidation stays conservative. The reductions remove repeated
+work, not cache invalidation, dynamic dependency checks or debug comparisons.
 
-## Concept review — 2026-11-04
+## Caller contract
 
-Accepted amendment: explicit input selection and failure recovery belong in the
-caller-facing usage contract. Implemented in `docs/training.md#policy-inputs`
-and `manabot/README.md`; reconciliation at `64e6bca33` found no open product
-choice. This follows Jack Heart's successor-input approval, not a default
-migration or checkpoint conversion.
-
-New layer-capable work selects v8 before collector/model construction. Older
-inputs reject before buffer writes/action prefix selection; a later observation
-can fail after earlier actions succeed. Preserve failed-run evidence, construct
-a compatible model for new work, and retain saved inputs and world admission.
-No rollback, weight reshaping, live swap or automatic restart is recovery.
-The recipe matches `test_v8_recipe_collector_and_evaluation_select_saved_input`.
-
-The current view, captured programs and saved architecture have distinct
-lifetimes. Caches remain internal. `scratch/concept-review.html` illustrates
-this contract; it is not a browser capture or performance proof. Exact earlier
-review/check details remain in blob `f8ff5bc693386baa3e247936684437da3ca0443d`.
+The accepted concept-review amendment is implemented in
+`docs/training.md#policy-inputs` and `manabot/README.md`: select v8 before
+collector/model construction. Older inputs reject before buffer writes/action
+prefix selection, potentially after earlier actions succeeded. Preserve failure
+evidence; construct a compatible model for new work. No rollback, checkpoint
+reshaping, live swap or automatic restart is recovery. The recipe is exercised
+by `test_v8_recipe_collector_and_evaluation_select_saved_input`.
+`scratch/concept-review.html` illustrates these separate current-view,
+captured-program and saved-architecture lifetimes; it is not a browser proof.
 
 ## Remaining work
 
-Jack Heart's subsequent [speed direction](mtg-244-speed-direction.md) supersedes
-budget-only repair: profile and compare concrete hot-path designs, implement the
-strongest supported design, and aim to beat the pre-layer engine on matched
-ordinary workloads. Realign/loop-or-next must return to implementation as needed;
-this compress pass and a measurement checkpoint are not completion.
-
-1. Repair the failures retained in [CI repair](mtg-244-ci-repair.md). PR #427
-   exists; its first isolated workflow failed to acquire the reference commit.
-   Keep the original performance baseline and collect a corrected run. The configured producer runs original TLA baseline/before/after,
-   dependency before/after, complete payments and seven full-policy cases per
-   revision. Require full score digests/counts, search samples, bounded 128-step
-   prefixes, native/Python encoding, inference/backward throughput and process
-   RSS. Mitigate demonstrated regressions and remeasure before review readiness.
-   Standard Engine Budget does not execute the dependency/model harnesses.
-   Retained contended timings remain exploratory; no further
-   product decision is needed. [Risk evidence](mtg-244-risk-validation.md) owns
-   measured results, exact sources, configurations and limitations.
-2. Gate owns affected suites and current-world admission: full debug Rust,
+1. Inspect final-head Layer Risk `41956688122` and CI `41956687926` for
+   `68ef4a63d`. The redesign is implemented and measured locally; matched isolated
+   timing and the unchanged budget remain unaccepted. Investigate any remaining
+   regression using retained exact counts/digests; do not claim review readiness
+   from measurement checkpoint publication. Further per-component invalidation
+   or instruction borrowing needs residual-cost evidence to justify complexity.
+2. Retain and compare the new isolated receipts with the completed predecessor
+   run `41952171271`. That run validates the producer and all seven policy cases,
+   but its engine still regresses. Local source-plan measurements preserve every
+   full score, action, simulation, payment/resource and step digest. The exact
+   tiny-comparison passes in optimized debug locally (53.24 s); hosted long
+   integration passes at preceding `a7b0ddaff`, while its budget still fails.
+   Source-plan/final evidence bundles are `49f516b3b42188a9e170e59a870907632d17fbcd`
+   and `6baa683f7ec901ea243538ec53e91108429f66ed`.
+3. Gate owns affected suites and current-world admission: full debug Rust,
    clippy, model/checkpoint/active-training checks, and current Academy receipt/
    fixture refreshes required by the catalog/state hash. Preserve historical
    evidence. The unchanged 10% same-runner Engine Budget remains separate.
-   A necessary digest/reference refresh uses the candidate's own CI artifact,
-   a documented reason and the seeded-search assertion in
-   `tests/infra/test_engine_budget.py`; it cannot hide a regression. Fewer
-   choices are not speedup evidence.
-3. Preserve integration boundaries. Main's `action_overflow=first-legal` pilot
+   The baseline remains unchanged: current checked counts/digests match, and
+   no performance cost has been accepted. Fewer choices are not speedup evidence.
+4. Preserve integration boundaries. Main's `action_overflow=first-legal` pilot
    exception follows input admission; default overflow stays error and fresh
    input stays v6. MTG-241's future retained frame/result/replacement-batch
    payloads are not claimed by current v8. Coordinate schemas through ordinary
    sync before combined publication without adding a second execution authority.
-   Its 2026-11-04 Task comment `dffd3f70` additionally identifies retained
-   `ZoneSelection`, state-owned `LibraryEnd`, optional `Move.library_end` and
-   public precommit entrants as pending integration interfaces. That report
-   supplies no combined-source proof or independently reserved input version.
+   Its later 2026-11-04 comment `cc08a059` reports integration of `1930146b0`
+   at `d77bc8676` and a private-capture correction at `91517292c`: remembered
+   bindings become `ObjectBinding` with exact object, captured `ZoneSelection`
+   and per-seat knowledge. Retained frames/batches remain its authority.
+   Causal counter provenance and logical token proposals still precede its
+   complete successor projection. This is reported adjacent work, absent from
+   this checkout; it supplies no combined-source or complete-v8-payload proof.
 
-Earlier validation commands and outcomes remain at
-`64e6bca33731010843531fff4cdabd177d08bb5e:scratch/mtg-244-layers.md` and
-payment bundle `88d6abd34d8b56a9606c3ec58696063955d08226`.
-Current repair results and remaining isolated acceptance are in
-[mtg-244-ci-repair.md](mtg-244-ci-repair.md); earlier passes do not supersede
-its first-publication CI failures.
+## Validation and retained sources
 
-Compress validation, debug `CARGO_PROFILE_DEV_OPT_LEVEL=1`, root commands:
-- `cargo test --manifest-path managym/Cargo.toml -j 2 --test rules_tests cr_613_continuous_effects`: 22 passed.
-- `cargo test --manifest-path managym/Cargo.toml -j 2 -p managym-cards --test cards -- iroh hakoda zhao lieutenant suki toph_enters team_avatar beorn kellan`: 25 passed after replacing Zhao's obsolete layer-6-removes-layer-4 assertion with retained type and fork-departure checks.
-- `cargo test --manifest-path managym/Cargo.toml -j 2 --lib -- cache_tests flow::mana::tests`: 3 passed. Format/diff checks pass; Gate owns full suites and isolated timings.
-- Release wheel rebuilt via the documented root command and installed atomically; `uv run --extra dev pytest tests/model/test_layer_input.py -q -k native_python_text_forward_backward_and_reload`: 3 passed.
+Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml` with `--test rules_tests cr_613_continuous_effects`, `--lib flow::statics::cache_tests`, and `--features benchmark --example bench_layers` passes 23 + 2 + 1 tests; `uv run --extra dev pytest tests/model/test_layer_input.py -q -k native_python_text_forward_backward_and_reload` passes 3. Release wheel rebuilt/installed atomically; rustfmt and diff checks pass. Gate owns full suites and isolated performance acceptance.
 
-## Preserved evidence
+The reduction preserves all dependency step/search digests and counts, plus all
+16 complete payment traces/resources. Against `68ef4a63d`, allocations fall
+563,724→552,779 for dependency steps and 49,115,896→48,159,001 for dependency
+search; pool/land payment allocations remain 436/509. No timing claim. Exact
+receipts, source patch and binary hashes are retained in gzip tar git blob
+`928f19c27f4729601867502f72b3da7180a255e6` (`git show <blob> > evidence.tar.gz`).
 
-The complete plan before this reduction, including uncommitted concept-review
-and documentation evidence, is git blob `6486ea3e1dde73d3977e8ce160ada16962ddfe6a`.
-Implementation started at `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`;
-reconciliation uses `64e6bca33731010843531fff4cdabd177d08bb5e`.
-Runtime mitigation: `b2fb06cbadb8978d1f2373c9b2490551c358c907`; measurement/payment
-checkpoint: `fb264f7c78dcd1a864cbe35a9e7d4cd985f9faf7`. Main's intervening
-`115f88165` / `510b5ec35` Wave changes introduced no runtime diff. Coverage memory
-and goal govern this Task; its Wave has no immediate child memory directories.
-
-The complete pre-compression plan, including detailed validation scope and source
-history, is blob `7b17e207b67ed3d9785e9915a69439a1e6eb44a1` (`git show <blob>`).
-
-
-Pre-compression plan and exact earlier test filters:
-`929d8324becbb243bdb88809d9670dada8ef11f3`; decision note:
-`3059c4d7a78ecd3f358a027d25c4208c376c52a2`.
-
-The archived pre-implementation draft patch, including new files, is git blob
-`f5de99621d9b59ad3a7464c2feaed8b2d0ebe519` (153,208 bytes).
-It can be inspected with `git show <blob>` and recovered as a patch against the
-base. It is an incomplete draft, not an approved migration or deliverable.
+The complete pre-reduction plan, including uncommitted incoming notes and exact
+prior test/evidence references, is git blob
+`2df8f0bfe2cdec1b230766932598f536e54d0894` (`git show <blob>`). It retains the
+archived implementation draft and previous concept-review/reconciliation history.
+The risk and CI-repair notes keep contrary measurements and remaining obligations
+current. Main sync through `51b4bd274` changed configuration only, not runtime.
 
 Primary rules fetched 2026-11-04 from
 https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt

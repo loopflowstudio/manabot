@@ -84,12 +84,23 @@ result supersedes the first CI regression. Short `sample` profiles attributed
 remaining work to invalidation, trigger-index rebuilding and layer instruction
 allocation, rather than game cloning; they are not latency measurements.
 
-The final changes therefore still need the corrected PR-triggered isolated
-producer and unchanged Engine Budget. Publishing through the existing Graph is
-the evidence-producing boundary, not performance acceptance. A clean result,
-matched full-policy/dependency receipts and mitigation of any remaining findings
-are required before readiness. Gate owns the affected full suites; no human
-judgment is missing and no extra Task or experiment is needed.
+Second publication, `beaacaa198acddb4162e5081cd570b1ec133ba05`, now has
+completed failure evidence from CI `41952171449`: Engine Budget is 230.730 s
+search / 7.045 s worst / 9,904.0 steps/s against 166.656 s / 4.883 s /
+12,938.9 steps/s. Full score/action/simulation and step digests match. This is
+still unaccepted. Artifact: `.cache/mtg-244-second-ci-engine-budget`.
+Long integration again fails the tiny comparison, now the training resource wall
+deadline on both attempts; 26 other long cases pass. Exact log:
+`.cache/mtg-244-second-long.log`. Academy UI, Academy integration, clean-machine
+Play, Python Unit and both conformance jobs pass. Rust/main integration were still running at inspection. Layer Risk `41952171271`
+subsequently succeeded: every full workload/payment/policy comparison matches,
+but it measures the still-regressed predecessor. Source-plan runtime `614a38fc8`
+is pushed in measurement checkpoint `a7b0ddaff`: CI `41955382680` passes long
+integration, but step time remains 10.54% over reference. Final lazy-SBA head
+`68ef4a63d` is now pushed; CI `41956687926` and Layer Risk `41956688122` are
+pending/running, not accepted. The prior risk run `41955382652` remains live. The source-plan redesign and its measurements are recorded in
+[the risk note](mtg-244-risk-validation.md); local passes cannot replace CI.
+Pre-reconciliation note: blob `e0079911b6f52fdfde8bfd8967d0cf41c0dc537a`.
 
 The retained debug failure spent 29.35 of 30.24 collection seconds in native
 stepping/encoding, versus 0.70 in policy inference. After immutable batch reads,

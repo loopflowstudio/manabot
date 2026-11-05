@@ -206,8 +206,9 @@ nonfinite/incomplete samples, different configs/storage, incomplete seed/payment
 identities and changed semantic digests. Eighteen injected-receipt checks cover
 that contract. Inventory-only output cannot satisfy timing comparison.
 
-Required next evidence: publish the final lazy-SBA cut and inspect its isolated
-original/dependency search, complete payments and seven policy cases. Source-plan
+Required next evidence: final lazy-SBA head `68ef4a63d` is pushed; inspect Layer
+Risk `41956688122` and CI `41956687926` (running/pending) for isolated original/
+dependency search, complete payments and seven policy cases. Source-plan
 CI `41955382680` supplies the failed budget above; Layer Risk `41955382652`
 remains running for that earlier checkpoint. Mitigate any remaining regression;
 measurement checkpoint publication does not establish acceptance. `41952171271` establishes the predecessor's

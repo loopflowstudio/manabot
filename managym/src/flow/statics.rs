@@ -386,23 +386,18 @@ impl Game {
         }
     }
 
-    pub(crate) fn static_sources(&self) -> Vec<(PermanentId, PlayerId, Arc<Characteristics>)> {
-        self.layer_board()
-            .objects
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, view)| {
-                let view = view.as_ref()?;
-                (!view.static_abilities.is_empty()).then(|| {
-                    let id = PermanentId(slot);
-                    (
-                        id,
-                        self.state.permanents[id].as_ref().unwrap().controller,
-                        view.clone(),
-                    )
-                })
+    pub(crate) fn static_sources(
+        &self,
+    ) -> impl Iterator<Item = (PermanentId, PlayerId, Arc<Characteristics>)> + '_ {
+        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .filter(|(_, view)| !view.static_abilities.is_empty())
+            .map(|(id, view)| {
+                (
+                    id,
+                    self.state.permanents[id].as_ref().unwrap().controller,
+                    view,
+                )
             })
-            .collect()
     }
     pub(crate) fn spell_keywords(&self, card: CardId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state.cards[card].keywords;
@@ -479,20 +474,19 @@ impl Game {
     }
 
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {
-        self.static_sources()
-            .into_iter()
-            .any(|(source, controller, view)| {
-                view.static_abilities.iter().any(|ability| {
-                    let StaticAbility::Restriction(restriction) = ability else {
-                        return false;
-                    };
-                    restriction.kind == kind
-                        && restriction.unless.as_ref().is_none_or(|condition| {
-                            !self.check_static_condition(condition, controller)
-                        })
-                        && self.static_scope_applies(&restriction.scope, source, controller, target)
-                })
+        self.static_sources().any(|(source, controller, view)| {
+            view.static_abilities.iter().any(|ability| {
+                let StaticAbility::Restriction(restriction) = ability else {
+                    return false;
+                };
+                restriction.kind == kind
+                    && restriction
+                        .unless
+                        .as_ref()
+                        .is_none_or(|condition| !self.check_static_condition(condition, controller))
+                    && self.static_scope_applies(&restriction.scope, source, controller, target)
             })
+        })
     }
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();

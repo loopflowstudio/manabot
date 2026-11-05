@@ -1086,7 +1086,6 @@ impl Game {
         let current = self.lookup_current_permanent(source.lki.object_ref).ok();
         let card = &self.state.cards[source.card];
         self.static_sources()
-            .into_iter()
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
                 grantor
