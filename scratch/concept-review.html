@@ -33,13 +33,13 @@ Built from <a href="explore-design.md">the working design</a>,
 <h1>Select the batch once; keep its identity through the experiment.</h1>
 <p><strong>Outcome: design changed. No open product choice.</strong>
 The accepted versioned handoff requires the same protocol and experiment selection
-through declaration, evaluation and analysis. The working design records this
-as the next implementation direction; this review changes no runtime code.</p>
+through declaration, evaluation and analysis. The binding is implemented and exercised through controlled fixtures.
+This page retains the design rationale; it supplies no scientific results.</p>
 <blockquote>
-<p><strong>Existing:</strong> <code>check --protocol next.json</code> selects a file.
+<p><strong>Prior mismatch:</strong> <code>check --protocol next.json</code> selects a file.
 Training jobs, discovered callbacks and the analysis store still select
 <code>growing_pool</code> / v1.</p>
-<p><strong>Proposed:</strong> bind the next manifest and its Etude experiment name
+<p><strong>Implemented:</strong> bind the next manifest and its Etude experiment name
 once in an entry point. All stages consume that binding. V1 retains its identity.</p>
 </blockquote>
 <p>The default read-only check currently rejects the changed engine source.
@@ -76,11 +76,12 @@ replay inputs are not replay verification or proof of optimizer use.</p>
 The migration receipt records the identity-preserving moves and preserved histories;
 this review performs no migration or fresh live-state audit. Existing integration
 and memory follow-up remains in the handoff.</p>
-<h2>Next proof</h2>
-<p>Exercise two distinct bindings through real Etude discovery, declarations,
-callback routing and offline analysis using controlled fixtures. Reject crossed
-experiment/protocol identities. Preserve real-runtime v1 rejection. No games,
-training or spending are required for this proof.</p>
+<h2>Controlled proof</h2>
+<p>Two distinct bindings passed real Etude discovery, declarations, callback
+routing and offline analysis with synthetic outcomes. Crossed experiment/protocol
+identities and copied entries retaining the old binding reject. Real-runtime v1
+rejection remains. No games or training were needed; gate and demo/review retain
+their acceptance boundaries.</p>
 <h2>Review conclusions</h2>
 <ol>
 <li><strong>Does this require a new product decision?</strong> No. It follows the

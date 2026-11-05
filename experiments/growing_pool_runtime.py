@@ -18,7 +18,6 @@ from etude.eval.match import Result, Row
 from etude.eval.records import (
     Benchmark,
     Code,
-    Environment,
     Inference,
     Match,
     Matchup,
@@ -51,6 +50,19 @@ from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.panels import ML, PERF
+
+POLICY_COMPUTE = "policy-cpu-one-thread-one-pass"
+
+
+def checkpoint_spec() -> dict[str, JsonValue]:
+    """Fixed inference settings shared by registration and receipt admission."""
+    return {
+        "kind": "checkpoint",
+        "device": "cpu",
+        "batch_size": 1,
+        "deterministic": False,
+        "allow_deck_repetition": True,
+    }
 
 
 class Conditions(StrictModel):
@@ -222,11 +234,7 @@ def evaluation_jobs(binding: ProtocolBinding, state: ExperimentState) -> list[Jo
         evaluation(
             Benchmark(
                 name=protocol.id,
-                environment=Environment(
-                    name=protocol.id,
-                    files=protocol.digest,
-                    config={"status": protocol.status},
-                ),
+                environment=protocol.environment(),
                 matchups=matchups,
             ),
             # Discovery runs this file through runpy. The worker needs this canonical
@@ -271,7 +279,7 @@ def _registration(
         action_abi_sha256=fingerprints["action_abi_sha256"],
         matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
         player_seed_derivation_id="arena-pair-deal-player-v1",
-        compute_class_id="policy-cpu-one-thread-one-pass",
+        compute_class_id=POLICY_COMPUTE,
     )
     if isinstance(player, Code):
         if player.config != {"kind": "heuristic"}:
@@ -293,13 +301,7 @@ def _registration(
     return PlayerRegistration(
         **common,
         runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "device": "cpu",
-            "batch_size": 1,
-            "deterministic": False,
-            "allow_deck_repetition": True,
-        },
+        player_spec=checkpoint_spec(),
         checkpoint_sha256=digest,
         checkpoint_bytes=path.stat().st_size,
         parameter_count=sum(p.numel() for p in agent.parameters()),
@@ -380,7 +382,7 @@ def play_match(binding: ProtocolBinding, match: Match) -> Result:
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=opponent.identity_sha256,
-        evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
+        evaluation_compute_envelope_id=POLICY_COMPUTE,
     )
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
     evidence = output.parent / f"{match.key}-cards"

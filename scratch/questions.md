@@ -138,13 +138,13 @@ named 2026-11-04 steers. Earlier exploration detail is at
 190b0c603d70e790f2217c61c970c38f82544d08:scratch/explore-design.md, and earlier
 protocol/workflow implementation context at a72b5ef1a:scratch/questions.md.
 
-Prior implementation evidence remains applicable to unchanged code: 53 focused
-Python capture/protocol/analysis checks, three debug native exposure fixtures,
-six native-roundtrip/journal/evaluation-reader checks, workflow compilation and
-formatting passed. These checks were not repeated for documentation reconciliation.
+Unchanged native capture/report and workflow checks retain their prior passing
+evidence at `e5c3dd947:scratch/questions.md`. The post-sync inspection also passed
+10 focused checks covering capture, strict compilation and incompatible-input
+rejection; capacity recovery remains opt-in. Frozen manifests and migration
+receipts are unchanged. No complete game or scientific campaign was run.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py -q` — 56 passed, including two bindings, runtime/job rejection and offline exposure without runtime admission; Ruff, formatting and `git diff --check` passed. Prior workflow compilation remains applicable. Gate owns full affected suites/acceptance; demo/review remains required. Frozen JSON bytes are unchanged.
-No campaign or complete game was run; all new evaluation/training records are synthetic.
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py -q` — 52 passed; Ruff lint/format and `git diff --check` passed. Gate owns the full affected suites and acceptance; demo/review remains required. `lf context` is within both limits.
 
 ## Sync provenance — 2026-11-04
 

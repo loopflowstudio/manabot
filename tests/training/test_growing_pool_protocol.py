@@ -244,11 +244,13 @@ def _run(tmp_path: Path, updates: tuple[int, ...]) -> TrainingRun:
     )
 
 
-def test_early_failure_retains_all_expected_export_slots(
-    protocol: Protocol, tmp_path: Path
+@pytest.mark.parametrize("updates", [(0, 8), (0, 8, 8)])
+def test_early_endpoint_retains_all_expected_export_slots(
+    protocol: Protocol, tmp_path: Path, updates: tuple[int, ...]
 ) -> None:
+    # A stopped run may export its final raw weights at a monitoring coordinate.
     slots = growing_pool.comparisons(
-        _run(tmp_path, (0, 8)), protocol, experiment=EXPERIMENT
+        _run(tmp_path, updates), protocol, experiment=EXPERIMENT
     )
     assert sum(s.expected_games for s in slots) == 400
     assert sum(s.expected_games for s in slots if s.matchup is not None) == 160
@@ -316,16 +318,6 @@ def test_exposure_counts_committed_choices_by_actual_actor() -> None:
     assert totals == {0: 0, 1: 1}
     assert [row["game_seat"] for row in rows if row["seat"] == 1] == [0, 0]
     assert all("offered" not in row and "resolved" not in row for row in rows)
-
-
-def test_paused_milestone_keeps_initialization_and_later_missing_slots(
-    protocol: Protocol, tmp_path: Path
-) -> None:
-    slots = growing_pool.comparisons(
-        _run(tmp_path, (0, 8, 8)), protocol, experiment=EXPERIMENT
-    )
-    assert sum(s.expected_games for s in slots if s.matchup is not None) == 160
-    assert {s.update for s in slots if s.matchup is None} == {16, 32}
 
 
 def test_checkpoint_population_and_initialization_role_are_admitted(

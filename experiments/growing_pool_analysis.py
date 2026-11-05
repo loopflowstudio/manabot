@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from etude.eval.query import read_blobs, statsdb
-from etude.eval.records import Environment, Match, Model
+from etude.eval.records import Match, Model
 from etude.experiment import ExperimentState, observe
 from etude.train.read import RunData, read_all
 import numpy as np
@@ -36,6 +36,8 @@ from experiments.growing_pool_protocol import (
     read_binding,
 )
 from experiments.growing_pool_runtime import (
+    POLICY_COMPUTE,
+    checkpoint_spec,
     comparisons,
     deck_matchup,
     policy_source,
@@ -253,8 +255,7 @@ def _validate_result(
         or request.key.world != protocol.world.world_version
         or request.key.arena_version != protocol.id
         or request.key.content_suite != matrix.content_suite
-        or request.key.evaluation_compute_envelope_id
-        != "policy-cpu-one-thread-one-pass"
+        or request.key.evaluation_compute_envelope_id != POLICY_COMPUTE
         or request.game_seconds != protocol.budget.game_seconds
         or request.max_commands != protocol.budget.max_commands
         or request.bootstrap_seed != protocol.analysis.bootstrap_seed
@@ -274,7 +275,7 @@ def _validate_result(
             or registration.content_suite != matrix.content_suite
             or registration.matchup_sha256
             != canonical_sha256(matrix.match().model_dump(mode="json"))
-            or registration.compute_class_id != "policy-cpu-one-thread-one-pass"
+            or registration.compute_class_id != POLICY_COMPUTE
             or registration.information_boundary != "acting-viewer"
         ):
             raise ValueError("sealed registration differs from protocol")
@@ -283,14 +284,7 @@ def _validate_result(
                 registration.checkpoint_sha256 != player.checkpoint.artifact.sha256
                 or registration.checkpoint_bytes
                 != player.checkpoint.artifact.size_bytes
-                or registration.player_spec
-                != {
-                    "kind": "checkpoint",
-                    "device": "cpu",
-                    "batch_size": 1,
-                    "deterministic": False,
-                    "allow_deck_repetition": True,
-                }
+                or registration.player_spec != checkpoint_spec()
             ):
                 raise ValueError("sealed checkpoint differs from export")
         elif registration.player_spec != {"kind": "heuristic"} or (
@@ -373,13 +367,10 @@ def _deal(
     if match is None:
         report.issues.append("Export unavailable.")
         return report
-    environment = Environment(
-        name=protocol.id, files=protocol.digest, config={"status": protocol.status}
-    )
     receipts = db.execute(
         "SELECT m.run, m.state, m.error, m.conditions, m.games FROM matches m "
         "JOIN runs r USING (run) WHERE m.match = ? AND r.environment = ?",
-        [match.key, environment.identity],
+        [match.key, protocol.environment().identity],
     ).fetchall()
     if len(receipts) > 1:
         raise ValueError("repeated evaluation match; no retries permitted")

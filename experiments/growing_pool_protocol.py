@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Literal
 
 from etude.eval.match import Result
-from etude.eval.records import Match
+from etude.eval.records import Environment, Match
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from manabot.env.observation import ObservationSpace
@@ -494,6 +494,12 @@ class Protocol(StrictModel):
             len(self.budget.seeds)
             * len(self.budget.evaluation_rounds)
             * sum(4 * len(panel.deals) for panel in self.manifest.panels)
+        )
+
+    def environment(self) -> Environment:
+        """The same sealed namespace is used by scheduling and offline reads."""
+        return Environment(
+            name=self.id, files=self.digest, config={"status": self.status}
         )
 
     def admit(self) -> None:
