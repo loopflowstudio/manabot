@@ -402,6 +402,7 @@ know and where the code lives.
 | [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
 | [training.md](docs/training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
 | [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
+| [workflows.md](docs/workflows.md) | Wave responsibilities, Coverage loops and experiment execution boundaries |
 | [development.md](docs/development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
 | [academy.md](docs/academy.md) | The browser UI: running it, the shared decision surface, presentation, trained challengers, the proof gate |
 

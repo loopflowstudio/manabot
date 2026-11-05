@@ -101,6 +101,7 @@ jobs:
           uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
+            tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py \
             tests/eval/ -q
 
       - name: Evaluation Perf report proof

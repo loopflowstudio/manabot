@@ -340,6 +340,18 @@ impl PyVectorEnv {
         })
     }
 
+    fn enable_exposure_capture(&mut self) -> PyResult<()> {
+        self.inner.enable_exposure_capture().map_err(map_agent_err)
+    }
+
+    fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.inner.take_exposure()
+    }
+
+    fn current_exposure(&self) -> PyResult<Vec<String>> {
+        self.inner.current_exposure().map_err(map_agent_err)
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()

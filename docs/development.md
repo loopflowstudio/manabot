@@ -111,6 +111,12 @@ Training CLI changes need the installed-wheel smoke from
 [Build and verify](#build-and-verify); a source-tree smoke cannot verify the
 installed entry point.
 
+**Loopflow workflows.** With `lf` installed, run
+`uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
+It uses real compilation/discovery and checks iteration, delivery and experiment
+review boundaries without launching agents, games or training. The
+[work boundaries](workflows.md) document defaults and migration limits.
+
 **New Python test modules.** Basenames must be unique across unpackaged test
 directories. Collect new modules with the existing tests of their CI invocation
 (`uv run pytest --collect-only`); isolated file runs miss name collisions.
