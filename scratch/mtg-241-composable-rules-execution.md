@@ -5,14 +5,19 @@
 Jack Heart's accepted directive (2026-11-04): one PR through the code Graph,
 stopping at interactive review; no merge, auto-merge, training or retained-evidence
 rewriting. The Task remains **incomplete**. No human judgment is missing.
-Original base: `4463e57f5`; integrated main: `8e8d702f8` via `58535f9f2`.
-Latest implementation checkpoint: `301877ea1` (retained event batches).
-The supplied feedback about synchronous commits describes the earlier
-`cf9f5a24b` checkpoint, not current code.
+Original base: `4463e57f5`; integrated main: `1546aae3f` via `d83376181`.
+Latest committed implementation: `301877ea1` (retained event batches), simplified at
+`7b381909e`, preserved by the sync. The current working tree migrates hidden
+selection and its consumers, both samplers, public entrants and library placement.
+The prior synchronous-commit feedback describes `cf9f5a24b`, not current code.
 
-`lf context` reports the `coverage` binding, but local Wave GOAL/MEMORY files
-are absent. The supplied Task directive is the available scope; Wave memory
-has not been edited. Detailed prior implementation/evidence is preserved at
+The sync restored the selected Wave at `.lf/wave/coverage/` by renaming the
+former `engine` directory. Its GOAL and complete MEMORY were read on 2026-11-04;
+there are no immediate child directories or child memories. The older chapter
+centers faithful shared play/training and measured consumer budgets. Jack Heart's
+dated Task directive supplies this broader execution scope without reopening the
+chapter or authorizing experiments. Durable execution lessons are reconciled in
+the selected memory through the code Graph. Detailed prior evidence is preserved at
 `301877ea1:scratch/mtg-241-composable-rules-execution.md`.
 
 ## Surviving ownership and contracts
@@ -57,14 +62,38 @@ First-strike retains normal damage across its SBA interval; SBA progress is
 Stable/Changed/Pending. Token/attachment cleanup waits for child work, and
 `turn_tick` exposes pending turn actions before stabilization.
 
-`SelectCards` currently migrates **public-zone results**: exact selector candidates,
-min/max cardinality and a selected child scope. `CardsThisWay` retains the latest
-mill/discard independently of later `Move`. Avatar Destiny preserves its source
-return between mill and selection; Ostrich-Horse keeps decline counters; Sparring
-Dummy reads its caller's mill result for the Lesson condition. The Command witness
-covers partial selection, divergent forks, exact-incarnation rejection, a child
-pause and one finalization. Do not extend these snapshots to hidden consumers
-before the materialization cut below.
+`SelectCards` now migrates public results and hidden hand/library selections.
+`ZoneSelection` retains owner, zone and predicate on decisions and selected child
+scopes. Both samplers remap unknown commitments across the saved caller chain
+with one exact-object matching; viewer-known choices remain exact. Incompatible
+restricted count worlds are excluded, and materialization rejects impossible
+commitments instead of dropping them. Direct determinization retries bounded
+compatible deals and returns an explicit error on exhaustion. Ordinary roots take
+no additional full clone. Requirements are captured before zone reassignment;
+remapping follows selected/remembered/result aliases across caller frames. Mixed
+foretell allocations count only compatible ordered fills, rather than retaining
+all their weight after a feasibility check. The directed two-selected-instant /
+two-foretold-slot witness retains 14 of 20 physical fills and resumes both samplers.
+The frozen count-only belief sampler explicitly rejects retained-selection and
+foretold domains before inference; its saved schema is not silently extended. Library inspection exposes all permitted members in
+stable definition/object order, never library order. Pending battlefield entrants
+are public and pinned even before their retained moves commit.
+
+`OptionalDiscardDraw`, `MayDiscard`, `SearchBasicLand`, `SearchLibraryToHand` and
+their dedicated continuations/helpers are deleted. Definitions use selection,
+movement, conditional effects and shuffle; optional discards commit the completed
+subset together, and draws read committed `Moved` results. Library-to-hand movement
+reveals definitions and updates known-hand minima. `CardsThisWay` retains latest
+mill/discard independently of later moves. Shared selection remains code 28;
+6/7 join the retired codes. Existing mill consumers retain their earlier contracts.
+
+`LibraryEnd` now lives with the authored rules types. `Move.library_end` commits
+explicit top/bottom placement with the movement, before linked-return questions;
+shuffle remains a subsequent instruction. The actual Merchant program's constructed
+linked-return witness covers bottom placement, deferred shuffle and completion.
+Real Merchant tests exposed sacrifice trigger predicates being read after their
+subjects departed: committed sacrifice facts now match all pre-move subjects before
+batch zone moves, with trigger placement still deferred.
 
 `OrderLibrary` owns top/bottom ordering. Bottom keeps immediate placement and
 remaining-only private visibility; top keeps the full inspected prefix pinned and
@@ -104,12 +133,15 @@ Completed cuts (history and original checks at the checkpoint references below):
   binding iterates moved results directly unless the frame must retain them.
   Shared entry-replacement fixtures remove three copies of identical setup.
 
-Remaining deletion cut, **with consumer migration and materialization together**:
-- OptionalDiscardDraw, MayDiscard, SearchBasicLand and overlapping search/move
-  handlers and dedicated decisions. Preserve decline, keyword events, private
-  inspection, reveal/shuffle, ordered remainders and result binding.
-- Synchronous hidden-search movement/finalization postambles; search's
-  source-bottoming must retain linked returns. Do not polish these predecessors.
+Completed hidden consumer cut: optional discard/draw and basic/tutor search
+handlers and their private search helpers, including synchronous source-bottoming.
+`ZoneSelection` owns hidden-source and slot eligibility checks; count-world
+admission and object rebinding share complete bipartite assignment. Inherited
+copies of the same constraint are retained once. Migrated definitions share
+`CardPredicate::basic_land()` without changing the authored rules values.
+Distinct-land split searches, named searches, Scry and LookAndSelect retain their
+operation-specific semantics; their remaining overlap must be evaluated with their
+visibility, revealed-prefix and ordering contracts rather than deleted blindly.
 
 ## Remaining implementation and acceptance
 
@@ -118,16 +150,16 @@ Remaining deletion cut, **with consumer migration and materialization together**
    `ModifyCounters` drivers use `count * multiplier + additional`; no registered
    card uses that replacement yet. The registered Leaves chapter with constructed
    drivers proves simultaneous placement, not those two complete cards.
-2. Migrate hidden selection and delete the composites above. Both `Game::determinize`
-   and `HiddenHandConstraints::materialize_validated` reassign hidden membership,
-   repin inspected library prefixes, then refresh only the active offer. Retained
-   exact hand candidates can therefore become library members. Add source/visibility
-   provenance and traverse saved decisions/child scopes; preserve viewer-known
-   membership and coherently resample unknown selected subsets against the sampled
-   zone/predicate. A partial restricted search also constrains compatible deals
-   (enough eligible objects must remain). Dropping missing selected IDs erases prior
-   commitments; updating only current offers cannot repair saved callers. Audit
-   immediate callers during this cut.
+2. Finish the hidden-state acceptance audit beyond the migrated consumers.
+   Current witnesses cover partial hand/library selections, restricted incompatible
+   deals, saved callers/inherited bindings, public precommit entrants, both samplers,
+   Commands/replay/stale rejection, divergent forks, frame remembered aliases,
+   conditional foretell weights and materialization. Count-only learned sampling
+   now rejects unsupported domains before inference. Audit private remembered
+   subjects after their selecting frame has ended and unknown legacy
+   Scry/LookAndSelect callers, preserving viewer-known inspected prefixes. No claim
+   of complete hidden-world coverage follows; new support for the frozen learned
+   sampler needs an explicit successor contract, not post-sampling rejection.
 3. Project pending batches (including precommit entrants), iteration progress,
    selected/this-way results, completion events and paid/rule callers. Paired states
    with identical current offers must distinguish consequential viewer-safe payloads
@@ -140,29 +172,42 @@ Remaining deletion cut, **with consumer migration and materialization together**
    fresh v6, saved omissions, capacities, original action-prefix indices/Commands
    and omitted-overflow-is-error. World/hash, capture boundaries and new conformance
    corpus remain unfinished.
-5. Follow Jack Heart's [performance/learning-risk acceptance](mtg-241-risk-validation.md).
-   Gate owns bounded same-runner ordinary-step and search total/tail measurements,
-   equivalent-work vs added-branching attribution, profiling and remeasurement of
-   targeted mitigations, paired policy/model checks, full debug Rust/Clippy, affected
-   Python/headless Academy, current-world admission and Engine Budget. No speed or
-   learning claim follows from these refactors, and no experiment was launched.
+5. Complete Jack Heart's [performance/learning-risk acceptance](mtg-241-risk-validation.md).
+   Implementation owns bounded ordinary-step/search probes, equivalent-work versus
+   added-branching attribution, targeted mitigations and remeasurement, and paired
+   policy/model and hidden-information witnesses alongside the new representation.
+   Gate owns final-head same-runner measurements, full debug Rust/Clippy, affected
+   Python/headless Academy, current-world admission and Engine Budget. These checks
+   cannot substitute for the unfinished implementation or its targeted risk work.
+   No speed or learning claim follows from the refactors; no experiment was launched.
+
+The hidden consumer deletion is implemented in the working tree. The next
+architectural cut is complete retained-payload projection and explicit version
+admission, with the remaining hidden-state consumer audit above. The complete
+real-card counter witness and bounded performance/learning-risk measurements are
+still acceptance work; this Task is not ready for review or completion.
 
 ## Integration and evidence
 
 MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. Dated shared
-reads (2026-11-04) found MTG-242 idle after its second loop-or-next, MTG-243 published
-for review at demo ([#424](https://github.com/loopflowstudio/manabot/pull/424)), and
-MTG-244 implementing. Publication does not establish integration. Task comments
+reads (2026-11-04, this reconciliation) found MTG-242 in compress on its resumed
+code Graph, MTG-243 in concept-review with open
+[#424](https://github.com/loopflowstudio/manabot/pull/424), and MTG-244 in compress
+on its second loop. Publication does not establish integration. Task comments
 carry FrameCompletion, paid-output protocol and codes 27–29. MTG-244 received the
-schema coordination request. Other checkouts were neither edited nor copied.
+schema coordination request and the working-tree `ZoneSelection`/`LibraryEnd`/
+public-entry interfaces (comment `dffd3f70-4dc9-462c-8fbc-6706b162ef76`). Other checkouts were neither edited nor copied.
 Main's selected casting-cost/X fixes and buffer/overflow contracts remain intact.
 The MTG-213 first-64 pilot exception does not authorize truncating new choices.
 
 Jack Heart's publication handoff makes [#425](https://github.com/loopflowstudio/manabot/pull/425)
-the source of the approved PRINCIPLES.md/README guide when syncing. Preserve newer
-edits; do not republish the older embedded draft. Current guide links public PRs
+the source of the approved PRINCIPLES.md/README guide, now integrated through
+`d83376181`. The published guide supersedes the older embedded draft and links PRs
 #42, #348, #353, #289, #412 and the speed investigation. Research publication does
-not merge or complete this Task.
+not complete this Task. Its [milestone](../docs/research/standard-2026-11/milestone.md)
+places execution/results beneath later costs, history and object-lifetime work;
+those proposed cohorts and separately authorized training Tasks do not expand this
+Task into another executor, content rollout or experiment campaign.
 
 Rules evidence previously checked:
 - [Guilds release notes](https://magic.wizards.com/en/news/feature/guilds-ravnica-release-notes-2018-09-20):
@@ -192,12 +237,12 @@ Historical checks and limits:
   two-object 3/4-counter commits, simultaneous combat and SBA linked-return/LKI.
   Full projection/model/performance acceptance remains open.
 
-Check (2026-11-04, `301877ea1` + Rust diff SHA256
-`a9b4e963263e4db02f60b3b04633649d8c975580d9ceded6924078a69db5a8f8`):
-`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 -p managym --no-default-features`
-with `--lib flow::resolution::resolution_tests` passed 34; `--test rules_tests`
-filters `cr_704_sba` and `cr_614_replacement` passed 10 and 5; `cargo fmt --manifest-path managym/Cargo.toml --all --check`
-passed; root `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
-passed and cp312 extension installed atomically; `uv run --extra dev pytest tests/semantic/test_text_observation.py -q -k 'joo_dee_surveil or shared_mill_selection'`
-passed 2; `git diff --check` and `lf context` passed. Gate owns broader suites
-and performance/model-risk measurements; hidden selection/projection remains implement-owned.
+- `7b381909e:scratch/mtg-241-composable-rules-execution.md` records the simplified
+  Rust diff SHA256 `a9b4e963263e4db02f60b3b04633649d8c975580d9ceded6924078a69db5a8f8`
+  against `301877ea1`: 34 debug resolution, 10 SBA and 5 replacement cases;
+  formatting, release extension build/atomic installation and two Python text
+  cases passed. This is reused evidence, not a new full-head test run.
+
+Check (2026-11-04): working-tree diff SHA256 `01e9dfdb10f02ed68e360b9aebee69c4fdce5934d7c20b56ba3de2b31b02f9bf` against `d83376181` (`git diff -- managym manabot/belief/sampling_data.py tests/belief/test_sampling_data.py`, new sampling module admitted with `git add -N`): debug `--lib hidden_selection` 6 pass; retained-batch filter 5, migrated-card filters 6, search filter 13 and both effect/selector token guards passed on the applicable unchanged code; root release maturin build/atomic cp312 installation and the two text/parity tests plus `test_count_sampler_rejects_retained_private_subset_before_inference` 3 pass; focused Ruff, `git diff --check` and `lf context` pass. Full affected suites remain gate-owned; the remaining implementation and bounded risk measurements above are not deferred to gate.
+
+Compression check (2026-11-04): same diff command now hashes to `0bb2f485f6b7dfc55d60e2ca1c4d3b9fde16522bb11f8240e9b918c84af939b4`; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml` with `--lib hidden_selection` / `-p managym-cards --test cards search` passes 6 / 13 tests. Root release maturin build and atomic cp312 installation pass; the complete learning-catalog JSON is unchanged (SHA256 `4dfdaca1ca80392d4fc9643ffdf8e15224fef432fec81a9e3882ca088fe8997b`). `uv run --extra dev pytest` shared-mill text/native/Python parity and retained-selection sampler rejection pass (2); formatting and diff checks pass. Gate retains the full affected suites and final-head acceptance; no runtime or learning-performance claim is made.

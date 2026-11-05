@@ -1074,6 +1074,15 @@ impl Observation {
             }
         };
 
+        // A replacement question identifies prospective battlefield entrants
+        // publicly before their retained zone moves commit.
+        for object in game.pending_public_entries() {
+            let card = CardId::from(object.entity);
+            if let Some(zone) = game.state.zones.zone_of(card) {
+                add_card(card, zone);
+            }
+        }
+
         for perspective in [agent_player, PlayerId(1 - agent_player.0)] {
             if !game.shares_information(agent_player, perspective) {
                 continue;
@@ -1107,15 +1116,9 @@ impl Observation {
                                     && game.state.cards[*card].owner != perspective)
                         })
                         .collect(),
-                    Decision::SearchBasicLand {
-                        player,
-                        subtype,
-                        to_hand,
-                        ..
-                    } => game.basic_land_search_candidates(*player, subtype, *to_hand),
-                    Decision::SearchLibraryToHand { player, predicate } => {
-                        game.library_search_candidates(*player, predicate)
-                    }
+                    Decision::SelectCards {
+                        from: Some(source), ..
+                    } => game.selection_zone_cards(source.owner, source.zone),
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
                         game.revealed_hand_candidates(decision)
                     }

@@ -164,6 +164,28 @@ pub(crate) struct EventBatch {
     pub binding: EventBinding,
 }
 
+impl EventBatch {
+    /// Choosing replacements for an entry exposes the entering objects. Their
+    /// current hidden-zone membership remains fixed until the batch commits.
+    pub(crate) fn public_entries(&self, out: &mut Vec<ObjectRef>) {
+        if !self.committed {
+            for pending in &self.events {
+                if let ProposedEvent::ZoneMove {
+                    object: Some(object),
+                    to: ZoneType::Battlefield,
+                    ..
+                } = pending.event
+                {
+                    out.push(object);
+                }
+            }
+        }
+        if let Some(child) = &self.child {
+            child.public_entries(out);
+        }
+    }
+}
+
 /// Which result of the interrupted instruction its frame consumes. Consequent
 /// child batches never replace these results with their own moves.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -173,6 +195,7 @@ pub(crate) enum EventBinding {
     Moved {
         linked: Option<(ObjectRef, bool)>,
         shuffle: bool,
+        library_end: Option<crate::state::ability::LibraryEnd>,
         reveal: bool,
     },
     ThisWay,
@@ -354,6 +377,36 @@ impl Game {
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
+        // Sacrifice is committed with this batch, after all replacement
+        // choices. Match its subjects while every pre-batch permanent still
+        // exists: moving a Food first would erase the predicate it satisfied.
+        // Trigger placement still waits for the entire resolution to finish.
+        if batch
+            .events
+            .iter()
+            .any(|pending| pending.sacrifice.is_some())
+        {
+            let mut departing = std::collections::BTreeSet::new();
+            let mut sacrifices = false;
+            for pending in &batch.events {
+                if !self.proposal_is_current(&pending.event) {
+                    continue;
+                }
+                if let ProposedEvent::ZoneMove { card, .. } = &pending.event {
+                    if !departing.insert(*card) {
+                        continue;
+                    }
+                }
+                if let Some((card, controller)) = pending.sacrifice {
+                    self.state.turn.history[controller.0].permanents_sacrificed += 1;
+                    self.emit(GameEvent::PermanentSacrificed { card, controller });
+                    sacrifices = true;
+                }
+            }
+            if sacrifices {
+                self.process_event_batch(&batch.sources);
+            }
+        }
         for pending in &batch.events {
             if !self.proposal_is_current(&pending.event) {
                 batch.results.push(EventResult {
@@ -361,10 +414,6 @@ impl Game {
                     ..Default::default()
                 });
                 continue;
-            }
-            if let Some((card, controller)) = pending.sacrifice {
-                self.state.turn.history[controller.0].permanents_sacrificed += 1;
-                self.emit(GameEvent::PermanentSacrificed { card, controller });
             }
             let mut event = pending.event.clone();
             if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
@@ -416,7 +465,7 @@ impl Game {
                 match &event {
                     ProposedEvent::ZoneMove {
                         card,
-                        from: Some(ZoneType::Graveyard),
+                        from: Some(ZoneType::Graveyard | ZoneType::Library),
                         to: ZoneType::Hand,
                         ..
                     } => Some((
@@ -434,6 +483,19 @@ impl Game {
             let committed =
                 self.commit_proposed_event(event, pending.departing_lki.clone(), &mut followups);
             if committed {
+                if matches!(
+                    batch.binding,
+                    EventBinding::Moved {
+                        library_end: Some(crate::state::ability::LibraryEnd::Bottom),
+                        ..
+                    }
+                ) {
+                    if let Some(card) = moved_card
+                        .filter(|card| self.state.zones.zone_of(*card) == Some(ZoneType::Library))
+                    {
+                        self.put_on_bottom_of_library(card);
+                    }
+                }
                 if let Some((owner, definition)) = reveal {
                     let count = self.state.players[owner.0]
                         .known_hand

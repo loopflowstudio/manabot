@@ -583,6 +583,36 @@ preserves accepted decisions, dated proof limits and source history.
   and browser geometry. The historical concept-review illustration predates
   implementation and is not a browser capture.
 
+## Retained execution lessons (2026-11-04; MTG-241, pending review)
+
+- A completion boundary includes consequent zone work. Sacrificing a mana
+  source can return a linked exiled card whose entry asks a replacement
+  question. Retaining the paid output and original payment until that entry
+  finishes prevents repeated costs, premature mana and early priority. A
+  constructed real-Command witness at `301877ea1`, retained through
+  `7b381909e`, covers this chain and the source's already-earned tap trigger;
+  it does not establish every payment resource or reconnect path.
+- A simultaneous batch retains transformed proposals, applied replacement
+  identities, pre-departure sources/LKI and original result ordinals across
+  choices. Recheck applicability after each transformation and bind root
+  results only after consequent children finish. Focused debug witnesses cover
+  newly applicable replacements, once-only application, affected-player 3/4
+  counter ordering and deferred combat/SBA commits. Constructed drivers are
+  not complete Doubling Season/Caradora card evidence. Surveil's partition
+  moves together before kept-card ordering; its keyword event follows the
+  completed operation, before the caller's suffix.
+- Exact continuation ownership is necessary but insufficient for learning
+  and possible worlds. Obligation codes and current offers omit consequential
+  retained results and pending batches. Refreshing only the active offer after
+  hidden membership resampling cannot repair saved callers or selected subsets.
+  MTG-241 still lacks complete retained-payload projection and hidden-selection
+  materialization; its public-result migration is not proof of either. Jack
+  Heart's 2026-11-04 directive requires bounded performance attribution,
+  mitigation/remeasurement and policy distinguishability before review, without
+  truncating choices or launching training. Frozen inputs remain frozen; the
+  successor schema must reconcile with MTG-244. No speed or learning-efficacy
+  claim follows from the focused execution tests.
+
 ## Open tensions
 
 - Migrate current Academy match/revision/replay bookkeeping into managym without

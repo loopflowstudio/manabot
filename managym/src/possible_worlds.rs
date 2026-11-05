@@ -68,7 +68,7 @@ fn falling(n: u32, k: u32) -> u128 {
 /// Exact binomial coefficient for the compatible-deal measure. The two-deck
 /// pool keeps `n <= 40`, so `u128` is ample and the incremental formula is
 /// exact at every step.
-fn binom(n: u32, k: u32) -> u128 {
+pub(crate) fn binom(n: u32, k: u32) -> u128 {
     if k > n {
         return 0;
     }
@@ -378,6 +378,10 @@ pub struct HiddenHandConstraints {
     pub foretold: u32,
     /// Pool names that carry foretell and so may fill a foretold slot.
     pub foretell: BTreeSet<String>,
+    /// Frozen count-only samplers cannot represent retained subset constraints.
+    /// This capability flag never identifies a private selected object.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub retained_selection: bool,
 }
 
 /// Card-name multiset of `cards`.
@@ -443,6 +447,7 @@ impl HiddenHandConstraints {
             known_hand,
             foretold,
             foretell,
+            retained_selection: game.has_hidden_selection(viewer),
         }
     }
 }
@@ -539,8 +544,14 @@ impl HiddenHandConstraints {
                     .or_default()
                     .push(card);
             }
+            let public = source.pending_public_entries();
             for cards in by_name.values_mut() {
-                cards.sort_unstable_by_key(|c| c.0);
+                cards.sort_unstable_by_key(|card| {
+                    (
+                        !public.iter().any(|object| object.entity == (*card).into()),
+                        card.0,
+                    )
+                });
             }
 
             let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
@@ -560,8 +571,23 @@ impl HiddenHandConstraints {
             new_hand.sort_unstable_by_key(|c| c.0);
             new_library.shuffle(&mut rng);
 
+            if source.has_hidden_selection(self.viewer)
+                && !source.prepare_selection_foretell(
+                    self.viewer,
+                    &world.hand,
+                    &mut new_library,
+                    &mut rng,
+                )
+            {
+                return Err(MaterializeError::InconsistentWorld);
+            }
             if !branch.fill_foretold_slots(opponent, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
+            }
+            let pending = source.pending_library_entries(opponent);
+            if !pending.is_empty() {
+                new_library.extend(pending);
+                new_library.shuffle(&mut rng);
             }
 
             branch
@@ -576,6 +602,13 @@ impl HiddenHandConstraints {
         }
         branch.shuffle_private_library(self.viewer, &mut rng);
         branch.repin_revealed_library_cards();
+        if !branch.refresh_hidden_selections(
+            self.viewer,
+            &mut rng,
+            &source.hidden_selection_requirements(self.viewer),
+        ) {
+            return Err(MaterializeError::InconsistentWorld);
+        }
 
         // Fail closed: the realized hand name-multiset must equal the world.
         let hand = branch.state.zones.zone_cards(ZoneType::Hand, opponent);
@@ -601,6 +634,21 @@ impl HiddenHandConstraints {
                 .ok_or(MaterializeError::UnsupportedActingPrompt)?;
             match kind {
                 ActionSpaceKind::Priority => branch.refresh_priority_actions(subject),
+                ActionSpaceKind::Modal
+                    if branch
+                        .state
+                        .suspended_decision
+                        .as_ref()
+                        .is_some_and(|suspended| {
+                            matches!(
+                                suspended.decision,
+                                crate::flow::decision::Decision::OrderReplacement { .. }
+                            )
+                        }) =>
+                {
+                    // All prospective entrants and replacement sources are
+                    // public and pinned; the retained alternatives stay valid.
+                }
                 ActionSpaceKind::Learn
                 | ActionSpaceKind::LookAndSelect
                 | ActionSpaceKind::Discard => {
@@ -818,7 +866,23 @@ impl PossibleWorldSpace {
     /// other player; the unseen pool is the opponent's Hand ∪ Library ∪
     /// foretold name multiset; `H` is the opponent's current hand size.
     pub fn for_viewer(game: &Game, viewer: PlayerId) -> Self {
-        Self::from_constraints(HiddenHandConstraints::for_viewer(game, viewer))
+        let mut space = Self::from_constraints(HiddenHandConstraints::for_viewer(game, viewer));
+        if game.has_hidden_selection(viewer) {
+            for world in &mut space.worlds {
+                let bearers = space
+                    .foretell
+                    .iter()
+                    .map(|name| space.pool[name] - world.hand.get(name).copied().unwrap_or(0))
+                    .sum();
+                // The prior measure includes every foretold fill; replace only
+                // that factor, preserving the exact hand-subset multiplicity.
+                world.weight = world.weight / falling(bearers, space.foretold)
+                    * game.selection_foretold_weight(viewer, &world.hand);
+            }
+            space.worlds.retain(|world| world.weight > 0);
+            space.total_weight = space.worlds.iter().map(|world| world.weight).sum();
+        }
+        space
     }
 
     /// Build the space directly from a pool. Used by weight/canonicalization
@@ -846,6 +910,7 @@ impl PossibleWorldSpace {
             known_hand: BTreeMap::new(),
             foretold: 0,
             foretell: BTreeSet::new(),
+            retained_selection: false,
         })
     }
 
@@ -859,6 +924,7 @@ impl PossibleWorldSpace {
             known_hand,
             foretold,
             foretell,
+            retained_selection: _,
         } = constraints;
         let mut residual = pool.clone();
         for (name, count) in &known_hand {
@@ -1054,6 +1120,7 @@ impl PossibleWorldSpace {
             known_hand: self.known_hand.clone(),
             foretold: self.foretold,
             foretell: self.foretell.clone(),
+            retained_selection: source.has_hidden_selection(self.viewer),
         }
         .materialize_validated(source, world, seed, mode)
     }

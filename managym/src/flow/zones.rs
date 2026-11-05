@@ -78,43 +78,12 @@ impl Game {
             .collect()
     }
 
-    /// Stable private search candidates, independent of library order.
-    pub(crate) fn basic_land_search_candidates(
-        &self,
-        player: PlayerId,
-        subtype: &Option<String>,
-        to_hand: bool,
-    ) -> Vec<CardId> {
-        let mut predicate = CardPredicate {
-            subtype: subtype.clone(),
-            ..Default::default()
-        };
-        // Landcycling finds any card of the subtype ("a Plains card"); a
-        // search to hand without a subtype is for "a basic land card".
-        if !to_hand || subtype.is_none() {
-            predicate.card_type = Some(crate::state::card::CardType::Land);
-            predicate.supertype = Some("basic".into());
-        }
-        self.library_search_candidates(player, &predicate)
-    }
-
-    /// Library cards matching `predicate`, in a stable order independent of
-    /// library order.
-    pub(crate) fn library_search_candidates(
-        &self,
-        player: PlayerId,
-        predicate: &CardPredicate,
-    ) -> Vec<CardId> {
-        let mut candidates: Vec<CardId> = self
-            .state
-            .zones
-            .zone_cards(ZoneType::Library, player)
-            .iter()
-            .copied()
-            .filter(|card| self.card_matches_predicate(*card, predicate))
-            .collect();
-        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
-        candidates
+    /// Zone inspection never reveals a library's order. All consumers use
+    /// this stable order for private selection candidates and visible cards.
+    pub(crate) fn selection_zone_cards(&self, owner: PlayerId, zone: ZoneType) -> Vec<CardId> {
+        let mut cards = self.state.zones.zone_cards(zone, owner).to_vec();
+        cards.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        cards
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {

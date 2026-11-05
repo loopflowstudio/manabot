@@ -75,6 +75,14 @@ impl CardPredicate {
         }
     }
 
+    pub fn basic_land() -> Self {
+        Self {
+            card_type: Some(CardType::Land),
+            supertype: Some("basic".into()),
+            ..Self::default()
+        }
+    }
+
     pub fn subtype(subtype: &str) -> Self {
         Self {
             subtype: Some(subtype.to_string()),

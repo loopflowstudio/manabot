@@ -472,6 +472,7 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::Moved => "it".into(),
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
+        ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
         ObjectSelector::You => "you".into(),
         ObjectSelector::Chosen { predicate, except } => format!(
             "{}{}",
@@ -580,6 +581,7 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
+        EffectValue::Objects(of) => format!("the number of {}", selector_description(of)),
         EffectValue::Half(value) => format!("half of {}, rounded down", value_description(value)),
         EffectValue::OwnedPermanentsOpponentsControl => {
             "the number of permanents you own that your opponents control".into()
@@ -688,7 +690,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
-        Move { what, to, tapped, transformed, under, with_counter, linked } => move_description(what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked),
+        Move { what, to, tapped, transformed, under, with_counter, linked, library_end } => {
+            if let Some(end) = library_end { format!("Put {} on the {} of its owner's library", selector_description(what), format!("{end:?}").to_lowercase()) }
+            else { move_description(what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked) }
+        },
         Tap { what } => format!("Tap {}", selector_description(what)),
         Untap { what } => format!("Untap {}", selector_description(what)),
         RemoveAllCounters { from } => format!("Remove all counters from {}", selector_description(from)),
@@ -705,15 +710,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
         MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(max), predicate_description(predicate, "cards"), selector_description(from), effects_description(effects), effects_description(if_declined)),
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),effects_description(effects)),
-        SearchBasicLand { subtype, to_hand: true, .. } => format!("Search your library for a {} card, reveal it, put it into your hand, then shuffle",subtype.as_deref().unwrap_or("land")),
-        SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source, .. } => {
-            let mut text = format!("Search your library for up to {} basic {} cards and put them onto the battlefield{}. Then shuffle",value_description(count),subtype.as_deref().unwrap_or("land"),if *tapped { " tapped" } else { "" });
-            if let Some(n) = untap_if_lands { text.push_str(&format!(". Untap those lands if you control at least {n} lands")); }
-            if *bottom_source { text.push_str(". Put this on the bottom of its owner's library"); }
-            text
-        },
-        OptionalDiscardDraw { count, up_to: 1 } => format!("You may discard a card. If you do, draw {count} cards"),
-        OptionalDiscardDraw { count, up_to } => format!("Discard up to {up_to} cards, then draw {count} for each"),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(what)),
@@ -783,10 +779,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
             match frequency { DelayedFrequency::Once => "once", DelayedFrequency::EachMatch => "each time" },
             effects_description(effects)
         ),
-        MayDiscard { then } => format!(
-            "You may discard a card. If you do, {}",
-            effects_description(then)
-        ),
         ForPlayer { player, effects } => format!(
             "{} does this: {}",
             player_description(player),
@@ -820,7 +812,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         GainLife { amount: EffectValue::Fixed(amount) } => format!("You gain {amount} life"),
         GainLife { amount } => format!("You gain life equal to {}", value_description(amount)),
         FightLastTarget => "The first target fights the last target".into(),
-        SearchLibraryToHand { predicate } => format!("Search your library for {}, reveal it, put it into your hand, then shuffle", predicate_description(predicate, "card")),
+        ShuffleLibrary => "Shuffle your library".into(),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
         Surveil { count } => format!("Surveil {count}"),

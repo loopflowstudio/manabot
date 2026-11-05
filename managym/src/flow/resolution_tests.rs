@@ -1,6 +1,7 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
+use crate::state::ability::LibraryEnd;
 use std::collections::BTreeMap;
 
 use crate::{
@@ -1450,7 +1451,7 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
                     let frames = branch.capture_decision(player, 0).unwrap().frames;
                     assert_eq!(frames.last().unwrap().mode, Some(index + 1));
                     let mut sampled = branch.clone();
-                    sampled.determinize(player, 119);
+                    sampled.determinize(player, 119).unwrap();
                     assert_eq!(
                         sampled.library_top(player, 3),
                         branch.library_top(player, 3)
@@ -1580,9 +1581,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
 #[test]
 fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
     use crate::agent::observation::Observation;
-    use crate::flow::decision::{
-        Decision, EffectFrame, FrameCompletion, LibraryEnd, SuspendedResolution,
-    };
+    use crate::flow::decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution};
 
     for player in [PlayerId(0), PlayerId(1)] {
         let opponent = PlayerId(1 - player.0);
@@ -1620,7 +1619,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
         assert!(visible_library(&game, opponent).is_empty());
         let original = game.state.deterministic_hash();
         let mut sampled = game.clone();
-        sampled.determinize(player, 241);
+        sampled.determinize(player, 241).unwrap();
         assert_eq!(sampled.library_top(player, 3), looked);
         assert_eq!(visible_library(&sampled, player), expected);
         checked_command(
@@ -1699,7 +1698,7 @@ fn retained_search_permission_preserves_opponent_membership_until_caller_finishe
                 .count(),
             library.len()
         );
-        game.determinize(player, 242);
+        game.determinize(player, 242).unwrap();
         assert_eq!(game.state.zones.zone_cards(ZoneType::Hand, opponent), &hand);
         assert_eq!(
             game.state.zones.zone_cards(ZoneType::Library, opponent),
@@ -2129,15 +2128,7 @@ fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() 
     let card = exiled_counter_entry(&mut game, player);
     let mut frame = EffectFrame::new(
         player,
-        vec![Effect::Move {
-            what: ObjectSelector::This,
-            to: ZoneType::Battlefield,
-            tapped: false,
-            transformed: false,
-            under: None,
-            with_counter: None,
-            linked: None,
-        }],
+        vec![Effect::return_to_battlefield(ObjectSelector::This, false)],
     );
     frame.source = Some(card);
     frame.source_ref = game.current_object_ref(card);
@@ -2341,4 +2332,637 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     );
     assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
     assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CardMoved { card, from: Some(ZoneType::Battlefield), .. } if *card == source_card)).count(), 1);
+}
+
+#[test]
+fn hidden_selection_partial_discard_survives_both_samplers_and_divergent_commands() {
+    use crate::{
+        flow::decision::{Decision, EffectFrame},
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+    };
+
+    for player in [PlayerId(0), PlayerId(1)] {
+        let viewer = PlayerId(1 - player.0);
+        let (mut root, _, _) = fixture(player);
+        let hand = root.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
+        assert!(hand.len() >= 2);
+        root.run_frame(EffectFrame::new(
+            player,
+            vec![Effect::discard_draw(2, 1), Effect::gain_life(3)],
+        ));
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        checked_command(
+            &mut root,
+            Action::SelectCard {
+                player,
+                card: hand[0],
+            },
+        );
+        assert_eq!(
+            root.state.zones.size(ZoneType::Hand, player),
+            hand.len(),
+            "partial selection commits no zone moves"
+        );
+        let original = root.state.deterministic_hash();
+        let mut known = root.clone();
+        known.determinize(player, 241).unwrap();
+        assert_eq!(
+            known.state.suspended_decision, root.state.suspended_decision,
+            "the choosing viewer retains exact choices"
+        );
+        let space = PossibleWorldSpace::for_viewer(&root, viewer);
+        let mut materialized = space
+            .materialize_index(&root, 0, 17, MaterializeMode::RefreshOpponentCommitment)
+            .unwrap();
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, 91).unwrap();
+        for branch in [&mut materialized, &mut sampled] {
+            let Decision::SelectCards {
+                selected,
+                candidates,
+                ..
+            } = &branch.state.suspended_decision.as_ref().unwrap().decision
+            else {
+                panic!("selection retained");
+            };
+            assert_eq!(selected.len(), 1, "a prior choice cannot disappear");
+            assert!(candidates.iter().all(|object| branch.state.zones.contains(
+                CardId::from(object.entity),
+                ZoneType::Hand,
+                player
+            )));
+            assert!(selected.iter().all(|object| candidates.contains(object)));
+            let first = CardId::from(selected[0].entity);
+            let second = branch
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .find_map(|action| match action {
+                    Action::SelectCard { card, .. } => Some(*card),
+                    _ => None,
+                })
+                .unwrap();
+            for choice in [
+                Action::Decline { player },
+                Action::SelectCard {
+                    player,
+                    card: second,
+                },
+            ] {
+                let mut fork = branch.clone();
+                let count = if matches!(choice, Action::Decline { .. }) {
+                    1
+                } else {
+                    2
+                };
+                let graveyard = fork.state.zones.size(ZoneType::Graveyard, player);
+                checked_command(&mut fork, choice);
+                assert_eq!(fork.state.zones.zone_of(first), Some(ZoneType::Graveyard));
+                assert_eq!(
+                    fork.state.zones.size(ZoneType::Graveyard, player),
+                    graveyard + count
+                );
+                assert_eq!(
+                    fork.state.zones.size(ZoneType::Hand, player),
+                    hand.len(),
+                    "draw once per committed discard"
+                );
+                assert_eq!(
+                    fork.state.players[player.0].life, 23,
+                    "one caller finalization"
+                );
+            }
+        }
+        assert_eq!(root.state.deterministic_hash(), original);
+    }
+}
+
+#[test]
+fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
+    use crate::{
+        agent::observation::Observation,
+        flow::decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution},
+        possible_worlds::HiddenHandConstraints,
+        state::ability::PlayerSelector,
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, _, _) = fixture(player);
+    let hand = root.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![
+            Effect::SelectCards {
+                from: ObjectSelector::Zone(ZoneType::Hand),
+                predicate: CardPredicate::default(),
+                min: 1,
+                max: 1.into(),
+                effects: vec![
+                    Effect::ForPlayer {
+                        player: PlayerSelector::EachOpponent,
+                        effects: vec![pause()],
+                    },
+                    Effect::move_to(ObjectSelector::Selected, ZoneType::Graveyard),
+                ],
+                if_declined: vec![],
+            },
+            Effect::gain_life(3),
+        ],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    checked_command(
+        &mut root,
+        Action::SelectCard {
+            player,
+            card: hand[0],
+        },
+    );
+    // Retain the choice-bearing child beneath another scope and saved decision.
+    let mut caller = root.state.suspended_decision_mut().take().unwrap();
+    caller.frame.remembered = caller.frame.selected.clone();
+    let mut child = EffectFrame::new(viewer, vec![]);
+    child.remembered = caller.frame.remembered.clone();
+    child.selected = caller.frame.selected.clone();
+    child.selected_from = caller.frame.selected_from.clone();
+    child.completion = FrameCompletion::Decision(Box::new(caller));
+    *root.state.suspended_decision_mut() = Some(SuspendedResolution {
+        frame: child,
+        decision: Decision::Modal {
+            player: viewer,
+            modes: vec![vec![], vec![Effect::gain_life(2)]],
+        },
+    });
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let hidden_before = Observation::for_player(&root, viewer);
+    let constraints = HiddenHandConstraints::for_viewer(&root, viewer);
+    let compatible = BTreeMap::from([("Mountain".to_string(), hand.len() as u32)]);
+    let materialized = constraints
+        .materialize_hand(&root, &compatible, 19)
+        .unwrap();
+    let mut sampled = root.clone();
+    sampled.determinize(viewer, 107).unwrap();
+    for mut branch in [materialized, sampled] {
+        let suspended = branch.state.suspended_decision.as_ref().unwrap();
+        let FrameCompletion::Decision(caller) = &suspended.frame.completion else {
+            panic!("caller retained");
+        };
+        assert_eq!(
+            suspended.frame.selected, caller.frame.selected,
+            "inherited bindings remap together"
+        );
+        assert_eq!(suspended.frame.remembered, caller.frame.selected);
+        assert_eq!(caller.frame.remembered, caller.frame.selected);
+        let selected = CardId::from(caller.frame.selected[0].entity);
+        assert!(branch
+            .state
+            .zones
+            .contains(selected, ZoneType::Hand, player));
+        let hidden_after = Observation::for_player(&branch, viewer);
+        assert_eq!(
+            hidden_after.opponent_cards, hidden_before.opponent_cards,
+            "private selection membership is not observation data"
+        );
+        checked_command(
+            &mut branch,
+            Action::ChooseMode {
+                player: viewer,
+                mode: 0,
+            },
+        );
+        checked_command(
+            &mut branch,
+            Action::ChooseMode {
+                player: viewer,
+                mode: 0,
+            },
+        );
+        assert_eq!(
+            branch.state.zones.zone_of(selected),
+            Some(ZoneType::Graveyard)
+        );
+        assert_eq!(branch.state.players[player.0].life, 23);
+    }
+}
+
+#[test]
+fn hidden_selection_library_commitments_survive_sampling_without_revealing_order() {
+    use crate::{
+        agent::observation::Observation,
+        flow::decision::{Decision, EffectFrame},
+        possible_worlds::{MaterializeError, MaterializeMode, PossibleWorld, PossibleWorldSpace},
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, _, _) = fixture(player);
+    // A restricted, partial search must leave at least its committed number
+    // of eligible cards in the sampled library, even when its chooser is hidden.
+    let bolts: Vec<_> = root
+        .state
+        .cards
+        .iter()
+        .enumerate()
+        .filter(|(_, card)| card.owner == player && card.name == "Lightning Bolt")
+        .map(|(index, _)| CardId(index))
+        .collect();
+    for card in &bolts {
+        root.move_card(*card, ZoneType::Library);
+    }
+    while root.state.zones.size(ZoneType::Hand, player) < 7 {
+        let card = root
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, player)
+            .iter()
+            .copied()
+            .find(|card| root.state.cards[*card].name == "Mountain")
+            .unwrap();
+        root.move_card(card, ZoneType::Hand);
+    }
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![
+            Effect::search_library(
+                CardPredicate {
+                    card_type: Some(CardType::Instant),
+                    ..Default::default()
+                },
+                2.into(),
+                vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            ),
+            Effect::gain_life(3),
+        ],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    checked_command(
+        &mut root,
+        Action::SelectCard {
+            player,
+            card: bolts[0],
+        },
+    );
+    let owner_before = Observation::for_player(&root, player);
+    let mut known = root.clone();
+    known.determinize(player, 13).unwrap();
+    assert_eq!(
+        Observation::for_player(&known, player).agent_cards,
+        owner_before.agent_cards,
+        "inspection reveals membership, never a shuffled draw order"
+    );
+    assert_eq!(
+        known.state.suspended_decision,
+        root.state.suspended_decision
+    );
+    let space = PossibleWorldSpace::for_viewer(&root, viewer);
+    let hand_size = root.state.zones.size(ZoneType::Hand, player);
+    let impossible = PossibleWorld {
+        hand: BTreeMap::from([
+            ("Lightning Bolt".into(), bolts.len() as u32),
+            ("Mountain".into(), (hand_size - bolts.len()) as u32),
+        ]),
+        weight: 1,
+    };
+    assert!(
+        matches!(
+            space.materialize(&root, &impossible, 29),
+            Err(MaterializeError::InconsistentWorld)
+        ),
+        "a world cannot erase a committed eligible selection"
+    );
+    assert!(
+        space.worlds().iter().all(
+            |world| world.hand.get("Lightning Bolt").copied().unwrap_or(0) < bolts.len() as u32
+        ),
+        "incompatible deals carry no probability mass"
+    );
+    let index = space
+        .worlds()
+        .iter()
+        .position(|world| world.hand.get("Lightning Bolt").copied().unwrap_or(0) == 0)
+        .unwrap();
+    let materialized = space
+        .materialize_index(&root, index, 31, MaterializeMode::RefreshOpponentCommitment)
+        .unwrap();
+    let mut sampled = root.clone();
+    sampled.determinize(viewer, 7).unwrap();
+    for mut branch in [sampled, materialized] {
+        let Decision::SelectCards { selected, .. } =
+            &branch.state.suspended_decision.as_ref().unwrap().decision
+        else {
+            panic!("search retained");
+        };
+        assert_eq!(selected.len(), 1);
+        let selected = CardId::from(selected[0].entity);
+        assert_eq!(
+            branch.state.zones.zone_of(selected),
+            Some(ZoneType::Library)
+        );
+        assert_eq!(branch.state.cards[selected].name, "Lightning Bolt");
+        assert!(Observation::for_player(&branch, viewer)
+            .opponent_cards
+            .iter()
+            .all(|card| card.zone != ZoneType::Library && card.zone != ZoneType::Hand));
+        checked_command(&mut branch, Action::Decline { player });
+        assert_eq!(branch.state.zones.zone_of(selected), Some(ZoneType::Hand));
+        assert_eq!(
+            branch.state.players[player.0]
+                .known_hand
+                .get(&branch.state.cards[selected].definition_id),
+            Some(&1)
+        );
+        assert_eq!(branch.state.events.iter().filter(|event| matches!(event, GameEvent::LibrarySearched { player: owner } if *owner == player)).count(), 1);
+        assert_eq!(branch.state.players[player.0].life, 23);
+    }
+}
+
+#[test]
+fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_after() {
+    use crate::{
+        flow::{
+            decision::{Decision, EffectFrame},
+            trigger::ExileLink,
+        },
+        state::ability::Ability,
+    };
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Mountain".into(), 24),
+        ("Gray Ogre".into(), 12),
+        ("Unlucky Cabbage Merchant".into(), 4),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        241,
+        false,
+    );
+    let merchant = game
+        .scenario_force_battlefield(player, "Unlucky Cabbage Merchant", true)
+        .unwrap();
+    let source = game.state.permanents[merchant].as_ref().unwrap().card;
+    let source_ref = game.permanent_object_ref(merchant).unwrap();
+    counter_replacement_drivers(&mut game, player);
+    let returned = exiled_counter_entry(&mut game, player);
+    // The real Merchant program is the consumer; this constructed link isolates
+    // a source departure whose consequent entry asks a replacement question.
+    game.state.exile_links.push(ExileLink {
+        source: source_ref,
+        exiled_card: returned,
+        returns: true,
+    });
+    let Ability::Triggered { effects, .. } = &game.state.cards[source].abilities[1];
+    let mut effects = effects.clone();
+    effects.push(Effect::gain_life(3));
+    let mut frame = EffectFrame::new(player, effects);
+    frame.source = Some(source);
+    frame.source_ref = Some(source_ref);
+    game.run_frame(frame);
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+    let mut expected_library = vec![source];
+    expected_library.extend(game.state.zones.zone_cards(ZoneType::Library, player));
+    checked_command(&mut game, Action::Decline { player });
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().unwrap().decision,
+        Decision::OrderReplacement { .. }
+    ));
+    assert_eq!(
+        game.state.zones.zone_cards(ZoneType::Library, player),
+        &expected_library,
+        "bottom placement has committed; the shuffle must wait for linked entry"
+    );
+    assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));
+    assert_eq!(game.state.players[player.0].life, 20);
+    assert!(
+        !game
+            .state
+            .events
+            .iter()
+            .any(|event| matches!(event, GameEvent::LibrarySearched { .. })),
+        "search completion waits for its whole child scope"
+    );
+    for mode in [0, 1] {
+        let mut fork = game.clone();
+        checked_command(&mut fork, Action::ChooseMode { player, mode });
+        assert_eq!(
+            fork.state.zones.zone_of(returned),
+            Some(ZoneType::Battlefield)
+        );
+        assert_eq!(fork.state.zones.zone_of(source), Some(ZoneType::Library));
+        assert_eq!(fork.state.players[player.0].life, 23);
+        assert_eq!(
+            fork.state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::LibrarySearched { .. }))
+                .count(),
+            1
+        );
+        assert_eq!(
+            fork.state.zones.size(ZoneType::Library, player),
+            expected_library.len()
+        );
+    }
+}
+
+#[test]
+fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
+    use crate::{
+        agent::observation::Observation,
+        flow::decision::{Decision, EffectFrame},
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+    };
+    for zone in [ZoneType::Hand, ZoneType::Library] {
+        let player = PlayerId(0);
+        let viewer = PlayerId(1);
+        let (mut root, _, _) = fixture(player);
+        counter_replacement_drivers(&mut root, player);
+        let entering = exiled_counter_entry(&mut root, player);
+        root.move_card(entering, zone);
+        root.run_frame(EffectFrame::new(
+            player,
+            vec![Effect::SelectCards {
+                from: ObjectSelector::Zone(zone),
+                predicate: CardPredicate::creature(),
+                min: 0,
+                max: 1.into(),
+                effects: vec![Effect::return_to_battlefield(
+                    ObjectSelector::Selected,
+                    false,
+                )],
+                if_declined: vec![],
+            }],
+        ));
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        checked_command(
+            &mut root,
+            Action::SelectCard {
+                player,
+                card: entering,
+            },
+        );
+        assert!(matches!(
+            root.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::OrderReplacement { .. }
+        ));
+        assert!(
+            Observation::for_player(&root, viewer)
+                .opponent_cards
+                .iter()
+                .any(|card| card.id == root.state.cards[entering].id.0 as i32 && card.zone == zone),
+            "a precommit entrant is public during replacement choices"
+        );
+        let space = PossibleWorldSpace::for_viewer(&root, viewer);
+        let materialized = space
+            .materialize_index(&root, 0, 31, MaterializeMode::RefreshOpponentCommitment)
+            .unwrap();
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, 11).unwrap();
+        for mut branch in [sampled, materialized] {
+            assert_eq!(branch.state.zones.zone_of(entering), Some(zone));
+            assert_eq!(
+                branch
+                    .state
+                    .suspended_decision
+                    .as_ref()
+                    .unwrap()
+                    .frame
+                    .selected,
+                root.state
+                    .suspended_decision
+                    .as_ref()
+                    .unwrap()
+                    .frame
+                    .selected
+            );
+            checked_command(&mut branch, Action::ChooseMode { player, mode: 0 });
+            assert_eq!(
+                branch.state.zones.zone_of(entering),
+                Some(ZoneType::Battlefield)
+            );
+        }
+    }
+}
+
+#[test]
+fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
+    use crate::{
+        flow::{
+            cast_permission::ExileCastGrant,
+            decision::{Decision, EffectFrame},
+        },
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+        state::{card::StaticAbility, mana::ManaCost},
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, _, _) = fixture(player);
+    let cards: Vec<_> = root
+        .state
+        .cards
+        .iter()
+        .enumerate()
+        .filter(|(_, card)| card.owner == player)
+        .map(|(index, _)| CardId(index))
+        .collect();
+    let bolts: Vec<_> = cards
+        .iter()
+        .copied()
+        .filter(|card| root.state.cards[*card].name == "Lightning Bolt")
+        .take(3)
+        .collect();
+    let ogres: Vec<_> = cards
+        .iter()
+        .copied()
+        .filter(|card| root.state.cards[*card].name == "Gray Ogre")
+        .take(2)
+        .collect();
+    for card in cards {
+        root.move_card(card, ZoneType::Graveyard);
+    }
+    // Two foretold slots can consume either of two names. With two of the
+    // three instants already selected in the library, only 14 of the 20
+    // ordered fills remain compatible: 2 Ogre/Ogre and 12 Ogre/Bolt fills.
+    for card in bolts.iter().chain(&ogres) {
+        root.state.cards[*card]
+            .statics
+            .push(StaticAbility::Foretell(ManaCost::parse("{1}")));
+        root.move_card(
+            *card,
+            if bolts.contains(card) {
+                ZoneType::Library
+            } else {
+                ZoneType::Exile
+            },
+        );
+    }
+    for card in &ogres {
+        let object = root.current_object_ref(*card).unwrap();
+        root.state
+            .cast_permissions
+            .exile_grants
+            .push(ExileCastGrant {
+                foretold: true,
+                ..ExileCastGrant::new(object, player)
+            });
+    }
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![Effect::search_library(
+            CardPredicate {
+                card_type: Some(CardType::Instant),
+                ..Default::default()
+            },
+            3.into(),
+            vec![Effect::return_to_hand(ObjectSelector::Selected)],
+        )],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    for card in &bolts[..2] {
+        checked_command(
+            &mut root,
+            Action::SelectCard {
+                player,
+                card: *card,
+            },
+        );
+    }
+    let space = PossibleWorldSpace::for_viewer(&root, viewer);
+    assert_eq!(space.worlds().len(), 1);
+    assert_eq!(
+        space.total_weight(),
+        14,
+        "count compatible physical deals, not subset choices"
+    );
+    for seed in 0..8 {
+        let exact = space
+            .materialize_index(&root, 0, seed, MaterializeMode::RefreshOpponentCommitment)
+            .unwrap();
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, seed).unwrap();
+        for mut branch in [exact, sampled] {
+            let Decision::SelectCards { selected, .. } =
+                &branch.state.suspended_decision.as_ref().unwrap().decision
+            else {
+                panic!("selection remains pending");
+            };
+            assert_eq!(selected.len(), 2);
+            for object in selected {
+                let card = CardId::from(object.entity);
+                assert_eq!(branch.state.cards[card].name, "Lightning Bolt");
+                assert!(branch.state.zones.contains(card, ZoneType::Library, player));
+            }
+            checked_command(&mut branch, Action::Decline { player });
+            assert_eq!(branch.state.zones.size(ZoneType::Hand, player), 2);
+            assert_eq!(branch.foretold_cards(player).len(), 2);
+            assert!(branch
+                .state
+                .zones
+                .zone_cards(ZoneType::Hand, player)
+                .iter()
+                .all(|card| branch.state.cards[*card].name == "Lightning Bolt"));
+        }
+    }
 }

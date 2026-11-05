@@ -180,7 +180,7 @@ fn hybrid_discard_is_optional_at_resolution_and_draws_exactly_two() {
         cast(&mut s, "Abandon Attachments");
         s.pass_priority();
         s.pass_priority();
-        assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
         let owner = Observation::for_player(s.game(), PlayerId(0));
         let other = Observation::for_player(s.game(), PlayerId(1));
         assert!(owner.agent_cards.iter().any(|c| c.name == "Plains"));
@@ -2085,13 +2085,17 @@ fn sokka_discards_up_to_two_then_draws_that_many_and_grows_on_artifacts_and_less
     let first = move_from_library(&mut s, 0, "Forest", ZoneType::Hand);
     let second = move_from_library(&mut s, 0, "Island", ZoneType::Hand);
     cast(&mut s, "Sokka, Bold Boomeranger");
-    pass_until(&mut s, ActionSpaceKind::Discard);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { card, .. } if *card == first),
     );
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
-    assert_eq!(hand(&s, 0).len(), 2, "no draw before the discards finish");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    assert_eq!(
+        hand(&s, 0).len(),
+        3,
+        "no movement before the discard subset is complete"
+    );
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { card, .. } if *card == second),
@@ -2120,7 +2124,7 @@ fn sokka_discards_up_to_two_then_draws_that_many_and_grows_on_artifacts_and_less
     let mut s = five_color_setup(&["Sokka, Bold Boomeranger"]);
     move_from_library(&mut s, 0, "Forest", ZoneType::Hand);
     cast(&mut s, "Sokka, Bold Boomeranger");
-    pass_until(&mut s, ActionSpaceKind::Discard);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     settle(&mut s);
     assert_eq!(hand(&s, 0).len(), 1);
@@ -4095,7 +4099,7 @@ fn scry_revealed_card_is_observation_encodable() {
 fn determinize_pins_scry_revealed_cards_on_top() {
     let mut s = glider_kids_scry_setup(25);
     let top = library_top(&s, 0);
-    s.game_mut().determinize(PlayerId(0), 12345);
+    s.game_mut().determinize(PlayerId(0), 12345).unwrap();
     assert_eq!(library_top(&s, 0), top);
     // The decision is still answerable.
     assert!(s.take_action_by_type(ActionType::ScryBottom));
@@ -4376,7 +4380,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
     let mut resampled = false;
     for seed in 0..256 {
         let mut game = s.game().clone();
-        game.determinize(PlayerId(1), seed);
+        game.determinize(PlayerId(1), seed).unwrap();
         let mut seen = BTreeMap::new();
         for player in [PlayerId(0), PlayerId(1)] {
             for zone in zones {
@@ -10141,7 +10145,7 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
         let chosen = library_card(&s, 0, "Gray Ogre");
         s.game_mut().move_card(chosen, ZoneType::Hand);
         cast(&mut s, "Yuyan Archers");
-        pass_until(&mut s, ActionSpaceKind::Discard);
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let top = *s
             .game()
             .state
@@ -12854,7 +12858,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let object = s.game().current_object_ref(strike).unwrap();
     assert!(s.choose_target(Target::GraveyardCard(object)));
-    pass_until(&mut s, ActionSpaceKind::Discard);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, fodder);
     settle(&mut s);
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
@@ -14733,7 +14737,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
         assert!(!offered_cards(&s).contains(&other));
         assert_eq!(offered_cards(&s).len(), 4);
         let mut fork = s.game().clone();
-        fork.determinize(PlayerId(0), 19);
+        fork.determinize(PlayerId(0), 19).unwrap();
         assert_eq!(
             fork.state.zones.zone_of(hand),
             Some(ZoneType::Hand),
@@ -15229,7 +15233,7 @@ fn secret_of_bloodbending_delegated_spell_uses_victims_mana_and_replays_atomical
         .any(|c| c.zone == ZoneType::Hand));
     let before = s.game().semantic_observation(PlayerId(0)).unwrap().identity;
     let mut sampled = s.game().clone();
-    sampled.determinize(PlayerId(0), 31);
+    sampled.determinize(PlayerId(0), 31).unwrap();
     assert_eq!(
         sampled.semantic_observation(PlayerId(0)).unwrap().identity,
         before
@@ -15361,7 +15365,7 @@ fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
         .iter()
         .any(|c| c.id == id && c.zone == ZoneType::Exile));
     let mut sampled = s.game().clone();
-    sampled.determinize(PlayerId(0), 17);
+    sampled.determinize(PlayerId(0), 17).unwrap();
     assert_eq!(
         sampled.semantic_observation(PlayerId(0)).unwrap().identity,
         s.game().semantic_observation(PlayerId(0)).unwrap().identity

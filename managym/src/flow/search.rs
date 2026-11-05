@@ -51,7 +51,34 @@ impl Game {
     ///   materialization fills them.
     ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
-    pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
+    pub fn determinize(&mut self, perspective: PlayerId, seed: u64) -> Result<(), AgentError> {
+        // Rejection is needed only when a retained unknown choice constrains
+        // the deal. Ordinary priority/search roots pay no extra full clone.
+        let requirements = self.hidden_selection_requirements(perspective);
+        let original = self.has_hidden_selection(perspective).then(|| self.clone());
+        for attempt in 0..64 {
+            if attempt > 0 {
+                *self = original.as_ref().expect("constrained selection").clone();
+            }
+            let sample_seed = if attempt == 0 {
+                seed
+            } else {
+                mix_seed(seed, attempt)
+            };
+            self.determinize_zones(perspective, sample_seed);
+            let mut rng = ChaCha8Rng::seed_from_u64(mix_seed(sample_seed, 241));
+            if self.refresh_hidden_selections(perspective, &mut rng, &requirements) {
+                self.refresh_sampled_decision(perspective);
+                return Ok(());
+            }
+        }
+        *self = original.expect("constrained selection");
+        Err(AgentError(
+            "no sampled deal satisfies retained selection commitments".into(),
+        ))
+    }
+
+    fn determinize_zones(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
         assert!(
@@ -74,7 +101,12 @@ impl Game {
                     "foretold cards are in their own pool"
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
-                let library = residual.split_off(unknown_slots);
+                let mut library = residual.split_off(unknown_slots);
+                let pending = self.pending_library_entries(opponent);
+                if !pending.is_empty() {
+                    library.extend(pending);
+                    library.shuffle(&mut rng);
+                }
                 known.extend(residual);
                 self.state.zones.reassign_hidden(opponent, known, library);
             }
@@ -82,6 +114,10 @@ impl Game {
         self.shuffle_private_library(perspective, &mut rng);
 
         self.repin_revealed_library_cards();
+    }
+
+    fn refresh_sampled_decision(&mut self, perspective: PlayerId) {
+        let opponent = PlayerId(1 - perspective.0);
         // An opponent's hidden hand can change under resampling. Rebuild
         // private choices from that sampled authority, never keep old hand IDs.
         let refresh = self
@@ -93,11 +129,9 @@ impl Game {
                     || suspended.decision.player() == opponent
                         && matches!(
                             suspended.decision,
-                            Decision::Learn { .. }
+                            Decision::SelectCards { from: Some(_), .. }
+                                | Decision::Learn { .. }
                                 | Decision::Discard { .. }
-                                | Decision::OptionalDiscardDraw { .. }
-                                | Decision::SearchBasicLand { .. }
-                                | Decision::SearchLibraryToHand { .. }
                                 | Decision::SearchDistinctLands { .. }
                                 | Decision::SearchNamed { .. }
                                 | Decision::CastDuringResolution { .. }
@@ -150,6 +184,7 @@ impl Game {
     /// this is exactly the possible-world pool, including any publicly known
     /// hand cards.
     pub fn unseen_cards(&self, owner: PlayerId, viewer: PlayerId) -> Vec<CardId> {
+        let pending_library = self.pending_library_entries(owner);
         let zones: &[ZoneType] = if owner == viewer {
             &[ZoneType::Library]
         } else {
@@ -158,6 +193,7 @@ impl Game {
         let mut cards: Vec<CardId> = zones
             .iter()
             .flat_map(|zone| self.state.zones.zone_cards(*zone, owner).iter().copied())
+            .filter(|card| !pending_library.contains(card))
             .collect();
         if !self.shares_information(viewer, owner) {
             cards.extend(self.foretold_cards(owner));
@@ -168,14 +204,32 @@ impl Game {
     /// Canonical physical witnesses for public definition counts, plus the
     /// residual unseen pool. Never pins the physical copy that was revealed.
     pub(crate) fn hidden_hand_partition(&self, player: PlayerId) -> (Vec<CardId>, Vec<CardId>) {
+        let public = self.pending_public_entries();
+        let pending_library = self.pending_library_entries(player);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
             .flat_map(|zone| self.state.zones.zone_cards(zone, player).iter().copied())
+            .filter(|card| !pending_library.contains(card))
             .collect();
         pool.sort_unstable_by_key(|card| card.0);
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
         let mut residual = Vec::new();
+        // Public entrants in a hand pin the physical witness; ordinary reveals
+        // still reserve only a definition minimum, as before.
+        pool.retain(|card| {
+            if public.iter().any(|object| object.entity == (*card).into())
+                && self.state.zones.contains(*card, ZoneType::Hand, player)
+            {
+                known.push(*card);
+                if let Some(count) = counts.get_mut(&self.state.cards[*card].definition_id) {
+                    *count = count.saturating_sub(1);
+                }
+                false
+            } else {
+                true
+            }
+        });
         for card in pool {
             if let Some(count) = counts.get_mut(&self.state.cards[card].definition_id) {
                 if *count > 0 {

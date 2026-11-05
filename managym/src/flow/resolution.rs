@@ -38,6 +38,7 @@ impl Game {
     /// announced X and recorded excess damage.
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         match value {
+            EffectValue::Objects(of) => self.select(of, frame).len() as i32,
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => match frame.context_target {
                 Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
@@ -79,7 +80,8 @@ impl Game {
     pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
             EffectValue::Fixed(value) => *value,
-            EffectValue::X
+            EffectValue::Objects(_)
+            | EffectValue::X
             | EffectValue::ExcessDamage
             | EffectValue::SourcePower
             | EffectValue::TriggeringPower
@@ -660,12 +662,14 @@ impl Game {
                 batch.binding = EventBinding::Moved {
                     linked: None,
                     shuffle: false,
+                    library_end: None,
                     reveal: false,
                 };
                 frame.batch = Some(batch);
                 None
             }
             Effect::Move {
+                library_end,
                 what,
                 to,
                 tapped,
@@ -734,7 +738,8 @@ impl Game {
                     linked: linked.and_then(|linked| {
                         source.map(|source| (source, linked == LinkedExile::UntilSourceLeaves))
                     }),
-                    shuffle: *to == ZoneType::Library,
+                    shuffle: *to == ZoneType::Library && library_end.is_none(),
+                    library_end: *library_end,
                     reveal: *to == ZoneType::Hand,
                 };
                 frame.batch = Some(batch);
@@ -874,16 +879,31 @@ impl Game {
                         self.card_matches_predicate(CardId::from(object.entity), predicate)
                     })
                     .collect();
-                let max = (self.effect_value(max, frame).max(0) as usize).min(candidates.len());
-                if max == 0 {
-                    frame.select_scope(Vec::new(), if_declined.clone());
+                let max = self.effect_value(max, frame).max(0) as usize;
+                let min = (*min).min(max).min(candidates.len());
+                if *from == ObjectSelector::Zone(ZoneType::Library) {
+                    frame.complete_with_event(GameEvent::LibrarySearched {
+                        player: frame.controller,
+                    });
+                }
+                if max == 0 || candidates.is_empty() {
+                    frame.select_scope(Vec::new(), None, if_declined.clone());
                     None
                 } else {
                     Some(Decision::SelectCards {
                         player: frame.controller,
+                        from: if let ObjectSelector::Zone(zone) = from {
+                            Some(crate::flow::decision::ZoneSelection {
+                                owner: frame.controller,
+                                zone: *zone,
+                                predicate: predicate.clone(),
+                            })
+                        } else {
+                            None
+                        },
                         candidates,
                         selected: Vec::new(),
-                        min: (*min).min(max),
+                        min,
                         max,
                         effects: effects.clone(),
                         if_declined: if_declined.clone(),
@@ -896,36 +916,6 @@ impl Game {
             }
             Effect::TargetClause { .. } => unreachable!("clauses are bound before resolution"),
 
-            Effect::SearchBasicLand {
-                subtype,
-                count,
-                tapped,
-                untap_if_lands,
-                bottom_source,
-                to_hand,
-            } => {
-                self.emit(GameEvent::LibrarySearched {
-                    player: frame.controller,
-                });
-                Some(Decision::SearchBasicLand {
-                    player: frame.controller,
-                    subtype: subtype.clone(),
-                    remaining: self.effect_value(count, frame).max(0) as usize,
-                    tapped: *tapped,
-                    untap_if_lands: *untap_if_lands,
-                    bottom_source: *bottom_source,
-                    to_hand: *to_hand,
-                    selected: Vec::new(),
-                })
-            }
-            Effect::OptionalDiscardDraw { count, up_to } => {
-                (*up_to > 0).then_some(Decision::OptionalDiscardDraw {
-                    player: frame.controller,
-                    count: *count,
-                    remaining: *up_to,
-                    discarded: 0,
-                })
-            }
             Effect::Discard { what, count } => {
                 frame.this_way.clear();
                 let [Affected::Player(player)] = self.resolve_affected(what, frame)[..] else {
@@ -940,7 +930,6 @@ impl Game {
                     .then_some(Decision::Discard {
                         player,
                         remaining: *count,
-                        then: None,
                     })
             }
             Effect::CopyTriggeringObject => {
@@ -1272,22 +1261,9 @@ impl Game {
                 frame.batch = Some(batch);
                 None
             }
-            Effect::SearchLibraryToHand { predicate } => {
-                self.emit(GameEvent::LibrarySearched {
-                    player: frame.controller,
-                });
-                // With nothing to find, the search still shuffles.
-                if self
-                    .library_search_candidates(frame.controller, predicate)
-                    .is_empty()
-                {
-                    self.shuffle_library(frame.controller);
-                    return None;
-                }
-                Some(Decision::SearchLibraryToHand {
-                    player: frame.controller,
-                    predicate: predicate.clone(),
-                })
+            Effect::ShuffleLibrary => {
+                self.shuffle_library(frame.controller);
+                None
             }
             Effect::CounterSpell { what } => {
                 // Spells only: countering an ability is a different effect.
@@ -1360,19 +1336,6 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
-            Effect::MayDiscard { then } => {
-                frame.this_way.clear();
-                (!self
-                    .state
-                    .zones
-                    .zone_cards(ZoneType::Hand, frame.controller)
-                    .is_empty())
-                .then(|| Decision::Discard {
-                    player: frame.controller,
-                    remaining: 1,
-                    then: Some(then.clone()),
-                })
-            }
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
@@ -1820,6 +1783,7 @@ impl Game {
                         source_card: CardId::from(watched.entity),
                         source_ref: Some(watched),
                         effects: vec![Effect::Move {
+                            library_end: None,
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,
                             tapped: true,
@@ -1940,6 +1904,11 @@ impl Game {
             .copied()
             .filter(|object| self.current_object_ref(CardId::from(object.entity)) == Some(*object))
             .collect(),
+            ObjectSelector::Zone(zone) => self
+                .selection_zone_cards(frame.controller, *zone)
+                .into_iter()
+                .filter_map(|card| self.current_object_ref(card))
+                .collect(),
             ObjectSelector::You => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");

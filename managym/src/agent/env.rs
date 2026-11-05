@@ -944,7 +944,7 @@ impl Env {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
         game.require_open_decklist(PlayerId(perspective))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1116,7 +1116,7 @@ impl Env {
             .as_mut()
             .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
         game.require_open_decklist(PlayerId(perspective))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1157,7 +1157,7 @@ impl Env {
             |game, hero, world_index| {
                 let world_seed = mix_seed(seed, world_index as u64);
                 let mut world = game.clone();
-                world.determinize(hero, world_seed);
+                world.determinize(hero, world_seed)?;
                 Ok((world, world_seed))
             },
         )

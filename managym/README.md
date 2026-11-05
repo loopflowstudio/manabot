@@ -295,17 +295,35 @@ priority. Combat, SBA departures, spell finalization, activated costs, token
 entry and Surveil movement use this owner. SBA progress distinguishes stable,
 changed and pending; a pending turn action cannot enter priority stabilization.
 Immediate fixture/arithmetic helpers require completion without a question and
-fail explicitly if used for a choice-bearing event. Remaining hidden-zone
-selection and complete versioned pending-payload projection are still under
-implementation; obligation codes alone do not represent those payloads.
+fail explicitly if used for a choice-bearing event. Sacrifice facts match their
+pre-move subjects after replacement choices and before any batch member leaves;
+trigger placement still waits for resolution. Complete versioned pending-payload
+projection remains under implementation; obligation codes alone do not represent
+those payloads.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
 `ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
 result independently of a later `Move`; the caller keeps those results while
-selection effects run. Current mill consumers use ordinary `MillCards`, `If`,
-`SelectCards` and `Move` composition. Shared selection has obligation code 28;
-retired code 5 keeps its historical meaning.
+selection effects run. Mill, optional discard/draw and basic/tutor searches use
+ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+`ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
+materializers refresh unknown selected subsets throughout saved callers and child
+scopes, preserving cardinality and exact viewer-known choices. Restricted partial
+selections exclude incompatible count worlds. Foretold assignments use the same
+subset constraints: exact weights count only compatible ordered fills, and the
+materializer samples that conditional measure. Commitments are captured before
+zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
+Frozen count-only belief samplers reject these additional constraints before
+inference. Library inspection exposes membership
+in stable definition/object order, never draw order. Prospective battlefield entrants
+are public during replacement choices and remain pinned in both samplers.
+
+`Effect::Move.library_end` states top/bottom placement without a shuffle; its
+placement commits before linked returns can pause. `put_in_library` authors that
+operation, and `ShuffleLibrary` can follow after all child work. Ordinary `move_to`
+retains shuffle-into-library behavior. Shared selection has obligation code 28;
+retired codes 5, 6 and 7 keep their historical meanings.
 
 `FrameCompletion::Event` announces a completed operation before its caller
 resumes. Scry and Surveil use it so keyword events wait for every choice;

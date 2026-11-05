@@ -2,12 +2,13 @@
 //! References link only to exact, visible incarnations. Tensor rows and portable
 //! text evidence consume these same facts; no strings or JSON enter encoding.
 
+use crate::state::ability::LibraryEnd;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
-        decision::{Decision, EffectFrame, LibraryEnd, ResolutionRef, SuspendedResolution},
+        decision::{Decision, EffectFrame, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
@@ -186,17 +187,18 @@ impl Game {
         }
         let card = &self.state.cards[card_id];
         let zone = self.state.zones.zone_of(card_id);
-        let visible = matches!(
-            zone,
-            Some(
-                ZoneType::Battlefield
-                    | ZoneType::Graveyard
-                    | ZoneType::Stack
-                    | ZoneType::Exile
-                    | ZoneType::Command
+        let visible = self.pending_public_entries().contains(&object)
+            || matches!(
+                zone,
+                Some(
+                    ZoneType::Battlefield
+                        | ZoneType::Graveyard
+                        | ZoneType::Stack
+                        | ZoneType::Exile
+                        | ZoneType::Command
+                )
             )
-        ) || (zone == Some(ZoneType::Hand)
-            && self.shares_information(viewer, card.owner))
+            || (zone == Some(ZoneType::Hand) && self.shares_information(viewer, card.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
                 && self.searches_private_zones(viewer, card.owner));
         if !visible || (self.is_foretold(card_id) && !self.shares_information(viewer, card.owner)) {
@@ -841,8 +843,6 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::ManaChoice { .. } => 3,
         Decision::ChooseObject { .. } => 4,
         Decision::SelectCards { .. } => 28,
-        Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => 6,
-        Decision::OptionalDiscardDraw { .. } => 7,
         Decision::Scry { .. } => 8,
         Decision::LookAndSelect { .. } => 9,
         Decision::Modal { .. } => 10,
@@ -1173,32 +1173,13 @@ mod tests {
             },
             Decision::SelectCards {
                 player,
+                from: None,
                 candidates: vec![],
                 selected: vec![],
                 min: 0,
                 max: 1,
                 effects: vec![],
                 if_declined: vec![],
-            },
-            Decision::SearchBasicLand {
-                player,
-                subtype: None,
-                remaining: 1,
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: false,
-                selected: vec![],
-            },
-            Decision::SearchLibraryToHand {
-                player,
-                predicate: predicate.clone(),
-            },
-            Decision::OptionalDiscardDraw {
-                player,
-                count: 1,
-                remaining: 1,
-                discarded: 0,
             },
             Decision::Scry {
                 player,
@@ -1278,7 +1259,6 @@ mod tests {
             Decision::Discard {
                 player,
                 remaining: 1,
-                then: None,
             },
             Decision::KeepCreatures {
                 player,

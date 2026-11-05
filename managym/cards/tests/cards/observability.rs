@@ -358,13 +358,14 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
         ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 14] {
+fn selector_witnesses() -> [ObjectSelector; 15] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -377,6 +378,7 @@ fn selector_witnesses() -> [ObjectSelector; 14] {
         ObjectSelector::Moved,
         ObjectSelector::CardsThisWay,
         ObjectSelector::Selected,
+        ObjectSelector::Zone(ZoneType::Hand),
         ObjectSelector::You,
         ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {
@@ -556,8 +558,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::SelectCards { .. } => "Effect::SelectCards",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
-        Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
-        Effect::OptionalDiscardDraw { .. } => "Effect::OptionalDiscardDraw",
         Effect::Destroy { .. } => "Effect::Destroy",
         Effect::Discard { .. } => "Effect::Discard",
         Effect::If { .. } => "Effect::If",
@@ -593,6 +593,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
+        Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
         Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
         Effect::RevealHandDiscardChosen { .. } => "Effect::RevealHandDiscardChosen",
@@ -610,7 +611,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::MayDiscard { .. } => "Effect::MayDiscard",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
@@ -618,13 +618,12 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
-        Effect::SearchLibraryToHand { .. } => "Effect::SearchLibraryToHand",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
     }
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 81;
+const EFFECT_VARIANTS: usize = 78;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -689,15 +688,6 @@ fn effect_witnesses() -> Vec<Effect> {
             effects: draw(),
         },
         Effect::SelectTargetRequirement { index: 0 },
-        Effect::SearchBasicLand {
-            subtype: None,
-            count: EffectValue::Fixed(1),
-            tapped: true,
-            untap_if_lands: None,
-            bottom_source: false,
-            to_hand: false,
-        },
-        Effect::OptionalDiscardDraw { count: 1, up_to: 1 },
         Effect::destroy(ObjectSelector::Target(target())),
         Effect::Discard {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -793,6 +783,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 ..Default::default()
             },
         },
+        Effect::ShuffleLibrary,
         Effect::ShuffleGraveyardIntoLibrary,
         Effect::OwnerPutsIntoLibrary {
             target: TargetSpec::Permanent {
@@ -844,9 +835,6 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::MayDiscard {
-            then: vec![Effect::discard()],
-        },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -893,12 +881,6 @@ fn effect_witnesses() -> Vec<Effect> {
             amount: EffectValue::GreatestSharedCreatureType,
         },
         Effect::FightLastTarget,
-        Effect::SearchLibraryToHand {
-            predicate: CardPredicate {
-                subtypes_any: vec!["Lesson".into(), "Noble".into()],
-                ..Default::default()
-            },
-        },
     ]
 }
 
@@ -1777,6 +1759,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
     for player in player_selector_witnesses() {
         let name = player_selector_token(&player);
         let effect = Effect::Move {
+            library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
             tapped: false,

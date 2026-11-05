@@ -4,6 +4,7 @@
 use crate::agent::ability_description::{
     counter_description, mana_description, trigger_description,
 };
+use crate::state::ability::LibraryEnd;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
@@ -20,7 +21,7 @@ use crate::{
 
 impl Game {
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
-        use crate::flow::decision::{Decision, LibraryEnd};
+        use crate::flow::decision::Decision;
         match action {
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
@@ -104,9 +105,10 @@ impl Game {
                             })
                         }
                         [Effect::ExileNamed { name, .. }] => Some(format!("Name {name}")),
-                        [Effect::SearchBasicLand { .. }] => {
-                            Some("Search your library for a basic land".into())
-                        }
+                        [Effect::SelectCards {
+                            from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
+                            ..
+                        }] => Some("Search your library".into()),
                         [Effect::RemoveCounters {
                             chosen: Some(kind), ..
                         }] => Some(format!("Remove a {} counter", counter_description(*kind))),
@@ -152,15 +154,9 @@ impl Game {
                             self.state.cards[*card].name
                         )),
 
-                        Decision::SearchBasicLand { to_hand: true, .. } => Some(format!(
-                            "Reveal {} and put it into your hand",
-                            self.state.cards[*card].name
-                        )),
-                        Decision::SearchBasicLand { tapped, .. } => Some(format!(
-                            "Put {} onto the battlefield{}",
-                            self.state.cards[*card].name,
-                            if *tapped { " tapped" } else { "" }
-                        )),
+                        Decision::SelectCards { .. } => {
+                            Some(format!("Select {}", self.state.cards[*card].name))
+                        }
                         Decision::OrderLibrary { end, .. } => Some(format!(
                             "Put {} next on the {}",
                             self.state.cards[*card].name,
@@ -180,10 +176,6 @@ impl Game {
                                 .zones
                                 .zone_of(*card)
                                 .map_or("unknown zone".to_string(), |zone| format!("{zone:?}"))
-                        )),
-                        Decision::SearchLibraryToHand { .. } => Some(format!(
-                            "Put {} into your hand",
-                            self.state.cards[*card].name
                         )),
                         Decision::DistributeCounters { kind, .. } => Some(format!(
                             "Put a {} counter on {}",

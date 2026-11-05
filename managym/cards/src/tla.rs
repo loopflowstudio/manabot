@@ -451,31 +451,25 @@ fn aang_s_journey() -> CardDefinition {
             Effect::If {
                 condition: Condition::Kicked,
                 then: vec![
-                    Effect::SearchBasicLand {
-                        subtype: None,
-                        count: EffectValue::Fixed(1),
-                        tapped: true,
-                        untap_if_lands: None,
-                        bottom_source: false,
-                        to_hand: true,
-                    },
-                    Effect::SearchBasicLand {
-                        subtype: Some("Shrine".into()),
-                        count: EffectValue::Fixed(1),
-                        tapped: true,
-                        untap_if_lands: None,
-                        bottom_source: false,
-                        to_hand: true,
-                    },
+                    Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    ),
+                    Effect::search_library(
+                        CardPredicate {
+                            subtype: Some("Shrine".into()),
+                            ..Default::default()
+                        },
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    ),
                 ],
-                otherwise: vec![Effect::SearchBasicLand {
-                    subtype: None,
-                    count: EffectValue::Fixed(1),
-                    tapped: true,
-                    untap_if_lands: None,
-                    bottom_source: false,
-                    to_hand: true,
-                }],
+                otherwise: vec![Effect::search_library(
+                    CardPredicate::basic_land(),
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
             },
             Effect::gain_life(2),
         ],
@@ -623,7 +617,7 @@ fn abandon_attachments() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{U/R}")),
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::OptionalDiscardDraw { count: 2, up_to: 1 }],
+        spell_effects: vec![Effect::discard_draw(1, 2)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -811,6 +805,7 @@ fn airbender_ascension() -> CardDefinition {
                     effects: vec![
                         Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                         Effect::Move {
+                            library_end: None,
                             what: ObjectSelector::Moved,
                             to: ZoneType::Battlefield,
                             tapped: false,
@@ -1194,6 +1189,7 @@ fn avatar_destiny() -> CardDefinition {
                     min: 0,
                     max: EffectValue::Fixed(1),
                     effects: vec![Effect::Move {
+                        library_end: None,
                         what: ObjectSelector::Selected,
                         to: ZoneType::Battlefield,
                         tapped: false,
@@ -2121,14 +2117,14 @@ fn canyon_crawler() -> CardDefinition {
             zone: ActivationZone::Hand,
             discard_source: true,
             mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::SearchBasicLand {
-                subtype: Some("Swamp".into()),
-                count: EffectValue::Fixed(1),
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: true,
-            }],
+            effects: vec![Effect::search_library(
+                CardPredicate {
+                    subtype: Some("Swamp".into()),
+                    ..Default::default()
+                },
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -2484,14 +2480,14 @@ fn cycle_of_renewal() -> CardDefinition {
                 card_type: Some(CardType::Land),
                 ..Default::default()
             }),
-            Effect::SearchBasicLand {
-                subtype: None,
-                count: EffectValue::Fixed(2),
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: false,
-            },
+            Effect::search_library(
+                CardPredicate::basic_land(),
+                EffectValue::Fixed(2),
+                vec![Effect::return_to_battlefield(
+                    ObjectSelector::Selected,
+                    true,
+                )],
+            ),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -3068,14 +3064,14 @@ fn earthbender_ascension() -> CardDefinition {
                         count: EffectValue::Fixed(2),
                         what: ObjectSelector::Target(TargetSpec::LandYouControl),
                     },
-                    Effect::SearchBasicLand {
-                        subtype: None,
-                        count: EffectValue::Fixed(1),
-                        tapped: true,
-                        untap_if_lands: None,
-                        bottom_source: false,
-                        to_hand: false,
-                    },
+                    Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            true,
+                        )],
+                    ),
                 ],
             },
             Ability::Triggered {
@@ -4200,14 +4196,14 @@ fn giant_koi() -> CardDefinition {
                 zone: ActivationZone::Hand,
                 discard_source: true,
                 mana_cost: ManaCost::parse("{2}"),
-                effects: vec![Effect::SearchBasicLand {
-                    subtype: Some("Island".into()),
-                    count: EffectValue::Fixed(1),
-                    tapped: true,
-                    untap_if_lands: None,
-                    bottom_source: false,
-                    to_hand: true,
-                }],
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        subtype: Some("Island".into()),
+                        ..Default::default()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -5607,19 +5603,19 @@ fn kyoshi_island_plaza() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::SearchBasicLand {
-                    subtype: None,
-                    count: EffectValue::BattlefieldMatching {
+                effects: vec![Effect::search_library(
+                    CardPredicate::basic_land(),
+                    EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
                         },
                     },
-                    tapped: true,
-                    untap_if_lands: None,
-                    bottom_source: false,
-                    to_hand: false,
-                }],
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        true,
+                    )],
+                )],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -5629,14 +5625,14 @@ fn kyoshi_island_plaza() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::SearchBasicLand {
-                    subtype: None,
-                    count: EffectValue::Fixed(1),
-                    tapped: true,
-                    untap_if_lands: None,
-                    bottom_source: false,
-                    to_hand: false,
-                }],
+                effects: vec![Effect::search_library(
+                    CardPredicate::basic_land(),
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        true,
+                    )],
+                )],
             },
         ],
         text_box: text_box.into(),
@@ -5777,12 +5773,14 @@ fn lo_and_li_twin_tutors() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::SearchLibraryToHand {
-                predicate: CardPredicate {
+            effects: vec![Effect::search_library(
+                CardPredicate {
                     subtypes_any: vec!["Lesson".into(), "Noble".into()],
                     ..Default::default()
                 },
-            }],
+                1.into(),
+                vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            )],
         }],
         statics: vec![
             StaticAbility::KeywordGrant(StaticKeywordGrant {
@@ -6302,14 +6300,14 @@ fn mongoose_lizard() -> CardDefinition {
             zone: ActivationZone::Hand,
             discard_source: true,
             mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::SearchBasicLand {
-                subtype: Some("Mountain".into()),
-                count: EffectValue::Fixed(1),
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: true,
-            }],
+            effects: vec![Effect::search_library(
+                CardPredicate {
+                    subtype: Some("Mountain".into()),
+                    ..Default::default()
+                },
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -6966,14 +6964,14 @@ fn price_of_freedom() -> CardDefinition {
                 player: PlayerSelector::TargetController,
                 effects: vec![Effect::OptionalPayment {
                     cost: PaymentCost::Mana(ManaCost::default()),
-                    if_paid: vec![Effect::SearchBasicLand {
-                        subtype: None,
-                        count: EffectValue::Fixed(1),
-                        tapped: true,
-                        untap_if_lands: None,
-                        bottom_source: false,
-                        to_hand: false,
-                    }],
+                    if_paid: vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            true,
+                        )],
+                    )],
                     if_declined: vec![],
                 }],
             },
@@ -7061,14 +7059,14 @@ fn rabaroo_troop() -> CardDefinition {
             zone: ActivationZone::Hand,
             discard_source: true,
             mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::SearchBasicLand {
-                subtype: Some("Plains".into()),
-                count: EffectValue::Fixed(1),
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: true,
-            }],
+            effects: vec![Effect::search_library(
+                CardPredicate {
+                    subtype: Some("Plains".into()),
+                    ..Default::default()
+                },
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -7539,14 +7537,14 @@ fn saber_tooth_moose_lion() -> CardDefinition {
             zone: ActivationZone::Hand,
             discard_source: true,
             mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::SearchBasicLand {
-                subtype: Some("Forest".into()),
-                count: EffectValue::Fixed(1),
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: true,
-            }],
+            effects: vec![Effect::search_library(
+                CardPredicate {
+                    subtype: Some("Forest".into()),
+                    ..Default::default()
+                },
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -7808,14 +7806,14 @@ fn shared_roots() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{G}")),
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::SearchBasicLand {
-            subtype: None,
-            count: EffectValue::Fixed(1),
-            tapped: true,
-            untap_if_lands: None,
-            bottom_source: false,
-            to_hand: false,
-        }],
+        spell_effects: vec![Effect::search_library(
+            CardPredicate::basic_land(),
+            EffectValue::Fixed(1),
+            vec![Effect::return_to_battlefield(
+                ObjectSelector::Selected,
+                true,
+            )],
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7917,7 +7915,7 @@ fn sokka_bold_boomeranger() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::OptionalDiscardDraw { count: 1, up_to: 2 }],
+                effects: vec![Effect::discard_draw(2, 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -8547,12 +8545,14 @@ fn the_cave_of_two_lovers() -> CardDefinition {
             chapter(1, vec![Effect::create_tokens("Ally", 2)]),
             chapter(
                 2,
-                vec![Effect::SearchLibraryToHand {
-                    predicate: CardPredicate {
+                vec![Effect::search_library(
+                    CardPredicate {
                         subtypes_any: vec!["Mountain".into(), "Cave".into()],
                         ..Default::default()
                     },
-                }],
+                    1.into(),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
             ),
             chapter(
                 3,
@@ -8597,20 +8597,20 @@ fn the_earth_king() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::SearchBasicLand {
-                    subtype: None,
-                    count: EffectValue::AttackingMatching {
+                effects: vec![Effect::search_library(
+                    CardPredicate::basic_land(),
+                    EffectValue::AttackingMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Creature),
                             min_power: Some(4),
                             ..Default::default()
                         },
                     },
-                    tapped: true,
-                    untap_if_lands: None,
-                    bottom_source: false,
-                    to_hand: false,
-                }],
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        true,
+                    )],
+                )],
             },
         ],
         text_box: text_box.into(),
@@ -9383,11 +9383,12 @@ fn toph_hardheaded_teacher() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::one(instant_or_sorcery()),
-                    effects: vec![Effect::MayDiscard {
-                        then: vec![Effect::return_to_hand(ObjectSelector::Target(
+                    effects: vec![Effect::may_discard(
+                        1,
+                        vec![Effect::return_to_hand(ObjectSelector::Target(
                             instant_or_sorcery(),
                         ))],
-                    }],
+                    )],
                 }],
             },
             Ability::Triggered {
@@ -9919,13 +9920,26 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                 },
                 effects: vec![Effect::Modal {
                     modes: vec![
-                        vec![Effect::SearchBasicLand {
-                            subtype: None,
-                            count: EffectValue::Fixed(1),
-                            tapped: true,
-                            untap_if_lands: None,
-                            bottom_source: true,
-                            to_hand: false,
+                        vec![Effect::SelectCards {
+                            from: ObjectSelector::Zone(ZoneType::Library),
+                            predicate: CardPredicate::basic_land(),
+                            min: 0,
+                            max: EffectValue::Fixed(1),
+                            effects: vec![
+                                Effect::return_to_battlefield(ObjectSelector::Selected, true),
+                                Effect::put_in_library(
+                                    ObjectSelector::This,
+                                    managym_state::ability::LibraryEnd::Bottom,
+                                ),
+                                Effect::ShuffleLibrary,
+                            ],
+                            if_declined: vec![
+                                Effect::put_in_library(
+                                    ObjectSelector::This,
+                                    managym_state::ability::LibraryEnd::Bottom,
+                                ),
+                                Effect::ShuffleLibrary,
+                            ],
                         }],
                         vec![],
                     ],
@@ -10491,6 +10505,7 @@ fn wolfbat() -> CardDefinition {
             effects: vec![Effect::OptionalPayment {
                 cost: PaymentCost::Mana(ManaCost::parse("{B}")),
                 if_paid: vec![Effect::Move {
+                    library_end: None,
                     what: ObjectSelector::This,
                     to: ZoneType::Battlefield,
                     tapped: false,
@@ -10590,7 +10605,7 @@ fn yuyan_archers() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::OptionalDiscardDraw { count: 1, up_to: 1 }],
+            effects: vec![Effect::discard_draw(1, 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -10724,6 +10739,7 @@ fn zuko_conflicted() -> CardDefinition {
                     mode(vec![
                         Effect::exile(ObjectSelector::This),
                         Effect::Move {
+                            library_end: None,
                             what: ObjectSelector::Moved,
                             to: ZoneType::Battlefield,
                             tapped: false,
@@ -10865,6 +10881,7 @@ fn return_transformed() -> Vec<Effect> {
     vec![
         Effect::exile(ObjectSelector::This),
         Effect::Move {
+            library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
             tapped: false,

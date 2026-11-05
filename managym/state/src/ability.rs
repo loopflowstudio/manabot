@@ -419,6 +419,8 @@ pub enum EffectValue {
     GreatestPowerYouControl,
     /// Cards in `controller`'s hand.
     CardsInHand,
+    /// Number of objects still named by a resolution result or selector.
+    Objects(Box<ObjectSelector>),
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -436,6 +438,13 @@ impl PaymentCost {
             Self::Waterbend { generic } => ManaCost::default().with_generic(*generic),
         }
     }
+}
+
+/// Which end of a library receives a moved or ordered card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LibraryEnd {
+    Top,
+    Bottom,
 }
 
 /// Which objects a verb acts on, read as the instruction resolves
@@ -477,6 +486,9 @@ pub enum ObjectSelector {
     CardsThisWay,
     /// Exact objects chosen by the enclosing SelectCards operation.
     Selected,
+    /// Cards the resolving player owns in a zone. Hidden selection retains
+    /// the zone provenance across sampled worlds.
+    Zone(ZoneType),
     /// The resolving player ("you"), as whom a continuous effect affects
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
@@ -585,6 +597,7 @@ impl ObjectSelector {
             | Self::Moved
             | Self::CardsThisWay
             | Self::Selected
+            | Self::Zone(_)
             | Self::You
             | Self::Chosen { .. }
             | Self::Each { .. } => None,
@@ -680,6 +693,9 @@ pub enum Effect {
     /// objects become [`ObjectSelector::Moved`] and answer
     /// [`Condition::Moved`].
     Move {
+        /// A stated end replaces the usual shuffle-into-library movement.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        library_end: Option<LibraryEnd>,
         what: ObjectSelector,
         to: ZoneType,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -746,29 +762,6 @@ pub enum Effect {
     },
     /// Internal cursor emitted when clauses are lowered into a frame queue.
     SelectTargetRequirement { index: usize },
-    /// Search is a private choice that always shuffles, including failure to find.
-    SearchBasicLand {
-        subtype: Option<String>,
-        /// Up to this many cards, read at resolution.
-        #[serde(skip_serializing_if = "is_fixed_one")]
-        count: EffectValue,
-        #[serde(skip_serializing_if = "is_true")]
-        tapped: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        untap_if_lands: Option<usize>,
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        bottom_source: bool,
-        /// Landcycling: any card of `subtype` (not only a basic land) is
-        /// revealed and put into hand instead of onto the battlefield.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        to_hand: bool,
-    },
-    /// Discard up to `up_to` cards, then draw `count` for each discarded.
-    OptionalDiscardDraw {
-        count: usize,
-        #[serde(skip_serializing_if = "is_one")]
-        up_to: usize,
-    },
     /// The player `what` names discards `count` cards, chosen by them.
     Discard {
         what: ObjectSelector,
@@ -997,8 +990,6 @@ pub enum Effect {
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
     PutTopCardsInHand { count: usize },
-    /// "You may discard a card. If you do, [then]."
-    MayDiscard { then: Vec<Effect> },
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
@@ -1066,9 +1057,8 @@ pub enum Effect {
     /// The first chosen creature fights the last (CR 701.14); records the
     /// excess damage dealt to the last.
     FightLastTarget,
-    /// Search your library for a card matching `predicate`, reveal it, put
-    /// it into your hand, then shuffle (CR 701.23).
-    SearchLibraryToHand { predicate: CardPredicate },
+    /// Shuffle the resolving player's library (CR 701.20).
+    ShuffleLibrary,
     /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
     /// controller picks a present kind or stops; with it set, one counter of
     /// that kind is removed and the choice repeats for `up_to - 1`.
@@ -1079,7 +1069,7 @@ pub enum Effect {
     },
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
-    /// creatures; they each get +2/+2"). Inner effects must not suspend.
+    /// creatures; they each get +2/+2"). Children may suspend.
     ForEachTarget { effects: Vec<Effect> },
 }
 
@@ -1276,9 +1266,6 @@ fn is_one(value: &usize) -> bool {
 fn is_fixed_one(value: &EffectValue) -> bool {
     *value == EffectValue::Fixed(1)
 }
-fn is_true(value: &bool) -> bool {
-    *value
-}
 
 impl Default for Effect {
     fn default() -> Self {
@@ -1452,9 +1439,7 @@ impl Effect {
                 .iter()
                 .chain(if_declined)
                 .find_map(Effect::target_spec),
-            Effect::MayDiscard { then }
-            | Effect::ForPlayer { effects: then, .. }
-            | Effect::MayOnceEachTurn { effects: then } => {
+            Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateTokenCopy { of, .. } => of.as_ref(),
@@ -1477,8 +1462,7 @@ impl Effect {
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
             | Effect::ApplyContinuous { .. }
-            | Effect::SearchBasicLand { .. }
-            | Effect::OptionalDiscardDraw { .. }
+            | Effect::ShuffleLibrary
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
@@ -1510,7 +1494,6 @@ impl Effect {
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::FightLastTarget
-            | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
@@ -1588,6 +1571,52 @@ impl Effect {
         }
     }
 
+    /// Search a library subset, run its selected branch, then shuffle even
+    /// on failure to find. The runtime announces completion after that scope.
+    pub fn search_library(
+        predicate: CardPredicate,
+        max: EffectValue,
+        mut effects: Vec<Effect>,
+    ) -> Self {
+        effects.push(Effect::ShuffleLibrary);
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate,
+            min: 0,
+            max,
+            effects,
+            if_declined: vec![Effect::ShuffleLibrary],
+        }
+    }
+
+    /// Select private hand cards as one subset, then discard them together.
+    /// The selected child retains its bindings through any subsequent question.
+    pub fn may_discard(up_to: usize, then: Vec<Effect>) -> Self {
+        let mut effects = vec![Self::move_to(ObjectSelector::Selected, ZoneType::Graveyard)];
+        effects.push(Self::if_you_do(then));
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate::default(),
+            min: 0,
+            max: EffectValue::Fixed(up_to as i32),
+            effects,
+            if_declined: Vec::new(),
+        }
+    }
+
+    /// "Discard up to N cards, then draw for each card discarded this way."
+    pub fn discard_draw(up_to: usize, per_card: usize) -> Self {
+        Self::may_discard(
+            up_to,
+            vec![
+                Effect::DrawCards {
+                    count: EffectValue::Objects(Box::new(ObjectSelector::Moved)),
+                };
+                per_card
+            ],
+        )
+    }
+
     /// "Discard a card."
     pub fn discard() -> Self {
         Effect::Discard {
@@ -1618,8 +1647,24 @@ impl Effect {
     /// "Put [what] into [zone]" with no further terms.
     pub fn move_to(what: ObjectSelector, to: ZoneType) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to,
+            tapped: false,
+            transformed: false,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }
+    }
+
+    /// Put an object on the stated end without shuffling. Placement commits
+    /// with the move, before linked returns can ask a subsequent question.
+    pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
+        Effect::Move {
+            library_end: Some(end),
+            what,
+            to: ZoneType::Library,
             tapped: false,
             transformed: false,
             under: None,
@@ -1642,6 +1687,7 @@ impl Effect {
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to: ZoneType::Battlefield,
             tapped,
@@ -1655,6 +1701,7 @@ impl Effect {
     /// "Exile [what] with this" or "until this leaves the battlefield".
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to: ZoneType::Exile,
             tapped: false,

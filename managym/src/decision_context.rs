@@ -6,6 +6,7 @@
 //! typed continuation projection is shared with tensor and text inputs; the
 //! frozen semantic observation/digest contract stays intact.
 
+use crate::state::ability::LibraryEnd;
 use crate::{
     agent::continuation::ContinuationFrame,
     experience::{
@@ -13,7 +14,7 @@ use crate::{
         OfferSubjectView, RequiredNullable, SubjectRef,
     },
     flow::{
-        decision::{Decision, LibraryEnd},
+        decision::Decision,
         game::{Game, PendingChoice},
     },
     state::game_object::{CardId, PlayerId, Target},
@@ -339,7 +340,6 @@ impl Game {
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::ChooseObject { .. } => ("resolution_choice", "Choose a permanent you control for the resolving instruction (sacrifice, tap, ...), not as an announcement cost."),
-                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a card or the legal failure-to-find offer; no library order is disclosed."),
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
@@ -351,7 +351,7 @@ impl Game {
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
-                Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),
+                Decision::Discard { .. } => ("discard", "Choose a card to discard, or decline when offered."),
                 Decision::SelectCards { .. } => ("select_cards", "Choose from the eligible cards, then finish selection when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
                 Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),

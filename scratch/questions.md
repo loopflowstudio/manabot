@@ -15,4 +15,5 @@ Reversible choices: shared top/bottom `OrderLibrary` with distinct visibility an
 stable codes; public-result selection before hidden-zone migration; preserve
 MTG-244's successor v8 direction without assigning a competing layout. The plan
 retains the exact contracts and materialization constraints. Actual linked-entry
-payment suspension is now proved; hidden selection and full projection remain open.
+payment suspension and the migrated hidden selections are now proved. The plan
+records the remaining hidden-state audit, full projection and risk acceptance.
