@@ -570,7 +570,7 @@ impl ContinuousEffectData {
                     crate::state::effect::EffectDuration::Indefinite,
                 ));
                 data.program =
-                    crate::cards::tokens::rules_tokens(modification, &default_content_pack())
+                    crate::cards::tokens::rules_tokens(modification, default_content_pack())
                         .expect("registered rules payload");
                 match modification {
                     Modification::AddTypes(_) => "AddTypes",
