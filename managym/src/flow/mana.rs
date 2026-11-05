@@ -14,6 +14,7 @@ use crate::{
         mana::{Color, Mana, ManaCost, SpendingContext},
     },
 };
+use std::hash::{Hash, Hasher};
 
 /// Opt-in, thread-local payment diagnostics. Normal builds compile out every
 /// counter write; measurements include all probes in the measured operation.
@@ -198,7 +199,7 @@ impl PaymentStep {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq)]
 struct PaymentSearchState {
     resources: Vec<SourceResources>,
     pool: Mana,
@@ -206,6 +207,20 @@ struct PaymentSearchState {
     obligations: Vec<Obligation>,
     /// Fixed-source budget until the first Spend; later obligations are unrestricted.
     prefix: Option<usize>,
+}
+
+impl Hash for PaymentSearchState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.resources.hash(state);
+        self.pool.hash(state);
+        self.life.hash(state);
+        self.prefix.hash(state);
+        // Branches mostly share their announced costs and output programs.
+        // Resources and continuation depth partition the visited set cheaply;
+        // full equality still compares every obligation, including spending
+        // purpose, whenever these keys collide. No payment is coalesced by hash.
+        self.obligations.len().hash(state);
+    }
 }
 
 /// Costs reserve only what they consume. An activation cannot recursively
