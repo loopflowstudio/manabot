@@ -74,20 +74,8 @@ The additional reviews are [implementation history](implementation-history.md),
 [current engine audit](current-engine-audit.md), and
 [external engines](external-engines.md). Their findings inform the shared implementation order in the milestone plan.
 
-Jack Heart subsequently identified Phase as the most useful source of problems
-we have not encountered, while judging its code less disciplined than managym.
-[Phase failure lessons](phase-lessons.md) examines concrete regression cases
-and translates them into proposed shared-engine acceptance scenarios.
-He also requested a deep comparison of engine objects, state machines,
-continuous effects and triggers across systems. That work is recorded in
-[Phase architecture](phase-architecture.md) and
-[other engine architectures](other-engine-architectures.md), separately from
-the initial authoring-language comparison.
-
 The resulting [engine principles](../../../managym/PRINCIPLES.md) preserve the
-implementation lessons and architectural boundaries. The
-[RL interface comparison](rl-engine-contract.md) distinguishes existing
-integration from unmeasured performance claims.
+implementation lessons and architectural boundaries.
 
 ## Implementation Tasks launched
 

@@ -42,13 +42,6 @@ Dependencies flow: python → agent → flow → state/infra, and across crates
 `managym` → `managym-cards` → `managym-state`. `cargo test` in this directory
 runs all three (the workspace's default members).
 
-[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md) is the
-dated 2026-07-15 research record on typed card programs, exact object identity,
-structured offers and proposed events; conformance fixtures live under
-[conformance/](../conformance/). Its undo, journal and page-COW sections were
-superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
-and the w2-182/198/199 benchmark reports under `experiments/`).
-
 Authored setups come from `AuthoredSetup::player_config` (Python:
 `managym.authored_deck_setup(setup, deck_key)`, naming the setup by preset or
 by the `pack_key` frozen evidence records). Carry that complete config

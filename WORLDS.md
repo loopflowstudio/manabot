@@ -489,9 +489,6 @@ top of tensor dimensions:
   zero silent truncation. Token-count and overflow receipts travel with
   experiment results.
 
-The full rationale and required controls are in
-[`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
-
 ## w8: Sacrifice and landfall (not yet frozen)
 
 MTG-162 adds selected sacrifice costs, payment alternatives, immediate chosen-color

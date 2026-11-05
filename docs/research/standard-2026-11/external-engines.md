@@ -7,10 +7,9 @@ No external engine was built or benchmarked.
 
 ## Identity, scale and limits of the comparison
 
-Jack Heart confirmed [Phase](https://phase-rs.dev/),
-[XMage](https://github.com/magefree/mage), and
+Jack Heart confirmed [XMage](https://github.com/magefree/mage) and
 [Forge](https://github.com/Card-Forge/forge) by supplying their links on
-2026-11-04. The Phase source comparison uses `phase-rs/phase`.
+2026-11-04.
 **DeepScry** identifies itself as a Rust
 reimplementation inspired by Forge. Magarena provides an additional comparison
 with a long-lived search-oriented engine.
@@ -21,7 +20,6 @@ The inspected source revisions are:
 |---|---|---|
 | [Forge](https://github.com/Card-Forge/forge/tree/a4281f7e58b50542decce8971d81bca4307fd8b4) | `a4281f7e58b50542decce8971d81bca4307fd8b4` | 34,134 `.txt` files under `forge-gui/res/cardsfolder/` |
 | [XMage](https://github.com/magefree/mage/tree/987fd4e9c73e9f113e235f8d8f98628f2d391667) | `987fd4e9c73e9f113e235f8d8f98628f2d391667` | 32,782 `.java` files under `Mage.Sets/src/mage/cards/`; README claims over 32,000 unique supported cards |
-| [Phase](https://github.com/phase-rs/phase/tree/381dc910b946881420dc752120c02689d7d53b0f) | `381dc910b946881420dc752120c02689d7d53b0f` | A computed coverage system over imported card data; no independently reproduced supported-card total in this investigation |
 | [Magarena](https://github.com/magarena/magarena/tree/efa0aba85e681816a92b4938b28741d540384e35) | `efa0aba85e681816a92b4938b28741d540384e35` | 13,071 `.txt` definitions and 1,917 `.groovy` files under `release/Magarena/scripts/` |
 | [DeepScry](https://deepscry.net/guide/introduction.html) | Deployed guide retrieved 2026-11-04 | Guide references approximately 31,000 upstream scripts; actual engine coverage unverified |
 
@@ -104,50 +102,6 @@ and a clear boundary between a definition and its executor. **Avoid:** stringly
 typed option growth, duplicated semantic interpretation in AI, and a separate
 approximate game representation for simulation. The current native-definition
 contract already permits the good parts without a DSL migration.
-
-## Phase: an ambitious parser exposes a useful root-cause model
-
-Phase's public architecture describes typed actions and reducers with structurally
-shared state. Current source confirms `im::Vector` state collections and `Arc`
-sharing of registries and deck records; the README's older `rpds` wording should
-not be treated as the precise current implementation. These techniques can reduce
-copy work, but mutation, allocation and traversal costs must also be measured.
-They do not establish that Phase is faster than managym.
-[Current state representation](https://github.com/phase-rs/phase/blob/381dc910b946881420dc752120c02689d7d53b0f/crates/engine/src/types/game_state.rs),
-[architecture overview](https://github.com/phase-rs/phase/blob/381dc910b946881420dc752120c02689d7d53b0f/README.md).
-
-Phase's most useful evidence is its own parser-misparse taxonomy. It records 29
-root causes implicating 4,511 distinct cards: dropped target restrictions,
-intervening conditions, wrong referents, lost second clauses, collapsed dynamic
-counts, and more. These figures describe that retained audit, not a verified
-current count of broken cards. Its structure is excellent: a shared defect family
-has concrete affected cards and a likely semantic owner. The caution is equally
-clear: text successfully becoming a typed value does not prove its meaning was
-preserved. [Root-cause inventory](https://github.com/phase-rs/phase/blob/381dc910b946881420dc752120c02689d7d53b0f/docs/parser-misparse-backlog.md).
-
-The current coverage pipeline goes beyond parser success: it checks unhandled
-resolver features and possible silent omissions before marking a card supported.
-Its CLI has corresponding audit views. Those are useful diagnostic distinctions,
-although introspecting the implementation cannot replace independently specified
-rules outcomes. Managym should borrow this evidence separation in planning and
-review, while preserving its rule that tests do not revoke an already defined
-card's playability. [Coverage authority](https://github.com/phase-rs/phase/blob/381dc910b946881420dc752120c02689d7d53b0f/crates/engine/src/game/coverage.rs),
-[coverage report](https://github.com/phase-rs/phase/blob/381dc910b946881420dc752120c02689d7d53b0f/crates/engine/src/bin/coverage_report.rs).
-
-Phase's search code also illustrates the cost of a rich choice surface: dedicated
-decision handling, legal candidate binding, hidden-world sampling and deadlines
-all coexist. Some fast paths avoid full affordability enumeration or repeated
-clones. The transferable lesson is to optimize behind the exact decision
-authority and measure the expensive stages separately. Its algorithm and budgets
-are different from managym's Search-64, so direct timing comparisons would be
-meaningless without controlled work and semantics.
-[Search source](https://github.com/phase-rs/phase/blob/381dc910b946881420dc752120c02689d7d53b0f/crates/phase-ai/src/search.rs).
-
-**Keep:** group defects by missing semantic capability and quantify their card
-reach; distinguish syntax, executable features and rules evidence. **Avoid:** an
-Oracle parser as a shortcut to declaring the Standard pool implemented. Nothing
-in this comparison supports replacing managym's explicit definitions with a
-parser, compiler or second representation.
 
 ## DeepScry: relevant engineering principles, incomplete verification
 

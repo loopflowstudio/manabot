@@ -9,7 +9,6 @@ was performed.
 Source pins: Forge `a4281f7e58b50542decce8971d81bca4307fd8b4`; XMage
 `987fd4e9c73e9f113e235f8d8f98628f2d391667`; Magarena
 `efa0aba85e681816a92b4938b28741d540384e35`; managym checkout `5dd11cec4`.
-The independent [Phase comparison](phase-architecture.md) covers that engine.
 This report inspected the methods cited below, including their callers and
 state owners; it does not infer complete behavior from class names.
 
@@ -182,7 +181,6 @@ those into managym would leave necessary data on a vanished call stack. Instead,
 a typed pending proposal should own the current event, eligible chooser,
 applied replacements, batch cursor and completion. Replace the existing one-pass
 loop when consumers migrate, and preserve an allocation-light no-choice path.
-The [Phase regressions](phase-lessons.md) provide concrete nested-choice tests.
 
 Controller conveniences also need scrutiny: both inspected human paths can
 collapse replacement options with identical display text. Text equality does

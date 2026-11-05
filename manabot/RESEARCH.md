@@ -280,8 +280,6 @@ the payoff matrix and exploiters decide whether the gain is robust.
 ## What successful ladders teach
 
 The useful lineage is a set of engineering patterns, not a recipe to copy.
-The detailed source review lives in
-[`docs/research/intelligence-development-ladders.md`](../docs/research/intelligence-development-ladders.md).
 
 | System | How it hill-climbed | What manabot should borrow |
 | --- | --- | --- |
