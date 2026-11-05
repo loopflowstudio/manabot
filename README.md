@@ -145,8 +145,8 @@ The [research program](manabot/RESEARCH.md#what-we-know) keeps the full table.
   significant intransitive triangles among 27 rated checkpoints
   ([protocol](experiments/protocols/elemental-183.md); rating report in
   `experiments/data/mtg183-rating/`).
-- **A frontier LLM played that checkpoint to a draw.** Claude Haiku 5.5 with
-  high reasoning won 51 of 100 games against MTG-183's final policy, at $0.37
+- **Claude Haiku played that checkpoint to a draw.** Haiku 5.5 with high
+  reasoning won 51 of 100 games against MTG-183's final policy, at $0.37
   per game and 1.4 seconds per decision against the policy's microseconds
   ([Haiku versus MTG-183](experiments/haiku-mtg183.md)).
 - **The anchors are moving targets.** A rewrite of the `heuristic` bot took it
