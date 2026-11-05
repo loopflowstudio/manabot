@@ -43,95 +43,119 @@ class SharedEffectEncoder(nn.Module):
         members: torch.Tensor,
         objects: torch.Tensor,
     ) -> torch.Tensor:
-        headers = masked_record_rows(headers, EFFECT_ROWS, EFFECT_DIM, 17)
-        batch = len(objects)
+        # One metadata transfer admits the entire batch. Numerical features and
+        # object joins below still read the original tensors, retaining gradients.
+        host = masked_record_rows(headers.detach().cpu(), EFFECT_ROWS, EFFECT_DIM, 17)
+        batch, object_count, width = objects.shape
         if (
-            headers.shape[0] != batch
+            host.shape[0] != batch
             or details.shape != (batch, DETAIL_ROWS, DETAIL_DIM)
             or members.shape != (batch, MEMBER_ROWS, MEMBER_DIM)
         ):
             raise ValueError("invalid shared effect buffer shape")
-        results = list(objects.unbind(0))
-        for b in headers[..., 17].bool().any(-1).nonzero().flatten().tolist():
-            live = headers[b, headers[b, :, 17].bool()]
-            halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
-            source = record_indexes(live[:, 11], 2**24, "effect source definition")
-            links = record_indexes(
-                live[:, [10, 12]], objects.shape[1], "effect source/controller"
-            )
-            if (links[:, 0] == 0).any():
-                raise ValueError("effect controller is absent")
-            numeric = live[:, 2:10].clone()
-            numeric[:, -1] /= EFFECT_ROWS
-            header = self.header(
-                torch.cat(
-                    (
-                        numeric,
-                        join_rows(objects[b], links[:, 0]),
-                        join_rows(objects[b], links[:, 1]),
-                    ),
-                    -1,
+        live_positions = host[..., 17].nonzero()
+        if len(live_positions) == 0:
+            return objects
+        live = host[live_positions[:, 0], live_positions[:, 1]]
+        halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
+        source = record_indexes(live[:, 11], 2**24, "effect source definition")
+        links = record_indexes(
+            live[:, [10, 12]], object_count, "effect source/controller"
+        )
+        if (links[:, 0] == 0).any():
+            raise ValueError("effect controller is absent")
+        offsets = record_indexes(
+            live[:, 13:17], MEMBER_ROWS, "effect CSR offset/count"
+        ).tolist()
+        detail_indexes: list[int] = []
+        member_indexes: list[int] = []
+        member_records: list[int] = []
+        token_indexes: list[int] = []
+        lengths: list[int] = []
+        previous_batch = -1
+        d_end = m_end = 0
+        for i, ((b, _), (d, count, m, targets)) in enumerate(
+            zip(live_positions.tolist(), offsets, strict=True)
+        ):
+            if b != previous_batch:
+                d_end = m_end = 0
+                previous_batch = b
+            if (
+                d != d_end
+                or m != m_end
+                or d + count > DETAIL_ROWS
+                or targets == 0
+                or m + targets > MEMBER_ROWS
+            ):
+                raise ValueError("invalid effect CSR partition")
+            d_end, m_end = d + count, m + targets
+            token_indexes.extend((3 * i, 3 * i + 1, 3 * i + 2))
+            token_indexes.extend(
+                range(
+                    3 * len(live) + len(detail_indexes),
+                    3 * len(live) + len(detail_indexes) + count,
                 )
             )
-            mod = self.modification(((halves[:, 0] << 16) | halves[:, 1]) % 4096)
-            sources = self.source(source % 4096)
-            offsets = record_indexes(
-                live[:, 13:17], MEMBER_ROWS, "effect CSR offset/count"
-            ).tolist()
-            records: list[torch.Tensor] = []
-            routes: list[torch.Tensor] = []
-            d_end = m_end = 0
-            member_orders: list[torch.Tensor] = []
-            for i, (d, count, m, targets) in enumerate(offsets):
-                if (
-                    d != d_end
-                    or m != m_end
-                    or d + count > DETAIL_ROWS
-                    or targets == 0
-                    or m + targets > MEMBER_ROWS
-                ):
-                    raise ValueError("invalid effect CSR partition")
-                d_end, m_end = d + count, m + targets
-                tokens = details[b, d:d_end]
-                kinds = record_indexes(tokens[:, 0], 3, "effect detail kind")
-                ids = record_indexes(tokens[:, 1:], 65535, "effect detail half")
-                if (kinds == 0).any():
-                    raise ValueError("live effect detail has no kind")
-                encoded_details = self.detail(
-                    ((ids[:, 0] << 16) | ids[:, 1]) % 4096
-                ) + self.detail_kind(kinds)
-                records.append(
-                    torch.cat(
-                        (
-                            torch.stack((mod[i], sources[i], torch.tanh(header[i]))),
-                            encoded_details,
-                        )
-                    )
-                )
-                memberships = members[b, m:m_end]
-                targets_index = record_indexes(
-                    memberships[:, 0], objects.shape[1], "effect member"
-                )
-                if (targets_index == 0).any():
-                    raise ValueError("effect membership is absent")
-                orders = record_indexes(
-                    memberships[:, 1], MEMBER_ROWS, "effect membership order"
-                )
-                if (orders == 0).any():
-                    raise ValueError("effect membership order is absent")
-                member_orders.append(orders)
-                routes.append(targets_index - 1)
-            orders = torch.cat(member_orders)
-            if len(orders.unique()) != len(orders):
-                raise ValueError("duplicate effect membership order")
-            encoded = self.reducer(records)
-            # index_add accumulates duplicate memberships and all target losses
-            # flow through the same encoded payload and shared encoder parameters.
-            repeated = torch.cat(
-                [encoded[i].expand(len(route), -1) for i, route in enumerate(routes)]
+            lengths.append(3 + count)
+            detail_indexes.extend(range(b * DETAIL_ROWS + d, b * DETAIL_ROWS + d_end))
+            member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
+            member_records.extend([i] * targets)
+        # Validate all live details/members together, ignoring poisoned padding.
+        detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
+        kinds = record_indexes(detail_host[:, 0], 3, "effect detail kind")
+        ids = record_indexes(detail_host[:, 1:], 65535, "effect detail half")
+        if (kinds == 0).any():
+            raise ValueError("live effect detail has no kind")
+        member_host = members.detach().cpu().reshape(-1, MEMBER_DIM)[member_indexes]
+        targets = record_indexes(member_host[:, 0], object_count, "effect member")
+        orders = record_indexes(
+            member_host[:, 1], MEMBER_ROWS, "effect membership order"
+        )
+        if (targets == 0).any():
+            raise ValueError("effect membership is absent")
+        if (orders == 0).any():
+            raise ValueError("effect membership order is absent")
+        batches = live_positions[:, 0]
+        member_batches = batches[member_records]
+        global_orders = member_batches * (MEMBER_ROWS + 1) + orders
+        if len(global_orders.unique()) != len(global_orders):
+            raise ValueError("duplicate effect membership order")
+        device = objects.device
+        header_indexes = (batches * EFFECT_ROWS + live_positions[:, 1]).to(device)
+        numeric = headers.reshape(-1, EFFECT_DIM)[header_indexes, 2:10].clone()
+        numeric[:, -1] /= EFFECT_ROWS
+        global_links = torch.where(
+            links > 0, links + batches[:, None] * object_count, 0
+        ).to(device)
+        table = objects.reshape(-1, width)
+        header = self.header(
+            torch.cat(
+                (
+                    numeric,
+                    join_rows(table, global_links[:, 0]),
+                    join_rows(table, global_links[:, 1]),
+                ),
+                -1,
             )
-            delta = torch.zeros_like(objects[b]).index_add(
-                0, torch.cat(routes), repeated
+        )
+        mod = self.modification(
+            (((halves[:, 0] << 16) | halves[:, 1]) % 4096).to(device)
+        )
+        sources = self.source((source % 4096).to(device))
+        detail_tokens = self.detail(
+            (((ids[:, 0] << 16) | ids[:, 1]) % 4096).to(device)
+        ) + self.detail_kind(kinds.to(device))
+        tokens = torch.cat(
+            (
+                torch.stack((mod, sources, torch.tanh(header)), 1).flatten(0, 1),
+                detail_tokens,
             )
-            results[b] = objects[b] + delta
-        return torch.stack(results)
+        )
+        encoded = self.reducer.reduce_tokens(
+            tokens[torch.tensor(token_indexes, device=device)], lengths
+        )
+        # Duplicate memberships remain separate scatter additions and gradients.
+        routes = (member_batches * object_count + targets - 1).to(device)
+        repeated = encoded[torch.tensor(member_records, device=device)]
+        delta = torch.zeros_like(table).index_add(0, routes, repeated)
+        return objects + delta.reshape_as(objects)

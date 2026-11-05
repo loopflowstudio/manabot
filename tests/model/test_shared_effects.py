@@ -1,5 +1,6 @@
 """Shared payload routing retains addressable objects and shared learning gradients."""
 
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.records import RecordReduction
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.local import local_smoke
 from manabot.sim.rollout import BatchedSampler
@@ -167,3 +169,52 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
     selected = BatchedSampler(model, deterministic=True).select(buffers, np.array([0]))
     assert buffers["actions_valid"][0, selected[0]] == 1
     assert np.isfinite(ValueScorer(model).score(buffers, np.array([0]))).all()
+
+
+@pytest.mark.parametrize("reduction", ("typed_pool", "typed_gru"))
+def test_batched_effect_routing_matches_independent_gradients(
+    reduction: RecordReduction,
+) -> None:
+    torch.set_num_threads(1)
+    torch.manual_seed(42)
+    env = shared_effect_root(7)
+    values = _batch(
+        ObservationSpace(ObservationConfig(policy_input_version=7)).encode(
+            env.observation_for_player(env.current_agent_index())
+        )
+    )
+    headers, details, members = (
+        values[key].repeat(3, 1, 1)
+        for key in ("effects", "effect_details", "effect_members")
+    )
+    headers[1] = 0
+    details[1] = members[1] = float("nan")
+    # Two memberships of the same payload to one object still add twice.
+    members[2, 1, 0] = members[2, 0, 0]
+    objects = torch.randn(3, 202, 8, requires_grad=True)
+    independent_objects = objects.detach().clone().requires_grad_()
+    headers.requires_grad_()
+    independent_headers = headers.detach().clone().requires_grad_()
+    encoder = SharedEffectEncoder(8, reduction)
+    independent = deepcopy(encoder)
+    actual = encoder(headers, details, members, objects)
+    expected = torch.cat(
+        [
+            independent(
+                independent_headers[i : i + 1],
+                details[i : i + 1],
+                members[i : i + 1],
+                independent_objects[i : i + 1],
+            )
+            for i in range(3)
+        ]
+    )
+    torch.testing.assert_close(actual, expected)
+    actual.square().sum().backward()
+    expected.square().sum().backward()
+    torch.testing.assert_close(objects.grad, independent_objects.grad)
+    torch.testing.assert_close(headers.grad, independent_headers.grad)
+    for parameter, reference in zip(
+        encoder.parameters(), independent.parameters(), strict=True
+    ):
+        torch.testing.assert_close(parameter.grad, reference.grad)

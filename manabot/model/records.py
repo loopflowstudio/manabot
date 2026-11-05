@@ -8,7 +8,7 @@ from typing import Literal
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pack_sequence
+from torch.nn.utils.rnn import PackedSequence
 
 RecordReduction = Literal["typed_pool", "typed_gru"]
 
@@ -52,11 +52,38 @@ class RecordReducer(nn.Module):
         self.output = nn.Linear(width, width)
 
     def forward(self, records: list[torch.Tensor]) -> torch.Tensor:
+        return self.reduce_tokens(
+            torch.cat(records), [len(record) for record in records]
+        )
+
+    def reduce_tokens(self, tokens: torch.Tensor, lengths: list[int]) -> torch.Tensor:
+        """Reduce a flat sequence table with host-owned, positive record lengths.
+
+        Packing indexes are built on the host once. No per-record device copy,
+        scalar read or padded CopySlices autograd chain is needed. GRU order and
+        parameters are identical to packing each original sequence separately.
+        """
+        if not lengths or min(lengths) < 1 or sum(lengths) != len(tokens):
+            raise ValueError("record lengths must partition nonempty token sequences")
         if self.gru is None:
-            pooled = torch.stack([record.sum(0) for record in records])
+            pooled = torch.segment_reduce(
+                tokens, "sum", lengths=torch.tensor(lengths, device=tokens.device)
+            )
         else:
-            # Embedding happens before packing only for actual tokens, not a
-            # batch-wide padded record array. Gradients reach every input token.
-            _, hidden = self.gru(pack_sequence(records, enforce_sorted=False))
-            pooled = hidden[-1]
+            order = sorted(range(len(lengths)), key=lambda i: -lengths[i])
+            offsets: list[int] = []
+            offset = 0
+            for length in lengths:
+                offsets.append(offset)
+                offset += length
+            indexes: list[int] = []
+            sizes: list[int] = []
+            for step in range(max(lengths)):
+                live = [i for i in order if lengths[i] > step]
+                sizes.append(len(live))
+                indexes.extend(offsets[i] + step for i in live)
+            data = tokens[torch.tensor(indexes, device=tokens.device)]
+            _, hidden = self.gru(PackedSequence(data, torch.tensor(sizes)))
+            inverse = sorted(range(len(order)), key=order.__getitem__)
+            pooled = hidden[-1][torch.tensor(inverse, device=tokens.device)]
         return self.output(torch.tanh(pooled))

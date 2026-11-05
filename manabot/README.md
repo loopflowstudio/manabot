@@ -15,6 +15,13 @@ preserves edge multiplicity and shared gradients; it is learned compression,
 not a proof of injective embeddings or improved play. See the
 [architecture walkthrough](../docs/observation-architecture.html).
 
+Shared-effect and typed-continuation routing validate one host metadata batch,
+then gather live features, project tokens and reduce all records together on the
+model device. Ordered GRU packing avoids per-record padded copies; pooling keeps
+the unnormalized sum. Input features, object joins and encoder parameters retain
+their gradients, including duplicate memberships. An unused continuation module
+keeps absent gradients so Adam does not update its momentum spuriously.
+
 The version is explicit in saved observation/configuration identities. Fresh
 construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
 retain their meanings. Historical captures without shared provenance cannot be
