@@ -79,3 +79,10 @@ matches. No concept, name or API change; nothing new to implement.
   (random non-mirror Elemental pairs vs heuristic, fixed pairing seed) once it
   lands; add a 252-specific design (own reserved deals) and a final-policy
   head-to-head matchup. Not needed until training finishes.
+- Training launched 2026-11-05 21:10–21:17 UTC, all nine runs on RunPod A40
+  (`mtg252-a40`, $0.59/h; L4 and Vast had no usable stock), one three-arm
+  cohort per seed (mtg252-s<seed>-mtg252-a40-*), $4.05 cap each, $12.15 total,
+  revision fe25e6e18. Runs: s25201 c296951dc634/c5a1a009338c/e2118d949d3a,
+  s25202 d70f68c8b612/cf95f6d220f1/4c0fc018fc8b, s25203
+  4782034c5274/1488ddda75ca/295d9d24de78 (masked/token/readout). Windows were
+  sized from L4 pace; A40 pace unmeasured — check first updates' seconds.
