@@ -3,11 +3,12 @@
 //! `GameEvent` remains the factual committed-event stream consumed by
 //! triggers, observations, and presentation. A batch retains proposals until
 //! every replacement has been chosen, then commits them under one pre-event
-//! source snapshot. Linked zone returns finish before the batch returns results.
+//! source snapshot and returns its results with the consequences its caller
+//! runs next.
 
 use crate::state::card::Keyword;
 use crate::{
-    flow::{event::GameEvent, game::Game, triggers::TriggerSourceSnapshot},
+    flow::{event::GameEvent, game::Game},
     state::card::StaticAbility,
     state::{
         card::ReplacementEffect,
@@ -198,26 +199,22 @@ impl ReplacementCandidate {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct PendingEvent {
     pub event: ProposedEvent,
+    /// Index of the original proposal; a creation's token entries keep its ordinal.
     pub(crate) ordinal: usize,
     pub(crate) sacrifice: Option<(CardId, PlayerId)>,
-    pub(crate) departing_lki: Option<ObjectLki>,
     pub(crate) applied: Vec<ReplacementId>,
 }
 
-/// A logical simultaneous event. No proposal is committed while another
-/// member still needs a replacement choice. Child batches are consequences of
-/// the committed event, such as cards returning when an exile duration ends.
+/// A logical simultaneous event: its current proposals in replacement order,
+/// the cursor of the next proposal still to be checked, and how the owning
+/// instruction consumes the committed results. No proposal is committed while
+/// another member still needs a replacement choice. Nothing on the board
+/// changes between proposal and commit, so pre-event trigger sources and last
+/// known information are read as the batch commits rather than retained.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct EventBatch {
     pub events: Vec<PendingEvent>,
     pub cursor: usize,
-    pub(crate) sources: Vec<TriggerSourceSnapshot>,
-    pub results: Vec<EventResult>,
-    pub(crate) committed: bool,
-    pub(crate) child: Option<Box<EventBatch>>,
-    /// Creation's entry batch returns its objects; consequential linked returns
-    /// preserve the parent's original results instead.
-    pub(crate) child_returns_results: bool,
     pub binding: EventBinding,
 }
 
@@ -225,20 +222,15 @@ impl EventBatch {
     /// Choosing replacements for an entry exposes the entering objects. Their
     /// current hidden-zone membership remains fixed until the batch commits.
     pub(crate) fn public_entries(&self, out: &mut Vec<ObjectRef>) {
-        if !self.committed {
-            for pending in &self.events {
-                if let ProposedEvent::ZoneMove {
-                    object: Some(object),
-                    to: ZoneType::Battlefield,
-                    ..
-                } = pending.event
-                {
-                    out.push(object);
-                }
+        for pending in &self.events {
+            if let ProposedEvent::ZoneMove {
+                object: Some(object),
+                to: ZoneType::Battlefield,
+                ..
+            } = pending.event
+            {
+                out.push(object);
             }
-        }
-        if let Some(child) = &self.child {
-            child.public_entries(out);
         }
     }
 }
@@ -276,10 +268,10 @@ pub(crate) enum EventBinding {
     },
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+/// One member's outcome, in the order of the batch's events.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EventResult {
     pub committed: bool,
-    pub ordinal: usize,
     pub moved: Option<ObjectRef>,
     pub excess_damage: Option<i32>,
 }
@@ -289,85 +281,65 @@ pub(crate) enum BatchProgress {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
     },
-    Complete,
+    /// Every member committed. Cards returning as a linked exile ends are
+    /// consequences of the committed event: a new simultaneous event the
+    /// caller runs next, which never replaces these results.
+    Complete {
+        results: Vec<EventResult>,
+        followups: Vec<ProposedEvent>,
+    },
 }
 
 impl Game {
     pub(crate) fn event_batch(&self, events: Vec<ProposedEvent>) -> EventBatch {
-        let sources = if events.iter().any(|event| {
-            matches!(
-                event,
-                ProposedEvent::Destroy { .. }
-                    | ProposedEvent::Sacrifice { .. }
-                    | ProposedEvent::ZoneMove {
-                        from: Some(ZoneType::Battlefield),
-                        ..
-                    }
-            )
-        }) {
-            self.snapshot_trigger_sources()
-        } else {
-            Vec::new()
-        };
         EventBatch {
             events: events
                 .into_iter()
                 .enumerate()
-                .filter_map(|(ordinal, mut event)| {
-                    if !self.proposal_is_current(&event) {
-                        return None;
-                    }
-                    let mut sacrifice = None;
-                    if let ProposedEvent::Destroy { target } | ProposedEvent::Sacrifice { target } =
-                        &event
-                    {
-                        let id = self.lookup_current_permanent(*target).ok()?;
-                        let permanent = self.state.permanents[id].as_ref()?;
-                        if matches!(event, ProposedEvent::Destroy { .. })
-                            && self
-                                .characteristics(id)
-                                .keywords
-                                .has(Keyword::Indestructible)
-                        {
-                            return None;
-                        }
-                        if matches!(event, ProposedEvent::Sacrifice { .. }) {
-                            sacrifice = Some((permanent.card, permanent.controller));
-                        }
-                        event = ProposedEvent::ZoneMove {
-                            card: permanent.card,
-                            object: Some(*target),
-                            from: Some(ZoneType::Battlefield),
-                            to: ZoneType::Graveyard,
-                            entry: ZoneEntry::default(),
-                        };
-                    }
-                    self.normalize_proposal(&mut event);
-                    let departing_lki = match &event {
-                        ProposedEvent::ZoneMove {
-                            card,
-                            from: Some(ZoneType::Battlefield),
-                            ..
-                        } => self.snapshot_current_permanent(*card),
-                        _ => None,
-                    };
-                    Some(PendingEvent {
-                        event,
-                        ordinal,
-                        sacrifice,
-                        departing_lki,
-                        applied: Vec::new(),
-                    })
-                })
+                .filter_map(|(ordinal, event)| self.pending_event(ordinal, event))
                 .collect(),
             cursor: 0,
-            sources,
-            results: Vec::new(),
-            committed: false,
-            child: None,
-            child_returns_results: false,
             binding: EventBinding::None,
         }
+    }
+
+    /// A current proposal ready for replacement. Destruction and sacrifice
+    /// become the graveyard move they cause (an indestructible permanent is
+    /// not destroyed), and a death the rules redirect is proposed as exile.
+    fn pending_event(&self, ordinal: usize, mut event: ProposedEvent) -> Option<PendingEvent> {
+        if !self.proposal_is_current(&event) {
+            return None;
+        }
+        let mut sacrifice = None;
+        if let ProposedEvent::Destroy { target } | ProposedEvent::Sacrifice { target } = &event {
+            let id = self.lookup_current_permanent(*target).ok()?;
+            let permanent = self.state.permanents[id].as_ref()?;
+            if matches!(event, ProposedEvent::Destroy { .. })
+                && self
+                    .characteristics(id)
+                    .keywords
+                    .has(Keyword::Indestructible)
+            {
+                return None;
+            }
+            if matches!(event, ProposedEvent::Sacrifice { .. }) {
+                sacrifice = Some((permanent.card, permanent.controller));
+            }
+            event = ProposedEvent::ZoneMove {
+                card: permanent.card,
+                object: Some(*target),
+                from: Some(ZoneType::Battlefield),
+                to: ZoneType::Graveyard,
+                entry: ZoneEntry::default(),
+            };
+        }
+        self.normalize_proposal(&mut event);
+        Some(PendingEvent {
+            event,
+            ordinal,
+            sacrifice,
+            applied: Vec::new(),
+        })
     }
 
     fn normalize_proposal(&self, event: &mut ProposedEvent) {
@@ -402,31 +374,44 @@ impl Game {
         // proposal. Match them while their sources still exist; committing a
         // sacrifice must not erase the source's already-earned tap trigger.
         self.process_game_events();
-        if let Some(child) = batch.child.as_mut() {
-            match self.advance_event_batch(child) {
-                BatchProgress::Complete => {
-                    if batch.child_returns_results {
-                        batch.results = std::mem::take(&mut child.results);
-                    }
-                    batch.child = None;
-                }
-                choice => return choice,
-            }
-        }
-        if batch.committed {
-            return BatchProgress::Complete;
-        }
-        while let Some(pending) = batch.events.get_mut(batch.cursor) {
+        while batch.cursor < batch.events.len() {
+            let pending = &batch.events[batch.cursor];
             let candidates: Vec<_> = self
                 .collect_replacements(&pending.event)
                 .into_iter()
                 .filter(|candidate| !pending.applied.contains(&candidate.identity))
                 .collect();
             match candidates.as_slice() {
-                [] => batch.cursor += 1,
-                [candidate] => {
-                    self.apply_replacement(pending, candidate);
+                // Token entry is nested within creation (CR 616.1g): once the
+                // creation's replacements finish, the final group is allocated
+                // and takes the creation's place as ordinary simultaneous
+                // entries, each checked for its own replacements before any
+                // member commits.
+                [] if matches!(pending.event, ProposedEvent::CreateTokens { .. }) => {
+                    let PendingEvent {
+                        event:
+                            ProposedEvent::CreateTokens {
+                                definition,
+                                controller,
+                                count,
+                                entry,
+                            },
+                        ordinal,
+                        ..
+                    } = batch.events.remove(batch.cursor)
+                    else {
+                        unreachable!("matched creation")
+                    };
+                    let entries = self.allocate_tokens(*definition, controller, count, entry);
+                    batch.events.splice(
+                        batch.cursor..batch.cursor,
+                        entries
+                            .into_iter()
+                            .filter_map(|event| self.pending_event(ordinal, event)),
+                    );
                 }
+                [] => batch.cursor += 1,
+                [candidate] => self.apply_replacement(&mut batch.events[batch.cursor], candidate),
                 _ => {
                     return BatchProgress::Choice {
                         player: self.affected_player(&pending.event),
@@ -435,53 +420,28 @@ impl Game {
                 }
             }
         }
-        // Token entry is nested within creation (CR 616.1g). Finish all
-        // creation replacements before allocating any object, then retain the
-        // ordinary simultaneous entry batch across its own replacement choices.
-        if let [PendingEvent {
-            event:
-                ProposedEvent::CreateTokens {
-                    definition,
-                    controller,
-                    count,
-                    entry,
-                },
-            ..
-        }] = batch.events.as_slice()
-        {
-            let mut entries = Vec::new();
-            for _ in 0..*count {
-                let card = match definition.as_ref() {
-                    TokenDefinition::Registered(name) => self.prepare_token(name, *controller),
-                    TokenDefinition::Copy {
-                        definition_id,
-                        definition,
-                        copy,
-                        exceptions,
-                    } => {
-                        let mut template = crate::state::card::Card::from_definition(
-                            crate::state::game_object::ObjectId(0),
-                            *controller,
-                            *definition_id,
-                            std::sync::Arc::clone(definition),
-                        );
-                        template.copy = copy.clone();
-                        Some(self.prepare_token_copy(template, *controller, exceptions.clone()))
-                    }
-                };
-                if let Some(card) = card {
-                    entries.push(self.zone_move_proposal(
-                        card,
-                        ZoneType::Battlefield,
-                        entry.clone(),
-                    ));
-                }
-            }
-            batch.committed = true;
-            batch.child_returns_results = true;
-            batch.child = Some(Box::new(self.event_batch(entries)));
-            return self.advance_event_batch(batch);
-        }
+        // Every member is ready. The board has not changed since the
+        // proposals were made, so leave-the-battlefield abilities and last
+        // known information are read now, before any member commits, as the
+        // permanents all were before the event (CR 603.10a).
+        let departing: Vec<Option<ObjectLki>> = batch
+            .events
+            .iter()
+            .map(|pending| match &pending.event {
+                ProposedEvent::ZoneMove {
+                    card,
+                    from: Some(ZoneType::Battlefield),
+                    ..
+                } => self.snapshot_current_permanent(*card),
+                _ => None,
+            })
+            .collect();
+        let sources = if departing.iter().any(Option::is_some) {
+            self.snapshot_trigger_sources()
+        } else {
+            Vec::new()
+        };
+        let mut results = Vec::with_capacity(batch.events.len());
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
@@ -494,14 +454,14 @@ impl Game {
             .iter()
             .any(|pending| pending.sacrifice.is_some())
         {
-            let mut departing = std::collections::BTreeSet::new();
+            let mut departed = std::collections::BTreeSet::new();
             let mut sacrifices = false;
             for pending in &batch.events {
                 if !self.proposal_is_current(&pending.event) {
                     continue;
                 }
                 if let ProposedEvent::ZoneMove { card, .. } = &pending.event {
-                    if !departing.insert(*card) {
+                    if !departed.insert(*card) {
                         continue;
                     }
                 }
@@ -512,15 +472,12 @@ impl Game {
                 }
             }
             if sacrifices {
-                self.process_event_batch(&batch.sources);
+                self.process_event_batch(&sources);
             }
         }
-        for pending in &batch.events {
+        for (pending, departing_lki) in batch.events.iter().zip(departing) {
             if !self.proposal_is_current(&pending.event) {
-                batch.results.push(EventResult {
-                    ordinal: pending.ordinal,
-                    ..Default::default()
-                });
+                results.push(EventResult::default());
                 continue;
             }
             let mut event = pending.event.clone();
@@ -588,8 +545,7 @@ impl Game {
             if let Some((owner, definition)) = reveal {
                 self.emit(GameEvent::CardRevealed { owner, definition });
             }
-            let committed =
-                self.commit_proposed_event(event, pending.departing_lki.clone(), &mut followups);
+            let committed = self.commit_proposed_event(event, departing_lki, &mut followups);
             if committed {
                 if matches!(
                     batch.binding,
@@ -615,9 +571,8 @@ impl Game {
                 died.extend(death);
                 hits.extend(hit);
             }
-            batch.results.push(EventResult {
+            results.push(EventResult {
                 committed,
-                ordinal: pending.ordinal,
                 excess_damage,
                 moved: moved_card
                     .filter(|_| committed)
@@ -629,7 +584,7 @@ impl Game {
             ..
         } = batch.binding
         {
-            for object in batch.results.iter().filter_map(|result| result.moved) {
+            for object in results.iter().filter_map(|result| result.moved) {
                 let card = CardId::from(object.entity);
                 if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
                     continue;
@@ -657,17 +612,44 @@ impl Game {
         if !hits.is_empty() {
             self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
         }
-        batch.committed = true;
-        self.process_event_batch(&batch.sources);
-        if !followups.is_empty() {
-            let mut child = self.event_batch(followups);
-            let progress = self.advance_event_batch(&mut child);
-            if matches!(progress, BatchProgress::Choice { .. }) {
-                batch.child = Some(Box::new(child));
+        self.process_event_batch(&sources);
+        BatchProgress::Complete { results, followups }
+    }
+
+    /// The physical tokens of a creation whose replacements have finished,
+    /// allocated outside every zone, as entry proposals under its terms.
+    fn allocate_tokens(
+        &mut self,
+        definition: TokenDefinition,
+        controller: PlayerId,
+        count: i32,
+        entry: ZoneEntry,
+    ) -> Vec<ProposedEvent> {
+        let mut entries = Vec::new();
+        for _ in 0..count {
+            let card = match &definition {
+                TokenDefinition::Registered(name) => self.prepare_token(name, controller),
+                TokenDefinition::Copy {
+                    definition_id,
+                    definition,
+                    copy,
+                    exceptions,
+                } => {
+                    let mut template = crate::state::card::Card::from_definition(
+                        crate::state::game_object::ObjectId(0),
+                        controller,
+                        *definition_id,
+                        std::sync::Arc::clone(definition),
+                    );
+                    template.copy = copy.clone();
+                    Some(self.prepare_token_copy(template, controller, exceptions.clone()))
+                }
+            };
+            if let Some(card) = card {
+                entries.push(self.zone_move_proposal(card, ZoneType::Battlefield, entry.clone()));
             }
-            return progress;
         }
-        BatchProgress::Complete
+        entries
     }
 
     pub(crate) fn choose_replacement(
@@ -675,12 +657,7 @@ impl Game {
         batch: &mut EventBatch,
         candidate: &ReplacementCandidate,
     ) {
-        if let Some(child) = batch.child.as_mut() {
-            self.choose_replacement(child, candidate);
-        } else {
-            let pending = &mut batch.events[batch.cursor];
-            self.apply_replacement(pending, candidate);
-        }
+        self.apply_replacement(&mut batch.events[batch.cursor], candidate);
     }
 
     fn affected_player(&self, event: &ProposedEvent) -> PlayerId {
@@ -711,15 +688,33 @@ impl Game {
     /// operations that can ask a replacement question retain an EventBatch on
     /// their EffectFrame; this entry point must never turn Pending into success.
     pub(crate) fn apply_immediate_event(&mut self, event: ProposedEvent) -> bool {
-        let mut batch = self.event_batch(vec![event]);
-        assert!(
-            matches!(
-                self.advance_event_batch(&mut batch),
-                BatchProgress::Complete
-            ),
-            "event requiring a choice needs a retained caller"
-        );
-        batch.results.first().is_some_and(|result| result.committed)
+        let batch = self.event_batch(vec![event]);
+        self.complete_immediate_batch(batch)
+            .first()
+            .is_some_and(|result| result.committed)
+    }
+
+    /// Commit `batch` and every consequence of it without a retained caller,
+    /// returning the root's results.
+    pub(crate) fn complete_immediate_batch(&mut self, mut batch: EventBatch) -> Vec<EventResult> {
+        let BatchProgress::Complete {
+            results,
+            mut followups,
+        } = self.advance_event_batch(&mut batch)
+        else {
+            panic!("event requiring a choice needs a retained caller")
+        };
+        while !followups.is_empty() {
+            let mut next = self.event_batch(followups);
+            let BatchProgress::Complete {
+                followups: more, ..
+            } = self.advance_event_batch(&mut next)
+            else {
+                panic!("event requiring a choice needs a retained caller")
+            };
+            followups = more;
+        }
+        results
     }
 
     fn proposal_is_current(&self, event: &ProposedEvent) -> bool {

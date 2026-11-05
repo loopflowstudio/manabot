@@ -61,7 +61,11 @@ impl EventKinds {
     }
 
     fn contains(self, kind: EventKind) -> bool {
-        self.0 & Self::of(kind).0 != 0
+        self.intersects(Self::of(kind))
+    }
+
+    fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
     }
 }
 
@@ -1337,19 +1341,30 @@ impl Game {
         }
     }
 
-    /// Cards whose triggered abilities can see this event: every permanent on
-    /// the battlefield, plus — for zone changes — the moved card itself, so
-    /// that leave-the-battlefield abilities look back in time (CR 603.6c).
+    /// The sources whose abilities can see a battlefield departure or a
+    /// sacrifice, as they exist before the event: the indexed permanents with a
+    /// printed or granted ability of those kinds, including a departing
+    /// object's own, so leave-the-battlefield abilities look back in time
+    /// (CR 603.6c, 603.10a).
     pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
-        let mut sources: Vec<_> = self
-            .state
-            .permanents
+        self.indexed_sources(
+            EventKinds::of(EventKind::CardMoved) | EventKinds::of(EventKind::PermanentSacrificed),
+        )
+    }
+
+    /// Current snapshots of the indexed permanents with an ability of any of
+    /// `kinds`, in object order.
+    fn indexed_sources(&self, kinds: EventKinds) -> Vec<TriggerSourceSnapshot> {
+        let index = self.trigger_index();
+        let mut sources: Vec<_> = index
+            .sources
             .iter()
-            .flatten()
-            .filter_map(|permanent| {
-                self.snapshot_current_permanent(permanent.card)
+            .filter(|entry| entry.kinds.intersects(kinds))
+            .filter_map(|entry| {
+                let permanent = self.state.permanents[entry.permanent].as_ref()?;
+                self.snapshot_current_permanent(entry.card)
                     .map(|lki| TriggerSourceSnapshot {
-                        card: permanent.card,
+                        card: entry.card,
                         controller: permanent.controller,
                         lki,
                     })
@@ -1406,22 +1421,7 @@ impl Game {
     /// `snapshot_trigger_sources` reads, less sources nothing could fire
     /// for), plus a moved card's last battlefield object.
     fn trigger_ability_sources(&self, event: &GameEvent) -> Vec<TriggerSourceSnapshot> {
-        let kind = event.kind();
-        let index = self.trigger_index();
-        let mut sources: Vec<TriggerSourceSnapshot> = index
-            .sources
-            .iter()
-            .filter(|entry| entry.kinds.contains(kind))
-            .filter_map(|entry| {
-                let permanent = self.state.permanents[entry.permanent].as_ref()?;
-                self.snapshot_current_permanent(entry.card)
-                    .map(|lki| TriggerSourceSnapshot {
-                        card: entry.card,
-                        controller: permanent.controller,
-                        lki,
-                    })
-            })
-            .collect();
+        let mut sources = self.indexed_sources(EventKinds::of(event.kind()));
 
         if let GameEvent::CardMoved {
             card, controller, ..

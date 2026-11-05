@@ -4326,8 +4326,14 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 ..Default::default()
             };
             let mut rows = vec![0.0; 64 * RELATION_DIM_V5];
-            managym::agent::continuation::encode_into(&[frame], 0, 8, &Default::default(), &mut rows)
-                .unwrap();
+            managym::agent::continuation::encode_into(
+                &[frame],
+                0,
+                8,
+                &Default::default(),
+                &mut rows,
+            )
+            .unwrap();
             assert_eq!(rows[28], 6.0, "event code stays on header");
             assert_eq!(rows[RELATION_DIM_V5], 9.0);
             assert_eq!(rows[RELATION_DIM_V5 + 28], f32::from(code));
@@ -4345,13 +4351,23 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
 fn counter_and_creation_replacements_reach_learning_tokens() {
     let doubling = tokens_of(&card_definition("Doubling Season"));
     let caradora = tokens_of(&card_definition("Caradora, Heart of Alacria"));
-    for variant in ["ReplacementEffect::ModifyCounters", "ReplacementEffect::MultiplyTokens"] {
+    for variant in [
+        "ReplacementEffect::ModifyCounters",
+        "ReplacementEffect::MultiplyTokens",
+    ] {
         assert!(doubling.contains(&(TokenKind::Variant, name_value(variant))));
     }
-    assert!(caradora.contains(&(TokenKind::Variant, name_value("ReplacementEffect::ModifyCounters"))));
+    assert!(caradora.contains(&(
+        TokenKind::Variant,
+        name_value("ReplacementEffect::ModifyCounters")
+    )));
     assert!(caradora.contains(&(TokenKind::Text, name_value("Vehicle"))));
     let mut definition = card_definition("Doubling Season");
-    let managym::state::card::ReplacementEffect::ModifyCounters { effects_only, .. } = &mut definition.replacement_effects[1] else { panic!("counter rule") };
+    let managym::state::card::ReplacementEffect::ModifyCounters { effects_only, .. } =
+        &mut definition.replacement_effects[1]
+    else {
+        panic!("counter rule")
+    };
     *effects_only = false;
     assert_ne!(doubling, tokens_of(&definition));
 }

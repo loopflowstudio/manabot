@@ -27,20 +27,30 @@ slots simultaneously; `ForEachTarget` runs a sequential child program per slot.
 Leaves from the Vine uses `Targets` for simultaneous counter placement.
 
 `EventBatch` owns proposals, original ordinals, exact replacement identities
-(source incarnation, definition index, namespace), cursor, departing LKI, trigger
-sources, results and child consequences. Recheck applicability after each replacement;
-the affected player chooses. No member commits until all are ready. Linked returns
-finish before root results bind and cannot replace them. `bind_event_results` owns
-postambles; `run_frame` schedules and resumes. `continue_resolution(frame, next)`
-owns batch-before-decision scheduling. Automatic and chosen replacements share
-`apply_replacement`, including identity tracking.
+(source incarnation, definition index, namespace), cursor and result binding; it
+retains nothing derivable. Recheck applicability after each replacement; the
+affected player chooses. No member commits until all are ready. The board cannot
+change between proposal and commit, so departing LKI and pre-event trigger sources
+are read as the batch commits (MTG-241 swing, 2026-11-05), never stored. Token
+creation finishes its own replacements, then its allocated entries take its place
+in the same batch for their entry replacements; there is no child batch.
+`advance_event_batch` returns the results and the consequences of the committed
+event (cards returning as a linked exile ends); `run_frame` binds the results, then
+runs the consequences as the instruction's next batch, which never replaces them.
+`bind_event_results` owns postambles; `run_frame` schedules and resumes.
+`continue_resolution(frame, next)` owns batch-before-decision scheduling. Automatic
+and chosen replacements share `apply_replacement`, including identity tracking.
 
-Only departure batches snapshot triggers. Departures match pre-batch sources;
-entries match the finished battlefield. Sacrifice facts match subjects before zone
-moves; trigger placement waits. Paid tap/life events match before sacrifices remove
-sources. Damage lifelink/counter loss stays in the same batch. Entry counters pass
-through replacement before entry, including intrinsic Saga lore. Immediate operations
-use this executor with an explicit no-question precondition, never pending-as-success.
+Only departure batches snapshot triggers, and only the indexed sources with a
+departure or sacrifice ability. Departures match pre-batch sources; entries match
+the finished battlefield. Sacrifice facts match subjects before zone moves; trigger
+placement waits. Paid tap/life events match before sacrifices remove sources.
+Damage lifelink/counter loss stays in the same batch. Entry counters pass through
+replacement before entry, including intrinsic Saga lore. Immediate operations use
+this executor and run every consequence with an explicit no-question precondition,
+never pending-as-success. A spell's `FrameCompletion::Spell` runs its stack
+departure through the ordinary batch and announces resolution once the card has
+left the stack; there is no separate resolved state.
 
 Mana activation transfers its caller by ownership. `advance_mana_upfront` commits
 automatic mana, tap and life costs, retains output and original payment, then runs
