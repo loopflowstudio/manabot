@@ -102,20 +102,28 @@ decisions in self-play. This unit does not depend on model size or batching,
 unlike iterations or Adam steps, and does not depend on hardware, unlike
 dollars or hours. We add a row when a run sets a new high.
 
-| Agent | Date | Model | Learner decisions | Decisions per iteration × iterations | Hardware |
-|---|---|---|---:|---:|---|
-| first-light PPO ([report](experiments/first-light-run-1.md)) | 2026-03 | width 64 | 262k | 512 × 512 | CPU |
-| matched-cost PPO ([exp-03](experiments/exp-03-distillation.md)) | 2026-07 | 100k params | 5.8M | 2,048 × 2,850 | M4 Max |
-| `small-26k` ([capacity](experiments/model-capacity.md)) | 2026-10 | 64×2, 188k params | 13.3M | 512 × 26,000 | 1× L4 |
-| `small-63k`, continued | 2026-10 | 64×2 | 32.3M | 512 × 63,000 | 1× L4 |
-| `small-100k`, continued | 2026-10 | 64×2 | 51.2M | 512 × 100,000 | 1× L4 |
-| scale ladder v1, one seat ([ladder](experiments/scale-ladder.md)) | 2026-10 | 64×2 | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
+| Agent | Date | Model | Parameters | Learner decisions | Decisions per iteration × iterations | Hardware |
+|---|---|---|---:|---:|---:|---|
+| first-light PPO ([report](experiments/first-light-run-1.md)) | 2026-03 | width 64, no attention | not recorded | 262k | 512 × 512 | CPU |
+| matched-cost PPO ([exp-03](experiments/exp-03-distillation.md)) | 2026-07 | width 64, no attention | 50,306 | 5.8M | 2,048 × 2,850 | M4 Max |
+| `small-26k` ([capacity](experiments/model-capacity.md)) | 2026-10 | 64 wide × 2 attention layers | 188,482 | 13.3M | 512 × 26,000 | 1× L4 |
+| `small-63k`, continued | 2026-10 | 64×2 | 188,482 | 32.3M | 512 × 63,000 | 1× L4 |
+| `small-100k`, continued | 2026-10 | 64×2 | 188,482 | 51.2M | 512 × 100,000 | 1× L4 |
+| scale ladder v1, one seat ([ladder](experiments/scale-ladder.md)) | 2026-10 | 64×2 | not retained | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
+| MTG-183, ten Elemental decks, both seats ([protocol](experiments/protocols/elemental-183.md)) | 2026-10 | 64×2 | 196,482 | 331.2M | ≈55,700 (complete games) × 5,950 | 1× L4, seven windows, $50 cap |
 
-The first two rows predate the current world and encoding, so they record
-scale only. The ladder run's $10 checkpoint (151.6M decisions) scored 0.69
-against the `heuristic` anchor across the four deck matchups, and 0.70 as
-Lessons against Allies. The run was closed before its $50 tier, once
-self-play moved to learning from both seats.
+The parameter count of a 64×2 network depends on its inputs, not only its
+width and depth. One embedding row per card definition in the world adds 64
+parameters per card, which is the 8,000 between the two-deck and ten-deck
+runs. The fact encoder (input v5 and later) and the shared-effect encoder
+(input v7) each hold about 0.8M parameters in hash-bucket embedding tables, so
+the current TLA recipe has 1,883,650 with the same 64×2 attention core.
+The first two rows predate the current world and
+encoding, so they record scale only. The one-seat ladder's $10 checkpoint
+(151.6M decisions) scored 0.69 against the `heuristic` anchor and 0.70 as
+Lessons against Allies; it was closed before its $50 tier once self-play
+moved to learning from both seats, and MTG-183 is the two-seat run that
+followed.
 
 Learning-rate schedules currently count iterations, not decisions. The same
 recipe run at a different batch size therefore decays at a different number
@@ -123,19 +131,43 @@ of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe
 
 ## What we know
 
-All numbers belong to the world they were measured in. The
-[research program](manabot/RESEARCH.md#what-we-know) keeps the full table.
+All numbers belong to the world they were measured in, and most come from one
+training seed, so they guide the next experiment rather than settle a method.
+The [research program](manabot/RESEARCH.md#what-we-know) keeps the full table.
 
-- **Self-play learns.** A 10,000-update cohort rose from 30.3% to 54.3%
-  against scripted greedy on monitoring deals, mostly by learning to pilot the
-  harder deck ([current baseline](experiments/current-baseline.md)).
+- **One seed on ten decks kept improving for 331M decisions.** MTG-183 trained
+  a 64×2 network from both seats on the ten-deck Elemental world (w13). Its
+  score against the `heuristic` anchor on the full 10×10 deck grid rose from
+  0.065 to 0.801 over 5,950 updates, and its rating from 525 to 1,248 Elo with
+  the heuristic at 1,000. When the heuristic score flattened after update
+  3,600, newer checkpoints still beat older ones: the endpoint scored 0.618
+  against update 2,000 and 0.532 [0.511, 0.554] against update 3,600, with no
+  significant intransitive triangles among 27 rated checkpoints
+  ([protocol](experiments/protocols/elemental-183.md); rating report in
+  `experiments/data/mtg183-rating/`).
+- **A frontier LLM played that checkpoint to a draw.** Claude Haiku 5.5 with
+  high reasoning won 51 of 100 games against MTG-183's final policy, at $0.37
+  per game and 1.4 seconds per decision against the policy's microseconds
+  ([Haiku versus MTG-183](experiments/haiku-mtg183.md)).
+- **The anchors are moving targets.** A rewrite of the `heuristic` bot took it
+  from 18.3% to 62.0% as UR Lessons against MTG-183's update-1,750 checkpoint,
+  and from 10.8% to 34.3% across all ten decks, without slower decisions
+  ([heuristic strength](experiments/heuristic-strength.md)). Ratings are
+  pinned to an anchor version and a world, never compared across them.
+- **Learning from both seats replaced one-seat training.** The one-seat ladder
+  reached 0.69 against the heuristic at $10; the two-seat run at matched
+  updates scored no worse per learner decision and collected about 1.4× faster
+  ([two-seat ladder](experiments/two-seat-ladder.md),
+  [scale ladder](experiments/scale-ladder.md)).
 - **Batching is the reliable speedup, and the smallest model kept up.** 64×2
-  took 109–111 minutes at 4 streams and about 5 at 256
+  took 109–111 minutes at 4 streams and about 5 at 256; larger models showed no
+  advantage at this horizon, on two seeds
   ([longer learning](experiments/longer-learning-017.md)). Collection is 82.5%
   of training time ([training time](experiments/training-time.md)).
-- **Borrowed techniques haven't shown a benefit yet.** Actor-only filtering
-  measured +3.33 points, interval [−4.33, +11.33], at 1.45× wall time
-  ([technique screen](experiments/ataraxos-technique-screen.md)).
+- **The trophy population is untested.** The TLA pilot's initialization scored
+  7–25 against the heuristic before its run stopped; there is no trained
+  checkpoint on random real decks yet
+  ([pilot evidence](experiments/tla-trophy-pilot.md)).
 - **Search and beliefs run end to end but add no strength yet**
   ([search and beliefs](docs/search-and-beliefs.md)).
 
@@ -198,6 +230,29 @@ inspecting what a bot does, not a way to play Magic.
 Versioned PyPI release preparation, platform support, CPU/CUDA installation
 and maintainer publishing are in [the release guide](docs/development.md#releases).
 [Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/).
+
+## Experiment data
+
+Every number above traces to a report in [experiments/](experiments/README.md)
+and the files behind it. Reports are in git; the result files are not.
+[`experiments/data.manifest.json`](experiments/data.manifest.json) records
+each file's path, size and SHA-256, and the bytes live once per digest in the
+team's R2 store, so a checkout is small and a report's evidence is still exact:
+
+```bash
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg183-rating   # one report's files
+uv run --extra artifacts python -m manabot.data fetch                                  # everything
+```
+
+`fetch` needs the `R2_*` credentials from Doppler `manabot/prd` (prefix the
+command with `doppler run -p manabot -c prd --`), verifies every digest and
+refuses to overwrite a file whose bytes differ. Training and evaluation runs
+themselves are tracked by [Etude](https://github.com/loopflowstudio/etude):
+`uv run etude report experiments/ --source r2://manabot/jobs --serve` renders
+every experiment's curves and matches from the job store, and
+`uv run etude eval experiments/elemental.py --source r2://manabot/jobs` plays
+whatever matchups a report still wants. How a question becomes a report, and
+what makes a result count, is in [experiments](docs/experiments.md).
 
 ## Map of the repository
 
