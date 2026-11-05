@@ -186,71 +186,69 @@ The complete decisions before this reduction, including A4000/A6000 placement
 assumptions and v9's identity-preserving Job.max_usd amendment, remain in git blob
 `79baeb35620eddc7eea26f3978254d2e4b5d2548`.
 
-## Task fc6ffb — batch closure and lambda (2026-11-04)
+## Task fc6ffb — batch closure and lambda (realigned 2026-11-05 UTC)
 
 Earlier sections are MTG-213 notes inherited from main; they do not direct this Task.
 
-Assumptions, each reversible:
-- Omitted closure means saved. `TrainingRegime` resolves dict stages by the old
-  inference; `TrainSelfPlay` instances take the complete-games default. No regime
-  schema bump, so every existing digest holds. A hand-written dict one-seat regime
-  therefore reads as exact quota and must declare complete games.
-- `baseline(learning_seats="one")` / `--learning-seats one` is new authoring, so it
-  now means complete games and its digest moved. Saved runs of it stay exact quota.
-- `AttackPlan` schema 2 uses the template closure; schema 1 stays exact quota.
-- The lambda study uses the two-seat recipe, since two-seat is settled as the recipe;
-  the closure study stays one-seat as the Task states.
-Protocol: `experiments/protocols/closure-lambda-v1.md`.
+Direction, by date. Jack Heart authorized $25 total on 2026-11-04 and, on the
+updates-versus-arms trade, kept all five lambda arms and three seeds per study
+("i think thats enough"). On 2026-11-05 he said the `seat_comparison` setup "is not
+really the current recipe, the current recipe should be the elemental 10v10 set up at a
+minimum", then "finish this study, then try it again with another $25 on elemental".
+So this Task finishes on Allies/Lessons, labelled as such, claiming nothing about
+Elemental; the Elemental repeat is a separate Task with its own $25 and does not run here.
+Deleting exact quota stays out of scope. `docs/learning.md` is not on main; the closure
+docs live in `docs/training.md`.
 
-Realigned 2026-11-05 after unscored calibration; the protocol's Calibration section
-holds the figures and owns the design.
+Exists, checked against the code and the published files:
+- Closure separation: `TrainSelfPlay.batch_closure` (default complete games), the
+  collector reads it and no longer infers, exact quota with both seats or with
+  `games_per_stream` / `game_errors` is a validation error. Saved stages resolve by the
+  old inference through `TrainingRegime`, serialize the field only when it differs, and
+  frozen digests hold (`tests/training/test_batch_closure.py`). `AttackPlan` schema 1
+  keeps exact-quota attackers; schema 2 uses the template's closure.
+- Protocol `experiments/protocols/closure-lambda-v1.md`, committed before scoring, with
+  calibration and Results. Both experiment files, the shared evaluation scaffolding and
+  the report builder. Report, figures and `results.json` published under
+  `experiments/data/closure-lambda-v1/`, untracked, manifest digests matching the local
+  bytes. Spend $19.26 of $25, every failure in the report.
 
-Assumptions, each reversible before scoring:
-- Quota stays 106. A first amendment chose 119 from the 30-update mean; the per-update
-  series showed that mean is an 8-update opening transient (complete rows 37.8k, then
-  27.3k vs exact 27.1k), so 119 would hold the arms about 12% apart. Reversed pre-freeze.
-- 300 updates with the original seeds would cost about $41. Kept all five lambda arms
-  and three seeds per study; cut updates to 200 (study 1) and 100 (study 2). Dropping
-  lambda arms for longer runs is the alternative and needs Jack Heart's view.
-- Update 0 unscored: a seed's arms share initial weights, so it compares nothing.
-  (`learner_transitions-0` is an Etude checkpoint; the earlier note was wrong.)
+Decisions taken here, each reversible and recorded in the protocol:
+- Omitted closure means saved; `baseline(learning_seats="one")` is new authoring, so it
+  now means complete games and its digest moved; saved runs of it stay exact quota.
+- Quota 106, not the 30-update-mean 119 (an opening transient); 200 and 100 updates with
+  the original seeds after calibration showed 300 would cost about $41.
+- Update 0 unscored, since a seed's arms share initial weights.
+- The lambda study uses the two-seat recipe; the closure study is one-seat as the Task states.
 
-Launch record, 2026-11-05: study 1's first queued cohort (six runs at `99d20a416`) ran
-no training. L4 refused three, and three got rentals whose window was too short for
-the frozen regime, because queue mode divides cohort dollars by `parallel - live` (6)
-with 3 pending. Rerunning as per-arm all-or-nothing launches with run ids `<id>-r2`;
-same jobs, seeds and source. Keep the six failed ids in the report's failure table.
+Results, Allies/Lessons only, early training: closure shows no detectable difference
+(−.019, seed interval −.076 to +.039 at 4.23M decisions); no lambda arm beat .5 / .8,
+and .95 / 1 scored .162 lower, with critic residual far from game end roughly doubling
+when value lambda rose. Evaluation covered all 2,250 deals at $4.17 with failures, 30%
+of training rather than the small fraction intended. Predictions mostly refuted; see
+the report's two "Against the predictions" tables.
 
-The first study 1 evaluation job (`batch-closure-v1-fec36e74289b-b`) failed at its
-result writer: the job lacked the `evaluation` extra. Fixed before any game was scored.
-The next (`-c`) stopped at 6 of 750 deals: games hit the 120 s limit in durable record
-writes (117 of 120 s) on the container disk, with .7 s of CPU. Its failed deal is
-infrastructure, so it replays; arena journals now run in memory and copy to the run.
+Remaining: publication of this branch as the Task's PR. No paid run remains in this
+Task. The report's wall-time rows carry host noise and the assembly-stall mechanism is
+not established; both are stated as limits, not open work here. A full report rebuild
+from R2 needs a rented machine or a streaming reader (the laptop reached 18 GB RSS
+without finishing); the published `results.json` stands as built.
 
-Study 2's first evaluation (`lambda-sweep-v1-462d58126cd1-f1`) never booted: no
-bootstrap log, one full window, $.97, no games. Charged to unspent training lines as
-the protocol allows, so evaluation stays inside $2.50. A guard now cancels at 15 minutes.
-
-Exists: closure separation, docs, tests, both experiment files, calibration, both
-studies trained and evaluated, report published, protocol Results filled, all scoped
-to Allies/Lessons per Jack Heart (2026-11-05). Spend $19.26 of $25. No paid runs remain
-here; the Elemental repeat is a separate Task with its own $25. Next: gate and PR.
-Check 2026-11-05 (implement re-pass): focused tests `tests/training/test_batch_closure.py test_collection.py test_credit_assignment.py tests/eval/test_learning_signal.py tests/infra/test_experiment_data_untracked.py` 64 passed; report.md fetched from R2 with an empty cache matches the manifest digest. `docs/learning.md` is not on main; `docs/training.md` carries the closure docs.
-Live pod `etude-716a7dba8603` ended on its own; it was never this Task's.
-Compress 2026-11-05: the report builder's `analyze` computes each job's curves once and
-`TrainingRecord.row` owns the per-update lookup; old and new `analyze` agree byte for byte
-on synthetic records, focused tests 63 passed. A full rebuild from R2 on the laptop reached
-18 GB RSS without finishing in 20 minutes, so regenerate on a rented machine or with a
-streaming reader; the published results.json stands as built.
+Check 2026-11-05 (realign): `uv run --extra dev pytest tests/training/test_batch_closure.py tests/eval/test_learning_signal.py tests/infra/test_experiment_data_untracked.py -q` 36 passed; local report bytes match the manifest digests (`shasum -a 256`).
 
 Proposed experiments Wave memory (the `code` Graph does not call for writing it):
-one-seat complete games at floor 76 realize 119 rows per stream on the Allies/Lessons
-current world; exact quota idles too (.47 of slots), so idle share alone does not
-measure closure cost; `usd` on a launcher run understated provider bills by about 3×
-in calibration ($.34 against $.92), so budget from bills and rentals.
-Further proposals from the scored runs: packed `[rows, 1]` batches cost about 1,100 s
-per study 1 run in target and diagnostic scans; assembly stalls are host-side and hit
-exact quota too; arena durable writes need memory-backed scratch on rented disks;
-queue mode undersizes windows when parallel exceeds pending runs; refused creates pin
-a run id; a pod that never boots ignores `cancel`, so terminate it by machine;
-controllers need `caffeinate` on the laptop.
+- One-seat complete games versus exact quota showed no detectable strength difference
+  in 4–6M early decisions on Allies/Lessons (three seeds; interval hides ±.04–.08).
+  Exact quota idles too (.47 of slots), so idle share alone does not measure closure cost.
+- Value lambda above .8 hurt early learning on Allies/Lessons (.95 / 1 by −.162) and
+  roughly doubled the critic residual far from game end; policy lambda .8 alone moved
+  nothing. Not evidence about later training or Elemental.
+- Packed `[rows, 1]` complete-game batches spend about 1,100 s per 200-update run in
+  target and diagnostic scans; a wall-time comparison must separate that from closure.
+- Assembly stalls (5–30 s per update, in episodes) are host-side and hit exact quota too.
+- Launcher `usd` understated provider bills about 3× in calibration ($.34 against $.92):
+  budget from bills and whole-rental quotes.
+- Arena durable writes need memory-backed scratch on rented disks; queue mode undersizes
+  windows when `parallel` exceeds pending runs; refused creates pin a run id; a pod that
+  never boots ignores `cancel` (2 of 7 CPU pods here), so terminate it by machine and
+  count its window; controllers need `caffeinate` on the laptop.
