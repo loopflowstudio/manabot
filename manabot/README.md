@@ -220,6 +220,24 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+The prospective [growing-pool reference league](../experiments/protocols/growing-pool-245-v1.md)
+freezes authored decks, sampling tickets and held-out experience splits through
+the existing deck source, training job and replay evaluator. Its read-only
+`uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
+checks admission without playing games; v1 rejects the changed engine source.
+Task 04 owns the integrated freeze and actual pilot results. The frozen proxy
+is not evidence of learning.
+
+The reference league's TrainingJob enables private exposure capture through the
+ordinary native vector collector. Digest-bound game receipts preserve actual
+sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
+card draws and completed effect frames. They live under `training/exposure`,
+separate from checkpoints and evaluation evidence. The offline analysis accepts
+these downloaded directories with `--training-evidence`; missing or interrupted
+capture leaves the report incomplete. Focus opportunities and completed frames
+are measurements of decisions/program completion, not strategic benefit. Other
+jobs keep capture disabled unless they explicitly select it.
+
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection

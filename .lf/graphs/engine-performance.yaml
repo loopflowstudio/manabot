@@ -1,0 +1,7 @@
+- graph: engine-optimization
+- pr-publish
+- loop: engine-optimization
+  interactive: demo
+- graph: deliver
+- loop: engine-optimization
+  interactive: verify
