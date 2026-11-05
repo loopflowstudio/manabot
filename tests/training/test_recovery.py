@@ -73,6 +73,7 @@ def recipe() -> TrainingRegime:
     # This fixture exercises exact-quota tails across updates; whole-game
     # both-seat recovery has its own collector and game-error coverage.
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.learning.epochs = 1
     stage.learning.ema = 0.9
     value.agent.hidden_dim = 8
@@ -149,6 +150,7 @@ def test_real_interruption_restores_complete_learning_state(
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = seats
+    stage.batch_closure = "exact-quota" if seats == "one" else "complete-games"
     if gradient == "damped_policy":
         value.agent.value_kind = "categorical_wdl"
         stage.learning = DampedPolicyLearning(
