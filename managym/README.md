@@ -80,7 +80,7 @@ in-game card objects or deck admission. Explicit policy input v9 carries name
 joins and group spans in `name_candidates[A,4]` at ordinary action capacity;
 v8's whole-vocabulary `[A,2]` rejects groups; v1–v7 layouts and fresh v6
 defaults are frozen.
-See [policy inputs](../docs/training.md#catalog-naming-input).
+See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
 
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
