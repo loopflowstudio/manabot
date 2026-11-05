@@ -19,3 +19,9 @@ scheduling noise stays in raw evidence, separately from process CPU cost.
 Additional production names, fresh v8 defaults and broad training remain separate
 decisions. Historical detail is at `b31998cc3:scratch/mtg-243-naming.md` and the
 pre-curation uncommitted plan in `.lf/logs/naming-speed/plan-before-curation.md`.
+
+Sync resolution: main's MTG-213 pilot assumptions remain available at
+`e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md` and its delivered
+results in `experiments/tla-trophy-pilot.md`. They describe a separate Task and
+supply no execution or delivery authority for MTG-243. Keep this file scoped to
+the naming branch; preserve the incoming pilot report and artifact manifest.
