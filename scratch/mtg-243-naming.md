@@ -399,3 +399,38 @@ fresh current-source acceptance is not supplied by the baseline's green run.
 Broader production names, fresh v8 defaults and native redesign remain outside
 this review's accepted scope. `scratch/concept-review.html` presents this result;
 loop-or-next owns navigation.
+
+## Publication validation — 2026-11-05 UTC
+
+`lf sync` reconciled main through `653b014b1` into `ed3c914f2` and resolved
+only `scratch/questions.md`; no runtime or test source changed from `5bb773ebf`.
+Incoming pilot report/artifact-manifest changes remain upstream-owned. The
+scratch conflict keeps MTG-243 scope and a pinned reference to main's pilot notes.
+The sync's artifact-tracking check passed and the working tree was clean.
+
+Publication inspected the actual `origin/main...HEAD` diff, native naming and
+scalar/vector bindings, model identity/scoring, full-gradient packed execution,
+rollout/learner ownership, retained schema transition and combined Academy proof.
+`uv run --extra dev --extra artifacts pytest tests/model/ tests/training/test_active_training.py -q`
+passed **249 tests, 1 skipped** in 84.71 seconds. `git diff --check` passed.
+
+Linux CI `41956530425` at `5bb773ebf` passed debug Rust, Python unit, long
+integration, Academy integration/UI, protocol/kernel conformance and clean-machine
+Play. Its main integration was cancelled after sync pushed `ed3c914f2`; Engine
+Budget was still running at this check. Fresh CI `41957382497` is queued for the
+synced head. These partial results are not a fully green optimized-head result.
+Publication may expose this checked change for interactive review, but full Linux
+integration and the unchanged 10% Engine Budget remain acceptance obligations.
+No merge, auto-merge, Task completion or new performance run is selected.
+
+PR copy must include the packed-program speed pass: measured width-64 mixed/naming
+CPU batch costs improve about 5.8–6.6x against `b31998cc3`; allocation traffic in
+naming slice backward falls 91%. These are retained measurements before helper
+extraction, not new timings of this merge head, peak RSS, GPU results or complete
+training-update throughput. Preserve the width-16 ordinary PPO/damped regressions
+and failed identical-binary native worst-reply control beside those gains.
+Native runtime source is unchanged in the speed pass, its structural hotspots
+remain with MTG-241/242/244, and no native speedup or cleared budget is claimed.
+The numerical oracle retains complete gradients; double precision diagnoses the
+whole-catalog float32 reduction-order discrepancy, while real float32 policy-loss
+checks retain their own bounds. Frozen evidence/reference/tolerance stay intact.
