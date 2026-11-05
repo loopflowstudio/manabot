@@ -24,15 +24,16 @@ Training consumes search targets.
 
 - **The pipeline runs.** The 2026-10-04 belief pilot completed three games
   (303 decisions) in 17.41 s, and its 840 held-out sampled hands had zero
-  support violations. Local search replayed 183 Commands with no mismatch.
-  That is software evidence, not strength.
+  support violations. A separate local-search pilot replayed 183 Commands
+  with no mismatch ([research program](../manabot/RESEARCH.md)). That is
+  software evidence, not strength.
 - **Determinized search fuses strategies.** Flat Monte Carlo was the strongest
   cheap player of the search era, 99% against random at 256 rollouts
   ([exp-02](../experiments/exp-02-flat-mc.md)), and could not play a control
   deck: it cast Pyroclasm on turn 1 in 300 of 300 runs at every strength
   ([exp-09](../experiments/exp-09-control-competency.md)). PUCT here is
   determinized PUCT, not a proof against the same failure
-  ([ARCHITECTURE.md](ARCHITECTURE.md#9-planner-honesty)).
+  ([ARCHITECTURE.md](ARCHITECTURE.md#contracts-the-code-enforces)).
 - **Search gave more than a weak policy had.** In the search era, every early
   trained policy was weaker than 16-rollout search, and search improved on a
   near-broken value function ([exp-10](../experiments/exp-10-value-gate.md)).
@@ -67,8 +68,8 @@ full clone; see [search branching decision v1](benchmarks/search-branching-decis
 
 - **Flat Monte Carlo** (`flat.py`, `flat_mc.py`). `Env.flat_mc_scores` scores
   each legal action over W determinized worlds by R random playouts and plays
-  the argmax; no network. A determinized world redraws the opponent's hand from
-  its unseen pool and reshuffles both libraries, keeping public state.
+  the argmax; no network. A determinized world redraws the opponent's unknown hand
+  slots from the unseen pool and reshuffles both libraries, keeping public state.
   `FlatSearchPolicy` imports neither NumPy nor Torch; Academy's search opponent
   and the arena use the same class.
 - **PUCT** (`puct.py`). Separate trees per determinized world (each receives at
@@ -136,8 +137,9 @@ enumeration. Seeds fix hidden library order; counts do not model a posterior
 over it. Collection and search share `public_sampler_input`.
 
 `LocalUpdateReceipt` retains offers, base/Q/reference/target, coefficients,
-sampling evidence, identities, seeds and exact branch Command tapes;
-`verify_replay` re-executes from an exact root. Intermediate compound prefixes
+sampling evidence, identities, seeds, actor observation hashes, the branch
+audit and the compound prefix Commands; `verify_replay` re-runs the search from
+the seed and compares the retained witness. Intermediate compound prefixes
 also need the original-root cursor. Arena admission binds
 `local_search_source_sha256()`. Deadlines are cooperative and charge
 preparation, sampling and rollouts: an overrun yields no target, never a
@@ -146,8 +148,8 @@ policy-only substitute.
 Compound search (`compound.py`) supports attacker include/exclude, single-target
 casts, independent blockers, action-aligned fallback offers and ordered
 waterbend payment subsets, without enumerating subsets; a legal tap outside the
-retained ordered prefix has exact zero mass. Menace, effectful payments, kicker
-and ward use the native sequential fallback.
+retained ordered prefix has exact zero mass. Other compound roles raise and
+fall back to the native sequential offers.
 
 ## Possible worlds and tracked beliefs
 
@@ -156,7 +158,8 @@ the opponent's unseen pool is Hand ∪ Library ∪ face-down foretold cards
 (matching `Game::determinize`), a world fixes only the hand, and weights are
 exact compatible-deal counts, never probabilities. It also defines the typed
 `WorldQuery` grammar, deterministic materialization into exact branches, and
-`HiddenHandConstraints` (public pool, known hand minima, hand size).
+`HiddenHandConstraints` (public pool, known hand minima, hand size and
+foretold-slot count).
 
 `manabot/belief` holds probability over that domain: `range.BeliefState`
 normalizes over one `PossibleWorldSpace`; `tracker` updates it from viewer
@@ -191,9 +194,9 @@ time.
   `ema`, and freezes those checkpoint bytes for both seats. `train_belief` fits
   only the sampler on that immutable dataset, so there is no circular
   policy/belief dependency. Flat observation-only policies and compound
-  policies (raw only) are supported; belief-conditioned behavior policies are
-  rejected. Collection uses the checkpoint's saved observation capacity and
-  fails explicitly if a game exceeds it.
+  policies (which publish raw weights only) are supported; belief-conditioned
+  behavior policies are rejected. Collection encodes with the checkpoint's
+  saved observation capacity, and overflow rejects as it does everywhere.
 - **Dataset** (`sampling_data`). Complete games with disjoint
   train/validation/test membership, alternating deck assignments, policy and
   world identities, public inputs captured before acting, and private labels.
@@ -256,7 +259,7 @@ report is fabricated software evidence.
 ## Unsupported and unmeasured
 
 The exact arm stops at opponent choices without a public likelihood (including
-combat and target choices) and at discard prompts the materializer cannot
+combat and target choices) and at opponent prompts the materializer cannot
 refresh, so full-game exact-versus-prior comparison is blocked. Compound
 exact-history likelihood is unavailable. No Academy advice provider is
 registered to the local-update teacher. Calibration, opponent transfer, search

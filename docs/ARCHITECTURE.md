@@ -1,715 +1,143 @@
-# Manabot architecture
+# Architecture
 
-This is the top-down architecture for managym, manabot, and the Academy play
-UI. It names the central data structures, gives each kind of truth one owner,
-and states the contracts shared by training, search, evaluation, and replay.
+Manabot is three packages with one direction of dependency and one kind of
+truth per package. This page says who owns what, which contracts the code
+enforces today, and what exists beside the training loop without being on it.
+How each part works is in its own guide; start from
+[Start here](start-here.md).
 
-The goal is superhuman play, so everything here serves one loop: generate
-experience in a faithful engine, learn from it, and measure the result
-honestly. Three decisions anchor the design:
+![The rules engine sends each seat's view to the policy network, which returns a chosen action. Decisions and results go to the learner, which sends new weights to the network. Checkpoints go to evaluation, which never feeds back into training.](images/system.svg)
 
-> “managym should be THE rules engine, but it also should be the rules engine
-> that manabot specifically needs.”
-
-> “Observation design is incredibly important for manabot and we should take
-> those as key laws of physics.”
-
-> “There is a language for talking about the world model and a grammar for
-> making queries on it to filter possible worlds.”
-
-## The system in one picture
-
-```text
-                         authoritative world (managym)
-
- ContentPack ──> MatchAuthority ──> Observation(viewer) ──> DecisionFrame
-                       │                    │                     │
-                       │                    │                     v
-                       │                    └── history        Command
-                       │                                      │
-                       ├── exact replay/fork <── TransitionReceipt
-                       │
-                       └── PossibleWorldSpace + WorldQuery + materialization
-                                                   │
-                                                   v
-                        learning, belief, and planning (manabot)
-
-        PolicyHead + ValueHead      BeliefSampler        Planner + LeafEvaluator
-                 │                        │                        │
-                 └────────────────────────┼────────────────────────┘
-                                          v
-             checkpoints ──> evaluation against anchors ──> receipts
-
-                         inspection UI (Academy, optional)
-
-                 local play against a checkpoint, replay, decision view
-```
-
-## The training loop
-
-The primary path is self-play reinforcement learning
-([how a manabot learns](learning.md)).
-Search and belief models are policy-improvement steps on top of it, not the
-main engine. The loop is declared as data and executed by one runner:
-
-```text
- TrainingRegime (experiments/<experiment>.py)
-   world, match + decks, ModelConfig, ordered stages, per-stage hardware limits
-        │
-        v
- TrainingRun ── train_self_play ──> raw + EMA checkpoints (world-bound)
-        │       collect_belief / train_belief       (hidden-hand samplers)
-        │
-        ├── VerifyStore: resolved recipe, seed streams, source identity,
-        │   costs, and every failed attempt
-        ├── Etude: per-update self-play metrics, once
-        v
- evaluation: fixed anchors (random, scripted greedy, heuristic) on held-out
- paired deals, both decks and seats, replay-verified games
-```
-
-- **Self-play learner.** Batched streams step games in lockstep, and policy
-  inference is batched on one device. The update is a clipped policy gradient
-  regularized toward the collection policy and a fixed action-type-uniform
-  reference, with advantage filtering, annealed step sizes, and an EMA for
-  evaluation. These choices follow Ataraxos
-  ([Sokota et al., 2026](https://doi.org/10.1038/s41586-026-11036-y)). Each
-  is a separate switch tested on Magic, with PPO kept as a control. See the
-  [research program](../manabot/RESEARCH.md) and the
-  [technique screens](../experiments/ataraxos-technique-screen.md).
-- **Remote execution.** Etude launches regimes on rented GPUs, ships their
-  metrics and checkpoints while they run, and enforces hours and dollars. The
-  machine is chosen at launch, never in the experiment. See
-  [remote training](training.md#remote-training) and
-  [training regimes](training.md#regimes-and-stages).
-- **Beliefs.** Belief samplers over the opponent's hidden cards are fit from a
-  frozen policy's own complete games. They never feed hidden truth to the
-  acting policy ([belief sampler](search-and-beliefs.md#belief-sampler)).
-- **Search as an improvement step.** Local search uses the frozen policy for
-  continuations and sampled hands for hidden state at play time
-  ([local policy search](search-and-beliefs.md#local-policy-search)).
-- **Encoding is identity.** An observation/action shape change is a new world
-  ([WORLDS.md](../WORLDS.md)). Checkpoints load only in their world, and a
-  nightly baseline check guards against inputs that make distinct choices
-  indistinguishable.
+- [Ownership](#ownership)
+- [Contracts the code enforces](#contracts-the-code-enforces)
+- [Beside the loop](#beside-the-loop)
+- [Non-goals](#non-goals)
 
 ## Ownership
 
-The ownership rule follows the repository's naming boundary:
-
-- **managym is the world.** It owns content meaning, match state, legality,
-  semantic decisions and Commands, committed events, viewer-safe
-  Observations, deterministic replay, exact forks, and the meaning of possible
-  worlds and queries.
-- **manabot is the agent.** It owns memory, beliefs and priors over managym
-  worlds, search, policy/value models, checkpoints, self-play, opponent selection, evaluation, and promotion
-  evidence.
-- **Academy is the inspection UI.** It owns transport, interaction drafts,
-  reconnect behavior, presentation, and replay navigation. It does not
-  reconstruct rules meaning, and nothing in training depends on it.
-- **Imports follow the same order.** Academy may import manabot and managym;
-  manabot imports managym and never academy; managym imports neither.
-
-Telemetry, behavior trackers, profilers, caches, and user-interface state may
-observe or accelerate these authorities. They never become an alternate source
-of truth.
-
-## Current state and convergence
-
-The labels in this document are precise:
-
-- **Current** means present on current main.
-- **In flight** means implemented or designed on an active branch but not a
-  contract of main.
-- **Target** means accepted architecture to which the repository should
-  converge.
-
-| Boundary | Current main | In flight | Target |
-|---|---|---|---|
-| Match authority | managym `Game`/`GameState` own rules mutation, while the Academy server separately owns match IDs, revisions, accepted commands, and historical decision bookkeeping. | — | One managym `MatchAuthority` owns match identity, revision, execution, committed Commands/events, replay, observation, and forks. |
-| Decisions | `ActionSpace` and `step(index)` are authoritative internally. `StructuredOfferSet`/`AtomicCommand` are a narrow bridge; Academy has a separate protocol `Command` and lowering context. | Structured command and compiled-semantic work continues in Engine. | A revision-bound semantic `DecisionFrame` and atomic `Command` are the common contract. Positional indices are private acceleration only. |
-| Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
-| Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
-| Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
-| Learning | `TrainingRegime`/`TrainingRun` execute declared stages (self-play, compound self-play, policy import, selection diagnostics, belief collection and fitting) with world-bound raw/EMA checkpoints and VerifyStore provenance. The batched self-play baseline uses a selectable Ataraxos-adapted rule with PPO as a control. | Technique screens, model-size and batching studies, and remote GPU cohorts continue. | Belief-conditioned policy/value, search-improved targets, and shared artifact manifests verified by every loader. |
-| Evaluation | Checkpoint monitoring and named tournaments score checkpoints against fixed anchors (random, scripted greedy, `heuristic`) on paired deals with both decks and seats, replay-verifying every game. INT-18's world-pinned rated arena (2026-07-18, 720 games, five anchors) predates the current world and has not been rerun. | Greedy is nearing saturation; `heuristic` is exploratory, not yet a frozen anchor. | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
-| Study | Academy identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Academy presents it without becoming another replay or belief engine. |
-
-The current implementation is not renamed into compliance. Migration is
-complete only when consumers use the target contract and the duplicate meaning
-constructor is deleted.
-
-## Central types and APIs
-
-These are semantic contracts. Exact module placement and wire encoding may
-evolve without changing their ownership.
-
-```rust
-struct MatchAuthority {
-    identity: MatchIdentity,
-    revision: Revision,
-    game: Game,
-    commands: Vec<CommittedCommand>,
-    events: Vec<CommittedEvent>,
-}
-
-struct Observation {
-    identity: ObservationIdentity,
-    state: ViewerState,
-    events: Vec<ViewerEvent>,
-    decision: Option<DecisionFrame>,
-}
-
-struct DecisionFrame {
-    revision: Revision,
-    actor: PlayerId,
-    fingerprint: DecisionFingerprint,
-    offers: Vec<SemanticOffer>,
-}
-
-struct Command {
-    command_id: CommandId,
-    expected_revision: Revision,
-    offer_id: OfferId,
-    answers: Vec<SemanticAnswer>,
-}
-
-struct TransitionReceipt {
-    before_revision: Revision,
-    after_revision: Revision,
-    command: CommandId,
-    events: Vec<EventIdentity>,
-    next_decision: Option<DecisionFingerprint>,
-}
-```
-
-`Command` is one atomic semantic commitment containing every choice knowable
-at commitment time. Casting a spell includes modes, targets, divisions,
-optional costs, and payment. Declaring attackers or blockers is one complete
-declaration. A later Command exists only for a genuinely later choice caused
-by resolution, new information, or another player.
-
-```rust
-struct PossibleWorldSpace {
-    observation: ObservationIdentity,
-    history: ViewerHistoryIdentity,
-    schema: WorldSchemaIdentity,
-}
-
-enum WorldQuery {
-    True,
-    Count {
-        zone: HiddenZone,
-        selector: WorldSelector,
-        comparison: Comparison,
-        value: u16,
-    },
-    All(Vec<WorldQuery>),
-    Any(Vec<WorldQuery>),
-    Not(Box<WorldQuery>),
-}
-
-struct ConditionalWorldPrior {
-    space: PossibleWorldSpaceIdentity,
-    query: WorldQueryDigest,
-    measure: WorldMeasureIdentity,
-    normalization: NormalizationReceipt,
-}
-
-struct BeliefState {
-    space: PossibleWorldSpaceIdentity,
-    model: BeliefModelIdentity,
-    normalized_distribution: WorldDistribution,
-}
-```
-
-A world hypothesis is the hidden semantic truth relevant to decisions, not a
-serialization of every private engine byte. Hypotheses quotient irrelevant
-physical-copy and hidden-order differences. A query uses stable semantic
-identity such as `CardDefId`, card type, or semantic tag; it cannot name a
-private physical card.
-
-For viewer history `H_v`, the actual private world `w*` is a member of
-`Omega(H_v)`. A belief `b` is a normalized distribution over that same domain.
-A query `Q` denotes a subset, and conditioning is:
-
-```text
-b_Q(w) = b(w) * 1[Q(w)] / b(Q)
-```
-
-Empty support is an explicit result. It never falls back to the unconditioned
-belief, and checking a query never reveals whether `w*` satisfies it.
-
-```python
-@dataclass(frozen=True)
-class PlanningProblem:
-    observation: ObservationIdentity
-    viewer_history: ViewerHistoryIdentity
-    belief: BeliefStateIdentity
-    queries: tuple[WorldQueryDigest, ...]
-    planner: PlannerIdentity
-    evaluator: LeafEvaluatorIdentity
-    budget: SearchBudget
-    seed_plan: SeedPlan
-
-@dataclass(frozen=True)
-class ConditionalStrategyResult:
-    actions: tuple[SemanticActionIdentity, ...]
-    conditions: tuple[ConditionResult, ...]
-    provenance: SearchReceipt
-
-@dataclass(frozen=True)
-class ConditionResult:
-    query: WorldQueryDigest
-    condition_mass: float
-    policy: tuple[float, ...]
-    q_values: tuple[float | None, ...]
-    root_value: float | None
-    uncertainty: UncertaintyReceipt
-    realized_budget: RealizedSearchBudget
-```
-
-Every condition aligns the same complete semantic root action set. Student
-policy distributions and temperature-normalized PUCT visit distributions are
-different typed outputs. Selecting an argmax action is a downstream operation,
-not the search result itself.
-
-The durable learning and evaluation identities are:
-
-| Type | Owner | Identity and lifetime |
-|---|---|---|
-| `ViewerTrajectory` | managym truth, recorded by manabot | Append-only ordered Observations, Commands, and outcomes for one match and seat. Private audit truth is a separate access class. |
-| `CheckpointManifest` | manabot | Exact weight bytes plus model, history/memory, belief, Observation/action ABI, run, seed, and inference-profile identities. |
-| `OpponentPoolManifest` | manabot | Immutable registered opponents and a versioned selection policy. A sampled opponent is recorded per match. |
-| `PlayerRegistration` | manabot | Immutable algorithm/checkpoint bytes, world, information boundary, compute class, and seed policy. |
-| `EvaluationKey` | manabot | World, content suite, viewer boundary, evaluation/rating versions, frozen anchor cohort, and compute class. |
-| `DecisionEvidence` | manabot evidence consumed by Academy | Immutable alternatives, policy/visits, values, robustness, uncertainty, and typed unavailable fields bound to one exact replay decision. |
-| `StudyReturnReceipt` | Academy adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest and a full-clone/structured-only execution receipt; fails closed if the retained root drifts or a rejected command mutates its child. |
-
-## Laws of physics
-
-### 1. Authority and ownership
-
-There is one rules and match authority. Only managym commits legal state
-transitions. Academy and manabot select Commands; neither patches state, invents
-legality, reconstructs viewer filtering, or interprets replay independently.
-Play, replay, Study, self-play, arena matches, and search must exercise this
-same authority.
-
-### 2. Identity and versioning
-
-Identity is typed and scoped. An action position is valid only in one exact
-decision frame. An `ObjectRef` includes incarnation and fails after a zone
-change. Match revision, Observation schema, world schema, planner, dataset,
-checkpoint, player, arena, and evidence identities are distinct domains.
-
-An end-to-end manifest composes those identities; it does not replace them
-with one untyped hash. A world/schema change creates a new version and requires
-explicit artifact migration or regeneration.
-
-### 3. Mutability, lifetime, and transitions
-
-`MatchAuthority` is the mutable aggregate. Its legal transition is:
-
-```text
-(revision N, DecisionFrame N) + valid Command(expected=N)
-    -> committed events + revision N+1 + next Observation
-```
-
-Stale Commands fail closed. Observations, receipts, queries, manifests,
-datasets, checkpoints, player registrations, arena results, and Study evidence
-are immutable values. Search roots are immutable; simulations mutate isolated
-child branches. A fork cannot outlive or silently detach from the authority
-identity from which it was made.
-
-### 4. Observation and history
-
-Observation is the complete legal input for one viewer at one revision:
-current visible state, ordered newly visible events, and the complete current
-semantic decision. managym must not discard viewer-visible information.
-Viewer-equivalent authority states produce byte-identical canonical
-Observations.
-
-Viewer history is the lossless ordered Observation/event stream from match
-start, including that viewer's hand, draws, private reveals, public events,
-hidden-zone counts, and prior Commands. It excludes opponent private cards,
-other seats' private observations, sampled-world seeds, and audit truth.
-
-Agent memory is not part of the match protocol. Current-only, last-N,
-recurrent, compressed, range-based, and full-history representations are
-manabot strategies bound to checkpoints. Dataset truth retains the raw ordered
-trajectory.
-
-### 5. Hidden information and queries
-
-Possible-world spaces are viewer-relative and revision-bound. Every
-materialized hypothesis preserves the viewer Observation and satisfies its
-query. Queries are deterministic, typed, compositional, canonically
-serialized, and versioned. They never address physical private IDs or expose
-whether actual authority satisfies them.
-
-An eventual LLM may construct `WorldQuery` values through a schema-constrained
-tool. It cannot inspect authority state, execute arbitrary predicates, or use
-validation as a hidden-truth oracle.
-
-### 6. Beliefs and conditional strategy
-
-managym defines world meaning and the reference measure over compatible
-physical deals. manabot owns epistemic and learned distributions over that
-domain. Uniform determinization is a baseline prior, not truth.
-
-The belief head consumes viewer history only. Actual hidden truth is a
-supervised calibration target, never an inference feature. Both policy and
-value are conditioned on `BeliefState`; otherwise PUCT priors, leaf values,
-and root strategy describe different decision problems.
-
-Query comparisons hold the visible state, legal offers, checkpoint, planner,
-budget, and seed plan fixed. Their deltas are conditional comparisons, not
-causal claims and not assertions about the actual hidden hand.
-
-### 7. Determinism and exact replay
-
-Rules replay pins content, engine, match seed, initial state, Commands, and
-schema and must regenerate the same revisions, committed events, and canonical
-Observations. RNG streams are explicit and derived from recorded seeds; thread
-scheduling cannot select game outcomes.
-
-Search replay additionally pins the root, viewer history, world distribution,
-queries, sampled-world seed schedule, planner/evaluator, checkpoint bytes,
-budget, source/runtime, and deterministic aggregation order. If a numerical
-backend cannot promise bit-exact floating-point replay, the receipt must say so
-and distinguish exact engine replay, exact recorded evidence, and statistical
-search reproduction.
-
-### 8. Serialization and provenance
-
-Every durable value has a versioned canonical serialization and digest.
-Locators and paths are not identity. Canonical encodings define field order,
-enum meaning, collection ordering, numeric representation, and absent versus
-zero. Unknown versions fail closed.
-
-Artifacts bind exact bytes to their complete context. Atomic file replacement
-prevents torn writes; immutability additionally requires content digests,
-append-only manifests or ledgers, and rejection of mutation. Verification may
-recompute from recorded inputs but never manufactures missing data.
-
-### 9. Planner honesty
-
-Current PUCT builds a separate perfect-information tree for each sampled world
-and aggregates root statistics. It is **determinized PUCT**, not ISMCTS,
-public-belief search, CFR, or a proof against strategy fusion. Better beliefs
-improve the worlds searched; they do not make future tree decisions obey one
-information-set strategy.
-
-Budgets are semantic. Flat Monte Carlo playouts per root action and total PUCT
-traversals across worlds are not comparable integers. Results report worlds,
-traversals or playouts, realized latency, inference work, and perspective.
-
-### 10. Concurrency and performance
-
-Full clone is the branch strategy (Jack Heart, 2026-10-30): search forks a
-`Game` by cloning it and applies Commands to the copy. The [search branching
-decision](benchmarks/search-branching-decision-v1.md) and its benchmark receipts
-record why undo and copy-on-write backends were rejected.
-
-Root state is immutable during concurrent planning. Each worker owns an
-isolated branch and RNG stream. Reductions have a deterministic order.
-Variable-length Observations, offers, histories, and world supports are batched
-with explicit lengths/masks; no fixed-cap fast path may silently lose legality
-or viewer-visible meaning.
-
-Possible-world filtering and materialization are lazy. Exact enumeration is a
-useful reference while support is small, not an API assumption. Performance
-receipts report p50/p95 latency, throughput, peak RSS, support/effective sample
-size, and model batching behavior at the consumer boundary.
-
-### 11. Learning evidence
-
-Chosen action, score softmax, PUCT visit distribution, per-action Q, root
-value, and terminal outcome are different targets. Missing values are absent,
-not zero.
-
-The training seed is the method-level experimental unit. More decisions or
-evaluation games narrow within-run noise; they do not create independent
-evidence about a learning method.
-
-### 12. Evaluation and promotion
-
-A player is an immutable registration, not a nickname or mutable path. Arena
-ratings are local coordinates: they never cross a changed world, content
-suite, information boundary, cohort, estimator, or compute class.
-
-Seat balance is not paired-deal evaluation. Admission uses the same exact deal
-with seats swapped, retains the full payoff matrix and competency/system
-results, estimates uncertainty over paired deal blocks, and treats disconnected
-or dominance-separated rating data explicitly. No one-off win rate, Elo-like
-number, experiment report, or Study artifact promotes a checkpoint.
-
-## End-to-end flows
-
-### 1. Authoritative execution and Commands
-
-1. `MatchAuthority.observe(viewer, cursor)` returns the canonical Observation.
-2. Its `DecisionFrame` lists all semantic legal offers for the actor.
-3. Academy, a human, or a manabot chooses an offer and supplies all currently
-   knowable answers in one Command.
-4. `MatchAuthority.execute(command)` checks match, revision, actor, offer,
-   answers, costs, and targets immediately before mutation.
-5. managym commits events, advances the revision, and returns a
-   `TransitionReceipt` and next Observation.
-
-Forced engine progress may collapse decisions, but it remains committed and
-observable through events. UI interaction drafts are not Commands and do not
-mutate authority.
-
-### 2. Observations and action representation
-
-The canonical Observation remains ragged and semantic. A versioned managym
-encoder may produce tensors with lengths, masks, symbolic vocabularies, and an
-encoding receipt. The receipt records original/encoded counts and any clipping;
-legality-affecting or meaning-affecting truncation is a hard error.
-
-Models score semantic offers. A positional tensor row may be used inside one
-batch, but trajectory, query, search, and Study evidence use semantic offer and
-Command identity.
-
-### 3. Hidden information and belief modeling
-
-managym derives `Omega(H_v)` from the viewer's history and all public
-constraints. The first reference representation can be exact opponent-hand
-count vectors plus pinned hidden facts; a completion kernel materializes
-physical copies and library chance when a search branch is required.
-
-The canonical prior is uniform over compatible physical deals. It is not
-uniform over collapsed count vectors. For remaining multiplicities `N_i` and a
-hand count vector `k`:
-
-```text
-P(k | Q) proportional to 1[Q(k)] * product_i choose(N_i, k_i)
-```
-
-Thus `Has(Bolt)` is precisely the normalized compatible-deal measure restricted
-to worlds where the Bolt count is at least one. A learned belief reweights the
-same domain using viewer history.
-
-### 4. Branching, determinization, PUCT, and leaf evaluation
-
-A `PlanningProblem` binds one root Observation/history and distribution.
-managym exact-forks authority and materializes sampled worlds. manabot applies
-only semantic Commands through the branch API.
-
-The current planner runs independent PUCT trees per determination and aligns
-semantic root actions when aggregating visits and Q values. A leaf evaluator is
-either an explicitly identified rollout policy or a checkpoint-bound,
-belief-conditioned policy/value model. Results retain per-world diagnostics,
-sampling receipts, uncertainty, and realized compute.
-
-A future information-set-consistent planner implements the same outer planning
-contract with different declared result semantics. It does not appear as a
-boolean that silently changes what PUCT means.
-
-### 5. Policy/value learning and checkpoints
-
-The desired model is:
-
-```text
-viewer Observation history -> BeliefHead -> BeliefState b
-
-current visible state + semantic offers + b -> PolicyHead pi(a | O, b)
-                                             -> ValueHead  V(O, b)
-```
-
-The policy/value model may consume canonical conditional priors before a
-learned belief head is ready. Training must then include history-informed
-non-uniform beliefs so serving on learned beliefs is not out of distribution. Equivalent queries inducing the same `BeliefState` must
-produce the same model result; query text is provenance, not an extra strategy
-feature.
-
-The belief-forming runtime makes this boundary explicit: `Manabot.decide`
-updates belief before policy/value evaluation; `evaluate_under_belief` evaluates
-a supplied belief without changing autonomous memory. Both use the same
-decision core. Search uses the full supplied world distribution.
-
-The reference updater recomputes managym's exact compatible-deal measure `p0`
-from current viewer-safe hard facts. The learned exact-world scorer normalizes
-`log_p0 + s_theta(world, viewer_history)` separately over each decision's ragged
-candidate set. Before typed commitments it returns `p0` exactly. There is no
-implemented mulligan/Keep event: future hand-size changes and redraw/return
-semantics belong to managym. Known-policy Bayes is a diagnostic; the deployed
-learned updater does not require the acting policy.
-
-Materialized hidden hands supervise whole-world negative log likelihood;
-larger hypothesis spaces may factor the same normalized joint distribution
-autoregressively. Independent card-count marginals are derived diagnostics and
-policy tokens, never authoritative query answers or the primary joint loss.
-Actual hidden truth and opponent/episode provenance do not enter inference.
-Population identities bind evidence, and splits by match and opponent version
-are needed to measure transfer. The bounded scripted-population demo holds out
-episodes only and makes no cross-opponent claim.
-
-The policy projection is schema-bound by canonical viewer-relative owner,
-hidden zone, CardDefId, and complete count probabilities. Queries condition the
-full `BeliefState`; query strings, condition roles, and artifact paths are not
-features. No private belief-updater activation may bypass a supplied belief.
-Belief and strategy losses remain separate; sharing more semantic parameters
-or enabling joint gradients requires an explicit measured model change.
-
-The current learned history encoder pools typed public commitments and is
-order-invariant. Arbitrary mid-game history attachment and a shared visible-card
-identity vocabulary remain gaps. The precise implementation limits and
-continuation proof are recorded in
-[Training memory](../.lf/wave/training/MEMORY.md).
-
-Checkpoints are immutable, content-addressed artifacts. Loading validates the
-world, Observation/action and world-hypothesis schemas, history/memory strategy,
-model architecture, target semantics, and exact bytes before constructing a
-player or leaf evaluator.
-
-Belief-enabled checkpoints additionally require `belief_schema_identity` and
-`belief_content_manifest_identity`; runtime compares the full ordered encoding
-contract before inference. Equal tensor dimensions do not establish vocabulary
-compatibility. The single `checkpoint` player dispatches from serialized
-capability. Removed positional-condition fields, missing bindings, and source
-drift fail closed; frozen experiments are not repaired by weight ports or
-rewriting their evidence.
-
-### 6. Self-play and opponent selection
-
-Every actor in self-play is a `PlayerRegistration`. An
-`OpponentPoolManifest` pins candidate bytes and a versioned selection policy;
-each match records the selected opponent and selection probability. A mutable
-“latest checkpoint” path is never an opponent identity.
-
-As the population grows, the pool may include the current champion, immutable
-historical checkpoints, nearby-skill opponents, search players, and dedicated
-exploiters. Selection is a manabot training policy, not an arena rating rule or
-managym behavior. No recurrent memory, belief state, branch, or RNG stream is
-shared between seats or matches.
-
-### 7. Evaluation, skill estimation, and promotion
-
-`sim` owns registered policies, bounded execution, replay and native card facts.
-`eval` owns admission, schedules, result schemas, ratings, GIH reduction/query
-and MTG Arena log export. `experiment` owns checkpoint staging and followers.
-Simulation imports none of evaluation, training, experiment or reports. Canonical
-byte identities live in `infra.identity`. The former `manabot.arena` package
-is removed without import shims. Frozen wire fields (`arena_key`,
-`arena_version`), seed identifiers, source-path contracts and artifact paths keep
-their recorded meaning; new evaluations bind the relocated source bytes.
-
-Development evaluation answers a pairwise question and remains useful. Evaluation
-admission registers a candidate under one `EvaluationKey`, plays a declared frozen
-cohort on exact paired deals with seats swapped, and records Commands, outcomes,
-competencies, calibration, latency, throughput, and cost.
-
-INT-6's intended estimator is a regularized Bradley–Terry-style population
-model with order effects and paired-deal block bootstrap. The estimator and
-prior are part of `EvaluationKey`; raw matrix, connectivity, residuals, and
-uncertainty remain visible. “Elo” is acceptable product shorthand only when it
-does not imply portability across evaluation cohorts. Promotion is an immutable receipt
-over all declared strength, safety, competency, and systems gates.
-
-### 8. Projecting evidence into Study
-
-Academy selects a historical decision and optional typed conditions. managym
-resolves its exact replay, historical viewer, Observation, and legal semantic
-offers. manabot resolves the exact checkpoint/planner artifacts or reports
-typed unavailability, then emits `DecisionEvidence` or a
-`ConditionalStrategyResult` bound to that context.
-
-Current main already proves the authority-private fork/execute/return half:
-`StudyForkProvider` retains a managym root, clones it for exploration, checks
-source and sibling isolation, and returns a consuming `StudyReturnReceipt`
-bound to the captured source digest. RUL-6 measures the production seam under
-sequential and retained-sibling load and makes its full-clone,
-`step_structured`-only, zero-fallback execution path explicit in that receipt.
-The convergence work is to move the remaining match/replay identity into
-managym and attach exact conditional manabot evidence to that proven return
-seam.
-
-Academy presents full distributions, values, robustness, uncertainty, and deltas
-without private sampled worlds. Queries may overlap; displays label conditional
-differences rather than causal effects. Study never substitutes nearby evidence
-and never reveals whether an actual hidden hand satisfies a condition.
-
-## Duplicate abstractions and migration boundaries
-
-| Present duplication or gap | Scaling failure | Convergence action |
-|---|---|---|
-| managym rules state versus Academy-owned match revision, accepted-command, and replay bookkeeping | Live play, Study, and search can disagree about the same match. | Introduce managym `MatchAuthority`; migrate Academy transport and historical consumers; delete server-side semantic/replay authority. |
-| `ActionSpace` positions, narrow `AtomicCommand`, Academy protocol `Command`, and multiple offer constructors | Cross-world actions and replay depend on positional or adapter-specific meaning. | Make managym semantic `DecisionFrame`/`Command` authoritative and retain indices only in revision-private bindings. |
-| Snapshot-like Observation plus duplicated Rust/Python tensor encoders | Visible history and legal actions can be truncated or drift across scalar/vector paths. | Land composite Observation and one managym encoder with explicit receipts; derive all model views from it. |
-| Uniform determinizers, raw-game search access, and INT-9 range types | Belief semantics, query semantics, and world completion can fork into separate ontologies. | Establish managym `PossibleWorldSpace`/`WorldQuery`/materializer, then adapt INT-9 and all planners to manabot distributions over it. |
-| Action-index keyed search trees/results | Semantic actions fail to align across conditioned worlds. | Key durable root evidence by semantic offer identity and validate every materialized world's legal correspondence. |
-| Dict-like player and opponent specs | Checkpoint, information, compute, and seed identity remain implicit. | Require `PlayerRegistration`, `OpponentPoolManifest`, and arena-local immutable registrations. |
-| Permissive checkpoint paths with stronger checks only in runners | Safe provenance is optional and cannot compose through training, arena, and Study. | Move manifest verification into shared loaders; keep runners as orchestration, not identity authorities. |
-| Caller-supplied Study identity strings | Structurally valid evidence can belong to another replay. | Resolve exact context from managym replay authority and fail with typed unavailable fields when artifacts are absent. |
-
-The original integration order was dependency-shaped:
-
-1. managym semantic Command, composite Observation, transition receipt, and
-   exact replay authority;
-2. minimal exact `PossibleWorldSpace`, typed `WorldQuery`, reference deal
-   measure, and materialization;
-3. conditional determinized PUCT and aligned teacher evidence;
-4. conditional shards and policy/value student, then the learned belief head;
-5. INT-9 adaptation, self-play pools, INT-6 arena admission, and Study
-   conditional evidence.
-
-Each step migrates at least one real Academy or manabot consumer and deletes its
-duplicate constructor. Contract-only substrate that no running path consumes
-does not complete a step.
-
-The July 18 results-first correction deferred the learned belief head while
-prioritizing the [results ladder](plans/results-first-roadmap.md). It treated
-three separate paths—exact-range play, conditional root search, and a neural
-student's positional tags—as completed belief integration. The belief-forming
-branch closed that composition gap: generated or supplied belief now feeds one
-policy/value core. Its bounded learned updater does not establish general
-calibration or strategic strength. The results ladder retains its evidence
-requirements; its blanket head deferral is superseded. The conditional
-teacher/student steps above are retired with supervised policy training;
-held-out conditional behavior and autonomous learned-belief play remain
-separate claims to measure.
-
-## Roadmaps and detailed contracts
-
-The immediate provider work is prioritized in the [Engine
-goal](../.lf/wave/engine/GOAL.md) and the [results-first
-roadmap](plans/results-first-roadmap.md). Engine owns changes to managym
-authority; Training owns manabot beliefs, planning, learning and opponents;
-Eval owns evaluation. Cross-wave work is integrated through runnable consumer
-slices, not by duplicating provider APIs.
-
-Detailed existing contracts remain authoritative within their narrower scope:
-
-- [experience protocol v1](architecture/experience-protocol-v1.md) describes
-  the current and transitional Academy wire path;
-- [match-state hash v1](architecture/match-state-hash-v1.md) defines one
-  deterministic state-hash domain;
-- [presentation runtime](academy.md#presentation-runtime) describes the
-  product projection seam;
-- [search branching decision](benchmarks/search-branching-decision-v1.md) and
-  [selected branch driver](benchmarks/selected-branchdriver-teacher-v1.md)
-  record the evidence for full-clone branching;
-- [WORLDS.md](../WORLDS.md) governs current Observation/action world freezes;
-- [manabot research](../manabot/RESEARCH.md) records the broader research and
-  evidence program.
-
-When a lower-level document conflicts with this file about ownership or the
-target architecture, this file governs the convergence direction. Frozen
-evidence, experiment IDs, contracts, and receipts retain their historical
-meaning and are never rewritten to appear compliant.
+- **managym is the world** (`managym/`, Rust; `import managym` in Python). It
+  owns card meaning, match state, legality, decisions and Commands, committed
+  events, viewer-safe observations, deterministic replay, exact forks, and the
+  hidden-hand domain. It never chooses among a learner's legal actions
+  ([the rules engine](engine.md)).
+- **manabot is the agent** (`manabot/`, Python). It owns the policy and value
+  network, self-play training, checkpoints, search, beliefs, evaluation and
+  experiment records. Inside it, `sim` runs games and registered players,
+  `eval` scores and rates, `training` learns, `experiment` declares and
+  executes comparisons, and `infra.identity` owns canonical byte identities.
+- **Academy is the inspection UI** (`academy/`, `academy/ui/`). It owns
+  transport, interaction drafts, reconnect behaviour, presentation and replay
+  navigation. It reconstructs no rules meaning, and nothing in training
+  depends on it ([Academy](academy.md)).
+- **Etude launches and records** (`loopflowstudio/etude`). Remote training and
+  evaluation go through it; the machine is chosen at launch, never in the
+  experiment ([training](training.md#remote-training)).
+
+Imports follow the same order: Academy may import manabot and managym, manabot
+imports managym and never Academy, managym imports neither, and `manabot.sim`
+imports none of `eval`, `training`, `experiment` or `reports`.
+`tests/test_package_boundaries.py` enforces all of it. Telemetry, profilers,
+caches and UI state may observe or accelerate these authorities; they never
+become a second source of truth.
+
+## Contracts the code enforces
+
+**One rules authority.** Only managym commits a state transition. A transition
+is `(revision N, decision N) + Command(expected=N) → committed events +
+revision N+1`; a Command against another revision fails closed
+(`SemanticError::StaleRevision`). Academy, a person or a manabot selects a
+Command; none patches state, invents legality or re-derives what a viewer may
+see. Academy's live play still lowers its protocol-v1 `Command` to a
+positional `step` through `DecisionContext.action_by_offer`; the semantic
+`DecisionFrame` / `Command` / `TransitionReceipt` contract in
+`managym/src/decision.rs` is the engine API, not yet Academy's wire path
+([experience protocol v1](architecture/experience-protocol-v1.md)).
+
+**Forced decisions are played by the engine.** A decision reaches a player
+only with at least two legal actions (`skip_trivial`, on everywhere). Every
+decision count in this repository excludes forced choices.
+
+**Observations are viewer-safe at the source.** `Observation::for_player`
+holds everything one seat may see and nothing else; legal actions appear only
+in the chooser's view; decklist disclosure lives on `PlayerConfig.disclosure`.
+Viewer-equivalent states produce byte-identical observations. The policy
+tensor, the LLM text and the learning tokens all derive from the same
+observation, and a mechanic reaches all three in the change that adds it
+([observations](observation-and-model.md)).
+
+**Identity is typed.** An `ObjectRef` carries its incarnation and fails after
+a zone change. An action index is valid only in one decision epoch. The
+observation and action encoding is a *world* (`managym.WORLD_VERSION`,
+[WORLDS.md](../WORLDS.md)); checkpoints bind world, deck setup and input
+schema and load only where the digest matches. Every durable value has a
+canonical serialization and digest (`manabot.infra.identity`), and locators
+are not identity.
+
+**Replay is exact.** A game regenerates from its deal seed, configuration and
+Commands, and every pre- and post-state digest must match. RNG streams derive
+from recorded seeds, so scheduling cannot select an outcome. Evaluation scores
+only replay-verified terminal games
+([forks, replay and determinization](engine.md#forks-replay-and-determinization)).
+
+**Branching is a full clone.** Search forks a `Game` by cloning it and steps
+the clone; a rules-only witness checks the source is untouched. Undo journals
+and copy-on-write pages were rejected on preregistered thresholds
+([search branching decision](benchmarks/search-branching-decision-v1.md)).
+Determinized PUCT and flat Monte Carlo are named as such: separate
+perfect-information trees per sampled world, aggregated at the root, with no
+claim to information-set consistency ([search](search-and-beliefs.md)).
+
+**Hidden information has one domain.** `managym/src/possible_worlds.rs` owns
+the hidden-hand domain, the five-variant `WorldQuery`, compatible-deal weights
+and materialization; `manabot.belief` owns probability over that domain. A
+query never reveals whether the actual hidden hand satisfies it, and empty
+support is an explicit result.
+
+**Training is declared data.** A `TrainingRegime` (one module per experiment
+under `experiments/`) names the world, decks, model and ordered stages; one
+runner executes it, writes world-bound raw and EMA checkpoints, records every
+attempt in `VerifyStore`, and ships metrics through Etude. Regimes refuse
+belief inputs; the trained model sees the current observation only
+([how a manabot learns](learning.md), [training](training.md)).
+
+**Evaluation never promotes.** A player is an immutable `PlayerRegistration`;
+a rating belongs to one `EvaluationKey` (world, content suite, viewer
+boundary, arena version, compute class) and never crosses it. Candidates play
+the same deals with seats and decks swapped, uncertainty resamples whole
+deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
+`heuristic` and frozen checkpoints as working anchors. No win rate, rating or
+report promotes a checkpoint; scores never enter the loss
+([evaluation](evaluation.md)).
+
+**Evidence is preregistered.** The question, prediction, kill criteria and
+cost cap are committed before a run; the training seed is the unit of
+evidence for a method; refutations stay on the record
+([experiments](experiments.md)).
+
+## Beside the loop
+
+These exist and run, and none of them is on the training path today.
+
+- **Belief samplers** (`manabot/belief`) fit a distribution over the
+  opponent's hidden cards from a frozen policy's games and are consumed only
+  by search players and a bounded demo seam; `ActorCritic` has an optional
+  belief channel that regimes reject.
+- **Search players** (`manabot/sim/search`): flat Monte Carlo, determinized
+  PUCT, and `LocalUpdateTeacher`, the current search-improvement code. None
+  has shown a strength gain over the policy alone.
+- **Academy Study** (`academy/study_branch.py`, the replay page) forks a
+  retained engine root, executes structured Commands on the clone, proves
+  source and sibling isolation, and returns through a consuming receipt.
+  Its decision evidence is fixture-served.
+- **LLM players** ([llm.md](llm.md)) read the text observation and choose
+  Commands through the same authority as everyone else.
 
 ## Non-goals
 
-- A general-purpose Magic rules library independent of the selected training
-  worlds.
-- Runtime natural-language parsing or LLM authority over legality.
-- Hidden decklists, multiplayer/general-sum play, Commander breadth, or broad
-  format legality in the current architecture slice.
-- A flag-day rewrite or a permanent compatibility layer with two semantic
-  authorities.
-- Claiming that exact beliefs solve strategy fusion, that one rating describes
-  every matchup, or that a valid Study schema proves exact historical evidence
-  is available.
+- A general-purpose Magic rules library independent of the training worlds.
+- Natural-language parsing or LLM authority over legality at runtime.
+- Multiplayer, general-sum play, Commander breadth or broad format legality.
+- A second semantic authority, in Academy or anywhere else, even as a
+  compatibility layer.
+- Claiming that exact beliefs solve strategy fusion, or that one rating
+  describes every matchup.

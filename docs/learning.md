@@ -283,7 +283,8 @@ That idle time is the price of having real outcomes on every trajectory.
 Most of this recipe is inherited from the paper and is being tested on Magic
 one switch at a time. These are the results the guide leans on:
 
-- **Terminal reward only.** Our shaped rewards lost to it by about 15 points
+- **Terminal reward only.** Potential shaping matched it and pay-per-event
+  shaping lost to it by about 14 points
   ([exp-04](../experiments/exp-04-potential-shaping.md)), in an earlier world.
 - **Technique screens.** Each Ataraxos component has its own status in the
   [technique screen](../experiments/ataraxos-technique-screen.md) and

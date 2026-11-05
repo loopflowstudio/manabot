@@ -46,8 +46,9 @@ frozen input version never silently falls behind the rules.
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
    masked, so every decision type shares one action head.
-4. **Estimate value.** Objects are projected, pooled by a masked mean and read
-   by the value head. The output is a scalar or loss/draw/win logits.
+4. **Estimate value.** Objects are projected, pooled by a mean over valid
+   objects (`masked_mean`, as in the TLA pilot; the historical default averages
+   every slot) and read by the value head. The output is a scalar or loss/draw/win logits.
 
 The GRU encodes a card's rules program, not game history. The network has no
 recurrent game memory, and the optional recent-event encoder is off by default.
@@ -99,7 +100,9 @@ returns loss, draw and win logits, and its value is P(win) − P(loss); a
 ## Sizes in the TLA pilot
 
 Each object has 64 channels. Two self-attention blocks, each with four heads, mix
-up to 202 padded object slots: two players, 120 cards and 80 permanents. An
+up to 386 padded object slots: two players, 256 cards and 128 permanents (128
+cards and 64 permanents per seat; a fresh `ObservationConfig` allots 60 and
+40, for 202 slots). An
 action concatenates its 64-channel projection with two 64-channel focus objects,
 giving 192 channels, and passes through 192 → 64 → 64 to the policy head.
 
@@ -126,13 +129,14 @@ native scalar/vector buffer shapes, model shape checks and checkpoint receipts.
 A native `relations[64,49]` float32 buffer carries ordered stack entries,
 announced targets and clauses, chosen modes and abilities, kicker, reserved
 sacrifices, suspended payments and waiting triggers. V5/v6 player, card and
-permanent widths are 67/55/38. Native buffers bind relation semantics by width
+permanent widths are 73/56/38. Native buffers bind relation semantics by width
 (32 for v2/v3, 33 for v4, 49 for v5/v6); validity stays at column 31. The fact
 axis binds capacity; at 128 rows v5 and v6 encode identically, while the saved
 configuration still distinguishes their identities. Checkpoints omitting the
 version load as v1 through `ObservationConfig.from_checkpoint`; legacy configs
 omit `max_facts`, preserving historical architecture hashes.
-`agent/continuation.rs` projects the facts once per observation and
+`agent/continuation.rs` projects the continuation frames and
+`agent/observation_encoder.rs` the fact rows once per observation;
 `manabot/env/observation.py` is the matching reference encoder. Only the
 acting viewer receives private continuation; overflow fails rather than
 truncating. Transport IDs are joins to the card catalog and object table,
@@ -148,9 +152,7 @@ inferring it from the event. V1–v4 omit these delayed facts.
 Encode-only benchmark: `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`.
 Matched full-vector benchmarks use `scripts/bench_breakdown.py --matched-corpus`
 and `scripts/bench_observation_pair.py` on a release extension built with the
-`benchmark` feature. On 2026-10-26 the paired comparison on a 32-vCPU EPYC
-host showed full-step ratios of 0.978–1.051, which met Jack Heart's revised
-2026-10-26 shipping acceptance permitting small measured overheads.
+`benchmark` feature.
 
 ### Input v7 capacity
 
@@ -163,12 +165,12 @@ rules records are deleted or semantically coalesced.
 
 The three padded effect arrays use 31,744 bytes per observation; local facts add
 6,144. This exceeds v6/256's 12,288-byte fact array, although the retained
-270-fragment case needs only 1,944 active effect bytes. The walkthrough documents
-the layout, routing, parameters and sum/normalization tradeoff. These engineering
-proofs establish no learning-quality advantage. Persistent memory remains future
-work. Fresh defaults remain v6; frozen v1–v6 checkpoints and the TLA pilot's
-protocols/receipts keep their original meanings. The transport itself is in
-[shared effect inputs](../manabot/README.md#shared-effect-inputs).
+270-fragment case needs only 1,944 active effect bytes. The layout, routing and
+sum/normalization tradeoff are in [`manabot/model/shared_effects.py`](../manabot/model/shared_effects.py)
+and [shared effect inputs](../manabot/README.md#shared-effect-inputs). These
+engineering proofs establish no learning-quality advantage. Persistent memory
+remains future work. Fresh defaults remain v6; frozen v1–v6 checkpoints keep
+their meanings, and the TLA v10 pilot trains on v7.
 
 ### Optional recent public events
 
@@ -188,7 +190,7 @@ complete decision history, and no training benefit has been measured.
 ## What we know
 
 - **The encoding hides no decision.** The learnability search found 0 clean
-  input collisions, and a nightly check guards it
+  input collisions, and the fixed suite runs on relevant PR updates
   ([learnability](../experiments/learnability-search.md)).
 - **The smallest model learned as well as larger ones at this scale.** Two
   seeds were not enough to rank sizes
@@ -209,4 +211,4 @@ complete decision history, and no training benefit has been measured.
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
 | Recent events | [`manabot/model/recent_events.py`](../manabot/model/recent_events.py) |
 | Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/model/semantic_cards.py`](../manabot/model/semantic_cards.py) |
-| Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md) |
+| Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md#capacity-identity-and-accounting) |

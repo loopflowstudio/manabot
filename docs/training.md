@@ -264,7 +264,7 @@ def runs(revision: str):
 ```
 
 ```sh
-uv run etude launch experiments/<name>.py --revision COMMIT --rent l4 --max-usd 10
+uv run etude launch experiments/<name>.py --revision COMMIT --cohort <name>-1 --rent l4 --max-usd 10
 uv run etude report experiments/<name>.py --source r2://manabot/jobs --open
 ```
 
@@ -368,8 +368,8 @@ uv run python -m manabot.reports.training --evaluations a/monitor.json b/monitor
 uv run python -m manabot.experiment.monitor_worker --import-manifest manifest.json --import-rows rows.json --out .runs/imported-monitor
 ```
 
-`--destination` (directory or `s3://bucket/prefix`) and `--experiment` select
-delivery; settled rows are never rewritten and a changed prefix is rejected.
+For `manabot.reports.training`, `--destination` (directory or
+`s3://bucket/prefix`) and `--experiment` select delivery; settled rows are never rewritten and a changed prefix is rejected.
 
 ### Stored bytes
 

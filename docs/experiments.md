@@ -25,7 +25,7 @@ reusable instruments. A file defining `report()` or `eval(state)` is an
 runs track under its stem:
 
 ```sh
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --max-usd 60
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play what is new
 uv run etude report experiments/ --source r2://manabot/jobs --serve       # every experiment
 ```
@@ -68,13 +68,15 @@ The question was whether a policy-invariant form of shaping would learn without
 that fingerprint. The prediction was committed first:
 
 > E2c reaches ≥90% of E2b's win-vs-random while holding instants
-> significantly longer.
+> significantly longer. […]
 
-The result overturned the premise instead: terminal-only reward beat every
-shaped variant by about 15 points. Reward in every recipe since has been win,
-loss or draw and nothing else. The report records the question, the prediction, the method, the results, a
-verdict on the prediction and the caveats, in that order, which is the shape
-every report here follows.
+The prediction held, and an addendum overturned the premise anyway: a
+terminal-only control matched the potential-shaped arm and beat pay-per-event
+shaping by about 14 points, so the shaping the project had been paying for was
+buying nothing. Reward in every recipe since has been win, loss or draw and
+nothing else. The report records the question, the prediction, the method, the
+results, a verdict on the prediction and the caveats, in that order, which is
+the shape reports here aim for.
 
 ## Failures worth reading
 
@@ -83,7 +85,7 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 | What we believed | What happened | Lesson |
 | --- | --- | --- |
-| Shaped rewards speed up learning | Terminal reward won by about 15 points ([exp-04](../experiments/exp-04-potential-shaping.md)) | Test the obvious helper |
+| Shaped rewards speed up learning | Terminal reward matched potential shaping and beat pay-per-event shaping by about 14 points ([exp-04](../experiments/exp-04-potential-shaping.md)) | Test the obvious helper |
 | Expert iteration compounds | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/exp-07-expert-iteration.md)) | Distillation doesn't improve a weak teacher |
 | Win rate measures competence | A strong-looking search pilot couldn't play a control deck ([exp-09](../experiments/exp-09-control-competency.md)) | Test specific skills, not just outcomes |
 | Matchup tables measure the decks | A four-card swap moved a matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)) | The pilot and the cards are confounded |
@@ -196,7 +198,8 @@ transitions, exposures, active time or dollars.
 Reports select over Etude jobs and average across seeds, and their metric
 definitions are in [experiment-metrics.md](experiment-metrics.md). When reading
 a training curve, keep the three kinds of progress apart: `rl/loss`,
-`rl/collection_kl` and `rl/entropy` describe optimization; monitoring scores
+`rl/collection_kl` and `rl/entropy` in the report (`loss`, `collection_kl` and
+`entropy` in the raw Etude rows) describe optimization; monitoring scores
 against the latest opponent describe relative progress; only held-out
 evaluation on paired deals describes durable progress
 ([reading a run](learning.md#reading-a-run)).

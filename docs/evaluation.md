@@ -53,15 +53,17 @@ return int(identity[:16], 16)
 - Legs of one deal are not independent samples. Uncertainty is a paired-deal
   bootstrap over whole deals, and a single deal has none.
 - Repeating a deal seed is not a new sample.
-- Held-out deals are never used for training or monitoring. A run's selection
+- Monitoring plays reserved development deals that scientific cohorts exclude,
+  and held-out deals never reach training. A run's selection
   rule is `last-complete-raw`, never the best evaluation, so no result is
   picked by looking at the test.
 
 ## What counts
 
-Only terminal, replay-verified games score. Draws, crashes, timeouts and
-failed replays are retained by outcome and never earn credit, and a cohort
-with an unscored game is rejected rather than quietly trimmed.
+Only terminal, replay-verified games score, and a terminal draw scores one
+half. Crashes, timeouts and failed replays are retained by outcome and never
+earn credit, and a cohort with an unscored game is rejected rather than quietly
+trimmed.
 
 From `fit_population` in [`manabot/eval/rating.py`](../manabot/eval/rating.py):
 
@@ -98,8 +100,9 @@ Working anchors are the rule-based `heuristic` player
 ([`manabot/sim/heuristic.py`](../manabot/sim/heuristic.py)) and frozen
 checkpoints. The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
-and diagnostics, not as working anchors. Head-to-head
-[Tournament](../experiments/head-to-head.md) files play chosen checkpoints
+and diagnostics, not as working anchors; `fit_population` still places
+`random-v1` at the origin by default. Head-to-head
+[tournaments](../experiments/head-to-head.md) play chosen checkpoints
 against each other on shared deals.
 
 Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
@@ -126,12 +129,14 @@ sit beside it:
 
 ## What we know
 
-- **The heuristic anchor separates checkpoints that greedy can't.** As UR
-  against MTG-183's update-1,750 GW it rises from 18.3% to 62.0% over 300
-  held-out games, and from 10.8% to 34.3% across all ten decks
-  ([heuristic strength](../experiments/heuristic-strength.md)).
-- **Win rate hid incompetence.** The search pilot of exp-02 beat random 99% of
-  the time and could not play a control deck: uniform random beat it on three
+- **The anchor itself moves.** Revising the `heuristic` player on 2026-10-24
+  raised it from 18.3% to 62.0% as UR against MTG-183's update-1,750 GW over
+  300 held-out games, and from 10.8% to 34.3% across all ten Elemental decks
+  over 400 games, without slower decisions
+  ([heuristic strength](../experiments/heuristic-strength.md)). Ratings are
+  pinned to an anchor version.
+- **Win rate hid incompetence.** The 256-rollout search pilot of exp-02 beat
+  random 99% of the time and could not play a control deck: uniform random beat it on three
   of five scenarios ([exp-09](../experiments/exp-09-control-competency.md)).
 - **Matchup tables measure the pilot and the cards.** A four-card swap moved a
   matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)).
@@ -140,7 +145,7 @@ sit beside it:
   attackers were untested ([exp-11](../experiments/exp-11-curriculum-exploitability.md)).
 - **An N-game evaluation once played one deal.** A seed bug made every game
   replay the same shuffle, and the seat-advantage claims built on it were
-  retracted ([F1](../paper/understanding.md)). Derived seeds and replay
+  retracted ([F1 and F3](../paper/understanding.md)). Derived seeds and replay
   verification are the response.
 
 ## Quick local evaluation
@@ -339,7 +344,7 @@ points. Counts are copy-weighted; tutors, bounce and generated cards are not
 draws. Only won/lost games with a passed replay are eligible; there is no
 implicit minimum sample. These are associations, not causal card values. The
 GIH interval is a deterministic 95% percentile bootstrap over whole deal seeds,
-one draw of deal weights per filter selection; it needs two deals.
+one draw of deal weights per filter selection.
 
 **Tables.** Each match delivers `card_plays` (per game and player),
 `card_counts`, `cards` and the shared `plays`; `seat` indexes `Match.players`,
@@ -351,8 +356,8 @@ ineligible row; its deal's other games still count. Evidence is a private
 blob per game read with Etude's `read_blobs`; `etude convert-eval` makes older
 per-file runs readable.
 
-**Arena logs.** `cards export-log --run RUN --game GAME --viewer 0|1 --mapping
-mapping.json --out game.log` writes `arena-card-log-v1` (`eval.arena_log`).
+**Arena logs.** `cards export-log --experiment EXP --source .runs/cards --run RUN
+--game GAME --viewer 0|1 --mapping mapping.json --out game.log` writes `arena-card-log-v1` (`eval.arena_log`).
 `CardMapping` binds content keys to retained Scryfall responses with verified
 `arena_id`; export refuses missing mappings and never joins by name. Logs omit
 opponent private cards and library order, are synthetic, and must never be
@@ -362,7 +367,7 @@ submitted to 17Lands; `tests/fixtures/seventeenlands` pins the upstream client.
 filter combinations in 16.01 s wall; a $0.03 L4 smoke audited 96/96 games
 clean. The `Card evaluation scale proof` workflow runs
 `manabot.eval.cards verify --games 1024` on CPU as an engineering proof.
-Details: [evaluation.md#card-data at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/card-evaluation.md).
+Details: [card-evaluation.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/card-evaluation.md).
 
 ## Checkpoint scenarios
 
@@ -416,7 +421,7 @@ arena evidence. Final paired improvement bootstraps over attacker seeds and is
 exploratory. A failed bounded attacker never certifies equilibrium. The
 real-PPO positive control raised score against a deliberately passive toy
 target from .59375 to 1.0 in 64 updates. History:
-[evaluation.md#frozen-policy-attacks at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/frozen-policy-attacks.md).
+[frozen-policy-attacks.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/frozen-policy-attacks.md).
 
 ## Open direction
 
@@ -429,7 +434,8 @@ a server starts, releasing idle compute when work finishes. That gate belongs
 in Etude's launch scheduler and is not implemented. Compute policy, a durable
 Etude priority queue, adaptive allocation and further serving optimizations
 remain unselected designs; see
-[evaluation.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/shared-evaluation.md).
+[shared-evaluation.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/shared-evaluation.md).
+
 ## Ownership
 
 Simulation (`manabot.sim`) owns serving, native games and bounded replay.

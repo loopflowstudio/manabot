@@ -238,7 +238,7 @@ their attackers (CR 500.8) are scheduled on the turn state. Bending events
 history, a spell on the stack can be airbent, spell costs can be reduced by
 colored mana that also reduces generic (CR 118.7c), and a permanent can have
 another card's activated and triggered abilities through an effect record.
-All 16 T6 cards are supported (335 supported definitions in `world`). The
+All 16 T6 cards are supported (336 supported definitions in `world`). The
 policy input adds player columns for the four bending kinds, extra turns and
 additional combats (67 → 73) and a card column for "until the end of your next
 turn" play permissions (55 → 56); decision code 26 is the each-player

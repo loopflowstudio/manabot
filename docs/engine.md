@@ -147,7 +147,7 @@ Ok(self.finish_action_step())
   share this same boundary.
 - The transition is `(revision N, decision N) + Command(expected=N) →
   committed events + revision N+1`. A Command against another revision fails
-  closed ([ARCHITECTURE.md](ARCHITECTURE.md#3-mutability-lifetime-and-transitions)).
+  closed ([ARCHITECTURE.md](ARCHITECTURE.md#contracts-the-code-enforces)).
 
 ## Forks, replay and determinization
 
@@ -155,7 +155,9 @@ Search, replay verification and hidden-information sampling all need the engine
 to produce the same game again, or a copy of it, exactly.
 
 **Fork.** A search player clones the whole game and steps the clone. From
-`Env::fork` in [`managym/src/agent/env.rs`](../managym/src/agent/env.rs):
+`Env::fork` in [`managym/src/agent/env.rs`](../managym/src/agent/env.rs)
+(`selected_fork`, which the Python `fork_exact` binding calls, has the same
+body):
 
 ```rust
 /// Independent copy of this env's game for search rollouts.

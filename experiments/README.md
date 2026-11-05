@@ -26,7 +26,7 @@ instruments.
 ```sh
 uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --max-usd 60
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for

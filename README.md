@@ -46,8 +46,10 @@ set is defined as a typed rules program (336 supported in
 [world w17](WORLDS.md)), and training draws both seats of each game at random
 from real trophy decks: 134 seven-win Premier Draft lists admitted whole from
 the [17Lands public dataset](https://www.17lands.com/public_datasets) (CC BY
-4.0), frozen in [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and
-the [pilot protocol](experiments/protocols/tla-trophy-213-v10.md).
+4.0), built by [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and
+frozen in the pilot's corpus and
+[regime](experiments/regimes/tla-trophy-213-v10.json)
+([protocol](experiments/protocols/tla-trophy-213-v10.md)).
 
 The pilot's question is whether the recipe learns on a population of real
 decks at all. Its first run learned for five updates before a capacity limit
@@ -77,7 +79,7 @@ The only feedback is who won. Each iteration has four steps:
 An EMA of the weights and annealed step sizes complete the recipe. Each piece
 has a source and is a separate switch we test on Magic rather than adopt on a
 paper's authority ([influences](docs/learning.md#influences)). Reward is win
-or loss only: our shaped rewards lost to it
+or loss only: shaped rewards bought nothing over it
 ([exp-04](experiments/exp-04-potential-shaping.md)).
 
 ## How strength is measured
@@ -97,8 +99,8 @@ method need independent training seeds. Refutations stay on the record
 
 Training scale per agent, measured in **learner decisions**: the decisions
 the learning policy made and trained on. Decisions with a single legal action
-are played automatically and not counted, and neither are the opponent seat's
-decisions in self-play. This unit does not depend on model size or batching,
+are played automatically and not counted, and neither are a frozen opponent's;
+when both seats learn, both seats count. This unit does not depend on model size or batching,
 unlike iterations or Adam steps, and does not depend on hardware, unlike
 dollars or hours. We add a row when a run sets a new high.
 
@@ -106,16 +108,16 @@ dollars or hours. We add a row when a run sets a new high.
 |---|---|---|---:|---:|---:|---|
 | first-light PPO ([report](experiments/first-light-run-1.md)) | 2026-03 | width 64, no attention | not recorded | 262k | 512 × 512 | CPU |
 | matched-cost PPO ([exp-03](experiments/exp-03-distillation.md)) | 2026-07 | width 64, no attention | 50,306 | 5.8M | 2,048 × 2,850 | M4 Max |
-| `small-26k` ([capacity](experiments/model-capacity.md)) | 2026-10 | 64 wide × 2 attention layers | 188,482 | 13.3M | 512 × 26,000 | 1× L4 |
+| `small-26k` ([capacity](experiments/model-capacity.md), [head-to-head](experiments/head-to-head.md)) | 2026-10 | 64 wide × 2 attention layers | 188,482 | 13.3M | 512 × 26,000 | 1× L4 |
 | `small-63k`, continued | 2026-10 | 64×2 | 188,482 | 32.3M | 512 × 63,000 | 1× L4 |
 | `small-100k`, continued | 2026-10 | 64×2 | 188,482 | 51.2M | 512 × 100,000 | 1× L4 |
 | scale ladder v1, one seat ([ladder](experiments/scale-ladder.md)) | 2026-10 | 64×2 | not retained | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
-| MTG-183, ten Elemental decks, both seats ([protocol](experiments/protocols/elemental-183.md)) | 2026-10 | 64×2 | 196,482 | 331.2M | ≈55,700 (complete games) × 5,950 | 1× L4, seven windows, $50 cap |
+| MTG-183, ten Elemental decks, both seats ([protocol](experiments/protocols/elemental-183.md)) | 2026-10 | 64×2 | 196,482 | 331.2M | ≈55,700 (complete games) × 5,950 | 1× L4, four rental segments, $50 cap |
 
 The parameter count of a 64×2 network depends on its inputs, not only its
-width and depth. One embedding row per card definition in the world adds 64
-parameters per card, which is the 8,000 between the two-deck and ten-deck
-runs. The fact encoder (input v5 and later) and the shared-effect encoder
+width and depth. The card encoder's token vocabulary adds 64 parameters per
+distinct learning token, card names among them, which is the 8,000 between the
+two-deck and ten-deck runs. The fact encoder (input v5 and later) and the shared-effect encoder
 (input v7) each hold about 0.8M parameters in hash-bucket embedding tables, so
 the current TLA recipe has 1,883,650 with the same 64×2 attention core.
 The first two rows predate the current world and
@@ -133,32 +135,35 @@ of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe
 
 All numbers belong to the world they were measured in, and most come from one
 training seed, so they guide the next experiment rather than settle a method.
-The [research program](manabot/RESEARCH.md#what-we-know) keeps the full table.
+Earlier findings are tabulated in the
+[research program](manabot/RESEARCH.md#what-we-know).
 
 - **One seed on ten decks kept improving for 331M decisions.** MTG-183 trained
   a 64×2 network from both seats on the ten-deck Elemental world (w13). Its
   score against the `heuristic` anchor on the full 10×10 deck grid rose from
   0.065 to 0.801 over 5,950 updates, and its rating from 525 to 1,248 Elo with
   the heuristic at 1,000. When the heuristic score flattened after update
-  3,600, newer checkpoints still beat older ones: the endpoint scored 0.618
-  against update 2,000 and 0.532 [0.511, 0.554] against update 3,600, with no
+  3,600, newer checkpoints still beat older ones: the endpoint scored 0.591
+  [0.569, 0.612] against update 2,000 and 0.532 [0.511, 0.554] against update 3,600, with no
   significant intransitive triangles among 27 rated checkpoints
   ([protocol](experiments/protocols/elemental-183.md); rating report in
   `experiments/data/mtg183-rating/`).
 - **Claude Haiku played that checkpoint to a draw.** Haiku 5.5 with high
   reasoning won 51 of 100 games against MTG-183's final policy, at $0.37
-  per game and 1.4 seconds per decision against the policy's microseconds
+  per game and a median 1.4 seconds per decision
   ([Haiku versus MTG-183](experiments/haiku-mtg183.md)).
 - **The anchors are moving targets.** A rewrite of the `heuristic` bot took it
   from 18.3% to 62.0% as UR Lessons against MTG-183's update-1,750 checkpoint,
-  and from 10.8% to 34.3% across all ten decks, without slower decisions
+  and from 10.8% to 34.3% as each of the ten decks against its GW and UB seats,
+  without slower decisions
   ([heuristic strength](experiments/heuristic-strength.md)). Ratings are
   pinned to an anchor version and a world, never compared across them.
 - **Learning from both seats replaced one-seat training.** The one-seat ladder
-  reached 0.69 against the heuristic at $10; the two-seat run at matched
-  updates scored no worse per learner decision and collected about 1.4× faster
-  ([two-seat ladder](experiments/two-seat-ladder.md),
-  [scale ladder](experiments/scale-ladder.md)).
+  reached 0.69 against the heuristic at $10
+  ([scale ladder](experiments/scale-ladder.md)); matched per learner decision
+  over four seeds per arm, two-seat learning was no worse and reached the same
+  score about 1.4× sooner
+  ([seat comparison](experiments/protocols/seat-comparison-v1.md)).
 - **Batching is the reliable speedup, and the smallest model kept up.** 64×2
   took 109–111 minutes at 4 streams and about 5 at 256; larger models showed no
   advantage at this horizon, on two seeds
@@ -192,9 +197,9 @@ From the earlier search era, in older encodings:
   at a permanent-capacity limit after five updates; its successor raises the
   capacity and recovers from oversized games, but hasn't run
   ([pilot evidence](experiments/tla-trophy-pilot.md)).
-- **The rest of the set's decks.** 866 of the 1,000 sampled trophy lists were
-  rejected for cards or rules the world doesn't yet define. Most are content
-  rather than engine changes.
+- **The full trophy population.** The pilot corpus was frozen when 134 of
+  1,000 sampled lists admitted; the current world admits all 1,000, and no
+  protocol or run uses the larger population yet.
 - **Limited.** The long-term target is sealed and draft play: building decks
   from a pool, then piloting them. Piloting random trophy decks is the first
   half; nothing in the repository drafts or builds decks yet.
@@ -210,7 +215,7 @@ uv sync --python 3.12 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run manabot train                       # small CPU training run, under a minute
+uv run manabot train                       # two-update CPU smoke, capped at two minutes
 uv run python scripts/inspect_batch.py     # one real batch and how credit reaches each decision
 ```
 
