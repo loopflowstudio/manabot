@@ -33,7 +33,7 @@ procedural card treatment. Clean-machine and release checks are in
 
 ## Shared decision surface
 
-Jack Heart's direction (2026-10-21): Academy makes the acting agent's
+Academy makes the acting agent's
 viewer-safe observations and complete legal action space understandable to a
 human. Navigation, grouping and labels may clarify that shared contract; they
 must not hide strategic choices, silently select actions, reveal unavailable
@@ -49,7 +49,7 @@ browser. The invariants that follow:
   recovery envelope. A lost response does not undo a submitted choice; **Back**
   cannot refund committed costs or hide revealed information.
 - **Forced decisions are never shown.** Academy uses native `skip_trivial`
-  like every game runner (Jack Heart, 2026-10-28): a sole legal action, for
+  like every game runner: a sole legal action, for
   either seat, never reaches a person or policy.
 - **Automation stays identifiable.** Priority-stop and F6 automation retain
   their Commands and appear as **Auto** in live and replay logs. Disabling
@@ -80,8 +80,7 @@ exact board objects. Learn keeps its Take a Lesson / Discard and draw / Decline
 interaction with previews and Back; costs and other small choices stay direct.
 
 The eight-choice threshold and text filtering are reversible product
-hypotheses; no preference or approval by Jack Heart is implied. Human usability
-acceptance (ETU-77) remains open.
+hypotheses. Human usability acceptance (ETU-77) remains open.
 
 [academy/fixtures/choice-navigation-w17.json](../academy/fixtures/choice-navigation-w17.json)
 pins actual GameSession positions (UR Lessons versus GW Allies) for five

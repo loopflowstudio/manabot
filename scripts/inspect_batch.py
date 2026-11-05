@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Collect one real self-play batch and print how credit reaches each decision.
 
-This is a learning aid for docs/start-here.md, not a training entry point. It
+This is a learning aid for docs/learning.md, not a training entry point. It
 uses the production collector and target code on an untrained or briefly trained
 model, so every number is what the update would see. It plays a handful of small
 games on one CPU thread and finishes in seconds.

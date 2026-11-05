@@ -82,7 +82,7 @@ interpretation and serialized identity.
 | `train_compound` | Ragged compound-decision policy; see [compound decisions](#compound-decisions). |
 | `import_policy` | Admit a frozen TrainingRun export's raw or EMA checkpoint without training. |
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
-| `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](ARCHITECTURE.md#beside-the-loop). |
+| `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](../README.md#beside-the-loop). |
 
 Every stage declares device, float32 precision, worker count, Torch thread
 count, wall and memory limits (`Execution`). `execution.workers` accepts 1
@@ -116,9 +116,8 @@ consume the training clock.
 
 `train_self_play.learning_seats` defaults to `"both"` for current-self and
 EMA-self training; `"one"` is the ablation control. Random and frozen
-opponents default to one seat and are never trained on. The default was
-selected by Jack Heart on 2026-10-20 and does not by itself establish a
-strength or cost gain.
+opponents default to one seat and are never trained on. The default is a
+choice, not a measured strength or cost gain.
 
 Both-seat collection records each acting seat's behavior outputs; each seat
 gets its own trajectory and terminal win/loss/draw reward (draws zero), and
@@ -373,9 +372,9 @@ For `manabot.reports.training`, `--destination` (directory or
 
 ### Stored bytes
 
-Jack Heart selected `s3://etudefantasia/manabot/` for retained bytes and
-`loopflow-studio/etude` for W&B metrics on 2026-10-06 (bucket in `us-west-2`,
-public access blocked, AES256, versioned). Use the standard AWS credential
+Retained bytes live in `s3://etudefantasia/manabot/` and W&B metrics under
+`loopflow-studio/etude` (bucket in `us-west-2`, public access blocked, AES256,
+versioned). Use the standard AWS credential
 chain; never put keys in recipes. Training exports are retained as Etude
 checkpoints; experiment results are published with
 `uv run --extra artifacts python -m manabot.data publish <path>`. Older

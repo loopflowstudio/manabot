@@ -10,7 +10,8 @@ explicit opt-in.
 
 This guide is for anyone who needs to trust what the engine guarantees.
 Building and testing it is in [managym/README.md](../managym/README.md); the
-cross-package contract is [ARCHITECTURE.md](ARCHITECTURE.md).
+cross-package contract is in the
+[README](../README.md#contracts-the-code-enforces).
 
 - [One decision](#one-decision)
 - [Forks, replay and determinization](#forks-replay-and-determinization)
@@ -147,7 +148,7 @@ Ok(self.finish_action_step())
   share this same boundary.
 - The transition is `(revision N, decision N) + Command(expected=N) →
   committed events + revision N+1`. A Command against another revision fails
-  closed ([ARCHITECTURE.md](ARCHITECTURE.md#contracts-the-code-enforces)).
+  closed ([contracts](../README.md#contracts-the-code-enforces)).
 
 ## Forks, replay and determinization
 
@@ -224,7 +225,7 @@ foretold cards; publicly known hand cards stay put. Both library orders are
 reshuffled, since the viewer knows neither, and everything the viewer can see is
 preserved. [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the
 same domain exactly, with compatible-deal counts as weights, for beliefs that
-want more than a uniform redraw ([beside the loop](ARCHITECTURE.md#beside-the-loop)).
+want more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
 
 ## Batched games
 

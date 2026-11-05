@@ -15,7 +15,7 @@ timing, trustworthy learning evidence, and measured runtime/search performance.
 managym is Manabot's authoritative world: match execution, semantic
 Commands, viewer Observations, deterministic replay, exact forks, and the
 meaning and materialization of possible worlds. The cross-package contracts
-and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+are in the [README](../README.md#contracts-the-code-enforces).
 
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)

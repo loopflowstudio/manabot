@@ -6,11 +6,11 @@ follows one training iteration from the first decision to the weight update,
 and explains how a win at the end of a game becomes a change to the network.
 
 It describes `DampedPolicyLearning`, the rule every current recipe selects
-(the `TrainSelfPlay` field itself still defaults to the PPO `Learning` control).
-[Start here](start-here.md) zooms from the whole system down to this loop; this
-guide goes further, with worked numbers, the questions a batch boundary raises,
-and the exact [departures from the source recipe](#fidelity-to-the-sources).
-For running training, see [training.md](training.md).
+(the `TrainSelfPlay` field itself still defaults to the PPO `Learning` control),
+with worked numbers, the code behind each stage, the questions a batch boundary
+raises, and the exact [departures from the source recipe](#fidelity-to-the-sources).
+The [README](../README.md#how-a-manabot-learns) has the loop in four sentences;
+for running training, see [training.md](training.md).
 
 ![One training iteration: play, assign credit, filter and update, then repeat with new weights. Weights also feed an EMA, checkpoints and evaluation, which never feed back into the loss.](images/learning-loop.svg)
 
@@ -23,6 +23,7 @@ For running training, see [training.md](training.md).
 - [Weights, checkpoints and evaluation](#weights-checkpoints-and-evaluation)
 - [Reading a run](#reading-a-run)
 - [Common questions](#common-questions)
+- [Open questions](#open-questions)
 - [What the evidence says](#what-the-evidence-says)
 - [Influences](#influences)
 - [Fidelity to the sources](#fidelity-to-the-sources)
@@ -62,6 +63,43 @@ next row in a trajectory is therefore this seat's next decision, however many
 opponent decisions came between them.
 
 ![An interleaved game of decisions by seats A and B, with one forced decision, splits into one row sequence per seat. Seat A's last row has reward +1 and seat B's has -1; all other rows have reward 0.](images/game-to-trajectories.svg)
+
+From `SeatRoutedCollector` in
+[`manabot/training/rollout/collection.py`](../manabot/training/rollout/collection.py):
+
+```python
+slot = (
+    2 * int(row) + int(acting[row])
+    if self.learning_seats == "both"
+    else int(row)
+)
+self._pending[slot] = _Pending(...)
+```
+
+Each stream and seat has its own slot, and a row stays pending in it until that
+seat decides again or the game ends.
+
+### Value
+
+The expected game outcome from the acting seat's observation, under the
+policies currently playing: $V(o) \approx \mathbb{E}[\text{outcome} \mid o]$.
+From `ActorCritic.forward` in
+[`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py):
+
+```python
+logits, raw_value = self.forward_distribution(obs)
+if self.config.value_kind == "categorical_wdl":
+    probabilities = raw_value.softmax(dim=-1)
+    value = probabilities[:, 2] - probabilities[:, 0]
+else:
+    value = raw_value.squeeze(-1)
+```
+
+`categorical_wdl` predicts loss, draw and win probabilities, and its value is
+P(win) − P(loss), so a draw counts as 0; `scalar`, used by the baseline recipe,
+predicts the outcome directly. The critic sees the same viewer-safe observation
+as the policy, never the opponent's hidden cards, and its values are recorded
+during collection and stay constant through the update.
 
 ## Can a batch contain unfinished games?
 
@@ -134,6 +172,25 @@ recursion with λ = 0.8, which leans more on what actually happened. A
 categorical value head uses a three-way loss/draw/win mixture with the same λ
 and a one-hot terminal. A scalar head uses $A_t + V_t$.
 
+From `transition_gae` in
+[`manabot/training/learning/returns.py`](../manabot/training/learning/returns.py):
+
+```python
+for step in reversed(range(len(rewards))):
+    live = (~ends[step].bool()).to(rewards.dtype)
+    delta = rewards[step] + gamma * live * following - values[step]
+    tail = delta + gamma * lam * live * tail
+    advantages[step] = tail
+    following = values[step]
+return advantages, advantages + values
+```
+
+Time advances per decision of the same seat, so opponent decisions add no
+steps. `live` cuts both the bootstrap and the trace at a game end, so credit
+never crosses into another game. `gamma` is always 1 here. Advantages are never
+normalized: they stay in outcome units, which gives the filter's 0.01 floor a
+fixed meaning.
+
 ### A worked example
 
 A seat makes three decisions with values 0.1, 0.3 and 0.6, then wins.
@@ -186,6 +243,30 @@ ones. By default, a dropped row leaves both the policy and value losses;
 renormalized after filtering. If nothing survives, the iteration still counts
 but takes no optimizer step.
 
+These are the last five decisions of a real lost game, from a batch that kept
+81 of 324 rows on an untrained network. `uv run python scripts/inspect_batch.py`
+prints this view in a few seconds:
+
+| To end | Value | Advantage | Kept |
+| ---: | ---: | ---: | --- |
+| 4 | −.132 | −.054 | |
+| 3 | −.155 | −.063 | |
+| 2 | −.160 | −.118 | Yes |
+| 1 | −.056 | −.443 | Yes |
+| 0 | .003 | −1.003 | Yes |
+
+From `selected_moves` in
+[`manabot/training/learning/selection.py`](../manabot/training/learning/selection.py):
+
+```python
+magnitude = advantages.detach().abs()
+threshold = max(float(torch.quantile(magnitude, quantile)), minimum)
+return magnitude >= threshold
+```
+
+When most advantages fall below 0.01, the floor sets the cut and far fewer than
+a quarter of rows survive.
+
 ## 4. Update
 
 The update makes one pass over the batch, in batch order, with no shuffling.
@@ -210,6 +291,35 @@ has a separate job:
   types, then uniform within a type. A spell with dozens of target choices then
   gets no more prior weight than a single attack. Its strength τ decays.
   [Influences](#influences) says where each term comes from.
+
+The **behavior policy** is the frozen weights that played the batch, and the
+ratio measures how far the learner has moved from them. From
+`damped_policy_loss` in
+[`manabot/training/learning/damped_policy.py`](../manabot/training/learning/damped_policy.py):
+
+```python
+ratio_logs = (
+    (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
+)
+surrogate = clipped_surrogate(ratio_logs, advantages, clip)
+```
+
+Collection stores log-probabilities for every legal action, because the KL term
+needs the full distribution and not only the sampled action. This is a
+per-action correction; there is no trajectory-level importance weighting.
+
+The **magnet** is a fixed reference policy built for each row from its legal
+actions. From `reference_distribution` in
+[`manabot/training/learning/references.py`](../manabot/training/learning/references.py):
+
+```python
+counts.scatter_add_(-1, types, valid.to(counts.dtype))
+weights = valid / counts.gather(-1, types).clamp_min(1)
+return weights / weights.sum(-1, keepdim=True)
+```
+
+Each action type present gets equal mass, split evenly among that type's legal
+actions, and the penalty is a reverse KL summed over all legal actions.
 
 ![Constants from collection feed the policy, damping and value terms. Gradients reach only the live network, through one shared encoder.](images/gradient-flow.svg)
 
@@ -236,7 +346,19 @@ they play the next batch. The **EMA** is an average updated once per iteration
 at 0.999, including iterations the filter emptied. A recipe can collect with the
 EMA by setting `behavior="ema-self"`; otherwise it is only an evaluation output.
 
-Checkpoints are bound to their [world](../WORLDS.md). Evaluation runs outside
+Checkpoints are bound to their [world](../WORLDS.md): a frozen version of the
+rules, cards and observation encoding. From `validate_checkpoint_world` in
+[`manabot/model/world.py`](../manabot/model/world.py):
+
+```python
+if _digest(current_binding_form(binding)) != _digest(expected):
+    raise ValueError(
+        "checkpoint world/setup/input binding differs from this runtime"
+    )
+```
+
+The check compares a digest of the world, setup and input binding, so a
+matching world number alone isn't enough. Evaluation runs outside
 the training clock and plays on held-out deals with both decks and seats
 ([evaluation.md](evaluation.md)). Its scores don't affect the loss. A run's
 selection rule is `last-complete-raw`, never the best seed or best evaluation,
@@ -277,6 +399,23 @@ and no trajectory-level importance correction is applied.
 **Why does a two-seat batch wait for slow games?** A stream past its floor idles
 until the last stream finishes, so the batch can be built from complete games.
 That idle time is the price of having real outcomes on every trajectory.
+
+## Open questions
+
+- **How far back should a result reach?** In one baseline, Allies reached
+  87–88% against a scripted opponent while Lessons climbed slowly from 5/150
+  to 32/150 ([current baseline](../experiments/current-baseline.md)). Credit
+  reach might be part of the reason, but that's untested.
+- **What does the advantage filter do?** Only about the top quarter of rows
+  by |A| train, and both KL terms apply only to those rows. Filtering on a
+  sampled advantage may change where the update converges. A game with exact
+  exploitability could test that directly.
+- **Which decisions actually lost the game?** Strong players can often point
+  to one in a replay. Those judgments could become fixed test positions that
+  track what a policy has learned.
+- **Is the policy improving, or circling?** A payoff matrix across checkpoints
+  from different points in training can separate the two
+  ([durable progress](../manabot/RESEARCH.md#durable-progress)).
 
 ## What the evidence says
 
@@ -356,7 +495,7 @@ outputs are selected explicitly at arena registration.
 | Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
 | EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation output by default, `behavior="ema-self"` opts in |
 | S3.3 setup learning | Not implemented | MTG has no learned setup |
-| S3.5 belief, S3.7 search | Outside this trainer | See [beside the loop](ARCHITECTURE.md#beside-the-loop) |
+| S3.5 belief, S3.7 search | Outside this trainer | See [beside the loop](../README.md#beside-the-loop) |
 | S3.6 network scale | Semantic Agent, small width, float32 on CPU or one GPU | The paper uses an 8-layer width-384 network on GPUs |
 
 **Unresolved source details:** Adam epsilon/betas, iteration origin, EMA

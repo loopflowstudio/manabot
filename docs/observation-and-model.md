@@ -95,7 +95,7 @@ The value head reads a masked mean over the same post-attention objects, so
 policy and value share one encoder and both losses train it
 ([what the gradient touches](learning.md#4-update)). A `categorical_wdl` head
 returns loss, draw and win logits, and its value is P(win) − P(loss); a
-`scalar` head returns the outcome directly ([value](start-here.md#value)).
+`scalar` head returns the outcome directly ([value](learning.md#value)).
 
 ## Sizes in the TLA pilot
 

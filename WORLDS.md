@@ -445,7 +445,7 @@ w3 and w4 results retain their original input contracts and evidence limits.
 
 ## w4: complete UR additions
 
-Jack Heart accepted a new world on 2026-09-29 for ETU-88. This world adds
+w4 was opened on 2026-09-29 for ETU-88. This world adds
 mandatory discard and legend-rule decisions, seven-card cleanup and Proft's
 hand-limit exemption, conditional spell-cost reduction, combat/draw-count
 abilities, and temporary death-to-exile replacement. The permanent tensor
@@ -455,7 +455,7 @@ using the existing SelectCard action. Match-state hashes use v3 and semantic
 decisions/observations use v6. Visible card records now carry registered rules
 text, including owned outside candidates.
 
-The authored UR and GW decklists are unchanged. Jack's revised 40-card UR list
+The authored UR and GW decklists are unchanged. A revised 40-card UR list
 is a custom setup for ETU-87 to measure, not an adopted authored deck. The
 new definitions use the ordinary declarative card registry and effect
 interpreter; they are not added to the frozen compiled two-deck semantic IR.

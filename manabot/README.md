@@ -163,8 +163,8 @@ admission. Simulation results are recorded locally through Etude.
 
 manabot owns memory, beliefs, planning, policy/value learning,
 self-play, evaluation, and promotion evidence over the authoritative managym
-world. The cross-package contracts and convergence status are in
-[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+world. The cross-package contracts are in the
+[README](../README.md#contracts-the-code-enforces).
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
@@ -195,16 +195,16 @@ Training regimes can [import a published raw/EMA policy](../docs/training.md#reg
 without retraining, preserving producer provenance and separate sunk costs.
 They can freeze a policy, collect private whole-game supervision,
 and fit a constrained autoregressive hand sampler without exact enumeration.
-See [frozen-policy belief sampling](../docs/ARCHITECTURE.md#beside-the-loop). This separately
+See [frozen-policy belief sampling](../README.md#beside-the-loop). This separately
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
-[Frozen-policy local search](../docs/ARCHITECTURE.md#beside-the-loop) plays through the
+[Frozen-policy local search](../README.md#beside-the-loop) plays through the
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.
 
 The existing `agent_puct` player accepts current flat and compound checkpoints;
-see [PUCT policy/value compatibility](../docs/ARCHITECTURE.md#beside-the-loop)
+see [PUCT policy/value compatibility](../README.md#beside-the-loop)
 for critic units, retained prefixes and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 

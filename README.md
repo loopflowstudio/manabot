@@ -3,7 +3,15 @@
 Manabot is a project to train superhuman
 [Magic: The Gathering](https://magic.wizards.com/) bots. A manabot learns by
 playing itself: it sees only what a player would see, chooses among the legal
-actions, and finds out who won when the game ends.
+actions, and finds out who won when the game ends. Nobody tells it which plays
+were good, and three things make that hard:
+
+- **The opponent learns too.** The best play depends on a policy that keeps
+  changing, so a good win rate against the latest self says little.
+- **Actions aren't a fixed list.** A legal action can name any object in play,
+  so the network scores what's offered rather than filling a fixed output layer.
+- **Cards change the rules.** Each pairing of decks is close to its own game,
+  and a new card can add a rule.
 
 > **Built with two companion projects from Loopflow Studio:**
 >
@@ -12,17 +20,31 @@ actions, and finds out who won when the game ends.
 > - **[Etude](https://github.com/loopflowstudio/etude)** launches training and evaluation
 >   runs and tracks what they record.
 
+- [The system](#the-system)
+- [What it trains on now](#what-it-trains-on-now)
+- [How a manabot learns](#how-a-manabot-learns)
+- [How strength is measured](#how-strength-is-measured)
+- [Contracts the code enforces](#contracts-the-code-enforces)
+- [Beside the loop](#beside-the-loop)
+- [Scale](#scale)
+- [What we know](#what-we-know)
+- [Not built yet](#not-built-yet)
+- [Quickstart](#quickstart)
+- [Experiment data](#experiment-data)
+- [Guides and map](#guides-and-map)
+
 ## The system
 
 ![The rules engine sends each seat's view to the policy network, which returns a chosen action. Decisions and results go to the learner, which sends new weights to the network. Checkpoints go to evaluation, which never feeds back into training.](docs/images/system.svg)
 
-- **The rules engine** (`managym/`, Rust) runs full games of Magic, many at
-  once, deterministically from a seed. It decides what is legal, plays forced
-  choices itself, shows each seat only what that seat may see, and can clone,
-  replay or re-deal a game exactly. Every card is one Rust function in the
-  engine's own rules types, so a new card is content and new behavior is a new
-  rules variant, never card-specific logic
-  ([the rules engine](docs/engine.md)).
+- **The rules engine** (`managym/`, Rust; `import managym` in Python) runs full
+  games of Magic, many at once, deterministically from a seed. It owns card
+  meaning, match state, legality, decisions and Commands, committed events,
+  viewer-safe observations, replay, exact forks and the hidden-hand domain. It
+  plays forced choices itself and never chooses among a learner's legal
+  actions. Every card is one Rust function in the engine's own rules types, so
+  a new card is content and new behavior is a new rules variant, never
+  card-specific logic ([the rules engine](docs/engine.md)).
 - **The policy network** (`manabot/model/`) embeds every visible object,
   including what each card *does*, mixes them with attention, and scores each
   legal action with the objects it names through one action head. A value
@@ -34,10 +56,22 @@ actions, and finds out who won when the game ends.
   outside the loop. Its scores never enter the loss
   ([evaluation](docs/evaluation.md)).
 
-The observation and action encoding is versioned as a *world*
-([WORLDS.md](WORLDS.md)); checkpoints load only in the world they were trained
-in. **[Start here](docs/start-here.md)** walks from this picture down to the
-code of each training stage.
+Two more pieces sit around the loop. **Academy** (`academy/`, `academy/ui/`)
+is the browser UI for inspecting a bot or a replay by hand; it owns transport,
+drafts and presentation, reconstructs no rules meaning, and nothing in
+training depends on it ([Academy](docs/academy.md)). **Etude** launches remote
+training and evaluation and records what they produce; the machine is chosen
+at launch, never in the experiment ([training](docs/training.md#remote-training)).
+
+Inside `manabot/`, `sim` runs games and registered players, `eval` scores and
+rates, `training` learns, `experiment` declares and executes comparisons, and
+`infra.identity` owns canonical byte identities. Imports follow one direction:
+Academy may import manabot and managym, manabot imports managym and never
+Academy, managym imports neither, and `manabot.sim` imports none of `eval`,
+`training`, `experiment` or `reports` (`tests/test_package_boundaries.py`
+enforces all of it). The observation and action encoding is versioned as a
+*world* ([WORLDS.md](WORLDS.md)); checkpoints load only in the world they were
+trained in.
 
 ## What it trains on now
 
@@ -81,6 +115,7 @@ has a source and is a separate switch we test on Magic rather than adopt on a
 paper's authority ([influences](docs/learning.md#influences)). Reward is win
 or loss only: shaped rewards bought nothing over it
 ([exp-04](experiments/exp-04-potential-shaping.md)).
+[How a manabot learns](docs/learning.md) walks each step down to the code.
 
 ## How strength is measured
 
@@ -94,6 +129,107 @@ A result counts as evidence only when its question, numeric prediction, kill
 criteria and cost cap were committed to git before the run, and claims about a
 method need independent training seeds. Refutations stay on the record
 ([experiments](docs/experiments.md)).
+
+## Contracts the code enforces
+
+**One rules authority.** Only managym commits a state transition. A transition
+is `(revision N, decision N) + Command(expected=N) → committed events +
+revision N+1`; a Command against another revision fails closed
+(`SemanticError::StaleRevision`). Academy, a person or a manabot selects a
+Command; none patches state, invents legality or re-derives what a viewer may
+see. Academy's live play still lowers its protocol-v1 `Command` to a
+positional `step` through `DecisionContext.action_by_offer`; the semantic
+`DecisionFrame` / `Command` / `TransitionReceipt` contract in
+`managym/src/decision.rs` is the engine API, not yet Academy's wire path
+([experience protocol v1](docs/architecture/experience-protocol-v1.md)).
+
+**Forced decisions are played by the engine.** A decision reaches a player
+only with at least two legal actions (`skip_trivial`, on everywhere). Every
+decision count in this repository excludes forced choices.
+
+**Observations are viewer-safe at the source.** `Observation::for_player`
+holds everything one seat may see and nothing else; legal actions appear only
+in the chooser's view; decklist disclosure lives on `PlayerConfig.disclosure`.
+Viewer-equivalent states produce byte-identical observations. The policy
+tensor, the LLM text and the learning tokens all derive from the same
+observation, and a mechanic reaches all three in the change that adds it
+([observations](docs/observation-and-model.md)).
+
+**Identity is typed.** An `ObjectRef` carries its incarnation and fails after
+a zone change. An action index is valid only in one decision epoch. Checkpoints
+bind world, deck setup and input schema and load only where the digest
+matches. Every durable value has a canonical serialization and digest
+(`manabot.infra.identity`), and locators are not identity.
+
+**Replay is exact.** A game regenerates from its deal seed, configuration and
+Commands, and every pre- and post-state digest must match. RNG streams derive
+from recorded seeds, so scheduling cannot select an outcome. Evaluation scores
+only replay-verified terminal games
+([forks, replay and determinization](docs/engine.md#forks-replay-and-determinization)).
+
+**Branching is a full clone.** Search forks a `Game` by cloning it and steps
+the clone; a rules-only witness checks the source is untouched. Determinized
+search is named as such: separate perfect-information trees per sampled world,
+aggregated at the root, with no claim to information-set consistency.
+
+**Hidden information has one domain.** `managym/src/possible_worlds.rs` owns
+the hidden-hand domain, the five-variant `WorldQuery`, compatible-deal weights
+and materialization; `manabot.belief` owns probability over that domain. A
+query never reveals whether the actual hidden hand satisfies it, and empty
+support is an explicit result.
+
+**Training is declared data.** A `TrainingRegime` (one module per experiment
+under `experiments/`) names the world, decks, model and ordered stages; one
+runner executes it, writes world-bound raw and EMA checkpoints, records every
+attempt in `VerifyStore`, and ships metrics through Etude. Regimes refuse
+belief inputs; the trained model sees the current observation only
+([training](docs/training.md)).
+
+**Evaluation never promotes.** A player is an immutable `PlayerRegistration`;
+a rating belongs to one `EvaluationKey` (world, content suite, viewer
+boundary, arena version, compute class) and never crosses it. Candidates play
+the same deals with seats and decks swapped, uncertainty resamples whole
+deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
+`heuristic` and frozen checkpoints as working anchors. No win rate, rating or
+report promotes a checkpoint; scores never enter the loss.
+
+**Evidence is preregistered.** The question, prediction, kill criteria and
+cost cap are committed before a run; the training seed is the unit of
+evidence for a method; refutations stay on the record.
+
+## Beside the loop
+
+These exist and run, and none of them is on the training path today.
+
+- **Search players** (`manabot/sim/search`). `flat_mc.make_player` builds
+  every kind from a spec: `search` (flat Monte Carlo over determinized worlds,
+  no network), `determinized_puct` and `agent_puct` (one tree per sampled
+  world, values as win scores, not information-set-consistent),
+  `policy_search`, `value_greedy`, `value_search`, and `local_update`.
+  `LocalUpdateTeacher` is the current search-improvement code: for one
+  checkpoint it maximizes `Σ p(a)Q(a) − α KL(p‖uniform) − β KL(p‖base)` over
+  rolled-out worlds, following Ataraxos supplement S3.7, and retains a
+  replayable receipt. Worlds come from the compatible-deal prior, a learned
+  sampler, or the small exact tracker. None has shown a strength gain over the
+  policy alone.
+- **Beliefs** (`manabot/belief`). `managym/src/possible_worlds.rs` owns the
+  hidden-hand domain; `manabot.belief` puts probability on it: `BeliefState`
+  over one `PossibleWorldSpace`, a tracker fed by viewer observations, and the
+  `AutoregressiveBeliefSampler`, which learns opponent hand counts from a
+  frozen policy's games. The `collect_belief` and `train_belief` stages fit it
+  on an immutable dataset (`uv run manabot train --regime-name belief_sampler
+  --seed 421 --out .runs/belief-pilot` is the bounded pilot), and
+  `python -m manabot.reports.belief` scores a sampler by held-out joint NLL,
+  Brier and calibration. Consumers are search players and a demo seam only;
+  `ActorCritic` has an optional belief channel that regimes reject, and
+  Academy's live belief tracking was removed. Detail:
+  [search-and-beliefs.md at 055dddab1](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md).
+- **Academy Study** (`academy/study_branch.py`, the replay page) forks a
+  retained engine root, executes structured Commands on the clone, proves
+  source and sibling isolation, and returns through a consuming receipt.
+  Its decision evidence is fixture-served.
+- **LLM players** ([evaluation](docs/evaluation.md#llm-players)) read the text
+  observation and choose Commands through the same authority as everyone else.
 
 ## Scale
 
@@ -174,7 +310,7 @@ Earlier findings are tabulated in the
   checkpoint on random real decks yet
   ([pilot evidence](experiments/tla-trophy-pilot.md)).
 - **Search and beliefs run end to end but add no strength yet**
-  ([beside the loop](docs/ARCHITECTURE.md#beside-the-loop)).
+  ([beside the loop](#beside-the-loop)).
 
 ## Not built yet
 
@@ -188,6 +324,13 @@ Earlier findings are tabulated in the
 - **Limited.** The long-term target is sealed and draft play: building decks
   from a pool, then piloting them. Piloting random trophy decks is the first
   half; nothing in the repository drafts or builds decks yet.
+
+Not goals: a general-purpose Magic rules library independent of the training
+worlds; natural-language parsing or LLM authority over legality at runtime;
+multiplayer, general-sum play, Commander breadth or broad format legality; a
+second semantic authority anywhere, even as a compatibility layer; claiming
+that exact beliefs solve strategy fusion, or that one rating describes every
+matchup.
 
 ## Quickstart
 
@@ -244,7 +387,23 @@ every experiment's curves and matches from the job store, and
 whatever matchups a report still wants. How a question becomes a report, and
 what makes a result count, is in [experiments](docs/experiments.md).
 
-## Map of the repository
+## Guides and map
+
+Each part of the system has one guide, written the same way: what it does, one
+worked example, the key terms with the code that implements them, then what we
+know and where the code lives.
+
+| Guide | What |
+|---|---|
+| [engine.md](docs/engine.md) | The rules engine: one decision, forced choices, who chooses, observations, forks, replay, cards as programs, decks, worlds |
+| [observation-and-model.md](docs/observation-and-model.md) | What the policy sees, how it scores legal actions and estimates value, policy input versions |
+| [learning.md](docs/learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, down to the code |
+| [evaluation.md](docs/evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, LLM players, shared inference, card data |
+| [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
+| [training.md](docs/training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
+| [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
+| [development.md](docs/development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
+| [academy.md](docs/academy.md) | The browser UI: running it, the shared decision surface, presentation, trained challengers, the proof gate |
 
 | Path | What it is |
 |---|---|
@@ -253,16 +412,11 @@ what makes a result count, is in [experiments](docs/experiments.md).
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
-| `docs/` | The system, part by part; training operations; rules; research notes ([index](docs/README.md)) |
+| `docs/` | The guides above, the [rules authority](docs/rules/), the [Academy wire protocol](docs/architecture/experience-protocol-v1.md) and dated [research](docs/research/) |
 | `paper/` | A working paper draft |
 | `deploy/` | Hosted service deployment |
 | `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
 | `.lf/` | Loopflow Waves (`.lf/wave/`), chapters and prompts that organize agent work |
-
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full system design. In
-short, managym owns the rules and legality, manabot owns inference and
-decisions, and the play UI only displays what managym allows the viewer to
-see.
 
 ## Development
 

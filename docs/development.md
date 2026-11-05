@@ -415,7 +415,7 @@ tags publish. Tag builds reject inconsistent versions, commits not on main and
 already-published versions. Only the publish job gets OIDC `id-token: write`;
 no PyPI token is stored, and uploads carry attestations. The trusted publisher
 is project `manabot`, owner `loopflowstudio`, repository `manabot`, workflow
-`release.yml`, environment `pypi`. The pending publisher submitted by Jack Heart
+`release.yml`, environment `pypi`. The pending publisher
 was used successfully on 2026-10-22; the GitHub `pypi` environment restricts
 deployment to `v*` tags and requires review. Verify these settings before
 tagging.
@@ -460,7 +460,7 @@ Chromium context shows a connected WebSocket, the default Search 64 opponent,
 `UR Lessons vs GW Allies`, an enabled authoritative legal action, and pack
 treatments for every visible card with no fallback. The budget is 90,000 ms. It
 was 60,000 ms until 2026-09-30; the release native build alone had reached about
-52 s on GitHub's runner, so Jack Heart accepted 90 s. The receipt records
+52 s on GitHub's runner, so the budget became 90 s. The receipt records
 `elapsed_to_playable_ms`, `budget_ms` and `within_budget`; CI reports the time
 and warns, but does not fail, when over budget, because runner variance decides
 it. The proof fails if the launch is not ready within 600 s or any playable or

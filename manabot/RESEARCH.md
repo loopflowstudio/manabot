@@ -8,7 +8,7 @@ fail, repeated until a bounded superhuman claim is earned.
 This document says what we are doing now, what we know, what we plan to do
 later, and how we judge results. Preregistered predictions, results and
 provenance live in [`experiments/`](../experiments/README.md); the system
-design is in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Live task
+design is in the [README](../README.md#the-system). Live task
 status lives in Linear, not here.
 
 ## What we are doing now
@@ -107,7 +107,7 @@ self-play policy (frozen checkpoint)
        local search at the decision
 ```
 
-The sampler and search exist ([beside the loop](../docs/ARCHITECTURE.md#beside-the-loop)). The plan is to make
+The sampler and search exist ([beside the loop](../README.md#beside-the-loop)). The plan is to make
 them improve play. Search should adjust a strong learned policy, not replace
 it. At a decision it samples hidden hands from the belief, plays out each
 candidate action with the frozen policy, and applies one regularized update to
@@ -332,7 +332,7 @@ prerequisites for the first bounded play-policy claim.
 | --- | --- |
 | This document | What we are doing, what we know, what we plan, and how we measure |
 | [`experiments/`](../experiments/README.md) | Preregistrations, immutable reports, raw evidence links, and reproduction |
-| [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) | System design and ownership |
+| [`README.md`](../README.md) | System design, ownership and the enforced contracts |
 | [`WORLDS.md`](../WORLDS.md) | Observation/action worlds and artifact compatibility |
 | Linear | Projects, Tasks, owners, dependencies, and live execution state |
 

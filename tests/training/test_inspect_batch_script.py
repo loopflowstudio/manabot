@@ -1,4 +1,4 @@
-"""The batch inspection script in docs/start-here.md must keep working."""
+"""The batch inspection script in docs/learning.md must keep working."""
 
 from pathlib import Path
 import subprocess

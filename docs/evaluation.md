@@ -207,15 +207,13 @@ benchmark and match identities. Changing device, dtype or contract version
 creates new identities. `seed_compute_envelope_id` preserves the original seed
 authority across serving changes. `shared-eval-v1` (through PR #389) also
 hashed allocation settings; its records stay readable as `EvalComputeV1` /
-`EvalExecutionV1` but are not reused or continued under v2 (Jack Heart,
-2026-10-28).
+`EvalExecutionV1` but are not reused or continued under v2.
 
 With an execution, flat stateless checkpoints are served; without one,
 `play_cell`, `evaluate` and the monitor play them scalar in the game child
 under their original registrations. Served and scalar players of one checkpoint
 therefore have distinct identities. Retiring scalar checkpoint play awaits a
-CPU measurement of served play after direct game connections (Jack Heart,
-2026-10-28). Code and search players always play in their game child.
+CPU measurement of served play after direct game connections. Code and search players always play in their game child.
 
 ```python
 from pathlib import Path
@@ -457,10 +455,10 @@ drivers, is in [llm.md at 055dddab1](https://github.com/loopflowstudio/manabot/b
 
 ## Open direction
 
-Jack Heart's accepted direction (2026-10-24) makes checkpoint-versus-checkpoint
-evaluation at growing model sizes the primary capacity workload; small local
+Checkpoint-versus-checkpoint evaluation at growing model sizes is the primary
+capacity workload; small local
 checkpoint-versus-heuristic checks keep the same semantics without training,
-cloud, queue or callbacks. The accepted cloud startup policy targets at least
+cloud, queue or callbacks. The cloud startup policy targets at least
 two hours of estimated eligible useful work on the chosen host/model mix before
 a server starts, releasing idle compute when work finishes. That gate belongs
 in Etude's launch scheduler and is not implemented. Compute policy, a durable
