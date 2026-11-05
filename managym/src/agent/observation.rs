@@ -6,6 +6,7 @@ use crate::{
         decision::Decision,
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
+        statics::Characteristics,
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
@@ -1206,15 +1207,12 @@ impl Observation {
     }
 
     fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
-        for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
-            for card_id in game.state.zones.zone_cards(ZoneType::Battlefield, player) {
-                if let Some(perm_id) = game.state.card_to_permanent[card_id] {
-                    let Some(permanent) = game.state.permanents[perm_id].as_ref() else {
-                        continue;
-                    };
-                    self.add_permanent(game, perm_id, permanent);
-                }
-            }
+        let ids = [agent_player, PlayerId((agent_player.0 + 1) % 2)]
+            .into_iter()
+            .flat_map(|player| game.iter_battlefield_permanents(player));
+        for (perm_id, characteristics) in game.characteristics_many(ids) {
+            let permanent = game.state.permanents[perm_id].as_ref().unwrap();
+            self.add_permanent(game, perm_id, permanent, &characteristics);
         }
     }
 
@@ -1240,8 +1238,8 @@ impl Observation {
         game: &Game,
         perm_id: crate::state::game_object::PermanentId,
         permanent: &Permanent,
+        characteristics: &Characteristics,
     ) {
-        let characteristics = game.characteristics(perm_id);
         let pdat = PermanentData {
             colors: (characteristics.colors != game.state.cards[permanent.card].colors()).then(
                 || {

@@ -43,6 +43,10 @@ jobs:
       - name: Prepare historical sources and record provenance
         run: |
           uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-risk
+      - name: Record CPU and dependencies even if preparation failed
+        if: always()
+        run: |
+          mkdir -p .cache/layer-risk
           lscpu > .cache/layer-risk/cpu.txt
           uv pip freeze > .cache/layer-risk/dependencies.txt
       - name: Measure ordinary reference and unmitigated and mitigated engines
@@ -70,4 +74,5 @@ jobs:
             .cache/layer-risk/comparison.json
             .cache/layer-risk/*/*.json
             .cache/layer-risk/*/*.jsonl
-          if-no-files-found: warn
+          include-hidden-files: true
+          if-no-files-found: error

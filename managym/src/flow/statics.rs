@@ -112,14 +112,19 @@ impl Characteristics {
 pub(crate) struct DerivedCache {
     revisions: Revisions,
     board: Option<Arc<LayerBoard>>,
-    characteristics: BTreeMap<PermanentId, Arc<Characteristics>>,
+    /// Indexed by PermanentId, as are the authoritative permanent slots.
+    characteristics: Vec<Option<Arc<Characteristics>>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
 }
 
 #[derive(Debug, PartialEq)]
 struct LayerBoard {
-    objects: BTreeMap<PermanentId, Arc<Characteristics>>,
+    objects: Vec<Option<Arc<Characteristics>>>,
     reads_mana: bool,
+    reads_tapped: bool,
+    /// Finalization can inspect state beyond the raw layer view. Ordinary
+    /// fixed activations retain their finalized entry across pool/tap writes.
+    dynamic_activations: bool,
 }
 impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -127,29 +132,43 @@ impl std::fmt::Debug for DerivedCache {
     }
 }
 impl DerivedCache {
+    #[inline]
     pub(super) fn at(&mut self, revisions: Revisions) -> &mut Self {
+        if self.revisions != revisions {
+            self.invalidate(revisions);
+        }
+        self
+    }
+
+    fn invalidate(&mut self, revisions: Revisions) {
         let mana_changed = self.revisions.mana_pools != revisions.mana_pools;
+        let tapped_changed = self.revisions.tapped != revisions.tapped;
         #[cfg(feature = "benchmark")]
         if mana_changed {
             crate::benchmark_layers::record(|m| m.mana_invalidations += 1);
         }
         let characteristics_changed = self.revisions.characteristics != revisions.characteristics;
-        if characteristics_changed
+        let board_changed = characteristics_changed
             || (mana_changed && self.board.as_ref().is_some_and(|board| board.reads_mana))
+            || (tapped_changed && self.board.as_ref().is_some_and(|board| board.reads_tapped));
+        if board_changed
+            || ((mana_changed || tapped_changed)
+                && self
+                    .board
+                    .as_ref()
+                    .is_some_and(|board| board.dynamic_activations))
         {
-            self.board = None;
-        }
-        // Activation finalization can read mana even when layers do not.
-        // Triggers conservatively refresh against the finalized abilities.
-        if characteristics_changed || mana_changed {
             self.characteristics.clear();
         }
-        if characteristics_changed || mana_changed || self.revisions.triggers != revisions.triggers
-        {
+        // Event kinds come from raw layered triggers. Activation prices and
+        // mana outputs cannot change that index; matching still reads live LKI.
+        if board_changed || self.revisions.triggers != revisions.triggers {
             self.trigger_index = None;
         }
+        if board_changed {
+            self.board = None;
+        }
         self.revisions = revisions;
-        self
     }
 }
 impl Game {
@@ -157,11 +176,26 @@ impl Game {
         let context = Context::evaluate(self);
         LayerBoard {
             reads_mana: context.reads_mana,
-            objects: context
-                .objects
-                .into_iter()
-                .map(|(id, object)| (id, Arc::new(object.view)))
-                .collect(),
+            reads_tapped: context.reads_tapped,
+            dynamic_activations: context.objects.values().any(|object| {
+                object.view.activated_abilities.iter().any(|ability| {
+                    // Conservatively include every conditional/dynamic output,
+                    // including conditions that do not currently match.
+                    ability.cost_reduction_per.is_some()
+                        || matches!(
+                            ability.effects.as_slice(),
+                            [crate::state::ability::Effect::If { .. }
+                                | crate::state::ability::Effect::AddOneColorManaValue { .. }]
+                        )
+                })
+            }),
+            objects: {
+                let mut objects = vec![None; self.state.permanents.len()];
+                for (id, object) in context.objects {
+                    objects[id.0] = Some(Arc::new(object.view));
+                }
+                objects
+            },
         }
     }
     fn layer_board(&self) -> Arc<LayerBoard> {
@@ -178,37 +212,73 @@ impl Game {
     pub(super) fn layer_view(&self, id: PermanentId) -> Arc<Characteristics> {
         self.layer_board()
             .objects
-            .get(&id)
-            .cloned()
+            .get(id.0)
+            .and_then(Clone::clone)
             .unwrap_or_default()
     }
+    /// One immutable board read for a whole-board consumer. In debug this
+    /// validates the entire board once, rather than once per permanent.
+    pub(super) fn layer_views(
+        &self,
+        ids: impl Iterator<Item = PermanentId>,
+    ) -> impl Iterator<Item = (PermanentId, Arc<Characteristics>)> {
+        let board = self.layer_board();
+        ids.filter_map(move |id| {
+            board
+                .objects
+                .get(id.0)
+                .and_then(Clone::clone)
+                .map(|view| (id, view))
+        })
+    }
     pub fn characteristics(&self, id: PermanentId) -> Arc<Characteristics> {
+        self.characteristics_from(id, || self.layer_view(id))
+    }
+    /// Read several final views at one immutable game state, preserving the
+    /// caller's order. The shared raw board is validated once, and each cached
+    /// finalized view still has its independent debug recomputation.
+    pub(crate) fn characteristics_many<'a>(
+        &'a self,
+        ids: impl Iterator<Item = PermanentId> + 'a,
+    ) -> impl Iterator<Item = (PermanentId, Arc<Characteristics>)> + 'a {
+        self.layer_views(ids)
+            .map(move |(id, raw)| (id, self.characteristics_from(id, || raw)))
+    }
+    fn characteristics_from(
+        &self,
+        id: PermanentId,
+        raw: impl FnOnce() -> Arc<Characteristics>,
+    ) -> Arc<Characteristics> {
         let revisions = self.state.revisions();
         let cached = self
             .derived
             .borrow_mut()
             .at(revisions)
             .characteristics
-            .get(&id)
-            .cloned();
+            .get(id.0)
+            .and_then(Clone::clone);
         if let Some(view) = cached {
             debug_assert_eq!(
                 view,
-                self.compute_characteristics(id),
+                self.finalize_characteristics(id, raw()),
                 "stale characteristics"
             );
             return view;
         }
-        let view = self.compute_characteristics(id);
-        self.derived
-            .borrow_mut()
-            .at(revisions)
-            .characteristics
-            .insert(id, view.clone());
+        let view = self.finalize_characteristics(id, raw());
+        let mut derived = self.derived.borrow_mut();
+        let cache = &mut derived.at(revisions).characteristics;
+        cache.resize(self.state.permanents.len(), None);
+        if let Some(slot) = cache.get_mut(id.0) {
+            *slot = Some(view.clone());
+        }
         view
     }
-    fn compute_characteristics(&self, id: PermanentId) -> Arc<Characteristics> {
-        let mut view = self.layer_view(id);
+    fn finalize_characteristics(
+        &self,
+        id: PermanentId,
+        mut view: Arc<Characteristics>,
+    ) -> Arc<Characteristics> {
         // Only activations need finalization. Every other view is already
         // complete and can share the board's immutable allocation across reads.
         if view.activated_abilities.is_empty() {
@@ -281,14 +351,14 @@ impl Game {
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
-                .iter_battlefield_permanents(controller)
-                .filter(|&id| self.layer_view(id).is_land())
-                .filter_map(|id| self.state.permanents[id].as_ref())
+                .layer_views(self.iter_battlefield_permanents(controller))
+                .filter(|(_, view)| view.is_land())
+                .filter_map(|(id, _)| self.state.permanents[id].as_ref())
                 .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
                 .sum(),
             PowerCda::CreaturesYouControl => self
-                .iter_battlefield_permanents(controller)
-                .filter(|id| self.layer_view(*id).is_creature())
+                .layer_views(self.iter_battlefield_permanents(controller))
+                .filter(|(_, view)| view.is_creature())
                 .count() as i32,
             PowerCda::GraveyardMatching(predicate) => {
                 self.count_graveyard_matching(controller, predicate) as i32
@@ -300,13 +370,17 @@ impl Game {
         self.layer_board()
             .objects
             .iter()
-            .filter(|(_, view)| !view.static_abilities.is_empty())
-            .map(|(&id, view)| {
-                (
-                    id,
-                    self.state.permanents[id].as_ref().unwrap().controller,
-                    view.clone(),
-                )
+            .enumerate()
+            .filter_map(|(slot, view)| {
+                let view = view.as_ref()?;
+                (!view.static_abilities.is_empty()).then(|| {
+                    let id = PermanentId(slot);
+                    (
+                        id,
+                        self.state.permanents[id].as_ref().unwrap().controller,
+                        view.clone(),
+                    )
+                })
             })
             .collect()
     }
@@ -402,8 +476,8 @@ impl Game {
     }
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-        for id in self.iter_battlefield_permanents(controller) {
-            for creature_type in &self.layer_view(id).creature_types {
+        for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
+            for creature_type in &view.creature_types {
                 *counts.entry(creature_type.clone()).or_default() += 1;
             }
         }
@@ -741,5 +815,133 @@ mod cache_tests {
         assert_eq!(branch.characteristics(id).pt(), (4, 4));
         *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default();
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
+    }
+
+    #[test]
+    fn tap_revision_tracks_nested_granted_predicates_and_stun_counters() {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", [("Gray Ogre".into(), 40)].into()),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        let id = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let board = game.layer_board();
+        let mut branch = game.clone();
+        branch.state.tap(id);
+        assert!(Arc::ptr_eq(&board, &branch.layer_board()));
+        assert!(!game.state.permanents[id].as_ref().unwrap().tapped);
+
+        let affected = branch.affected_permanent(id).unwrap();
+        branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
+                effects: vec![Effect::add_mana(Mana::parse("R"))],
+                ..Default::default()
+            })),
+            EffectDuration::Indefinite,
+        );
+        let fixed = branch.characteristics(id);
+        branch.state.untap(id);
+        *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R");
+        assert!(Arc::ptr_eq(&fixed, &branch.characteristics(id)));
+
+        let affected = branch.affected_permanent(id).unwrap();
+        branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
+                effects: vec![Effect::If {
+                    condition: Condition::ControlsAtLeast {
+                        count: 1,
+                        predicate: CardPredicate {
+                            tapped: true,
+                            ..Default::default()
+                        },
+                    },
+                    then: vec![Effect::add_mana(Mana::parse("RR"))],
+                    otherwise: vec![Effect::add_mana(Mana::parse("R"))],
+                }],
+                ..Default::default()
+            })),
+            EffectDuration::Indefinite,
+        );
+        let before = branch.characteristics(id);
+        let board = branch.layer_board();
+        branch.state.tap(id);
+        let after = branch.characteristics(id);
+        assert!(Arc::ptr_eq(&board, &branch.layer_board()));
+        assert_eq!(
+            before.activated_abilities[1].effects,
+            vec![Effect::add_mana(Mana::parse("R"))]
+        );
+        assert_eq!(
+            after.activated_abilities[1].effects,
+            vec![Effect::add_mana(Mana::parse("RR"))]
+        );
+
+        // Both a nested target predicate and a nested source condition must
+        // invalidate, even when the granting node itself reads neither.
+        for in_scope in [true, false] {
+            let mut branch = game.clone();
+            let tapped = CardPredicate {
+                any_of: vec![CardPredicate {
+                    tapped: true,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let affected = branch.affected_permanent(id).unwrap();
+            branch.apply_continuous(
+                None,
+                PlayerId(0),
+                [affected],
+                Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                    scope: if in_scope {
+                        StaticScope::YouControl(tapped.clone())
+                    } else {
+                        StaticScope::This
+                    },
+                    condition: (!in_scope)
+                        .then(|| Condition::AnyOf(vec![Condition::SourceMatches(tapped)])),
+                    characteristic_defining: false,
+                    modifications: vec![Modification::ModifyPt {
+                        power: LayerValue::Fixed(2),
+                        toughness: LayerValue::Fixed(2),
+                    }],
+                }))),
+                EffectDuration::Indefinite,
+            );
+            assert_eq!(branch.characteristics(id).pt(), (2, 2));
+            branch.state.tap(id);
+            assert_eq!(branch.characteristics(id).pt(), (4, 4));
+            branch.state.untap(id);
+            assert_eq!(branch.characteristics(id).pt(), (2, 2));
+        }
+
+        // Untapping through a stun counter keeps the tap state, but changes
+        // counter-dependent characteristics and must still evict the board.
+        let permanent = game.state.permanents[id].as_mut().unwrap();
+        permanent.tapped = true;
+        permanent.change_counters(CounterKind::Stun, 1);
+        let board = game.layer_board();
+        game.state.untap(id);
+        assert!(game.state.permanents[id].as_ref().unwrap().tapped);
+        assert_eq!(
+            game.state.permanents[id]
+                .as_ref()
+                .unwrap()
+                .counter_count(CounterKind::Stun),
+            0
+        );
+        assert!(!Arc::ptr_eq(&board, &game.layer_board()));
     }
 }

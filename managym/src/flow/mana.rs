@@ -9,6 +9,7 @@ use crate::{
     flow::{
         decision::{EffectFrame, SuspendedResolution},
         game::Game,
+        statics::Characteristics,
     },
     state::{
         ability::Effect,
@@ -577,14 +578,13 @@ impl Game {
             reserve(&suspended.decision, self, &mut reserved);
         }
         let sources = self
-            .iter_battlefield_permanents(player)
-            .map(|permanent| {
+            .characteristics_many(self.iter_battlefield_permanents(player))
+            .map(|(permanent, characteristics)| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
-                let characteristics = self.characteristics(permanent);
                 // A source that lost its abilities offers no zero-mana tap.
                 let can_tap = self.permanent_can_tap(permanent);
                 let fixed = (can_tap && !characteristics.mana_abilities.is_empty())
-                    .then(|| self.fixed_source_mana(permanent));
+                    .then(|| self.fixed_source_mana(permanent, &characteristics));
                 let abilities = characteristics
                     .activated_abilities
                     .iter()
@@ -1045,9 +1045,8 @@ impl Game {
     /// in the payment search until the player selects a color. Callers check
     /// that the source has mana abilities, can tap and has not lost its
     /// abilities, reading its characteristics once.
-    fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
+    fn fixed_source_mana(&self, permanent: PermanentId, view: &Characteristics) -> Mana {
         let source = self.state.permanents[permanent].as_ref().unwrap();
-        let view = self.characteristics(permanent);
         let mut output = Mana::default();
         for ability in &view.mana_abilities {
             output.add(&ability.mana);
@@ -1170,13 +1169,11 @@ impl Game {
 
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
-        for permanent_id in self.iter_battlefield_permanents(player) {
-            if self.characteristics(permanent_id).mana_abilities.is_empty()
-                || !self.permanent_can_tap(permanent_id)
-            {
+        for (permanent_id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+            if view.mana_abilities.is_empty() || !self.permanent_can_tap(permanent_id) {
                 continue;
             }
-            total.add(&self.fixed_source_mana(permanent_id));
+            total.add(&self.fixed_source_mana(permanent_id, &view));
         }
         total
     }

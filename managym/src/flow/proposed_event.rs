@@ -781,15 +781,15 @@ impl Game {
                 // Keep own replacements before battlefield grants. Borrow the
                 // shared characteristics; discovering one entry rule must not
                 // clone every static ability's program on each recheck.
-                for id in [PlayerId(0), PlayerId(1)]
+                let ids = [PlayerId(0), PlayerId(1)]
                     .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                {
+                    .flat_map(|player| self.iter_battlefield_permanents(player));
+                for (id, view) in self.layer_views(ids) {
                     let Some(source) = self.permanent_object_ref(id) else {
                         continue;
                     };
                     for (definition_index, ability) in
-                        self.characteristics(id).static_abilities.iter().enumerate()
+                        view.static_abilities.iter().enumerate()
                     {
                         if matches!(ability, StaticAbility::EntersTapped(predicate)
                             if self.card_matches_predicate(*card, predicate))

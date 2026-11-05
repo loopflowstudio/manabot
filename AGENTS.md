@@ -342,11 +342,16 @@ offer code indexes only that list, never `card.activated_abilities`. Resolution
 consumes the effects captured at activation. `flow/layers.rs::Context` evaluates
 the board without calling the public view; `flow/statics.rs` caches that board
 and finalizes activation costs and dynamic mana outputs. Each immutable view is
-shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` with
-`Revisions` (`characteristics`, `mana_pools`, `triggers`): `DerefMut`
+shared as an `Arc<Characteristics>`. Whole-board readers use `characteristics_many`
+(or internal `layer_views` when activation finalization is unnecessary), preserving
+their input order and validating the shared board once per immutable scan.
+`Game::state` is a `TrackedState` with
+`Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
 advances every counter, and its typed accessors (`tap`, `mark_damage`,
 `events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
-their field feeds. Route a hot write through a typed accessor only when no
+their field feeds. Tap/untap advances `tapped`; layers retain their board only
+when no discovered scope, condition or value predicate reads tap state. Removing
+a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
 layer, static condition or trigger source reads the field; debug builds
 recompute every cached view and index on read and assert they match, so a
 misclassified accessor fails `cargo test` in debug. Continuous-effect records

@@ -1381,23 +1381,19 @@ impl Game {
 
     fn build_trigger_index(&self) -> TriggerIndex {
         let mut sources: Vec<TriggerSourceEntry> = self
-            .state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, permanent)| {
-                let permanent = permanent.as_ref()?;
-                Some(TriggerSourceEntry {
-                    permanent: PermanentId(slot),
+            .layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .map(|(id, view)| {
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                TriggerSourceEntry {
+                    permanent: id,
                     card: permanent.card,
-                    kinds: self
-                        .layer_view(PermanentId(slot))
+                    kinds: view
                         .triggered_abilities
                         .iter()
                         .fold(EventKinds::NONE, |kinds, ability| {
                             kinds | ability_event_kinds(&ability.ability)
                         }),
-                })
+                }
             })
             .collect();
         // Object order (a battlefield card has one current object, so its

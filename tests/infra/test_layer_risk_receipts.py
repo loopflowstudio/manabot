@@ -1,5 +1,6 @@
 """A faster payment must still preserve every legal action and spent resource."""
 
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -272,3 +273,54 @@ def test_layer_risk_rejects_incomplete_or_unmatched_policy_receipts(
     assert result.returncode != 0
     assert message in result.stderr
     assert not (tmp_path / "comparison.json").exists()
+
+
+def test_layer_risk_fetches_pinned_history_outside_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A squash-retained reference is absent even after fetching branch history."""
+    spec = importlib.util.spec_from_file_location(
+        "measure_layer_risk", ROOT / "scripts/measure_layer_risk.py"
+    )
+    assert spec is not None and spec.loader is not None
+    measure = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(measure)
+    origin = tmp_path / "origin"
+    origin.mkdir()
+
+    def git(cwd: Path, *args: str) -> str:
+        return subprocess.check_output(
+            ["git", *args], cwd=cwd, text=True, stderr=subprocess.PIPE
+        ).strip()
+
+    git(origin, "init", "-b", "main")
+    git(origin, "config", "user.name", "Fixture")
+    git(origin, "config", "user.email", "fixture@example.test")
+    git(origin, "commit", "--allow-empty", "-m", "retained reference")
+    reference = git(origin, "rev-parse", "HEAD")
+    git(origin, "branch", "retained")
+    git(origin, "checkout", "--orphan", "candidate")
+    git(origin, "commit", "--allow-empty", "-m", "candidate")
+    checkout = tmp_path / "checkout"
+    git(
+        tmp_path,
+        "clone",
+        "--single-branch",
+        "--branch",
+        "candidate",
+        "--depth",
+        "1",
+        origin.as_uri(),
+        str(checkout),
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        git(checkout, "cat-file", "-e", reference)
+    monkeypatch.setattr(measure, "ROOT", checkout)
+    # run()'s default cwd is bound at import time; explicit ROOT belongs to
+    # reference acquisition so the public operation also works in this clone.
+    measure.ensure_revision(reference)
+    assert git(checkout, "rev-parse", f"{reference}^{{commit}}") == reference
+    git(checkout, "remote", "set-url", "origin", str(tmp_path / "unavailable"))
+    measure.ensure_revision(reference)  # Already present: no remote required.
+    with pytest.raises(subprocess.CalledProcessError):
+        measure.ensure_revision("0" * 40)

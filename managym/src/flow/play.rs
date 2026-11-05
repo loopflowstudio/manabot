@@ -77,10 +77,8 @@ impl Game {
             return None;
         }
         let granted = self.active_player() == player
-            && self.battlefield_permanents(player).iter().any(|id| {
-                self.characteristics(*id)
-                    .static_abilities
-                    .contains(&StaticAbility::GraveyardSpellsHaveFlashback)
+            && self.active_permanent_has(player, |ability| {
+                *ability == StaticAbility::GraveyardSpellsHaveFlashback
             });
         if !granted {
             definition.flashback().cloned()
@@ -93,14 +91,15 @@ impl Game {
 
     /// Whether a layered static ability on the player's battlefield matches.
     fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&StaticAbility) -> bool) -> bool {
-        self.battlefield_permanents(player)
-            .into_iter()
-            .any(|id| self.characteristics(id).static_abilities.iter().any(&has))
+        self.layer_views(self.iter_battlefield_permanents(player))
+            .any(|(_, view)| view.static_abilities.iter().any(&has))
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
-        self.active_permanent_has(player, |card| *card == StaticAbility::LookAtLibraryTop)
+        self.active_permanent_has(player, |ability| {
+            *ability == StaticAbility::LookAtLibraryTop
+        })
     }
 
     /// The top card of `player`'s library, when a permanent they control
@@ -204,8 +203,8 @@ impl Game {
                 cost = cost.reduced_generic(reduction.generic);
             }
         }
-        for permanent_id in self.battlefield_permanents(player) {
-            for ability in &self.characteristics(permanent_id).static_abilities {
+        for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+            for ability in &view.static_abilities {
                 if let StaticAbility::SpellsCostLessMana(reduction) = ability {
                     cost = cost.reduced_by(reduction);
                     continue;
