@@ -1,4 +1,10 @@
-# Vast diagnosis and admission — evidence through 2026-11-05 02:34 UTC
+# Vast diagnosis and admission — completed evidence through 2026-11-05 02:34 UTC
+
+The plan owns current scientific progress and accounting; this note retains the
+completed diagnosis and admission evidence. Run `e51f61b92931` is still active;
+its partial learner receipts do not establish final inventory or qualified
+results. Fresh reads and the original launch handoff are retained separately
+under `batched-plateau/`, preserving their observation times.
 
 ## Retained CUDA diagnosis, admission and scientific handoff
 

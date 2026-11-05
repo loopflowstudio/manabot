@@ -5,13 +5,13 @@ study. Jack Heart requested actual GPU learning toward a sustained plateau,
 within the original cumulative $25, and authorized a necessary Etude SDK release
 and Vast use. No winner promotion, merge or MTG-213 allocation is authorized.
 
-Reading scope, reconciled 2026-11-04: the original comparison and allocation
-sections describe executed source `27a126422`. Later amendments preserve each
-attempt's distinct source, recipe and budget. The final operational restart
-amendment supersedes the historical final-settlement-only gate and describes
-the current sequential executable. No replacement scientific cohort or plateau
-is established. The live plan is `scratch/representation-learning-plan.md`.
-Retained attempt receipts and reported charges remain immutable evidence.
+Reading scope: the original comparison and allocation sections describe executed
+source `27a126422`. Later dated amendments preserve each attempt's source, recipe
+and budget. The final **Matched batched admission and scientific allocation**
+section records replacement Run `e51f61b92931` at `af601877e` and its launch;
+no plateau result exists. It supersedes the historical spending gates below.
+`scratch/representation-learning-plan.md` owns current progress and remaining
+work. Retained attempt receipts and reported charges remain immutable evidence.
 
 ## Execution outcome — allocation invalidated
 

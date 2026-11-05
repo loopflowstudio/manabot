@@ -105,7 +105,8 @@ admissions then failed: startup loss; a pooled learner paused at 7/8 updates;
 and a 256-stream learner lost without a final output inventory. The last loss
 establishes neither zero exposure nor OOM. Those attempts supplied no complete
 two-arm throughput admission. A later admission completed both arms as recorded
-below; no replacement scientific cohort exists, and plateau remains unmet.
+below; the subsequently launched replacement cohort has no qualified plateau
+result in the retained evidence.
 
 The 2026-11-04 19:55–19:57 UTC reconciliation found all five Vast instances
 absent and all five runs terminal. Full-day provider charge rows total $0.398;
@@ -190,8 +191,9 @@ duplicate memberships, canonical order and absent gradients for unused Adam
 parameters. A zero gradient is not equivalent to None when optimizer momentum
 exists. Checkpoint parameters and fixed input contracts remain unchanged.
 
-Host metadata copies and routing loops survive the batching repair; their CUDA
-cost remains unmeasured. The initial learning trace covered only grad-enabled
+Host metadata copies and routing loops survive the batching repair. Their CUDA
+cost was unresolved at this CPU-only stage; later retained traces are summarized
+below. The initial learning trace covered only grad-enabled
 forward. `6c0e33d4b` extended it through backward, clipping, Adam and numerical
 health, with partial traces on failure. Focused tests verify actual operators
 and unchanged weights/gradients across two ordinary updates. Aggregate phase
@@ -228,8 +230,8 @@ can therefore lose the diagnostic artifacts if that later work loses its machine
 The maintained diagnostic now ends after its two one-update profiles and emits
 bounded parity/operator summaries into carried logs. It has a 30-minute work
 bound and retains the $0.50 attempt ceiling; setup and other rental costs also
-need a fresh quote. Successful delivery of complete traces remains unproved.
-Separate uninstrumented admission remains necessary before science. Neither
+need a fresh quote. Later run `911423cce90b` verified complete trace delivery,
+and separate uninstrumented admission qualified the scientific launch below. Neither
 the split nor a successful progress log replaces a verified output inventory.
 Jack Heart's bounded diagnosis authorization remains in force; the loss does
 not replenish the allowance, shorten the cohort or select a representation.
@@ -241,16 +243,48 @@ the executor stop callback. Injected fixtures establish these controls; the
 frozen completed rental does not prove their live enforcement. Capacity stops
 must remain independent of model scores and retain every failed attempt.
 
-Scientific orchestration now exists: sequential balanced seed/arm execution,
-initialization and periodic exports, checkpoint evaluation and strict complete
-cohort analysis. Default discovery remains admission-only; an explicit affordable
-allocation selects science. No replacement scientific cohort ran, and plateau
-remains unmet. Post-repair GPU evidence and affordability remain unresolved;
-neither a settlement watermark nor missing orchestration prevents authorized
-diagnosis. Completed rental evidence is manifest-backed under
-`experiments/data/state-representation-gpu-5da5f4/`, including `operational-restart/`;
-older accounting and failed receipts remain immutable. These are dated reads,
-not a fresh provider balance.
+The subsequent diagnostic `b153cc2e5a77` passed frozen CUDA references but failed
+one float32 parameter-gradient tolerance before any learning. An independent
+float64 reference in `af601877e` bounded both float32 paths without changing
+learner semantics. Diagnostic `911423cce90b` then passed all four reference
+comparisons and six routing tests, completing both ordinary profiled updates.
+All 59 outputs, including complete inference/backward/clipping/Adam traces,
+matched the inventory; its rental was confirmed absent. First-minibatch encoder
+host scopes measured 13.09/15.45ms for pool/GRU, with only 0.099/0.093ms of CUDA
+stream waits inside those scopes. Host routing remains measurable, but these
+captures do not support device synchronization as the dominant cost. First-step
+loading and profiling overhead preclude recurring-throughput extrapolation or
+another runtime repair from those traces alone.
+
+Separate admission `37c1523a98ed` used the same source and RTX3090 hardware,
+completing four updates/1,024 games per arm in 516.7714s overall. All 49 outputs
+verified and the rental was confirmed absent. The complete phase projection,
+including the declared allowances, exports, setup/evaluation/teardown, was
+55.66970 hours / $13.77310. Four updates qualify this prospective allocation;
+they do not establish later game lengths, a plateau or architecture quality.
+
+Before admission completed, accounting released unused ended-attempt ceilings
+under Jack Heart's no-double-counting direction. The surviving rule reserves
+max($3.50, twice fresh per-rental reported/lifetime maxima including settled L4),
+$6 ancillary and unknown/live commitments in full. At 2026-11-05 02:25:26 UTC,
+all eleven prior rentals were absent and the maxima totaled $1.04590824,
+leaving $15.50 within the original $25. This supersedes accumulated ended-attempt
+cap reservations above, without asserting final settlement or adding funds.
+
+Scientific Run `e51f61b92931` launched at `af601877e` with that full $15.50
+allocation reserved. At the retained 02:34:17 UTC read, instance `59194544` was
+the sole Task rental, running its first pooling seed 74211. Finish-after-work
+was acknowledged, with deadline 2026-11-07 10:09:07 UTC as backstop; this proves
+neither final delivery nor teardown. Sequential balanced seed/arm execution,
+256 updates per learner, initialization/interior exports and complete evaluation
+remain the frozen design. No completed scientific update count, final inventory
+or qualified plateau result is available in that handoff. Default discovery
+remains admission-only; a live allocation must not be duplicated because an
+earlier planning note still says diagnosis is pending. The plan owns remaining
+acceptance. Evidence is manifest-backed under
+`experiments/data/state-representation-gpu-5da5f4/`, especially `cuda-traces/`,
+`batched-admission/` and `batched-plateau/`; failed receipts remain immutable.
+These are dated reads, not a fresh provider balance.
 
 Wider complete-game batches change gradient estimates and optimizer exposure;
 they require a prospective identity and fresh paired seeds, even at a matched

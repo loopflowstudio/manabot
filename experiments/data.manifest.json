@@ -46726,6 +46726,66 @@
    "sha256": "d05246917b686e07668d71e6ce906a116df26c8b2434a0033dd73866934a231a",
    "bytes": 164806
   },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/account-progress.py": {
+   "sha256": "66a0fb0120fbb0979ed0ac40d948af6bffc157d43184a9a16b638ccd4fd0e465",
+   "bytes": 2266
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/analyze.py": {
+   "sha256": "44c42519ba8aa9792bdd84a497f0739e18e30143bae387528df3fbc719692c88",
+   "bytes": 1888
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/checkpoint-backup/typed_pool-74211/training/monitor-00000000.pt": {
+   "sha256": "958d563f96b2477659c058639d7096b308cf4e929690447399c3c4616c3f50b0",
+   "bytes": 9728427
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/checkpoint-backup/typed_pool-74211/training/self-play-initial-raw.pt": {
+   "sha256": "cba1a152198a5ca6c555cc960974df5116777216974c84441f7e086b12722b19",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/collect.py": {
+   "sha256": "6ab746667fbb947407a7aa5eb8016e1d8c380bed03a76489e547f5b5aa319b02",
+   "bytes": 2870
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/fab524c5b5db49bfb23f037e0c5114f7.json": {
+   "sha256": "748644e9fb9556b81097ec6b26c5aac69eda08d415b5d32f4e56276d5acf37c1",
+   "bytes": 11607
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/live-accounting.json": {
+   "sha256": "602b820591cd3910dc43358f40b863c41e156fe841a5f7ddea87714eaa88678c",
+   "bytes": 669
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/observe.py": {
+   "sha256": "61cca95ac954bba67d3c2a5d2b23826fdf45b45411626ba3f306396c76d1b496",
+   "bytes": 3848
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/progress-accounting.json": {
+   "sha256": "31f36bb60d22e97996fe691d2e4514abbb4ed9f048f0736ff9b45e7d2d9920a4",
+   "bytes": 4023
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/provenance.json": {
+   "sha256": "0b79d4ca902c3b526b2cc59b12ecf6076c6e8d9f7653a7c5429048a7694464cd",
+   "bytes": 424
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025439Z/summary.json": {
+   "sha256": "d5f4004196a3daf921ad05d73a53ef9b7de86839768ef584bc63b56b0be52bca",
+   "bytes": 590
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025802Z/current-logs.json": {
+   "sha256": "3a1d78a1686487e123ea9025e5927d275b5b71a3ff20b6e3972813c6fa712fed",
+   "bytes": 16355
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025802Z/fab524c5b5db49bfb23f037e0c5114f7.json": {
+   "sha256": "578712b4f3c1319486a74fc901c1e662ae0b87149f988b5ca87d24cee3212763",
+   "bytes": 11606
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025802Z/progress-accounting.json": {
+   "sha256": "ea5f2ba76f9806079c8ad57e6f5d30469dacc02ee1f09f628a5d0049876bcc2f",
+   "bytes": 4023
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/progress-20261105T025802Z/summary.json": {
+   "sha256": "313ee7bde02557e1f7bbd8ac725cb27a4381d88237a900cc930fae29e5c8cd48",
+   "bytes": 590
+  },
   "experiments/data/state-representation-gpu-5da5f4/batched-plateau/projection.json": {
    "sha256": "ceef2a5100cc7297d832fb65c7a301ab35ec96959724077083099c08893c5b27",
    "bytes": 228

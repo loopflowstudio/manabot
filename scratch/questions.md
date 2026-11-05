@@ -29,13 +29,13 @@
 
 ## Current handoff and implementation decisions
 
-At the retained 2026-11-05 02:34:17 UTC read, scientific Run `e51f61b92931`
-was running at source `af601877e`, instance `59194544`, with pooling seed 74211
-started and finish-after-work acknowledged. Its $13.77310 projection fits the
-fully reserved $15.50 allocation. Completed CUDA diagnostics and matched admission
-qualify that launch; final scientific inventory, evaluation and teardown remain
-open. This is a dated handoff, not a new provider read. The plan owns acceptance;
-`vast-host-diagnosis.md` owns measurement and delivery evidence.
+The plan owns fresh scientific progress, accounting, evidence paths and remaining
+acceptance. Run `e51f61b92931` at `af601877e` is active on rental `59194544`;
+continue that allocation without repeating diagnosis/admission. The completed
+CUDA gates and matched throughput qualified its launch, not a scientific result.
+Instance-only SSH attachment of the existing local public key enabled read-only
+receipt/checkpoint collection; no source, recipe, deadline or provider account
+changed. The diagnosis owns detailed measurement and delivery evidence.
 
 The failed combined diagnostic lost completed traces when its rental disappeared.
 End diagnosis before separate admission so Etude can deliver its inventory;

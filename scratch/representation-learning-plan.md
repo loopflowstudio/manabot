@@ -2,24 +2,43 @@
 
 ## Current direction, result and remaining work
 
-Reconciled 2026-11-05 against source `af601877e`. Diagnostic `911423cce90b`
-completed both CUDA profiles, all four frozen reference comparisons and six
-routing tests, including float64-reference gradient checks. All 59 outputs
-(170,244,006 bytes) match the worker inventory; rental `59191723` is confirmed
-absent. Separate uninstrumented admission `37c1523a98ed` completed four updates
-per arm; all 49 outputs verified and rental absent. Its full-cohort projection is
-55.66970 hours / $13.77310, below the freshly reconciled $15.50 allowance.
-At the retained 02:34:17 UTC handoff, scientific Run **`e51f61b92931` was running**
-at that exact source; its first child was pooling seed 74211. All four paired
-seeds, horizon, curve/held-out schedules and criteria are unchanged. No plateau
-or architecture result exists yet. The diagnosis owns detailed accounting and
-trace interpretation; `batched-plateau/` retains the prospective allocation.
-At 02:34:17 UTC, instance `59194544` was the sole Task rental. The worker
-acknowledged `finish when done` at 02:32:32: final delivery and self-deletion
-follow its one job, with rental deadline 2026-11-07 10:09:07 UTC as backstop.
-Completed scientific update counts are not available in the carried parent log.
-The local wait client was stopped after this managed-run handoff. This compress
-pass performs no new provider read or allocation.
+Scientific Run **`e51f61b92931` remains active** at frozen source `af601877e`.
+The 2026-11-05 02:58:02 UTC learner receipt records typed_pool seed 74211 at
+**39/256 updates, 9,984 games and 1,155,622 learner transitions**, CUDA:0 / one
+thread, with no recorded error. Collection/learning total 787.37/724.20 seconds.
+Initialization and update-32 raw checkpoints match their recorded sizes/SHA256.
+No learner or evaluation endpoint has completed; all eight learners, 72 curve
+endpoints, eight held-out endpoints, final inventory and teardown remain required.
+This is partial execution evidence, not a plateau or architecture result.
+
+Fresh launcher status reports `running`, approximately $0.12. At 02:58:26 UTC,
+all eleven preceding rentals remained absent and `59194544` was the sole Task
+rental. Prior reported/lifetime maxima remain $1.04590824; $3.50 prior compute +
+$6 ancillary + $15.50 live commitment reserve the original $25. Live charges count
+inside that commitment, not in addition. No final settlement is claimed.
+The worker acknowledged finish-after-work at 02:32:32; delivery and self-deletion
+remain pending, with rental deadline 2026-11-07 10:09:07 UTC as backstop.
+Continue this run without another allocation, retry or source change.
+
+Evidence is manifest-backed under
+`experiments/data/state-representation-gpu-5da5f4/batched-plateau/`:
+`launch-handoff.json` retains the original launch;
+`progress-20261105T025439Z/` retains the first receipt, both verified checkpoint
+backups and collection helpers; `progress-20261105T025802Z/` retains the fresh
+receipt, accounting and launcher logs. Operational helpers live in
+`.runs/representation/gpu-plateau-batched/`: `observe.py` reads receipts and backs
+up checkpoints; `collect.py` requires and verifies the terminal output inventory;
+`analyze.py` requires success and every endpoint before recomputing the frozen
+comparison. Use `ETUDE_HOME="$PWD/.runs/representation/etude"` for launcher reads.
+No partial score analysis has run.
+
+Diagnostic `911423cce90b` passed four frozen comparisons and six CUDA routing
+tests, retaining both complete profiles and all 59 verified outputs. Separate
+admission `37c1523a98ed` completed four updates per arm with all 49 outputs
+verified. Both rentals are absent. The 55.66970-hour / $13.77310 full-cohort
+projection qualified the $15.50 allocation at the same `af601877e` source.
+`vast-host-diagnosis.md` owns detailed measurements and their limitations;
+completed diagnosis/admission need no repetition while science runs.
 
 ## Accepted scope and remaining work
 
@@ -44,7 +63,8 @@ passed in the successful diagnostic without changing learner semantics.
 
 ## Delete — do not maintain
 
-These cuts are complete; there is no pending runtime deletion target:
+These cuts are complete; no further runtime deletion is justified. Keep their
+replacements below and recover predecessor implementations only from git:
 
 - Per-sample/per-frame projections in `TypedContinuationEncoder.forward` and
   `SharedEffectEncoder.forward`, and per-sequence padded packing in
@@ -220,8 +240,12 @@ Replacement science needs its own actual source/native freeze and admission.
 Main syncs moved the selected Wave to Experiments and incorporated MTG-213
 v10; none amends this study's capacities, recovery, population or separate budget.
 The runtime-changing syncs require actual source/native binding at admission.
-The latest sync `2b2061c8d` / `51b4bd274` moved Linear bindings only. Experiments
-has no child memories. The Standard growing-pool research remains separate design
+The pre-launch sync `2b2061c8d` / `51b4bd274` moved Linear bindings only.
+The subsequent sync `8318f1525` incorporated main `e113602a2` and MTG-213's
+v10 endpoint evidence. Since the executed source, the only runtime code diff
+is an equivalent shared-effect token-index construction; the study runner is
+unchanged. The live run retains `af601877e`, and its CUDA receipts do not certify
+the later checkout. Experiments has no child memories. The Standard growing-pool research remains separate design
 work, not authority to replace this fixed Allies/Lessons comparison.
 
 Memory, relation splitting, membership interning and semantic coalescing remain
@@ -245,4 +269,4 @@ no uncommitted evidence was removed. Original design/diagram:
 traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: `uv run --locked --extra dev --extra artifacts pytest tests/model/test_shared_effects.py -k 'memberships_share_gradients or batched_effect_routing' -q` — 3 passed, 2 local CUDA skips; compilation, Ruff and diff checks pass. Gate owns broader validation; the frozen-source remote CUDA gates remain historical evidence.
+Check: `git diff --check` passed; `lf context` is within both limits; four fresh evidence files published and hash-verified. Runtime unchanged, so no test rerun; gate owns broader validation and demo/review owns scientific judgment.
