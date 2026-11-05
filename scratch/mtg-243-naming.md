@@ -12,7 +12,7 @@ demo own the review artifacts and interactive handoff.
 
 The current speed baseline is `b31998cc38bb3b86abedce397e2531c4e0d91379`.
 Earlier implementation, repair, review and publication history is preserved in
-`b31998cc3:scratch/mtg-243-naming.md`. The uncommitted accepted speed direction
+`b31998cc3:scratch/mtg-243-naming.md`. The accepted speed direction
 and pre-curation notes are retained in `.lf/logs/naming-speed/plan-before-curation.md`.
 Original implementation: `9db184b9`; risk reduction: `5a57096f2`; combined-proof
 repair: `a643a344b`; upstream integration: `bca261295`; numerical/test
@@ -178,7 +178,7 @@ sync. The separate MTG-213 pilot v10 supplies no execution authority here.
 
 Main's accepted full Standard roadmap supersedes the former Allies/Lessons-only
 Wave scope; it adds no card-authoring, prepared-spell or training work to MTG-243.
-The coverage Wave remains read-only. MTG-241 owns continuation execution and has
+MTG-241 owns continuation execution and has
 reported `FrameCompletion`, obligation codes 27–29, retained events/payments and
 postambles; this checkout still has `FrameFinalize`, maximum code 26, naming code
 10. Ordinary sync must reconcile them; no collision is known.
@@ -201,59 +201,30 @@ paid execution/strength experiments.
 
 Baseline for attributable improvements is current published/runtime head
 `b31998cc38bb3b86abedce397e2531c4e0d91379`, alongside the unchanged CI budget
-reference `ea316ff14`. Current-head Engine Budget run `41951255376`, job
+reference `ea316ff14`. Baseline-head Engine Budget run `41951255376`, job
 `126995532291`, passes: worst reply 3.638 -> 3.830 s (+5.3%), total search
 123.901 -> 128.930 s (+4.1%), throughput 17511.2 -> 16527.4/s (-5.6%, +6.0%
 time/step). Both candidate orders nearly exhaust wall time on CPU: searches
 128.841/129.086 elapsed vs 128.797/129.070 CPU seconds. These comparisons still
 include intervening engine changes and do not isolate naming. Preserve earlier
-failed samples; no budget reference/tolerance changes are authorized. Final main
-integration in that run was still running when this speed pass was requested.
+failed samples; no budget reference/tolerance changes are authorized. That run
+completed successfully, including main/long integration, Linux learning
+assertions and Engine Budget (rechecked during reconciliation on 2026-11-04).
+It certifies the pre-speed baseline, not the optimized source.
 
-Execution direction:
+The profiling and implementation phase is complete at `5bb773ebf`: the measured
+highest-payoff change is packed program backward, with native profiling retained
+as an ownership-bound finding. Acceptance still requires complete choices,
+original action coordinates, viewer-safe identity, exact replay/Command digests,
+frozen inputs and full learning gradients. No detached trainable cache or new
+native invalidation scheme was introduced. Fixed balanced measurements retain
+all samples and CPU/scheduling telemetry; no artificial load, adaptive retry,
+cross-runner timing comparison or budget/reference movement is authorized.
 
-- First profile bounded actual step/search workloads and the existing real
-  naming/model mixture. Separate setup, native clone/decision/projection,
-  observation encoding, semantic program encoding, action scoring, and learner
-  materialization/backward where relevant. Inspect existing profiling hooks and
-  representative native workloads. Identify dominant cost and allocation owners
-  before selecting structural changes. Produce ranked measured hotspots rather
-  than speculative optimization or another diagnostic-only conclusion.
-- Optimize the highest-payoff paths revealed by those profiles. Existing evidence
-  points to executable-program encoding/backprop and ordinary native runtime as
-  candidates; verify rather than assuming. Prefer removing repeated work,
-  redundant allocations/copies, or oversized representations with clear owners.
-  Preserve complete choices, original action coordinates, viewer-safe identity,
-  replay/Command semantics, frozen versions, and full behavior evidence. Learning
-  must retain gradients: no detached trainable-program cache across updates or
-  inference-only shortcut described as a learner speedup. Native cache changes
-  must preserve revision invalidation and debug recomputation invariants.
-- Measure before/after against b31998cc3 on the same machine, building both before
-  measurement and using a fixed balanced run order with all samples retained.
-  Use CPU/wall time and scheduling telemetry, exact memory/allocation counts
-  where available, and matching digests. Keep profiling separate from timing.
-  No other workers started by this pass during timing; no artificial load,
-  contention injection, adaptive reruns until green or cross-runner wall-time
-  comparisons. Use controlled fixtures and bounded real workloads only.
-- Seek a material, repeatable gain beyond noise, reporting native step throughput,
-  total/worst search latency and actual model/learner costs separately. Do not
-  infer end-to-end gains from a microbenchmark or claim general scaling from
-  definition-free names. Preserve mixed and ordinary workload coverage so a
-  naming optimization cannot silently slow every other turn. Do not promise an
-  arbitrary multiplier before profiling. If a proposed large engine redesign is
-  separate work, retain the findings and identify that boundary rather than
-  silently expanding this PR.
-- Check active ownership before changing shared hot paths; do not duplicate
-  ongoing engine/continuation work. Keep one implementation and remove obsolete
-  paths. Validate meaningful semantic/numerical equivalence, the combined 928-name
-  execution proof, debug Rust/native rebuild as applicable, and required affected
-  checks. Current-source CI must retain the unchanged budget. Update the PR and
-  review artifacts with the achieved speedup, baseline hashes, raw evidence and
-  remaining limits; keep any failed approaches in concise evidence notes.
-
-The Graph is restarted at implement for profiling plus implementation, returning
-to demo for review. This direction supersedes the earlier statement that no
-further runtime optimization was requested; it does not approve shipping.
+Native structural optimization remains outside this diff because its measured
+hotspots overlap MTG-241/242/244. No native gain is claimed. The achieved learner
+speedup and the decision to leave those native changes with their owners remain
+part of interactive review, not an implicit reduction of the accepted outcome.
 
 ## Speed implementation — 2026-11-04
 
@@ -314,7 +285,7 @@ payment and continuation owners are active in MTG-241/242/244. No speculative
 native cache/invalidation change accompanies the learner optimization. The
 balanced native timing is an unchanged-binary control, not a native speedup.
 
-Reproduction: `uv run --extra dev python scratch/naming-speed.py measure --width 64`;
+Reproduction: `uv run --extra dev python scratch/naming-speed.py measure --width 64 --label <fresh-label>`;
 the width-16 default is identical. Raw timings, profiles, prototype source and
 baseline binaries are retained under `.lf/logs/naming-speed/`. Native sampling
 uses `scratch/native-speed-profile.py`; balanced timing uses the existing budget
@@ -352,13 +323,79 @@ attention/FiLM combinations, sparse reordered actions and prepared inference.
 This is changed reduction order, not lost cross-chunk gradients. The failed
 float32 diagnostic is retained in `gradient-roundoff.json`.
 
-Checks after simplification: `uv run --extra dev pytest tests/model/test_policy_catalog.py::test_program_execution_preserves_values_and_parameter_gradients tests/model/test_catalog_naming.py::test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation -q` — 14 passed; `uv run --extra dev --extra artifacts --extra evaluation pytest tests/verify/test_native_buffer_capacities.py::test_retained_airship_growth_preserves_every_permanent tests/verify/test_native_buffer_capacities.py::test_retained_airship_overflow_isolates_only_its_stream tests/verify/test_native_buffer_capacities.py::test_repaired_retained_prefix_has_scalar_vector_python_parity tests/verify/test_shared_effect_transport.py::test_retained_drill_prefix_admits_shared_effects tests/eval/test_tla_pilot.py::test_pilot_retains_generated_cards_and_sideboard_in_all_encoders -q` — 14 passed. Ruff check/format and diff checks passed. Earlier six consumer cases passed; the first whole-catalog gradient oracle failure and its diagnosis remain above.
-No Rust changed, so no rebuild or new debug-suite result is claimed. Gate owns
-the affected model/inference and active-training suites and fresh Linux CI;
-publication/demo own PR copy, review-artifact refresh and interactive review.
+Retained post-simplification checks cover 14 program-value/gradient and mixed
+policy cases plus 14 retained-capacity/shared-effect/pilot parity cases; Ruff
+check/format and diff checks passed. Earlier six consumer cases passed. The
+whole-catalog float32 failure and its diagnosis remain above. No Rust changed
+in the speed pass, so no rebuild or new debug-suite result is claimed here.
+
+### Remaining acceptance — reconciled 2026-11-04
+
+- Gate: affected model/inference and active-training suites, plus current-source
+  Linux CI with the unchanged 10% Engine Budget. At reconciliation, PR #424
+  points to `5bb773ebf`; its Linux checks are in progress. Baseline run
+  `41951255376` is green, but supplies no optimized-head result.
+- Performance review: width-64 mixed/naming batch gains are measured, while
+  width-16 ordinary PPO/damped CPU costs increased and native worst-reply control
+  failed. These observations remain limitations, not load-only explanations or
+  cleared failures. GPU, larger minibatches, optimizer/update throughput and
+  end-to-end collection/learning remain unmeasured.
+- Publication/demo: refresh PR copy and review artifacts around the achieved
+  learner gain, failed native control and scope limits, then obtain interactive
+  review. The concept page now covers the speed pass; other review artifacts
+  still need refresh. Merge/auto-merge,
+  paid execution and strength experiments remain unauthorized.
+
+No new product decision is required for reconciliation. Additional production
+names, fresh v8 defaults and a broader native redesign remain separate decisions.
 
 [`naming-speed-evidence.json.gz`](naming-speed-evidence.json.gz) retains both
 widths' raw samples, CPU telemetry, numerical diagnosis, allocation profiles,
 native controls, binary hashes, the rejected prototype and retained probe/code
 sources. Original raw files remain in `.lf/logs/naming-speed/`. Reproduction
 requires a fresh `--label`; the probe refuses to overwrite prior measurements.
+
+The archive's `source_note` predates simplification: the measured recurrent loop
+was subsequently extracted into `_encode_programs`, leaving catalog selection
+and scattering in `definitions`. The arithmetic and chunk boundaries are
+unchanged, but the current helper layout was not separately timed. Retained
+post-extraction equivalence tests support correctness; archived sources and raw
+measurements remain intact rather than being relabeled as exact-head timings.
+
+Check: `git diff --check` and `lf context` — passed; memory and scratch remain within both limits. Behavioral checks above are reused, not rerun.
+
+## Concept review — 2026-11-04, head `5bb773ebf`
+
+Outcome: no design change and no open product choice for this scope. Jack Heart's
+accepted atomic naming interaction still fits the implementation: filter without
+commitment, submit one bound name choice, then inspect/select through the native
+private search. Reconnect restores the actual pending choice and remaining search;
+stale submissions cannot repeat committed exiles. Public vocabulary, executable
+definitions and hidden membership remain distinct. Explicit v8 and frozen/default
+input boundaries stay as documented in `docs/training.md`.
+
+The speed pass adds no user-facing concept. `definitions` owns catalog selection
+and original-row scattering; `_encode_programs` owns transient packing and GRU
+execution. A 64-step chunk is neither a game decision nor a training truncation,
+checkpoint boundary or resumable job. Full hidden-state gradients cross chunks;
+weights, serialized buffers, policy-scoped inference caching and empty-rollout
+recovery requirements remain unchanged. No new configuration, workflow skill,
+usage-doc change or implementation direction is needed.
+
+The consequential review mismatch is evidential: faster complete learning batches
+do not imply faster native play or end-to-end training. Keep the measured gain,
+ordinary-workload regressions and failed identical-binary native control together
+at interactive review, without treating noise as budget acceptance. Leaving native
+structural work with its active owners does not silently reduce the accepted
+speed request. No further product approval is inferred here.
+
+Counterexamples remain a missing score above 511, preferences tied to action
+ordering, hidden-membership leakage, stale/reconnect loss of commitment, dropped
+behavior probabilities, detached cross-chunk gradients or remapped checkpoint
+identity. Existing targeted witnesses cover these contracts; this review inspected
+source and retained evidence without rerunning behavioral tests or measurements.
+Next proof remains the reconciled gate and publication/demo obligations above;
+fresh current-source acceptance is not supplied by the baseline's green run.
+Broader production names, fresh v8 defaults and native redesign remain outside
+this review's accepted scope. `scratch/concept-review.html` presents this result;
+loop-or-next owns navigation.

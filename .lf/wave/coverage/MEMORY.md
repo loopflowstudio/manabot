@@ -45,9 +45,10 @@ ambiguity or safety-critical invariants, not substitute products.
   original slots and behavior evidence through both learners and incidents;
   only selected minibatches expand onto the device. Four controlled observations
   used 81.8% fewer retained action bytes, but live buffers/logits remain dense.
-  Program encoding/backprop dominates measured cost; variable CPU timings do
-  not establish end-to-end speedup. The 928-name fixture mostly adds names
-  without programs, so it cannot stand for 928 executable definitions. The
+  Initial program encoding/backprop dominated measured cost; the later speed
+  pass below addresses it without establishing end-to-end throughput. The
+  928-name fixture mostly adds names without programs, so it cannot stand for
+  928 executable definitions. The
   original split proofs missed combined native/vector/Academy behavior above
   512. Jack Heart accepted that repair on November 4 (comment d4db22c5): one
   controlled native scenario now supplies all paths, including a policy-selected
@@ -67,8 +68,10 @@ ambiguity or safety-critical invariants, not substitute products.
   The repair checks closed inputs bitwise and bounds outputs with the existing
   float32 tolerance. A pinned Linux final-layer-only probe did not reproduce
   the difference, so its exact operation remains unisolated; this is not
-  evidence of CPU load or a privacy leak. The repaired full test still needs
-  Linux validation.
+  evidence of CPU load or a privacy leak. Linux run `41951255376` at
+  `b31998cc3` subsequently passed all jobs, including main/long integration
+  and Engine Budget. That validates the repaired baseline, not the later
+  program-encoding optimization.
 - Main `ee85d6fc8` adds opt-in isolated observation-capacity recovery with
   retained input contracts; default rejection and fatal buffer/payload errors
   stay intact. The shared writer now returns typed `ObservationWriteError`;
@@ -80,6 +83,32 @@ ambiguity or safety-critical invariants, not substitute products.
   identity and reject new name references under schema 7; they do not admit an
   old checkpoint to the new world. Public projection changes require explicit
   comparisons, not rewriting frozen captures to make bytes match.
+- Jack Heart requested a substantial measured speedup on 2026-11-04 (comment
+  86384701), against `b31998cc3`, with complete choices, learning gradients,
+  exact digests and the existing budget preserved. Profiling found packed-GRU
+  slice-gradient allocation traffic dominated naming backward. Packing IDs
+  before embedding and splitting the same GRU into at most 64 recurrent steps
+  bounds that traffic while carrying full hidden-state gradients. It adds no
+  weights, checkpoint buffers, detached cache or policy-input version. The
+  replaced execution remains only as a numerical test reference.
+- Balanced same-host measurements of real observations at width 64 showed
+  roughly 5.8–6.6x lower mixed/naming learning-batch CPU cost and 91% less
+  naming slice-backward allocation traffic. Those are measured batch costs
+  with materialization, loss and backward, not peak RSS, optimizer/update
+  throughput or strength. Width-16 ordinary PPO/damped CPU costs increased;
+  CPU/wall divergence proves some scheduling variation, not a universal gain.
+  The 344 referenced naming programs are distinct from the 928-name vocabulary.
+  GPU and larger batches remain unmeasured. The recurrent loop was later
+  extracted into a helper without changing arithmetic; equivalence checks
+  cover that layout, while archived timing sources retain the earlier layout.
+- Chunking changes floating-point gradient reduction order. The unnormalized
+  whole-catalog float32 oracle failed one input-weight entry despite equal
+  outputs; float64 recomputation reduced maximum error to 2.88e-13. Algebraic
+  value/gradient checks use float64, while actual float32 policy losses retain
+  strict tolerances across both measured widths and sparse/reordered actions.
+  This diagnoses numerical roundoff separately from lost cross-chunk gradients
+  and from CPU load. Raw failures and the rejected dense-bucket prototype stay
+  in the Task's evidence archive; focused equivalence is not full-head acceptance.
 
 ## Learn decisions and current evidence
 
@@ -241,6 +270,16 @@ preserves accepted decisions, dated proof limits and source history.
   explains the earlier failures nor certifies later source; final-source CI
   remains necessary. Detailed raw evidence and limits remain in MTG-243's plan,
   `.lf/logs/naming-budget-paired/` and `.lf/logs/naming-budget-final-linux/`.
+- The later MTG-243 speed pass supplies an unchanged-binary native control,
+  not a native optimization: hashes, decision/search digests and counts match,
+  but median worst reply still failed the unchanged threshold (2.977 to
+  3.3495 seconds). Identical executable bytes rule out a code regression in
+  that control. CPU/wall divergence and switches identify scheduling variation
+  without explaining every outlier or old different-source failures. No retry
+  or baseline/tolerance change cleared it. Native profiles pointed into
+  stabilization, action generation and active MTG-241/242/244 ownership;
+  speculative cache changes were not folded into the learner speedup. Current
+  source still needs its own Linux budget result and interactive review.
 - Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
   indexed records and cache-carrying clones. Run 41555845634 (2026-11-03 UTC)
   measured that engine at `4b5e9c0e4` against `88dc8c1ad` on one runner:
