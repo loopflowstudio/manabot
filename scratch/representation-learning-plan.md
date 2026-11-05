@@ -69,13 +69,14 @@ Ryzen 9900X with an unused 5060 Ti. Full learner about 37 minutes; evaluators ge
 1.5h and $0.50 each, one at a time. The first endpoint was measured after one
 learner had been dispatched, not before; the CPU allocation followed it.
 
-Progress at 19:10 UTC: all three retained learners have all 10 endpoints scored
-and hash-verified (pool/74211 needed a repeat of curve-0032, whose first attempt
-had two zero-decision wall-clock timeouts; unstarted endpoints of that Run also
-received placeholder attempts before a driver fix). Pool/74212 and GRU/74213
-delivered complete learners (3.82h, 3.07h). Their evaluations are queued. Three
-learners remain running after two hosts never booted. Ended cost is $2.65.
-Pool/74212's init mismatch is explained in questions.md.
+**Cohort complete, 2026-11-05 22:29 UTC.** All eight learners trained and all 80
+endpoints were scored and verified. The frozen analysis found **no qualified
+plateau** (one of six window intervals within ±5) and held-out GRU minus pool of
+−1.95 points [−5.88, +1.98]. `mtg-249-gpu-report.md` owns the result; the
+protocol's **Recovery cohort result** records it. Remaining: demo/review
+judgment. A longer horizon would need its own prospective amendment and funds
+(about $6 of the $25 remains). Etude defect: a Vast 400 is retained as an unknown
+create (questions.md).
 
 Operations: `.runs/representation/recovery/`: `drive.py` (state `drive-state.json`,
 log `drive-*.log`), `commitments.md`, `units/`, `deliveries/`, `ledger/`. Resume with

@@ -123,3 +123,11 @@ only by host QR rounding in `orthogonal_` (≤1.04e-6 in 18 matrices; identical 
 streams and other tensors), so it is admitted for scoring. Receipt:
 `.runs/representation/recovery/init-comparison-typed_pool-74212.json`. The
 paused evaluation `664f44738f35` stays an unscored attempt.
+
+Etude defect exposed (2026-11-05 20:10 UTC, not fixed here): Vast answered two
+creates with HTTP 400 (the $0.2022 Czech 3090 host, asks 591379xx–591380xx; a third on `recovery3090`). Etude records that as
+"create reply unknown", and `VastMachines.find` raises while no labelled instance
+exists, so sessions `1bd3d916419c`/`7da0af2dc646` never settle and their Run ids
+stay blocked. Inventory showed no instance, so nothing was paid. These units were
+recorded as never-started attempts (fresh unit identities follow). This belongs
+to Etude (`ff3d48` / PR84 owners).

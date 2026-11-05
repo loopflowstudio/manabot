@@ -560,3 +560,23 @@ receipts only.
 The launcher runs from Etude PR #84 head `6bfa114ed`, which keeps a Vast rental
 through a 15-minute outage; workers stay locked to `64e9eaabf`. PR #84 and this
 study are not merged by this amendment. Spending stays inside the original $25.
+
+## Recovery cohort result — 2026-11-05
+
+All eight learners completed 256 updates; all 72 curve and eight held-out
+endpoints were scored and hash-verified (11,264 games, all replayed, zero
+failures). The frozen analysis ran once, over the complete ledger.
+
+- **Plateau: not reached.** Of the six final-window intervals, only pool
+  192→224 (−0.2, [−2.5, +2.2] points) lies within ±5. The rest are pool
+  160→192 +3.9 [−1.7, +9.6], 224→256 +2.7 [−1.4, +6.9]; GRU 160→192 +4.7
+  [−1.7, +11.0], 192→224 +0.4 [−5.0, +5.8], 224→256 −0.2 [−7.3, +6.9].
+- **Primary:** held-out GRU minus pool at update 256, −1.95 points, 95%
+  [−5.88, +1.98]. No advantage or equivalence is established.
+
+Repeated attempts followed missing evidence only: a host stall, a cancellation
+during the pool/74212 initialization check (host QR rounding, ≤1.04e-6), three
+Vast creates refused with HTTP 400 that Etude retained as unknown replies, and
+two learner hosts that never booted. Recovery cost about $6.75 in Etude
+estimates; with prior accounting, about $18.89 of the original $25. Evidence:
+`experiments/data/state-representation-gpu-5da5f4/recovery-20261105/`.
