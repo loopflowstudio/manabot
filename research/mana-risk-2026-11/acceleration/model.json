@@ -1,0 +1,889 @@
+{
+  "seed": 242,
+  "threads": 1,
+  "hidden_dim": 16,
+  "batch": 2,
+  "policy_input_version": 9,
+  "policy_film": true,
+  "scope": "No optimizer or training run. Alternating forward samples, output and full-model gradient parity. Uncontrolled ambient activity; CPU only.",
+  "source_sha256": {
+    "before": "f42b5d357c989c56c503f1ed4f9f0ba25a6ccb8d67f2f13b9c19badc0980cb91",
+    "after": "c9dce9a4a2644f18d53253b7d1361440a62e8f6d38cf8f6eaae5ce4b78f8ea5e"
+  },
+  "samples": [
+    {
+      "pair": "amount_assignment",
+      "round": 0,
+      "role": "before",
+      "facts_us": 362.7499099820852,
+      "model_us": 13470.500009134412
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 0,
+      "role": "after",
+      "facts_us": 254.5409370213747,
+      "model_us": 13779.832981526852
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 1,
+      "role": "after",
+      "facts_us": 242.8750740364194,
+      "model_us": 16266.37508161366
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 1,
+      "role": "before",
+      "facts_us": 397.459021769464,
+      "model_us": 17747.41697590798
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 2,
+      "role": "before",
+      "facts_us": 513.7079861015081,
+      "model_us": 18077.79201772064
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 2,
+      "role": "after",
+      "facts_us": 269.04093101620674,
+      "model_us": 12922.083027660847
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 3,
+      "role": "after",
+      "facts_us": 229.99988868832588,
+      "model_us": 13054.167036898434
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 3,
+      "role": "before",
+      "facts_us": 381.8750847131014,
+      "model_us": 12988.99995163083
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 4,
+      "role": "before",
+      "facts_us": 370.37499714642763,
+      "model_us": 12878.833920694888
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 4,
+      "role": "after",
+      "facts_us": 232.04111494123936,
+      "model_us": 22959.541995078325
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 5,
+      "role": "after",
+      "facts_us": 231.87499027699232,
+      "model_us": 14825.91696549207
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 5,
+      "role": "before",
+      "facts_us": 395.6669243052602,
+      "model_us": 16181.749990209937
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 6,
+      "role": "before",
+      "facts_us": 394.0409515053034,
+      "model_us": 23853.082908317447
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 6,
+      "role": "after",
+      "facts_us": 300.2498997375369,
+      "model_us": 12977.249920368195
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 7,
+      "role": "after",
+      "facts_us": 230.5000089108944,
+      "model_us": 12900.790898129344
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 7,
+      "role": "before",
+      "facts_us": 375.3750352188945,
+      "model_us": 13056.375086307526
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 8,
+      "role": "before",
+      "facts_us": 364.9169811978936,
+      "model_us": 30360.95795687288
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 8,
+      "role": "after",
+      "facts_us": 255.25002274662256,
+      "model_us": 22660.791059024632
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 9,
+      "role": "after",
+      "facts_us": 241.12500250339508,
+      "model_us": 12756.70900940895
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 9,
+      "role": "before",
+      "facts_us": 381.95797242224216,
+      "model_us": 12921.62504978478
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 10,
+      "role": "before",
+      "facts_us": 362.4579403549433,
+      "model_us": 12796.70896474272
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 10,
+      "role": "after",
+      "facts_us": 237.54197172820568,
+      "model_us": 12715.207994915545
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 11,
+      "role": "after",
+      "facts_us": 228.708959184587,
+      "model_us": 12815.665919333696
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 11,
+      "role": "before",
+      "facts_us": 364.45795558393,
+      "model_us": 12850.709026679397
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 12,
+      "role": "before",
+      "facts_us": 358.08305256068707,
+      "model_us": 24625.167017802596
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 12,
+      "role": "after",
+      "facts_us": 405.1669966429472,
+      "model_us": 22878.624964505434
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 13,
+      "role": "after",
+      "facts_us": 242.54107847809792,
+      "model_us": 13411.749969236553
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 13,
+      "role": "before",
+      "facts_us": 402.16592606157064,
+      "model_us": 13594.45892740041
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 14,
+      "role": "before",
+      "facts_us": 376.87504664063454,
+      "model_us": 13548.125047236681
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 14,
+      "role": "after",
+      "facts_us": 249.0000333636999,
+      "model_us": 13534.250087104738
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 15,
+      "role": "after",
+      "facts_us": 235.58293469250202,
+      "model_us": 31304.25000563264
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 15,
+      "role": "before",
+      "facts_us": 530.3750513121486,
+      "model_us": 24163.958034478128
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 16,
+      "role": "before",
+      "facts_us": 1599.124982021749,
+      "model_us": 17043.374944478273
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 16,
+      "role": "after",
+      "facts_us": 273.4999870881438,
+      "model_us": 18130.62489964068
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 17,
+      "role": "after",
+      "facts_us": 1236.4160502329469,
+      "model_us": 22776.875062845647
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 17,
+      "role": "before",
+      "facts_us": 1923.958072438836,
+      "model_us": 29356.91608581692
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 18,
+      "role": "before",
+      "facts_us": 410.29194835573435,
+      "model_us": 13579.958933405578
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 18,
+      "role": "after",
+      "facts_us": 253.25000751763582,
+      "model_us": 13216.292019933462
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 19,
+      "role": "after",
+      "facts_us": 221.87491413205862,
+      "model_us": 13288.915972225368
+    },
+    {
+      "pair": "amount_assignment",
+      "round": 19,
+      "role": "before",
+      "facts_us": 383.6670657619834,
+      "model_us": 13467.125012539327
+    },
+    {
+      "pair": "output_mode",
+      "round": 0,
+      "role": "before",
+      "facts_us": 446.7919934540987,
+      "model_us": 14949.250034987926
+    },
+    {
+      "pair": "output_mode",
+      "round": 0,
+      "role": "after",
+      "facts_us": 307.9579910263419,
+      "model_us": 19380.58400992304
+    },
+    {
+      "pair": "output_mode",
+      "round": 1,
+      "role": "after",
+      "facts_us": 313.2499987259507,
+      "model_us": 20691.000041551888
+    },
+    {
+      "pair": "output_mode",
+      "round": 1,
+      "role": "before",
+      "facts_us": 523.4589334577322,
+      "model_us": 15161.957941018045
+    },
+    {
+      "pair": "output_mode",
+      "round": 2,
+      "role": "before",
+      "facts_us": 492.87499859929085,
+      "model_us": 13923.833961598575
+    },
+    {
+      "pair": "output_mode",
+      "round": 2,
+      "role": "after",
+      "facts_us": 301.3330278918147,
+      "model_us": 13494.541984982789
+    },
+    {
+      "pair": "output_mode",
+      "round": 3,
+      "role": "after",
+      "facts_us": 262.8329675644636,
+      "model_us": 19378.416938707232
+    },
+    {
+      "pair": "output_mode",
+      "round": 3,
+      "role": "before",
+      "facts_us": 751.0419236496091,
+      "model_us": 14251.708053052425
+    },
+    {
+      "pair": "output_mode",
+      "round": 4,
+      "role": "before",
+      "facts_us": 475.5409900099039,
+      "model_us": 13242.791988886893
+    },
+    {
+      "pair": "output_mode",
+      "round": 4,
+      "role": "after",
+      "facts_us": 290.12502636760473,
+      "model_us": 16081.999987363815
+    },
+    {
+      "pair": "output_mode",
+      "round": 5,
+      "role": "after",
+      "facts_us": 289.62502256035805,
+      "model_us": 16362.207941710949
+    },
+    {
+      "pair": "output_mode",
+      "round": 5,
+      "role": "before",
+      "facts_us": 536.7080448195338,
+      "model_us": 15684.750047512352
+    },
+    {
+      "pair": "output_mode",
+      "round": 6,
+      "role": "before",
+      "facts_us": 514.1668953001499,
+      "model_us": 15512.792044319212
+    },
+    {
+      "pair": "output_mode",
+      "round": 6,
+      "role": "after",
+      "facts_us": 454.2499082162976,
+      "model_us": 14006.708981469274
+    },
+    {
+      "pair": "output_mode",
+      "round": 7,
+      "role": "after",
+      "facts_us": 276.12491976469755,
+      "model_us": 13316.166936419904
+    },
+    {
+      "pair": "output_mode",
+      "round": 7,
+      "role": "before",
+      "facts_us": 505.58289512991905,
+      "model_us": 13661.167002283037
+    },
+    {
+      "pair": "output_mode",
+      "round": 8,
+      "role": "before",
+      "facts_us": 477.50002704560757,
+      "model_us": 13855.500030331314
+    },
+    {
+      "pair": "output_mode",
+      "round": 8,
+      "role": "after",
+      "facts_us": 278.5420510917902,
+      "model_us": 13583.833002485335
+    },
+    {
+      "pair": "output_mode",
+      "round": 9,
+      "role": "after",
+      "facts_us": 264.5410131663084,
+      "model_us": 13720.541028305888
+    },
+    {
+      "pair": "output_mode",
+      "round": 9,
+      "role": "before",
+      "facts_us": 501.4160415157676,
+      "model_us": 13508.95909126848
+    },
+    {
+      "pair": "output_mode",
+      "round": 10,
+      "role": "before",
+      "facts_us": 450.08305460214615,
+      "model_us": 13952.790992334485
+    },
+    {
+      "pair": "output_mode",
+      "round": 10,
+      "role": "after",
+      "facts_us": 331.33290708065033,
+      "model_us": 13942.208024673164
+    },
+    {
+      "pair": "output_mode",
+      "round": 11,
+      "role": "after",
+      "facts_us": 264.7079527378082,
+      "model_us": 13430.875027552247
+    },
+    {
+      "pair": "output_mode",
+      "round": 11,
+      "role": "before",
+      "facts_us": 628.2079266384244,
+      "model_us": 13947.749976068735
+    },
+    {
+      "pair": "output_mode",
+      "round": 12,
+      "role": "before",
+      "facts_us": 506.12492486834526,
+      "model_us": 13786.916038952768
+    },
+    {
+      "pair": "output_mode",
+      "round": 12,
+      "role": "after",
+      "facts_us": 270.04198636859655,
+      "model_us": 13347.20803424716
+    },
+    {
+      "pair": "output_mode",
+      "round": 13,
+      "role": "after",
+      "facts_us": 256.0829743742943,
+      "model_us": 14968.791976571083
+    },
+    {
+      "pair": "output_mode",
+      "round": 13,
+      "role": "before",
+      "facts_us": 514.7499032318592,
+      "model_us": 13695.750036276877
+    },
+    {
+      "pair": "output_mode",
+      "round": 14,
+      "role": "before",
+      "facts_us": 479.37489580363035,
+      "model_us": 13245.916925370693
+    },
+    {
+      "pair": "output_mode",
+      "round": 14,
+      "role": "after",
+      "facts_us": 268.5000654309988,
+      "model_us": 14013.417065143585
+    },
+    {
+      "pair": "output_mode",
+      "round": 15,
+      "role": "after",
+      "facts_us": 297.33404517173767,
+      "model_us": 14498.875010758638
+    },
+    {
+      "pair": "output_mode",
+      "round": 15,
+      "role": "before",
+      "facts_us": 524.3750056251884,
+      "model_us": 14621.20795622468
+    },
+    {
+      "pair": "output_mode",
+      "round": 16,
+      "role": "before",
+      "facts_us": 519.7499413043261,
+      "model_us": 15032.332972623408
+    },
+    {
+      "pair": "output_mode",
+      "round": 16,
+      "role": "after",
+      "facts_us": 315.0410484522581,
+      "model_us": 13650.667038746178
+    },
+    {
+      "pair": "output_mode",
+      "round": 17,
+      "role": "after",
+      "facts_us": 273.957964964211,
+      "model_us": 13800.417073071003
+    },
+    {
+      "pair": "output_mode",
+      "round": 17,
+      "role": "before",
+      "facts_us": 511.20808348059654,
+      "model_us": 13754.16701193899
+    },
+    {
+      "pair": "output_mode",
+      "round": 18,
+      "role": "before",
+      "facts_us": 481.5829452127218,
+      "model_us": 19357.20897745341
+    },
+    {
+      "pair": "output_mode",
+      "round": 18,
+      "role": "after",
+      "facts_us": 271.08401991426945,
+      "model_us": 15051.166992634535
+    },
+    {
+      "pair": "output_mode",
+      "round": 19,
+      "role": "after",
+      "facts_us": 273.58299121260643,
+      "model_us": 13498.125015757978
+    },
+    {
+      "pair": "output_mode",
+      "round": 19,
+      "role": "before",
+      "facts_us": 494.6659319102764,
+      "model_us": 29561.624978668988
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 0,
+      "role": "before",
+      "facts_us": 272.2089411690831,
+      "model_us": 12960.958061739802
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 0,
+      "role": "after",
+      "facts_us": 160.9170576557517,
+      "model_us": 13013.667077757418
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 1,
+      "role": "after",
+      "facts_us": 151.20801981538534,
+      "model_us": 12817.50004272908
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 1,
+      "role": "before",
+      "facts_us": 271.4999718591571,
+      "model_us": 13440.750073641539
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 2,
+      "role": "before",
+      "facts_us": 275.6250323727727,
+      "model_us": 12801.20899900794
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 2,
+      "role": "after",
+      "facts_us": 153.3749746158719,
+      "model_us": 12694.084085524082
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 3,
+      "role": "after",
+      "facts_us": 136.20802201330662,
+      "model_us": 12879.166984930634
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 3,
+      "role": "before",
+      "facts_us": 274.666934274137,
+      "model_us": 13233.124976977706
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 4,
+      "role": "before",
+      "facts_us": 260.7920905575156,
+      "model_us": 12932.667043060064
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 4,
+      "role": "after",
+      "facts_us": 141.87500346451998,
+      "model_us": 12908.29200297594
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 5,
+      "role": "after",
+      "facts_us": 140.1250483468175,
+      "model_us": 12913.084006868303
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 5,
+      "role": "before",
+      "facts_us": 275.8749760687351,
+      "model_us": 13444.249983876944
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 6,
+      "role": "before",
+      "facts_us": 295.54194770753384,
+      "model_us": 12991.625000722706
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 6,
+      "role": "after",
+      "facts_us": 149.54200014472008,
+      "model_us": 12887.040968053043
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 7,
+      "role": "after",
+      "facts_us": 166.83305148035288,
+      "model_us": 11990.958009846509
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 7,
+      "role": "before",
+      "facts_us": 254.9999626353383,
+      "model_us": 12778.874952346087
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 8,
+      "role": "before",
+      "facts_us": 256.83396961539984,
+      "model_us": 12379.958061501384
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 8,
+      "role": "after",
+      "facts_us": 141.29094779491425,
+      "model_us": 12151.583912782371
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 9,
+      "role": "after",
+      "facts_us": 127.29200534522533,
+      "model_us": 12456.667027436197
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 9,
+      "role": "before",
+      "facts_us": 260.333064943552,
+      "model_us": 12525.541009381413
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 10,
+      "role": "before",
+      "facts_us": 253.45897302031517,
+      "model_us": 12898.874934762716
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 10,
+      "role": "after",
+      "facts_us": 154.0409866720438,
+      "model_us": 12252.999935299158
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 11,
+      "role": "after",
+      "facts_us": 138.12503311783075,
+      "model_us": 12206.95802476257
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 11,
+      "role": "before",
+      "facts_us": 255.12499269098043,
+      "model_us": 12070.16606349498
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 12,
+      "role": "before",
+      "facts_us": 250.41704066097736,
+      "model_us": 12112.125055864453
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 12,
+      "role": "after",
+      "facts_us": 132.41602573543787,
+      "model_us": 12006.709002889693
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 13,
+      "role": "after",
+      "facts_us": 126.7909538000822,
+      "model_us": 12573.624961078167
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 13,
+      "role": "before",
+      "facts_us": 259.7499405965209,
+      "model_us": 12661.249958910048
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 14,
+      "role": "before",
+      "facts_us": 257.0830984041095,
+      "model_us": 12588.1670974195
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 14,
+      "role": "after",
+      "facts_us": 153.791974298656,
+      "model_us": 12857.290916144848
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 15,
+      "role": "after",
+      "facts_us": 160.70797573775053,
+      "model_us": 12425.540946424007
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 15,
+      "role": "before",
+      "facts_us": 254.79192845523357,
+      "model_us": 12159.33298226446
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 16,
+      "role": "before",
+      "facts_us": 258.20801965892315,
+      "model_us": 12059.083092026412
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 16,
+      "role": "after",
+      "facts_us": 161.20797954499722,
+      "model_us": 12527.666985988617
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 17,
+      "role": "after",
+      "facts_us": 133.6670247837901,
+      "model_us": 11850.749957375228
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 17,
+      "role": "before",
+      "facts_us": 255.24990633130074,
+      "model_us": 12392.667005769908
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 18,
+      "role": "before",
+      "facts_us": 242.16598831117153,
+      "model_us": 12044.416973367333
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 18,
+      "role": "after",
+      "facts_us": 138.54203280061483,
+      "model_us": 12522.66694791615
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 19,
+      "role": "after",
+      "facts_us": 156.7500876262784,
+      "model_us": 12767.791049554944
+    },
+    {
+      "pair": "remaining_taps",
+      "round": 19,
+      "role": "before",
+      "facts_us": 255.75002655386925,
+      "model_us": 12770.375004038215
+    }
+  ],
+  "summary_medians_us": {
+    "amount_assignment": {
+      "before": {
+        "facts_us": 382.8125190921128,
+        "model_us": 13587.208930402994
+      },
+      "after": {
+        "facts_us": 242.70807625725865,
+        "model_us": 13473.000028170645
+      }
+    },
+    "output_mode": {
+      "before": {
+        "facts_us": 505.85390999913216,
+        "model_us": 13950.27048420161
+      },
+      "after": {
+        "facts_us": 277.3334854282439,
+        "model_us": 13974.458503071219
+      }
+    },
+    "remaining_taps": {
+      "before": {
+        "facts_us": 257.6455590315163,
+        "model_us": 12715.812481474131
+      },
+      "after": {
+        "facts_us": 145.70850180462003,
+        "model_us": 12550.645973533392
+      }
+    }
+  },
+  "retained_source_sha256": "7b29b1731bfd00fbf76e8c84d60f4aacf00a5b2792ca1389369012db939f0b93",
+  "formatting_note": "Ruff formatting only after measurement; source.patch retains the final spelling of the same operations."
+}

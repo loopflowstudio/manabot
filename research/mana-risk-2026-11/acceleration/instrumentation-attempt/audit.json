@@ -1,0 +1,5 @@
+{
+  "excluded": true,
+  "reason": "The first instrumented snapshot build reused the root Cargo target. A subsequent candidate build completed without compilation and yielded the identical binary hash, so separate source identity was not established. Discard this attempt from before/after attribution. Rebuild the reference in a new independent target and force current source freshness for the candidate. Uninstrumented comparisons and profiles completed before this attempt and their saved binaries are unaffected.",
+  "binary_sha256": "fe66df688490ed6d72fc1bb2816a96b87756ce54499ba701448c2b6b62a3bdd0"
+}

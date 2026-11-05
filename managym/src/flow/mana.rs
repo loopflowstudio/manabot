@@ -14,7 +14,10 @@ use crate::{
         mana::{Color, Mana, ManaCost, SpendingContext},
     },
 };
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    rc::Rc,
+};
 
 /// Opt-in, thread-local payment diagnostics. Normal builds compile out every
 /// counter write; measurements include all probes in the measured operation.
@@ -72,7 +75,7 @@ pub mod measurement {
 /// upfront obligation, so filters cannot finance themselves or form seedless
 /// cycles. Taps, departures, selected-object costs and usage limits remain
 /// distinct. Witnesses retain identities and concrete typed pool remainders.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Obligation {
     Pay {
         cost: ManaCost,
@@ -163,7 +166,7 @@ struct SourceReservation {
     ability: Option<usize>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum PaymentStep {
     Fixed(PermanentId),
     Activate(PermanentId, usize),
@@ -201,10 +204,13 @@ impl PaymentStep {
 
 #[derive(Clone, PartialEq, Eq)]
 struct PaymentSearchState {
-    resources: Vec<SourceResources>,
+    // Search keys and sibling probes share immutable slices. A transition
+    // copies only the resource slice it changes; inserting a visited key never
+    // deep-clones ability histories or the announced continuation.
+    resources: Rc<[SourceResources]>,
     pool: Mana,
     life: u32,
-    obligations: Vec<Obligation>,
+    obligations: Rc<[Obligation]>,
     /// Fixed-source budget until the first Spend; later obligations are unrestricted.
     prefix: Option<usize>,
 }
@@ -313,10 +319,10 @@ impl PaymentModel<'_> {
     /// Each probe owns its changing resources and borrows this decision's inventory.
     fn initial_state(&self, pool: Mana, obligations: Vec<Obligation>) -> PaymentSearchState {
         PaymentSearchState {
-            resources: self.reserved.clone(),
+            resources: Rc::from(self.reserved.as_slice()),
             pool,
             life: self.life,
-            obligations,
+            obligations: obligations.into(),
             prefix: None,
         }
     }
@@ -340,7 +346,7 @@ impl PaymentModel<'_> {
         let mut obligations = ability.obligations(permanent);
         obligations.extend(self.game.payment_obligations(self.player));
         let mut state = self.initial_state(self.game.pooled_mana(self.player), obligations);
-        state.resources[index].reserve(ability);
+        Rc::make_mut(&mut state.resources)[index].reserve(ability);
         let mut path = self.witness(state, SourcePolicy::All, &mut Default::default())?;
         path.insert(0, PaymentStep::Activate(permanent, ability_index));
         Some(path)
@@ -370,7 +376,7 @@ impl PaymentModel<'_> {
         }
         *remaining -= 1;
         let mut state = self.initial_state(self.game.pooled_mana(self.player), obligations);
-        state.resources[index].tapped = true;
+        Rc::make_mut(&mut state.resources)[index].tapped = true;
         self.witness(state, SourcePolicy::All, &mut Default::default())
             .is_some()
     }
@@ -452,7 +458,7 @@ impl PaymentModel<'_> {
         // A variable producer can gain output when another resource leaves
         // (for example, a negative static modifier). Its current amount is not
         // an admissible upper bound; exact transitions below decide feasibility.
-        if self.sources.iter().zip(&state.resources).any(|(source, resources)| {
+        if self.sources.iter().zip(state.resources.iter()).any(|(source, resources)| {
             source.abilities.iter().any(|ability| {
                 ability.dynamic.is_some()
                     && (resources.has_resources(ability)
@@ -478,7 +484,7 @@ impl PaymentModel<'_> {
             )
         });
         let mut total = u64::from(state.pool.total());
-        for (source, resources) in self.sources.iter().zip(&state.resources) {
+        for (source, resources) in self.sources.iter().zip(state.resources.iter()) {
             if resources.departed {
                 continue;
             }
@@ -501,7 +507,7 @@ impl PaymentModel<'_> {
             }
         }
         let mut owed = 0_u64;
-        for obligation in &state.obligations {
+        for obligation in state.obligations.iter() {
             match obligation {
                 Obligation::Tap { .. } => {}
                 Obligation::Pay { cost, .. } => owed += u64::from(cost.mana_value),
@@ -515,7 +521,7 @@ impl PaymentModel<'_> {
         }
         if let Some(Obligation::Pay { cost, waterbend }) = state.obligations.first() {
             let mut upper = state.pool.clone();
-            for (source, resources) in self.sources.iter().zip(&state.resources) {
+            for (source, resources) in self.sources.iter().zip(state.resources.iter()) {
                 if resources.departed {
                     continue;
                 }
@@ -578,9 +584,8 @@ impl PaymentModel<'_> {
         // A payable final obligation needs no more resource search. Keep the
         // ordinary class-aware spending order without cloning/hashing the
         // inventory or constructing an optimistic bound for a known success.
-        if let [Obligation::Pay { cost, .. }] = state.obligations.as_slice() {
-            if state.pool.can_pay(cost) {
-                state.pool.pay(cost);
+        if let [Obligation::Pay { cost, .. }] = state.obligations.as_ref() {
+            if state.pool.try_pay(cost) {
                 #[cfg(feature = "benchmark")]
                 measurement::update(|c| {
                     c.payment_remainders += 1;
@@ -589,17 +594,33 @@ impl PaymentModel<'_> {
                 return Some(vec![PaymentStep::Spend(state.pool)]);
             }
         }
-        if !self.can_cover(&state, policy) {
-            #[cfg(feature = "benchmark")]
-            measurement::update(|c| c.pruned += 1);
-            return None;
+        // A zero upfront cost has exactly one remainder and cannot consume a
+        // parent's colored route. Advancing it needs no resource copy or key.
+        if matches!(state.obligations.first(), Some(Obligation::Pay { cost, .. })
+            if cost.mana_value == 0)
+        {
+            let remainder = state.pool.clone();
+            state.obligations = Rc::from(&state.obligations[1..]);
+            state.prefix = None;
+            let mut path = self.witness(state, policy, visited)?;
+            path.insert(0, PaymentStep::Spend(remainder));
+            return Some(path);
         }
-        // Only states that need exploration need an owned visited key. Terminal
-        // success and the resource bound above require neither cloning nor hashing.
-        if !visited.insert(state.clone()) {
-            #[cfg(feature = "benchmark")]
-            measurement::update(|c| c.deduplicated += 1);
-            return None;
+        // Outputs only discharge an existing obligation, and selected taps
+        // strictly consume resources. Cycles/different production routes meet
+        // at Pay nodes; bound and memoize there instead of copying the same
+        // continuation again while committing its already-reserved costs.
+        if matches!(state.obligations.first(), Some(Obligation::Pay { .. })) {
+            if !self.can_cover(&state, policy) {
+                #[cfg(feature = "benchmark")]
+                measurement::update(|c| c.pruned += 1);
+                return None;
+            }
+            if !visited.insert(state.clone()) {
+                #[cfg(feature = "benchmark")]
+                measurement::update(|c| c.deduplicated += 1);
+                return None;
+            }
         }
         let PaymentSearchState {
             resources,
@@ -621,7 +642,7 @@ impl PaymentModel<'_> {
                             resources,
                             pool,
                             life,
-                            obligations: rest.to_vec(),
+                            obligations: Rc::from(rest),
                             prefix,
                         },
                         policy,
@@ -633,7 +654,7 @@ impl PaymentModel<'_> {
                     .filter(|permanent| {
                         self.sources
                             .iter()
-                            .zip(&resources)
+                            .zip(resources.iter())
                             .any(|(source, resource)| {
                                 source.permanent == **permanent
                                     && !resource.tapped
@@ -659,7 +680,7 @@ impl PaymentModel<'_> {
                         continue;
                     }
                     let mut next = resources.clone();
-                    next[index].tapped = true;
+                    Rc::make_mut(&mut next)[index].tapped = true;
                     let mut obligations = vec![Obligation::Tap {
                         // This obligation consumes a set. Explore each set once;
                         // the real chooser still receives every legal first tap.
@@ -672,7 +693,7 @@ impl PaymentModel<'_> {
                             resources: next,
                             pool: pool.clone(),
                             life,
-                            obligations,
+                            obligations: obligations.into(),
                             prefix,
                         },
                         policy,
@@ -696,8 +717,9 @@ impl PaymentModel<'_> {
                     .iter()
                     .position(|candidate| candidate.permanent == *source)
                 {
-                    after_cost[index].departed |= sacrifice;
-                    after_cost[index].finish_activation(*ability_index);
+                    let resource = &mut Rc::make_mut(&mut after_cost)[index];
+                    resource.departed |= sacrifice;
+                    resource.finish_activation(*ability_index);
                 }
                 if *life_cost > life {
                     return None;
@@ -718,7 +740,7 @@ impl PaymentModel<'_> {
                             resources: after_cost.clone(),
                             pool: next,
                             life: life - life_cost,
-                            obligations: rest.to_vec(),
+                            obligations: Rc::from(rest),
                             prefix,
                         },
                         policy,
@@ -748,7 +770,7 @@ impl PaymentModel<'_> {
                             resources: resources.clone(),
                             pool: remainder.clone(),
                             life,
-                            obligations: rest.to_vec(),
+                            obligations: Rc::from(rest),
                             prefix: None,
                         },
                         policy,
@@ -769,7 +791,7 @@ impl PaymentModel<'_> {
                     if let Some(output) = source.fixed.as_ref().filter(|_| !resources[index].tapped)
                     {
                         let mut tapped = resources.clone();
-                        tapped[index].tapped = true;
+                        Rc::make_mut(&mut tapped)[index].tapped = true;
                         let mut next = pool.clone();
                         next.add(output);
                         if let Some(mut path) = self.witness(
@@ -797,7 +819,7 @@ impl PaymentModel<'_> {
                             continue;
                         }
                         let mut remaining = resources.clone();
-                        remaining[index].reserve(ability);
+                        Rc::make_mut(&mut remaining)[index].reserve(ability);
                         let mut nested = ability.obligations(source.permanent);
                         nested.extend_from_slice(&obligations);
                         if let Some(mut path) = self.witness(
@@ -805,7 +827,7 @@ impl PaymentModel<'_> {
                                 resources: remaining,
                                 pool: pool.clone(),
                                 life,
-                                obligations: nested,
+                                obligations: nested.into(),
                                 prefix: None,
                             },
                             policy,
@@ -824,7 +846,7 @@ impl PaymentModel<'_> {
                         && cost.generic() > 0
                     {
                         let mut tapped = resources.clone();
-                        tapped[index].tapped = true;
+                        Rc::make_mut(&mut tapped)[index].tapped = true;
                         let mut next = vec![Obligation::Pay {
                             cost: cost.reduced_generic(1),
                             waterbend: true,
@@ -835,7 +857,7 @@ impl PaymentModel<'_> {
                                 resources: tapped,
                                 pool: pool.clone(),
                                 life,
-                                obligations: next,
+                                obligations: next.into(),
                                 prefix: after_source,
                             },
                             policy,
@@ -857,16 +879,64 @@ impl PaymentModel<'_> {
         obligations: Vec<Obligation>,
         policy: SourcePolicy,
     ) -> Option<Vec<PaymentStep>> {
+        // With one terminal cost and only independent fixed taps, adding mana
+        // is monotone. The general DFS takes this same source-order prefix; no
+        // mutable resource copies, bounds or visited set are needed. Nested
+        // obligations, waterbend and available activations still use the search.
+        if let [Obligation::Pay {
+            cost,
+            waterbend: false,
+        }] = obligations.as_slice()
+        {
+            if policy != SourcePolicy::AutomaticPrefix
+                && (policy == SourcePolicy::FixedOnly
+                    || self
+                        .sources
+                        .iter()
+                        .zip(&self.reserved)
+                        .all(|(source, resource)| {
+                            source
+                                .abilities
+                                .iter()
+                                .all(|ability| !resource.admits(ability))
+                        }))
+            {
+                let mut remaining = pool.clone();
+                let mut path = Vec::new();
+                let mut sources = self.sources.iter().zip(&self.reserved);
+                let result = loop {
+                    if remaining.try_pay(cost) {
+                        path.push(PaymentStep::Spend(remaining));
+                        break Some(path);
+                    }
+                    let Some((source, resource)) = sources.next() else {
+                        break None;
+                    };
+                    if !resource.tapped && !resource.departed {
+                        if let Some(output) = &source.fixed {
+                            remaining.add(output);
+                            path.push(PaymentStep::Fixed(source.permanent));
+                        }
+                    }
+                };
+                debug_assert_eq!(
+                    result,
+                    self.witness(
+                        self.initial_state(pool, obligations),
+                        policy,
+                        &mut Default::default(),
+                    )
+                );
+                return result;
+            }
+        }
         // Offers need one executable witness, not a proof of the fewest taps.
         // Ordinary fixed production retains source-order automatic payment.
         // Only a nested automatic prefix minimizes early commitments, where
         // retaining a parent's colored route requires considering alternatives.
+        let state = self.initial_state(pool, obligations);
         if policy != SourcePolicy::AutomaticPrefix {
-            return self.witness(
-                self.initial_state(pool, obligations),
-                policy,
-                &mut Default::default(),
-            );
+            return self.witness(state, policy, &mut Default::default());
         }
         // Minimize resources committed before the current obligation is paid.
         // Later costs remain part of the same witness, but cannot force an
@@ -875,7 +945,7 @@ impl PaymentModel<'_> {
             if let Some(path) = self.witness(
                 PaymentSearchState {
                     prefix: Some(budget),
-                    ..self.initial_state(pool.clone(), obligations.clone())
+                    ..state.clone()
                 },
                 policy,
                 &mut Default::default(),
@@ -1149,8 +1219,10 @@ impl Game {
 
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {
         use crate::flow::{decision::Decision, game::PendingChoice};
-        fn append(decision: &Decision, game: &Game, result: &mut Vec<Obligation>) {
-            match decision {
+        let mut result = Vec::new();
+        let mut decision = self.state.suspended_decision.as_ref().map(|s| &s.decision);
+        while let Some(current) = decision {
+            decision = match current {
                 Decision::ManaUpfront {
                     permanent,
                     ability_index,
@@ -1158,18 +1230,18 @@ impl Game {
                     resume,
                     ..
                 } => {
-                    let view = game.characteristics(*permanent);
+                    let view = self.characteristics(*permanent);
                     let ability = &view.activated_abilities[*ability_index];
-                    let mut outputs = game.mana_outputs(ability, decision.player()).unwrap();
+                    let mut outputs = self.mana_outputs(ability, current.player()).unwrap();
                     if ability.tap_source {
-                        let bonus = game.tap_mana_bonus(*permanent, decision.player());
+                        let bonus = self.tap_mana_bonus(*permanent, current.player());
                         for output in &mut outputs {
                             output.add(&bonus);
                         }
                     }
                     if *taps_remaining > 0 {
                         result.push(Obligation::Tap {
-                            candidates: game.tap_cost_candidates(decision.player(), ability),
+                            candidates: self.tap_cost_candidates(current.player(), ability),
                             remaining: *taps_remaining,
                         });
                     }
@@ -1184,13 +1256,9 @@ impl Game {
                         ability_index: *ability_index,
                         sacrifice: ability.sacrifice_source,
                     });
-                    if let Some(next) = resume {
-                        append(next, game, result);
-                    }
+                    resume.as_deref()
                 }
-                Decision::ManaChoice {
-                    resume: Some(next), ..
-                } => append(next, game, result),
+                Decision::ManaChoice { resume, .. } => resume.as_deref(),
                 Decision::Payment(progress) if !progress.can_decline() => {
                     result.push(Obligation::Pay {
                         cost: progress.remaining.mana_cost(),
@@ -1199,13 +1267,10 @@ impl Game {
                             crate::state::ability::PaymentCost::Waterbend { .. }
                         ),
                     });
+                    None
                 }
-                _ => {}
-            }
-        }
-        let mut result = Vec::new();
-        if let Some(suspended) = &self.state.suspended_decision {
-            append(&suspended.decision, self, &mut result);
+                _ => None,
+            };
         }
         match &self.pending_choice {
             Some(PendingChoice::ManaPayment {
@@ -1841,6 +1906,79 @@ mod tests {
             1
         );
         assert!(matches!(path.last(), Some(PaymentStep::Spend(pool)) if pool.total() == 0));
+    }
+
+    #[test]
+    fn fixed_payment_preserves_source_order_restrictions_and_reservations() {
+        use super::*;
+        use crate::state::{mana::ManaRestriction, player::PlayerConfig};
+        let game = Game::new(
+            vec![
+                PlayerConfig::new("a", [("Mountain".into(), 40)].into()),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            1,
+            false,
+        );
+        let mut model = PaymentModel {
+            game: &game,
+            player: PlayerId(0),
+            life: 20,
+            sources: [
+                Mana::restricted_to(ManaRestriction::spell(["Citizen"]), Mana::parse("RR").mana),
+                Mana::parse("U"),
+                Mana::parse("R"),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(index, output)| ManaSource {
+                permanent: PermanentId(index),
+                fixed: Some(output),
+                abilities: Vec::new(),
+                waterbend: false,
+            })
+            .collect(),
+            reserved: vec![SourceResources::default(); 3],
+        };
+        let cost = ManaCost {
+            purpose: SpendingContext::spell(["Citizen"]),
+            ..ManaCost::parse("1U")
+        };
+        let obligations = || {
+            vec![Obligation::Pay {
+                cost: cost.clone(),
+                waterbend: false,
+            }]
+        };
+        let restricted_remainder =
+            Mana::restricted_to(ManaRestriction::spell(["Citizen"]), Mana::parse("R").mana);
+        for policy in [SourcePolicy::All, SourcePolicy::FixedOnly] {
+            assert_eq!(
+                model.plan(Mana::default(), obligations(), policy),
+                Some(vec![
+                    PaymentStep::Fixed(PermanentId(0)),
+                    PaymentStep::Fixed(PermanentId(1)),
+                    PaymentStep::Spend(restricted_remainder.clone()),
+                ])
+            );
+        }
+        model.reserved[0].tapped = true;
+        assert_eq!(
+            model.plan(Mana::default(), obligations(), SourcePolicy::All),
+            Some(vec![
+                PaymentStep::Fixed(PermanentId(1)),
+                PaymentStep::Fixed(PermanentId(2)),
+                PaymentStep::Spend(Mana::default()),
+            ])
+        );
+        model.reserved[2].departed = true;
+        assert!(model
+            .plan(Mana::default(), obligations(), SourcePolicy::All)
+            .is_none());
+        assert_eq!(
+            model.plan(Mana::parse("UR"), obligations(), SourcePolicy::All),
+            Some(vec![PaymentStep::Spend(Mana::default())])
+        );
     }
 
     #[test]

@@ -540,22 +540,22 @@ impl Mana {
         colors
     }
 
-    /// Enumerate concrete remainders after colored, hybrid, then generic
-    /// payment. Ordinary spending stops at the first result; activation search
-    /// considers alternatives so generic costs cannot consume a parent's pip.
-    fn payment_remainders(&self, cost: &ManaCost, all: bool) -> Vec<[u8; 6]> {
+    /// Visit colored, hybrid, then generic remainders in spending order.
+    /// Returning true stops enumeration. First-result queries keep their result
+    /// on the stack; only nested payments collect all concrete alternatives.
+    fn visit_payment_remainders(
+        &self,
+        cost: &ManaCost,
+        visit: &mut impl FnMut([u8; 6]) -> bool,
+    ) -> bool {
         fn generic(
             remaining: [u8; 6],
             slot: usize,
             needed: u8,
-            results: &mut Vec<[u8; 6]>,
-            all: bool,
+            visit: &mut impl FnMut([u8; 6]) -> bool,
         ) -> bool {
             if needed == 0 {
-                if !results.contains(&remaining) {
-                    results.push(remaining);
-                }
-                return !all;
+                return visit(remaining);
             }
             if slot == 6 {
                 return false;
@@ -574,7 +574,7 @@ impl Mana {
             for spent in (0..=needed.min(remaining[index])).rev() {
                 let mut next = remaining;
                 next[index] -= spent;
-                if generic(next, slot + 1, needed - spent, results, all) {
+                if generic(next, slot + 1, needed - spent, visit) {
                     return true;
                 }
             }
@@ -584,8 +584,7 @@ impl Mana {
             remaining: [u8; 6],
             pips: &[[Color; 2]],
             needed: u8,
-            results: &mut Vec<[u8; 6]>,
-            all: bool,
+            visit: &mut impl FnMut([u8; 6]) -> bool,
         ) -> bool {
             if let Some((pip, rest)) = pips.split_first() {
                 for color in pip {
@@ -593,39 +592,46 @@ impl Mana {
                     if remaining[index] > 0 {
                         let mut next = remaining;
                         next[index] -= 1;
-                        if assign(next, rest, needed, results, all) {
+                        if assign(next, rest, needed, visit) {
                             return true;
                         }
                     }
                 }
                 false
             } else {
-                generic(remaining, 0, needed, results, all)
+                generic(remaining, 0, needed, visit)
             }
         }
         let mut remaining = self.usable_colors(cost);
         for (available, required) in remaining.iter_mut().zip(cost.cost) {
             let Some(left) = available.checked_sub(required) else {
-                return Vec::new();
+                return false;
             };
             *available = left;
         }
-        let mut results = Vec::new();
-        assign(remaining, &cost.hybrid, cost.generic(), &mut results, all);
-        results
+        assign(remaining, &cost.hybrid, cost.generic(), visit)
     }
 
     pub fn can_pay(&self, cost: &ManaCost) -> bool {
-        !self.payment_remainders(cost, false).is_empty()
+        self.visit_payment_remainders(cost, &mut |_| true)
+    }
+
+    /// Commit the first legal remainder, leaving the pool unchanged on failure.
+    pub fn try_pay(&mut self, cost: &ManaCost) -> bool {
+        let mut remaining = None;
+        self.visit_payment_remainders(cost, &mut |mana| {
+            remaining = Some(mana);
+            true
+        });
+        let Some(remaining) = remaining else {
+            return false;
+        };
+        self.apply_payment_remainder(cost, remaining);
+        true
     }
 
     pub fn pay(&mut self, cost: &ManaCost) {
-        let remaining = self
-            .payment_remainders(cost, false)
-            .into_iter()
-            .next()
-            .expect("insufficient mana");
-        self.apply_payment_remainder(cost, remaining);
+        assert!(self.try_pay(cost), "insufficient mana");
     }
 
     /// Every eligible concrete remainder. Equal-colored mana with different
@@ -669,24 +675,32 @@ impl Mana {
                 assign(next, classes, slot, class_index + 1, remaining, results);
             }
         }
-        // Avoid allocation/combinatorics on the ordinary fixed-pool path.
+        let mut results = Vec::new();
+        // Ordinary pools have no class allocation to enumerate.
         if self.restricted.is_none() {
-            return self
-                .payment_remainders(cost, true)
-                .into_iter()
-                .map(|mana| Mana {
-                    mana,
-                    restricted: None,
-                })
-                .collect();
+            self.visit_payment_remainders(cost, &mut |mana| {
+                let pool = Mana { mana, restricted: None };
+                if !results.contains(&pool) {
+                    results.push(pool);
+                }
+                false
+            });
+            return results;
         }
         let classes = self.usable_classes(cost);
         let usable = self.usable_colors(cost);
-        let mut results = Vec::new();
-        for remaining in self.payment_remainders(cost, true) {
+        let mut seen = Vec::new();
+        self.visit_payment_remainders(cost, &mut |remaining| {
+            // Different hybrid assignments can reach the same color remainder;
+            // expand its class allocations only once.
+            if seen.contains(&remaining) {
+                return false;
+            }
+            seen.push(remaining);
             let spent = std::array::from_fn(|slot| usable[slot] - remaining[slot]);
             assign(self.clone(), &classes, 0, 0, spent, &mut results);
-        }
+            false
+        });
         results
     }
 
@@ -966,6 +980,9 @@ mod tests {
                         let cost = ManaCost { purpose: SpendingContext::spell(["Citizen"]), ..ManaCost::parse("U").with_generic(generic) };
                         let options = pool.payment_options(&cost);
                         assert_eq!(pool.can_pay(&cost), !options.is_empty());
+                        let mut attempted = pool.clone();
+                        assert_eq!(attempted.try_pay(&cost), !options.is_empty());
+                        assert_eq!(&attempted, options.first().unwrap_or(&pool));
                         if let Some(first) = options.first() {
                             let mut terminal = pool.clone();
                             terminal.pay(&cost);

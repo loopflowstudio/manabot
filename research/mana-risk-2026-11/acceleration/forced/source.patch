@@ -1,0 +1,475 @@
+diff --git a/manabot/model/facts.py b/manabot/model/facts.py
+index 76a22ac5d..944ad21c0 100644
+--- a/manabot/model/facts.py
++++ b/manabot/model/facts.py
+@@ -85,6 +85,16 @@ class FactEncoder(nn.Module):
+             raise ValueError("invalid fact object reference")
+         if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= self.kinds)).all():
+             raise ValueError("invalid fact kind")
++        owners = None
++        if self.mana_join is not None:
++            # V9 joins only linked rows. Padding never contributes or receives
++            # gradients, so do not embed hundreds of unused capacity slots.
++            linked = valid.bool() & (links > 0)
++            batch = torch.arange(len(facts), device=facts.device)[:, None]
++            owners = (batch * objects.shape[1] + links.long() - 1)[linked]
++            facts = facts[linked]
++            links = facts[..., FACT_OBJECT_INDEX]
++            kinds = facts[..., FACT_KIND_INDEX]
+         duration = facts[..., FACT_DURATION_INDEX]
+         numeric = torch.stack(
+             (
+@@ -99,12 +109,7 @@ class FactEncoder(nn.Module):
+         mana = None
+         identifiers = self._bucket(facts, FACT_ID_INDEX)
+         if self.mana_join is not None:
+-            mana = (
+-                (kinds >= FACT_MANA_AMOUNT)
+-                & (kinds <= FACT_MANA_LOCATION)
+-                & valid.bool()
+-                & (links > 0)
+-            )
++            mana = (kinds >= FACT_MANA_AMOUNT) & (kinds <= FACT_MANA_LOCATION)
+             identifiers = identifiers.masked_fill(mana, 0)
+         hidden = (
+             self.kind(kinds.long())
+@@ -114,9 +119,18 @@ class FactEncoder(nn.Module):
+             + self.numeric(numeric)
+         )
+         encoded = self.output(torch.tanh(hidden))
+-        linked = (valid.bool() & (links > 0)).unsqueeze(-1)
+         if mana is not None:
+-            linked = linked & ~mana.unsqueeze(-1)
++            assert owners is not None
++            delta = (
++                torch.zeros_like(objects)
++                .flatten(0, 1)
++                .index_add(0, owners, encoded.masked_fill(mana.unsqueeze(-1), 0))
++                .reshape_as(objects)
++            )
++            if mana.any():
++                delta = delta + self._mana_delta(facts, hidden, mana, owners, objects)
++            return objects + delta
++        linked = (valid.bool() & (links > 0)).unsqueeze(-1)
+         targets = (
+             (links.long() - 1)
+             .clamp_min(0)
+@@ -126,8 +140,6 @@ class FactEncoder(nn.Module):
+         delta = torch.zeros_like(objects).scatter_add(
+             1, targets, encoded.masked_fill(~linked, 0)
+         )
+-        if mana is not None and mana.any():
+-            delta = delta + self._mana_delta(facts, hidden, mana, objects)
+         return objects + delta
+ 
+     def _mana_delta(
+@@ -135,6 +147,7 @@ class FactEncoder(nn.Module):
+         facts: torch.Tensor,
+         hidden: torch.Tensor,
+         mana: torch.Tensor,
++        owners: torch.Tensor,
+         objects: torch.Tensor,
+     ) -> torch.Tensor:
+         """Pool complete classes, then route each to its owning object [B,N,D]."""
+@@ -146,18 +159,19 @@ class FactEncoder(nn.Module):
+         groups = (halves[:, 0].long() << 16) | halves[:, 1].long()
+         if (groups == 0).any():
+             raise ValueError("mana class identifier must be positive")
+-        batch = torch.arange(len(facts), device=facts.device)[:, None].expand_as(mana)[
+-            mana
+-        ]
+-        keys = torch.stack((batch, rows[:, FACT_OBJECT_INDEX].long() - 1, groups), -1)
+-        classes, inverse = torch.unique(keys, dim=0, return_inverse=True)
++        # Dense class ranks make an exact scalar key without limiting the
++        # 32-bit wire identifiers or packing object IDs into their high bits.
++        # Scalar uniqueness avoids tuple-wise comparisons/copies on every row.
++        _, ranks = torch.unique(groups, return_inverse=True)
++        stride = len(rows)
++        classes, inverse = torch.unique(owners[mana] * stride + ranks, return_inverse=True)
+         # Nonlinearity after the join is essential: summing each predicate and
+         # amount independently would lose which restriction owns which amount.
+         pooled = hidden.new_zeros((len(classes), hidden.shape[-1])).index_add(
+             0, inverse, torch.tanh(hidden[mana])
+         )
+         encoded = self.output(torch.tanh(self.mana_join(pooled)))
+-        targets = classes[:, 0] * objects.shape[1] + classes[:, 1]
++        targets = classes // stride
+         return (
+             torch.zeros_like(objects)
+             .flatten(0, 1)
+diff --git a/managym/src/flow/mana.rs b/managym/src/flow/mana.rs
+index a2c864832..80d286a5d 100644
+--- a/managym/src/flow/mana.rs
++++ b/managym/src/flow/mana.rs
+@@ -163,7 +163,7 @@ struct SourceReservation {
+     ability: Option<usize>,
+ }
+ 
+-#[derive(Clone, Debug)]
++#[derive(Clone, Debug, PartialEq, Eq)]
+ enum PaymentStep {
+     Fixed(PermanentId),
+     Activate(PermanentId, usize),
+@@ -579,8 +579,7 @@ impl PaymentModel<'_> {
+         // ordinary class-aware spending order without cloning/hashing the
+         // inventory or constructing an optimistic bound for a known success.
+         if let [Obligation::Pay { cost, .. }] = state.obligations.as_slice() {
+-            if state.pool.can_pay(cost) {
+-                state.pool.pay(cost);
++            if state.pool.try_pay(cost) {
+                 #[cfg(feature = "benchmark")]
+                 measurement::update(|c| {
+                     c.payment_remainders += 1;
+@@ -589,17 +588,33 @@ impl PaymentModel<'_> {
+                 return Some(vec![PaymentStep::Spend(state.pool)]);
+             }
+         }
+-        if !self.can_cover(&state, policy) {
+-            #[cfg(feature = "benchmark")]
+-            measurement::update(|c| c.pruned += 1);
+-            return None;
++        // A zero upfront cost has exactly one remainder and cannot consume a
++        // parent's colored route. Advancing it needs no resource copy or key.
++        if matches!(state.obligations.first(), Some(Obligation::Pay { cost, .. })
++            if cost.mana_value == 0)
++        {
++            let remainder = state.pool.clone();
++            state.obligations.remove(0);
++            state.prefix = None;
++            let mut path = self.witness(state, policy, visited)?;
++            path.insert(0, PaymentStep::Spend(remainder));
++            return Some(path);
+         }
+-        // Only states that need exploration need an owned visited key. Terminal
+-        // success and the resource bound above require neither cloning nor hashing.
+-        if !visited.insert(state.clone()) {
+-            #[cfg(feature = "benchmark")]
+-            measurement::update(|c| c.deduplicated += 1);
+-            return None;
++        // Outputs only discharge an existing obligation, and selected taps
++        // strictly consume resources. Cycles/different production routes meet
++        // at Pay nodes; bound and memoize there instead of copying the same
++        // continuation again while committing its already-reserved costs.
++        if matches!(state.obligations.first(), Some(Obligation::Pay { .. })) {
++            if !self.can_cover(&state, policy) {
++                #[cfg(feature = "benchmark")]
++                measurement::update(|c| c.pruned += 1);
++                return None;
++            }
++            if !visited.insert(state.clone()) {
++                #[cfg(feature = "benchmark")]
++                measurement::update(|c| c.deduplicated += 1);
++                return None;
++            }
+         }
+         let PaymentSearchState {
+             resources,
+@@ -857,6 +872,57 @@ impl PaymentModel<'_> {
+         obligations: Vec<Obligation>,
+         policy: SourcePolicy,
+     ) -> Option<Vec<PaymentStep>> {
++        // With one terminal cost and only independent fixed taps, adding mana
++        // is monotone. The general DFS takes this same source-order prefix; no
++        // mutable resource copies, bounds or visited set are needed. Nested
++        // obligations, waterbend and available activations still use the search.
++        if let [Obligation::Pay {
++            cost,
++            waterbend: false,
++        }] = obligations.as_slice()
++        {
++            if policy != SourcePolicy::AutomaticPrefix
++                && (policy == SourcePolicy::FixedOnly
++                    || self
++                        .sources
++                        .iter()
++                        .zip(&self.reserved)
++                        .all(|(source, resource)| {
++                            source
++                                .abilities
++                                .iter()
++                                .all(|ability| !resource.admits(ability))
++                        }))
++            {
++                let mut remaining = pool.clone();
++                let mut path = Vec::new();
++                let mut sources = self.sources.iter().zip(&self.reserved);
++                let result = loop {
++                    if remaining.try_pay(cost) {
++                        path.push(PaymentStep::Spend(remaining));
++                        break Some(path);
++                    }
++                    let Some((source, resource)) = sources.next() else {
++                        break None;
++                    };
++                    if !resource.tapped && !resource.departed {
++                        if let Some(output) = &source.fixed {
++                            remaining.add(output);
++                            path.push(PaymentStep::Fixed(source.permanent));
++                        }
++                    }
++                };
++                debug_assert_eq!(
++                    result,
++                    self.witness(
++                        self.initial_state(pool, obligations),
++                        policy,
++                        &mut Default::default(),
++                    )
++                );
++                return result;
++            }
++        }
+         // Offers need one executable witness, not a proof of the fewest taps.
+         // Ordinary fixed production retains source-order automatic payment.
+         // Only a nested automatic prefix minimizes early commitments, where
+@@ -1843,6 +1909,79 @@ mod tests {
+         assert!(matches!(path.last(), Some(PaymentStep::Spend(pool)) if pool.total() == 0));
+     }
+ 
++    #[test]
++    fn fixed_payment_preserves_source_order_restrictions_and_reservations() {
++        use super::*;
++        use crate::state::{mana::ManaRestriction, player::PlayerConfig};
++        let game = Game::new(
++            vec![
++                PlayerConfig::new("a", [("Mountain".into(), 40)].into()),
++                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
++            ],
++            1,
++            false,
++        );
++        let mut model = PaymentModel {
++            game: &game,
++            player: PlayerId(0),
++            life: 20,
++            sources: [
++                Mana::restricted_to(ManaRestriction::spell(["Citizen"]), Mana::parse("RR").mana),
++                Mana::parse("U"),
++                Mana::parse("R"),
++            ]
++            .into_iter()
++            .enumerate()
++            .map(|(index, output)| ManaSource {
++                permanent: PermanentId(index),
++                fixed: Some(output),
++                abilities: Vec::new(),
++                waterbend: false,
++            })
++            .collect(),
++            reserved: vec![SourceResources::default(); 3],
++        };
++        let cost = ManaCost {
++            purpose: SpendingContext::spell(["Citizen"]),
++            ..ManaCost::parse("1U")
++        };
++        let obligations = || {
++            vec![Obligation::Pay {
++                cost: cost.clone(),
++                waterbend: false,
++            }]
++        };
++        let restricted_remainder =
++            Mana::restricted_to(ManaRestriction::spell(["Citizen"]), Mana::parse("R").mana);
++        for policy in [SourcePolicy::All, SourcePolicy::FixedOnly] {
++            assert_eq!(
++                model.plan(Mana::default(), obligations(), policy),
++                Some(vec![
++                    PaymentStep::Fixed(PermanentId(0)),
++                    PaymentStep::Fixed(PermanentId(1)),
++                    PaymentStep::Spend(restricted_remainder.clone()),
++                ])
++            );
++        }
++        model.reserved[0].tapped = true;
++        assert_eq!(
++            model.plan(Mana::default(), obligations(), SourcePolicy::All),
++            Some(vec![
++                PaymentStep::Fixed(PermanentId(1)),
++                PaymentStep::Fixed(PermanentId(2)),
++                PaymentStep::Spend(Mana::default()),
++            ])
++        );
++        model.reserved[2].departed = true;
++        assert!(model
++            .plan(Mana::default(), obligations(), SourcePolicy::All)
++            .is_none());
++        assert_eq!(
++            model.plan(Mana::parse("UR"), obligations(), SourcePolicy::All),
++            Some(vec![PaymentStep::Spend(Mana::default())])
++        );
++    }
++
+     #[test]
+     fn registered_mana_activations_have_finite_source_costs() {
+         for definition in ContentPack::default().definitions() {
+diff --git a/managym/state/src/mana.rs b/managym/state/src/mana.rs
+index b725b58e8..fb2b4a0f9 100644
+--- a/managym/state/src/mana.rs
++++ b/managym/state/src/mana.rs
+@@ -540,22 +540,22 @@ impl Mana {
+         colors
+     }
+ 
+-    /// Enumerate concrete remainders after colored, hybrid, then generic
+-    /// payment. Ordinary spending stops at the first result; activation search
+-    /// considers alternatives so generic costs cannot consume a parent's pip.
+-    fn payment_remainders(&self, cost: &ManaCost, all: bool) -> Vec<[u8; 6]> {
++    /// Visit colored, hybrid, then generic remainders in spending order.
++    /// Returning true stops enumeration. First-result queries keep their result
++    /// on the stack; only nested payments collect all concrete alternatives.
++    fn visit_payment_remainders(
++        &self,
++        cost: &ManaCost,
++        visit: &mut impl FnMut([u8; 6]) -> bool,
++    ) -> bool {
+         fn generic(
+             remaining: [u8; 6],
+             slot: usize,
+             needed: u8,
+-            results: &mut Vec<[u8; 6]>,
+-            all: bool,
++            visit: &mut impl FnMut([u8; 6]) -> bool,
+         ) -> bool {
+             if needed == 0 {
+-                if !results.contains(&remaining) {
+-                    results.push(remaining);
+-                }
+-                return !all;
++                return visit(remaining);
+             }
+             if slot == 6 {
+                 return false;
+@@ -574,7 +574,7 @@ impl Mana {
+             for spent in (0..=needed.min(remaining[index])).rev() {
+                 let mut next = remaining;
+                 next[index] -= spent;
+-                if generic(next, slot + 1, needed - spent, results, all) {
++                if generic(next, slot + 1, needed - spent, visit) {
+                     return true;
+                 }
+             }
+@@ -584,8 +584,7 @@ impl Mana {
+             remaining: [u8; 6],
+             pips: &[[Color; 2]],
+             needed: u8,
+-            results: &mut Vec<[u8; 6]>,
+-            all: bool,
++            visit: &mut impl FnMut([u8; 6]) -> bool,
+         ) -> bool {
+             if let Some((pip, rest)) = pips.split_first() {
+                 for color in pip {
+@@ -593,39 +592,46 @@ impl Mana {
+                     if remaining[index] > 0 {
+                         let mut next = remaining;
+                         next[index] -= 1;
+-                        if assign(next, rest, needed, results, all) {
++                        if assign(next, rest, needed, visit) {
+                             return true;
+                         }
+                     }
+                 }
+                 false
+             } else {
+-                generic(remaining, 0, needed, results, all)
++                generic(remaining, 0, needed, visit)
+             }
+         }
+         let mut remaining = self.usable_colors(cost);
+         for (available, required) in remaining.iter_mut().zip(cost.cost) {
+             let Some(left) = available.checked_sub(required) else {
+-                return Vec::new();
++                return false;
+             };
+             *available = left;
+         }
+-        let mut results = Vec::new();
+-        assign(remaining, &cost.hybrid, cost.generic(), &mut results, all);
+-        results
++        assign(remaining, &cost.hybrid, cost.generic(), visit)
+     }
+ 
+     pub fn can_pay(&self, cost: &ManaCost) -> bool {
+-        !self.payment_remainders(cost, false).is_empty()
++        self.visit_payment_remainders(cost, &mut |_| true)
++    }
++
++    /// Commit the first legal remainder, leaving the pool unchanged on failure.
++    pub fn try_pay(&mut self, cost: &ManaCost) -> bool {
++        let mut remaining = None;
++        self.visit_payment_remainders(cost, &mut |mana| {
++            remaining = Some(mana);
++            true
++        });
++        let Some(remaining) = remaining else {
++            return false;
++        };
++        self.apply_payment_remainder(cost, remaining);
++        true
+     }
+ 
+     pub fn pay(&mut self, cost: &ManaCost) {
+-        let remaining = self
+-            .payment_remainders(cost, false)
+-            .into_iter()
+-            .next()
+-            .expect("insufficient mana");
+-        self.apply_payment_remainder(cost, remaining);
++        assert!(self.try_pay(cost), "insufficient mana");
+     }
+ 
+     /// Every eligible concrete remainder. Equal-colored mana with different
+@@ -669,24 +675,32 @@ impl Mana {
+                 assign(next, classes, slot, class_index + 1, remaining, results);
+             }
+         }
+-        // Avoid allocation/combinatorics on the ordinary fixed-pool path.
++        let mut results = Vec::new();
++        // Ordinary pools have no class allocation to enumerate.
+         if self.restricted.is_none() {
+-            return self
+-                .payment_remainders(cost, true)
+-                .into_iter()
+-                .map(|mana| Mana {
+-                    mana,
+-                    restricted: None,
+-                })
+-                .collect();
++            self.visit_payment_remainders(cost, &mut |mana| {
++                let pool = Mana { mana, restricted: None };
++                if !results.contains(&pool) {
++                    results.push(pool);
++                }
++                false
++            });
++            return results;
+         }
+         let classes = self.usable_classes(cost);
+         let usable = self.usable_colors(cost);
+-        let mut results = Vec::new();
+-        for remaining in self.payment_remainders(cost, true) {
++        let mut seen = Vec::new();
++        self.visit_payment_remainders(cost, &mut |remaining| {
++            // Different hybrid assignments can reach the same color remainder;
++            // expand its class allocations only once.
++            if seen.contains(&remaining) {
++                return false;
++            }
++            seen.push(remaining);
+             let spent = std::array::from_fn(|slot| usable[slot] - remaining[slot]);
+             assign(self.clone(), &classes, 0, 0, spent, &mut results);
+-        }
++            false
++        });
+         results
+     }
+ 
+@@ -966,6 +980,9 @@ mod tests {
+                         let cost = ManaCost { purpose: SpendingContext::spell(["Citizen"]), ..ManaCost::parse("U").with_generic(generic) };
+                         let options = pool.payment_options(&cost);
+                         assert_eq!(pool.can_pay(&cost), !options.is_empty());
++                        let mut attempted = pool.clone();
++                        assert_eq!(attempted.try_pay(&cost), !options.is_empty());
++                        assert_eq!(&attempted, options.first().unwrap_or(&pool));
+                         if let Some(first) = options.first() {
+                             let mut terminal = pool.clone();
+                             terminal.pay(&cost);

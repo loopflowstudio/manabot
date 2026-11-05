@@ -251,6 +251,13 @@ Announced spending characteristics are immutable shared snapshots; cloning a
 cost or game retains their values without following later source changes.
 Fixed-source search states allocate no activation history. Used and pending
 ability indices remain unbounded lists when an activation needs them.
+Within a search, visited keys share immutable continuation and resource slices;
+only a changed resource slice is copied. Hash collisions still compare the full
+state. Terminal payments with only fixed taps walk source order directly and
+compare their complete witness with general search in debug builds. Nested
+payments retain every eligible color/class remainder. Pool feasibility and
+spending stream the same remainder enumeration without allocating a result list
+for a first-result query.
 Performance remains subject to the same-runner Engine Budget.
 
 Explicit input v8 preserves v7 object widths and shared effects. Relations have

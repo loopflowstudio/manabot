@@ -1,0 +1,133 @@
+{
+  "before_commit": "b4ac66e4edb5b139de9f3abfbe55fade680fe134",
+  "candidate_patch": "final/source.patch",
+  "build": "cargo build -j 2 --release --locked --features benchmark --example bench_mana; reference archive in a fresh independent Cargo target; candidate root sources refreshed and rebuilt after rejecting the shared-target attempt",
+  "binary_sha256": {
+    "before": "cf68756cb7bf58cb3dd0415e69439290fcbe18021ca24e506c8fa8ccb5416136",
+    "after": "d74d2d91a172c2a84cb50856b68d84f1c96be9a4a55a958893d4bf14cb4021ed"
+  },
+  "checked": "Every payment/offer field except timings/counters agrees; every decision trace field except encoding timings agrees, including legal commands, counts, skipped decisions, facts and final resources.",
+  "instrumentation_note": "The direct fixed-only plan does not visit general search states, so zero explored states is expected and does not mean zero work.",
+  "summary": [
+    {
+      "case": "fixed",
+      "obligation": "payable",
+      "before_median_us": 1.2915,
+      "after_median_us": 0.3125,
+      "before_max_us": 15.333,
+      "after_max_us": 6.042
+    },
+    {
+      "case": "fixed",
+      "obligation": "unpayable",
+      "before_median_us": 0.20850000000000002,
+      "after_median_us": 0.20800000000000002,
+      "before_max_us": 0.7080000000000001,
+      "after_max_us": 1.25
+    },
+    {
+      "case": "fixed",
+      "obligation": null,
+      "before_median_us": 1.833,
+      "after_median_us": 0.7080000000000001,
+      "before_max_us": 3.875,
+      "after_max_us": 2.791
+    },
+    {
+      "case": "restrictions",
+      "obligation": "payable",
+      "before_median_us": 0.625,
+      "after_median_us": 0.7295,
+      "before_max_us": 1.833,
+      "after_max_us": 11.875
+    },
+    {
+      "case": "restrictions",
+      "obligation": "unpayable",
+      "before_median_us": 0.25,
+      "after_median_us": 0.458,
+      "before_max_us": 0.667,
+      "after_max_us": 0.875
+    },
+    {
+      "case": "restrictions",
+      "obligation": null,
+      "before_median_us": 0.875,
+      "after_median_us": 0.834,
+      "before_max_us": 1.792,
+      "after_max_us": 2.125
+    },
+    {
+      "case": "shared_taps",
+      "obligation": "payable",
+      "before_median_us": 34.6045,
+      "after_median_us": 13.875499999999999,
+      "before_max_us": 77.834,
+      "after_max_us": 53.625
+    },
+    {
+      "case": "shared_taps",
+      "obligation": "unpayable",
+      "before_median_us": 0.625,
+      "after_median_us": 0.7290000000000001,
+      "before_max_us": 1.334,
+      "after_max_us": 2.166
+    },
+    {
+      "case": "shared_taps",
+      "obligation": null,
+      "before_median_us": 4.458,
+      "after_median_us": 2.625,
+      "before_max_us": 6.875,
+      "after_max_us": 6.917
+    },
+    {
+      "case": "prism_treasure",
+      "obligation": "payable",
+      "before_median_us": 4.166499999999999,
+      "after_median_us": 2.3335,
+      "before_max_us": 7.208,
+      "after_max_us": 5.917000000000001
+    },
+    {
+      "case": "prism_treasure",
+      "obligation": "unpayable",
+      "before_median_us": 0.5205,
+      "after_median_us": 0.5419999999999999,
+      "before_max_us": 0.834,
+      "after_max_us": 0.875
+    },
+    {
+      "case": "prism_treasure",
+      "obligation": null,
+      "before_median_us": 5.979,
+      "after_median_us": 3.479,
+      "before_max_us": 7.791999999999999,
+      "after_max_us": 5.417
+    },
+    {
+      "case": "variable",
+      "obligation": "payable",
+      "before_median_us": 3.5835,
+      "after_median_us": 2.6670000000000003,
+      "before_max_us": 38.541000000000004,
+      "after_max_us": 45.5
+    },
+    {
+      "case": "variable",
+      "obligation": "unpayable",
+      "before_median_us": 6.063,
+      "after_median_us": 4.125,
+      "before_max_us": 17.166,
+      "after_max_us": 5.8340000000000005
+    },
+    {
+      "case": "variable",
+      "obligation": null,
+      "before_median_us": 6.437,
+      "after_median_us": 4.958,
+      "before_max_us": 8.417,
+      "after_max_us": 7.458
+    }
+  ]
+}

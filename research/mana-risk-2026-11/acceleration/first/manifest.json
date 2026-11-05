@@ -1,0 +1,53 @@
+{
+  "candidate_parent_commit": "b4ac66e4edb5b139de9f3abfbe55fade680fe134",
+  "reference_commits": {
+    "base": "4463e57f5a92ebd3b60e2fb50c046b84ac2c0372",
+    "main": "fe83a6b068dace2187613e1bf124f9677b077ff3"
+  },
+  "started_utc": "2026-11-05T02:11:10.747934+00:00",
+  "order": [
+    [
+      "base",
+      "main",
+      "before",
+      "after"
+    ],
+    [
+      "after",
+      "before",
+      "main",
+      "base"
+    ],
+    [
+      "main",
+      "after",
+      "base",
+      "before"
+    ]
+  ],
+  "commands": [
+    "bench_steps 128",
+    "bench_search 3"
+  ],
+  "build": "cargo build -j 2 --release --locked --manifest-path managym/Cargo.toml --example bench_search --example bench_steps (default empty features)",
+  "binary_sha256": {
+    "base": {
+      "bench_steps": "ac234bf4d7ff37fa9d74a27bfa4e83163a87e1728ee21249e90a6ecaea987620",
+      "bench_search": "f2fcd5965fa290970a4111437a766ac3668650a7483993b673005d6c5a286e26"
+    },
+    "main": {
+      "bench_steps": "fb18add371c74ae7b2d0fe07b9e85f683380b692fa6a4c97e64d9eb9407f1ff4",
+      "bench_search": "1c53cd5882f1c766be965621971838445ea6cc3579b2c98d365e2cd8d35cdbd5"
+    },
+    "before": {
+      "bench_steps": "8f66045f31332bac4144811b90c941603c9950d6f43aeea3faa53df2cba6eaeb",
+      "bench_search": "d880e3bc26dd68c1ff444d85c6ea4daee8038bb76738dfda795df1928414aefb"
+    },
+    "after": {
+      "bench_steps": "0d5826398029b5003054b3aa43698c10201351f778c8043f0f9bf6c14301ae3c",
+      "bench_search": "7432358584d0d365ba20865c336823c1c7e4fb58305e51522c5e587117965a42"
+    }
+  },
+  "scope": "Initial acceleration bounded serial same-runner comparison, after debug checks. More games reduce short-process noise. Wrapper records process user/system CPU time to help distinguish scheduling delay from computation; it does not replace wall-time guardrails. No concurrent build/test/benchmark started by this session. Ambient activity uncontrolled. Full CI Engine Budget remains separate.",
+  "finished_utc": "2026-11-05T02:13:03.802027+00:00"
+}

@@ -85,6 +85,16 @@ class FactEncoder(nn.Module):
             raise ValueError("invalid fact object reference")
         if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= self.kinds)).all():
             raise ValueError("invalid fact kind")
+        owners = None
+        if self.mana_join is not None:
+            # V9 joins only linked rows. Padding never contributes or receives
+            # gradients, so do not embed hundreds of unused capacity slots.
+            linked = valid.bool() & (links > 0)
+            batch = torch.arange(len(facts), device=facts.device)[:, None]
+            owners = (batch * objects.shape[1] + links.long() - 1)[linked]
+            facts = facts[linked]
+            links = facts[..., FACT_OBJECT_INDEX]
+            kinds = facts[..., FACT_KIND_INDEX]
         duration = facts[..., FACT_DURATION_INDEX]
         numeric = torch.stack(
             (
@@ -99,12 +109,7 @@ class FactEncoder(nn.Module):
         mana = None
         identifiers = self._bucket(facts, FACT_ID_INDEX)
         if self.mana_join is not None:
-            mana = (
-                (kinds >= FACT_MANA_AMOUNT)
-                & (kinds <= FACT_MANA_LOCATION)
-                & valid.bool()
-                & (links > 0)
-            )
+            mana = (kinds >= FACT_MANA_AMOUNT) & (kinds <= FACT_MANA_LOCATION)
             identifiers = identifiers.masked_fill(mana, 0)
         hidden = (
             self.kind(kinds.long())
@@ -113,10 +118,25 @@ class FactEncoder(nn.Module):
             + self.source(facts[..., FACT_SOURCE_INDEX].long() % self.buckets)
             + self.numeric(numeric)
         )
+        if mana is not None:
+            assert owners is not None
+            # Mana rows contribute only through their complete class below.
+            # Project independent rows once instead of projecting and discarding
+            # the same mana rows before the class join.
+            encoded = self.output(torch.tanh(hidden[~mana]))
+            delta = (
+                torch.zeros_like(objects)
+                .flatten(0, 1)
+                .index_add(0, owners[~mana], encoded)
+            )
+            if mana.any():
+                targets, encoded = self._mana_classes(
+                    facts[mana], hidden[mana], owners[mana]
+                )
+                delta = delta.index_add(0, targets, encoded)
+            return objects + delta.reshape_as(objects)
         encoded = self.output(torch.tanh(hidden))
         linked = (valid.bool() & (links > 0)).unsqueeze(-1)
-        if mana is not None:
-            linked = linked & ~mana.unsqueeze(-1)
         targets = (
             (links.long() - 1)
             .clamp_min(0)
@@ -126,41 +146,32 @@ class FactEncoder(nn.Module):
         delta = torch.zeros_like(objects).scatter_add(
             1, targets, encoded.masked_fill(~linked, 0)
         )
-        if mana is not None and mana.any():
-            delta = delta + self._mana_delta(facts, hidden, mana, objects)
         return objects + delta
 
-    def _mana_delta(
+    def _mana_classes(
         self,
-        facts: torch.Tensor,
+        rows: torch.Tensor,
         hidden: torch.Tensor,
-        mana: torch.Tensor,
-        objects: torch.Tensor,
-    ) -> torch.Tensor:
-        """Pool complete classes, then route each to its owning object [B,N,D]."""
+        owners: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Encode each complete class and return its flattened object target."""
         assert self.mana_join is not None
-        rows = facts[mana]
         halves = rows[:, FACT_ID_INDEX : FACT_ID_INDEX + 2]
         if not ((halves == halves.floor()) & (halves >= 0) & (halves <= 65535)).all():
             raise ValueError("invalid mana class identifier")
         groups = (halves[:, 0].long() << 16) | halves[:, 1].long()
         if (groups == 0).any():
             raise ValueError("mana class identifier must be positive")
-        batch = torch.arange(len(facts), device=facts.device)[:, None].expand_as(mana)[
-            mana
-        ]
-        keys = torch.stack((batch, rows[:, FACT_OBJECT_INDEX].long() - 1, groups), -1)
-        classes, inverse = torch.unique(keys, dim=0, return_inverse=True)
+        # Dense class ranks make an exact scalar key without limiting the
+        # 32-bit wire identifiers or packing object IDs into their high bits.
+        # Scalar uniqueness avoids tuple-wise comparisons/copies on every row.
+        _, ranks = torch.unique(groups, return_inverse=True)
+        stride = len(rows)
+        classes, inverse = torch.unique(owners * stride + ranks, return_inverse=True)
         # Nonlinearity after the join is essential: summing each predicate and
         # amount independently would lose which restriction owns which amount.
         pooled = hidden.new_zeros((len(classes), hidden.shape[-1])).index_add(
-            0, inverse, torch.tanh(hidden[mana])
+            0, inverse, torch.tanh(hidden)
         )
         encoded = self.output(torch.tanh(self.mana_join(pooled)))
-        targets = classes[:, 0] * objects.shape[1] + classes[:, 1]
-        return (
-            torch.zeros_like(objects)
-            .flatten(0, 1)
-            .index_add(0, targets, encoded)
-            .reshape_as(objects)
-        )
+        return classes // stride, encoded

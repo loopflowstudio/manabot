@@ -1,0 +1,19 @@
+{
+  "command": "sample <bench_search 3 pid> 3 -file profile.txt",
+  "scope": "Separate bounded profiles, excluded from timed comparisons. Sampling counts are attribution clues, not exact cost fractions.",
+  "before_commit": "b4ac66e4edb5b139de9f3abfbe55fade680fe134",
+  "candidate_patch": "final/source.patch",
+  "top_of_stack_before": {
+    "DefaultHasher_write": 75,
+    "SourceResources_clone": 29
+  },
+  "top_of_stack_after": {
+    "DefaultHasher_write": 33
+  },
+  "residual": "Allocation/free, characteristics and derived-cache reads now dominate the top-of-stack list; further broad storage/layer work is outside this mana optimization. Source and raw sample trees are retained.",
+  "profile_sha256": {
+    "before": "bc933d77998f57085d8b9d4d0f6c3fadc96260413412b712fb13e41ad8476b62",
+    "after": "15daffe6fbf66c6736a3b459131ac15946e6a0c9556effbbe7a3f2d486e504bb"
+  },
+  "ambient_evidence": "During the forced-step comparison, read-only ps reported unrelated rustc, swift-frontend, build scripts and another repository test process using CPU. None was started or stopped by this measurement. Serial task-owned builds/tests/benchmarks; ambient activity remains uncontrolled."
+}

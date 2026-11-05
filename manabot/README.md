@@ -506,6 +506,9 @@ adding it to the owning player. Class IDs are joins, not learned features.
 Native scalar/vector buffer binding intentionally emits identical v8/v9 bytes;
 the saved input version selects the model aggregation. V8 checkpoints keep
 independent row embeddings and fresh configurations remain v6.
+V9 embeds only linked fact rows and groups classes with exact scalar routing
+keys. Padding and class labels carry no learned signal; saved parameter shapes,
+object ownership and nonlinear class pooling stay unchanged.
 
 For a flat policy whose focus-free actions must depend on player facts, select
 `ModelConfig(policy_film=True)`. Its zero-initialized gate and the fact encoder's

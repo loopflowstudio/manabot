@@ -16,8 +16,11 @@ Frozen inputs keep their meanings; fresh construction stays v6. V9 is an
 explicit model successor that joins mana classes over byte-identical v8 wire
 rows, so native buffer binding needs no new width discriminator. Saved v8 keeps
 its original model. This does not settle MTG-244's conflicting schema; its
-published PR #427 at `6165e0fe48e7c4d500e724b030b6dc11fce749f6` is a stable
-handoff for reconciliation, not combined acceptance.
+published PR #427 at `6165e0fe48e7c4d500e724b030b6dc11fce749f6` is a pinned
+schema reference, not combined acceptance. The 2026-11-04 Task refresh reports
+renewed implementation for CI performance/integration repairs; the plan retains
+the reported failures. No repaired handoff or authority to copy live work is
+inferred from publication.
 
 MTG-241 remains a live writer with no superseding integration handoff for its
 no-live-copy request. Its retained batches and suspended-return witness exist
@@ -37,7 +40,8 @@ plan and `research/mana-risk-2026-11/`. Initial 32-game and later 128-game
 comparisons do not replace dedicated Engine Budget acceptance. Unsupported
 baseline mechanics have absolute costs only; no standing reference was adopted.
 
-Jack Heart clarified that no net speedup is required. Keep the existing 10%
+Jack Heart initially clarified that no net speedup was required; the later
+acceleration direction below supersedes that stopping target. Keep the 10%
 guardrail and disclose tails; noisy samples cannot establish a pass. Model
 forward/backward probes establish capacity and gradient paths, not RL learning
 or playing strength. Completion and schema integration remain acceptance work.
@@ -51,3 +55,26 @@ context at `51b4bd274c34398dc0bf0066dfc3933f26911f87:scratch/questions.md`.
 They do not authorize training or change MTG-242’s review boundary. The sync
 retains main’s permanent-capacity regression tests alongside this branch’s
 v8 native/Python buffer parity coverage.
+
+## Acceleration direction — 2026-11-04
+
+After reviewing the remaining +6.7% step / +8.0% search cost versus main,
+Jack Heart said that was not good enough and requested: "make it stupidly fast".
+Continue an aggressive, measured optimization pass in this Task. Aim to erase
+the net regression and deliver a substantial speedup on equivalent work; the
+previous within-10% stopping target is no longer sufficient by itself. Do not
+invent a guaranteed percentage. Profile the remaining ordinary-path and tail
+costs, make structural improvements within mana ownership, and remeasure against
+pinned main and original base. Include the expensive new model aggregation path.
+Preserve exact rules, complete strategic choices, model distinctions, frozen
+inputs and debug oracles. No training run, merge, stress workload or speculative
+whole-engine storage rewrite is authorized. Completion/schema integration remains
+required, but independent acceleration work should proceed while it is pending.
+
+The acceleration pass retains source-order witnesses and full state equality;
+`Rc` sharing is confined to one synchronous search, never a live Game cache.
+Bounded engine measurements recover near-original-base performance, but a
+substantial net speedup and a dedicated wall-time-budget pass are unproven.
+Further broad allocator/layer changes are not inferred from the request; the
+remaining profile and dependency integration are recorded in the plan. Model
+results are CPU forward/backward probes only, with saved semantics preserved.

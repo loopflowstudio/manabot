@@ -1,0 +1,12 @@
+{
+  "bench_steps": {
+    "wall_seconds": 0.9822408329928294,
+    "user_seconds": 0.959575000000001,
+    "system_seconds": 0.005998000000000003
+  },
+  "bench_search": {
+    "wall_seconds": 8.267112999921665,
+    "user_seconds": 8.175402999999996,
+    "system_seconds": 0.030098000000000014
+  }
+}

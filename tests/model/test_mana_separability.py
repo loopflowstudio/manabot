@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import (
+    FACT_ID_INDEX,
+    FACT_KIND_INDEX,
+    FACT_MANA_AMOUNT,
+    FACT_MANA_LOCATION,
+    FACT_OBJECT_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
@@ -102,3 +109,57 @@ def test_v8_class_label_sensitivity_is_retained_only_for_frozen_input() -> None:
     assert (representations[0] - representations[1]).abs().max() > 0.1
     assert ObservationConfig().policy_input_version == 6
     assert ObservationConfig.from_checkpoint({}).policy_input_version == 1
+
+
+def test_mana_class_routing_preserves_batch_objects_large_labels_and_gradients() -> (
+    None
+):
+    torch.set_num_threads(1)
+    torch.manual_seed(242)
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    model = ActorCritic(space, ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP))
+    open_fact_adapter(model)
+    encoder = model.facts
+    assert encoder is not None
+    pair = mana_pairs(space)[0]
+    facts = tensor_batch(pair.left, pair.right)["facts"]
+    mana = (facts[..., FACT_KIND_INDEX] >= FACT_MANA_AMOUNT) & (
+        facts[..., FACT_KIND_INDEX] <= FACT_MANA_LOCATION
+    )
+    facts = facts.masked_fill(~mana.unsqueeze(-1), 0)
+    # Reuse the same class labels across two owners and two batch elements.
+    # Each owner must receive only its own joined classes.
+    second_owner = facts.clone()
+    second_owner[..., FACT_OBJECT_INDEX][mana] = 2
+    facts = torch.cat((facts, second_owner), dim=1)
+    encoder.max_facts = facts.shape[1]
+    objects = empty_fact_objects(model, 2)
+    expected = torch.cat(
+        [encoder(facts[i : i + 1], objects[i : i + 1]) for i in range(2)]
+    )
+    actual = encoder(facts, objects)
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(actual[:, 0], actual[:, 1])
+    actual.square().sum().backward()
+    expected_gradients = {
+        name: parameter.grad.clone()
+        for name, parameter in encoder.named_parameters()
+        if parameter.grad is not None
+    }
+    encoder.zero_grad(set_to_none=True)
+    reordered = facts.flip(1).clone()
+    mana = (reordered[..., FACT_KIND_INDEX] >= FACT_MANA_AMOUNT) & (
+        reordered[..., FACT_KIND_INDEX] <= FACT_MANA_LOCATION
+    )
+    # Distinct labels at the wire's upper bound still route exactly; their
+    # magnitudes must never become learned features or cross-object aliases.
+    reordered[..., FACT_ID_INDEX][mana] = 65535
+    reordered[..., FACT_ID_INDEX + 1][mana] = (
+        65536 - reordered[..., FACT_ID_INDEX + 1][mana]
+    )
+    relabeled = encoder(reordered, objects)
+    torch.testing.assert_close(relabeled, actual)
+    relabeled.square().sum().backward()
+    for name, parameter in encoder.named_parameters():
+        if name in expected_gradients:
+            torch.testing.assert_close(parameter.grad, expected_gradients[name])
