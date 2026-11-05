@@ -170,7 +170,7 @@ pub fn fork(&self) -> Result<Env, AgentError> {
 Full clone is the only branching strategy. Undo journals and copy-on-write
 pages were tried, failed their preregistered thresholds and were kept out of
 production; their drivers have since been deleted
-([search branching decision](benchmarks/search-branching-decision-v1.md)). A
+([decision record](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/benchmarks/search-branching-decision-v1.md)). A
 search-state witness of rules facts alone checks that a fork left its source
 untouched ([`search_state.rs`](../managym/src/search_state.rs)).
 
@@ -194,6 +194,17 @@ initial state digest and every Command, and every pre- and post-state digest
 must match. RNG streams derive from recorded seeds, so thread scheduling can't
 select an outcome.
 
+The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
+canonical JSON over every `GameState` field plus the content pack's schema and
+digest (`MATCH_STATE_HASH_VERSION`, now 1). The struct is destructured without
+`..`, so a new field fails to compile until its canonical treatment is chosen;
+pointers, capacities, timings and observation projections are excluded, and
+the RNG is represented by eight draws from a clone, never advanced.
+`cargo test --test match_state_hash_tests` in `managym/` proves clone and
+allocation independence, mutation sensitivity and RNG non-mutation. Consumers
+compare version and digest together; a content change changes the hash on
+purpose.
+
 **Determinize.** A search over hidden information redraws what the acting seat
 cannot see and keeps everything it can. From `Game::determinize` in
 [`managym/src/flow/search.rs`](../managym/src/flow/search.rs):
@@ -213,7 +224,7 @@ foretold cards; publicly known hand cards stay put. Both library orders are
 reshuffled, since the viewer knows neither, and everything the viewer can see is
 preserved. [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the
 same domain exactly, with compatible-deal counts as weights, for beliefs that
-want more than a uniform redraw ([search and beliefs](search-and-beliefs.md)).
+want more than a uniform redraw ([beside the loop](ARCHITECTURE.md#beside-the-loop)).
 
 ## Batched games
 
@@ -283,6 +294,54 @@ engine always knows its own: `managym.WORLD_VERSION`
 setup and the input schema, and load only where the digest matches. Main
 carries at most one open world; a rules or shape change extends it, and
 freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md)).
+
+## Decks
+
+A deck is a managym value: `managym.Deck` holds main and sideboard counts, and
+`managym.Decklist` one submitted file with its source, filename, entries and
+line issues. Parsing, name resolution and admission all run natively against
+the installed world, so Academy and manabot share one importer, and a deck
+needs only a world: defined non-token cards are supported, tokens and rules
+fixtures are not, and set restrictions such as TLA-only are filters for
+choosing decks (`managym.set_cards`), never admission. Construction is the
+`development-v1` ruleset: a nonempty main deck, positive counts, at most 1,000
+cards per player, no tournament size or copy limits, and no legality claim.
+
+Files are UTF-8 text under 64 KiB, one `count name` per line, with optional
+`Main`/`Deck`/`Sideboard` headings and `#` comments. Names match
+case-insensitively after Unicode normalization; a double-faced card takes its
+full or front name, never the back alone. Unknown or unsupported names are
+reported by line and never substituted.
+
+```python
+import managym
+from manabot.infra.config import MatchConfig
+
+hero, villain = managym.admit_decklists(
+    [("hero", managym.Decklist.read("hero.txt")),
+     ("villain", managym.Decklist.read("villain.txt"))]
+)
+match = MatchConfig.from_import(hero, villain)
+```
+
+Failure raises `managym.DeckImportError` with each failing seat's line issues.
+A serialized match keeps each seat's admitted source privately as provenance
+and re-admits it on load, so a world that no longer admits the list rejects
+the record. `managym.check_decks(decks)` is the cheap check without a game.
+
+Training does not take deck files; it takes a **deck source** in the regime
+(`deck_source`, with `agent.world = "world"` and no `match`). `UniformDecks`
+(`uniform-distinct-v1`) draws two different decks per game uniformly over
+ordered pairs from its RNG domain, so exact resume reproduces decks, seats and
+seed; the TLA pilot's source is the frozen trophy corpus
+([training](training.md#regimes-and-stages)). Every deck a source lists is
+admitted when the regime validates, and again natively at each game root. A
+checkpoint from such a run binds the world and nothing about the decks, so it
+plays any deck the world admits, including ones it never saw. Checkpoints bound
+to an authored setup refuse imported decks even when shapes agree
+(`manabot.model.world.validate_agent_setup`). Academy imports a pair through
+**Import decklist files**; the CLI takes `--hero-deck-file` and
+`--villain-deck-file` ([Academy](academy.md)).
 
 ## What we know
 

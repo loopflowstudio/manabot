@@ -356,7 +356,7 @@ outputs are selected explicitly at arena registration.
 | Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
 | EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation output by default, `behavior="ema-self"` opts in |
 | S3.3 setup learning | Not implemented | MTG has no learned setup |
-| S3.5 belief, S3.7 search | Outside this trainer | See [search-and-beliefs.md](search-and-beliefs.md) |
+| S3.5 belief, S3.7 search | Outside this trainer | See [beside the loop](ARCHITECTURE.md#beside-the-loop) |
 | S3.6 network scale | Semantic Agent, small width, float32 on CPU or one GPU | The paper uses an 8-layer width-384 network on GPUs |
 
 **Unresolved source details:** Adam epsilon/betas, iteration origin, EMA

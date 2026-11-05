@@ -227,7 +227,7 @@ a currently reachable imported-deck sequence.
 The native setup still draws seven without offering mulligans
 ([setup.rs](../../../managym/src/flow/setup.rs)); deck admission remains
 development-only and sideboards have no between-game swapping
-([decklist import contract](../../decklist-import.md)). Full card-file coverage
+([decklist import contract](../../engine.md#decks)). Full card-file coverage
 must therefore be distinguished from tournament-complete Standard play.
 The payment model also retains its documented finite-source restriction;
 repeatable mana sources require extending that model, not bypassing it.

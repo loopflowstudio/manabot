@@ -314,5 +314,5 @@ if _digest(current_binding_form(binding)) != _digest(expected):
 | Running, monitoring and recovering a training run | [Training](training.md) |
 | How strength is measured | [Evaluation](evaluation.md) |
 | How a question becomes a report | [Experiments](experiments.md) |
-| Search and beliefs over hidden cards | [Search and beliefs](search-and-beliefs.md) |
+| Search and beliefs over hidden cards | [Beside the loop](ARCHITECTURE.md#beside-the-loop) |
 | What we are doing now and what we know | [Research program](../manabot/RESEARCH.md) |

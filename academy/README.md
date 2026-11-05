@@ -266,4 +266,4 @@ decision, or the current stack if placement has finished. A lost response does n
 undo a submitted choice.
 
 For editable file input and development construction rules, see
-[decklist import](../docs/decklist-import.md).
+[decklist import](../docs/engine.md#decks).

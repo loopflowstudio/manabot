@@ -174,7 +174,7 @@ Earlier findings are tabulated in the
   checkpoint on random real decks yet
   ([pilot evidence](experiments/tla-trophy-pilot.md)).
 - **Search and beliefs run end to end but add no strength yet**
-  ([search and beliefs](docs/search-and-beliefs.md)).
+  ([beside the loop](docs/ARCHITECTURE.md#beside-the-loop)).
 
 ## Not built yet
 

@@ -195,16 +195,16 @@ Training regimes can [import a published raw/EMA policy](../docs/training.md#reg
 without retraining, preserving producer provenance and separate sunk costs.
 They can freeze a policy, collect private whole-game supervision,
 and fit a constrained autoregressive hand sampler without exact enumeration.
-See [frozen-policy belief sampling](../docs/search-and-beliefs.md#belief-sampler). This separately
+See [frozen-policy belief sampling](../docs/ARCHITECTURE.md#beside-the-loop). This separately
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
-[Frozen-policy local search](../docs/search-and-beliefs.md#local-policy-search) plays through the
+[Frozen-policy local search](../docs/ARCHITECTURE.md#beside-the-loop) plays through the
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.
 
 The existing `agent_puct` player accepts current flat and compound checkpoints;
-see [PUCT policy/value compatibility](../docs/search-and-beliefs.md#local-policy-search)
+see [PUCT policy/value compatibility](../docs/ARCHITECTURE.md#beside-the-loop)
 for critic units, retained prefixes and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
@@ -460,7 +460,7 @@ serialized `arena_key`, `arena_version`, seed identifiers and retained artifact
 paths preserve their original meaning; current source identities use the new paths.
 
 For a standalone, inspectable pretrained-model decision over supplied text and
-legal references, see the optional [LLM harness](../docs/llm.md). It owns
+legal references, see the optional [LLM players](../docs/evaluation.md#llm-players). It owns
 protocol recovery and inference evidence; observation rendering and Command
 execution remain outside it.
 
@@ -498,5 +498,5 @@ receipts. This uses bounded public policy history v1; it loads no model and has
 no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
 
-[Decklist file import](../docs/decklist-import.md) admits novel development decks
+[Decklist file import](../docs/engine.md#decks) admits novel development decks
 against the installed world for simulation and Academy play.

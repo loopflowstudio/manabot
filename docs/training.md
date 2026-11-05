@@ -82,7 +82,7 @@ interpretation and serialized identity.
 | `train_compound` | Ragged compound-decision policy; see [compound decisions](#compound-decisions). |
 | `import_policy` | Admit a frozen TrainingRun export's raw or EMA checkpoint without training. |
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
-| `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [search-and-beliefs.md](search-and-beliefs.md). |
+| `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](ARCHITECTURE.md#beside-the-loop). |
 
 Every stage declares device, float32 precision, worker count, Torch thread
 count, wall and memory limits (`Execution`). `execution.workers` accepts 1

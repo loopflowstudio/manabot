@@ -420,6 +420,41 @@ real-PPO positive control raised score against a deliberately passive toy
 target from .59375 to 1.0 in 64 updates. History:
 [frozen-policy-attacks.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/frozen-policy-attacks.md).
 
+## LLM players
+
+`manabot.llm` asks an unmodified language model to pick one action from the
+viewer-safe text observation and its complete legal-reference list, and keeps
+a receipt of the choice. It runs locally through Transformers, behind a
+loopback vLLM server, or hosted through OpenRouter; the native game runner
+(`manabot.verify.llm_game`) owns capture, stale rejection, submission and
+replay, and importing `manabot.llm` loads no model runtime.
+
+The protocol is strict so that scores mean something. The prompt is never
+truncated: one that doesn't fit is a failure. An answer must be exactly one
+listed reference. One invalid answer gets one repair prompt; a second produces
+a seeded uniform draw, recorded as `fallback` in the receipt, and playing
+scores must include those games. Runtime errors, provider errors and exhausted
+deadlines stop with evidence and never fall back. Local configs
+(`configs/llm/qwen3.5-9b*.json`) pin model and tokenizer revisions;
+`OpenRouterConfig` reads `OPENROUTER_API_KEY` from the environment, never from
+configuration or receipts, and `BudgetLedger` reserves a justified maximum
+charge in SQLite before every paid call.
+
+```sh
+uv run python -m manabot.verify.llm_game --random-control --out .runs/llm-control
+uv run --extra openrouter python -m manabot.verify.llm_game \
+  --openrouter configs/llm/openrouter-haiku-high.json --out .runs/openrouter/game
+```
+
+`GameConfig.opponent_checkpoint` substitutes a frozen policy for the random
+opponent, which is how Haiku 5.5 played MTG-183's final checkpoint to 51–49
+over 100 games at $0.37 a game
+([Haiku versus MTG-183](../experiments/haiku-mtg183.md)). Qwen3.5-9B on an L4
+won one functional game in 308 decisions with every selection valid first time
+(2026-10-25). `manabot/reports/inference.py` reads receipts offline without the
+model runtime. Full operating detail, including vLLM serving and the campaign
+drivers, is in [llm.md at 055dddab1](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/llm.md).
+
 ## Open direction
 
 Jack Heart's accepted direction (2026-10-24) makes checkpoint-versus-checkpoint

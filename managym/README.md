@@ -182,7 +182,7 @@ order, so authored setups are decklists over the world pool, not packs.
 `PlayerConfig.submitted` (Python: `world="world"`, `managym.WORLD_SETUP`, set by
 `Deck.player()`) submits a deck to the installed world: it must pass
 `development-v1` admission against the world's supported cards (see [decklist
-import](../docs/decklist-import.md)) or reset fails. Fixed setups and tests leave
+import](../docs/engine.md#decks)) or reset fails. Fixed setups and tests leave
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 

@@ -82,10 +82,10 @@ only replay-verified terminal games
 **Branching is a full clone.** Search forks a `Game` by cloning it and steps
 the clone; a rules-only witness checks the source is untouched. Undo journals
 and copy-on-write pages were rejected on preregistered thresholds
-([search branching decision](benchmarks/search-branching-decision-v1.md)).
+([decision record](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/benchmarks/search-branching-decision-v1.md)).
 Determinized PUCT and flat Monte Carlo are named as such: separate
 perfect-information trees per sampled world, aggregated at the root, with no
-claim to information-set consistency ([search](search-and-beliefs.md)).
+claim to information-set consistency ([beside the loop](#beside-the-loop)).
 
 **Hidden information has one domain.** `managym/src/possible_worlds.rs` owns
 the hidden-hand domain, the five-variant `WorldQuery`, compatible-deal weights
@@ -118,18 +118,35 @@ evidence for a method; refutations stay on the record
 
 These exist and run, and none of them is on the training path today.
 
-- **Belief samplers** (`manabot/belief`) fit a distribution over the
-  opponent's hidden cards from a frozen policy's games and are consumed only
-  by search players and a bounded demo seam; `ActorCritic` has an optional
-  belief channel that regimes reject.
-- **Search players** (`manabot/sim/search`): flat Monte Carlo, determinized
-  PUCT, and `LocalUpdateTeacher`, the current search-improvement code. None
-  has shown a strength gain over the policy alone.
+- **Search players** (`manabot/sim/search`). `flat_mc.make_player` builds
+  every kind from a spec: `search` (flat Monte Carlo over determinized worlds,
+  no network), `determinized_puct` and `agent_puct` (one tree per sampled
+  world, values as win scores, not information-set-consistent),
+  `policy_search`, `value_greedy`, `value_search`, and `local_update`.
+  `LocalUpdateTeacher` is the current search-improvement code: for one
+  checkpoint it maximizes `Σ p(a)Q(a) − α KL(p‖uniform) − β KL(p‖base)` over
+  rolled-out worlds, following Ataraxos supplement S3.7, and retains a
+  replayable receipt. Worlds come from the compatible-deal prior, a learned
+  sampler, or the small exact tracker. None has shown a strength gain over the
+  policy alone, and every determinized method shares the strategy-fusion
+  caveat above.
+- **Beliefs** (`manabot/belief`). `managym/src/possible_worlds.rs` owns the
+  hidden-hand domain; `manabot.belief` puts probability on it: `BeliefState`
+  over one `PossibleWorldSpace`, a tracker fed by viewer observations, and the
+  `AutoregressiveBeliefSampler`, which learns opponent hand counts from a
+  frozen policy's games. The `collect_belief` and `train_belief` stages fit it
+  on an immutable dataset (`uv run manabot train --regime-name belief_sampler
+  --seed 421 --out .runs/belief-pilot` is the bounded pilot), and
+  `python -m manabot.reports.belief` scores a sampler by held-out joint NLL,
+  Brier and calibration. Consumers are search players and a demo seam only;
+  `ActorCritic` has an optional belief channel that regimes reject, and
+  Academy's live belief tracking was removed. Detail:
+  [search-and-beliefs.md at 055dddab1](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md).
 - **Academy Study** (`academy/study_branch.py`, the replay page) forks a
   retained engine root, executes structured Commands on the clone, proves
   source and sibling isolation, and returns through a consuming receipt.
   Its decision evidence is fixture-served.
-- **LLM players** ([llm.md](llm.md)) read the text observation and choose
+- **LLM players** ([evaluation](evaluation.md#llm-players)) read the text observation and choose
   Commands through the same authority as everyone else.
 
 ## Non-goals

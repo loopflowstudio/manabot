@@ -107,8 +107,7 @@ self-play policy (frozen checkpoint)
        local search at the decision
 ```
 
-The sampler and search exist ([belief sampler](../docs/search-and-beliefs.md#belief-sampler),
-[local policy search](../docs/search-and-beliefs.md#local-policy-search)). The plan is to make
+The sampler and search exist ([beside the loop](../docs/ARCHITECTURE.md#beside-the-loop)). The plan is to make
 them improve play. Search should adjust a strong learned policy, not replace
 it. At a decision it samples hidden hands from the belief, plays out each
 candidate action with the frozen policy, and applies one regularized update to
