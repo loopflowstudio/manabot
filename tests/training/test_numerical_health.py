@@ -298,9 +298,10 @@ def test_extreme_real_collector_to_learner() -> None:
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
-        # This numerical fixture needs four decisions per stream. Two-seat
-        # collection waits for whole games, which this extreme policy can stall.
+        # This numerical fixture needs four decisions per stream. Complete-game
+        # closure waits for whole games, which this extreme policy can stall.
         learning_seats="one",
+        batch_closure="exact-quota",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
@@ -381,6 +382,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     # Fault accounting needs two tiny updates, not completion of sampled games.
     # Keep the workload bounded as well as the injected accounting clock.
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.execution.device = DEVICE
     stage.learning.min_advantage = 0
     # Charge only injected durations in the executor. Keep watchdogs and the

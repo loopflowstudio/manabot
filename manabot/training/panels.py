@@ -16,6 +16,11 @@ PERF: tuple[MetricPanel, ...] = (
     Attempts(),
     Flame(),
     Series(title="Games played", keys=("coordinates/games",), unit="games"),
+    Series(
+        title="Idle stream steps",
+        keys=("coordinates/idle_stream_steps",),
+        unit="stream slots",
+    ),
     Series(title="Process memory", keys=("coordinates/rss_bytes",), unit="bytes"),
     Series(title="Host load", keys=("coordinates/host_load_1m",), unit="1-min load"),
 )

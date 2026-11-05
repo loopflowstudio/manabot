@@ -107,17 +107,18 @@ It depends on how the batch is closed, and there are two ways.
 
 ![Complete-game batches let each stream finish its game and idle until every stream is done. Exact-quota batches stop every stream at the same decision count, pausing unfinished games and bootstrapping them from a value estimate.](images/batch-boundaries.svg)
 
-**Complete games: no.** This is the default, because two-seat learning always
-uses it. One-seat runs use it too when they set `games_per_stream` or a game
-error policy. `transitions` is a floor on a stream's decisions, counting both
-seats, unless `games_per_stream` is set, which replaces the floor with a game
-count. A stream that has passed the floor stops at the end of its current game.
+`batch_closure` declares which, independently of who learns.
+
+**Complete games: no.** This is the default for new stages, and two-seat learning
+always uses it. `transitions` is a floor on a stream's retained decisions, the
+total across seats when both learn, unless `games_per_stream` is set, which
+replaces the floor with a game count. A stream that has passed the floor stops at the end of its current game.
 Rows are packed into one `[rows, 1]` column with an end flag after each
 trajectory, and row counts vary by batch. The collector asserts that the last
 row is an end, and `bootstrapped_tail_fraction` is 0.
 
-**Exact quota: yes.** With one learning seat and neither of those settings,
-each stream collects exactly `transitions` learner decisions and the batch has
+**Exact quota: yes.** With `batch_closure="exact-quota"`, which needs one learning
+seat and neither `games_per_stream` nor a game error policy, each stream collects exactly `transitions` learner decisions and the batch has
 shape `[transitions, streams]`. The scale ladder v1 run trained this way. One
 column can hold the end of a game begun in the last batch, some whole games,
 and the start of a game that hasn't finished.
@@ -396,7 +397,7 @@ viewer-safe observations.
 **Is there a replay buffer?** No. Each batch is used for one pass and discarded,
 and no trajectory-level importance correction is applied.
 
-**Why does a two-seat batch wait for slow games?** A stream past its floor idles
+**Why does a complete-game batch wait for slow games?** A stream past its floor idles
 until the last stream finishes, so the batch can be built from complete games.
 That idle time is the price of having real outcomes on every trajectory.
 
@@ -465,9 +466,8 @@ ablation uses squared-error lambda returns instead. Only current logits receive
 gradients: behavior, references, estimates and targets are detached; the
 shared encoder receives both losses.
 
-Collection freezes learner weights within each batch; both-seat and
-`games_per_stream` collection finish games before updating, while one-seat
-quota collection may span updates. One epoch still changes parameters between
+Collection freezes learner weights within each batch; complete-game closure
+finishes games before updating, while an exact-quota game may span updates. One epoch still changes parameters between
 minibatches, so per-action ratios remain necessary. No replay buffer,
 trajectory ratio product or state-occupancy correction is implemented.
 Filtering changes the training-state measure, as in the source, and
