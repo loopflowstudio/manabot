@@ -22,7 +22,7 @@ use crate::{
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
-        vector_env::VectorEnv,
+        vector_env::{ObservationWriteError, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
@@ -183,6 +183,7 @@ impl PyVectorEnv {
             inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -200,6 +201,7 @@ impl PyVectorEnv {
             inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -230,6 +232,7 @@ impl PyVectorEnv {
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
                         .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
                 },
             )
         })
@@ -293,27 +296,36 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
+    #[pyo3(signature = (actions, active, recover_capacity=false))]
     fn step_isolated_into_buffers(
         &mut self,
         py: Python<'_>,
         actions: Vec<i64>,
         active: Vec<bool>,
+        recover_capacity: bool,
     ) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, buffers, config| {
             // Never leave a preceding terminal flag on a failed/inactive row.
             for index in 0..inner.len() {
                 buffers.write_step_state(index, 0.0, false, false)?;
             }
-            inner.step_isolated_into(&actions, &active, |index, obs, reward, done, truncated| {
-                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
-            })
+            inner.step_isolated_into(
+                &actions,
+                &active,
+                recover_capacity,
+                |index, obs, reward, done, truncated| {
+                    buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+                },
+            )
         })
     }
 
     fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, buffers, config| {
             inner.replace_failed_into(&failed, |index, obs, reward, done, truncated| {
-                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+                buffers
+                    .write_encoded_row(index, obs, reward, done, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -321,7 +333,9 @@ impl PyVectorEnv {
     fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {
-                write_buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                write_buffers
+                    .write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -782,7 +796,9 @@ impl PyRolloutPool {
     fn encode_active(&mut self, py: Python<'_>) -> PyResult<Vec<usize>> {
         self.run_with_buffers(py, |inner, write_buffers, config| {
             inner.encode_active_into(|slot_index, obs| {
-                write_buffers.encode_observation(slot_index, obs, &config)
+                write_buffers
+                    .encode_observation(slot_index, obs, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -792,7 +808,9 @@ impl PyRolloutPool {
     fn step_active(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<Vec<usize>> {
         self.run_with_buffers(py, move |inner, write_buffers, config| {
             inner.step_active_into(&actions, |slot_index, obs| {
-                write_buffers.encode_observation(slot_index, obs, &config)
+                write_buffers
+                    .encode_observation(slot_index, obs, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -1148,9 +1166,9 @@ impl SendWriteBuffers {
         env_index: usize,
         observation: &Observation,
         config: &ObservationEncoderConfig,
-    ) -> Result<(), AgentError> {
+    ) -> Result<(), ObservationWriteError> {
         let out = self.fields.encoded_row_mut(env_index, config)?;
-        encode_into(observation, config, out).map_err(|err| AgentError(err.to_string()))
+        encode_into(observation, config, out).map_err(ObservationWriteError::from)
     }
 
     fn write_step_state(
@@ -1181,9 +1199,10 @@ impl SendWriteBuffers {
         terminated: bool,
         truncated: bool,
         config: &ObservationEncoderConfig,
-    ) -> Result<(), AgentError> {
+    ) -> Result<(), ObservationWriteError> {
         self.encode_observation(env_index, observation, config)?;
         self.write_step_state(env_index, reward, terminated, truncated)
+            .map_err(ObservationWriteError::from)
     }
 }
 

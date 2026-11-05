@@ -35,3 +35,10 @@ Historical context: parent T7 decisions remain at
 context at `1546aae3fa7b207b2c5e8ac92a6571af036ddf83:scratch/questions.md`.
 The full preceding decision note is blob
 `8a6de1149523ed8d99031fcc4d1b4797e6bcc287` (`git show <blob>`).
+
+Latest incoming pilot context is retained at
+`ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md`.
+It records prospective v10 permanent capacity 64 and explicit per-game
+capacity recovery at .25 with window/warmup 100/100, preserving executed v9.
+These MTG-213 decisions remain historical context for this layers Task;
+they do not authorize a pilot launch or change its review boundary.

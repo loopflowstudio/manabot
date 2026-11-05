@@ -50,7 +50,7 @@ These aggregate counts are not learner-only or actor-specific rates.
 Collector/game close and vector
 reseeding flush exact totals, including zero-overflow runs. The approximation
 and its evaluation limits are specified in the
-[TLA v9 protocol](../experiments/protocols/tla-trophy-213-v9.md).
+[TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
 
 ## Quickstart
 
@@ -136,10 +136,16 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
-The fixed TLA trophy pilot uses `experiments/tla_corpus.py` to prefetch and
-admit whole 17Lands trophy lists, and `experiments/tla_pilot_v5.py` for Etude
-training/evaluation. Its [frozen protocol](../experiments/protocols/tla-trophy-213-v5.md)
-names the corpus, budget and comparison limits. `UniformDecks.sampling` selects
+The current prospective TLA trophy pilot uses `experiments/tla_corpus.py`
+for the fixed admitted corpus and `experiments/tla_pilot_v10.py` for Etude
+training and paired evaluation. Its [v10 protocol](../experiments/protocols/tla-trophy-213-v10.md)
+selects 64 permanent rows per player and isolated
+[capacity recovery](../docs/training.md#game-failures), and requires fresh
+initialization. Historical runs retain their original protocols and execute
+from their pinned source; see the [pilot evidence](../experiments/tla-trophy-pilot.md).
+V10 has not yet produced a trained endpoint or completed paired evaluation.
+
+`UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
 contract. Stable population entry IDs distinguish events even when lists match;
 checkpoints still bind the world, never the population.
@@ -149,7 +155,7 @@ Local Etude evaluation needs an explicit directory for the pilot's replay eviden
 (rented jobs receive this directory from the launcher):
 
 ```sh
-ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v5.py --source r2://manabot/jobs
+ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v10.py --source r2://manabot/jobs
 ```
 
 ## World identity
@@ -358,6 +364,9 @@ world/ABI admission and failure receipts inside the attempt output. Only a
 completed target emits `etude-result.json` with the admitted policy path.
 Cancellation is checked with the resource watchdog (at most once per second at
 check boundaries) and retains a failed receipt, not a successful partial target.
+The [game-failures guide](../docs/training.md#game-failures) describes opt-in
+`GameErrorPolicy.recover_capacity`, its recovery boundaries and evaluation limits.
+
 Policy checkpoints cannot resume optimizer, RNG or collector state. Automatic
 retries are disabled (`max_attempts=1`); multi-stage and imported-state jobs are
 not yet admitted. This worker proof does not establish SDK placement, remote
