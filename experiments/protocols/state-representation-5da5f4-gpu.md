@@ -382,3 +382,48 @@ No science launched; all plateau acceptance remains open. Instance `59168556`
 was terminated and confirmed absent at 22:58:28 UTC. Reported charge $0.205 is
 not final settlement. Manifest-backed evidence and distinct derived projection:
 `experiments/data/state-representation-gpu-5da5f4/cheaper-3090/`.
+
+## Matched batched admission and scientific allocation — 2026-11-05
+
+Source `af601877e9700bbd4ede5baf4ce17163f6b62283` passed both retained CUDA
+reference/gradient gates and completed diagnostic `911423cce90b`; its 59 outputs
+include complete inference and learning traces for each reducer. The preceding
+`b153cc2e5a77` failed one float32 gradient tolerance and ran no learner. The
+surviving test compares both float32 paths to independent float64 outputs and
+gradients; no learner semantics or parameters changed. Every attempt remains
+in the denominator. The diagnostic and failed-gate artifacts are published under
+`cuda-traces/` and `trace-delivery-failure/` in the GPU study data directory.
+
+Uninstrumented admission `37c1523a98ed` at that exact source completed four
+updates/1,024 games per arm, CUDA float32 and one thread, on NVIDIA GeForce
+RTX 3090. All 49 outputs (131,228,103 bytes) match the worker inventory. Pooled
+collection/learning took 136.4431/122.2212s; GRU took 132.4886/111.1156s. Both
+learners' complete phase receipts give 516.7714s overall admission and a full
+cohort projection of 55.66970 rental hours / $13.77310 at $0.2474074074/hour.
+This includes the declared 50% recurring-work allowance, all checkpoint exports,
+setup, evaluation and teardown; it is a projection, not guaranteed completion.
+
+All eleven preceding Task rentals were absent at 02:25:26 UTC. Per-rental
+reported/lifetime maxima plus settled L4 total $1.04590824. Unused ceilings of
+completed diagnostic/admission rentals are released, not counted as charges.
+The completed-compute reserve is max($3.50, twice those fresh maxima), with the
+existing $6 ancillary reserve and every unknown/live commitment in full. This
+rule was recorded before admission completed, implements Jack Heart's existing
+no-double-counting direction, and leaves $15.50 within the ORIGINAL $25. It
+requires no invented final-billing watermark. Historical receipts are unchanged.
+
+Prepared scientific Run `e51f61b92931` binds the admission file's SHA256, exact
+source, matching GPU name, locked Etude `64e9eaabf`, measured phase costs and a
+$15.50 maximum. The fresh whole-rental quote is $13.77310 including 40 GB disk
+and free transfer, with no competing allocation. Allocation/config/source/quote
+bytes are retained under `batched-plateau/`. Launch follows this freeze; a
+prepared Run or quote is not evidence of execution.
+
+The scientific design remains unchanged: sequential balanced arm order for
+paired seeds 74211–74214, 256 complete-game updates × 256 streams per learner,
+initialization plus every 32-update export, all 72 curve endpoints and eight
+held-out endpoints, and the same fixed-window plateau and comparison criteria.
+No score selection, shortened horizon, MTG-213 funds, merge or promotion. The
+Etude session receives a finish-after-work request once its sole job starts;
+its supported courier delivers final files and the worker deletes the rental
+on completion, with the independent rental deadline as a backstop.

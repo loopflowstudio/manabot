@@ -45166,6 +45166,282 @@
    "sha256": "8c95a8421ad1c881079539b3242cd02a8652d25da8af12e6790108600b0d62c6",
    "bytes": 117
   },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/accounting.json": {
+   "sha256": "7981d925507791f7899d3bf827132676b5370e6a1e72f3d395aaf1bc226e28aa",
+   "bytes": 3687
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/collect.log": {
+   "sha256": "0e442ade9a98e5711ee5a589f8696005d9aa253273f2255858986f170aa89835",
+   "bytes": 4330
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/final-accounting.json": {
+   "sha256": "a67d286b2a4ff990b50ccf2e117540af55e28c0f2e78f8c6e25f402ebadc4003",
+   "bytes": 1032
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/final-attempt.json": {
+   "sha256": "9a458649275a5ed1ce6e6de710e3af5713c05f5a5b08d50017eeacde32240356",
+   "bytes": 10887
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/final-logs.json": {
+   "sha256": "b77d103c22869b524f09dc7f06a250e020fdc42e25415011cbe0d3a2088629f0",
+   "bytes": 18622
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/job.log": {
+   "sha256": "e81127a448d2bc461e24d52e1534e66b37f06865fbf192b2e5ebb9b5d355ecf2",
+   "bytes": 7958
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/limits.json": {
+   "sha256": "3a301e5e467e56bafb517a14aa60446f6c65b9161bea6c9efa11de7744365aa9",
+   "bytes": 50
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/batch-0/child-0.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/batch-0/processes.json": {
+   "sha256": "ebf7adc62868daae6965d71eaa8e4d7e1b10563ccc1a7b13096817d2a0c4f11c",
+   "bytes": 63
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/batch-0/progress.json": {
+   "sha256": "884c246a57e0c6d1796198528eff60c032b0782d7c352ec4e6902ed0955aac78",
+   "bytes": 10817
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/batch-1/child-0.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/batch-1/processes.json": {
+   "sha256": "ebf7adc62868daae6965d71eaa8e4d7e1b10563ccc1a7b13096817d2a0c4f11c",
+   "bytes": 63
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/batch-1/progress.json": {
+   "sha256": "163d58d9f500c8eca1145021b8dfa3912ec38e7acabc6b01033e3227e48c8334",
+   "bytes": 11938
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/device.json": {
+   "sha256": "0fd1394547ef322d9a7fbd8f9df60771c9418a8c8dcbb295a1f9a68a036ac702",
+   "bytes": 125
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training.sqlite": {
+   "sha256": "176381e07f25088b50fcc5d5013870d9eaf749c0e8c21809af1064a5116a95f7",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/run.json": {
+   "sha256": "163d58d9f500c8eca1145021b8dfa3912ec38e7acabc6b01033e3227e48c8334",
+   "bytes": 11938
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play-ema.pt": {
+   "sha256": "6021a5b3f71e6036c5ee29f9db473fc90799a98fd82b911382e844aba9a6f53c",
+   "bytes": 9931355
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play-initial-raw.pt": {
+   "sha256": "0650f47ef606885e01181c4050f20babf156a3070581a5e7aecbc8bbec4e9930",
+   "bytes": 9930319
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play-optimizer.pt": {
+   "sha256": "6b6941995d2a4f717048508ae834aa8fb82cb099d7eebf7b0975b2657cfa557d",
+   "bytes": 15729971
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play-raw.pt": {
+   "sha256": "ce586bf540586eeefaa4d36160b99d4a91dbcbc3d80bc60d71dc11e282d1eddb",
+   "bytes": 9929463
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/checkpoints/learner_transitions-0.json": {
+   "sha256": "61ee105d5346af56d3f8dd191df2c1a2185a60b146dc82b89bf3881b650dd7d7",
+   "bytes": 494
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/checkpoints/learner_transitions-0.pt": {
+   "sha256": "0650f47ef606885e01181c4050f20babf156a3070581a5e7aecbc8bbec4e9930",
+   "bytes": 9930319
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/checkpoints/learner_transitions-190580.json": {
+   "sha256": "0bc91af7e7d4c12b0ce5d7ef18f6e7390c9a169dd1226a92758f75edb0072688",
+   "bytes": 504
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/checkpoints/learner_transitions-190580.pt": {
+   "sha256": "ce586bf540586eeefaa4d36160b99d4a91dbcbc3d80bc60d71dc11e282d1eddb",
+   "bytes": 9929463
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/metrics/2-00000000-00000004-fac35abe8778.blk": {
+   "sha256": "44b0dbaaa768e25c1ab091c440588d108ef83c6ced8f7de18cecfc6a4811be10",
+   "bytes": 358600
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/metrics/fac35abe8778.index.json": {
+   "sha256": "93599362a6bb0b8986abe1f37d7b919f65faf935e8de6b669c9325252f2fe16c",
+   "bytes": 59740
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/metrics/fac35abe8778.json": {
+   "sha256": "5337f80a6cf463d02f0ec1724a070feb9057393e2fe372bc54ea28eaac93527a",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/metrics/fac35abe8778.permanent.json": {
+   "sha256": "0ab035883b5dca7bf4f141fb7b971d31780488c8274e7c9bcbcab5963475640b",
+   "bytes": 415958
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/metrics/fac35abe8778.removed": {
+   "sha256": "5edb0cc9be7a3ccda21e94a51d92b1bb54111ceac063d007ba984712ff209571",
+   "bytes": 180
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/run.json": {
+   "sha256": "e8fddc8f265d48ac681a6db8d17e0800562d02f581a8c7986ced1a50d929f4e0",
+   "bytes": 6531
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_gru/training/self-play/etude/a070de7fe2664482bceced7c9383eed9/state.json": {
+   "sha256": "c96dbc1be58624addab4fcb10e20392f5490edad9c3bd12b04dccbf69a04c99c",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/device.json": {
+   "sha256": "6c40d4def74ff6c1884e92dd5cc815e0c0cee96c3c8754e48fa36e8bfc6b709e",
+   "bytes": 125
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training.sqlite": {
+   "sha256": "a41c71f85216ffe906aef95be7179d71ab902e3d30f79e11f6e7a8af4835dc08",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/run.json": {
+   "sha256": "182b8a4fcc6ee6d682910d0d5b503dbd84e8237fa7e42eee09888f75ad812c20",
+   "bytes": 11947
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play-ema.pt": {
+   "sha256": "e0833e760f2a5adda62fdda2028394cc48ded1892676bf55c903d6ce10f55dfc",
+   "bytes": 9728827
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play-initial-raw.pt": {
+   "sha256": "f278bfa6447ec626c6d25e4547d097043c73e9278d120e2d03050238cd0ddf73",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play-optimizer.pt": {
+   "sha256": "1d343bb7113c5b8b9150fc4f74e0a265fd66552c04d3ae1d43403bab6466342d",
+   "bytes": 15323779
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play-raw.pt": {
+   "sha256": "2b7ceb3b816033daea515e81adf2017b26116d12736f963afb770a714c3d0464",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/checkpoints/learner_transitions-0.json": {
+   "sha256": "5720b0b7e7ad278dfe4ae2f83dfe5f927717eb36b0cf92852b1df1d59da09bfb",
+   "bytes": 495
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/checkpoints/learner_transitions-0.pt": {
+   "sha256": "f278bfa6447ec626c6d25e4547d097043c73e9278d120e2d03050238cd0ddf73",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/checkpoints/learner_transitions-190429.json": {
+   "sha256": "19005ed92810446bce78045cd6a4cd7a0b56d2389438b3f62110324a118dd0be",
+   "bytes": 505
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/checkpoints/learner_transitions-190429.pt": {
+   "sha256": "2b7ceb3b816033daea515e81adf2017b26116d12736f963afb770a714c3d0464",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/metrics/2-00000000-00000004-980b41d72b55.blk": {
+   "sha256": "884437f3ddea5307737b5b35e4ea460215ba21ec6e570713f9fb1f96812d8da7",
+   "bytes": 358472
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/metrics/980b41d72b55.index.json": {
+   "sha256": "d5b790f9a9dc0f826888b63b5efae28b35d46112edae3e15a738cc0a736857b4",
+   "bytes": 59631
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/metrics/980b41d72b55.json": {
+   "sha256": "60f86778ac7ebf2f00076453405caa468c8175a23fd8120afabb6a978af40d52",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/metrics/980b41d72b55.permanent.json": {
+   "sha256": "648d0dccba6ff5ac2a9f4bb3dd3b669fd84235ad14913be0f7d9283ad49f4902",
+   "bytes": 415583
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/metrics/980b41d72b55.removed": {
+   "sha256": "ead8ba94a32486e1c6dfe967a4d25649c49b534186dde008acde50bf5f8d3b44",
+   "bytes": 180
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/run.json": {
+   "sha256": "86cac0cd6baaf64a5ce2be4863dd2793af9b00f9930fc0f162f28f64375c600d",
+   "bytes": 6534
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-1/typed_pool/training/self-play/etude/897d624e44e44c0ea414afcf7060d5ba/state.json": {
+   "sha256": "9f647716152f11d89d1c17864d41c1a3704607e9259bff44516e9aa1bcf0ba30",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/admission-limits.json": {
+   "sha256": "e3ce011c7db6b2e140f23bda7e7b7598694448fdcef1219492d38cb5213ee025",
+   "bytes": 110
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/etude-result.json": {
+   "sha256": "2158a15193352e39c98b7b904276ac1c04b5c1b8b0d6723be6ce8d0103819b6d",
+   "bytes": 39
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/numerical-validation.json": {
+   "sha256": "50a4f34ac885b937a64b72aac050457f16921cf22ab4c1e014eb13db1922a2b7",
+   "bytes": 646
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/numerical-validation.log": {
+   "sha256": "4d3998d4668d2c1186ceedabfd25854cbc116d9096c76c4ff24e6781c839ed05",
+   "bytes": 663
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/outputs/throughput.json": {
+   "sha256": "6621cbd736d32f163be2372883cb51c311a79c866e88ab903159a2919dfb3c11",
+   "bytes": 704
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/prepare.py": {
+   "sha256": "c5f32007fdbba190287e3a6948e499e698aea8db51b1a525e82345d0fc5c6fa8",
+   "bytes": 1325
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/prepared.json": {
+   "sha256": "c87d543bbaf19703b916143c741e6b48ea11d6ea46e05143f82c2ba0ed060e1c",
+   "bytes": 164047
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/provider.json": {
+   "sha256": "14054a4becc5a166d09adcca1cd90791a9d64946788ccefed189588315e85cb0",
+   "bytes": 305
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/quote.json": {
+   "sha256": "8247dc88432c21b119bb4d0814048c21f8a4990a0f8a3c6b36038f01053dbf91",
+   "bytes": 321
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/rental.json": {
+   "sha256": "d1e730bc7ad21706279f341252d0ab7874df0ea3ffa0a3b35635ab886b716268",
+   "bytes": 253
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/session.json": {
+   "sha256": "0c7897bbd2399e1478a08729d31350d5b9bfaf0787577f0685ffc3838f0d5a9f",
+   "bytes": 501
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-admission/status.json": {
+   "sha256": "f33b1dac37aa617a36651acde487fb196b9bdd409b98f619aebe4ee3246ff4e0",
+   "bytes": 429
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/accounting.json": {
+   "sha256": "81cb264439d60d4042918d34f08f12e82bf9a9a10bdd7100221e32ff922a44f4",
+   "bytes": 4013
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/allocation.json": {
+   "sha256": "ec632aafe22c12fb27cb8b618f6bf608516fc3a8836e73cbfe78cca895616e12",
+   "bytes": 909
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/prepare.py": {
+   "sha256": "2b48a4e25164a6e62617dadeb89c1dbcc58e60a346903f88f95a0c662c84b83f",
+   "bytes": 2493
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/prepared.json": {
+   "sha256": "d05246917b686e07668d71e6ce906a116df26c8b2434a0033dd73866934a231a",
+   "bytes": 164806
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/projection.json": {
+   "sha256": "ceef2a5100cc7297d832fb65c7a301ab35ec96959724077083099c08893c5b27",
+   "bytes": 228
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/quote.json": {
+   "sha256": "7496e18b79d7ee16e7934022dc63c6cb7c02b56627fd3e4071f83e36ff500005",
+   "bytes": 332
+  },
   "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/accounting.json": {
    "sha256": "dc9e15eda9439a8ccd26c277ad3bca622ba4363554d5c4a25c109bb45c4e7782",
    "bytes": 4180
@@ -45954,6 +46230,298 @@
    "sha256": "2f21c9af772532c46e0fafe152a7a96609c23ba207dad58ae8315bb2d2ba8451",
    "bytes": 84
   },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/accounting.json": {
+   "sha256": "4777418ab9673d058dc7001bea4d1566d3b8ad356db3081b1e64e15461e374de",
+   "bytes": 3354
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/analyze.py": {
+   "sha256": "189414650ea46d448584061916bf19860512edf145e5f606fbfb6cf907184950",
+   "bytes": 1560
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/collect-retry.log": {
+   "sha256": "3874cbd8a75585caf6d51fdfcd60728b1d234156c7cd3688d33c90258ca76076",
+   "bytes": 4350
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/final-accounting.json": {
+   "sha256": "8d120ca1931c3da45ae72c41c8e2891a7afb3954dbdb300da6c5a38d4067fe47",
+   "bytes": 1031
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/final-attempt.json": {
+   "sha256": "311e78a32cf94d138e120def0b12e5fa8c13ffcd76493115fe803d667c007e6e",
+   "bytes": 12164
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/final-logs.json": {
+   "sha256": "35ef720d43b3aa4cfdc82fd4a89ee6f82db7a4e9a1bbb8060709bea9dcddd58b",
+   "bytes": 91153
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/job.log": {
+   "sha256": "34e3be7a0217f00c2906bc103edf0585e359b8cee0ec4b4656f3a611935586fa",
+   "bytes": 79935
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/cuda-parity.json": {
+   "sha256": "d6eab6375373bd5772622dbe64d1658017267be08498dc8892c1e5dd53ab2863",
+   "bytes": 688
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/cuda-routing-tests.txt": {
+   "sha256": "1ab4dff891ec6d5d6da3da0f6fb3b4ebf6559a902edb66ac759a6bd592e0156d",
+   "bytes": 961
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/etude-result.json": {
+   "sha256": "2fabc77e1458aa2b3f22c301a444d1b77e3a85c3b1295c51a600b3359de3bf2c",
+   "bytes": 39
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru-supervision/child-0.log": {
+   "sha256": "92a0802817f1f3ee5b7fdbc495da8ebc7af3fbd38bb7e31c077a08bd3edcb458",
+   "bytes": 313
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru-supervision/processes.json": {
+   "sha256": "ebf7adc62868daae6965d71eaa8e4d7e1b10563ccc1a7b13096817d2a0c4f11c",
+   "bytes": 63
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru-supervision/progress.json": {
+   "sha256": "8d9732b7435699c146e97ce507282276dbffff8a45824f2938488e878212ad08",
+   "bytes": 10768
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/diagnosis.json": {
+   "sha256": "311cd474cd238b8c9a69345abb3f89ac340bdacfa7925063c074435b4e5b2f23",
+   "bytes": 242
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/inference.operators.txt": {
+   "sha256": "c6a277ff43d4b8ab5eeec9e481c555595c8ab77063ca58f580305a3d06e1d60e",
+   "bytes": 17551
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/inference.trace.json": {
+   "sha256": "a99571d3384aa2eef5f3e01cc209622f603470437cad82bf2a72b0b96656c7cb",
+   "bytes": 3963768
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/learning.operators.txt": {
+   "sha256": "a5da15f0ab49107f3155875c4e36a3d263d157c5462199b7a859451bf2efd8a1",
+   "bytes": 17551
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/learning.trace.json": {
+   "sha256": "fba82416ebcc6dba0eb012daecac4b6f769b888a12f09ccbcd04f8786b01f24a",
+   "bytes": 14861738
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/python.prof": {
+   "sha256": "7bde35b41912517310c037acd8b54b8479aedef18092932904acff21645262bd",
+   "bytes": 1067430
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/python.txt": {
+   "sha256": "59d307ec049ed7dc1aa314234eccd8b949ee905199aaf0cd47a8ad92fccbe32d",
+   "bytes": 6551
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training.sqlite": {
+   "sha256": "e87be5a6bdfe00d594fb92f09b4065f8b69514267869eb222331f5b8f4d19974",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/run.json": {
+   "sha256": "5ac02175410df0ffe53fc880b7f7d2fda6d5c856a5aab8d4c5eea428d70043e8",
+   "bytes": 11838
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play-ema.pt": {
+   "sha256": "469a935da1f253d0a6443909353294610a120fb2e3fb722f12ee3fe3071bb74a",
+   "bytes": 9931355
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play-initial-raw.pt": {
+   "sha256": "4b6969bc266e58139d6f509f61eec5caa8bfa8dc42f88006c620b0d8cd3ffa25",
+   "bytes": 9930319
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play-optimizer.pt": {
+   "sha256": "fc4d295f744b5201ff62aa51b91d638e800e7f9b230a28c7b2ce4d483a815b7c",
+   "bytes": 15729971
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play-raw.pt": {
+   "sha256": "8c6f790b64aae52f07278a3dc2a321ce6e3a0d132c59087b666c27573401c53f",
+   "bytes": 9929463
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/checkpoints/learner_transitions-0.json": {
+   "sha256": "fd217b3254c174f9c72e84465995a27a3dd4c86a3f77242f6e09b3888e497fc8",
+   "bytes": 482
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/checkpoints/learner_transitions-0.pt": {
+   "sha256": "4b6969bc266e58139d6f509f61eec5caa8bfa8dc42f88006c620b0d8cd3ffa25",
+   "bytes": 9930319
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/checkpoints/learner_transitions-50261.json": {
+   "sha256": "f48ceb06ea579ac256fca95c1c6b7d886906e86afce3779387f095e7489c9586",
+   "bytes": 490
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/checkpoints/learner_transitions-50261.pt": {
+   "sha256": "8c6f790b64aae52f07278a3dc2a321ce6e3a0d132c59087b666c27573401c53f",
+   "bytes": 9929463
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/metrics/01db55da46b2.index.json": {
+   "sha256": "475489623d30ae9796b219e075cd34f3149a77b61a811e73ca78b3bf1863070d",
+   "bytes": 59693
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/metrics/01db55da46b2.json": {
+   "sha256": "f3e6d0e63af6ff48f7377e20d69c834f6ee2fb9a09c13631020fe1c855189e0a",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/metrics/01db55da46b2.permanent.json": {
+   "sha256": "cbc4b0c444ea66ecdfff643feb04a8235abb61a172e885c6654c37c57ab9569e",
+   "bytes": 414113
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/metrics/01db55da46b2.removed": {
+   "sha256": "db1265be8a3df90014a20f7a93d6ac06be375a2f648f84c9509516bc857ac386",
+   "bytes": 45
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/metrics/2-00000000-00000001-01db55da46b2.blk": {
+   "sha256": "83bff3f4aabf6e9ef5c2ff76e5d906cf3570ec7fee5f6851a7596d46acc41259",
+   "bytes": 356744
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/run.json": {
+   "sha256": "70598a3ae84c38e867f31bbde66e293dd0304f13e787cd8c6446f9b19e3ff0ed",
+   "bytes": 6491
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_gru/training/self-play/etude/1ac4079e65474cca926ab63401e33689/state.json": {
+   "sha256": "581c70e0fc917388fb619eb8e791b4954b849c79943073f5ab92be66d72ffa1e",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool-supervision/child-0.log": {
+   "sha256": "92a0802817f1f3ee5b7fdbc495da8ebc7af3fbd38bb7e31c077a08bd3edcb458",
+   "bytes": 313
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool-supervision/processes.json": {
+   "sha256": "ebf7adc62868daae6965d71eaa8e4d7e1b10563ccc1a7b13096817d2a0c4f11c",
+   "bytes": 63
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool-supervision/progress.json": {
+   "sha256": "efcc83c393b0adebe175c92ebc3a7feab7214ac670781d32805e9a6a254ad28a",
+   "bytes": 10768
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/diagnosis.json": {
+   "sha256": "ea9a34cecfde64eafcdcc06c54b34f5c20fa5b61028ba1550220df61f9818226",
+   "bytes": 243
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/inference.operators.txt": {
+   "sha256": "4dd6e0f241bcb3b6878fca1f836b3efb2e7d5362abfc1f758f4bec06af78f791",
+   "bytes": 17551
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/inference.trace.json": {
+   "sha256": "83311ccd2dd13326d863e42c0e346435d77432eb0c49072be18e7d8ed2cec91e",
+   "bytes": 3963764
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/learning.operators.txt": {
+   "sha256": "ba90cad5d6d4c898ed7bafe53aa4786ae458d2670c4a55bfe97d0a5a88bfffc5",
+   "bytes": 17551
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/learning.trace.json": {
+   "sha256": "3b9b28666111d4b2970eebaea94202b19424d1c3eb0e9c1f70628c7b0db09bda",
+   "bytes": 14024770
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/python.prof": {
+   "sha256": "403418b923157b9cef5ce869d715b682615f4f425756fc2ae5f23cc402c9a73c",
+   "bytes": 1059647
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/python.txt": {
+   "sha256": "29305f026ee36dfc58340b92d3f051d65072160745ed5706db59326611492e91",
+   "bytes": 6685
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training.sqlite": {
+   "sha256": "d64e7e97e0673a242b688fec41663853022b1b85ab353ff41f0e17fca344c658",
+   "bytes": 73728
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training.writer.lock": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/run.json": {
+   "sha256": "8d27bf61c3bda403dfd6af4167cc14ec5e0ca8e6ee35455e2b973dc0470765b3",
+   "bytes": 11844
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play-ema.pt": {
+   "sha256": "f54062375a8843a4a2ce3fe64c5f624a2f798743da3917fd891b5ada222b81b9",
+   "bytes": 9728827
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play-initial-raw.pt": {
+   "sha256": "1b7758f6b73ef4b088f417bc4fb098a608408e1601d5977a40cfe81cc3e2a216",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play-optimizer.pt": {
+   "sha256": "462ec442138d6ce8113c8498c508bd0785bbe16353a2afcac2192a8d17789c34",
+   "bytes": 15323779
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play-raw.pt": {
+   "sha256": "45721d3b5b56f1425dc3283498715f914afc5a07cf61be6073aaee03a55f2638",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/checkpoints/learner_transitions-0.json": {
+   "sha256": "ccdb4dbfca26fcba1cfa01c73a1bd33e1eb7885b1841386a4985457508fb26af",
+   "bytes": 483
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/checkpoints/learner_transitions-0.pt": {
+   "sha256": "1b7758f6b73ef4b088f417bc4fb098a608408e1601d5977a40cfe81cc3e2a216",
+   "bytes": 9728952
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/checkpoints/learner_transitions-51091.json": {
+   "sha256": "80d8d1496ec4e71f618e03ea971cec56d948973015c6ab93fce0a42f0617d93f",
+   "bytes": 491
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/checkpoints/learner_transitions-51091.pt": {
+   "sha256": "45721d3b5b56f1425dc3283498715f914afc5a07cf61be6073aaee03a55f2638",
+   "bytes": 9728112
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/metrics/2-00000000-00000001-6be4c7ab8a57.blk": {
+   "sha256": "fd04abda1622181ea4614903550cf296810efc7577941c60b4cf8e1f344bc5f4",
+   "bytes": 356744
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/metrics/6be4c7ab8a57.index.json": {
+   "sha256": "bdb4790df510c5b8dbbb84353ed1f64fb897c215198565acbb37a9ec99c2785b",
+   "bytes": 59649
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/metrics/6be4c7ab8a57.json": {
+   "sha256": "b17c8cf3efeae848423edfa454df602a0d5c53dba95932f123d1876ae586262e",
+   "bytes": 135
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/metrics/6be4c7ab8a57.permanent.json": {
+   "sha256": "99d4f83cdf9020101a27925a74ce8d1fcd26ea3545bbaac00f4091770693e6d8",
+   "bytes": 413824
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/metrics/6be4c7ab8a57.removed": {
+   "sha256": "ffb2419814130c75048b32e0ecc68a204e2182ef96d8445027330eb75173acfb",
+   "bytes": 45
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/run.json": {
+   "sha256": "fb16f214d00e9a4bf2133b291bbf443f2938569a5757ae93c2749a9a8af06c94",
+   "bytes": 6494
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/outputs/typed_pool/training/self-play/etude/6addfcfbfd124cf2b4603303e59332da/state.json": {
+   "sha256": "e488434dc8385546d86c58168435dbe5b349c0696a27a599e9472480caa3970b",
+   "bytes": 84
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/prepared.json": {
+   "sha256": "904a80819e06c131b64a99b5ca4a33cf8b7c22aefd9f43342bfe43ec6d3d2196",
+   "bytes": 165206
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/provider.json": {
+   "sha256": "1304f5638f919a4736e89a06f387638cb60ed9a6027afa6686cb0987e1d04112",
+   "bytes": 305
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/quote.json": {
+   "sha256": "3c084e0c1a74c281c40e02902b671a4b9e50579e844834161c28c9d964c8f473",
+   "bytes": 328
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/rental.json": {
+   "sha256": "634ad41ba1b4e9fca9efa59a79a6f73cf896585fccefcd9a1c417fa74c4ff5ac",
+   "bytes": 253
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/session.json": {
+   "sha256": "2e0f111c3a74677a62f121dae58a9eba819e94b470eb5fa0d94ce3b9b46ad421",
+   "bytes": 526
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/status.json": {
+   "sha256": "b7eb5938366278f9e8d660d410fb7c30eb381bb400af8bf335ded07035dcd158",
+   "bytes": 429
+  },
+  "experiments/data/state-representation-gpu-5da5f4/cuda-traces/trace-analysis.json": {
+   "sha256": "7ce22b9af60a57bdcd6fe5da458c307110739d335a80359a6764ca7b1a6179f5",
+   "bytes": 3909
+  },
   "experiments/data/state-representation-gpu-5da5f4/encoder-reference/typed_gru-continuation.pt": {
    "sha256": "d8f295f43500d931f7ad816a0d03b70b35aa016a40ce2bd7c4607c8520bb5321",
    "bytes": 522965
@@ -46249,6 +46817,62 @@
   "experiments/data/state-representation-gpu-5da5f4/restart/startup-settlement.json": {
    "sha256": "b592c5873445657e32c9a884fc1694017df1b34b5f25ced2d0f6281ee43f9174",
    "bytes": 643
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/accounting.json": {
+   "sha256": "8473e174f320b85d2ef6195ef42dd77f70ecfd0ce179b0c5310d219fa96ccba1",
+   "bytes": 3021
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/collect.log": {
+   "sha256": "715c47e51c0564b9c9404206b2911983f81e84e4c4bbb52d94c24eba79afaaba",
+   "bytes": 104
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/final-accounting.json": {
+   "sha256": "c5d5ff7c714382852e4fbd65029955f3b4e27bd53d60faa8c6b405192d02596e",
+   "bytes": 1032
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/final-attempt.json": {
+   "sha256": "0ee4d05a390147cb75bd822876ba264376e99343b121f613d45a1988574dc5b9",
+   "bytes": 839
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/final-logs.json": {
+   "sha256": "26d329407e0df5e93fb3cef81b2fe01a7a5d43a6832710b3217e25e3ca665b28",
+   "bytes": 19515
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/job.log": {
+   "sha256": "6570e1ac2207632ef622ff0e734c11a2b919c28204b4e010a767e46d3de3ac63",
+   "bytes": 8755
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/outputs/cuda-parity.json": {
+   "sha256": "d6eab6375373bd5772622dbe64d1658017267be08498dc8892c1e5dd53ab2863",
+   "bytes": 688
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/outputs/cuda-routing-tests.txt": {
+   "sha256": "8fbe40a0dcd491284eb8e11b9d5fb030f54bfca0bed20c9e59450b89db4539b1",
+   "bytes": 4166
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/prepared.json": {
+   "sha256": "43f3da5765a28ff33ec2cf4e5df05be9f239a469836272ef71f66539becfc0d5",
+   "bytes": 165206
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/provider.json": {
+   "sha256": "2d351407d9dcd0a522587ee55d63880a005bb46bd74ac869aa968e08a0858d70",
+   "bytes": 300
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/quote.json": {
+   "sha256": "3c084e0c1a74c281c40e02902b671a4b9e50579e844834161c28c9d964c8f473",
+   "bytes": 328
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/rental.json": {
+   "sha256": "7a1b824e444ead82b8ec0e1707e97d047db624c291d280247d409a36b1773836",
+   "bytes": 253
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/session.json": {
+   "sha256": "53c34303402c9a5b41be577039da765fd90237b6132f16b1c1987c88e5fa47ca",
+   "bytes": 501
+  },
+  "experiments/data/state-representation-gpu-5da5f4/trace-delivery-failure/status.json": {
+   "sha256": "93c90998fd8ddad701bdf5cfc4d9509457fdd4577456fff768a3123fb2f9f92b",
+   "bytes": 404
   },
   "experiments/data/state-representation-v7-5da5f4/analyze.py": {
    "sha256": "3fb08f1b31c3e48882b369576041a9f173fb8184fdbe54e621dfd14d96cd641f",
