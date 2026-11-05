@@ -28,12 +28,47 @@ The latest cheaper-host attempt is completed, not an instruction to repeat it.
 Results stop at demo/review: no study merge, model/default promotion, temporal
 memory implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
 
-Next work: operator-level profiling to test the suspected dispatch/device-sync
-cost, a justified implementation improvement, then prospectively frozen matched
-admission and affordable four-paired-seed GPU science. Repeating the eight-context
+Implementation update, 2026-11-05: `59ec1bd24` batches shared-effect and
+continuation projections/reducers after one host metadata admission per buffer.
+The pooled ordinary CPU learner completed identical 256-game/51,095-decision/
+200-minibatch work before and after: collection plus learning fell from 202.86s
+to 121.71s, with encoder call time 30.36s to 2.71s. CProfile ran in both;
+the final run additionally captured two operator traces. This is bounded local
+evidence, not CUDA synchronization attribution or scientific affordability.
+Native multi-position outputs and all parameter/object/definition gradients agree
+with the saved pre-change oracle; focused tests include duplicate memberships,
+canonical ordering, padding and absent gradients for unused Adam parameters.
+
+CUDA profiling is blocked by connectivity: the diagnostic quote was $0.19
+under a $0.50 cap, but Etude source publication stalled on GitHub before any
+run/rental was created. A bounded publication attempt also timed out, and
+GitHub HTTPS/Doppler reads timed out. No new provider allocation or expense
+was incurred. Details and retained local evidence are in the diagnosis.
+Matched GPU source/workload admission must still demonstrate affordability
+before the four-paired-seed cohort. Repeating the eight-context
 failure, substituting CPU evidence, shortening the learning objective or treating
 cleanup as completion does not satisfy acceptance. Every failed attempt remains
 in the denominator; no score-based retries or selection.
+
+Accepted direction remains Jack Heart's GPU plateau comparison; the proposed
+profiling/optimization route does not guarantee that it fits the cap. If that
+route cannot establish affordability, the unchanged objective remains unmet.
+No product decision is needed for bounded diagnosis; changing the budget,
+population, horizon or scientific criterion remains outside accepted scope.
+
+## Implementation cut — encoder dispatch diagnosis
+
+The excluded local diagnosis profiles the ordinary executor, first at smoke
+size and then one update of the actual 256-stream recipe on CPU (seed 74200).
+It cannot measure CUDA synchronization or qualify GPU affordability. A measured
+dispatch repair must preserve checkpoint parameters, complete live-row validation,
+canonical token order, joins, duplicate memberships and input/parameter gradients.
+
+Deleted in `59ec1bd24`: per-sample/per-frame neural projections and reducer
+dispatch in `TypedContinuationEncoder.forward` and `SharedEffectEncoder.forward`,
+plus `RecordReducer`'s per-sequence padded packing. Malformed-input rejection and
+schema/semantic tests survive on the batched path. Pre-change source remains at
+`42709fa1b`, not as a runtime fallback. No parameters or tensor contracts changed.
 
 ## Budget and dependency authority
 
@@ -93,8 +128,8 @@ intervals must each have both arms' four-seed 95% t gain intervals wholly inside
 under this criterion nor competence. Missing seeds/games/checkpoints prevent a
 qualified result. No best-checkpoint selection or shortened horizon.
 
-Delete — do not maintain: no remaining deletion targets. Total-elapsed scaling
-and its exclusive expected-value fixture are removed. `ArmThroughput` owns
+Implemented: total-elapsed scaling and its exclusive expected-value fixture
+are removed. `ArmThroughput` owns
 recurring collection/learning/bookkeeping versus fixed initialization/close and
 exports; only recurring work scales with update count and the 50% allowance.
 Periodic exports, outer orchestration, setup, evaluation and teardown remain
@@ -175,6 +210,15 @@ recipes retain 64 actions; unscored smoke and GPU study use 512 with overflow
 rejection. MTG-213's explicit first-64 pilot exception and $10 are separate.
 Replacement science needs its own actual source/native freeze and admission.
 
+Upstream reconciliation, 2026-11-04: merge `70d5893aa` moved the selected Wave
+from Training to Experiments and removed the Eval memory file; the objective
+is unchanged and Experiments has no child memories. The incoming Standard
+research distinguishes engine architecture from measured learner throughput
+(`docs/research/standard-2026-11/rl-engine-contract.md`). Its growing-pool
+protocol Task is separate design work, not evidence for this comparison or
+authority to replace the fixed Allies/Lessons population. The merge introduces
+research and Wave changes, not an encoder optimization or new GPU result.
+
 Memory, relation splitting, membership interning and semantic coalescing remain
 proposals. Coalescing requires identical future behavior across expiry, sources,
 affected sets/later entrants, intervening grants and additive effects. MTG-240's
@@ -195,7 +239,9 @@ and `:scratch/observation-architecture-snapshot.html`. PR419 verification:
 `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`; historical validation and
 accounting: `37511d297611aa8720c52453a0034991c753be06:scratch/representation-learning-plan.md`.
 Prior phase/watchdog/executor checks and native rebuild are recorded in the
-existing diagnosis. Gate owns broader suites; realign owns plan/Wave reconciliation;
-results demo/review owns scientific judgment. No rendering proof is claimed.
+existing diagnosis; the pre-reconciliation plan at `70d5893aa:scratch/representation-learning-plan.md`
+retains the 31 passing focused checks and manifest audit. Gate owns broader
+suites; results demo/review owns scientific judgment. Live watchdog enforcement
+and GPU profiling remain unverified. No rendering proof is claimed.
 
-Validation: `uv run --locked --extra dev --extra artifacts --extra evaluation pytest tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py -q` — 31 passed; changed-file Ruff check/format and `git diff --check` clean. Read-only manifest audit verified all 987 additions' local SHA256/lengths and unchanged historical entries. Gate owns broader suites; live watchdog enforcement and GPU profiling remain future execution work.
+Validation: focused selections in `uv run --no-sync pytest tests/model/test_shared_effects.py tests/model/test_state_records.py -q` passed (28 distinct tests); saved native forward/gradient oracles, two final ordinary CPU updates, checkpoint reloads and Ruff passed. Gate owns the complete affected suites; CUDA checks and matched GPU admission are deferred by the documented connectivity failure.

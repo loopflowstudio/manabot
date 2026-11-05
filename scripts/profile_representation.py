@@ -24,6 +24,7 @@ import torch
 
 from experiments.state_representation_gpu import (
     ADMISSION_SEED,
+    AdmissionLimits,
     ProgressWatch,
     StudyJob,
     _run_child,
@@ -43,6 +44,9 @@ from manabot.verify.store import VerifyStore
 def runs(revision: str) -> list[Run]:
     """Declare one capped diagnostic rental; no scientific seed is used."""
     (run,) = admission_runs(revision)
+    assert run.job.config is not None
+    spec = StudyJob.model_validate_json(run.job.config)
+    spec.admission_limits = AdmissionLimits(scientific_usd=Decimal("15.50"))
     job = run.job.model_copy(
         update={
             "name": "representation-operator-profile",
@@ -53,6 +57,7 @@ def runs(revision: str) -> list[Run]:
             "until": "updates=1",
             "max_hours": 0.5,
             "max_usd": Decimal("0.50"),
+            "config": spec.model_dump_json(),
         }
     )
     return job.runs(0)

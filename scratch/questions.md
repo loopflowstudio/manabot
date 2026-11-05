@@ -1,5 +1,13 @@
 # Decisions and open questions — 5da5f4
 
+- 2026-11-05 implementation assumption: ordinary CPU profiling can justify a
+  dispatch repair, but cannot qualify CUDA synchronization, affordability or
+  architecture selection. `59ec1bd24` preserves semantics/gradients and reduces
+  matched pooled CPU collection/learning from 202.86s to 121.71s. GPU diagnosis
+  failed before allocation because GitHub/Doppler connectivity timed out;
+  no new compute charge, no science, and no change to the $25 cap. Diagnosis
+  owns local evidence paths and outstanding GPU acceptance.
+
 - Current result: the cheaper 3090 completed both excluded admission arms;
   all outputs verified and rental deleted. Corrected full-cohort projection
   $71.82 exceeds the $16 science allowance; even recurring work alone costs
@@ -11,7 +19,7 @@
   startup/progress/cost stops with retained evidence and teardown. No extra
   budget, competing allocation, artificial load or scientific shortening.
   Phase accounting and stop controls are implemented; causal operator-level
-  profiling and a justified speed improvement remain open.
+  CUDA profiling and matched GPU admission remain open after the CPU repair.
 - Jack Heart authorized viable GPU execution to the start of a sustained plateau
   under the ORIGINAL cumulative $25, including necessary Etude SDK work and
   Vast use. The CPU comparison is insufficient for architecture selection.
