@@ -45450,6 +45450,22 @@
    "sha256": "e588501a655a33b20a7c7243260a376534628319eb2ef030d26fcb1a26568c5e",
    "bytes": 378
   },
+  "experiments/data/state-representation-gpu-5da5f4/encoder-reference/typed_gru-continuation.pt": {
+   "sha256": "d8f295f43500d931f7ad816a0d03b70b35aa016a40ce2bd7c4607c8520bb5321",
+   "bytes": 522965
+  },
+  "experiments/data/state-representation-gpu-5da5f4/encoder-reference/typed_gru-effects.pt": {
+   "sha256": "736f72b266a4f7564780ebdd4041a4a1ed6fb2f8045d1fbaed234775a967b1cf",
+   "bytes": 1518001
+  },
+  "experiments/data/state-representation-gpu-5da5f4/encoder-reference/typed_pool-continuation.pt": {
+   "sha256": "4e7de873c66588473c320524c2e332c2204eb24bb26a9feee8f8fa1553b98d4b",
+   "bytes": 517205
+  },
+  "experiments/data/state-representation-gpu-5da5f4/encoder-reference/typed_pool-effects.pt": {
+   "sha256": "0d0ea6c885e42441e1fd64c6b50a218a46c434890fac820f766ea019c2f5f0d0",
+   "bytes": 1512341
+  },
   "experiments/data/state-representation-gpu-5da5f4/operational-restart/accounting.json": {
    "sha256": "877b2567c7e92212cb976f2db91c40ca65834b50b68b35f3ab71d685c35714ad",
    "bytes": 3729
