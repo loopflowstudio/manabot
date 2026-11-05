@@ -3,7 +3,7 @@
 Naming is a sequence of ordinary native decisions: prompts over more than
 `managym.NAME_BRANCHING` names offer balanced groups of sorted names, and only
 the final name choice commits. Policy input v9 encodes group spans and names
-at ordinary action capacity; v8 cannot represent groups.
+at ordinary action capacity; earlier inputs see anonymous modal choices.
 """
 
 from dataclasses import dataclass
@@ -169,13 +169,8 @@ def test_catalog_naming_v9_groups_then_names_with_scalar_parity_and_private_text
     text = capture_text_decision(naming_root).text
     assert f"Names {catalog[0].name} through" in text
     assert not naming_root.observation_for_player(1).action_space.actions
-    # V8 offered the whole vocabulary at once and cannot represent groups.
-    with pytest.raises(ValueError, match="cannot represent naming groups"):
-        ObservationSpace(ObservationConfig(policy_input_version=8)).encode(raw)
-    with pytest.raises(Exception, match="cannot represent naming groups"):
-        naming_root.encode_observation(raw, policy_input_version=8)
-    # Frozen inputs without name identity see anonymous modal choices.
-    for version in (6, 7):
+    # Inputs without name identity see anonymous modal choices.
+    for version in (6, 7, 8):
         legacy = naming_root.encode_observation(raw, policy_input_version=version)
         assert "name_candidates" not in legacy
         np.testing.assert_array_equal(
@@ -265,6 +260,12 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     # The mean shares one group gradient equally among members; padding is inert.
     torch.testing.assert_close(members, members[:1].expand_as(members))
     assert not grad[0].any()
+    # A few more bounded supervised steps make the target the greedy choice.
+    for _ in range(7):
+        selected, _, _, _ = model.get_action_and_value(tensors, deterministic=True)
+        if int(selected) == target:
+            break
+        _supervised_step(model, tensors, target)
     selected, _, _, _ = model.get_action_and_value(tensors, deterministic=True)
     assert int(selected) == target
 

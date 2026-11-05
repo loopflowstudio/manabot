@@ -312,7 +312,7 @@ class ActorCritic(nn.Module):
                 if self.semantic_cards is not None
                 else None,
             )
-            if enc.config.policy_input_version >= 8
+            if enc.config.policy_input_version >= 9
             else None
         )
 

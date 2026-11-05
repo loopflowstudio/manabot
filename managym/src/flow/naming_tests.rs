@@ -41,6 +41,7 @@ fn naming_game() -> Game {
         false,
     );
     game.run_frame(EffectFrame {
+        program: Vec::new(),
         remembered: vec![],
         inherited_from: None,
         source_transforms: 0,
@@ -158,12 +159,11 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         .actions
         .is_empty());
 
-    // Policy inputs: v9 encodes group spans at ordinary capacity; v8 cannot
-    // represent groups; earlier inputs see anonymous modal choices.
+    // Policy inputs: v9 encodes group spans at ordinary capacity; earlier
+    // inputs see anonymous modal choices.
     let v9 = ObservationEncoderConfig {
         policy_input_version: 9,
         max_actions: NAME_BRANCHING,
-        max_facts: 128,
         ..Default::default()
     };
     let encoded = encode(&obs, &v9).unwrap();
@@ -176,10 +176,9 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
     }
     let v8 = ObservationEncoderConfig {
         policy_input_version: 8,
-        max_actions: names.len(),
         ..v9
     };
-    assert!(encode(&obs, &v8).is_err());
+    assert!(encode(&obs, &v8).unwrap().name_candidates.is_empty());
     assert!(encode(&obs, &ObservationEncoderConfig::default()).is_ok());
 
     let back = names
@@ -371,7 +370,6 @@ fn catalog_naming_cost_attribution() {
     let config = ObservationEncoderConfig {
         policy_input_version: 9,
         max_actions: NAME_BRANCHING,
-        max_facts: 128,
         ..Default::default()
     };
     let mut buffers = encode(&obs, &config).unwrap();

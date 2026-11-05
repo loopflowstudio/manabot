@@ -9,12 +9,10 @@ Task/PR to interactive review; no merge or strength campaign. Compound decisions
 including mana payment, belong to a separate experimental-validation Task.
 
 Material implementation assumptions (2026-11-05, reversible, for review):
-- V1–v7 never carried name identity; they see group and name prompts as
-  ordinary anonymous modal choices within capacity (previously 344 anonymous
-  names). Rejecting them would stop fresh-default v6 games that cast The Rise of
-  Sozin. Only v8, whose contract is one whole-vocabulary choice, rejects groups.
-- V8 stays as an accepted, explicitly rejecting configuration rather than being
-  deleted, because the accepted revision lists v1–v8 as frozen.
+- V1–v8 carry no name identity; they see group and name prompts as ordinary
+  anonymous modal choices within capacity. Rejecting them would stop
+  fresh-default v6 games that cast The Rise of Sozin. (Superseded by the sync
+  resolution below: the branch-only whole-vocabulary `[A,2]` v8 was dropped.)
 - Group identity is its public sorted span; the model embeds it as the exact mean
   of member name vectors. Member programs are not encoded for group prompts.
 - The native compound-offer lowering (`Game::compound_offers`/`compound_commands`
@@ -73,3 +71,19 @@ or renumber it explicitly — never reinterpret main v8 rows). Re-record fixture
 and parity digests from the merged engine; never hand-merge digests. Fresh v6
 defaults stay. Re-run debug cargo tests, Engine Budget and integration on the
 merged head; earlier green CI does not cover it.
+
+Sync resolution applied 2026-11-05 (merge of `423dd2fcd`): main's v8 keeps its
+number and layer meaning. The branch-only `[A,2]` v8 is dropped. V9 is main's
+v8 layout (4096 × 3 details, 512 default facts, fact kinds 11–14, layer
+admission) plus `name_candidates[A,4]`; the checkpoint binding always records
+`public-groups-v1`. V1–v8 see naming prompts anonymously. Academy fixtures,
+authored-match/parity receipts and their pins were regenerated from the merged
+engine (`generate_authored_match_receipt.py`, both parity `write`s,
+`refresh_academy_fixtures.py`). The naming learnability witness now allows up
+to eight bounded supervised steps for greedy selection, because v9's v8-based
+model initializes differently; its loss-decrease and gradient checks are
+unchanged.
+Main's `semantic-kernel-w17-v2` corpus was recorded under state hash v15; this
+branch's hash contract 16 moved every case's final hash and trace digest.
+Re-recorded with `semantic_conformance -- record`; command counts, outcomes,
+manifest and Phase rows are unchanged.

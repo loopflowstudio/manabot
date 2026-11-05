@@ -471,18 +471,16 @@ pub(super) fn input_buffer_config(
         return Err(PyValueError::new_err("v7 requires current relation width"));
     }
     if naming {
-        if config.policy_input_version != 7 {
+        // Naming composes the v8 layer layout with name and group-span rows.
+        if config.policy_input_version != 8 {
             return Err(PyValueError::new_err(
-                "v8 requires shared effects and current relations",
+                "v9 requires the v8 shared-effect layout",
             ));
         }
-        // Column count selects the naming contract: v8 whole-vocabulary names,
-        // v9 names plus group spans.
-        config.policy_input_version = match shape("name_candidates")?[1] {
-            crate::agent::observation_encoder::NAME_DIM_V8 => 8,
-            crate::agent::observation_encoder::NAME_DIM_V9 => 9,
-            _ => return Err(PyValueError::new_err("invalid name candidate width")),
-        };
+        if shape("name_candidates")?[1] != crate::agent::observation_encoder::NAME_DIM_V9 {
+            return Err(PyValueError::new_err("invalid name candidate width"));
+        }
+        config.policy_input_version = 9;
     }
     Ok(config)
 }
@@ -502,7 +500,7 @@ fn read_observation_buffers(
         ))
     };
     Ok(ObservationBuffers {
-        name_candidates: if c.policy_input_version >= 8 {
+        name_candidates: if c.policy_input_version >= 9 {
             Some(
                 require_numpy_array(
                     buffers,

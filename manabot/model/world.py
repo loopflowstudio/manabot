@@ -122,14 +122,8 @@ def _input_binding(observation_space: Any) -> dict:
             {
                 # V9 binds the native group partition through its branching
                 # bound; changing it reinterprets every group route.
-                **(
-                    {
-                        "naming_representation": "public-groups-v1",
-                        "naming_branching": managym.NAME_BRANCHING,
-                    }
-                    if observation_space.encoder.config.policy_input_version >= 9
-                    else {"naming_representation": "public-identity-v1"}
-                ),
+                "naming_representation": "public-groups-v1",
+                "naming_branching": managym.NAME_BRANCHING,
                 "naming_vocabulary": _digest(
                     [
                         {"name": candidate.name, "definition": candidate.definition}
@@ -137,7 +131,7 @@ def _input_binding(observation_space: Any) -> dict:
                     ]
                 ),
             }
-            if observation_space.encoder.config.policy_input_version >= 8
+            if observation_space.encoder.config.policy_input_version >= 9
             else {}
         ),
         "rules": {

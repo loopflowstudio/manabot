@@ -77,9 +77,8 @@ contiguous groups, and choosing one only narrows the scope. Selecting a name
 constructs one `ExileNamed` effect, then enters the existing private search
 continuation. Public names and optional learning definition references are not
 in-game card objects or deck admission. Explicit policy input v9 carries name
-joins and group spans in `name_candidates[A,4]` at ordinary action capacity;
-v8's whole-vocabulary `[A,2]` rejects groups; v1–v7 layouts and fresh v6
-defaults are frozen.
+joins and group spans in `name_candidates[A,4]` at ordinary action capacity,
+beside v8's layer layout; v1–v8 layouts and fresh v6 defaults are frozen.
 See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
 
 Spell-level modes are announced before targets and payment. Independent target

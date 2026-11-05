@@ -158,11 +158,9 @@ addition to tensor shapes and the content manifest. A changed vocabulary,
 order, join or branching bound fails admission; there is no warm start or
 remapping.
 
-Explicit v8 (`name_candidates[A,2]`, `A = max(max_actions, vocabulary)`) scored
-the whole vocabulary in one decision. It cannot represent groups, so it rejects
-any prompt that offers them, including the installed catalog's first prompt.
-V1–v7 never had name identity: group and name choices appear as ordinary modal
-choices, within their capacities. Missing-checkpoint defaults and fresh v6
+V9 composes the [v8 layer layout](#composable-layer-input-v8) with
+`name_candidates[A,4]`. V1–v8 have no name identity: group and name choices
+appear as ordinary modal choices, within their capacities. Missing-checkpoint defaults and fresh v6
 defaults are unchanged; using v9 is explicit. The semantic observation/capture
 contracts are 8/5, so earlier semantic world bindings are rejected for current
 execution.
