@@ -16,7 +16,7 @@ use crate::{
         cast_permission::CastPermissions,
         combat::CombatState,
         decision::SuspendedResolution,
-        event::GameEvent,
+        event::{EventLedger, GameEvent},
         priority::PriorityState,
         statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
@@ -51,7 +51,8 @@ pub struct GameState {
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub events: Vec<GameEvent>,
+    /// Committed rules events; forks share the sealed history.
+    pub events: EventLedger,
     pub pending_events: Vec<GameEvent>,
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
@@ -296,7 +297,7 @@ impl TrackedState {
         &mut self.state.id_gen
     }
 
-    pub(crate) fn events_mut(&mut self) -> &mut Vec<GameEvent> {
+    pub(crate) fn events_mut(&mut self) -> &mut EventLedger {
         &mut self.state.events
     }
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     flow::turn::StepKind,
     state::{
@@ -243,4 +245,182 @@ impl GameEvent {
 pub enum DamageTarget {
     Player(PlayerId),
     Permanent(PermanentId),
+}
+
+/// The committed rules-event ledger, in emission order.
+///
+/// Every `SEGMENT` events the unsealed tail is sealed into an immutable,
+/// reference-counted segment, so a fork shares the game's history and copies
+/// at most one partial segment: cloning a long game no longer costs its past.
+/// Readers see one ordered sequence; `Index`, `iter` and `len` cover the
+/// whole ledger, and `take` drains it like the `Vec` it replaces.
+#[derive(Clone, Debug, Default)]
+pub struct EventLedger {
+    sealed: Option<Arc<Segment>>,
+    tail: Vec<GameEvent>,
+}
+
+#[derive(Debug)]
+struct Segment {
+    earlier: Option<Arc<Segment>>,
+    events: Vec<GameEvent>,
+    /// Events in this segment and every earlier one.
+    len: usize,
+}
+
+const SEGMENT: usize = 32;
+
+impl EventLedger {
+    pub fn push(&mut self, event: GameEvent) {
+        if self.tail.len() == SEGMENT {
+            let events = std::mem::replace(&mut self.tail, Vec::with_capacity(SEGMENT));
+            let len = self.sealed_len() + events.len();
+            self.sealed = Some(Arc::new(Segment {
+                earlier: self.sealed.take(),
+                events,
+                len,
+            }));
+        }
+        self.tail.push(event);
+    }
+
+    fn sealed_len(&self) -> usize {
+        self.sealed.as_ref().map_or(0, |segment| segment.len)
+    }
+
+    pub fn len(&self) -> usize {
+        self.sealed_len() + self.tail.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Sealed segments, oldest first.
+    fn segments(&self) -> Vec<&[GameEvent]> {
+        let mut segments = Vec::new();
+        let mut cursor = self.sealed.as_deref();
+        while let Some(segment) = cursor {
+            segments.push(segment.events.as_slice());
+            cursor = segment.earlier.as_deref();
+        }
+        segments.reverse();
+        segments
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &GameEvent> {
+        self.segments()
+            .into_iter()
+            .flatten()
+            .chain(self.tail.iter())
+    }
+
+    pub fn get(&self, index: usize) -> Option<&GameEvent> {
+        let sealed_len = self.sealed_len();
+        if index >= sealed_len {
+            return self.tail.get(index - sealed_len);
+        }
+        let mut cursor = self.sealed.as_deref();
+        while let Some(segment) = cursor {
+            let start = segment.len - segment.events.len();
+            if index >= start {
+                return segment.events.get(index - start);
+            }
+            cursor = segment.earlier.as_deref();
+        }
+        None
+    }
+
+    /// Remove and return every event, oldest first.
+    pub fn take(&mut self) -> Vec<GameEvent> {
+        let events = self.iter().cloned().collect();
+        self.clear();
+        events
+    }
+
+    pub fn clear(&mut self) {
+        self.sealed = None;
+        self.tail.clear();
+    }
+}
+
+impl std::ops::Index<usize> for EventLedger {
+    type Output = GameEvent;
+
+    fn index(&self, index: usize) -> &GameEvent {
+        self.get(index).expect("event index within the ledger")
+    }
+}
+
+/// Equal ledgers hold the same events, however they are segmented.
+impl PartialEq for EventLedger {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for EventLedger {}
+
+impl PartialEq<Vec<GameEvent>> for EventLedger {
+    fn eq(&self, other: &Vec<GameEvent>) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+/// Serializes as the plain event sequence, so witnesses and hashes read
+/// exactly what the `Vec` they replace produced.
+impl serde::Serialize for EventLedger {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn life(new: i32) -> GameEvent {
+        GameEvent::LifeChanged {
+            player: PlayerId(0),
+            old: new + 1,
+            new,
+        }
+    }
+
+    #[test]
+    fn ledger_reads_as_one_sequence_across_sealed_segments_and_forks() {
+        let mut ledger = EventLedger::default();
+        let count = 3 * SEGMENT + 5;
+        for index in 0..count {
+            ledger.push(life(index as i32));
+        }
+        let expected: Vec<_> = (0..count as i32).map(life).collect();
+        assert_eq!(ledger.len(), count);
+        assert_eq!(ledger, expected);
+        assert!(ledger.iter().eq(expected.iter()));
+        for (index, event) in expected.iter().enumerate() {
+            assert_eq!(&ledger[index], event);
+        }
+        assert_eq!(ledger.get(count), None);
+        assert_eq!(
+            serde_json::to_value(&ledger).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
+
+        // A fork shares the sealed history and diverges independently.
+        let mut fork = ledger.clone();
+        fork.push(life(-1));
+        ledger.push(life(-2));
+        assert_eq!(ledger.len(), count + 1);
+        assert_eq!(fork[count], life(-1));
+        assert_eq!(ledger[count], life(-2));
+        assert_ne!(fork, ledger);
+        assert!(fork.iter().take(count).eq(expected.iter()));
+
+        let drained = ledger.take();
+        assert_eq!(drained.len(), count + 1);
+        assert_eq!(drained[..count], expected[..]);
+        assert!(ledger.is_empty());
+        assert_eq!(fork.len(), count + 1, "draining one fork leaves the other");
+    }
 }
