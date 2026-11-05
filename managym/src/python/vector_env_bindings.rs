@@ -177,7 +177,9 @@ impl PyVectorEnv {
     fn scenario_naming_vocabulary_into_buffers(&mut self, py: Python<'_>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.scenario_naming_vocabulary_into(|index, obs| {
-                write_buffers.write_encoded_row(index, obs, 0.0, false, false, &config)
+                write_buffers
+                    .write_encoded_row(index, obs, 0.0, false, false, &config)
+                    .map_err(AgentError::from)
             })?;
             Ok(vec![InfoDict::new(); inner.len()])
         })

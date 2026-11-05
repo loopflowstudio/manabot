@@ -31,3 +31,11 @@ schema/fingerprint transition exclusion; preserve every decision/offer field
 and the frozen receipt bytes. Main's MTG-213 decisions remain available at
 `ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md`; they do not
 authorize pilot execution or change this Task's interactive review boundary.
+
+Sync verification: the incoming typed `ObservationWriteError` required the
+naming scenario writer to use the same `AgentError::from` conversion as adjacent
+non-isolated writers. Release extension rebuilt and atomically installed.
+Focused pytest passed 25 cases: retained permanent growth/recovery (including
+sharded streams), v1–v8 nondefault axes, retained action-prefix parity, and the
+combined large-vocabulary native/model/vector proof. Broader debug/CI and
+Engine Budget remain gate work; this sync makes no new performance claim.
