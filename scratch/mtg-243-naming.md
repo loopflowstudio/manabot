@@ -104,8 +104,8 @@ Removed `RolloutBatch.from_dense`: its two test fixtures now use the production
 `PackedActions.pack` entry point directly. Boolean/integer indexing already owns
 its NumPy output, so packing and pending object slices need no second copy.
 Inspection tests reuse one materialization or read retained object fields directly;
-the history fixture materializes only its selected row. No further deletion target
-remains in this design.
+the history fixture materializes only its selected row. No further production
+deletion target remains in this design.
 
 The only dense scoring reference is `tests/model/naming_reference.py`, frozen
 from the published action computation for numerical checks. No production fallback
@@ -119,13 +119,17 @@ coordinates, attention/FiLM on and off, values and parameter gradients, prepared
 inference, malformed joins, full compound naming support, exact storage/copy
 ownership, both loss gradients, bounded minibatch materialization, numerical
 incidents and native collector recovery. CI now selects the packed-action and
-hand-calculated credit tests explicitly. The original 928-name legality and
-policy-reachability fixtures remain; vector and Academy coverage use the installed
-catalog. The large vocabulary is injected at the native test/model-fixture
-boundaries, not admitted as a production world. Greater-than-512 native legality
-and model reachability have separate witnesses; a combined large-catalog
-scalar/vector/Academy acceptance proof remains outstanding, without broadening
-production deck admission to supply it.
+hand-calculated credit tests explicitly. The controlled 928-name vocabulary now enters native authority through
+`scenario_naming_vocabulary`, sharing the checked-in Scryfall fixture across
+Rust, scalar/vector encoding, models and Academy. The model test no longer
+fabricates observation rows. A policy-selected row beyond 511 executes through
+scalar Commands, vector buffers and the Academy WebSocket; states/encodings
+agree after execution. Separate choices at 0/511/512, Gray Ogre and the real
+Fire Lord Sozin back face retain fork/replay/stale checks. Gray Ogre's private
+search preserves remaining selections, reconnect, duplicate/stale rejection and
+committed exiles. Names without matches preserve native trivial-decision
+skipping. The fixture changes only a pending scenario decision; the installed
+catalog, deck admission and subsequent normal game setup stay unchanged.
 
 The equal-rule competency check changes only two installed encoder token rows,
 not native definitions or deck admission. Without the public identity join the
@@ -186,135 +190,150 @@ immediate base `8e8d702f8`; do not attribute its whole delta to naming. The new
 head still requires CI. Prior native allocation attribution remains at the
 published design reference above; no naming-engine algorithm changed this pass.
 
-## Remaining validation and review
+## Review and earlier validation
 
-### Concept review — 2026-11-04, after risk reduction
+The concept review of `d11ca430d` retained Jack Heart's accepted design with no
+open product choice. Filtering commits nothing; one Command chooses the name,
+then the existing private search commits exiles or stops and shuffles. Reconnect
+restores the pending decision and inspection permissions; it does not promise
+process-crash durability. Learner recovery still requires empty pending storage.
+Production admission of additional names and default adoption of v8 remain
+separate decisions. Detailed review and earlier check output are retained at
+`2acc50a37:scratch/mtg-243-naming.md`.
 
-Outcome: **no design change and no open product choice within this Task**.
-The review of `d11ca430d` and the current working design retains Jack Heart's
-accepted complete installed-catalog choice and risk-reduction direction. The
-next implementation direction is unchanged; this finding supplies evidence to
-loop-or-next and does not select its route or approve delivery.
+At that revision, full debug Rust passed (970 tests, two ignored), as did
+Clippy/formatting. Broad Python checks exposed packed-rollout comparison and
+float32 equality assumptions, repaired at `4e7e4ea94`. Two recovery failures
+came from committing while their parent cached the old source identity; both
+passed in a fresh process without relaxing admission. CI-selection/release
+checks passed (58), and Academy labels passed (four). The authored-match receipt
+refresh changed only source fingerprints; Commands, viewer projections, events
+and state witnesses remained identical, and the three receipt tests passed.
+Frozen evidence was unchanged. These are earlier-source results, not acceptance
+of the current repair.
 
-The experience is one deliberate name selection, then the existing optional
-named-card search. A person filters the published offers and chooses “Name Gray
-Ogre”; a policy scores the same complete support. Filtering changes no game
-state. The bound Command commits the name, constructs one `ExileNamed`, and
-resumes the retained frame as `SearchNamed`. Selecting a matching card commits
-its exile; “Stop searching and shuffle” ends the search without reversing it.
-No confirmation, draft-name state, cancellation or browser-owned legality is
-needed. Public candidate identity, executable definition and physical card
-remain distinct because they carry different rules and visibility contracts.
+The publication check at `2acc50a37` stopped on a real gap: the large-vocabulary
+model test fabricated observation rows while vector and Academy still used the
+344-name installed catalog. The accepted repair below replaces that split proof.
+PR #424's published head remains `96b055105`; its copy needs the repaired proof,
+compact storage/scoring, identity fix and measured limitations. The existing
+`scratch/naming-risks.html` assessment and prior `scratch/pr-review.html`
+walkthrough remain review artifacts without new rendering proof.
 
-The consequential mismatch in the first implementation was contextual:
-different name vectors alone could not distinguish equal-rule cards in public
-state. The implemented v8 public-definition identity join resolves that mismatch
-without changing the interaction or granting hidden membership. Legal-row
-scoring and `PackedActions` are internal representations of the same complete
-choice, not a second action space. Original slots and full behavior evidence
-survive collection, both learners and numerical incidents; only minibatch
-materialization recreates dense rows. Checkpoint vocabulary/representation
-binding owns compatibility. These changes remove unnecessary per-name programs
-and retained padding without inventing a new user-facing lifecycle.
+## Accepted repair pass — 2026-11-04
 
-Normal path, failure and recovery agree with that contract: before selection,
-reconnect restores naming offers; during search, it restores the committed name,
-remaining selections and authorized inspection. A duplicate Command cannot
-repeat an exile, and a fresh stale Command is rejected. Retained-session recovery
-does not imply process-crash durability. A vocabulary mismatch must reject a
-checkpoint before loading weights; recovery requires a compatible runtime/input
-binding, not silent name remapping. Learner recovery remains at its existing
-empty-pending boundary rather than promising mid-rollout restart.
+Jack Heart accepted the design and requested repairs before shipping, explicitly
+asking whether CPU load explained the failures (comment d4db22c5). Implementation
+continues within this Task; the selected Graph owns subsequent gate, publication
+and interactive review. No merge, auto-merge or strength experiment is authorized.
+The pre-repair uncommitted direction is preserved at
+`.lf/logs/naming-plan-before-repair.md`; published failing CI remains
+run `41925981431`, head `96b055105`.
 
-Usage wording reviewed: “Find an action, choose a name, then choose matching
-cards or stop searching.” Academy's existing filter and recovery contract need
-no new interaction instructions. `docs/training.md#catalog-naming-input` already
-states explicit v8 selection, complete vocabulary capacity, visible identity,
-compact storage and checkpoint rejection; its current guidance remains unchanged.
-No repository skill needs a new workflow. Broader production name legality and
-fresh-default adoption of v8 remain separate future decisions, not unresolved
-choices blocking the accepted scope.
+### Delete — do not maintain
 
-Counterexamples remain decisive: a legal name beyond row 511 that cannot be
-scored, preferences lost under action reordering, hidden deck membership changing
-logits, rebound Commands after filtering/reconnect, lost behavior probabilities,
-or restored searches reversing committed exiles. Existing focused witnesses
-address these boundaries separately. The next proof is the already-required
-combined greater-than-512 scalar/vector/Academy workflow, followed by the
-affected gate checks. Neither a two-example head fit nor variable small CPU
-samples establish training strength, accelerator behavior or intended-size
-throughput. This review inspected source and tests; it reran no runtime checks.
+Completed this pass: remove the model's fabricated large-vocabulary action rows
+and the duplicate Rust fixture builder in favor of one native scenario fixture;
+replace the platform-default least-squares fit with checked SVD; remove bitwise
+float assertions for reordered legal-row GEMMs while keeping the >=95% learned
+preference tests; replace candidate/build-reference/reference timing with a
+fixed two-order measurement. Preserve complete legal choices, original Commands,
+all behavior/gradient/privacy assertions, failed measurements, the 10% budget,
+exact digests and reference-build-failure candidate recording. The reduction
+also removes the duplicate sampler digest/count predicate: both comparisons and
+sample aggregation use `digest_checks`. Native fixture injection retains the
+shared vocabulary through `Env`; only the Python list boundary copies entries,
+so vector injection discards no copied name list. Rust tests call the fixture
+owner directly, without a forwarding wrapper or unused configuration argument.
+The SVD fit supplies its own rank check; the separate rank decomposition is
+removed. No remaining deletion target is known. Production naming, model weights,
+frozen schema/evidence and the budget reference are unchanged.
 
-No product decision blocks the installed-catalog scope. Gate owns affected
-model/training/recovery suites, package boundaries, current-world admission,
-full debug Rust/Clippy, Academy/browser coverage and any current-source receipt
-refresh. Frozen evidence must remain untouched. Release extension rebuilt and
-atomically installed; the focused native decoder test passes with debug guards.
-All five published CI failure cases pass locally in focused checks.
+### Repaired proof and numerical diagnosis
 
-The retained implementation check at `5a57096f2:scratch/mtg-243-naming.md`
-records the exact focused command: 110 passed, 1 skipped, plus passing Ruff and
-diff checks. No runtime tests or cost probes were repeated for this documentation
-reconciliation. Full affected suites, the combined large-catalog proof and
-final-source CI remain outstanding; GPU and intended-size throughput claims
-remain unmeasured rather than implied by those checks.
+The combined native/model/vector/Academy path passes locally against the actual
+928-name scenario decision. Academy uses the same model-selected index above
+511 and compares its resulting native state and observation with scalar replay
+and vector execution. The separate matching-name path exercises committed exile
+and reconnect; back-face and definition-free choices remain distinct.
 
-The pending PR #424 update covers compact storage/scoring, the reproduced
-identity gap and its fix, and these measured costs and limitations. Its
-publication boundary remains interactive review. `scratch/naming-risks.html`
-holds the current risk assessment; `scratch/pr-review.html` retains the prior
-source walkthrough with an update notice. PR #424 remains unmerged; no
-auto-merge or experiment occurred. Local HTML/screenshots remain review
-artifacts rather than product source; updated pages have no new rendering proof.
+The equal-rule feature matrix has singular values 2.657710831 and
+0.002939572 (condition ~904), rank 2, and six exact zero columns. The pinned
+Linux x86 `torch==2.10.0+cpu` reproduces default `gelsy` rank 0 and a 0.001
+margin residual on this exact exported matrix, including a zero-first column
+permutation. `gelsd` returns rank 2 and residual <3e-17. macOS 2.10 and newer
+ARM Linux 2.15 do not reproduce that QR failure; platform/version matters.
+The test now explicitly selects SVD and checks rank, conditioning and residual
+before installing the fitted head. It retains identity/program gradients,
+permutation invariance, positive complete support and closed-information parity.
+This is a solver-sensitive test failure, not evidence of CPU load or lost model
+capacity. The failed earlier Adam probe and limits on SGD/strength claims remain.
+Raw numerical evidence: `.lf/logs/naming-fit.pt`, `naming-linux-x86-fit.log`,
+`naming-linux-fit.log`. Two ordinary-choice erased-channel ties now admit
+float32 rounding (2e-6 absolute, 1e-6 relative); their 0.95 preference thresholds
+and native execution assertions remain strict. Both preference directions pass
+locally after the repair.
 
-Production admission of extra validated names and default adoption of v8 remain
-separate future decisions. The current universe includes real back-face names
-but does not claim all legal Magic names or change deck admission.
+### Engine Budget diagnosis
 
-Check (realign): `git diff --check` — passed; `lf context` — memory and scratch below both configured limits; runtime validation reused from `5a57096f2`, full acceptance deferred to gate/CI.
+The old CI failed only step throughput: 23489.9 -> 21126.6/s, below 21354.5;
+search total 93.734 -> 101.409 s, worst 2.733 -> 2.975 s. Digests matched.
+There is no retained utilization telemetry, so historical CPU contention cannot
+be claimed. The reference is `ea316ff14`, not this PR's immediate base.
 
-## Publication check — 2026-11-04
+Both binaries are now built before timing. `engine_budget.py sample` executes a
+fixed candidate/reference/reference/candidate plan, retains every raw sample,
+CPU user/system time, context switches and host load / Linux pressure counters,
+and compares median durations (inverse median time/step for throughput). All
+sample digests and workload counts must agree; tolerance remains 0.10 and the
+reference is untouched. No adaptive retries, artificial load or discarded
+outliers. Failed reference builds/runs still retain the completed candidate's
+recording, then fail the job. Injected executable fixtures cover aggregation,
+changed digests, unchanged slowdown rejection and failure propagation.
 
-`lf sync` completed without conflicts, checkpointing the inherited reconciliation
-at `96b055105`. The existing PR #424 already exposes that head; its copy still
-describes the earlier implementation. The actual remote main was `3de3a0ebf`,
-with local main `1546aae3f` already incorporated. No `lf pr publish`, merge,
-auto-merge or Task completion was performed in this check.
+The fixed local paired run completed, with no other test/compiler/diagnostic
+workers started by this pass during timing. Source reference was extracted with
+`git archive` into `.cache/naming-budget-reference`, not a second Task/worktree.
+Raw evidence and executable hashes: `.lf/logs/naming-budget-paired/`.
 
-The broad model check found three test compatibility failures: the inference
-recovery comparator did not admit `PackedActions`, and two independent dense
-focus references required bitwise equality across differently shaped float32
-matrix multiplies (observed error about 3.3e-11). Commit `4e7e4ea94` compares
-complete materialized observations and behavior distributions and uses a tight
-float32 tolerance for the focus references. The repaired checks pass.
+| Local metric | Reference | Candidate | Existing budget |
+| --- | ---: | ---: | --- |
+| Step throughput | 29,983.0/s | 28,338.2/s | pass |
+| Search total | 81.658 s | 87.025 s | pass |
+| Worst search reply | 2.181 s | 4.290 s | **fail** (limit 2.399 s) |
 
-Validation: full debug Rust with `CARGO_PROFILE_DEV_OPT_LEVEL=1`, `-j 2`:
-970 passed, two ignored; Cargo formatting and all-target/all-feature Clippy pass.
-The first affected Python invocation stopped at the three failures after 204
-passes and one skip. The continuation/recheck invocation covered remaining
-model, packed rollout, learning, recovery, observation/buffer, Academy recovery,
-package-boundary, world-admission and monitoring checks: 384 passed, two failed.
-Those two abrupt-process recovery failures were source-identity mismatches
-caused by committing the test repairs while the parent process cached its old
-commit; both pass in a fresh, unchanged-checkout invocation. Recovery admission
-was not relaxed. CI-selection/release tests: 58 passed; Academy labels: four
-passed; Ruff and diff checks pass.
+All digests and workload counts agree. Candidate search totals were
+78.541 / 95.511 s; worst replies 2.309 / 6.498 s. Whole-process CPU totals
+were 77.841 / 79.652 s, while process wall times were 78.852 / 95.557 s;
+involuntary switches rose 27,186 -> 52,177. This shows scheduling contributes
+to the local elapsed-time variation, but lacks per-reply CPU accounting to
+attribute the entire 6.498-second spike. Reference CPU totals were
+75.381 / 74.763 s; the candidate's ~4.9% higher aggregate CPU time is not an
+isolated naming-only cost or a demonstrated >10% code regression.
 
-Academy receipt/navigation/setup checks had 28 passes and one stale authored-match
-receipt. Rebuilding and comparing the complete open-w17 receipt proved that only
-the source fingerprints of the historical-reader changes differed. Refreshed
-those fingerprints with identical Commands, viewer projections, events and state
-witnesses; the three-test authored-match suite then passed. Frozen evidence is
-unchanged. Full browser coverage and CI on the final source are still outstanding.
+An important distinction: reference step process wall times were 4.780 / 3.464 s
+but the benchmark's timed step loop was 3.379 / 3.401 s, with CPU 3.371 / 3.381 s.
+The large process-launch delay did not enter its reported throughput. Thus
+observing host contention alone cannot explain the old CI step failure.
+The failed worst-reply result is retained without retries, baseline movement or
+budget relaxation. Final-source Linux CI remains required; this local run does
+not clear Engine Budget or justify accepting a persistent cost.
 
-Publication remains blocked by the accepted combined greater-than-512 proof.
-`flow/naming_tests.rs` installs a controlled vocabulary into a Rust decision;
-`test_catalog_naming_large_support_learns_and_rejects_wrong_binding` separately
-injects corresponding observation rows. Vector and Academy execution still use
-the 344-name installed catalog. They do not prove that a policy-selected row
-beyond 511 executes through the vector and Academy Command paths against the
-same native vocabulary. Closing this needs a controlled native fixture shared
-by those consumers, without enlarging production deck admission or treating
-synthetic observations as execution authority. Refresh the PR copy through
-`lf pr publish` only after that acceptance gap is closed; the repaired tests and
-receipt are retained locally for that continuation.
+Check: `uv run --extra dev --extra play pytest tests/infra/test_engine_budget.py tests/model/test_catalog_naming.py::test_catalog_naming_large_support_learns_and_rejects_wrong_binding tests/model/test_catalog_naming.py::test_equal_rule_names_learn_opposite_public_preferences tests/academy/test_named_search_recovery.py -q` — 24 passed; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib flow::naming_tests` — two passed; release extension rebuilt and atomically installed, Ruff/format/diff checks passed. Prior repair check details are retained in `.lf/logs/naming-plan-before-compress.md`; gate owns broad suites and final-source CI.
+
+The sample collector added typed telemetry fields and a fresh-artifact guard after
+the actual timing run; the reduction shares existing digest/count validation.
+No workload, aggregation or tolerance changed, and no timing was repeated.
+The local budget failure above remains visible. `lf context` reports memory and
+scratch below both token and byte targets after condensing the earlier review.
+
+### Remaining boundary
+
+Gate owns affected suites, full debug Rust/Clippy, current-source receipts,
+browser coverage and final-source Linux CI / Engine Budget once. Implementation
+runs only focused changed-behavior checks and the specifically requested bounded
+diagnosis. Final publication must use the complete repaired tree, update PR #424
+and stop at interactive review; previous green Graph steps or old CI do not
+establish that outcome. GPU behavior, intended-size throughput and strength
+remain unmeasured. The local review page must distinguish the repairs from the
+still-published failing head; it supplies no new browser rendering proof.

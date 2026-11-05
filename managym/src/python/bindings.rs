@@ -3955,8 +3955,20 @@ impl PyEnv {
     // FOR TEST AND MEASUREMENT HARNESSES ONLY — they mutate state directly,
     // bypassing the rules engine (no events, no triggers, no costs). Used by
     // manabot/verify/competency.py to construct scored mid-game positions.
-    // Inject at a priority decision, then call scenario_refresh() once.
+    // Priority injections need scenario_refresh() once. The naming fixture
+    // instead requires a pending name decision and republishes it directly.
     // ------------------------------------------------------------------
+
+    /// Scenario harness only: install the checked-in large naming vocabulary.
+    fn scenario_naming_vocabulary(&self) -> PyResult<Vec<crate::cards::names::NameCandidate>> {
+        self.reject_guarded_mutation("scenario_naming_vocabulary")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .scenario_naming_vocabulary()
+            .map(|names| names.iter().cloned().collect())
+            .map_err(map_agent_err)
+    }
 
     /// Scenario harness: set a player's life total directly.
     fn scenario_set_life(&self, player: usize, life: i32) -> PyResult<()> {

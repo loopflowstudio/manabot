@@ -125,49 +125,27 @@ def test_catalog_naming_v8_scalar_parity_and_private_text(
 
 
 def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
-    naming_root: managym.Env,
+    naming_trace: NamingTrace,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(243)
-    fixture = json.loads(
-        Path("managym/tests/fixtures/naming_vocabulary.json").read_text()
-    )
-    entries: dict[str, int | None] = {entry["name"]: None for entry in fixture["names"]}
-    entries.update(
-        {candidate.name: candidate.definition for candidate in managym.naming_catalog()}
-    )
-    catalog = [
-        managym.NameCandidate(name, definition)
-        for name, definition in sorted(entries.items())
-    ]
+    root = naming_trace.root.clone_env()
+    installed = managym.naming_catalog()
+    catalog = root.scenario_naming_vocabulary()
     assert len(catalog) > 600
+    assert len(naming_trace.root.observation_for_player(0).action_space.actions) == len(
+        installed
+    )
+    assert [c.name for c in managym.naming_catalog()] == [c.name for c in installed]
+    definition_free = next(c.name for c in catalog if c.definition is None)
+    assert managym.unsupported_cards([definition_free]) == [definition_free]
     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
     space = ObservationSpace(ObservationConfig(policy_input_version=8))
     assert space.shapes["actions"][0] == len(catalog)
-    # Native deserialization and scalar encoding exercise the same controlled
-    # vocabulary as flow/naming_tests.rs; no fake CardDefinition is installed.
-    raw = naming_root.observation_for_player(0)
-    payload = json.loads(raw.toJSON())
-    template = payload["action_space"]["actions"][0]
-    template.pop("name_definition", None)
-    payload["action_space"]["actions"] = [
-        template
-        | {
-            "description": f"Name {candidate.name}",
-            "mode_index": index,
-            "name_index": index,
-            **(
-                {"name_definition": candidate.definition}
-                if candidate.definition is not None
-                else {}
-            ),
-        }
-        for index, candidate in enumerate(catalog)
-    ]
-    raw = managym.Observation.from_json(json.dumps(payload))
+    raw = root.observation_for_player(0)
     values = space.encoder.allocate()
-    naming_root.encode_observation_into(raw, values)
+    root.encode_observation_into(raw, values)
     for key, expected in space.encode(raw).items():
         np.testing.assert_allclose(values[key], expected, atol=1e-6, err_msg=key)
     with pytest.raises(ValueError, match="capacity"):
@@ -191,6 +169,84 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     optimizer.step()
     after, _ = model(tensors)
     assert torch.nn.functional.cross_entropy(after, target) < before.detach()
+    selected, _, _, _ = model.get_action_and_value(tensors, deterministic=True)
+    index = int(selected)
+    assert index >= 512
+    # The policy's actual choice executes against the same native vocabulary,
+    # through vector buffers and semantic Commands, not fabricated action rows.
+    vector = managym.VectorEnv(num_envs=1, seed=165)
+    vector.reset_all(_players())
+    for action in naming_trace.actions:
+        vector.step([action])
+    buffers = space.encoder.allocate(1)
+    buffers.update(
+        rewards=np.zeros(1, dtype=np.float64),
+        terminated=np.zeros(1, dtype=np.uint8),
+        truncated=np.zeros(1, dtype=np.uint8),
+    )
+    vector.set_buffers(buffers)
+    vector.scenario_naming_vocabulary_into_buffers()
+    for key, expected in values.items():
+        np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+    frame = json.loads(root.semantic_decision_frame_json())
+    assert json.loads(vector.semantic_decision_frames_json()[0]) == frame
+    root_digest = root.state_digest()
+    back = next(
+        i for i, candidate in enumerate(catalog) if candidate.name == "Fire Lord Sozin"
+    )
+    ogre = next(
+        i for i, candidate in enumerate(catalog) if candidate.name == "Gray Ogre"
+    )
+    for choice in dict.fromkeys([0, 511, 512, back, ogre, index]):
+        branch = root.clone_env()
+        replay = root.clone_env()
+        command = json.dumps(
+            {
+                "command_id": f"large-name.{choice}",
+                "expected_revision": frame["revision"],
+                "offer_id": frame["offers"][choice]["id"],
+                "answers": [],
+            }
+        )
+        branch.step_semantic_command(command)
+        replay.step_semantic_command(command)
+        assert branch.state_digest() == replay.state_digest()
+        pending = branch.observation_for_player(0)
+        searching = any(f.decision == 25 and f.mode == 4 for f in pending.continuation)
+        if searching:
+            assert not branch.observation_for_player(1).action_space.actions
+        assert not pending.opponent.main_counts
+        with pytest.raises(Exception, match="revision|stale"):
+            branch.step_semantic_command(command)
+        assert branch.state_digest() == replay.state_digest()
+        offers = json.loads(branch.semantic_decision_frame_json())["offers"]
+        if choice == ogre:
+            assert searching
+            assert len(offers) > 5
+            assert all(
+                "Gray Ogre" in o["label"] or o["label"] == "Stop searching and shuffle"
+                for o in offers
+            )
+        if choice == index:
+            vector.step_into_buffers([choice])
+            assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
+                branch.semantic_decision_frame_json()
+            )
+            for key, expected in space.encode(pending).items():
+                np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        if searching:
+            stop = next(
+                i
+                for i, offer in enumerate(offers)
+                if offer["label"] == "Stop searching and shuffle"
+            )
+            branch.step(stop)
+        else:
+            # No matching cards leaves only fail-to-find, skipped natively.
+            assert all(
+                offer["label"] != "Stop searching and shuffle" for offer in offers
+            )
+    assert root.state_digest() == root_digest
     # Portable model state preserves candidate preferences exactly.
     restored = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
     restored.load_state_dict(model.state_dict())
@@ -535,10 +591,18 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     hook.remove()
     count = len(catalog)
     encoded = features[0].reshape(2, count, -1)
-    differences = encoded[:, choices[0]] - encoded[:, choices[1]]
-    assert torch.linalg.matrix_rank(differences.double()) == 2
+    differences = (encoded[:, choices[0]] - encoded[:, choices[1]]).double()
     target_margins = torch.tensor([0.001, -0.001], dtype=torch.float64)
-    fitted = torch.linalg.lstsq(differences.double(), target_margins).solution
+    # ReLU features include exact zero columns. Rank-revealing QR (the CPU
+    # default gelsy driver) can report rank zero for this underdetermined matrix
+    # on Linux LAPACK. SVD handles zero columns without losing the rank-2 signal.
+    fit = torch.linalg.lstsq(differences, target_margins, driver="gelsd")
+    assert fit.rank == 2
+    assert fit.singular_values[-1] / fit.singular_values[0] > 1e-6
+    fitted = fit.solution
+    torch.testing.assert_close(
+        differences @ fitted, target_margins, atol=1e-10, rtol=1e-8
+    )
     # Gradients also reach both public identity and executable program inputs.
     loss = torch.nn.functional.cross_entropy(before[:, choices], torch.arange(2))
     loss.backward()

@@ -11,8 +11,13 @@ protocol. Fresh v6 and frozen inputs remain unchanged. Names outside the real
 supported catalog and default adoption of v8 remain separate decisions.
 
 Main `1546aae3f` is incorporated; the plan records its documentation-only change
-and MTG-241's unsynced continuation codes 27–29. The separate native/model
-greater-than-512 witnesses leave a combined vector/Academy proof outstanding.
+and MTG-241's unsynced continuation codes 27–29. The combined greater-than-512 native/model/vector/Academy fixture now passes
+locally; final-source CI remains a gate obligation.
 Inherited T7 context is historical at `4463e57f5:scratch/questions.md`.
 The duplicate uncommitted notes are preserved at
 `.lf/logs/naming-risk/questions-before-compress.md`.
+
+The repair uses a fixed candidate/reference/reference/candidate plan and median
+durations to balance run order, with the existing 10% tolerance and digest
+requirements unchanged. This is a measurement-method change for review, not
+permission to reset the reference or explain old CI failures without telemetry.

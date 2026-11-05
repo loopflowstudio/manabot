@@ -173,6 +173,16 @@ impl PyVectorEnv {
         Ok(())
     }
 
+    /// Scenario harness only; does not change deck admission or future resets.
+    fn scenario_naming_vocabulary_into_buffers(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.scenario_naming_vocabulary_into(|index, obs| {
+                write_buffers.write_encoded_row(index, obs, 0.0, false, false, &config)
+            })?;
+            Ok(vec![InfoDict::new(); inner.len()])
+        })
+    }
+
     fn reset_all_into_buffers(
         &mut self,
         py: Python<'_>,

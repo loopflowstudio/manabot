@@ -11,14 +11,12 @@ use crate::{
         observation::Observation,
         observation_encoder::{encode, ObservationEncoderConfig},
     },
-    cards::{
-        content_pack::default_content_pack,
-        names::{NameCandidate, NameVocabulary},
-    },
+    cards::content_pack::default_content_pack,
     decision::Command,
     flow::{
         decision::{Decision, EffectFrame, FrameFinalize},
         game::Game,
+        scenario::naming_fixture_vocabulary,
     },
     search_state::witness,
     state::{
@@ -28,29 +26,7 @@ use crate::{
     },
 };
 
-fn vocabulary() -> Arc<NameVocabulary> {
-    let fixture: serde_json::Value =
-        serde_json::from_str(include_str!("../../tests/fixtures/naming_vocabulary.json")).unwrap();
-    let pack = default_content_pack();
-    let mut entries: BTreeMap<String, Option<crate::state::card::CardDefId>> = fixture["names"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|entry| (entry["name"].as_str().unwrap().to_owned(), None))
-        .collect();
-    // Keep the installed universe, including real back faces, and its learning joins.
-    for entry in pack.name_candidates().iter() {
-        entries.insert(entry.name.clone(), entry.definition);
-    }
-    NameVocabulary::new(
-        entries
-            .into_iter()
-            .map(|(name, definition)| NameCandidate { name, definition })
-            .collect(),
-    )
-}
-
-fn naming_game(names: Arc<NameVocabulary>) -> Game {
+fn naming_game() -> Game {
     let deck = BTreeMap::from([("Gray Ogre".into(), 12), ("Mountain".into(), 28)]);
     let mut game = Game::new(
         vec![
@@ -84,14 +60,7 @@ fn naming_game(names: Arc<NameVocabulary>) -> Game {
         queue: VecDeque::from([Effect::NameAndExileFromTargetPlayer { count: 4 }]),
         finalize: FrameFinalize::None,
     });
-    let Decision::NameCard {
-        names: installed, ..
-    } = &mut game.state.suspended_decision.as_mut().unwrap().decision
-    else {
-        panic!("naming decision")
-    };
-    *installed = names;
-    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    game.scenario_naming_vocabulary().unwrap();
     game
 }
 
@@ -108,9 +77,9 @@ fn command(game: &Game, index: usize) -> Command {
 
 #[test]
 fn catalog_naming_is_complete_encoded_and_forkable_beyond_512() {
-    let names = vocabulary();
+    let names = naming_fixture_vocabulary();
     assert!(names.len() > 600);
-    let game = naming_game(Arc::clone(&names));
+    let game = naming_game();
     let root = witness(&game);
     let obs = Observation::for_player(&game, PlayerId(0));
     assert_eq!(obs.action_space.actions.len(), names.len());
@@ -232,9 +201,12 @@ fn catalog_naming_cost_attribution() {
         let pack = crate::cards::content_pack::ContentPack::default();
         pack.name_candidates()
     });
-    measure("validated_large_vocabulary_setup", vocabulary);
-    let names = vocabulary();
-    let game = naming_game(Arc::clone(&names));
+    measure(
+        "validated_large_vocabulary_shared_handle",
+        naming_fixture_vocabulary,
+    );
+    let names = naming_fixture_vocabulary();
+    let game = naming_game();
     measure("naming_decision", || Decision::NameCard {
         player: PlayerId(0),
         count: 4,
