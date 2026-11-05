@@ -32,7 +32,7 @@ from managym.enums import (  # noqa: F401
 import numpy as np
 
 # Local imports
-from manabot.env.shared_effects import SHARED_EFFECT_SHAPES, encode_shared_effects
+from manabot.env.shared_effects import encode_shared_effects, shared_effect_shapes
 from manabot.infra.config import ObservationConfig
 from manabot.infra.log import getLogger
 import managym
@@ -125,6 +125,12 @@ FACT_COPY_EXCEPTION = 8
 FACT_TRANSFORMS = 9
 FACT_COMBAT_RESTRICTION = 10
 FACT_KINDS = 10
+# V8 extends the vocabulary without resizing retained v5–v7 embeddings.
+FACT_EFFECT_PROGRAM = 11
+FACT_EFFECTIVE_COLOR = 12
+FACT_KEYWORD_COUNTER_TIMESTAMP = 13
+FACT_CONTINUATION_PROGRAM = 14
+FACT_KINDS_V8 = 14
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # v5 decklist rows: definition id + 1, then main, unseen, sideboard and
@@ -180,6 +186,11 @@ def _timestamp_ranks(
             *(perm.effects for perm in permanents),
         ):
             stamps.update(effect.timestamp for effect in effects)
+    stamps.update(
+        timestamp
+        for perm in permanents
+        for timestamp in perm.keyword_counter_timestamps.values()
+    )
     return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
 
 
@@ -261,7 +272,11 @@ class ObservationEncoder:
                 if self.shows_everything
                 else {}
             ),
-            **(SHARED_EFFECT_SHAPES if self.config.policy_input_version >= 7 else {}),
+            **(
+                shared_effect_shapes(self.config.policy_input_version)
+                if self.config.policy_input_version >= 7
+                else {}
+            ),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             **(
@@ -304,6 +319,7 @@ class ObservationEncoder:
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+        managym.validate_policy_input(obs, self.config.policy_input_version)
         # Native selection owns the optional policy prefix; authority stays complete.
         retained = managym.policy_action_count(
             len(obs.action_space.actions), self.max_actions, self.config.action_overflow
@@ -428,7 +444,14 @@ class ObservationEncoder:
                     out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
             out["facts"] = self._encode_facts(obs, ranks)
             if self.config.policy_input_version >= 7:
-                out.update(encode_shared_effects(obs, self.object_to_index, ranks))
+                out.update(
+                    encode_shared_effects(
+                        obs,
+                        self.object_to_index,
+                        ranks,
+                        self.config.policy_input_version,
+                    )
+                )
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -513,6 +536,14 @@ class ObservationEncoder:
                     token(f"CounterKind::{kind}"),
                     (count / 10.0, 0.0),
                 )
+            if perm.colors is not None:
+                for color in perm.colors or ["Colorless"]:
+                    push(
+                        perm.id,
+                        FACT_EFFECTIVE_COLOR,
+                        token(f"Color::{color}"),
+                        (1.0, 0.0),
+                    )
             for subtype in perm.temp_subtypes:
                 push(perm.id, FACT_ADDED_SUBTYPE, token(subtype), (1.0, 0.0))
             if perm.name is not None:
@@ -540,6 +571,16 @@ class ObservationEncoder:
                 )
 
         for index, frame in enumerate(obs.continuation):
+            for ordinal, (kind, value) in enumerate(frame.program):
+                push(
+                    obs.agent.id
+                    if frame.controller == obs.agent.player_index
+                    else obs.opponent.id,
+                    FACT_CONTINUATION_PROGRAM,
+                    index + 1,
+                    (float(kind), float(ordinal)),
+                    detail=value,
+                )
             if frame.attackers is not None:
                 push(
                     obs.agent.id
@@ -576,6 +617,15 @@ class ObservationEncoder:
                 case _:
                     duration = 2.0
             provenance = (duration, effect.timestamp, effect.source_registry_key)
+            for ordinal, (token_kind, token_value) in enumerate(effect.program):
+                push(
+                    obj,
+                    FACT_EFFECT_PROGRAM,
+                    ident,
+                    (float(token_kind), float(ordinal)),
+                    token_value,
+                    provenance,
+                )
             for detail in details:
                 push(obj, kind, ident, values, detail, provenance)
 
@@ -591,6 +641,15 @@ class ObservationEncoder:
             )
             for exception in perm.copy.exceptions:
                 push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
+        for perm in permanents:
+            for kind, timestamp in sorted(perm.keyword_counter_timestamps.items()):
+                push(
+                    perm.id,
+                    FACT_KEYWORD_COUNTER_TIMESTAMP,
+                    token(f"CounterKind::{kind}"),
+                    (0.0, 0.0),
+                    provenance=(0.0, timestamp, None),
+                )
         if self.config.policy_input_version < 7:
             holders = [
                 (obs.agent.id, obs.agent.effects),

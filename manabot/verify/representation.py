@@ -1,4 +1,7 @@
-"""Bounded same-input representation proof, not a learning or speed ranking.
+"""Constructed Command roots and bounded representation proofs.
+
+Shared roots serve policy tests and cost measurements; the v5 proof below is
+not a learning or speed ranking.
 
 One forward/backward per arm per native fixture, CPU and one thread. Retains
 both viewers' v5 tensors and hashes so a result cannot silently substitute a
@@ -112,6 +115,48 @@ def shared_effect_root(activations: int) -> managym.Env:
         else:
             raise AssertionError("Drill did not resolve within the declared prefix")
     return env
+
+
+def kellan_upgrade_root(hand: tuple[str, ...] = ()) -> managym.Env:
+    """Resolve Kellan's first upgrade through Commands in a bounded fixture."""
+    env = priority_root(hand, ("Kellan, Planar Trailblazer",) + ("Mountain",) * 5)
+    for step in range(16):
+        obs = env.observation_for_player(env.current_agent_index())
+        if any(r.effect.program for r in obs.shared_effects or []):
+            return env
+        decision = capture_text_decision(env)
+        actions = obs.action_space.actions
+        index = next(
+            i
+            for i, action in enumerate(actions)
+            if (step == 0 and action.ability_index == 0)
+            or (
+                step > 0
+                and (
+                    "pass" in decision.actions[i].description.lower()
+                    or "pay" in decision.actions[i].description.lower()
+                )
+            )
+        )
+        submit_response(env, decision, decision.actions[index].reference)
+    raise AssertionError("Kellan upgrade did not resolve")
+
+
+def kellan_trigger_root(hand: tuple[str, ...] = ()) -> managym.Env:
+    """Reach the upgraded Kellan's captured combat trigger on the stack."""
+    env = kellan_upgrade_root(hand)
+    for _ in range(24):
+        obs = env.observation_for_player(env.current_agent_index())
+        if any(frame.program for frame in obs.continuation):
+            return env
+        decision = capture_text_decision(env)
+        action = next(
+            a
+            for a in decision.actions
+            if a.description.startswith(("Pass priority", "Attack with"))
+        )
+        submit_response(env, decision, action.reference)
+    raise AssertionError("Kellan's combat trigger did not reach the stack")
 
 
 @dataclass

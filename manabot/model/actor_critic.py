@@ -12,6 +12,8 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env.observation import (
+    FACT_KINDS,
+    FACT_KINDS_V8,
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
@@ -63,8 +65,11 @@ class ActorCritic(nn.Module):
         if config.state_encoder != "rows" and enc.config.policy_input_version not in (
             5,
             7,
+            8,
         ):
-            raise ValueError("typed state experiment requires policy input v5 or v7")
+            raise ValueError(
+                "typed state experiment requires policy input v5, v7 or v8"
+            )
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -269,7 +274,13 @@ class ActorCritic(nn.Module):
             self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
         else:
             self.facts = (
-                FactEncoder(embed_dim, enc.config.fact_rows)
+                FactEncoder(
+                    embed_dim,
+                    enc.config.fact_rows,
+                    kinds=FACT_KINDS_V8
+                    if enc.config.policy_input_version >= 8
+                    else FACT_KINDS,
+                )
                 if enc.shows_everything
                 else None
             )
@@ -278,6 +289,7 @@ class ActorCritic(nn.Module):
             SharedEffectEncoder(
                 embed_dim,
                 "typed_gru" if config.state_encoder == "typed_gru" else "typed_pool",
+                version=enc.config.policy_input_version,
             )
             if enc.config.policy_input_version >= 7
             else None

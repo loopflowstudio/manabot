@@ -16,6 +16,10 @@ mod blb;
 mod definitions;
 #[path = "cards/eld.rs"]
 mod eld;
+#[path = "cards/fdn.rs"]
+mod fdn;
+#[path = "cards/hob.rs"]
+mod hob;
 #[path = "cards/ice.rs"]
 mod ice;
 #[path = "cards/iko.rs"]

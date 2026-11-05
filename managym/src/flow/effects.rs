@@ -170,16 +170,6 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::DoesntUntap)
     }
 
-    /// Keywords records remove from the permanent, whatever grants them.
-    pub(crate) fn lost_keywords(&self, permanent_id: PermanentId) -> Keywords {
-        self.effects_on(permanent_id)
-            .filter_map(|effect| match effect.modification {
-                Modification::LoseKeywords(keywords) => Some(keywords),
-                _ => None,
-            })
-            .fold(Keywords::default(), Keywords::union)
-    }
-
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)

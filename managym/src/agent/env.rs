@@ -1100,6 +1100,13 @@ impl Env {
             .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
     }
 
+    /// Fixture access for opt-in native measurement, absent from Python/wheels.
+    /// The harness must refresh priority after changing its constructed board.
+    #[cfg(feature = "benchmark")]
+    pub fn benchmark_game_mut(&mut self) -> &mut Game {
+        self.scenario_game_mut("benchmark_game_mut").unwrap()
+    }
+
     fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
         if player > 1 {
             return Err(AgentError(format!(
