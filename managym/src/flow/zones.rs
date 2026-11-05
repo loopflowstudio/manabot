@@ -298,7 +298,7 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
-        let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
+        let batch = self.event_batch(vec![ProposedEvent::CreateTokens {
             definition: Box::new(crate::flow::proposed_event::TokenDefinition::Registered(
                 name.into(),
             )),
@@ -309,18 +309,11 @@ impl Game {
                 ..Default::default()
             },
         }]);
-        assert!(
-            matches!(
-                self.advance_event_batch(&mut batch),
-                crate::flow::proposed_event::BatchProgress::Complete
-            ),
-            "token creation requiring a choice needs a retained caller"
-        );
-        for object in batch.results.iter().filter_map(|result| result.moved) {
+        let results = self.complete_immediate_batch(batch);
+        for object in results.iter().filter_map(|result| result.moved) {
             self.finish_created_token(CardId::from(object.entity), tapped_and_attacking);
         }
-        batch
-            .results
+        results
             .iter()
             .filter_map(|result| result.moved)
             .find_map(|object| self.lookup_current_permanent(object).ok())
@@ -504,7 +497,7 @@ impl Game {
             }) { ZoneType::Exile } else { to_zone };
         let object = from.and_then(|_| self.current_object_ref(card));
         entry = entry.for_zone(to_zone);
-        if to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga() {
+        if to_zone == ZoneType::Battlefield && self.enters_as_saga(card, &entry) {
             entry.counters.change(CounterKind::Lore, 1);
         }
         ProposedEvent::ZoneMove {
@@ -514,6 +507,18 @@ impl Game {
             to: to_zone,
             entry,
         }
+    }
+
+    /// Whether the face that enters is a Saga: the back face when it enters
+    /// transformed (CR 712.14), so a Saga returning as a creature gets no lore.
+    fn enters_as_saga(&self, card: CardId, entry: &ZoneEntry) -> bool {
+        let printed = &self.state.cards[card];
+        if entry.transformed {
+            if let Some((_, back)) = default_content_pack().back_face(printed.definition_id) {
+                return back.is_saga();
+            }
+        }
+        printed.is_saga()
     }
 
     pub(crate) fn commit_zone_move(

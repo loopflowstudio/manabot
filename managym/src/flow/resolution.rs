@@ -1322,6 +1322,7 @@ impl Game {
                     definition: Box::new(TokenDefinition::Copy {
                         definition_id: self.state.cards[copied].definition_id,
                         definition: self.state.cards[copied].copiable_definition(),
+                        front: self.state.cards[copied].front_face().cloned(),
                         copy: self.state.cards[copied].copy.clone(),
                         exceptions,
                     }),

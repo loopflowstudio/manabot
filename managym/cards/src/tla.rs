@@ -3676,7 +3676,6 @@ fn fire_navy_trebuchet() -> CardDefinition {
                     token_name: "Ballistic Boulder".into(),
                     count: EffectValue::Fixed(1),
                     tapped_and_attacking: true,
-
                 },
                 Effect::CreateDelayedTrigger {
                     remember: Some(ObjectSelector::CreatedThisWay),
@@ -5564,7 +5563,9 @@ fn kyoshi_battle_fan() -> CardDefinition {
                     predicate: CardPredicate::creature(),
                     min: 1,
                     max: EffectValue::Fixed(1),
-                    effects: vec![Effect::AttachSourceTo { what: ObjectSelector::Selected }],
+                    effects: vec![Effect::AttachSourceTo {
+                        what: ObjectSelector::Selected,
+                    }],
                     if_declined: vec![],
                 },
             ],
@@ -8284,7 +8285,6 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                 token_name: "Ally".into(),
                 count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
-
             }],
         }],
         statics: vec![StaticAbility::CharacteristicPower(

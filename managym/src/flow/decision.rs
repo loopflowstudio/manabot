@@ -15,7 +15,9 @@ use crate::{
     flow::{
         event::GameEvent,
         game::{CastChoices, Game, Payment},
-        proposed_event::{BatchProgress, EventBatch, EventBinding, ReplacementCandidate},
+        proposed_event::{
+            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
+        },
         turn::OnceEachTurnKey,
     },
     state::{
@@ -49,11 +51,6 @@ pub enum FrameCompletion {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
         source_after_cost: Option<CardId>,
     },
-    /// Spell zone movement has completed, including any child entry choices.
-    SpellResolved {
-        card: CardId,
-        attach_to: Option<ObjectRef>,
-    },
     /// An iteration child returns to its interrupted scope.
     Frame(Box<EffectFrame>),
     /// Announce a completed rules operation before resuming its caller.
@@ -66,9 +63,10 @@ pub enum FrameCompletion {
     /// Its frame, output and parent payment remain owned here across choices.
     Decision(Box<SuspendedResolution>),
     /// Spells: remove the stack object, then put the card into the
-    /// battlefield (permanents) or graveyard. A resolving Aura spell enters
-    /// attached to `attach_to`, the object its attach instruction chose
-    /// (CR 303.4f).
+    /// battlefield (permanents) or graveyard, through the ordinary entry
+    /// batch and its replacement choices, then announce the resolution. A
+    /// resolving Aura spell enters attached to `attach_to`, the object its
+    /// attach instruction chose (CR 303.4f).
     Spell {
         card: CardId,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -759,7 +757,6 @@ impl SuspendedResolution {
                 | FrameCompletion::CombatNormal
                 | FrameCompletion::Priority
                 | FrameCompletion::Continue
-                | FrameCompletion::SpellResolved { .. }
                 | FrameCompletion::Spell { .. } => {}
             }
         }
@@ -1054,17 +1051,26 @@ impl Game {
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         loop {
             if let Some(mut batch) = frame.batch.take() {
-                if let BatchProgress::Choice { player, candidates } =
-                    self.advance_event_batch(&mut batch)
-                {
-                    frame.batch = Some(batch);
-                    *self.state.suspended_decision_mut() = Some(SuspendedResolution {
-                        frame,
-                        decision: Decision::OrderReplacement { player, candidates },
-                    });
-                    return;
+                match self.advance_event_batch(&mut batch) {
+                    BatchProgress::Choice { player, candidates } => {
+                        frame.batch = Some(batch);
+                        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                            frame,
+                            decision: Decision::OrderReplacement { player, candidates },
+                        });
+                        return;
+                    }
+                    BatchProgress::Complete { results, followups } => {
+                        self.bind_event_results(&mut frame, &batch, &results);
+                        // Cards returning as a linked exile ends are the
+                        // instruction's next simultaneous event; its bound
+                        // results are already its own.
+                        if !followups.is_empty() {
+                            frame.batch = Some(self.event_batch(followups));
+                            continue;
+                        }
+                    }
                 }
-                self.bind_event_results(&mut frame, batch);
             }
             if frame.iteration.is_some() {
                 frame = frame.next_iteration();
@@ -1158,7 +1164,9 @@ impl Game {
                     }
                     FrameCompletion::Continue => return,
                     FrameCompletion::Spell { card, attach_to } => {
-                        frame.completion = FrameCompletion::SpellResolved { card, attach_to };
+                        // A spell that exiled itself ("Exile Avatar's Wrath")
+                        // has already left the stack (CR 608.2n); the entry
+                        // batch always moves a card still on it.
                         if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
                             let (to, entry) = if self.state.cards[card].types.is_permanent() {
                                 (
@@ -1175,10 +1183,9 @@ impl Game {
                             frame.batch = Some(
                                 self.event_batch(vec![self.zone_move_proposal(card, to, entry)]),
                             );
+                            frame.completion = FrameCompletion::Spell { card, attach_to };
+                            continue;
                         }
-                        continue;
-                    }
-                    FrameCompletion::SpellResolved { card, attach_to } => {
                         if let Some(permanent_id) = self.state.card_to_permanent[card] {
                             if attach_to.is_some() {
                                 self.state.permanents[permanent_id]
@@ -1206,10 +1213,15 @@ impl Game {
         }
     }
 
-    /// Consume the instruction's results only after its whole batch and linked
-    /// returns finish. Binding never consumes a consequent child batch's results.
-    fn bind_event_results(&mut self, frame: &mut EffectFrame, batch: EventBatch) {
-        let moved = batch.results.iter().filter_map(|result| result.moved);
+    /// Consume the instruction's results once its whole batch has committed.
+    /// `results` pair with `batch.events` in order.
+    fn bind_event_results(
+        &mut self,
+        frame: &mut EffectFrame,
+        batch: &EventBatch,
+        results: &[EventResult],
+    ) {
+        let moved = results.iter().filter_map(|result| result.moved);
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
             EventBinding::Bending { player, kind } => self.record_bending(player, kind),
@@ -1239,10 +1251,11 @@ impl Game {
             }
             EventBinding::Damage { result: measured } => {
                 if let Some(excess) = batch
-                    .results
+                    .events
                     .iter()
-                    .filter(|result| measured.is_none_or(|index| index == result.ordinal))
-                    .filter_map(|result| result.excess_damage)
+                    .zip(results)
+                    .filter(|(pending, _)| measured.is_none_or(|index| index == pending.ordinal))
+                    .filter_map(|(_, result)| result.excess_damage)
                     .next_back()
                 {
                     frame.excess_damage = excess;
@@ -1260,8 +1273,7 @@ impl Game {
                     )
                 };
                 if batch.events.iter().any(is_discard) {
-                    frame.this_way = batch
-                        .results
+                    frame.this_way = results
                         .iter()
                         .zip(&batch.events)
                         .filter(|(_, event)| is_discard(event))

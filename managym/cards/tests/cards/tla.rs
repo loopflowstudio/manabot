@@ -124,7 +124,8 @@ fn aangs_journey_finds_a_basic_land_and_kicked_also_a_shrine() {
             |a| matches!(a, Action::SelectCard { card, .. } if *card == offered[0]),
         );
         if kicked {
-            assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+            // No Shrine matches, so the second search asks nothing.
+            assert_ne!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
             assert!(offered_cards(&s).is_empty());
         }
         settle(&mut s);
@@ -13458,7 +13459,10 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
 #[test]
 fn leaves_from_the_vine_counter_choices_keep_both_targets_in_one_event() {
     let mut s = five_color_setup(&[
-        "Leaves from the Vine", "Gray Ogre", "Caradora, Heart of Alacria", "Doubling Season",
+        "Leaves from the Vine",
+        "Gray Ogre",
+        "Caradora, Heart of Alacria",
+        "Doubling Season",
     ]);
     let creatures = [
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
@@ -15619,11 +15623,16 @@ fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice(
         let frame = branch.semantic_decision_frame().unwrap();
         let command = Command {
             command_id: format!("fan-attach-{}", card.0),
-            expected_revision: frame.revision, offer_id: frame.offers[action].id.0,
-            answers: vec![], object_preconditions: vec![],
+            expected_revision: frame.revision,
+            offer_id: frame.offers[action].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
         };
         branch.execute_semantic_command(&command).unwrap();
-        assert_eq!(branch.state.permanents[fan].as_ref().unwrap().attached_to, branch.permanent_object_ref(ally));
+        assert_eq!(
+            branch.state.permanents[fan].as_ref().unwrap().attached_to,
+            branch.permanent_object_ref(ally)
+        );
         assert_eq!(branch.characteristics(ally).pt(), (2, 1));
     }
     assert_eq!(witness(s.game()), witness(&root));
@@ -15640,10 +15649,14 @@ fn doubled_trebuchet_tokens_keep_attack_terms_and_both_delayed_sacrifices() {
     assert_eq!(tokens.len(), 2);
     for token in &tokens {
         assert!(permanent(&s, *token).tapped && permanent(&s, *token).attacking);
-        assert!(s.game().state.delayed_triggers[0].remembered.iter().any(|binding|
-            Some(binding.object) == s.game().permanent_object_ref(*token)));
+        assert!(s.game().state.delayed_triggers[0]
+            .remembered
+            .iter()
+            .any(|binding| Some(binding.object) == s.game().permanent_object_ref(*token)));
     }
     s.advance_to_active_step(0, StepKind::End);
     settle(&mut s);
-    assert!(s.battlefield_permanents_named(0, "Ballistic Boulder").is_empty());
+    assert!(s
+        .battlefield_permanents_named(0, "Ballistic Boulder")
+        .is_empty());
 }

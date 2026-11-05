@@ -55,10 +55,13 @@ impl Game {
                 "public history v1 requires 0..32 rows".into(),
             ));
         }
-        let (observation, agent) = self.semantic_observation_with_input(viewer)?;
+        let (observation, mut agent) = self.semantic_observation_with_input(viewer)?;
         if observation.decision.is_none() {
             return Err(SemanticError::NoActiveDecision);
         }
+        // Captured frames carry the retained execution text the LLM view and
+        // pending summaries read; the policy observation itself never does.
+        self.describe_execution(viewer, &mut agent.continuation);
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();

@@ -21,7 +21,10 @@ use crate::{
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
     game.action_space()
@@ -90,7 +93,8 @@ pub struct FlatMcResult {
 /// Private scalar replay input retained only for diagnostics at vector failures.
 #[derive(Clone, Debug, serde::Serialize)]
 struct NativeActionTrace {
-    player_configs: Vec<PlayerConfig>,
+    /// Fixed at reset; forks share it rather than copying the decklists.
+    player_configs: Arc<[PlayerConfig]>,
     actions: Vec<usize>,
 }
 
@@ -235,7 +239,7 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         self.action_trace = Some(NativeActionTrace {
-            player_configs: player_configs.clone(),
+            player_configs: Arc::from(player_configs.clone()),
             actions: Vec::new(),
         });
         let mut game = if self.capture_cards {
@@ -291,7 +295,7 @@ impl Env {
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace
             .as_ref()
-            .map_or(&[], |trace| trace.player_configs.as_slice())
+            .map_or(&[], |trace| &trace.player_configs[..])
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
