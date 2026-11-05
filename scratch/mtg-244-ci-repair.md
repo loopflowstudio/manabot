@@ -83,6 +83,7 @@ Budget search is 22.8% less time, worst reply 23.1% less, steps 12.6% higher.
 - Layer Risk: 16/16 payment receipts equal except `digest` fields, because `before`
   (`fb3555ffb`) lacked the reorder, the only card-source difference. The `before` leg
   now uses the candidate's `tla.rs`; the exact comparison stays unweakened.
+  Local `--payment-only` on `201bc7b58`: all 16 match, digests included; not hosted evidence.
 - Outside CI, `tests/belief/`: two `test_sampling_data` cases fail identically on
   main (message casing; left alone). `test_real_population_learning…` fails here at
   0.0926 > 0.1 and passes on main. Seeds 197/198/199: branch .093/.185/.155, main
