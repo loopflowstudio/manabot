@@ -311,9 +311,11 @@ Immediate fixture/arithmetic helpers require completion without a question and
 fail explicitly if used for a choice-bearing event. Sacrifice facts match their
 pre-move subjects after replacement choices and before any batch member leaves;
 trigger placement still waits for resolution. Explicit input v8 projects the
-retained program, results, completion and proposals through fact-kind 14, with
-viewer-safe reference slots in relation kind 10. Academy's pending-resolution
-summary and LLM text consume that same native projection. Earlier inputs reject
+retained program, results, completion and proposals through fact-kind 14 as bare
+name/value facts, with viewer-safe reference slots in relation kind 10; a frame
+that retains nothing emits no occurrence. Academy's pending-resolution summary
+and LLM text are rendered by the same walk only through `describe_execution`
+(decision context and capture), never by a policy observation. Earlier inputs reject
 novel retained state before buffer writes; migrated searches retain their frozen
 obligation codes and implied completion events.
 

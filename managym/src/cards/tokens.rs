@@ -21,7 +21,6 @@
 //! Entry point: [`learning_catalog`].
 
 use serde::ser::{self, Serialize};
-use std::borrow::Cow;
 
 use super::ContentError;
 use crate::cards::content_pack::ContentPack;
@@ -46,6 +45,24 @@ pub enum TokenKind {
     DefinitionRef = 7,
     Null = 8,
     ProgramKind = 9,
+}
+
+impl TokenKind {
+    /// The kind a written `u16` names; writers only ever store these values.
+    fn of(kind: u16) -> Self {
+        match kind {
+            1 => Self::Structure,
+            2 => Self::Field,
+            3 => Self::Variant,
+            4 => Self::Integer,
+            5 => Self::Boolean,
+            6 => Self::Text,
+            7 => Self::DefinitionRef,
+            8 => Self::Null,
+            9 => Self::ProgramKind,
+            other => unreachable!("unknown token kind {other}"),
+        }
+    }
 }
 
 /// Which part of a definition a program span encodes.
@@ -105,9 +122,9 @@ pub fn definition_tokens(
     let mut writer = TokenWriter::new(pack);
     writer.append_definition(definition)?;
     Ok(writer
-        .tokens
+        .into_rules_tokens()
         .into_iter()
-        .map(|(kind, value, reference)| (kind, reference.unwrap_or(value)))
+        .map(|(kind, value)| (TokenKind::of(kind), value))
         .collect())
 }
 
@@ -124,22 +141,23 @@ pub fn rules_tokens<T: Serialize>(
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
 pub fn learning_catalog(pack: &ContentPack) -> Result<LearningCatalog, ContentError> {
     let mut out = LearningCatalog::default();
-    let mut programs: Vec<Vec<(TokenKind, i32, Option<i32>)>> = Vec::new();
+    let mut programs: Vec<Span> = Vec::new();
     let mut definition_programs: Vec<Vec<i32>> = Vec::new();
 
     out.definition_offsets.push(0);
     for (_, definition) in pack.definition_entries() {
         let mut writer = TokenWriter::new(pack);
         definition.serialize(&mut writer)?;
-        append(&mut out, writer.tokens);
+        append(&mut out, writer.span());
         out.definition_offsets.push(out.token_kind.len() as i32);
 
         let mut rows = Vec::new();
         for (kind, tokens) in definition_programs_of(definition, pack)? {
             rows.push(programs.len() as i32);
-            let mut span = vec![(TokenKind::ProgramKind, kind as i32, None)];
+            let mut span = TokenWriter::new(pack);
+            span.push(TokenKind::ProgramKind, kind as i32);
             span.extend(tokens);
-            programs.push(span);
+            programs.push(span.span());
         }
         definition_programs.push(rows);
     }
@@ -158,16 +176,23 @@ pub fn learning_catalog(pack: &ContentPack) -> Result<LearningCatalog, ContentEr
     Ok(out)
 }
 
-type Span = Vec<(TokenKind, i32, Option<i32>)>;
+/// A written token stream: `(kind, value)` exactly as the policy reads them,
+/// plus the positions of its definition references and their target rows, so
+/// the catalog can join created tokens and back faces.
+struct Span {
+    tokens: Vec<(u16, i32)>,
+    references: Vec<(usize, i32)>,
+}
 
-fn append(out: &mut LearningCatalog, tokens: Span) {
-    for (kind, value, reference) in tokens {
-        if let Some(row) = reference {
-            out.definition_ref_source_tokens
-                .push(out.token_kind.len() as i32);
-            out.definition_ref_target_rows.push(row);
-        }
-        out.token_kind.push(kind as u16);
+fn append(out: &mut LearningCatalog, span: Span) {
+    let offset = out.token_kind.len();
+    for (index, row) in span.references {
+        out.definition_ref_source_tokens
+            .push((offset + index) as i32);
+        out.definition_ref_target_rows.push(row);
+    }
+    for (kind, value) in span.tokens {
+        out.token_kind.push(kind);
         out.token_value.push(value);
     }
 }
@@ -186,7 +211,7 @@ fn definition_programs_of(
     fn tokens<T: Serialize>(value: &T, pack: &ContentPack) -> Result<Span, ContentError> {
         let mut writer = TokenWriter::new(pack);
         value.serialize(&mut writer)?;
-        Ok(writer.tokens)
+        Ok(writer.span())
     }
     let mut out = Vec::new();
     for ability in &definition.abilities {
@@ -214,9 +239,13 @@ fn definition_programs_of(
 // ---------------------------------------------------------------------------
 // The serializer.
 
+/// Writes tokens in their final `(kind, value)` form; no second pass converts
+/// them, and names are hashed in place without temporary strings.
 pub(crate) struct TokenWriter<'p> {
     pack: &'p ContentPack,
-    tokens: Span,
+    tokens: Vec<(u16, i32)>,
+    /// Positions of definition reference tokens and their target rows.
+    references: Vec<(usize, i32)>,
     /// Name of the struct field being written, for `token_name` references.
     field: Option<&'static str>,
     /// Depth of nested structs; the top-level `CardDefinition` is depth 1.
@@ -228,6 +257,7 @@ impl<'p> TokenWriter<'p> {
         Self {
             pack,
             tokens: Vec::new(),
+            references: Vec::new(),
             field: None,
             depth: 0,
         }
@@ -243,36 +273,67 @@ impl<'p> TokenWriter<'p> {
         definition: &CardDefinition,
     ) -> Result<(), ContentError> {
         definition.serialize(&mut *self)?;
-        for (kind, tokens) in definition_programs_of(definition, self.pack)? {
+        for (kind, span) in definition_programs_of(definition, self.pack)? {
             self.push(TokenKind::ProgramKind, kind as i32);
-            self.tokens.extend(tokens);
+            self.extend(span);
         }
         Ok(())
     }
 
     pub(crate) fn into_rules_tokens(self) -> Vec<(u16, i32)> {
         self.tokens
-            .into_iter()
-            .map(|(kind, value, reference)| (kind as u16, reference.unwrap_or(value)))
-            .collect()
+    }
+
+    fn span(self) -> Span {
+        Span {
+            tokens: self.tokens,
+            references: self.references,
+        }
+    }
+
+    fn extend(&mut self, span: Span) {
+        let offset = self.tokens.len();
+        self.references.extend(
+            span.references
+                .into_iter()
+                .map(|(index, row)| (offset + index, row)),
+        );
+        self.tokens.extend(span.tokens);
     }
 
     fn push(&mut self, kind: TokenKind, value: i32) {
-        self.tokens.push((kind, value, None));
+        self.tokens.push((kind as u16, value));
     }
 
-    fn open(&mut self, name: &str) {
-        self.push(TokenKind::Structure, name_value(name));
-    }
-
-    fn close(&mut self, name: &str) {
+    /// `Name`, `Name::Variant` or their `/`-prefixed closing form, hashed as
+    /// one path: the same value `name_value` gives the joined string.
+    fn path_value(name: &str, variant: Option<&str>, closing: bool) -> i32 {
         let mut hash = blake3::Hasher::new();
-        hash.update(b"/");
+        if closing {
+            hash.update(b"/");
+        }
         hash.update(name.as_bytes());
+        if let Some(variant) = variant {
+            hash.update(b"::");
+            hash.update(variant.as_bytes());
+        }
         let bytes = hash.finalize();
-        let value =
-            (u32::from_le_bytes(bytes.as_bytes()[..4].try_into().unwrap()) & 0x7fff_ffff) as i32;
-        self.push(TokenKind::Structure, value);
+        (u32::from_le_bytes(bytes.as_bytes()[..4].try_into().unwrap()) & 0x7fff_ffff) as i32
+    }
+
+    fn open(&mut self, name: &'static str) {
+        self.push(TokenKind::Structure, Self::path_value(name, None, false));
+    }
+
+    fn variant(&mut self, name: &'static str, variant: &'static str) {
+        self.push(
+            TokenKind::Variant,
+            Self::path_value(name, Some(variant), false),
+        );
+    }
+
+    fn close(&mut self, name: &'static str, variant: Option<&'static str>) {
+        self.push(TokenKind::Structure, Self::path_value(name, variant, true));
     }
 
     fn integer(&mut self, value: i64) -> Result<(), ContentError> {
@@ -350,8 +411,8 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
                 .definition_id(value)
                 .ok_or_else(|| ContentError(format!("{value:?} is not in the pack")))?;
             let CardDefId(row) = row;
-            self.tokens
-                .push((TokenKind::DefinitionRef, 0, Some(row as i32)));
+            self.references.push((self.tokens.len(), row as i32));
+            self.push(TokenKind::DefinitionRef, row as i32);
         } else {
             self.push(TokenKind::Text, name_value(value));
         }
@@ -373,7 +434,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     }
     fn serialize_unit_struct(self, name: &'static str) -> Result<(), ContentError> {
         self.open(name);
-        self.close(name);
+        self.close(name, None);
         Ok(())
     }
     fn serialize_unit_variant(
@@ -382,10 +443,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         _: u32,
         variant: &'static str,
     ) -> Result<(), ContentError> {
-        self.push(
-            TokenKind::Variant,
-            name_value(&format!("{name}::{variant}")),
-        );
+        self.variant(name, variant);
         Ok(())
     }
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -395,7 +453,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     ) -> Result<(), ContentError> {
         self.open(name);
         value.serialize(&mut *self)?;
-        self.close(name);
+        self.close(name, None);
         Ok(())
     }
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
@@ -405,19 +463,18 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         variant: &'static str,
         value: &T,
     ) -> Result<(), ContentError> {
-        let path = format!("{name}::{variant}");
-        self.push(TokenKind::Variant, name_value(&path));
+        self.variant(name, variant);
         value.serialize(&mut *self)?;
-        self.close(&path);
+        self.close(name, Some(variant));
         Ok(())
     }
     fn serialize_seq(self, _: Option<usize>) -> Result<Compound<'a, 'p>, ContentError> {
         self.open("[");
-        Ok(Compound::new(self, "[".into(), false))
+        Ok(Compound::new(self, "[", None, false))
     }
     fn serialize_tuple(self, _: usize) -> Result<Compound<'a, 'p>, ContentError> {
         self.open("[");
-        Ok(Compound::new(self, "[".into(), false))
+        Ok(Compound::new(self, "[", None, false))
     }
     fn serialize_tuple_struct(
         self,
@@ -425,7 +482,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         _: usize,
     ) -> Result<Compound<'a, 'p>, ContentError> {
         self.open(name);
-        Ok(Compound::new(self, name.into(), false))
+        Ok(Compound::new(self, name, None, false))
     }
     fn serialize_tuple_variant(
         self,
@@ -434,9 +491,8 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         variant: &'static str,
         _: usize,
     ) -> Result<Compound<'a, 'p>, ContentError> {
-        let path = format!("{name}::{variant}");
-        self.push(TokenKind::Variant, name_value(&path));
-        Ok(Compound::new(self, path.into(), false))
+        self.variant(name, variant);
+        Ok(Compound::new(self, name, Some(variant), false))
     }
     fn serialize_map(self, _: Option<usize>) -> Result<Compound<'a, 'p>, ContentError> {
         unsupported("maps")
@@ -449,7 +505,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         self.open(name);
         self.depth += 1;
         let top = self.depth == 1 && name == "CardDefinition";
-        Ok(Compound::new(self, name.into(), top))
+        Ok(Compound::new(self, name, None, top))
     }
     fn serialize_struct_variant(
         self,
@@ -458,25 +514,31 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         variant: &'static str,
         _: usize,
     ) -> Result<Compound<'a, 'p>, ContentError> {
-        let path = format!("{name}::{variant}");
-        self.push(TokenKind::Variant, name_value(&path));
+        self.variant(name, variant);
         self.depth += 1;
-        Ok(Compound::new(self, path.into(), false))
+        Ok(Compound::new(self, name, Some(variant), false))
     }
 }
 
 pub(crate) struct Compound<'a, 'p> {
     writer: &'a mut TokenWriter<'p>,
-    name: Cow<'static, str>,
+    name: &'static str,
+    variant: Option<&'static str>,
     /// The definition's own struct: identity and program fields are skipped.
     definition: bool,
 }
 
 impl<'a, 'p> Compound<'a, 'p> {
-    fn new(writer: &'a mut TokenWriter<'p>, name: Cow<'static, str>, definition: bool) -> Self {
+    fn new(
+        writer: &'a mut TokenWriter<'p>,
+        name: &'static str,
+        variant: Option<&'static str>,
+        definition: bool,
+    ) -> Self {
         Self {
             writer,
             name,
+            variant,
             definition,
         }
     }
@@ -505,12 +567,12 @@ impl<'a, 'p> Compound<'a, 'p> {
 
     fn end_struct(self) -> Result<(), ContentError> {
         self.writer.depth -= 1;
-        self.writer.close(&self.name);
+        self.writer.close(self.name, self.variant);
         Ok(())
     }
 
     fn end(self) -> Result<(), ContentError> {
-        self.writer.close(&self.name);
+        self.writer.close(self.name, self.variant);
         Ok(())
     }
 }
