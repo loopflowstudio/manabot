@@ -1,35 +1,68 @@
 # Manabot
 
 Manabot is a project to train superhuman
-[Magic: The Gathering](https://magic.wizards.com/) bots.
-
-It has two halves:
-
-- **managym** (Rust): a deterministic rules engine built for learning. It
-  handles fast batched stepping, exact clone/fork for search, replay, and
-  per-player observations that keep hidden information hidden. Python bindings
-  come through PyO3.
-- **manabot** (Python): the agents. It includes self-play training, search,
-  belief models over hidden cards, and evaluation tools for checkpoints
-  against fixed opponents.
-
-We are currently focusing on a very small but fairly complicated set of decks:
-[UR Lessons versus GW Allies](content/DECKS.md), from the *Avatar: The Last
-Airbender* set.
+[Magic: The Gathering](https://magic.wizards.com/) bots. A manabot learns by
+playing itself: it sees only what a player would see, chooses among the legal
+actions, and finds out who won when the game ends.
 
 > **Built with two companion projects from Loopflow Studio:**
 >
 > - **[Loopflow](https://github.com/loopflowstudio/loopflow)** is how
 >   coding agents are coordinated to write the code.
 > - **[Etude](https://github.com/loopflowstudio/etude)** launches training and evaluation
->   runs and tracks what they record. 
+>   runs and tracks what they record.
+
+## The system
+
+![The rules engine sends each seat's view to the policy network, which returns a chosen action. Decisions and results go to the learner, which sends new weights to the network. Checkpoints go to evaluation, which never feeds back into training.](docs/images/system.svg)
+
+- **The rules engine** (`managym/`, Rust) runs full games of Magic, many at
+  once, deterministically from a seed. It decides what is legal, plays forced
+  choices itself, shows each seat only what that seat may see, and can clone,
+  replay or re-deal a game exactly. Every card is one Rust function in the
+  engine's own rules types, so a new card is content and new behavior is a new
+  rules variant, never card-specific logic
+  ([the rules engine](docs/engine.md)).
+- **The policy network** (`manabot/model/`) embeds every visible object,
+  including what each card *does*, mixes them with attention, and scores each
+  legal action with the objects it names through one action head. A value
+  head predicts the outcome
+  ([observations and the policy network](docs/observation-and-model.md)).
+- **The learner** (`manabot/training/`) turns finished games into one weight
+  update per batch ([how a manabot learns](docs/learning.md)).
+- **Evaluation** (`manabot/eval/`) measures strength on held-out deals from
+  outside the loop. Its scores never enter the loss
+  ([evaluation](docs/evaluation.md)).
+
+The observation and action encoding is versioned as a *world*
+([WORLDS.md](WORLDS.md)); checkpoints load only in the world they were trained
+in. **[Start here](docs/start-here.md)** walks from this picture down to the
+code of each training stage.
+
+## What it trains on now
+
+The current world is *Avatar: The Last Airbender* Limited. Every card in the
+set is defined as a typed rules program (336 supported in
+[world w17](WORLDS.md)), and training draws both seats of each game at random
+from real trophy decks: 134 seven-win Premier Draft lists admitted whole from
+the [17Lands public dataset](https://www.17lands.com/public_datasets) (CC BY
+4.0), frozen in [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and
+the [pilot protocol](experiments/protocols/tla-trophy-213-v10.md).
+
+The pilot's question is whether the recipe learns on a population of real
+decks at all. Its first run learned for five updates before a capacity limit
+stopped it, and no trained checkpoint on this population exists yet
+([pilot evidence](experiments/tla-trophy-pilot.md)). The curriculum questions
+that follow, which matchups, opponents and mix of self-play to learn from, are
+in the [research program](manabot/RESEARCH.md). Earlier runs trained on one
+fixed matchup, [UR Lessons versus GW Allies](content/DECKS.md), which the older
+reports and the local evaluation check still use.
 
 ## How a manabot learns
 
 ![One training iteration: play, assign credit, filter and update, then repeat with new weights. Weights also feed an EMA, checkpoints and evaluation, which never feed back into the loss.](docs/images/learning-loop.svg)
 
-A manabot learns from self-play, and the only feedback is who won. Each
-iteration has four steps:
+The only feedback is who won. Each iteration has four steps:
 
 1. **Play.** Many games step in lockstep so inference is batched, and one
    network plays them. By default both seats learn.
@@ -41,45 +74,24 @@ iteration has four steps:
    the policy that played the batch and a fixed reference policy. The batch is
    then discarded.
 
-An EMA of the weights, annealed step sizes and head-to-head evaluation complete
-the recipe. These choices follow
-[Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) (Sokota et al., 2026),
-and each one is a separate switch that we test on Magic rather than adopt on the
-paper's authority ([research program](manabot/RESEARCH.md)). Reward is win or
-loss only: our shaped rewards lost to it
+An EMA of the weights and annealed step sizes complete the recipe. Each piece
+has a source and is a separate switch we test on Magic rather than adopt on a
+paper's authority ([influences](docs/learning.md#influences)). Reward is win
+or loss only: our shaped rewards lost to it
 ([exp-04](experiments/exp-04-potential-shaping.md)).
 
-**[Start here](docs/start-here.md)** zooms from the four parts of the system
-to the code behind each training stage. **[How a manabot learns](docs/learning.md)**
-goes further, with worked numbers and answers to questions like what happens
-to games a batch cuts off.
+## How strength is measured
 
-## Quickstart
+Two players meet on the same seeded deal four times, swapping decks and seats,
+and only finished, replay-verified games count. Uncertainty resamples whole
+deals. A rule-based `heuristic` bot and frozen checkpoints anchor the scale,
+ratings are fit across the whole population, and tactical scenarios and
+bounded attacks probe what a win rate hides ([evaluation](docs/evaluation.md)).
 
-You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
-
-```bash
-git clone git@github.com:loopflowstudio/manabot.git
-cd manabot
-uv sync --python 3.12 --extra dev
-uv run --extra play maturin develop --release \
-  --manifest-path managym/Cargo.toml --features python
-
-uv run manabot train          # small CPU training run, under a minute, local Etude tracking
-```
-
-`uv run manabot train` trains a small agent and saves checkpoints under
-`.runs/`. Training recipes are typed *regimes* composed in Python, one module per
-current experiment in [experiments/](experiments/), from reusable parts in
-[manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
-baseline is
-`uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
-[manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
-simulation, and evaluation.
-
-There is also a local browser table (`./scripts/play`, needs Node) for playing
-one game against a checkpoint or stepping through a replay. It is for
-inspecting what a bot does, not a way to play Magic.
+A result counts as evidence only when its question, numeric prediction, kill
+criteria and cost cap were committed to git before the run, and claims about a
+method need independent training seeds. Refutations stay on the record
+([experiments](docs/experiments.md)).
 
 ## Scale
 
@@ -109,103 +121,83 @@ Learning-rate schedules currently count iterations, not decisions. The same
 recipe run at a different batch size therefore decays at a different number
 of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe.
 
-## Technical approach
+## What we know
 
-**A rules engine built for learning.** managym runs a full game of Magic:
-priority, the stack, combat, triggers, and state-based actions. It is
-deterministic given a seed, steps many games in lockstep, and can clone a game
-state exactly. That makes batched self-play, search over possible futures,
-and replay verification cheap. At every decision it gives each player an
-observation of only what that player can see: players, cards, and permanents
-as typed objects, plus the list of legal actions with the objects each one
-targets.
+All numbers belong to the world they were measured in. The
+[research program](manabot/RESEARCH.md#what-we-know) keeps the full table.
 
-**Cards as typed programs.** Cards are not parsed from Oracle text and not
-hand-coded per card name. Each card is one Rust function returning the
-engine's own `CardDefinition`, written in its rules types
-([content/semantic/](content/semantic/README.md)), and new behavior is a new
-rules variant rather than card-specific logic. The model can embed what a card
-*does* as well as its name: learning tokens derive from the same definitions. Rules behavior is pinned by conformance
-fixtures ([conformance/](conformance/)).
+- **Self-play learns.** A 10,000-update cohort rose from 30.3% to 54.3%
+  against scripted greedy on monitoring deals, mostly by learning to pilot the
+  harder deck ([current baseline](experiments/current-baseline.md)).
+- **Batching is the reliable speedup, and the smallest model kept up.** 64×2
+  took 109–111 minutes at 4 streams and about 5 at 256
+  ([longer learning](experiments/longer-learning-017.md)). Collection is 82.5%
+  of training time ([training time](experiments/training-time.md)).
+- **Borrowed techniques haven't shown a benefit yet.** Actor-only filtering
+  measured +3.33 points, interval [−4.33, +11.33], at 1.45× wall time
+  ([technique screen](experiments/ataraxos-technique-screen.md)).
+- **Search and beliefs run end to end but add no strength yet**
+  ([search and beliefs](docs/search-and-beliefs.md)).
 
-**Versioned worlds.** The observation and action encoding is versioned as a
-*world* ([WORLDS.md](WORLDS.md)). Checkpoints only load in the world they were
-trained in, and the nightly baseline check refuses encodings that make two
-different choices look identical.
-
-**One network, one action head.** One network encodes every visible object,
-mixes them with attention, and scores each legal action together with its
-focus objects. A value head predicts the game outcome. Every decision, from
-casting and targeting to attacking, blocking, and paying costs, goes through
-that single action head.
-
-**Hidden information and search.** Belief samplers learn a distribution over
-the opponent's hidden cards from a frozen policy's own games
-([belief sampler](docs/search-and-beliefs.md#belief-sampler)). Search samples hands from that
-belief and uses the frozen policy for continuations at play time
-([local policy search](docs/search-and-beliefs.md#local-policy-search)). It has not yet shown a
-strength gain over the policy alone.
-
-**Evaluation by head-to-head play.** Trained agents play each other. A
-*Tournament* file names a roster of checkpoints and fixed opponents, and the
-runner plays every pairing on the same held-out deals, with both decks and
-both seats ([head-to-head](experiments/head-to-head.md)). The evaluation library fits
-ratings across the whole population (`manabot/eval/`), and a rule-based
-`heuristic` bot gives a stable reference point across runs. Every game is
-replay-verified.
-
-**Preregistered experiments.** The question, numeric prediction, kill
-criteria, and cost cap are committed to git before a run; without that commit
-a result is exploratory, not evidence. Frozen contracts record the hashes of
-their inputs, claims about a training method need independent training seeds,
-and refutations stay on the record ([experiments/](experiments/README.md)).
-
-Right now the main open question is the training curriculum: which matchups,
-opponents, and mix of self-play the agent should learn from (for example,
-mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
-just enough to compare curricula, rather than testing current agents across a
-wide range of environments.
-
-The engine's guarantees are in [The rules engine](docs/engine.md), and the
-observation boundary and network in
-[Observations and the policy network](docs/observation-and-model.md).
-
-## Versioned installs
-
-Versioned PyPI release preparation, platform support, CPU/CUDA installation and
-maintainer publishing are described in [the release guide](docs/development.md#releases).
-[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
-the source workflow below remains available.
-
-## Earlier results
-
-Before self-play became the main loop, the project leaned on search. These
-results come from that period and from earlier encodings, so their numbers are
-not comparable with today's checkpoints:
+From the earlier search era, in older encodings:
 
 - **Search was strong and cheap.** Flat determinized Monte Carlo with 256
-  rollouts beat random 99% of the time. Every early trained policy was weaker
-  than 16-rollout search ([exp-02](experiments/exp-02-flat-mc.md)).
-- **Distillation beat PPO at equal cost**, 90.5% versus 52.7% against random
-  ([exp-03](experiments/exp-03-distillation.md)). Naive expert iteration did
-  not compound: round 1 lost 74–26 to round 0
-  ([exp-07](experiments/exp-07-expert-iteration.md)).
-- **Reward shaping hurt.** Terminal-only reward beat our shaped rewards by
-  about 15 points ([exp-04](experiments/exp-04-potential-shaping.md)).
-- **Win rate hid incompetence.** The search pilot could not play a control
-  deck: it found the right line at most 39% of the time in competency
-  scenarios, and random beat it in 3 of 5
+  rollouts beat random 99% of the time
+  ([exp-02](experiments/exp-02-flat-mc.md)).
+- **Win rate hid incompetence.** That same pilot could not play a control
+  deck, and random beat it in 3 of 5 competency scenarios
   ([exp-09](experiments/exp-09-control-competency.md)). Matchup tables mostly
   measured the pilot and card quality
   ([exp-08b](experiments/exp-08b-ancestral-dose.md)).
+- **Distillation beat PPO at equal cost**, 90.5% versus 52.7% against random
+  ([exp-03](experiments/exp-03-distillation.md)), but expert iteration did not
+  compound: round 1 lost 74–26 to round 0
+  ([exp-07](experiments/exp-07-expert-iteration.md)).
 
 ## Not built yet
 
-- **More cards.** Because cards are typed programs, most new cards can be
-  added as content without engine changes, but the pool is still two decks.
+- **A trained agent on the trophy population.** The pilot's first run stopped
+  at a permanent-capacity limit after five updates; its successor raises the
+  capacity and recovers from oversized games, but hasn't run
+  ([pilot evidence](experiments/tla-trophy-pilot.md)).
+- **The rest of the set's decks.** 866 of the 1,000 sampled trophy lists were
+  rejected for cards or rules the world doesn't yet define. Most are content
+  rather than engine changes.
 - **Limited.** The long-term target is sealed and draft play: building decks
-  from a pool, then piloting them. Nothing in the repository drafts or builds
-  decks yet.
+  from a pool, then piloting them. Piloting random trophy decks is the first
+  half; nothing in the repository drafts or builds decks yet.
+
+## Quickstart
+
+You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
+
+```bash
+git clone git@github.com:loopflowstudio/manabot.git
+cd manabot
+uv sync --python 3.12 --extra dev
+uv run --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
+
+uv run manabot train                       # small CPU training run, under a minute
+uv run python scripts/inspect_batch.py     # one real batch and how credit reaches each decision
+```
+
+`uv run manabot train` trains a small agent and saves checkpoints under
+`.runs/`. Training recipes are typed *regimes* composed in Python, one module per
+current experiment in [experiments/](experiments/), from reusable parts in
+[manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
+baseline is
+`uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
+[docs/training.md](docs/training.md) covers running, monitoring and recovering
+runs, and [manabot/README.md](manabot/README.md) covers the package.
+
+There is also a local browser table (`./scripts/play`, needs Node) for playing
+one game against a checkpoint or stepping through a replay. It is for
+inspecting what a bot does, not a way to play Magic.
+
+Versioned PyPI release preparation, platform support, CPU/CUDA installation
+and maintainer publishing are in [the release guide](docs/development.md#releases).
+[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/).
 
 ## Map of the repository
 
@@ -216,7 +208,7 @@ not comparable with today's checkpoints:
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
-| `docs/` | How learning works, architecture, training operations, rules, and research notes ([index](docs/README.md)) |
+| `docs/` | The system, part by part; training operations; rules; research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `deploy/` | Hosted service deployment |
 | `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
