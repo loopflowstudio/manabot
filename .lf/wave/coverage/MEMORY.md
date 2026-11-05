@@ -25,7 +25,8 @@ ambiguity or safety-critical invariants, not substitute products.
   measurement and amelioration of its risks. Merge, auto-merge and training
   experiments remain unauthorized for that Task. Broader roadmap campaigns
   and MTG-245 methodology do not confer execution authority on engine work.
-- The pending implementation (`5a57096f2`, docs-only main sync `d11ca430d`)
+- The review-pending implementation (risk reduction `5a57096f2`, combined-proof
+  repair `a643a344b`, upstream integration `bca261295`)
   shares an immutable name vocabulary and constructs only the chosen effect.
   Names are public vocabulary, not game objects; optional definition joins
   carry semantics without inventing unsupported cards. Explicit v8 reserves
@@ -46,10 +47,27 @@ ambiguity or safety-critical invariants, not substitute products.
   used 81.8% fewer retained action bytes, but live buffers/logits remain dense.
   Program encoding/backprop dominates measured cost; variable CPU timings do
   not establish end-to-end speedup. The 928-name fixture mostly adds names
-  without programs, so it cannot stand for 928 executable definitions. Native
-  legality/model reachability above 512 and installed-catalog vector/Academy
-  proofs are separate; a combined large-catalog workflow remains unproven.
-  Full acceptance and final-source CI remain outstanding.
+  without programs, so it cannot stand for 928 executable definitions. The
+  original split proofs missed combined native/vector/Academy behavior above
+  512. Jack Heart accepted that repair on November 4 (comment d4db22c5): one
+  controlled native scenario now supplies all paths, including a policy-selected
+  choice above 511 through Academy's WebSocket, scalar replay and vector buffers.
+  This establishes headless consumer agreement, not browser geometry or strength;
+  full acceptance and final-source CI remain outstanding.
+- A representability fixture's solver can fail independently of model capacity.
+  The exported equal-rule feature matrix has rank 2 with exact zero columns;
+  pinned x86 Linux Torch 2.10 CPU `gelsy` reported rank 0, while explicit `gelsd`
+  retained rank 2 and negligible residual. macOS 2.10 and ARM Linux 2.15 did
+  not reproduce the QR failure. Checked SVD repairs this platform-sensitive
+  test without a CPU-load explanation or a claim that SGD converges. Reordered
+  legal-row GEMMs also need float32 tolerance for erased-channel ties while
+  learned-preference thresholds, privacy and execution checks stay strict.
+- Main `ee85d6fc8` adds opt-in isolated observation-capacity recovery with
+  retained input contracts; default rejection and fatal buffer/payload errors
+  stay intact. The shared writer now returns typed `ObservationWriteError`;
+  ordinary naming scenario writes convert through `AgentError::from` rather
+  than inheriting recovery semantics. The combined source needs its own gate
+  evidence even when pre-sync model/Academy tests passed.
 - Historical capture 3/4 uses schema 7 for read-only validation while live
   naming uses schema 8/capture 5/hash 16. Compatibility readers preserve old
   identity and reject new name references under schema 7; they do not admit an
@@ -186,14 +204,30 @@ preserves accepted decisions, dated proof limits and source history.
   throughput comparison correctly and retained a downloadable, adoptable
   artifact. Its search timings and all digests/counts passed; 65 focused
   tests cover the controlled pipeline and recovery paths.
-- Record the candidate before building the reference so an incompatible
-  reference still leaves an adoptable measurement; upload follows in the final
-  always-run step. A controlled reference-build failure proves local adoption
+- Retain a candidate measurement even when the reference fails to build;
+  upload follows in the final always-run step. MTG-243's pending workflow now
+  builds both engines before timing, then records the candidate alone if the
+  reference build failed and still fails the job. This replaces the earlier
+  candidate-timing/build-reference/reference-timing sequence. A controlled
+  reference-build failure proves local adoption
   with the real recording CLI. Hosted transport and adoption after comparison
   failure are proven by run 41552162812; hosted reference-build failure
   remains unexercised. Moving digests, accepting a cost or
   retaining a speedup requires a reason and the candidate's own CI artifact.
   Measure the durable PR head, not the ephemeral merge commit.
+- MTG-243's November 4 failure diagnosis separates scheduling evidence from
+  regression claims. Its fixed candidate/reference/reference/candidate sampler
+  keeps every raw sample and scheduling counters and compares median durations;
+  tolerance stays 10%, digests/counts remain exact and the reference is unchanged.
+  The old CI step failure has no utilization telemetry, so contention is
+  unproven. In the pre-sync local pair, step throughput and total search passed
+  but worst reply failed (4.290 s versus a 2.399 s limit). CPU/wall divergence
+  and more context switches show scheduling contributed to variation, without
+  per-reply attribution of the full spike. Reference process-launch delays did
+  not enter the timed step loop. Neither noise nor ordering balance clears a
+  failed budget, proves a naming-only cost, or justifies retrying until green;
+  final-source Linux CI remains necessary. Detailed raw evidence and limits
+  remain in MTG-243's plan and `.lf/logs/naming-budget-paired/`.
 - Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
   indexed records and cache-carrying clones. Run 41555845634 (2026-11-03 UTC)
   measured that engine at `4b5e9c0e4` against `88dc8c1ad` on one runner:

@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from time import perf_counter
 from unittest.mock import patch
 
 from naming_reference import DenseActionReference
@@ -274,9 +273,7 @@ def test_catalog_naming_programs_affect_scores(
     assert model.name_candidates is not None
     with torch.no_grad():
         model.name_candidates.embedding.weight.zero_()
-    started = perf_counter()
     logits, _ = model(tensors)
-    score_seconds = perf_counter() - started
     # These rows have identical action features/focus and zero name-identity
     # vectors. Different scores must therefore read their different programs.
     assert logits[0, : len(managym.naming_catalog())].unique().numel() > 1
@@ -289,9 +286,6 @@ def test_catalog_naming_programs_affect_scores(
     assert model.semantic_cards is not None
     assert model.semantic_cards.token_embedding.weight.grad is not None
     assert model.semantic_cards.token_embedding.weight.grad.abs().sum() > 0
-    print(
-        f"naming scoring: {len(raw.action_space.actions)} candidates, {score_seconds:.6f}s (one CPU forward; no speed threshold)"
-    )
 
 
 @pytest.mark.parametrize("change", ["name", "order", "definition", "representation"])
@@ -530,7 +524,8 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     """
     torch.set_num_threads(1)
     torch.manual_seed(243)
-    space, batch = _mixed_naming_batch(naming_root)
+    space = ObservationSpace(ObservationConfig(policy_input_version=8))
+    batch = _tensor(space.encode(naming_root.observation_for_player(0)))
     model = ActorCritic(
         space,
         ModelConfig(
@@ -557,8 +552,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
         encoder.tokens[program_rows[1]] = encoder.tokens[program_rows[0]]
         encoder.lengths[program_rows[1]] = encoder.lengths[program_rows[0]]
     paired = {
-        key: value[:1].repeat(2, *([1] * (value.ndim - 1)))
-        for key, value in batch.items()
+        key: value.repeat(2, *([1] * (value.ndim - 1))) for key, value in batch.items()
     }
     paired["decklists"].zero_()
     for row, definition in enumerate(definitions):
@@ -577,7 +571,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     ):
         indistinguishable, _ = model(paired)
         torch.testing.assert_close(
-            indistinguishable[0], indistinguishable[1], atol=0, rtol=0
+            indistinguishable[0], indistinguishable[1], atol=2e-6, rtol=1e-6
         )
     features: list[torch.Tensor] = []
 
@@ -624,11 +618,14 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     moved, _ = model(reordered)
     torch.testing.assert_close(moved, logits[:, order], atol=2e-6, rtol=1e-5)
     # Closed information is the native zero decklist projection; both states
-    # then have exactly the same observable evidence and must score identically.
+    # then have exactly the same observable evidence. Packed GEMMs can round
+    # identical rows differently by batch position, so only inputs are bitwise.
     closed = {key: value.clone() for key, value in paired.items()}
     closed["decklists"][:, 1].zero_()
+    for value in closed.values():
+        torch.testing.assert_close(value[0], value[1], atol=0, rtol=0)
     hidden, _ = model(closed)
-    torch.testing.assert_close(hidden[0], hidden[1], atol=0, rtol=0)
+    torch.testing.assert_close(hidden[0], hidden[1], atol=2e-6, rtol=1e-6)
 
 
 def test_compound_naming_keeps_complete_atomic_offer_support(

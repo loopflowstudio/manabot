@@ -10,9 +10,16 @@ catalog-derived explicit v8 capacity preserve complete naming without a multi-st
 protocol. Fresh v6 and frozen inputs remain unchanged. Names outside the real
 supported catalog and default adoption of v8 remain separate decisions.
 
-Main `1546aae3f` is incorporated; the plan records its documentation-only change
-and MTG-241's unsynced continuation codes 27–29. The combined greater-than-512 native/model/vector/Academy fixture now passes
-locally; final-source CI remains a gate obligation.
+Main `ee85d6fc8` is incorporated; the plan records its isolated-capacity recovery,
+the naming writer integration repair and MTG-241's unsynced codes 27–29.
+The combined greater-than-512 native/model/vector/Academy fixture passed before
+that sync; the post-sync 25-case run covers native/model/vector and retained
+capacity recovery. PR #424 publishes `bca261295` with stale review copy. Final-head Engine Budget
+passes with stable within-budget CPU costs in both orders; the earlier local
+worst-reply failure remains incompletely attributed. Main Linux integration finished with one bitwise float32 logit assertion
+failure (1.49e-7 maximum difference). Its test-only repair requires exact closed
+input equality and bounded output tolerance; the focused local test passes.
+Full repaired Linux validation and final-source acceptance remain gate obligations.
 Inherited T7 context is historical at `4463e57f5:scratch/questions.md`.
 The duplicate uncommitted notes are preserved at
 `.lf/logs/naming-risk/questions-before-compress.md`.
@@ -22,20 +29,4 @@ durations to balance run order, with the existing 10% tolerance and digest
 requirements unchanged. This is a measurement-method change for review, not
 permission to reset the reference or explain old CI failures without telemetry.
 
-## Sync with main — 2026-11-04
-
-Main `ee85d6fc82ed631d7b460e68c73e7ac27f0458ff` adds retained permanent-capacity
-and isolated-stream recovery tests. Keep those alongside this branch's v8
-capacity coverage. Compare historical schema-7 frames using the existing
-schema/fingerprint transition exclusion; preserve every decision/offer field
-and the frozen receipt bytes. Main's MTG-213 decisions remain available at
-`ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md`; they do not
-authorize pilot execution or change this Task's interactive review boundary.
-
-Sync verification: the incoming typed `ObservationWriteError` required the
-naming scenario writer to use the same `AgentError::from` conversion as adjacent
-non-isolated writers. Release extension rebuilt and atomically installed.
-Focused pytest passed 25 cases: retained permanent growth/recovery (including
-sharded streams), v1–v8 nondefault axes, retained action-prefix parity, and the
-combined large-vocabulary native/model/vector proof. Broader debug/CI and
-Engine Budget remain gate work; this sync makes no new performance claim.
+The sync evidence and MTG-213 historical reference are consolidated in the plan.

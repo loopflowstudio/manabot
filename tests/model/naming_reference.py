@@ -146,9 +146,9 @@ class DenseActionReference(ActorCritic):
             )
             actions = actions + self.name_candidates(candidates)
             ids = candidates[..., 1]
-            if self.semantic_cards is not None and state.definitions is not None:
+            if self.semantic_cards is not None and state.programs is not None:
                 actions = actions + self.semantic_cards.embed_definitions(
-                    ids, state.definitions
+                    ids, state.programs
                 )
         if state.shared_context is not None:
             # Focus-free actions also receive the same context without attention.

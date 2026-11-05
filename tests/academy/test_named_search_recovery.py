@@ -58,7 +58,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             for ordinal in range(200):
                 if any(o.label == "Name Gray Ogre" for o in frame.offers):
                     break
-                labels = ["Name Gray Ogre", "Target Villain", "Play Swamp"]
+                labels = ["Target Villain", "Play Swamp"]
                 if not cast:
                     labels.append("Cast The Rise of Sozin")
                 labels.extend(["Pass priority", "Decline"])
@@ -179,7 +179,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     offer for offer in frame.offers if offer.label == "Name Gray Ogre"
                 )
             )
-            name_command = _command(frame, name_offer, "name-gray-ogre")
+            name_command = _command(frame, name_offer, "name-card")
             socket.send_json({"type": "command", "command": name_command})
             named = socket.receive_json()
             assert named["status"] == "accepted"

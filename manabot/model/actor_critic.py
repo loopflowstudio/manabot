@@ -43,7 +43,8 @@ class EmbeddedObservation:
     validity: torch.Tensor
     shared_context: torch.Tensor | None
     frame_context: torch.Tensor | None
-    definitions: torch.Tensor | None
+    # Raw executable programs; object inputs separately add public name identity.
+    programs: torch.Tensor | None
 
 
 class ActorCritic(nn.Module):
@@ -509,9 +510,9 @@ class ActorCritic(nn.Module):
         if self.name_candidates is not None:
             candidates = obs["name_candidates"][batches, slots]
             actions = actions + self.name_candidates(candidates)
-            if self.semantic_cards is not None and state.definitions is not None:
+            if self.semantic_cards is not None and state.programs is not None:
                 actions = actions + self.semantic_cards.embed_definitions(
-                    candidates[..., 1], state.definitions
+                    candidates[..., 1], state.programs
                 )
         if state.shared_context is not None:
             actions = actions + state.shared_context[batches]
@@ -554,17 +555,19 @@ class ActorCritic(nn.Module):
             # float rounding, identical gradient support); without autograd the
             # full table keeps unprepared inference bitwise equal to serving.
             if isinstance(obs, PreparedObservation):
-                definitions = obs.scope.catalog()
+                programs = obs.scope.catalog()
             elif torch.is_grad_enabled():
-                definitions = self.semantic_cards.definitions(
+                programs = self.semantic_cards.definitions(
                     self._referenced_definitions(obs, permanent_ids)
                 )
             else:
-                definitions = self.semantic_cards.definitions()
-            assert definitions is not None
-            programs = definitions
-            if self.name_candidates is not None:
-                definitions = self.name_candidates.public_definitions(programs)
+                programs = self.semantic_cards.definitions()
+            assert programs is not None
+            definitions = (
+                self.name_candidates.public_definitions(programs)
+                if self.name_candidates is not None
+                else programs
+            )
             cards, known = self.semantic_cards(obs, definitions, references)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
