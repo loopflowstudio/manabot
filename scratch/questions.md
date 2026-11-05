@@ -164,3 +164,36 @@ MTG-245's implementation handoff here; main's MTG-213 pilot decisions remain at
 results at `experiments/tla-trophy-pilot.md`. Those separate pilot decisions and
 execution budgets do not extend MTG-245's authority. Incoming code and protocol
 changes merge unchanged; this resolution changes only task-local notes.
+
+## Publication verification — 2026-11-04
+
+`lf sync` completed cleanly, preserving the existing reconciliation edits. The
+publication review inspected the committed range against `origin/main` plus the
+previously uncommitted work. No implementation changes were needed in this step.
+
+- All seven repository graphs compile and their skill, loop, delivery and
+  experiment boundaries pass `scripts/check_loopflow_workflows.py`.
+- Rust formatting, all-target/all-feature Clippy with warnings denied, and the
+  complete workspace debug suite pass (`CARGO_PROFILE_DEV_OPT_LEVEL=1`, `-j 2`).
+  Clippy needed the absolute pinned interpreter path; the documented relative
+  path did not resolve from its build subprocess.
+- 185 Python checks pass across growing-pool protocol/analysis/exposure,
+  card evaluation, experiment discovery, regimes, CI/release selection and
+  package boundaries. The exact two-seat/evaluation CI invocation collects
+  all 383 tests without module-name collisions.
+- The deck/native-buffer/recovery regression selection initially had 96 passes
+  and four failures because the local extension predated main's recovery
+  argument. Rebuilt the release wheel from the repository root and atomically
+  installed its cp312 extension. All four failures and all four exposure checks
+  then pass (8 checks). No source change or weakened assertion was needed.
+- Ruff lint/format and `git diff --check` pass. A fresh shared Wave read retains
+  the four core identities plus Academy, with Study abandoned.
+
+These are automated software fixtures and regression suites, including the
+repository's bounded native-game and recovery fixtures. No scientific campaign,
+pilot, allocation or spending was performed. No learning, throughput or replay-
+verification claim follows from them. The frozen v1 proxy still rejects the
+changed engine source; Task 04 must author and freeze its integrated prospective
+binding, lists/probes and settings before authorized execution. Engine-budget CI,
+demo, delivery and post-merge verification retain their own boundaries. Publish
+for review only; do not merge, arm auto-merge or complete MTG-245.
