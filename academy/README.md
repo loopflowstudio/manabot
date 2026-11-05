@@ -79,7 +79,7 @@ The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
 draw**, or **Decline Learn**. The first two modes show card previews and a
 Back control; only choosing its explicit offer commits the choice. **New Game** repeats
 the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
-its [evidence and remaining integration work](../docs/rules/learn-lesson.md)
+its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
 The table reads **Who decides / What is happening / Your choices**. Inspect any
@@ -226,10 +226,10 @@ setups, and loaded policies retain that roster for cross-pair and mirror
 admission. Temporary Avatar grants reach both player projections, the shared
 protocol and the card's visible/accessibility label. These changes add no
 human-only choice or extra information. See the
-[Elemental world contract](../docs/rules/elemental/world.md) for evidence limits.
+[Elemental world contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) for evidence limits.
 
 Optional resolving costs share typed payment progress and effect continuations.
-See [optional payments](../docs/rules/optional-payments.md) for authoring,
+See [optional payments](../docs/engine.md#resolution-contracts) for authoring,
 commitment and frozen-content boundaries.
 
 ## Isolated browser validation
@@ -266,4 +266,4 @@ decision, or the current stack if placement has finished. A lost response does n
 undo a submitted choice.
 
 For editable file input and development construction rules, see
-[decklist import](../docs/decklist-import.md).
+[decklist import](../docs/engine.md#decks).

@@ -163,7 +163,7 @@ preserves accepted decisions, dated proof limits and source history.
   digests and counts on one runner. It retained 49.91% less worst-reply time,
   43.93% less total-search time and 30.43% less time per step against
   `4b5e9c0e4`, preserving the 10% tolerance. The baseline and investigation in
-  `docs/development.md` / `docs/research/engine-speed-2026-11.md` own the
+  `docs/development.md` / `.lf/wave/engine-performance/research/engine-speed-2026-11.md` own the
   measurements and rejected approaches. This upstream proof does not certify
   MTG-239's corrected rules or any subsequent merged tree.
 - Rules corrections can change benchmark work even when the decklists stay

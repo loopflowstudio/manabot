@@ -210,7 +210,7 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
     let pool = world_pool();
     let mut identities = BTreeSet::new();
     let (mut faces, mut tokens, mut markers, mut excluded) = (0, 0, 0, 0);
-    for line in include_str!("../../../../docs/rules/tla/allocation.jsonl").lines() {
+    for line in include_str!("../fixtures/tla-allocation.jsonl").lines() {
         let row: Value = serde_json::from_str(line).unwrap();
         let name = row["face_name"].as_str().unwrap();
         match row["kind"].as_str().unwrap() {

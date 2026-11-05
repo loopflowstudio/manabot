@@ -1,7 +1,9 @@
 # Decks
 
-The current training matchup, from the *Avatar: The Last Airbender* set. The
-canonical source is the `two_deck` setup in
+The fixed two-deck matchup from the *Avatar: The Last Airbender* set that the
+earlier self-play runs trained on and the local evaluation check still uses.
+Current training draws decks from the 17Lands trophy corpus instead
+([README](../README.md)). The canonical source is the `two_deck` setup in
 [`semantic/current/setups.json`](semantic/current/setups.json); update this page
 when it changes.
 

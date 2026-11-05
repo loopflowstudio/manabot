@@ -179,7 +179,7 @@ work, not cache invalidation, dynamic dependency checks or debug comparisons.
 ## Caller contract
 
 The accepted concept-review amendment is implemented in
-`docs/training.md#policy-inputs` and `manabot/README.md`: select v8 before
+`docs/observation-and-model.md#composable-layer-input-v8` and `manabot/README.md`: select v8 before
 collector/model construction. Older inputs reject before buffer writes/action
 prefix selection, potentially after earlier actions succeeded. Preserve failure
 evidence; construct a compatible model for new work. No rollback, checkpoint
