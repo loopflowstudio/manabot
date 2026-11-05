@@ -12,12 +12,13 @@ jobs:
   integration:
     name: Integration (${{ inputs.runner }}, ${{ matrix.group }})
     runs-on: ${{ inputs.runner }}
-    env:
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
+    # Each group runs on its own runner after the shared install and extension
+    # build (~2.5 min); balance groups by measured pytest time so no single
+    # group sets the critical path (core ~10 min, evaluation ~9, long ~6).
     strategy:
       fail-fast: false
       matrix:
-        group: [main, long]
+        group: [core, evaluation, long]
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +56,7 @@ jobs:
           node-version: '22'
 
       - name: Integration tests
-        if: matrix.group == 'main'
+        if: matrix.group == 'core'
         run: |
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
             --ignore=tests/model/test_world.py \
@@ -93,7 +94,7 @@ jobs:
             tests/training/test_monitor_evaluation.py
 
       - name: Two-seat and Etude evaluation integration
-        if: matrix.group == 'main'
+        if: matrix.group == 'evaluation'
         run: |
           uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
@@ -101,17 +102,17 @@ jobs:
             tests/eval/ -q
 
       - name: Evaluation Perf report proof
-        if: matrix.group == 'main'
+        if: matrix.group == 'evaluation'
         run: |
           npm --prefix academy/ui ci --ignore-scripts
           npm --prefix academy/ui exec -- playwright install --with-deps chromium
           ./scripts/verify-eval-performance-report
 
       - name: Enum smoke test
-        if: matrix.group == 'main'
+        if: matrix.group == 'evaluation'
         run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 
       - name: Training smoke test
-        if: matrix.group == 'main'
+        if: matrix.group == 'evaluation'
         run: |
           uv run --python 3.12 manabot train --out .runs/ci-local-smoke

@@ -1,0 +1,15 @@
+# cargo-nextest configuration for the managym workspace. CI runs
+# `cargo nextest run --profile ci`; `cargo test` remains equivalent locally.
+
+[profile.ci]
+# Report every failure in one run rather than stopping at the first.
+fail-fast = false
+# The slowest debug tests (engine random smokes, semantic conformance evidence)
+# take 30-40 s each with four test threads. A test still running after 60 s is
+# reported as slow; one still running after 5 minutes is terminated and fails,
+# so a debug-only cost blowup names its test within minutes instead of holding
+# the job for hours.
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+[profile.ci.junit]
+path = "junit.xml"

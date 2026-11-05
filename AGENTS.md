@@ -248,7 +248,9 @@ collection even when the tests pass individually.
   builds with the change's benchmarks is recorded the same way
   ([engine performance budget](docs/development.md#engine-performance-budget));
   wall time is never compared across runners.
-- **CI runs `cargo test` in debug, so validate in debug before landing.**
+- **CI runs the Rust suite in debug, so validate in debug before landing.**
+  The dev profile is opt-level 1 with debug assertions on; CI runs it with
+  `cargo nextest run --profile ci`, which terminates any test after 5 minutes.
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
   pass green in release and still fail CI. `create_token` is the live example —

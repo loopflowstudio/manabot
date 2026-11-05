@@ -41,13 +41,18 @@ subprocesses, including benchmarks, debugging and demos.
 cd managym
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test
+cargo nextest run   # or cargo test
 ```
 
-CI tests in debug with `CARGO_PROFILE_DEV_OPT_LEVEL=1`, which keeps debug
-assertions and overflow checks; match it locally (release-only passes are not
-enough) and use `-j 2` on shared hosts. Keep one Cargo operation per build
-directory. `--all-features` builds the PyO3 bindings; if the default `python3`
+The dev and test profiles build at opt-level 1, which keeps debug assertions
+and overflow checks while running the suite about 3x faster than opt-level 0;
+release-only passes are not enough. `cargo nextest run` runs every test of every
+binary in parallel and reports each failure as it finishes, where `cargo test`
+runs binaries one after another; `--profile ci` adds CI's 5-minute per-test
+limit (`managym/.config/nextest.toml`). Use `-j 2` and `--test-threads 2` on
+shared hosts, and name the binary or test while iterating
+(`cargo nextest run -E 'binary(rules_tests)'`). Keep one Cargo operation per
+build directory. `--all-features` builds the PyO3 bindings; if the default `python3`
 is newer than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python`. A failure of
 `cargo test --all-features` for missing Python dev/link symbols is environment
 setup, not engine correctness. Record unavailable tooling in the gate summary.
@@ -155,9 +160,9 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 
 | Job | Runs |
 |---|---|
-| Rust Tests | debug `cargo test` in `managym/`, including `semantic_conformance_tests` |
+| Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
-| Integration | `manabot-integration.yml` (`main` and `long` groups, Perf report proof, training smoke) |
+| Integration | `manabot-integration.yml` (`core`, `evaluation` and `long` groups on separate runners; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v1` |
@@ -183,6 +188,7 @@ neither skipped nor succeeded.
 |---|---|
 | Native engine, `content/`, `conformance/`, shared Python/Cargo dependencies, CI selector or `ci.yml` | All |
 | `managym/tests/` | Rust, semantic conformance |
+| `managym/.config/nextest.toml` | Rust |
 | `protocol/` | Rust, protocol, UI, semantic conformance |
 | Curated packs and UI fixtures | All but Python unit |
 | UI dependency, build config, scripts, static assets, card art | UI, clean-machine |
