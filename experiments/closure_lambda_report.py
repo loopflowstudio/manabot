@@ -35,6 +35,8 @@ DISTANCES = ("terminal", "1-4", "5+", "censored")
 L4_USD_PER_HOUR = 0.59
 BOOTSTRAP_RESAMPLES = 2000
 INTERVAL = 0.95
+# A healthy assembly takes about a second at these row counts.
+ASSEMBLY_STALL_SECONDS = 5.0
 # Two-sided 95% Student t quantiles by degrees of freedom; studies run 2 to 3 seeds.
 T_95 = {1: 12.706, 2: 4.303}
 
@@ -189,6 +191,13 @@ def _clock(record: TrainingRecord, update: int, kind: str) -> float:
     if kind == "decisions":
         return record.at_update(update, "coordinates/learner_transitions")
     seconds = record.at_update(update, "coordinates/active_training_seconds")
+    if kind == "seconds_without_assembly":
+        # Assembly stalls are intermittent and host-side, in both arms (see report.md).
+        return seconds - sum(
+            row.get("time/collection/batch_assembly", 0.0)
+            for row in record.updates
+            if row["update"] <= update
+        )
     return seconds if kind == "seconds" else seconds / 3600 * L4_USD_PER_HOUR
 
 
@@ -287,6 +296,20 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
         "diagnostics_seconds": learning["Selection and health diagnostics"]["seconds"],
         "idle_stream_steps": idle,
         "idle_share": idle / (idle + decisions),
+        "assembly_stalled_updates": float(
+            sum(
+                row.get("time/collection/batch_assembly", 0.0) > ASSEMBLY_STALL_SECONDS
+                for row in record.updates
+            )
+        ),
+        "median_update_seconds": float(
+            np.median(
+                [
+                    row["time/collection"] + row["time/learning"]
+                    for row in record.updates
+                ]
+            )
+        ),
         "seconds_per_million_rows": (
             float(cast(float, stage["collection_seconds"]))
             + float(cast(float, stage["learning_seconds"]))
@@ -325,7 +348,7 @@ def analyze(
     }
     usable = [r for r in records if r.run in scored and scored[r.run].updates]
     views: dict[str, dict[str, object]] = {}
-    for kind in ("decisions", "seconds", "dollars"):
+    for kind in ("decisions", "seconds", "seconds_without_assembly", "dollars"):
         grid = matched_grid(usable, scored, kind)
         curves = {
             job: np.array(
