@@ -77,3 +77,15 @@ Earlier SDK decisions: `075378dd87600428ad3efa60b7288b327c32cee7:scratch/questio
 original design: `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`.
 All removed detail is committed there. Existing Wave-memory edits remain for
 their owning realign step; this pass does not replace them.
+
+## Main sync — MTG-213 context (2026-11-05 UTC)
+
+Keep this file scoped to Task 5da5f4. Main's MTG-213 decisions are retained at
+`e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md` and in
+`experiments/tla-trophy-pilot.md`, with the shared summary in Experiments Wave
+memory. V10 exported a trained endpoint and completed all 64 endpoint games;
+its 100-update target and full scientific schedule remain incomplete. Jack Heart
+requested discussion of damped learning before a full-TLA successor. That pilot
+choice and its separate $10 cap do not replace this study's approved GPU run,
+$25 total, or review boundary. No new rental or scientific decision is selected
+by this sync.
