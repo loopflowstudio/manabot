@@ -1,4 +1,4 @@
-"""MTG-213 prospective v9 fixed-corpus TLA self-play and paired checkpoint evaluation.
+"""MTG-213 prospective v10 fixed-corpus TLA self-play and paired checkpoint evaluation.
 
 17Lands supplies the CC BY 4.0 trophy source; see the frozen protocol and corpus
 receipt. `runs` uses TrainingJob/execute_regime, while `eval` uses Etude and the
@@ -30,7 +30,7 @@ from etude.report import Curve, Matches, Report, Score
 from pydantic import Field
 import torch
 
-from experiments import tla_pilot_v9
+from experiments import tla_pilot_v10
 from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -41,13 +41,14 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.state.game_errors import GameErrorPolicy
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENT = "tla_pilot_v9"
-REGIME = ROOT / "experiments/regimes/tla-trophy-213-v9.json"
-PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v9.json"
+EXPERIMENT = "tla_pilot_v10"
+REGIME = ROOT / "experiments/regimes/tla-trophy-213-v10.json"
+PROTOCOL = ROOT / "experiments/protocols/tla-trophy-213-v10.json"
 GAMES_PER_PAIR = 4
 
 type Anchor = Literal["heuristic", "initial"]
@@ -79,7 +80,8 @@ class RuntimeWorld(StrictModel):
 
 
 class Protocol(StrictModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[3, 4] = 4
+    game_errors: GameErrorPolicy | None = None
     observation_shapes: dict[str, tuple[int, ...]]
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
@@ -117,11 +119,19 @@ def frozen() -> tuple[TrainingRegime, Protocol]:
         raise ValueError("pilot tensor capacities differ from frozen protocol")
     if regime.observation.action_overflow != protocol.action_overflow:
         raise ValueError("pilot action overflow policy differs from frozen protocol")
+    if protocol.schema_version != 4 or protocol.game_errors is None:
+        raise ValueError("v10 requires an explicit resource recovery contract")
+    if any(
+        not isinstance(stage, TrainSelfPlay)
+        or stage.game_errors != protocol.game_errors
+        for stage in regime.stages
+    ):
+        raise ValueError("pilot game error policy differs from frozen protocol")
     if (
         protocol.heuristic_action_support != "policy-prefix"
         or protocol.action_overflow != "first-legal"
     ):
-        raise ValueError("v9 requires matched policy-prefix heuristic support")
+        raise ValueError("v10 requires matched policy-prefix heuristic support")
     if regime.deck_source is None or regime.deck_source.entry_ids is None:
         raise ValueError("pilot requires a frozen population with event IDs")
     if regime.deck_source.sampling != "uniform-independent-v1":
@@ -166,7 +176,7 @@ def _source() -> list[Path]:
 
 def environment(protocol: Protocol) -> Environment:
     return Environment(
-        name="tla-trophy-213-v9",
+        name="tla-trophy-213-v10",
         files=canonical_sha256(
             {
                 "world": managym.world_identity(),
@@ -199,7 +209,7 @@ def comparison_schedule(
     required checkpoints can be played, but all slots count in the analysis.
     """
     if run.experiment != EXPERIMENT:
-        raise ValueError("v9 comparisons require a fresh v9 initialization")
+        raise ValueError("v10 comparisons require a fresh v10 initialization")
     source = _source()
     inference = Inference(source=source)
     heuristic = Code(
@@ -251,7 +261,7 @@ def comparison_schedule(
 def eval(state: ExperimentState) -> list[Job]:
     """Play available comparisons; Etude owns already-delivered matches."""
     if state.experiment != EXPERIMENT:
-        raise ValueError("v9 evaluation requires fresh v9 training runs")
+        raise ValueError("v10 evaluation requires fresh v10 training runs")
     _, protocol = frozen()
     matchups = tuple(
         comparison.matchup
@@ -264,13 +274,13 @@ def eval(state: ExperimentState) -> list[Job]:
     return [
         evaluation(
             Benchmark(
-                name="tla-trophy-paired-v9",
+                name="tla-trophy-paired-v10",
                 environment=environment(protocol),
                 matchups=matchups,
             ),
             # Etude discovers this file with runpy; callbacks need an importable
             # module identity even when eval itself came from <run_path>.
-            play=tla_pilot_v9.play,
+            play=tla_pilot_v10.play,
             workers=1,
             max_hours=4,
         )
@@ -361,7 +371,7 @@ def play(match: Match) -> Tables:
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="tla-trophy-213-v9",
+        arena_version="tla-trophy-213-v10",
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),

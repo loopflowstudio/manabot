@@ -706,16 +706,24 @@ class CapturedVector(_Capture):
         self._step(actions, active, isolated=False)
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool] | None = None
+        self,
+        actions: list[int],
+        active: list[bool] | None = None,
+        recover_capacity: bool = False,
     ) -> None:
-        self._step(actions, active, isolated=True)
+        self._step(actions, active, isolated=True, recover_capacity=recover_capacity)
 
     def replace_failed_into_buffers(self, active: list[bool]) -> None:
         self.native.replace_failed_into_buffers(active)
         self._synchronize()
 
     def _step(
-        self, actions: list[int], active: list[bool] | None, *, isolated: bool
+        self,
+        actions: list[int],
+        active: list[bool] | None,
+        *,
+        isolated: bool,
+        recover_capacity: bool = False,
     ) -> None:
         enabled = active if active is not None else [True] * len(self.games)
         actors = self.native.current_agent_indices()
@@ -737,7 +745,9 @@ class CapturedVector(_Capture):
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
             if isolated:
-                self.native.step_isolated_into_buffers(actions, active)
+                self.native.step_isolated_into_buffers(
+                    actions, enabled, recover_capacity
+                )
             else:
                 self.native.step_into_buffers(actions, active)
         self._synchronize()

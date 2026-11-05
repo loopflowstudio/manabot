@@ -145,3 +145,12 @@ formatting passed. These checks were not repeated for documentation reconciliati
 
 Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py -q` — 56 passed, including two bindings, runtime/job rejection and offline exposure without runtime admission; Ruff, formatting and `git diff --check` passed. Prior workflow compilation remains applicable. Gate owns full affected suites/acceptance; demo/review remains required. Frozen JSON bytes are unchanged.
 No campaign or complete game was run; all new evaluation/training records are synthetic.
+
+## Sync provenance — 2026-11-04
+
+The merge from main conflicted only in this shared scratch filename. Retain
+MTG-245's implementation handoff here; main's MTG-213 pilot decisions remain at
+`ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md` and its
+results at `experiments/tla-trophy-pilot.md`. Those separate pilot decisions and
+execution budgets do not extend MTG-245's authority. Incoming code and protocol
+changes merge unchanged; this resolution changes only task-local notes.

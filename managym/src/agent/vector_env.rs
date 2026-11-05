@@ -4,12 +4,44 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::{action::AgentError, env::Env, observation::Observation, opponent::OpponentPolicy},
+    agent::{
+        action::AgentError, env::Env, observation::Observation,
+        observation_encoder::ObservationEncodeError, opponent::OpponentPolicy,
+    },
     infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
 };
 
 const HERO_PLAYER_INDEX: i32 = 0;
+
+/// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
+/// faults and malformed observation payloads are never disposable game outcomes.
+#[derive(Debug)]
+pub enum ObservationWriteError {
+    Encoding(ObservationEncodeError),
+    Buffer(AgentError),
+}
+
+impl From<AgentError> for ObservationWriteError {
+    fn from(error: AgentError) -> Self {
+        Self::Buffer(error)
+    }
+}
+
+impl From<ObservationEncodeError> for ObservationWriteError {
+    fn from(error: ObservationEncodeError) -> Self {
+        Self::Encoding(error)
+    }
+}
+
+impl From<ObservationWriteError> for AgentError {
+    fn from(error: ObservationWriteError) -> Self {
+        match error {
+            ObservationWriteError::Encoding(error) => Self(error.to_string()),
+            ObservationWriteError::Buffer(error) => error,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct StepResult {
@@ -451,15 +483,17 @@ impl VectorEnv {
 
     /// Settle each active gameplay call independently. Failed games are poisoned:
     /// callers must retain their inputs and replace them before stepping again.
-    /// Encoding and reset failures remain fatal, rather than looking like games.
+    /// Only explicitly selected observation capacity failures may join gameplay
+    /// failures. Reset, buffer integrity and malformed payload failures stay fatal.
     pub fn step_isolated_into<F>(
         &mut self,
         actions: &[i64],
         active: &[bool],
+        recover_capacity: bool,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
-        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
     {
         self.validate_actions_len(actions.len())?;
         self.validate_actions_len(active.len())?;
@@ -511,7 +545,28 @@ impl VectorEnv {
                 )?;
                 out.obs = obs;
             }
-            write(index, &out.obs, out.reward, out.terminated, out.truncated)?;
+            if let Err(error) = write(index, &out.obs, out.reward, out.terminated, out.truncated) {
+                if recover_capacity && !out.terminated && !out.truncated {
+                    if let ObservationWriteError::Encoding(
+                        error @ ObservationEncodeError::Capacity { .. },
+                    ) = &error
+                    {
+                        return Ok(InfoDict::from([
+                            ("game_error".into(), InfoValue::String(error.to_string())),
+                            (
+                                "game_error_class".into(),
+                                InfoValue::String("ObservationCapacity".into()),
+                            ),
+                            (
+                                "game_error_kind".into(),
+                                InfoValue::String("resource_limit".into()),
+                            ),
+                            ("game_error_frame".into(), InfoValue::String(frame)),
+                        ]));
+                    }
+                }
+                return Err(error.into());
+            }
             Ok(out.info)
         })
     }
@@ -786,7 +841,11 @@ mod tests {
     use std::{cell::RefCell, collections::BTreeMap};
 
     use crate::{
-        agent::{action::AgentError, env::Env, opponent::OpponentPolicy, vector_env::VectorEnv},
+        agent::{
+            action::AgentError, env::Env, observation_encoder::ObservationEncodeError,
+            opponent::OpponentPolicy, vector_env::VectorEnv,
+        },
+        infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
 
@@ -1075,6 +1134,56 @@ mod tests {
     }
 
     #[test]
+    fn isolated_encoding_recovers_only_opted_in_capacity_errors() {
+        for recover in [false, true] {
+            for kind in 0..3 {
+                let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+                vector.reset_all(sample_player_configs()).unwrap();
+                let mut control = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+                control.reset_all(sample_player_configs()).unwrap();
+                let result =
+                    vector.step_isolated_into(&[0; 3], &[true; 3], recover, |index, _, _, _, _| {
+                        if index != 1 {
+                            return Ok(());
+                        }
+                        Err(match kind {
+                            0 => ObservationEncodeError::Capacity {
+                                field: "agent_permanents",
+                                capacity: 40,
+                                actual: 41,
+                            }
+                            .into(),
+                            1 => ObservationEncodeError::InvalidShared("missing source").into(),
+                            _ => AgentError("invalid buffer pointer".into()).into(),
+                        })
+                    });
+                if !recover || kind != 0 {
+                    assert!(result.is_err());
+                    continue;
+                }
+                let info = result.unwrap();
+                assert!(
+                    matches!(info[1].get("game_error_kind"), Some(InfoValue::String(kind)) if kind == "resource_limit")
+                );
+                assert!(info[1].contains_key("game_error_frame"));
+                assert!(!info[0].contains_key("game_error"));
+                assert!(!info[2].contains_key("game_error"));
+                control.step(&[0; 3]).unwrap();
+                vector
+                    .replace_failed_into(&[false, true, false], |_, _, _, _, _| Ok(()))
+                    .unwrap();
+                assert_eq!(vector.current_game_seeds(), vec![7, 11, 9]);
+                for index in [0, 2] {
+                    assert_eq!(
+                        vector.envs[index].state_digest().unwrap(),
+                        control.envs[index].state_digest().unwrap()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn isolated_failure_preserves_successful_streams_and_seed_stride() {
         let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
         vector.reset_all(sample_player_configs()).unwrap();
@@ -1082,7 +1191,7 @@ mod tests {
         control.reset_all(sample_player_configs()).unwrap();
         let rows = RefCell::new(Vec::new());
         let outcomes = vector
-            .step_isolated_into(&[0, -1, 0], &[true; 3], |index, _, _, _, _| {
+            .step_isolated_into(&[0, -1, 0], &[true; 3], false, |index, _, _, _, _| {
                 rows.borrow_mut().push(index);
                 Ok(())
             })
