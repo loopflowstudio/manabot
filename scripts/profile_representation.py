@@ -15,6 +15,7 @@ from decimal import Decimal
 import os
 from pathlib import Path
 import pstats
+import subprocess
 import sys
 import time
 from typing import Callable
@@ -263,6 +264,23 @@ def worker() -> None:
     check_references(
         Path(os.environ["ETUDE_INPUTS_DIR"]), out / "cuda-parity.json", "cuda"
     )
+    with (out / "cuda-routing-tests.txt").open("w") as log:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/model/test_shared_effects.py",
+                "tests/model/test_state_records.py",
+                "-k",
+                "cuda and (batched_effect_routing or continuation_batches or unused_continuation)",
+                "-q",
+            ],
+            check=True,
+            timeout=120,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
     for arm in ("typed_pool", "typed_gru"):
         logs = out / f"{arm}-supervision"
         logs.mkdir(parents=True)

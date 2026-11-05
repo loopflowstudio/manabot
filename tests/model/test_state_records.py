@@ -243,12 +243,22 @@ def test_stack_order_is_semantic_but_row_storage_order_is_not(arm: Arm) -> None:
     assert not torch.allclose(changed, summary, atol=1e-7, rtol=1e-7)
 
 
-def test_unused_continuation_parameters_keep_absent_gradients() -> None:
-    encoder = TypedContinuationEncoder(8, "typed_pool")
-    rows = torch.zeros(2, 64, 49)
+@pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_unused_continuation_parameters_keep_absent_gradients(
+    arm: Arm, device: str
+) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+    encoder = TypedContinuationEncoder(8, arm).to(device)
+    rows = torch.zeros(2, 64, 49, device=device)
     rows[:, 0, :7] = torch.tensor([1, 1, 0, 7, 1, 1, 1])
     rows[:, 0, 31] = 1
-    summary, _ = encoder(rows, torch.randn(2, 2, 8), torch.randn(2, 64, 2, 8))
+    summary, _ = encoder(
+        rows,
+        torch.randn(2, 2, 8, device=device),
+        torch.randn(2, 64, 2, 8, device=device),
+    )
     summary.square().sum().backward()
     assert all(p.grad is None for p in encoder.edge.parameters())
     assert all(p.grad is None for p in encoder.structures[0].parameters())
@@ -305,16 +315,20 @@ def test_flat_records_preserve_sequence_order_and_gradients(arm: Arm) -> None:
 
 
 @pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
 def test_continuation_batches_preserve_independent_frames_and_gradients(
     arm: Arm,
+    device: str,
 ) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
     torch.set_num_threads(1)
     torch.manual_seed(93)
-    encoder = TypedContinuationEncoder(8, arm)
+    encoder = TypedContinuationEncoder(8, arm).to(device)
     reference = deepcopy(encoder)
-    objects = torch.randn(3, 3, 8, requires_grad=True)
-    definitions = torch.randn(3, 64, 2, 8, requires_grad=True)
-    relations = torch.zeros(3, 64, 49)
+    objects = torch.randn(3, 3, 8, device=device, requires_grad=True)
+    definitions = torch.randn(3, 64, 2, 8, device=device, requires_grad=True)
+    relations = torch.zeros(3, 64, 49, device=device)
     for batch in (0, 2):
         for row, (handle, parent, kind) in enumerate(((4, 0, 1), (9, 4, 7))):
             relations[batch, row, :7] = torch.tensor([1, handle, parent, kind, 1, 1, 1])

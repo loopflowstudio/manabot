@@ -172,9 +172,13 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
 
 
 @pytest.mark.parametrize("reduction", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
 def test_batched_effect_routing_matches_independent_gradients(
     reduction: RecordReduction,
+    device: str,
 ) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
     torch.set_num_threads(1)
     torch.manual_seed(42)
     env = shared_effect_root(7)
@@ -184,7 +188,7 @@ def test_batched_effect_routing_matches_independent_gradients(
         )
     )
     headers, details, members = (
-        values[key].repeat(3, 1, 1)
+        values[key].repeat(3, 1, 1).to(device)
         for key in ("effects", "effect_details", "effect_members")
     )
     headers[1] = 0
@@ -194,11 +198,11 @@ def test_batched_effect_routing_matches_independent_gradients(
     headers[2, 0, 10] = 2
     # Two memberships of the same payload to one object still add twice.
     members[2, 1, 0] = members[2, 0, 0]
-    objects = torch.randn(3, 202, 8, requires_grad=True)
+    objects = torch.randn(3, 202, 8, device=device, requires_grad=True)
     independent_objects = objects.detach().clone().requires_grad_()
     headers.requires_grad_()
     independent_headers = headers.detach().clone().requires_grad_()
-    encoder = SharedEffectEncoder(8, reduction)
+    encoder = SharedEffectEncoder(8, reduction).to(device)
     independent = deepcopy(encoder)
     actual = encoder(headers, details, members, objects)
     expected = torch.cat(
