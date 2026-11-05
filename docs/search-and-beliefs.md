@@ -46,13 +46,12 @@ full clone; see [search branching decision v1](benchmarks/search-branching-decis
 - **PUCT** (`puct.py`). Separate trees per determinized world (each receives at
   least one of the total `sims`); not information-set-consistent. Play chooses
   maximal visits, then root-perspective Q, then offer order. Values are win
-  scores (loss 0, draw .5, win 1): signed scalar, categorical and compound
+  scores (loss 0, draw .5, win 1): signed scalar and categorical
   critics convert by `(value + 1) / 2` and invert for the other seat; only
   checkpoints declaring `bc.value_semantic="win_logit"` use a sigmoid. Untagged
   scalar heads are rejected for learned values; `value_mode="neutral"`
-  substitutes .5 and keeps policy priors. Compound priors marginalize the
-  retained decoder prefix onto next canonical Commands (`compound.py`); call
-  `start_game(env, seat)` at game boundaries. `agent_puct` arena registrations
+  substitutes .5 and keeps policy priors. Call `start_game(env, seat)` at
+  game boundaries. `agent_puct` arena registrations
   bind `puct_source_sha256()` and echo `branch_audit`. Unvisited Q=.5 is a
   placeholder; `forward_calls` counts flat forwards only.
 - **Conditional search** (`conditional.py`) compares one root under paired
@@ -63,8 +62,7 @@ full clone; see [search branching decision v1](benchmarks/search-branching-decis
 ## Local policy search
 
 `manabot.sim.search.local_update.LocalUpdateTeacher` admits one checkpoint by
-exact SHA-256. Compound checkpoints use the decoder's signed prefix critic;
-ordinary scalar artifacts must declare `bc.value_semantic = signed_outcome`
+exact SHA-256. Scalar artifacts must declare `bc.value_semantic = signed_outcome`
 (TrainingRegime writes it for self-play); untagged historical scalar critics are
 rejected.
 
@@ -109,17 +107,12 @@ over it. Collection and search share `public_sampler_input`.
 
 `LocalUpdateReceipt` retains offers, base/Q/reference/target, coefficients,
 sampling evidence, identities, seeds and exact branch Command tapes;
-`verify_replay` re-executes from an exact root. Intermediate compound prefixes
-also need the original-root cursor. Arena admission binds
+`verify_replay` re-executes from an exact root; historical receipts that
+retain a compound decoder prefix remain readable but are no longer
+replayable. Arena admission binds
 `local_search_source_sha256()`. Deadlines are cooperative and charge
 preparation, sampling and rollouts: an overrun yields no target, never a
 policy-only substitute.
-
-Compound search (`compound.py`) supports attacker include/exclude, single-target
-casts, independent blockers, action-aligned fallback offers and ordered
-waterbend payment subsets, without enumerating subsets; a legal tap outside the
-retained ordered prefix has exact zero mass. Menace, effectful payments, kicker
-and ward use the native sequential fallback.
 
 ## Possible worlds and tracked beliefs
 
@@ -162,8 +155,8 @@ time.
 - **Stages.** `collect_belief` names an earlier policy stage, chooses `raw` or
   `ema`, and freezes those checkpoint bytes for both seats. `train_belief` fits
   only the sampler on that immutable dataset, so there is no circular
-  policy/belief dependency. Flat observation-only policies and compound
-  policies (raw only) are supported; belief-conditioned behavior policies are
+  policy/belief dependency. Flat observation-only policies are supported;
+  belief-conditioned behavior policies are
   rejected. Collection uses the checkpoint's saved observation capacity and
   fails explicitly if a game exceeds it.
 - **Dataset** (`sampling_data`). Complete games with disjoint
@@ -229,8 +222,7 @@ report is fabricated software evidence.
 
 The exact arm stops at opponent choices without a public likelihood (including
 combat and target choices) and at discard prompts the materializer cannot
-refresh, so full-game exact-versus-prior comparison is blocked. Compound
-exact-history likelihood is unavailable. No Academy advice provider is
+refresh, so full-game exact-versus-prior comparison is blocked. No Academy advice provider is
 registered to the local-update teacher. Calibration, opponent transfer, search
 strength and human-play results remain unmeasured; fixture tests establish
 software behavior only.

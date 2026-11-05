@@ -109,8 +109,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     [
         {"value_aggregation": "value_token", "attention_on": False},
         {"attention_layers": 2, "attention_on": False},
-        {"value_aggregation": "masked_mean", "compound_decisions": True},
-        {"attention_layers": 2, "compound_decisions": True},
+        {"compound_decisions": True},
         {"hidden_dim": 7, "num_attention_heads": 4},
         {"attention_layers": 0},
     ],

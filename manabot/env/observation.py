@@ -44,6 +44,10 @@ ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
+# Name candidate columns: v8 name row + 1 and definition + 1; v9 appends the
+# first and last name rows (+ 1) of a naming group choice.
+NAME_DIM_V8 = 2
+NAME_DIM_V9 = 4
 PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
 LEGACY_RELATION_DIM = 32
@@ -201,12 +205,21 @@ class ObservationEncoder:
             self.relation_dim = LEGACY_RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
-        # V8 binds its action axis to the installed vocabulary. Checkpoint
-        # identity already includes shapes and the exact content manifest.
+        # V8 binds its action axis to the installed vocabulary. V9 names
+        # through bounded group prompts, so ordinary capacity is independent of
+        # vocabulary size. Checkpoint identity already includes shapes and the
+        # exact content manifest.
         self.max_actions = (
             max(config.max_actions, len(managym.naming_catalog()))
-            if config.policy_input_version >= 8
+            if config.policy_input_version == 8
             else config.max_actions
+        )
+        self.name_dim = (
+            NAME_DIM_V9
+            if config.policy_input_version >= 9
+            else NAME_DIM_V8
+            if config.policy_input_version == 8
+            else 0
         )
         self.max_focus_objects = config.max_focus_objects
         self.max_events = config.max_events
@@ -283,7 +296,7 @@ class ObservationEncoder:
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
             "opponent_permanents": (self.perms_per_player, self.permanent_dim),
             **(
-                {"name_candidates": (self.max_actions, 2)}
+                {"name_candidates": (self.max_actions, self.name_dim)}
                 if self.config.policy_input_version >= 8
                 else {}
             ),
@@ -966,8 +979,8 @@ class ObservationEncoder:
             (self.max_actions, self.max_focus_objects), -1, dtype=np.int32
         )
         candidates = (
-            np.zeros((self.max_actions, 2), dtype=np.float32)
-            if self.config.policy_input_version >= 8
+            np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
+            if self.name_dim
             else None
         )
         for idx, action in enumerate(actions):
@@ -998,13 +1011,25 @@ class ObservationEncoder:
                 if action.name_index is not None:
                     if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
                         raise ValueError("observation capacity exceeded: name selector")
-                    candidates[idx] = (
+                    candidates[idx, :2] = (
                         action.name_index + 1,
                         (action.name_definition + 1)
                         if action.name_definition is not None
                         else 0,
                     )
                     # Names use categorical identity rather than a numeric mode.
+                    arr[idx, ACTION_MODE_INDEX] = 0
+                if action.name_group is not None:
+                    if self.name_dim != NAME_DIM_V9:
+                        raise ValueError(
+                            "policy input v8 offers whole-vocabulary names and "
+                            "cannot represent naming groups"
+                        )
+                    first, last = action.name_group
+                    if not 0 <= first <= last <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name group")
+                    # A group is its public span of sorted names, not a mode.
+                    candidates[idx, 2:] = (first + 1, last + 1)
                     arr[idx, ACTION_MODE_INDEX] = 0
 
             if len(action.focus) > self.max_focus_objects:

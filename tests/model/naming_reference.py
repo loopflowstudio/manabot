@@ -48,10 +48,6 @@ class DenseActionReference(ActorCritic):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        if self.compound_decoder is not None:
-            raise ValueError(
-                "compound checkpoint requires authoritative offers; use ActorCritic.compound"
-            )
         state = self._gather_object_embeddings(obs)
 
         encoded = self._attend_objects(

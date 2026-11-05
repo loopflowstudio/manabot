@@ -78,7 +78,6 @@ interpretation and serialized identity.
 | Operation | Purpose |
 | --- | --- |
 | `train_self_play` | Ordinary self-play learner (PPO-style `Learning` or `DampedPolicyLearning`). |
-| `train_compound` | Ragged compound-decision policy; see [compound decisions](#compound-decisions). |
 | `import_policy` | Admit a frozen TrainingRun export's raw or EMA checkpoint without training. |
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
 | `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [search-and-beliefs.md](search-and-beliefs.md). |
@@ -146,49 +145,22 @@ published artifacts. Reproducibility means resolved settings and artifact
 provenance, not byte-identical stochastic training. A fresh execution owns
 fresh costs; no pre-existing corpus is free.
 
-### Compound decisions
+### Compound decisions (removed)
 
-`ModelConfig.compound_decisions=true` selects the learned ragged policy;
-`train_compound` collects complete self-play games before each update. The
-recipes are `experiments/compound_decisions.py` variants
-`{sequential,grouped}_{bootstrap,outcome}`.
-
-managym's `compound_offers` supplies the legal surface: complete attacker
-declarations and simple single-target casts; complete remaining blocker
-declarations when each blocker's legal targets are independent (menace stays
-sequential); and waterbend payments with fixed tap/mana economics. Kicker,
-ward, mana abilities and triggers remain sequential decisions. A native
-`compound_commands_json` call lowers a sampled submission on an exact fork into
-ordinary revision-bound Commands; the live root is untouched, and interruption
-rejects a stale suffix. No Python code reconstructs these rules.
-
-A small GRU conditions include/exclude logits on the selected prefix over the
-shared viewer encoder. Candidates are visited once in native order with
-cardinality masks, so each subset has one encoding; joint log probability is
-the sum of normalized conditional log probabilities, and forced tokens have
-log probability zero. Conditional entropy and KL terms are sampled-prefix
-regularizers, not exact joint quantities. `grouping=grouped` uses one joint
-ratio and root value per submission; `sequential` uses per-factor ratios and
-prefix values. `estimator=outcome` uses terminal Monte Carlo returns;
-`bootstrapped` uses transition-end GAE. Recipes fix gamma=1. Raw weights only;
-EMA is unsupported. Native `skip_trivial` stays on; report complete-game wall
-cost, since fewer exposed prompts alone are not a speedup.
-
-```bash
-OMP_NUM_THREADS=1 uv run --extra notebook python -m experiments.compound_decisions --profile smoke --out .runs/compound-smoke
-uv run --extra notebook python -m experiments.compound_decisions --report-only .runs/compound-smoke
-```
-
-The smoke is one seed; a scientific comparison needs independent training
-seeds, fresh deals, equal wall budgets and measured inference cost.
+The learned compound-decision policy (`compound_decisions` models and
+`train_compound` stages) has been removed. Saved configurations, checkpoints
+and regimes that select it fail validation rather than loading as flat
+policies; reproduce them from source commit
+`ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`. Retained receipts and reports
+that record compound fields remain readable.
 
 ### Selection diagnostics
 
 `collect_selection` freezes a prior self-play stage's raw or EMA checkpoint
 (optionally from another run in the same store via `source_run`) and collects
 a declared population with unique seeds and whole-game development/held-out
-splits. Scalar and categorical values are supported; compound and belief-input
-sources are not. The protocol is in
+splits. Scalar and categorical values are supported; belief-input sources
+are not. The protocol is in
 [ataraxos-omitted-controls](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
 results are frozen-policy associations, not causal filter benefits.
 
@@ -409,7 +381,7 @@ phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), `selection_groups/<action
 type>/<terminal distance>/rows` and `self_play_outcomes/<deck>/<opponent
 deck>/<play|draw>/wins`. Offline readers use
-`manabot.training.update_metrics.read_updates`. Compound, selection and belief
+`manabot.training.update_metrics.read_updates`. Selection and belief
 summaries stay in their stage's `diagnostics`.
 
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
@@ -428,7 +400,7 @@ milestone. `ExperimentSchedule` and `PlannedRun` default to 1,000 updates, an
 authoring default rather than an hourly estimate. Portable continuation keeps
 the absolute grid (resuming at 26,000 with interval 1,000 first exports at
 27,000). Step cadence requires one step-target self-play stage; multi-stage
-and compound recipes keep explicit legacy cadence. `--checkpoint-seconds`
+recipes keep explicit legacy cadence. `--checkpoint-seconds`
 preserves historical elapsed-time cadence for frozen recipes.
 
 ### Checkpoint evaluation
@@ -732,7 +704,7 @@ under the TrainingRun's `failures/` directory or `.runs/game-failures/`
 elsewhere. Files are create-only, mode 0600 and fsynced; a storage failure is
 attached to the original exception. Coverage includes strict self-play,
 `sim.rollout` and vector environments, search players (flat-MC and rollout
-pool roots), compound/selection journals, and arena evaluation, which journals
+pool roots), selection journals, and arena evaluation, which journals
 each pending Command under `failures/` before execution (pass
 `keep_game_logs=True` to keep journals of successful games).
 
@@ -842,45 +814,54 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 ### Catalog naming input
 
-`ObservationConfig(policy_input_version=8)` retains v7's object, relation and
-shared-effect layouts and adds `name_candidates[A,2]`: one-based public name
-row and optional one-based definition reference (zero means absent). `A` is
-`max(max_actions, len(managym.naming_catalog()))`. Every installed candidate
-receives a legal row and a policy logit, even when `max_actions` is smaller than
-the vocabulary. Other capacity excesses fail explicitly, except action overflow
-with the separately selected `action_overflow="first-legal"` policy. That policy
-retains the configured buffer's prefix; it does not reduce v8's vocabulary-derived
-action axis. No card/permanent row is fabricated for a name. V8
-suppresses the positional mode feature on these rows, so candidate identity
-comes from the categorical join, never from its magnitude.
+Naming a card is a sequence of ordinary native decisions. A prompt over at most
+`managym.NAME_BRANCHING` (64) names offers those names; a larger prompt offers a
+deterministic, balanced, complete partition of its sorted names into at most 64
+contiguous groups, recursively. With 928 names that is 15 groups of 61 or 62,
+then one name prompt; the installed 344-name catalog uses 6 groups. Choosing a
+group narrows the pending prompt and commits nothing: no search, inspection or
+exile. Only choosing a name resumes the effect. Each prompt is one learner
+transition through the ordinary policy, value estimate, rollout and learner,
+with the standard discount and credit; no reward is assigned to group choices.
+The extra decision is real temporal structure, so learning is not claimed to
+equal one flat choice over every name. Single-option prompts follow the native
+trivial-decision skip. Reconnect, replay and forks restore the actual current
+prompt; Commands bound to an earlier prompt are stale.
 
-The policy adds a trainable name vector and, where present, the definition's
-existing learning-program embedding from the same table used by game objects.
-Each referenced program is encoded once per learner forward; inference reuses
-its policy-scoped catalog cache. Distinct names with equivalent rules
-remain distinguishable. V8 joins those same name vectors to viewer-visible
-program references before card, known-hand and decklist pooling. Equal-rule
-cards with different public names can therefore support different preferences;
-closed native decklist rows still contribute no identities.
-Only naming decisions request all candidate programs; ordinary learner steps
-retain referenced-definition encoding. Action networks score only legal rows,
-including in mixed naming/ordinary batches, and restore original logit slots.
-Pending transitions and rollouts pack all legal action fields and full behavior
-probabilities/log probabilities with original coordinates. Both learner rules
-materialize and transfer only selected minibatches; private numerical incidents
-retain the packed offsets and slots. Native live buffers and each minibatch's
-policy ABI still have the configured dense action axis.
+`ObservationConfig(policy_input_version=9)` retains v7's object, relation and
+shared-effect layouts and adds `name_candidates[A,4]` at the ordinary action
+capacity `A = max_actions`: one-based public name row, optional one-based
+definition reference, then the one-based first and last name rows of a group
+choice (zero means absent). Sorted names make the span a viewer-safe identity
+of every member. No card/permanent row is fabricated for a name or group. These
+rows suppress the positional mode feature, so identity comes from categorical
+joins, never from magnitude.
 
-The checkpoint binding includes the ordered naming vocabulary and optional
-definition joins and `naming_representation="public-identity-v1"`, in addition
-to tensor shapes and the content manifest. Earlier unreleased v8 bindings fail
-admission; there is no automatic warm start or name remapping.
-V1–v7 arrays, missing-checkpoint defaults and fresh v6 defaults are unchanged;
-using v8 is explicit. A historical fixed-capacity input rejects an oversized
-naming decision under the default overflow policy. Explicit `first-legal` can
-truncate such legacy input and does not provide complete naming support.
-The new semantic observation/capture contracts are
-8/5, so earlier semantic world bindings are rejected for current execution.
+The policy adds a trainable vector per name and, where present, the
+definition's learning-program embedding from the table used by game objects. A
+group's vector is the mean of its members' name vectors, computed exactly from
+a prefix sum over the name table: every member receives the group's gradient,
+and no member programs are encoded for a group prompt. V9 joins name vectors to
+viewer-visible program references before card, known-hand and decklist pooling,
+so equal-rule cards with different public names support different preferences;
+closed native decklist rows contribute no identities. Action networks score
+only legal rows, and rollouts pack legal action fields and complete behavior
+probabilities with original coordinates.
+
+The checkpoint binding includes the ordered naming vocabulary with definition
+joins, `naming_representation="public-groups-v1"` and `naming_branching`, in
+addition to tensor shapes and the content manifest. A changed vocabulary,
+order, join or branching bound fails admission; there is no warm start or
+remapping.
+
+Explicit v8 (`name_candidates[A,2]`, `A = max(max_actions, vocabulary)`) scored
+the whole vocabulary in one decision. It cannot represent groups, so it rejects
+any prompt that offers them, including the installed catalog's first prompt.
+V1–v7 never had name identity: group and name choices appear as ordinary modal
+choices, within their capacities. Missing-checkpoint defaults and fresh v6
+defaults are unchanged; using v9 is explicit. The semantic observation/capture
+contracts are 8/5, so earlier semantic world bindings are rejected for current
+execution.
 
 The default universe remains real non-token catalog names, including back faces.
 A separate immutable vocabulary can hold validated names without playable card

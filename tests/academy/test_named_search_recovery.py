@@ -1,4 +1,9 @@
-"""A private named-card search retains its choices and permissions on reconnect."""
+"""Naming and the private named-card search survive reconnect.
+
+Naming is a sequence of ordinary prompts: groups of sorted names, then names.
+Reconnect restores the actual current prompt; earlier prompts' Commands are
+stale; only the final name starts the private search.
+"""
 
 import json
 from pathlib import Path
@@ -32,6 +37,17 @@ def _command(
     }
 
 
+def _toward(frame: ExperienceFrame, name: str) -> InteractionOffer:
+    """The leaf offer naming `name`, or the group whose label span contains it."""
+    for offer in frame.offers:
+        if offer.label == f"Name {name}":
+            return offer
+        first, _, last = offer.label.removeprefix("Names ").partition(" through ")
+        if offer.label.startswith("Names ") and first <= name <= last:
+            return offer
+    raise AssertionError(f"{name} is unreachable")
+
+
 @pytest.mark.parametrize("case", ["installed", "large-search", "large-policy"])
 def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection(
     monkeypatch: pytest.MonkeyPatch,
@@ -56,7 +72,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             cast = False
             # Reach chapter II using ordinary Commands, without injecting state.
             for ordinal in range(200):
-                if any(o.label == "Name Gray Ogre" for o in frame.offers):
+                if any(o.label.startswith("Names ") for o in frame.offers):
                     break
                 labels = ["Target Villain", "Play Swamp"]
                 if not cast:
@@ -93,10 +109,10 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 game.obs = game.env.observation_for_player(0)
                 game.published_prompt = None
                 frame = ExperienceFrame.model_validate(game._experience_frame())
-                assert len(frame.offers) == len(catalog) > 512
-                assert [o.label for o in frame.offers] == [
-                    f"Name {c.name}" for c in catalog
-                ]
+                assert len(catalog) > 512
+                assert len(frame.offers) == -(-len(catalog) // managym.NAME_BRANCHING)
+                assert frame.offers[0].label.startswith(f"Names {catalog[0].name} ")
+                assert frame.offers[-1].label.endswith(f" through {catalog[-1].name}")
                 assert (
                     next(i for i, c in enumerate(catalog) if c.name == "Gray Ogre")
                     > 511
@@ -109,9 +125,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
                     torch.set_num_threads(1)
                     torch.manual_seed(243)
-                    space = ObservationSpace(ObservationConfig(policy_input_version=8))
-                    values = space.encoder.allocate()
-                    game.env.encode_observation_into(game.obs, values)
+                    space = ObservationSpace(ObservationConfig(policy_input_version=9))
                     vector = managym.VectorEnv(num_envs=1, seed=165)
                     vector.reset_all(game.trace.config.to_rust())
                     for event in game.trace.events:
@@ -124,42 +138,90 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     )
                     vector.set_buffers(buffers)
                     vector.scenario_naming_vocabulary_into_buffers()
-                    for key, expected in space.encode(game.obs).items():
-                        np.testing.assert_array_equal(
-                            values[key], expected, err_msg=key
-                        )
-                        np.testing.assert_array_equal(
-                            buffers[key][0], expected, err_msg=key
-                        )
                     model = ActorCritic(
                         space, ModelConfig(hidden_dim=16, attention_on=False)
                     )
-                    obs = {
-                        key: torch.from_numpy(value)[None]
-                        for key, value in values.items()
-                    }
-                    # Same one-step supervised reachability witness as the model
-                    # test. This is neither a strategic target nor a strength claim.
-                    optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
-                    loss = torch.nn.functional.cross_entropy(
-                        model(obs)[0], torch.tensor([512])
-                    )
-                    loss.backward()
-                    optimizer.step()
-                    selected = int(
-                        model.get_action_and_value(obs, deterministic=True)[0]
-                    )
-                    assert selected >= 512
                     replay = game.env.clone_env()
-                    native_frame = json.loads(replay.semantic_decision_frame_json())
-                    assert (
-                        json.loads(vector.semantic_decision_frames_json()[0])
-                        == native_frame
-                    )
                     trace_length = len(game.trace.events)
+                    target = catalog[512].name
 
-        # Disconnect before naming: recovery must retain the complete vocabulary
-        # and its exact Command binding, without granting search inspection early.
+        def policy_choice(frame: ExperienceFrame) -> InteractionOffer:
+            """The ordinary policy's choice at the current naming prompt.
+
+            One supervised step toward the prompt's offer leading to row 512
+            witnesses reachability; it is neither a strategic target nor a
+            strength claim. Scalar and vector encodings must agree first.
+            """
+            assert game.env is not None and game.obs is not None
+            values = space.encoder.allocate()
+            game.env.encode_observation_into(game.obs, values)
+            for key, expected in space.encode(game.obs).items():
+                np.testing.assert_array_equal(values[key], expected, err_msg=key)
+                np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+            assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
+                game.env.semantic_decision_frame_json()
+            )
+            obs = {key: torch.from_numpy(value)[None] for key, value in values.items()}
+            wanted = frame.offers.index(_toward(frame, target))
+            for _ in range(20):
+                optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
+                model.zero_grad()
+                torch.nn.functional.cross_entropy(
+                    model(obs)[0], torch.tensor([wanted])
+                ).backward()
+                optimizer.step()
+                selected = int(model.get_action_and_value(obs, deterministic=True)[0])
+                if selected == wanted:
+                    return frame.offers[selected]
+            raise AssertionError("policy did not reach the supervised offer")
+
+        # Disconnect at each naming prompt: recovery restores the actual current
+        # prompt and its exact Command binding, without granting search
+        # inspection early. Choosing a group commits nothing.
+        selections: list[int] = []
+        while True:
+            with client.websocket_connect("/ws/play") as socket:
+                socket.send_json(
+                    {
+                        "type": "resume",
+                        "session_id": initial["session_id"],
+                        "resume_token": initial["resume_token"],
+                    }
+                )
+                recovered_name = ExperienceFrame.model_validate(
+                    socket.receive_json()["recovery"]["frame"]
+                )
+                assert recovered_name == frame
+                game = server.SESSION_REGISTRY[initial["session_id"]].game
+                assert game.env is not None
+                assert not decision_surface_view(game.env, 0)["agent"].get("inspected")
+                name_offer = (
+                    policy_choice(frame)
+                    if case == "large-policy"
+                    else _toward(frame, "Gray Ogre")
+                )
+                selections.append(frame.offers.index(name_offer))
+                if case == "large-policy":
+                    vector.step_into_buffers([selections[-1]])
+                name_command = _command(
+                    frame, name_offer, f"name-card.{len(selections)}"
+                )
+                socket.send_json({"type": "command", "command": name_command})
+                named = socket.receive_json()
+                assert named["status"] == "accepted"
+                frame = ExperienceFrame.model_validate(named["update"]["frame"])
+                socket.send_json(
+                    {
+                        "type": "command",
+                        "command": name_command | {"command_id": "name-stale"},
+                    }
+                )
+                stale_name = socket.receive_json()
+                assert stale_name["status"] == "rejected"
+                assert stale_name["rejection"]["code"] == "stale_revision"
+                if name_offer.label.startswith("Name "):
+                    break
+        assert len(selections) == 2
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json(
                 {
@@ -168,49 +230,21 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     "resume_token": initial["resume_token"],
                 }
             )
-            recovered_name = ExperienceFrame.model_validate(
-                socket.receive_json()["recovery"]["frame"]
-            )
-            assert recovered_name == frame
-            name_offer = (
-                frame.offers[selected]
-                if case == "large-policy"
-                else next(
-                    offer for offer in frame.offers if offer.label == "Name Gray Ogre"
+            assert (
+                ExperienceFrame.model_validate(
+                    socket.receive_json()["recovery"]["frame"]
                 )
+                == frame
             )
-            name_command = _command(frame, name_offer, "name-card")
-            socket.send_json({"type": "command", "command": name_command})
-            named = socket.receive_json()
-            assert named["status"] == "accepted"
-            frame = ExperienceFrame.model_validate(named["update"]["frame"])
-            socket.send_json(
-                {
-                    "type": "command",
-                    "command": name_command | {"command_id": "name-stale"},
-                }
-            )
-            stale_name = socket.receive_json()
-            assert stale_name["status"] == "rejected"
-            assert stale_name["rejection"]["code"] == "stale_revision"
             if case == "large-policy":
                 assert (
                     game.env is not None
                     and game.trace is not None
                     and game.obs is not None
                 )
-                replay.step_semantic_command(
-                    json.dumps(
-                        {
-                            "command_id": "large-policy-replay",
-                            "expected_revision": native_frame["revision"],
-                            "offer_id": native_frame["offers"][selected]["id"],
-                            "answers": [],
-                        }
-                    )
-                )
-                vector.step_into_buffers([selected])
-                for event in game.trace.events[trace_length + 1 :]:
+                for selected in selections:
+                    replay.step(selected)
+                for event in game.trace.events[trace_length + len(selections) :]:
                     replay.step(event.action)
                     vector.step_into_buffers([event.action])
                 assert replay.state_digest() == game.env.state_digest()
@@ -221,11 +255,9 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     np.testing.assert_array_equal(
                         buffers[key][0], expected, err_msg=key
                     )
-                assert game.trace.events[trace_length].action == selected
-                assert (
-                    game.trace.events[trace_length].action_description
-                    == name_offer.label
-                )
+                recorded = game.trace.events[trace_length:][: len(selections)]
+                assert [event.action for event in recorded] == selections
+                assert recorded[-1].action_description == f"Name {target}"
                 assert not decision_surface_view(game.env, 1)["agent"].get("inspected")
                 return
             assert frame.action_space == "LOOK_AND_SELECT"

@@ -11,7 +11,12 @@ from pydantic import (
     model_validator,
 )
 
-from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.config import (
+    COMPOUND_DECISIONS_REMOVED,
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+)
 from manabot.training.decks import UniformDecks
 from manabot.training.state.game_errors import GameErrorPolicy
 
@@ -532,42 +537,8 @@ class TrainBelief(Stage):
     evaluation_samples: int = Field(default=32, ge=1)
 
 
-class TrainCompound(Stage):
-    """Complete-game self-play with explicit decoder credit units."""
-
-    operation: Literal["train_compound"]
-    initial: str | None = None
-    updates: int = Field(default=1, ge=1)
-    games_per_update: int = Field(default=2, ge=1)
-    max_commands: int = Field(default=4000, ge=1)
-    grouping: Literal["sequential", "grouped"] = "grouped"
-    estimator: Literal["outcome", "bootstrapped"] = "outcome"
-    skip_trivial: bool = True
-    learning: Learning = Learning(retained_fraction=1, epochs=1)
-
-    @model_validator(mode="after")
-    def supported_learning(self) -> "TrainCompound":
-        if (
-            self.learning.filter_kind != "top_count"
-            or self.learning.filter_scope != "actor_critic"
-        ):
-            raise ValueError(
-                "compound stages support top-count actor-critic filtering only"
-            )
-        if self.learning.reference != "uniform" or self.learning.ema is not None:
-            raise ValueError(
-                "compound stages require conditional uniform reference and raw weights"
-            )
-        return self
-
-
 Operation = Annotated[
-    ImportPolicy
-    | TrainSelfPlay
-    | TrainCompound
-    | CollectBelief
-    | CollectSelection
-    | TrainBelief,
+    ImportPolicy | TrainSelfPlay | CollectBelief | CollectSelection | TrainBelief,
     Field(discriminator="operation"),
 ]
 
@@ -615,7 +586,16 @@ class TrainingRegime(Strict):
     @model_validator(mode="before")
     @classmethod
     def read_one_seat_regime(cls, value: object) -> object:
-        """Schema 1 omitted the one-seat choice; never relabel frozen evidence."""
+        """Schema 1 omitted the one-seat choice; never relabel frozen evidence.
+
+        Retired `train_compound` stages fail with the reproduction commit
+        rather than as an unknown discriminator.
+        """
+        if isinstance(value, dict) and any(
+            isinstance(stage, dict) and stage.get("operation") == "train_compound"
+            for stage in value.get("stages") or ()
+        ):
+            raise ValueError(COMPOUND_DECISIONS_REMOVED)
         if isinstance(value, dict) and value.get("schema_version") == 1:
             stages = value.get("stages")
             if isinstance(stages, list):
@@ -712,25 +692,6 @@ class TrainingRegime(Strict):
         self.observation = self.observation.model_copy(
             update={"policy_history_version": 1 if self.agent.recent_events else 0}
         )
-        has_compound = any(isinstance(stage, TrainCompound) for stage in self.stages)
-        has_import = any(isinstance(stage, ImportPolicy) for stage in self.stages)
-        if (
-            has_compound
-            and not self.agent.compound_decisions
-            or (self.agent.compound_decisions and not (has_compound or has_import))
-        ):
-            raise ValueError(
-                "compound stages and compound ActorCritic must be selected together"
-            )
-        if self.agent.compound_decisions and any(
-            not isinstance(
-                stage, (TrainCompound, ImportPolicy, CollectBelief, TrainBelief)
-            )
-            for stage in self.stages
-        ):
-            raise ValueError(
-                "compound policies require compound policy stages throughout the run"
-            )
         if self.recovery is not None and self.recovery_max_microsteps is not None:
             raise ValueError("select one recovery contract")
         if self.recoverable and (
@@ -762,7 +723,6 @@ class TrainingRegime(Strict):
                 raise ValueError("CUDA requires self-contained ordinary self-play")
         previous: dict[str, Stage] = {}
         latest_self_play = None
-        latest_compound = None
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
@@ -774,7 +734,7 @@ class TrainingRegime(Strict):
                     raise ValueError("selection EMA dependency requires EMA weights")
             if isinstance(stage, CollectBelief):
                 policy = previous.get(stage.policy)
-                if not isinstance(policy, (TrainSelfPlay, TrainCompound, ImportPolicy)):
+                if not isinstance(policy, (TrainSelfPlay, ImportPolicy)):
                     raise ValueError(
                         "belief policy must refer to an earlier policy stage"
                     )
@@ -825,15 +785,9 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         "live self-play continuation must preserve streams, curriculum, gradient, EMA clock, workers and opponent"
                     )
-            if isinstance(stage, TrainCompound):
-                if initial and parent is not latest_compound:
-                    raise ValueError(
-                        "compound continuation cannot branch from older weights"
-                    )
-                latest_compound = stage
-            if self.agent.value_kind == "categorical_wdl" and (
-                isinstance(stage, TrainCompound)
-                or isinstance(stage, TrainSelfPlay)
+            if (
+                self.agent.value_kind == "categorical_wdl"
+                and isinstance(stage, TrainSelfPlay)
                 and not isinstance(stage.learning, DampedPolicyLearning)
             ):
                 raise ValueError("categorical outcome training requires damped_policy")

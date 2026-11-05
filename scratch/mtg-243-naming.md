@@ -1,5 +1,155 @@
 # MTG-243 — complete catalog naming
 
+
+## CURRENT ACCEPTED REVISION — 2026-11-05, sequential naming and decoder removal
+
+This section supersedes earlier same-day proposals for bot-internal hierarchical
+decoding, a flat/compound hybrid, and one-transition route credit. Those remain
+historical discussion below, not current implementation direction.
+
+Jack Heart directed: delete the active neural compound decoder; introduce name
+selection as simple serialized hierarchical decisions; file a separate Task to
+experimentally validate compound decision-making, explicitly including mana
+payment. He confirmed the exact meaning: **ordinary sequential engine decisions**
+for choose-a-group then choose-a-name, each using the regular policy head and
+normal rollout. Only the final leaf commits the selected name. Continue MTG-243
+and PR #424 through implementation and publication to interactive review. No
+merge/Auto-Ship, paid execution or strength campaign is authorized. Full end-to-end
+throughput measurement is still not a shipping prerequisite.
+
+### Implementation outcome
+
+- Remove the neural CompoundDecoder and its active model-wide alternate policy,
+  compound-only learner/rollout/search glue, runnable study recipes and obsolete
+  feature/configuration branches that exist solely to support it. Trace consumers
+  before deleting; remove dead parallel paths instead of retaining disabled copies.
+  Keep shared flat-policy encoders, naming identity, packed-rollout improvements,
+  shared native legality/offer/Command APIs needed by real remaining consumers,
+  and the broader Task's completed correctness/performance repairs.
+- This is retirement of an unvalidated alternate learning architecture, not a
+  claim it never ran or that compound choices are worse. ETU-94's retained 56-game
+  proof establishes wiring only; Elemental 10x10 MTG-181/183 uses the flat policy.
+  Retain historical evidence byte-for-byte and point to historical source
+  ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b for reproduction. Historical compound
+  checkpoints must fail clearly if execution is no longer supported, never be
+  loaded as flat policies. Preserve ordinary/frozen configuration omissions and
+  offline evidence readers; do not retain the full decoder just for metadata.
+- Native NameCard becomes a complete bounded hierarchy of ordinary decisions:
+  publish legal groups; selecting one advances the pending naming scope; publish
+  its children until a leaf set fits; selecting a leaf resumes the original
+  effect. Use deterministic balanced complete grouping, initially at most 64
+  options per prompt, recursively for larger vocabularies. No reject/next paging,
+  hidden auto-selection or missing names. Skip single-choice decisions according
+  to the existing native skip_trivial contract.
+- Group navigation changes pending decision state but commits no naming effect,
+  resource cost or private inspection. Only selecting the actual name starts the
+  existing private SearchNamed continuation. Preserve committed exiles, optional
+  stopping and fail-to-find semantics. Reconnect/fork/replay restore the actual
+  current group or leaf prompt; stale earlier-group Commands reject. No undo or
+  cancel lifecycle is newly authorized.
+- Every exposed hierarchy stage uses the ordinary policy forward, categorical
+  distribution, rollout, value estimate and existing learner. No separate GRU,
+  internal token tape, joint-path PPO ratio or special compound KL. Standard
+  temporal discount/credit applies: document the extra decisions and do not claim
+  learning equivalence to an atomic flat choice. No intermediate reward is invented.
+- Group choices need viewer-safe, machine-readable identity/features that let the
+  regular policy distinguish their candidate sets; presentation labels alone are
+  insufficient. Bind grouping/membership to the vocabulary/decision identity.
+  Preserve useful public name/definition joins, including names without definitions,
+  and never infer hidden membership. Avoid expanding every ordinary live buffer
+  or learner minibatch with the catalog. Ordinary action capacity must be independent
+  of vocabulary size; shared immutable catalog storage can remain linear.
+- The new native decision sequence is shared authority. Academy and LLM clients
+  should work through their existing ordinary-offer controls/text projections;
+  no bespoke Academy redesign or new LLM tool interface is requested. Update the
+  normal native/Python/scalar/vector/model/text/Command consumers and focused
+  shared-surface proofs needed for the changed contract.
+- Preserve frozen v1–v8 input layouts/semantics and saved evidence. If bounded
+  group representation/transport needs a new input version or live world/capture
+  transition, make it explicit; never reinterpret v8 name rows as groups. Fresh
+  default adoption remains a separate decision unless explicitly necessary to
+  expose this Task's opt-in feature. Unsupported old configurations must reject
+  explicitly instead of truncating choices or pretending to understand groups.
+
+### Required proof and review
+
+Use one real native vocabulary beyond 512 (existing 928-name fixture) through
+scalar/vector/ordinary policy/Command and current shared clients. Prove every name
+is reachable exactly once, balanced bounded branching including deeper trees,
+learnable group and leaf distinctions with gradients, correct final effect and
+no effect before leaf selection, private visibility, stale/replay/reconnect,
+trivial-decision skipping and fail-to-find. Exercise ordinary flat training through
+both group and leaf transitions. Keep tests meaningful rather than mirroring a
+partition function. Measure bounded buffer sizes and ordinary/naming costs with
+controlled fixtures; no artificial load. Apply docs/development.md checks, rebuild
+Rust extension atomically, run debug Rust, and retain the unchanged Engine Budget
+reference/tolerance unless actual semantic digests require documented adoption.
+Published old-head CI is not evidence for this new architecture.
+
+The implementation may settle routine data structures, grouping and deletion
+mechanics within these constraints. If a real product/compatibility conflict
+cannot be resolved without changing accepted behavior, bring that precise issue
+back to this conversation. Do not restart design merely to re-ask the accepted
+choice of ordinary sequential decisions.
+
+### Coordination
+
+Open PRs at this decision: #433 / MTG-241 owns execution/payment continuations;
+#427 / MTG-244 owns layers and shared observations; #434 / MTG-252 owns critic
+readout changes; #383 / MTG-175 owns curriculum/learner work; #428 / MTG-245 owns
+league protocols. MTG-249 / #421 owns effective-state/agent-memory design. Sync
+through lf as appropriate, preserve their work and do not copy their active
+implementations. Keep deletion narrowly about the neural compound architecture;
+engine APIs with existing non-neural consumers have separate responsibilities.
+
+A separate experiments-Wave Task is being filed for controlled learning validation
+of sequential versus compound choices including mana payment; filing is not an
+experiment launch. Its brief pins this source and separates prior wiring proofs
+from scientific validation. No compound architecture is to be reintroduced here
+on speculative benefit.
+
+### Implementation — 2026-11-05 (uncommitted at writing)
+
+Native: `Decision::NameCard` holds `scope: NameScope` (`cards/names.rs`). A scope
+over `NAME_BRANCHING` = 64 offers `ceil(len / 64^(d-1))` balanced contiguous
+groups (sizes differ by ≤1); choosing one only narrows the scope and re-suspends;
+a leaf name choice pushes `ExileNamed`. Labels: "Names A through B" / "Name X";
+the decision instruction says choosing a group commits nothing. `ActionOption`
+gains `name_group: [first, last]` (JSON/PyO3/stub). 928 names → 15 groups then
+a leaf; installed 344 → 6 groups. Schema 8 / capture 5 / hash 16 edited in place.
+
+Input: explicit v9 `name_candidates[A,4]` (name, definition, group first, last;
+one-based) at `A = max_actions`; native vector infers v8/v9 from width. V8 rejects
+any group prompt; v1–v7 see anonymous modal choices. Model: a group is the exact
+prefix-sum mean of member name vectors (padding excluded); checkpoint binding
+`public-groups-v1` plus `naming_branching`. Live observation bytes at default
+capacity: v9 155,120 independent of vocabulary; v8 151,024 (344) / 195,952 (928).
+Native single-sample release controls at the 928-name root: action space 600 B /
+1 allocation, observation 9.3 KB / 58, `encode_into` 792 B / 5 (~3 µs). Not
+throughput claims.
+
+Deletion: neural `CompoundDecoder`, `ActorCritic.compound`, `compound_decisions`,
+`TrainCompound`, compound rollout/learner/search/action modules, study recipe and
+exclusive tests are removed. Historical `compound_decisions: true` configs,
+checkpoints and `train_compound` regimes fail with a pointer to `ba3cd58de`;
+local-search receipts keep their fields (None/0) and reject a compound prefix.
+Report readers of retained compound runs stay. Native compound-offer lowering
+stays (see questions.md). PUCT/local-search admission source hashes change.
+
+Tests: native hierarchy/partition (depths with branching 2/4/7/64), Sozin card
+tests through groups, v9 scalar/vector/Command parity across group and leaf,
+group/leaf gradients, stale/replay/reconnect in Academy at both prompts, text
+policy, and a real self-play rollout + PPO update through group and name
+transitions (`tests/training/test_naming_transitions.py`).
+Check: debug `cargo test --workspace` 972 passed; clippy/rustfmt clean; focused
+Python (model, naming, Academy recovery, text, verify, pilot, current-world
+admission, boundaries) 611 passed / 1 skipped; deletion batches 394 passed, one
+pre-existing missing-data failure (`int-13` fixture absent in this worktree).
+Remaining: gate (Linux CI incl. unchanged 10% Engine Budget), PR copy/review
+artifacts for the new architecture, demo. No merge/Auto-Ship.
+
+## Prior accepted implementation and historical review record
+
 ## Accepted direction and boundary
 
 Jack Heart authorized complete, learnable catalog-wide naming beyond 512 names
@@ -69,29 +219,19 @@ only the explicitly asserted schema/fingerprint transition. Frozen bytes stay in
 
 ## Delete — do not maintain
 
-Completed in the naming change: per-name owned effect branches and resolution
-sorting; padded action networks; dense retained action/distribution padding;
-whole-rollout device expansion; `RolloutBatch.from_dense`; duplicate packing
-copies; fabricated large-vocabulary model rows; duplicate Rust vocabulary
-builders; stale schema-7 live-frame assertions; platform-default least-squares
-solver and bitwise float assertions on reordered GEMMs; duplicate digest checks;
-candidate/build-reference/reference timing. Their required behavior and evidence
-now live on the surviving native, packed-action and balanced-sampling paths.
+Done in the sequential-naming revision: the neural `CompoundDecoder`,
+`ActorCritic.compound`, `ModelConfig.compound_decisions` (now a rejecting
+validator), `TrainCompound`, compound rollout/learner/search/action modules,
+`experiments/compound_decisions.py` and their exclusive tests. Earlier passes
+removed per-name effect branches, padded/dense action paths and duplicate
+vocabulary builders (detail at `b31998cc3:scratch/mtg-243-naming.md`).
+Naming-option decoding has one owner, `NameScope::option` → `NameOption`
+(group or row), read by application, labels and observation.
 
-This speed pass replaces embedding padded programs and one unbounded packed GRU
-call. There is one production execution path with the same GRU, weights, tokens,
-checkpoint buffers and complete gradients. The old packed execution survives
-only as a numerical test reference at `tests/model/naming_reference.py`, alongside
-the frozen dense action reference. The rejected dense-bucket prototype remains
-in `.lf/logs/naming-speed/dense-buckets.py`, not production.
-
-Catalog selection/scattering stays in `definitions`; `_encode_programs` owns
-packing, recurrent chunks and restoration of supplied row order. The reordered
-oracle selects a descending-length subset directly, including the longest
-program. One `tests/retained_decision.py` assertion replaces three copies of the
-schema-transition comparison: version and fingerprint must change as declared,
-and every remaining decision/offer field must match. No further deletion target
-remains; frozen references and evidence stay intact.
+Kept deliberately, not deletion targets: native compound-offer lowering and its
+bindings (questions.md); `CompoundPrefixReceipt` and `decoder_factors`, which keep
+historical local-search receipts' replay identities and Academy arena display;
+report readers of retained compound runs. No further deletion target remains.
 
 ## Evidence carried into the speed pass
 
@@ -434,3 +574,73 @@ remain with MTG-241/242/244, and no native speedup or cleared budget is claimed.
 The numerical oracle retains complete gradients; double precision diagnoses the
 whole-catalog float32 reduction-order discrepancy, while real float32 policy-loss
 checks retain their own bounds. Frozen evidence/reference/tolerance stay intact.
+
+## Interactive concept review — 2026-11-05
+
+Reviewed published implementation `ba3cd58de` with Jack Heart's accepted atomic
+naming experience and subsequent speed request. Existing decisions remain in
+force; no new acceptance or shipping approval is inferred from this review.
+
+The recommended experience remains: find an offer, deliberately choose its name,
+then choose matching cards or stop searching. Filtering never commits a name.
+NameVocabulary owns public identity, NameCard owns the pending choice, and the
+bound Command resumes the existing SearchNamed lifecycle. Reconnect restores the
+actual pending decision and authorized inspection; stale Commands fail and
+committed exiles remain. A public name, its optional executable definition and
+hidden deck membership must stay distinct. Invalid checkpoint binding requires a
+compatible runtime, never silent remapping. No draft/confirmation/cancellation
+lifecycle or configurable recurrent-chunk concept is proposed.
+
+Usage wording for review (illustrates existing behavior, not a product edit):
+“Find an action, choose a name, then choose matching cards or stop searching.
+Typing in the filter does not select a name. Reconnecting restores your current
+choice or search; stopping does not return cards already exiled.” Trainer wording:
+“Select policy input v8 for complete installed-catalog naming. Existing v6 defaults
+and historical checkpoint contracts remain unchanged.” docs/training.md already
+states this accurately; leave its guidance and repository skill instructions
+unchanged. Chunks remain internal full-gradient execution machinery.
+
+One scope question is proposed for this conversation, not yet decided by Jack
+Heart: (1a, recommended) retain the measured naming-learner gain as this PR's speed
+outcome, leaving broader native work with its active owners; or (1b) require a
+representative end-to-end training-throughput gain before this PR ships. Neither
+answer approves merging or training-strength experiments. This question does not
+reopen the accepted interaction or default-v8 boundary. The original speed
+request remains intact until Jack Heart resolves the breadth of its acceptance.
+
+The consequential mismatch is the possible inference that ~6x faster measured
+learning batches means ~6x faster training or play. It does not. CPU gains and
+complete gradients are supported; small-width ordinary costs, GPU behavior,
+optimizer/update throughput and native hotspots remain separate evidence. Current
+published-head CI 41957548309 is now green, including Linux integration and Engine
+Budget; this supersedes the page's former pending-CI wording, without erasing the
+failed identical-binary local control or retiming the post-extraction code.
+
+Next proof depends on the chosen scope: existing complete-choice, privacy,
+recovery and gradient acceptance stays mandatory for either option. A broader
+throughput requirement would need a bounded representative production-path
+measurement with named device/batch/workload, fixed before/after source and no
+strength claim. A missing legal score, leaked membership, remapped Command,
+reversed exile, lost behavior probability or detached gradient invalidates the
+design regardless of speed. No product implementation or Graph restart is part
+of this concept review. The page is scratch/concept-review.html.
+
+### Decision received during review — 2026-11-05
+
+Jack Heart answered: “dont need a full measurement before shipping”. The
+end-to-end measurement proposal is not a shipping prerequisite. This resolves
+the review scope question: retain the measured naming-learner gain and its
+limits; no claim of end-to-end training or native speedup follows. The accepted
+interaction and mandatory correctness/CI requirements are unchanged. There is
+no remaining product choice from this concept review and no implementation
+change is proposed. This answer does not itself request merge or Auto-Ship.
+The page was checked in light/dark at desktop/narrow widths with no page overflow.
+
+### Superseded hierarchy discussions — 2026-11-05
+
+The pagination, bot-internal group→name, names-only hierarchy and compound
+decoder investigations that preceded the CURRENT ACCEPTED REVISION are retained
+verbatim in `.lf/logs/naming-sequential/plan-before-curation.md` and
+`.lf/logs/naming-hierarchy/design-before-curation.md`. They do not direct
+implementation. Study acc0fe owns comparative compound-decision learning
+validation, including mana payment; ETU-94's 56-game run was wiring evidence.

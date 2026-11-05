@@ -105,7 +105,12 @@ fn encoded_to_dict<'py>(
     if config.policy_input_version >= 8 {
         dict.set_item(
             "name_candidates",
-            to_numpy_array_f32(py, &np, &encoded.name_candidates, &[config.max_actions, 2])?,
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.name_candidates,
+                &[config.max_actions, config.name_dim()],
+            )?,
         )?;
     }
     if config.policy_input_version >= 7 {
@@ -2062,6 +2067,9 @@ pub struct PyAction {
     pub name_definition: Option<u32>,
     #[pyo3(get, set)]
     pub name_index: Option<usize>,
+    /// First and last vocabulary rows of a naming group choice.
+    #[pyo3(get, set)]
+    pub name_group: Option<[usize; 2]>,
     #[pyo3(get, set)]
     pub ability_index: Option<usize>,
     #[pyo3(get)]
@@ -2176,6 +2184,7 @@ impl From<ActionOption> for PyAction {
             mode_index: value.mode_index,
             name_definition: value.name_definition,
             name_index: value.name_index,
+            name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
         }
@@ -2193,6 +2202,7 @@ impl From<PyAction> for ActionOption {
             mode_index: value.mode_index,
             name_definition: value.name_definition,
             name_index: value.name_index,
+            name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
         }
@@ -4181,7 +4191,7 @@ impl PyEnv {
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=8) {
+        if !matches!(policy_input_version, 1..=9) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
@@ -4191,7 +4201,7 @@ impl PyEnv {
         }
         let config = ObservationEncoderConfig {
             policy_input_version,
-            max_actions: if policy_input_version >= 8 {
+            max_actions: if policy_input_version == 8 {
                 ObservationEncoderConfig::default().max_actions.max(
                     crate::cards::content_pack::default_content_pack()
                         .name_candidates()
@@ -4487,11 +4497,11 @@ fn validate_observation_json(text: &str, schema_version: u16) -> PyResult<()> {
     let viewer = crate::agent::observation_json::parse(&observation.viewer_state.to_string())
         .map_err(PyValueError::new_err)?;
     if schema_version == 7
-        && viewer
-            .action_space
-            .actions
-            .iter()
-            .any(|action| action.name_index.is_some() || action.name_definition.is_some())
+        && viewer.action_space.actions.iter().any(|action| {
+            action.name_index.is_some()
+                || action.name_definition.is_some()
+                || action.name_group.is_some()
+        })
     {
         return Err(PyValueError::new_err(
             "schema 7 has no public name references",
@@ -4533,6 +4543,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         "CARD_DEFINITION_COUNT",
         crate::cards::content_pack::default_content_pack().len(),
     )?;
+    m.add("NAME_BRANCHING", crate::cards::names::NAME_BRANCHING)?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
 
     m.add_class::<ZoneEnum>()?;

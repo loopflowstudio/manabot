@@ -41,7 +41,7 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8] = Field(
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
     # V6 and v7 carry a configurable local-fact capacity. Omission on older inputs
@@ -53,8 +53,9 @@ class ObservationConfig(BaseConfig):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Frozen inputs use this capacity directly; explicit v8 also reserves the
-    # installed naming vocabulary. A pilot may explicitly retain a legal prefix.
+    # Inputs use this capacity directly, except explicit v8, which also reserves
+    # the installed naming vocabulary; v9 names through bounded group prompts.
+    # A pilot may explicitly retain a legal prefix.
     max_actions: int = Field(default=512, gt=0)
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
@@ -208,6 +209,15 @@ class RuntimeConfig(BaseConfig):
     log_level: str = "INFO"
 
 
+# Compound-decision policies (a learned ragged decoder over native compound
+# offers) were removed; their checkpoints and regimes run only from the source
+# that trained them.
+COMPOUND_DECISIONS_REMOVED = (
+    "compound-decision policies are no longer executable; reproduce them at "
+    "commit ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b"
+)
+
+
 class ModelConfig(BaseConfig):
     """Model construction contract, independent of learning and execution settings.
 
@@ -221,7 +231,6 @@ class ModelConfig(BaseConfig):
     state_encoder: StateEncoder = Field(
         default="rows", exclude_if=lambda value: value == "rows"
     )
-    compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
     # The semantic vocabulary the model reads: the world's one catalog. Fresh
@@ -258,10 +267,19 @@ class ModelConfig(BaseConfig):
     belief_owner_role_vocab_size: int = 2
     belief_hidden_zone_vocab_size: int = 7
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_compound_decisions(cls, data: Any) -> Any:
+        """Admit the retired flag only when false; never load it as a flat policy."""
+        if not isinstance(data, dict) or "compound_decisions" not in data:
+            return data
+        data = dict(data)
+        if data.pop("compound_decisions") is not False:
+            raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        return data
+
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":
-        if self.state_encoder != "rows" and self.compound_decisions:
-            raise ValueError("typed state experiment requires flat legal actions")
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
@@ -272,17 +290,6 @@ class ModelConfig(BaseConfig):
             or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
-        if self.compound_decisions and (
-            self.value_aggregation != "historical_mean" or self.attention_layers != 1
-        ):
-            raise ValueError(
-                "compound critic does not support value aggregation variants"
-            )
-        if self.compound_decisions and self.policy_film:
-            raise ValueError(
-                "compound decoder owns its own state conditioning; "
-                "set agent.policy_film=false"
-            )
         return self
 
 

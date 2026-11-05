@@ -65,7 +65,7 @@ impl Game {
     /// Replace only a pending naming decision with the validated large fixture.
     /// This is an injected root, not a legal transition or production vocabulary.
     pub fn scenario_naming_vocabulary(&mut self) -> Result<Arc<NameVocabulary>, AgentError> {
-        let Some(Decision::NameCard { names, .. }) = self
+        let Some(Decision::NameCard { names, scope, .. }) = self
             .state
             .suspended_decision
             .as_mut()
@@ -77,6 +77,7 @@ impl Game {
         };
         let fixture = naming_fixture_vocabulary();
         *names = Arc::clone(&fixture);
+        *scope = fixture.root();
         self.policy_history = Default::default();
         self.publish_action_space(
             self.suspended_decision_action_space()

@@ -120,7 +120,16 @@ def _input_binding(observation_space: Any) -> dict:
         "policy_input_version": observation_space.encoder.config.policy_input_version,
         **(
             {
-                "naming_representation": "public-identity-v1",
+                # V9 binds the native group partition through its branching
+                # bound; changing it reinterprets every group route.
+                **(
+                    {
+                        "naming_representation": "public-groups-v1",
+                        "naming_branching": managym.NAME_BRANCHING,
+                    }
+                    if observation_space.encoder.config.policy_input_version >= 9
+                    else {"naming_representation": "public-identity-v1"}
+                ),
                 "naming_vocabulary": _digest(
                     [
                         {"name": candidate.name, "definition": candidate.definition}

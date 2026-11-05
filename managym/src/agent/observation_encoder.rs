@@ -182,6 +182,9 @@ pub fn policy_action_count(
     }
     Ok(count.min(capacity))
 }
+pub const NAME_DIM_V8: usize = 2;
+pub const NAME_DIM_V9: usize = 4;
+
 /// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
 /// remaining-sideboard counts (`PlayerData` decklist maps).
 pub const DECKLIST_DIM: usize = 5;
@@ -218,10 +221,16 @@ impl Default for ObservationEncoderConfig {
 impl ObservationEncoderConfig {
     /// Candidate rows share the action axis, but never consume object capacity.
     pub fn name_candidates_len(&self) -> usize {
-        if self.policy_input_version >= 8 {
-            2 * self.max_actions
-        } else {
-            0
+        self.name_dim() * self.max_actions
+    }
+
+    /// v8 rows: name row + 1, definition + 1. v9 appends the first and last
+    /// name rows (+ 1) of a naming group choice; v8 cannot represent groups.
+    pub fn name_dim(&self) -> usize {
+        match self.policy_input_version {
+            9.. => NAME_DIM_V9,
+            8 => NAME_DIM_V8,
+            _ => 0,
         }
     }
 
@@ -640,6 +649,11 @@ pub fn encode_into(
         }
     }
     for action in obs.action_space.actions.iter().take(config.max_actions) {
+        if action.name_group.is_some() && config.policy_input_version == 8 {
+            return Err(ObservationEncodeError::InvalidName(
+                "policy input v8 offers whole-vocabulary names and cannot represent naming groups",
+            ));
+        }
         if let Some(definition) = action.name_definition {
             if action.name_index.is_none() || definition as usize > MAX_ACTION_SELECTOR {
                 return Err(ObservationEncodeError::InvalidName(
@@ -664,6 +678,7 @@ pub fn encode_into(
         for index in [action.mode_index, action.ability_index, action.name_index]
             .into_iter()
             .flatten()
+            .chain(action.name_group.into_iter().flatten())
         {
             if index > MAX_ACTION_SELECTOR {
                 return Err(ObservationEncodeError::Capacity {
@@ -1456,17 +1471,20 @@ fn encode_actions(
             row[action_type_index] = 1.0;
         }
         row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
-        match action
-            .name_index
-            .filter(|_| config.policy_input_version >= 8)
-        {
-            Some(index) => {
-                // A name is categorical; its position is never a numeric mode feature.
-                out_names[2 * action_index] = (index + 1) as f32;
-                out_names[2 * action_index + 1] =
-                    action.name_definition.map_or(0.0, |id| (id + 1) as f32);
+        let names = config.name_dim();
+        let name_row = &mut out_names[names * action_index..names * (action_index + 1)];
+        match (action.name_index, action.name_group) {
+            // A name is categorical; its position is never a numeric mode feature.
+            (Some(index), _) if names > 0 => {
+                name_row[0] = (index + 1) as f32;
+                name_row[1] = action.name_definition.map_or(0.0, |id| (id + 1) as f32);
             }
-            None => {
+            // A group is its public member span; v8 rejected groups above.
+            (_, Some([first, last])) if names == NAME_DIM_V9 => {
+                name_row[2] = (first + 1) as f32;
+                name_row[3] = (last + 1) as f32;
+            }
+            _ => {
                 row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
             }
         }
@@ -1665,6 +1683,7 @@ mod tests {
                         mode_index: None,
                         name_definition: None,
                         name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1676,6 +1695,7 @@ mod tests {
                         mode_index: None,
                         name_definition: None,
                         name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1687,6 +1707,7 @@ mod tests {
                         mode_index: None,
                         name_definition: None,
                         name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1811,6 +1832,7 @@ mod tests {
                 mode_index: None,
                 name_definition: None,
                 name_index: None,
+                name_group: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -1980,6 +2002,7 @@ mod tests {
                 mode_index: None,
                 name_definition: None,
                 name_index: None,
+                name_group: None,
                 ability_index: None,
                 continuation_index: None,
             })

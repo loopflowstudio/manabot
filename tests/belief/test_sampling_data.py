@@ -67,12 +67,9 @@ def test_dataset_round_trip_and_fail_closed_integrity(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "compound,max_actions", [(False, 10), (True, 10), (True, 1), (False, 1)]
-)
+@pytest.mark.parametrize("max_actions", [10, 1])
 def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     tmp_path: Path,
-    compound: bool,
     max_actions: int,
 ) -> None:
     torch.set_num_threads(1)
@@ -82,7 +79,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     )
     obs_config = ObservationConfig(max_actions=max_actions)
     obs_space = ObservationSpace(obs_config)
-    agent_config = ModelConfig(hidden_dim=8, compound_decisions=compound)
+    agent_config = ModelConfig(hidden_dim=8)
     agent = ActorCritic(obs_space, agent_config)
     checkpoint = tmp_path / "policy.pt"
     torch.save(
@@ -97,7 +94,9 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
         checkpoint,
     )
     if max_actions == 1:
-        with pytest.raises(ValueError, match="Observation capacity exceeded: actions"):
+        with pytest.raises(
+            ValueError, match="(?i)observation capacity exceeded: actions"
+        ):
             collect_frozen_policy(
                 checkpoint=checkpoint,
                 match_config=match_config,

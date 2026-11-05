@@ -25,12 +25,13 @@ persistent game memory.
 
 ## Naming policies
 
-Explicit input v8 scores the entire installed naming vocabulary using categorical
-name identity plus each available definition's learning tokens. Its action
-capacity follows the catalog, independently of card/permanent capacity; ordinary
-steps encode only referenced programs. Names with no executable definition can
-have a vocabulary identity without becoming playable cards. Checkpoints bind
-ordered names and optional definition joins. See the
+Naming a card is a sequence of ordinary decisions: groups of at most 64 sorted
+names, then a name. Explicit input v9 encodes each group by its public span of
+names and each name by categorical identity plus its definition's learning
+tokens, at ordinary action capacity; each group and name choice is one ordinary
+rollout transition. Names with no executable definition can have a vocabulary
+identity without becoming playable cards. Checkpoints bind ordered names,
+definition joins and the branching bound. See the
 [naming input contract](../docs/training.md#catalog-naming-input).
 
 ## Policy action capacity
@@ -130,7 +131,7 @@ It retains private replay inputs, discards both seats' uncommitted experience fr
 failed games and regathers under the same policy. A persisted rolling error rate
 strictly above the declared threshold stops training; evaluation remains strict.
 Strict scalar/vector training and data-generation paths automatically retain
-private native failure inputs before propagating errors. Compound/selection and
+private native failure inputs before propagating errors. Selection and
 simulation retain pending Commands before execution. The same bounded replay command
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
@@ -215,7 +216,7 @@ world. The cross-package contracts and convergence status are in
 2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
    `manabot.training` owns the regime executor and `Learner`
 3. **`manabot.sim`**: players and game runners.
-   `sim/action` owns structured offers and compound-action execution.
+   `sim/action` owns the structured-offer prototype decoder and its benchmark.
    `sim/search` owns frozen-policy planning, world sampling and search evidence:
    `puct.py` implements tree search; `conditional.py` compares its action estimates
    under different hidden-information assumptions at the same decision.
@@ -247,9 +248,9 @@ foreign-opponent calibration or search strength.
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.
 
-The existing `agent_puct` player accepts current flat and compound checkpoints;
+The existing `agent_puct` player accepts flat checkpoints;
 see [PUCT policy/value compatibility](../docs/search-and-beliefs.md#local-policy-search)
-for critic units, retained prefixes and evaluation registration. This is a search
+for critic units and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
 Declare training comparisons with [typed Python experiments](../docs/training.md#experiments).
@@ -315,10 +316,9 @@ from manabot.env.observation import ObservationSpace
 from .sibling import Thing
 ```
 
-Compound checkpoints use an autoregressive legal-offer decoder and execute via
-ordinary checkpoint players. Their complete-game training stages, credit
-boundaries and separate comparison recipes are documented under
-[compound decisions](../docs/training.md#regimes-and-stages).
+The learned compound-decision decoder has been removed; checkpoints and
+regimes that select it fail validation. See
+[compound decisions](../docs/training.md#compound-decisions-removed).
 
 Self-play update diagnostics live only in the run's Etude metrics;
 TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
@@ -435,9 +435,9 @@ with those packages blocked.
   `regime.py` declares recipes; `records.py` holds measured run records.
   `execution.py` sequences stages and owns the run lifecycle.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
-  complete-game accounting. Compound collection and replay live here.
+  complete-game accounting.
 - `training/learning/`: Learner, optimization rules, per-seat returns, sample
-  selection and numerical health. Compound credit and parameter updates live here.
+  selection and numerical health.
 - `training/state/`: policy admission, exact learning snapshots, recovery and
   retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;

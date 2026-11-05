@@ -35,7 +35,7 @@ class CheckpointOpponent:
         self, path: Path, players: list[managym.PlayerConfig], seed: int
     ) -> None:
         self.agent, self.space = load_checkpoint(str(path))
-        if self.agent.config.compound_decisions or self.agent.belief_count_buckets:
+        if self.agent.belief_count_buckets:
             raise ValueError("text-game opponent requires an ordinary flat policy")
         validate_agent_setup(self.agent, players)
         self.identity = CheckpointIdentity(

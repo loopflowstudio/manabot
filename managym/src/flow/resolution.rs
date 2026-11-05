@@ -1549,11 +1549,15 @@ impl Game {
                 self.invalidate_mana_cache(frame.controller);
                 None
             }
-            Effect::NameAndExileFromTargetPlayer { count } => Some(Decision::NameCard {
-                names: default_content_pack().name_candidates(),
-                player: frame.controller,
-                count: *count,
-            }),
+            Effect::NameAndExileFromTargetPlayer { count } => {
+                let names = default_content_pack().name_candidates();
+                Some(Decision::NameCard {
+                    scope: names.root(),
+                    names,
+                    player: frame.controller,
+                    count: *count,
+                })
+            }
             Effect::ExileNamed { name, count } => {
                 let Some(Target::Player(player)) = self.present_primary_target(frame) else {
                     return None;

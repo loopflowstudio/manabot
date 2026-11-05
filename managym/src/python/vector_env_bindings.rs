@@ -454,7 +454,13 @@ pub(super) fn input_buffer_config(
                 "v8 requires shared effects and current relations",
             ));
         }
-        config.policy_input_version = 8;
+        // Column count selects the naming contract: v8 whole-vocabulary names,
+        // v9 names plus group spans.
+        config.policy_input_version = match shape("name_candidates")?[1] {
+            crate::agent::observation_encoder::NAME_DIM_V8 => 8,
+            crate::agent::observation_encoder::NAME_DIM_V9 => 9,
+            _ => return Err(PyValueError::new_err("invalid name candidate width")),
+        };
     }
     Ok(config)
 }
@@ -479,7 +485,7 @@ fn read_observation_buffers(
                 require_numpy_array(
                     buffers,
                     "name_candidates",
-                    &[n, c.max_actions, 2],
+                    &[n, c.max_actions, c.name_dim()],
                     "float32",
                 )?
                 .unbind(),

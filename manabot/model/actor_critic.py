@@ -20,7 +20,6 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
-from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder
 from manabot.model.inference import PreparedObservation
@@ -30,7 +29,6 @@ from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.state_records import SharedFactEncoder, TypedContinuationEncoder
-from manabot.sim.action.structured import RaggedOfferBatch
 import managym
 
 
@@ -66,11 +64,9 @@ class ActorCritic(nn.Module):
         self.observation_space = observation_space
         self.config = config
         # Scalar heads need the checkpoint's training-target declaration. WDL
-        # means and compound prefix critics have architectural signed units.
+        # means have architectural signed units.
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
-            "signed_outcome"
-            if config.value_kind == "categorical_wdl" or config.compound_decisions
-            else None
+            "signed_outcome" if config.value_kind == "categorical_wdl" else None
         )
         self.logger = getLogger(__name__)
 
@@ -105,9 +101,6 @@ class ActorCritic(nn.Module):
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
-        self.compound_decoder = (
-            CompoundDecoder(embed_dim) if config.compound_decisions else None
-        )
 
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
@@ -346,10 +339,6 @@ class ActorCritic(nn.Module):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        if self.compound_decoder is not None:
-            raise ValueError(
-                "compound checkpoint requires authoritative offers; use ActorCritic.compound"
-            )
         state = self._gather_object_embeddings(obs)
 
         encoded = self._attend_objects(
@@ -428,53 +417,6 @@ class ActorCritic(nn.Module):
         # Indexing avoids constructing temporary Sequential modules per decision.
         return self.value_head[5](self.value_head[4](self.value_head[3](projected)))
 
-    def compound(
-        self,
-        obs: dict[str, torch.Tensor],
-        batch: RaggedOfferBatch,
-        *,
-        tokens: tuple[int, ...] | None = None,
-        prefix: tuple[int, ...] = (),
-        generator: torch.Generator | None = None,
-        deterministic: bool = False,
-    ) -> CompoundOutput:
-        """One viewer-safe root, one ragged action; no intermediate observation."""
-        if self.compound_decoder is None:
-            raise ValueError("checkpoint has no compound policy")
-        state = self._gather_object_embeddings(obs)
-        objects, valid = state.objects, state.validity
-        if objects.shape[0] != 1:
-            raise ValueError("compound decoding requires one root")
-        if self.config.attention_on:
-            objects = self.attention(
-                objects, state.is_agent, key_padding_mask=valid == 0
-            )
-        context = (objects * valid.unsqueeze(-1)).sum(1) / valid.sum(
-            1, keepdim=True
-        ).clamp_min(1)
-        # Complete priority/fallback offers preserve the native action ordering.
-        # Complete declarations/payments instead have one set-valued offer;
-        # its first row must not inherit an unrelated microchoice embedding.
-        features = None
-        if not any(
-            offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
-            for offer in batch.offers
-        ):
-            slots = torch.arange(len(batch.offers), device=objects.device)
-            batches = torch.zeros_like(slots)
-            features = self._gather_informed_actions(
-                obs, objects, state, batches, slots
-            )
-        return self.compound_decoder(
-            context[0],
-            batch,
-            offer_features=features,
-            tokens=tokens,
-            prefix=prefix,
-            generator=generator,
-            deterministic=deterministic,
-        )
-
     def _gather_informed_actions(
         self,
         obs: dict[str, torch.Tensor],
@@ -485,8 +427,8 @@ class ActorCritic(nn.Module):
     ) -> torch.Tensor:
         """Embed selected legal rows [K,D], preserving their original joins.
 
-        Flat and compound policies share this owner. Coordinates select actions,
-        continuation frames and focus objects from the same observation row.
+        Coordinates select actions, continuation frames and focus objects from
+        the same observation row.
         """
         action_rows = obs["actions"][batches, slots]
         actions = self.action_embedding(action_rows[..., :-2])

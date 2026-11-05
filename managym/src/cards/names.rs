@@ -55,3 +55,92 @@ impl NameVocabulary {
         self.entries.iter()
     }
 }
+
+/// Most options a naming prompt offers. Larger scopes publish groups first.
+pub const NAME_BRANCHING: usize = 64;
+
+/// A contiguous span of vocabulary rows, `start..end` in sorted name order.
+/// Sorting makes every span a public, viewer-safe set: its first and last names
+/// identify all members.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct NameScope {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// One option of a naming prompt: a narrower group, or a vocabulary row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NameOption {
+    Group(NameScope),
+    Name(usize),
+}
+
+impl NameScope {
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    /// Whether this scope's prompt offers names rather than groups.
+    pub fn is_leaf(&self) -> bool {
+        self.len() <= NAME_BRANCHING
+    }
+
+    /// Number of options published for this scope: names for a leaf, groups
+    /// otherwise.
+    pub fn option_count(&self) -> usize {
+        self.option_count_with(NAME_BRANCHING)
+    }
+
+    /// Option `index` of this scope's prompt; `None` when out of range.
+    pub fn option(&self, index: usize) -> Option<NameOption> {
+        self.option_with(index, NAME_BRANCHING)
+    }
+
+    /// Children form a deterministic, balanced, complete partition: the depth
+    /// needed is the smallest `d` with `len <= b^d`; the scope splits into
+    /// `k = ceil(len / b^(d-1))` children whose sizes differ by at most one, so
+    /// every child fits in `d - 1` further levels and every name is reachable
+    /// through exactly one path. `b` is a parameter only so tests can exercise
+    /// deep trees with real vocabularies; play always uses `NAME_BRANCHING`.
+    pub(crate) fn option_count_with(&self, branching: usize) -> usize {
+        let len = self.len();
+        if len <= branching {
+            return len;
+        }
+        let mut capacity = branching;
+        while capacity * branching < len {
+            capacity *= branching;
+        }
+        len.div_ceil(capacity)
+    }
+
+    pub(crate) fn option_with(&self, index: usize, branching: usize) -> Option<NameOption> {
+        let count = self.option_count_with(branching);
+        if index >= count {
+            return None;
+        }
+        let len = self.len();
+        Some(if len <= branching {
+            NameOption::Name(self.start + index)
+        } else {
+            NameOption::Group(NameScope {
+                start: self.start + index * len / count,
+                end: self.start + (index + 1) * len / count,
+            })
+        })
+    }
+}
+
+impl NameVocabulary {
+    /// The whole vocabulary, the root naming prompt.
+    pub fn root(&self) -> NameScope {
+        NameScope {
+            start: 0,
+            end: self.len(),
+        }
+    }
+}

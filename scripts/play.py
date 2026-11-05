@@ -60,7 +60,6 @@ UV_RUNTIME = [
 RUNTIME_IMPORTS = (
     "academy.server",
     "manabot.model.world",
-    "manabot.sim.action.compound",
     "manabot.sim.search.flat_mc",
     "manabot.verify.util",
     "numpy",

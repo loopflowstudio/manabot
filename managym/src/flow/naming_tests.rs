@@ -11,7 +11,10 @@ use crate::{
         observation::Observation,
         observation_encoder::{encode, ObservationEncoderConfig},
     },
-    cards::content_pack::default_content_pack,
+    cards::{
+        content_pack::default_content_pack,
+        names::{NameOption, NameScope, NAME_BRANCHING},
+    },
     decision::Command,
     flow::{
         decision::{Decision, EffectFrame, FrameFinalize},
@@ -23,6 +26,7 @@ use crate::{
         ability::Effect,
         game_object::{PlayerId, Target},
         player::PlayerConfig,
+        zone::ZoneType,
     },
 };
 
@@ -75,30 +79,109 @@ fn command(game: &Game, index: usize) -> Command {
     }
 }
 
+/// The offer whose published group span contains vocabulary row `index`, or
+/// the leaf offer naming it. Navigation reads only the public observation.
+fn offer_toward(game: &Game, index: usize) -> (usize, bool) {
+    let obs = Observation::for_player(game, PlayerId(0));
+    obs.action_space
+        .actions
+        .iter()
+        .enumerate()
+        .find_map(
+            |(offer, action)| match (action.name_group, action.name_index) {
+                (Some([first, last]), _) if (first..=last).contains(&index) => Some((offer, false)),
+                (_, Some(name)) if name == index => Some((offer, true)),
+                _ => None,
+            },
+        )
+        .expect("every name is reachable from every prompt on its path")
+}
+
+fn assert_no_naming_effect(before: &Game, after: &Game) {
+    // Group navigation narrows the prompt; it searches, reveals and exiles nothing.
+    assert!(matches!(
+        after.state.suspended_decision.as_ref().unwrap().decision,
+        Decision::NameCard { .. }
+    ));
+    for player in [PlayerId(0), PlayerId(1)] {
+        for zone in [
+            ZoneType::Library,
+            ZoneType::Hand,
+            ZoneType::Graveyard,
+            ZoneType::Exile,
+        ] {
+            assert_eq!(
+                before.state.zones.zone_cards(zone, player),
+                after.state.zones.zone_cards(zone, player)
+            );
+        }
+    }
+    assert_eq!(before.state.events.len(), after.state.events.len());
+}
+
 #[test]
-fn catalog_naming_is_complete_encoded_and_forkable_beyond_512() {
+fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
     let names = naming_fixture_vocabulary();
     assert!(names.len() > 600);
     let game = naming_game();
     let root = witness(&game);
     let obs = Observation::for_player(&game, PlayerId(0));
-    assert_eq!(obs.action_space.actions.len(), names.len());
-    let config = ObservationEncoderConfig {
-        policy_input_version: 8,
-        max_actions: names.len(),
-        max_facts: 128,
-        ..Default::default()
-    };
-    let encoded = encode(&obs, &config).unwrap();
+    // 928 names: ceil(928 / 64) = 15 balanced groups of 61 or 62 names.
+    let groups: Vec<[usize; 2]> = obs
+        .action_space
+        .actions
+        .iter()
+        .map(|action| action.name_group.expect("root offers groups"))
+        .collect();
+    assert_eq!(groups.len(), names.len().div_ceil(NAME_BRANCHING));
+    assert_eq!(groups[0][0], 0);
+    assert_eq!(groups.last().unwrap()[1], names.len() - 1);
+    for pair in groups.windows(2) {
+        assert_eq!(pair[0][1] + 1, pair[1][0], "groups tile the vocabulary");
+    }
+    let sizes: Vec<usize> = groups.iter().map(|[a, b]| b - a + 1).collect();
+    assert!(sizes.iter().max().unwrap() - sizes.iter().min().unwrap() <= 1);
+    assert!(sizes.iter().all(|size| *size <= NAME_BRANCHING));
     assert_eq!(
-        encoded.actions_valid.iter().sum::<f32>(),
-        names.len() as f32
+        obs.action_space.actions[0].description.as_deref(),
+        Some(
+            format!(
+                "Names {} through {}",
+                names.get(0).unwrap().name,
+                names.get(groups[0][1]).unwrap().name
+            )
+            .as_str()
+        )
     );
-    assert!(encode(&obs, &ObservationEncoderConfig::default()).is_err());
     assert!(Observation::for_player(&game, PlayerId(1))
         .action_space
         .actions
         .is_empty());
+
+    // Policy inputs: v9 encodes group spans at ordinary capacity; v8 cannot
+    // represent groups; earlier inputs see anonymous modal choices.
+    let v9 = ObservationEncoderConfig {
+        policy_input_version: 9,
+        max_actions: NAME_BRANCHING,
+        max_facts: 128,
+        ..Default::default()
+    };
+    let encoded = encode(&obs, &v9).unwrap();
+    assert_eq!(encoded.name_candidates.len(), 4 * NAME_BRANCHING);
+    for (row, [first, last]) in groups.iter().enumerate() {
+        assert_eq!(
+            encoded.name_candidates[4 * row..4 * row + 4],
+            [0.0, 0.0, (first + 1) as f32, (last + 1) as f32]
+        );
+    }
+    let v8 = ObservationEncoderConfig {
+        policy_input_version: 8,
+        max_actions: names.len(),
+        ..v9
+    };
+    assert!(encode(&obs, &v8).is_err());
+    assert!(encode(&obs, &ObservationEncoderConfig::default()).is_ok());
+
     let back = names
         .iter()
         .position(|entry| entry.name == "Fire Lord Sozin")
@@ -108,20 +191,37 @@ fn catalog_naming_is_complete_encoded_and_forkable_beyond_512() {
         .position(|entry| entry.name == "Gray Ogre")
         .unwrap();
     for index in [0, 511, 512, names.len() - 1, back, ogre] {
-        assert_eq!(encoded.name_candidates[2 * index], (index + 1) as f32);
-        assert_eq!(
-            obs.action_space.actions[index].description.as_deref(),
-            Some(format!("Name {}", names.get(index).unwrap().name).as_str())
-        );
         let mut branch = game.clone();
+        let mut path = vec![];
+        loop {
+            let (offer, leaf) = offer_toward(&branch, index);
+            let choose = command(&branch, offer);
+            path.push(choose.clone());
+            if leaf {
+                let leaf_obs = Observation::for_player(&branch, PlayerId(0));
+                assert!(leaf_obs.action_space.actions.len() <= NAME_BRANCHING);
+                assert_eq!(
+                    leaf_obs.action_space.actions[offer].description.as_deref(),
+                    Some(format!("Name {}", names.get(index).unwrap().name).as_str())
+                );
+                let leaf_encoded = encode(&leaf_obs, &v9).unwrap();
+                assert_eq!(leaf_encoded.name_candidates[4 * offer], (index + 1) as f32);
+                branch.execute_semantic_command(&choose).unwrap();
+                break;
+            }
+            let before = branch.clone();
+            branch.execute_semantic_command(&choose).unwrap();
+            assert_no_naming_effect(&before, &branch);
+            // The earlier prompt's Command is stale once the scope narrows.
+            assert!(branch.execute_semantic_command(&choose).is_err());
+        }
+        assert_eq!(path.len(), 2, "928 names need one group level");
         let Decision::NameCard { names: cloned, .. } =
-            &branch.state.suspended_decision.as_ref().unwrap().decision
+            &game.state.suspended_decision.as_ref().unwrap().decision
         else {
             panic!()
         };
         assert!(Arc::ptr_eq(&names, cloned));
-        let choose = command(&branch, index);
-        branch.execute_semantic_command(&choose).unwrap();
         let Decision::SearchNamed {
             name, remaining, ..
         } = &branch.state.suspended_decision.as_ref().unwrap().decision
@@ -131,10 +231,14 @@ fn catalog_naming_is_complete_encoded_and_forkable_beyond_512() {
         assert_eq!(name, &names.get(index).unwrap().name);
         assert_eq!(*remaining, 4);
         let searched = witness(&branch);
-        assert!(branch.execute_semantic_command(&choose).is_err());
+        for stale in &path {
+            assert!(branch.execute_semantic_command(stale).is_err());
+        }
         assert_eq!(witness(&branch), searched);
         let mut replay = game.clone();
-        replay.execute_semantic_command(&choose).unwrap();
+        for step in &path {
+            replay.execute_semantic_command(step).unwrap();
+        }
         assert_eq!(witness(&replay), searched);
         assert_eq!(witness(&game), root);
         // Fail-to-find remains an explicit choice, even when no definition exists.
@@ -155,8 +259,52 @@ fn catalog_naming_is_complete_encoded_and_forkable_beyond_512() {
         serde_json::to_vec(&game.state.suspended_decision.as_ref().unwrap().decision)
             .unwrap()
             .len()
-            < 200
+            < 240
     );
+}
+
+#[test]
+fn naming_groups_partition_completely_at_every_depth() {
+    // A small branching bound over the real 928-name vocabulary forces a deep
+    // tree; play uses NAME_BRANCHING. Every name has exactly one path, every
+    // prompt is bounded and sibling sizes differ by at most one.
+    let names = naming_fixture_vocabulary();
+    for branching in [2, 4, 7, NAME_BRANCHING] {
+        let mut reached = vec![0usize; names.len()];
+        let mut deepest = 0;
+        let mut pending = vec![(names.root(), 0usize)];
+        while let Some((scope, depth)) = pending.pop() {
+            let options = scope.option_count_with(branching);
+            assert!(options >= 1 && options <= branching);
+            if scope.len() <= branching {
+                deepest = deepest.max(depth);
+                for count in &mut reached[scope.start..scope.end] {
+                    *count += 1;
+                }
+                continue;
+            }
+            let children: Vec<NameScope> = (0..options)
+                .map(|index| match scope.option_with(index, branching) {
+                    Some(NameOption::Group(child)) => child,
+                    other => panic!("group prompt offered {other:?}"),
+                })
+                .collect();
+            assert!(scope.option_with(options, branching).is_none());
+            assert!(options >= 2, "a group prompt always has a real choice");
+            let sizes: Vec<usize> = children.iter().map(NameScope::len).collect();
+            assert!(sizes.iter().max().unwrap() - sizes.iter().min().unwrap() <= 1);
+            pending.extend(children.into_iter().map(|child| (child, depth + 1)));
+        }
+        assert!(reached.iter().all(|count| *count == 1));
+        // Minimal depth: the smallest d with branching^(d+1) >= len.
+        let mut capacity = branching;
+        let mut minimal = 0;
+        while capacity < names.len() {
+            capacity *= branching;
+            minimal += 1;
+        }
+        assert_eq!(deepest, minimal, "branching {branching}");
+    }
 }
 
 #[test]
@@ -210,6 +358,7 @@ fn catalog_naming_cost_attribution() {
     measure("naming_decision", || Decision::NameCard {
         player: PlayerId(0),
         count: 4,
+        scope: names.root(),
         names: Arc::clone(&names),
     });
     measure("naming_action_space", || {
@@ -220,8 +369,8 @@ fn catalog_naming_cost_attribution() {
     });
     let obs = Observation::for_player(&game, PlayerId(0));
     let config = ObservationEncoderConfig {
-        policy_input_version: 8,
-        max_actions: names.len(),
+        policy_input_version: 9,
+        max_actions: NAME_BRANCHING,
         max_facts: 128,
         ..Default::default()
     };

@@ -1,4 +1,4 @@
-"""Validated ragged offers shared by prototype and learned compound decoders.
+"""Validated ragged offers for the prototype structured-policy decoder.
 
 Rust remains authoritative for IDs and legality. `flatten_projection` validates
 public choice rows without fixed-width padding; decoders return ID-only

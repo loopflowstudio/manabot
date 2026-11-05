@@ -13,7 +13,6 @@ from manabot.training.regime import (
     LearningStateOrigin,
     ProducerCost,
     Strict,
-    TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -76,7 +75,7 @@ class StageRecord(Strict):
         default=None, exclude_if=lambda value: value is None
     )
     # Completed update iterations in this segment: self-play collect/update
-    # iterations or compound updates. Imported learning-state iterations are
+    # iterations. Imported learning-state iterations are
     # counted by learning_state_origin, not here.
     updates: int = Field(default=0, ge=0)
     games: int = 0
@@ -92,9 +91,10 @@ class StageRecord(Strict):
     inputs: dict[str, dict] = {}
     artifacts: dict[str, dict] = {}
     rejected_artifacts: dict[str, dict] = {}
-    # Bounded rows of stages Etude does not track: compound, selection or
-    # belief summaries. Self-play update rows are Etude metrics only
-    # (TrainingRun.metrics_run); historical exports retain theirs here.
+    # Bounded rows of stages Etude does not track: selection or belief
+    # summaries (historical records may also hold compound summaries).
+    # Self-play update rows are Etude metrics only (TrainingRun.metrics_run);
+    # historical exports retain theirs here.
     diagnostics: list[dict] = []
     error: str | None = None
 
@@ -252,9 +252,5 @@ class TrainingRun(RunRecord[TrainingRegime]):
 
     def updates_through(self, stage_id: str | None = None) -> int:
         """Completed learner iterations; collection records are not updates."""
-        learning = {
-            s.id
-            for s in self.regime.stages
-            if isinstance(s, (TrainSelfPlay, TrainCompound))
-        }
+        learning = {s.id for s in self.regime.stages if isinstance(s, TrainSelfPlay)}
         return self._updates_through(learning, stage_id)

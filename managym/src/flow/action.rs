@@ -5,6 +5,7 @@ use crate::agent::ability_description::{
     counter_description, mana_description, trigger_description,
 };
 
+use crate::cards::names::NameOption;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     cards::content_pack::default_content_pack,
@@ -74,9 +75,14 @@ impl Game {
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
-                    Decision::NameCard { names, .. } => names
-                        .get(*mode)
-                        .map(|candidate| format!("Name {}", candidate.name)),
+                    Decision::NameCard { names, scope, .. } => match scope.option(*mode)? {
+                        NameOption::Group(group) => Some(format!(
+                            "Names {} through {}",
+                            names.get(group.start)?.name,
+                            names.get(group.end - 1)?.name
+                        )),
+                        NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
+                    },
                     Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))

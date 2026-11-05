@@ -18,8 +18,10 @@ instruments.
 | [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/training.md#ataraxos)) | `manabot train` |
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
-| [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
 | [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+
+The compound-decision study (`compound_decisions.py`) is no longer runnable;
+reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 
 ## Etude experiment files
 

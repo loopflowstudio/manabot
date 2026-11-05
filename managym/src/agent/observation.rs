@@ -1,3 +1,4 @@
+use crate::cards::names::NameOption;
 use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
@@ -767,6 +768,10 @@ pub struct ActionOption {
     /// Vocabulary row, independent of executable definitions and physical objects.
     #[serde(default)]
     pub name_index: Option<usize>,
+    /// First and last vocabulary rows of a naming group choice. Rows are sorted
+    /// public names, so the pair identifies every member without hidden state.
+    #[serde(default)]
+    pub name_group: Option<[usize; 2]>,
     pub ability_index: Option<usize>,
     /// Decision-local continuation frame; occurrence IDs never enter policy features.
     pub continuation_index: Option<usize>,
@@ -870,21 +875,28 @@ impl Observation {
                         .actions
                         .iter()
                         .map(|action| {
-                            let (name_index, name_definition) = match (
+                            let (name_index, name_definition, name_group) = match (
                                 action,
                                 game.state.suspended_decision.as_ref().map(|s| &s.decision),
                             ) {
                                 (
                                     Action::ChooseMode { mode, .. },
-                                    Some(Decision::NameCard { names, .. }),
-                                ) => (
-                                    Some(*mode),
-                                    names
-                                        .get(*mode)
-                                        .and_then(|candidate| candidate.definition)
-                                        .map(|id| id.0),
-                                ),
-                                _ => (None, None),
+                                    Some(Decision::NameCard { names, scope, .. }),
+                                ) => match scope.option(*mode) {
+                                    Some(NameOption::Group(group)) => {
+                                        (None, None, Some([group.start, group.end - 1]))
+                                    }
+                                    Some(NameOption::Name(row)) => (
+                                        Some(row),
+                                        names
+                                            .get(row)
+                                            .and_then(|candidate| candidate.definition)
+                                            .map(|id| id.0),
+                                        None,
+                                    ),
+                                    None => (None, None, None),
+                                },
+                                _ => (None, None, None),
                             };
                             ActionOption {
                                 description: game.action_description(action),
@@ -903,6 +915,7 @@ impl Observation {
                                 },
                                 name_index,
                                 name_definition,
+                                name_group,
                                 mode_index: match action {
                                     Action::ChooseMode { mode, .. } => Some(*mode),
                                     _ => None,
@@ -2061,6 +2074,9 @@ impl Observation {
                 });
                 if let Some(index) = action.name_index {
                     value["name_index"] = json!(index);
+                }
+                if let Some(group) = action.name_group {
+                    value["name_group"] = json!(group);
                 }
                 if let Some(definition) = action.name_definition {
                     value["name_definition"] = json!(definition);

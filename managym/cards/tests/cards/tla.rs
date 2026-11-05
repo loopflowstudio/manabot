@@ -14160,8 +14160,9 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     next_main_phase(&mut s);
     target_opponent(&mut s);
     pass_until(&mut s, ActionSpaceKind::Modal);
-    let names = s.action_space().actions.len();
-    assert!(names > 200, "every card name in the world: {names}");
+    // Every card name in the world, offered as at most 64 balanced groups.
+    let groups = s.action_space().actions.len();
+    assert!((2..=64).contains(&groups), "naming groups: {groups}");
     sozin_name(&mut s, "Gray Ogre");
     for _ in 0..4 {
         choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
@@ -14603,17 +14604,36 @@ fn fire_lord_sozin_declining_and_zero_payment_are_distinct() {
     assert_eq!(zone_of(&s, nonzero), Some(ZoneType::Graveyard));
 }
 
+/// Name a card through the ordinary group prompts, then the leaf prompt. Each
+/// prompt fits the fresh policy input; groups span sorted names.
 fn sozin_name(s: &mut Scenario, name: &str) {
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    managym::agent::observation_encoder::encode(&observation, &Default::default())
-        .expect("all names fit the fresh policy input");
-    let index = observation
-        .action_space
-        .actions
-        .iter()
-        .position(|a| a.description.as_deref() == Some(&format!("Name {name}")))
-        .expect("unrestricted card name");
-    s.step_action(index);
+    loop {
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        managym::agent::observation_encoder::encode(&observation, &Default::default())
+            .expect("every naming prompt fits the fresh policy input");
+        let descriptions = observation
+            .action_space
+            .actions
+            .iter()
+            .map(|a| a.description.clone().unwrap_or_default());
+        if let Some(index) = descriptions
+            .clone()
+            .position(|description| description == format!("Name {name}"))
+        {
+            s.step_action(index);
+            return;
+        }
+        let group = descriptions
+            .clone()
+            .position(|description| {
+                description
+                    .strip_prefix("Names ")
+                    .and_then(|span| span.split_once(" through "))
+                    .is_some_and(|(first, last)| first <= name && name <= last)
+            })
+            .expect("unrestricted card name");
+        s.step_action(group);
+    }
 }
 
 #[test]

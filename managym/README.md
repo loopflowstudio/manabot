@@ -78,11 +78,15 @@ Projection never mutates or semantically coalesces the engine’s records.
 Catalog naming uses `Decision::NameCard` over a shared immutable `NameVocabulary`.
 The catalog builds sorted real names once, including back faces and excluding
 tokens and rules fixtures. Decisions/forks share that allocation; canonical state
-records its digest. Selecting one candidate constructs one `ExileNamed` effect,
-then enters the existing private search continuation. Public names and optional
-learning definition references are not in-game card objects or deck admission.
-Explicit policy input v8 carries these joins in `name_candidates[A,2]`, with
-catalog-derived action capacity; v1–v7 layouts and fresh v6 defaults are frozen.
+records its digest. A decision holds a `NameScope`; a scope over
+`NAME_BRANCHING` (64) names offers a deterministic balanced partition into
+contiguous groups, and choosing one only narrows the scope. Selecting a name
+constructs one `ExileNamed` effect, then enters the existing private search
+continuation. Public names and optional learning definition references are not
+in-game card objects or deck admission. Explicit policy input v9 carries name
+joins and group spans in `name_candidates[A,4]` at ordinary action capacity;
+v8's whole-vocabulary `[A,2]` rejects groups; v1–v7 layouts and fresh v6
+defaults are frozen.
 See [policy inputs](../docs/training.md#catalog-naming-input).
 
 Spell-level modes are announced before targets and payment. Independent target

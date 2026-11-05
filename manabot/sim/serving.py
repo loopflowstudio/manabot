@@ -134,10 +134,8 @@ class PolicyStore:
         with self.perf.span("model_load"):
             agent, space = load_checkpoint(str(path))
             agent.eval()
-            if agent.config.compound_decisions or agent.belief_count_buckets:
-                raise ValueError(
-                    "shared inference rejects compound or belief checkpoints"
-                )
+            if agent.belief_count_buckets:
+                raise ValueError("shared inference rejects belief checkpoints")
             schema = {
                 name: {"shape": list(shape), "dtype": "float32"}
                 for name, shape in sorted(space.shapes.items())

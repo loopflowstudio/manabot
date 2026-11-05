@@ -730,6 +730,8 @@ class Action:
     mode_index: int | None
     name_definition: int | None
     name_index: int | None
+    # First and last vocabulary rows of a naming group choice.
+    name_group: tuple[int, int] | None
     ability_index: int | None
     continuation_index: int | None
 
@@ -798,6 +800,8 @@ class AgentError(RuntimeError): ...
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
+# Most options one naming prompt offers; larger scopes publish groups first.
+NAME_BRANCHING: int
 
 class VisibleReference:
     object: int | None
