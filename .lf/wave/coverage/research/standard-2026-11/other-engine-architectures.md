@@ -24,7 +24,7 @@ every decision with all continuation state available for cloning, replay and
 policy execution. [Forge controller](https://github.com/Card-Forge/forge/blob/a4281f7e58b50542decce8971d81bca4307fd8b4/forge-gui/src/main/java/forge/player/PlayerControllerHuman.java),
 [XMage human player](https://github.com/magefree/mage/blob/987fd4e9c73e9f113e235f8d8f98628f2d391667/Mage.Server.Plugins/Mage.Player.Human/src/mage/player/human/HumanPlayer.java).
 
-Managym's [`Decision` and `EffectFrame`](../../../managym/src/flow/decision.rs)
+Managym's [`Decision` and `EffectFrame`](../../../../../managym/src/flow/decision.rs)
 instead persist the unfinished operation and return an `ActionSpace`. A larger
 card library makes that architectural difference more important, not less.
 Borrow their separation of semantic responsibilities; translate their local
@@ -104,8 +104,8 @@ invariants. The inspected path scans registered triggers; managym's event-kind
 index should remain an advantage rather than being replaced with that scan.
 [TriggeredAbilities](https://github.com/magefree/mage/blob/987fd4e9c73e9f113e235f8d8f98628f2d391667/Mage/src/main/java/mage/abilities/TriggeredAbilities.java).
 
-**For us:** preserve [`stabilize_before_priority`](../../../managym/src/flow/stabilization.rs)
-and [`TriggerIndex`](../../../managym/src/flow/triggers.rs). Extend their existing
+**For us:** preserve [`stabilize_before_priority`](../../../../../managym/src/flow/stabilization.rs)
+and [`TriggerIndex`](../../../../../managym/src/flow/triggers.rs). Extend their existing
 authority with explicit occurrence snapshots, scoped history and complete
 placement choices. A trigger match is not stack placement; neither grants
 priority during a resolving instruction. Test simultaneous source departures,
@@ -149,7 +149,7 @@ dependencies correctly. Forge's dynamic probing and XMage's declared metadata
 are two different strategies, each with an evidence burden.
 [ContinuousEffectImpl](https://github.com/magefree/mage/blob/987fd4e9c73e9f113e235f8d8f98628f2d391667/Mage/src/main/java/mage/abilities/effects/ContinuousEffectImpl.java).
 
-**For us:** extend [`Game::characteristics`](../../../managym/src/flow/statics.rs)
+**For us:** extend [`Game::characteristics`](../../../../../managym/src/flow/statics.rs)
 into one dependency-aware layer authority while retaining revision caching and
 private layer-stage reads. Add actual required layers, same-layer dependency
 reevaluation and grant/removal closure using discriminating cards. Do not cache

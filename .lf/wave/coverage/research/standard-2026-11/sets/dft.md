@@ -43,7 +43,7 @@ implementation. A's cards still need their individual predicate/target audit;
 
 ## The strongest multiplier: contribution costs
 
-[Current crew selection](../../../../managym/src/flow/play.rs) has two concrete
+[Current crew selection](../../../../../../managym/src/flow/play.rs) has two concrete
 shortcuts: `crew_candidates` admits only positive-power creatures (around line
 1651), and `crew_tap_action` completes immediately at the threshold (around
 1680). DFT makes omitted choices consequential: Interface Ace untaps after
@@ -66,7 +66,7 @@ subset into the policy action table.
 
 ## Activation and mana are one larger boundary
 
-[`ActivatedAbilityDefinition`](../../../../managym/state/src/card.rs) already
+[`ActivatedAbilityDefinition`](../../../../../../managym/state/src/card.rs) already
 has exhaust, once-per-turn, hand activation, discard and crew fields. Extend
 shared cost and activation semantics rather than adding one field for each
 DFT card. Draconautics Engineer and Loot need independent per-ability use;
@@ -75,7 +75,7 @@ needs a graveyard trigger for another exhaust activation. Cycling must retain
 announced X for Valor's Flagship/Webstrike Elite and emit discard and cycling
 events with the correct ordering.
 
-[`ManaUse`](../../../../managym/state/src/mana.rs) currently names three subtype
+[`ManaUse`](../../../../../../managym/state/src/mana.rs) currently names three subtype
 bits. Guidelight Optimizer, Boommobile, Redshift and Pit Automaton require
 artifact-spell and arbitrary-activation restrictions; adding more special bits
 would repeat the same scaling problem. Use a typed purpose predicate evaluated
@@ -110,7 +110,7 @@ approximated by global counts or a last-touched-card variable.
 
 E should extend ordered private selection once: Stock Up, surveil two, multiple
 search zones, exact library insertion and Gonti's face-down permissions.
-[Current Surveil](../../../../managym/state/src/ability.rs) explicitly preserves
+[Current Surveil](../../../../../../managym/state/src/ability.rs) explicitly preserves
 kept order for the registered count-one subset; Grim Bauble and Wreckage
 Wickerfolk require more. Ancient Vendetta also exposes catalog-wide naming's
 fixed action-capacity problem. No card-specific UI or silent choice is acceptable.

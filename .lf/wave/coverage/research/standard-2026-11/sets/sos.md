@@ -19,12 +19,12 @@ intervening conditions, optional payments, reflexive triggers and delayed subjec
 missing feature. Reuse those owners, including `OnNthResolutionThisTurn` and
 `MayOnceEachTurn`, rather than replacing TLA's work with SOS-only interpreters.
 
-The important gaps are narrower. [SpellOnStack](../../../../managym/state/src/stack_object.rs)
+The important gaps are narrower. [SpellOnStack](../../../../../../managym/state/src/stack_object.rs)
 stores origin, flashback, kicked, X and one mode, but no immutable receipt of
-actual mana paid. Existing [cast grants](../../../../managym/src/flow/cast_permission.rs)
+actual mana paid. Existing [cast grants](../../../../../../managym/src/flow/cast_permission.rs)
 bind a real exiled object to a fixed player; preparation needs a persistent
 spell copy and a permission following a permanent's current controller.
-[Ability/effect types](../../../../managym/state/src/ability.rs) provide the
+[Ability/effect types](../../../../../../managym/state/src/ability.rs) provide the
 composition points, but ordered selections, repeated modes, new history queries
 and copy lifetimes need extensions.
 

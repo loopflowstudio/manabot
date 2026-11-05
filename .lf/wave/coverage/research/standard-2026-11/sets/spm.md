@@ -64,7 +64,7 @@ value at entry. Urban Retreat uses that same return operation as a hand
 activation cost, while Pumpkin Bombardment chooses discard or extra mana.
 Supportive Parents taps two creatures for mana; Iron Spider removes counters
 across artifacts. Generalize the current
-[`AdditionalCost` and activation fields](../../../../managym/state/src/card.rs)
+[`AdditionalCost` and activation fields](../../../../../../managym/state/src/card.rs)
 into shared typed obligations and result bindings rather than new per-card
 booleans. Convoke shares contribution selection but keeps its own colored/generic
 payment semantics. Interdimensional Web Watch requires source-zone spending
@@ -75,7 +75,7 @@ opponent's library, retains private face-down exiles, and permits flexible mana
 spending. Gwen Stacy's permission lasts while the exact source stays controlled;
 Superior Foes' lasts until its next successful exile; Madame Web continually
 exposes only the top card; Gwenom substitutes a life cost. Existing
-[`PlayWindow`](../../../../managym/state/src/ability.rs) has only turn-boundary
+[`PlayWindow`](../../../../../../managym/state/src/ability.rs) has only turn-boundary
 durations. A shared permission record should own exact subjects, controller,
 zone, expiry, timing and payment override. Readers in offers, execution, search,
 observations and text must agree. Do not duplicate this in Academy.

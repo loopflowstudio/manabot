@@ -159,7 +159,7 @@ controller-specific timing. The substantive repairs are inspectable in
 [`1bc8b33fb`](https://github.com/loopflowstudio/manabot/commit/1bc8b33fbac1dd1fb331833a143ad8fa608529cd)
 and [`854d5e282`](https://github.com/loopflowstudio/manabot/commit/854d5e2820f51940206f240bd44e754a0fab4421),
 and the accepted learning-evidence standard is recorded in the
-[engine principles](../../../managym/PRINCIPLES.md).
+[engine principles](../../../../../managym/PRINCIPLES.md).
 
 **Improve:** specify adversarial witnesses before broad authoring: counter the
 reflexive trigger, transform away and back, remove the grantor, search zero/fewer
@@ -197,7 +197,7 @@ queries, allocations, priority generation and payment-search work.
 The retained same-runner result for #414 is strong evidence: **30.43% less
 regular step time, 43.93% less total Search-64 time and 49.91% less worst-reply
 time**, with identical counts and digests. This is engine evidence, not
-end-to-end learner throughput. [The speed investigation](../engine-speed-2026-11.md)
+end-to-end learner throughput. [The speed investigation](../../../engine-performance/research/engine-speed-2026-11.md)
 also records rejected optimizations whose apparent gains did not repeat.
 
 The useful pattern was unify the authority, profile actual work, remove repeated
@@ -219,15 +219,15 @@ artificial contention, stress workloads or cross-runner timing comparisons.
 Historical audit tables are not current defect inventories: for example, their
 claims that Auras, reflexive triggers and any-target damage are absent have been
 superseded. Two explicitly ignored proposal tests remain at this checkout:
-[earthbend destination incarnation and deathtouch SBA history](../../../managym/tests/rules/cr_608_resolution.rs).
+[earthbend destination incarnation and deathtouch SBA history](../../../../../managym/tests/rules/cr_608_resolution.rs).
 Their source still documents the missing obligations. This pass did not rerun
 them; their historical failures use synthetic state changes and do not establish
 a currently reachable imported-deck sequence.
 
 The native setup still draws seven without offering mulligans
-([setup.rs](../../../managym/src/flow/setup.rs)); deck admission remains
+([setup.rs](../../../../../managym/src/flow/setup.rs)); deck admission remains
 development-only and sideboards have no between-game swapping
-([decklist import contract](../../engine.md#decks)). Full card-file coverage
+([decklist import contract](../../../../../docs/engine.md#decks)). Full card-file coverage
 must therefore be distinguished from tournament-complete Standard play.
 The payment model also retains its documented finite-source restriction;
 repeatable mana sources require extending that model, not bypassing it.

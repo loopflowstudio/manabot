@@ -7,9 +7,8 @@ He requested independent per-set analyses, an implementation retrospective, an
 audit of current shortcuts, and comparison with other Magic engines.
 
 The four explicitly authorized foundation Tasks are listed below. The
-[proposed milestone plan](milestone.md) and
-[HTML walkthrough with API sketches](milestone.html)
-map eight additional Tasks across two milestones, with training validation and
+[proposed milestone plan](milestone.md)
+maps eight additional Tasks across two milestones, with training validation and
 a rough later arc. A separate [MTG-245](loopflow://manabot/task/MTG-245) now covers training/evaluation methodology for uneven card-pool growth, with its research launch authorized. Tasks 04 and 08 remain actual training runs; the near-term plan therefore contains nine new Tasks.
 This research changes no runtime behavior.
 
@@ -74,7 +73,7 @@ The additional reviews are [implementation history](implementation-history.md),
 [current engine audit](current-engine-audit.md), and
 [external engines](external-engines.md). Their findings inform the shared implementation order in the milestone plan.
 
-The resulting [engine principles](../../../managym/PRINCIPLES.md) preserve the
+The resulting [engine principles](../../../../../managym/PRINCIPLES.md) preserve the
 implementation lessons and architectural boundaries.
 
 ## Implementation Tasks launched

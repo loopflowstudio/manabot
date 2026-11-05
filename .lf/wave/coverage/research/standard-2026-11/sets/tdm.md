@@ -45,7 +45,7 @@ object; avoid rescanning a retained game log for every static query.
 
 **2. Generalize costs and their executable witnesses.** Monocolored hybrid
 `{2/W}` and its siblings currently hit the two-color-only parser's panic branch
-in [mana.rs](../../../../managym/state/src/mana.rs). Introduce typed alternatives
+in [mana.rs](../../../../../../managym/state/src/mana.rs). Introduce typed alternatives
 at the common cost owner. Maelstrom of the Spirit Dragon requires Dragon-or-Omen
 spending restrictions; Herd Heirloom requires a card-type restriction, neither
 expressible by the existing three-subtype bit mask. Dragonbroods' Relic adds a

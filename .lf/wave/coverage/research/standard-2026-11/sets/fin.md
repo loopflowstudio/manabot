@@ -23,7 +23,7 @@ cards as one permanent, unlike ordinary transformation, and that departure
 moves both cards. That needs explicit identity support rather than a fabricated
 single-card back face.
 
-[fin.rs](../../../../managym/cards/src/fin.rs) currently defines only Sazh's
+[fin.rs](../../../../../../managym/cards/src/fin.rs) currently defines only Sazh's
 Chocobo. Exact-name scanning finds it and five basics elsewhere: six matches,
 not six independently revalidated implementations. Existing selectors, effect
 values, optional payments, flashback, Saga chapters, transforms, finality/stun

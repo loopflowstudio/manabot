@@ -3,7 +3,7 @@
 Status: proposed sequence plus separate research Task [MTG-245](loopflow://manabot/task/MTG-245), authorized to launch. Tasks 04 and 08 remain actual training/evaluation runs; no training experiment has been launched.
 Accepted direction: full post-rotation Standard; faithful, trusted rules, performance and composable code first; coherent changes; large shared changes early; complete FDN first, then generally newer sets. Bugs do not automatically revoke playability or invalidate every run. Preserve evidence so conclusions can be scoped.
 
-The [HTML walkthrough](milestone.html) is the detailed plan and API explanation. API snippets are proposals, not implemented signatures. Existing excerpts are pinned to `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`.
+API snippets are proposals, not implemented signatures. Existing excerpts are pinned to `5dd11cec4100aa0e1f4a23c063dfd5778e2ba28f`.
 
 Four already launched Tasks (MTG-241 execution/replacements, MTG-242 mana, MTG-243 naming, MTG-244 layers) are dependencies, excluded from the eight below. No new executor, card DSL, parallel characteristic authority or per-card payment bypass is proposed.
 

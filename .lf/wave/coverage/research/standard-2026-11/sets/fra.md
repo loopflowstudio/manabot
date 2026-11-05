@@ -20,11 +20,11 @@ needs two ordinary prowess trigger instances, not a duplicated keyword bit.
 Existing `OnceEachTurn`, `OnNthResolutionThisTurn` and `MayOnceEachTurn` have
 different meanings and should remain distinct.
 
-The [activated ability definition](../../../../managym/state/src/card.rs)
+The [activated ability definition](../../../../../../managym/state/src/card.rs)
 has no loyalty cost or general scoped loyalty grant. Planeswalker card types,
 loyalty counters, damage removal and the
-[zero-loyalty SBA](../../../../managym/src/flow/sba.rs) exist, but do not provide
-planeswalker execution. [ManaUse](../../../../managym/state/src/mana.rs) currently
+[zero-loyalty SBA](../../../../../../managym/src/flow/sba.rs) exist, but do not provide
+planeswalker execution. [ManaUse](../../../../../../managym/state/src/mana.rs) currently
 restricts by three named subtypes, not card type or cast origin; mana-choice
 recognition assumes fixed output. Existing `Surveil` preserves kept-card order,
 which needs expansion for Yuriko's surveil two. The current replacement pipeline

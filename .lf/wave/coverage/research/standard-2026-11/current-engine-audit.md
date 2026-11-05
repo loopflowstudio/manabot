@@ -35,16 +35,16 @@ or is cloned for search.
 ## 1. Repair inconsistent exact-object reads before multiplying their consumers
 
 **Source-confirmed current defect: source power loses LKI.**
-[`effect_value`](../../../managym/src/flow/resolution.rs) at lines 40–58 has an
+[`effect_value`](../../../../../managym/src/flow/resolution.rs) at lines 40–58 has an
 LKI fallback for `TriggeringPower`, but `SourcePower` uses
 `source_permanent_id(frame).map_or(0, ...)`. The latter helper at line 2080 only
 returns a currently present permanent matching `frame.source_ref`.
-[`ObjectLki`](../../../managym/state/src/game_object.rs) already retains power.
+[`ObjectLki`](../../../../../managym/state/src/game_object.rs) already retains power.
 
 This affects existing definitions, not a hypothetical future extension:
 Firebending Student and Fire Lord Zuko use source power for their attack-triggered
 mana; Combustion Man uses it for its attack trigger's damage choice
-([definitions](../../../managym/cards/src/tla.rs), lines 2220, 3420, 3829).
+([definitions](../../../../../managym/cards/src/tla.rs), lines 2220, 3420, 3829).
 If the source leaves in response, the implementation reads zero. The required
 fixture is an attack trigger with a known, modified power, source removal before
 resolution, and assertions on the resulting mana or damage. Add a leave/re-enter
@@ -53,7 +53,7 @@ runtime reproduced here; the contradiction is visible in the current call path.
 
 **Source-confirmed current defect: entry replacements inspect the owner instead
 of the entering controller.** In
-[`collect_replacements`](../../../managym/src/flow/proposed_event.rs), line 262,
+[`collect_replacements`](../../../../../managym/src/flow/proposed_event.rs), line 262,
 `entering_controller` is unconditionally `self.state.cards[*card].owner`.
 `ZoneEntry` already carries a controller override and the eventual commit uses
 entry terms. Both conditional entry counters and conditional tapped entry read
@@ -74,7 +74,7 @@ read stages; do not route layer computation recursively through the public view.
 
 **Verified architectural restriction:** `Effect::ForEachTarget` does not compose
 with effects that ask a question. Its handler
-([resolution.rs:1824](../../../managym/src/flow/resolution.rs)) manually constructs
+([resolution.rs:1824](../../../../../managym/src/flow/resolution.rs)) manually constructs
 a subframe, executes its queue, and only `debug_assert!`s that each returned
 decision is absent. In release, a returned decision is discarded. The enum
 documents the restriction, and this audit does not assert that an existing
@@ -84,7 +84,7 @@ silently change rules behavior in release.
 
 **Verified structural debt:** `EffectFrame` has one mutable slot apiece for
 `this_way`, `moved`, `created`, and `excess_damage`, plus a cloned
-`VecDeque<Effect>` ([decision.rs:58–119](../../../managym/src/flow/decision.rs)).
+`VecDeque<Effect>` ([decision.rs:58–119](../../../../../managym/src/flow/decision.rs)).
 These are useful for today's sequential programs, but nested iteration and
 branching need explicit result lifetime. A subframe currently initializes several
 of these slots from scratch. New "for each … if you do … that many …" cards
@@ -120,12 +120,12 @@ contract needs its proper version boundary.
 ## 3. Replace deterministic replacement shortcuts with actual rules choices
 
 **Verified scope gap:**
-[`apply_proposed_event`](../../../managym/src/flow/proposed_event.rs), lines
+[`apply_proposed_event`](../../../../../managym/src/flow/proposed_event.rs), lines
 113–153, collects candidates once, applies them in a fixed order, then commits.
 The sorter at approximately line 325 puts opponent damage increases last with a
 comment describing that as preferable to the affected player. This does not
 offer that player's choice. The limitations are explicit in the
-[original replacement contract](../../rules/proposed-events-v1.md), but its
+[original replacement contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/proposed-events-v1.md), but its
 historical instruction to exclude incomplete cards has since been superseded by
 the current definition-based playability policy.
 
@@ -154,12 +154,12 @@ Existing cards remain playable while defects are fixed and tracked.
 **Source-confirmed catalog-growth blocker:**
 `NameAndExileFromTargetPlayer` builds a `BTreeSet<String>` of every catalog name
 and one modal effect vector per name
-([resolution.rs:1535–1559](../../../managym/src/flow/resolution.rs)).
+([resolution.rs:1535–1559](../../../../../managym/src/flow/resolution.rs)).
 The Rise of Sozin's second chapter uses it. This is linear work and allocation over the whole
 installed catalog for one in-game decision, and produces one legal action per
 name. Fresh native and Python policy inputs allow 512 actions; the Python
 encoder explicitly errors beyond capacity
-([observation.py:962](../../../manabot/env/observation.py)). A multi-set catalog
+([observation.py:962](../../../../../manabot/env/observation.py)). A multi-set catalog
 will cross this limit even in a small-board game. Native semantic legality and
 policy encodability must be considered separately.
 
@@ -174,7 +174,7 @@ effect trees per resolution. Do not claim a chosen design until its decision
 and observation costs have been measured.
 
 **Verified payment vocabulary limits:**
-[`ManaUse`](../../../managym/state/src/mana.rs), lines 35–53, encodes only
+[`ManaUse`](../../../../../managym/state/src/mana.rs), lines 35–53, encodes only
 Lesson, Shrine, and Ally in a fixed `u8` mask. Unknown subtype strings disappear
 in `filter_map`. This is insufficient for broad spending restrictions, and
 silently accepting a new restriction's unknown vocabulary is particularly
@@ -184,7 +184,7 @@ meanings. Do not merely keep appending subtype bits.
 
 The mana witness search is a valuable shared owner, but its current source model
 uses each source once. A registry test at
-[mana.rs:1247](../../../managym/src/flow/mana.rs) requires tapped or once-per-turn
+[mana.rs:1247](../../../../../managym/src/flow/mana.rs) requires tapped or once-per-turn
 chosen-output abilities and excludes other upfront sacrifice/waterbend costs.
 Repeatable mana activations and new cost resources need explicit transitions,
 termination reasoning, and resource reservations. Also audit bounded `u8`
@@ -193,7 +193,7 @@ These are known modeling limits, not proof of a defect in each present card.
 
 ## 5. Preserve the good layer/cache architecture while widening its semantics
 
-The header of [`statics.rs`](../../../managym/src/flow/statics.rs) explicitly
+The header of [`statics.rs`](../../../../../managym/src/flow/statics.rs) explicitly
 excludes layer 7d switching and CR 613.8 dependency ordering. Timestamp ordering
 is not sufficient for every possible future interaction. Extend one layer
 evaluation authority as actual set requirements arrive; do not create separate
@@ -201,14 +201,14 @@ special-case readers for combat, costs, observations, or card predicates.
 
 `TrackedState` and debug recomputation are strong designs worth retaining.
 However, the classification of writes is tied to the current rule vocabulary:
-the comments at [game.rs:365](../../../managym/src/flow/game.rs) declare tap,
+the comments at [game.rs:365](../../../../../managym/src/flow/game.rs) declare tap,
 damage, and some other writes irrelevant to cached derivations. A new static
 condition reading one of those facts changes that dependency. Each mechanic
 must review its reads against invalidation, not just add an enum branch.
 Use precise revision ownership, with the slow recomputation oracle preserved.
 
 Two old ignored audit probes remain in
-[`cr_608_resolution.rs`](../../../managym/tests/rules/cr_608_resolution.rs):
+[`cr_608_resolution.rs`](../../../../../managym/tests/rules/cr_608_resolution.rs):
 earthbend following a second zone change and deathtouch surviving an SBA check.
 They must not be reported as freshly reproduced. Current source still reads
 `deathtouch_damage` in lethal checks and clears it at cleanup rather than after
@@ -220,7 +220,7 @@ checking the code.
 
 ## 6. Make performance evidence cover the architecture being expanded
 
-The retained [engine investigation](../engine-speed-2026-11.md) already found
+The retained [engine investigation](../../../engine-performance/research/engine-speed-2026-11.md) already found
 that ordinary rollout work, rather than outer search-fork setup, dominated its
 sample. It also records failed or inconclusive COW/undo and small-allocation
 ideas. There is no evidence here supporting a wholesale state-storage rewrite.

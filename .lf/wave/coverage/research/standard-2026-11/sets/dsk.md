@@ -23,7 +23,7 @@ first-printing identities. The remaining 270 are not existing definitions.
 The 63 composition-batch rows include those six and 57 definition candidates;
 “candidate” means reusable primitives appear sufficient, not proven coverage.
 
-The strongest reuse is in [ability.rs](../../../../managym/state/src/ability.rs):
+The strongest reuse is in [ability.rs](../../../../../../managym/state/src/ability.rs):
 `TargetClause`, `Move`, `Moved`, `PutCountersFrom`, `CreateDelayedTrigger`,
 `WhenYouDo`, `OnNthResolutionThisTurn`, retargeting, private selection and
 copy-with-exceptions. Finality and stun already exist. Existing costs cover

@@ -288,7 +288,7 @@ the step digest changed, with 101,650 steps instead of 99,923 across 512 games
 These are the two measurements from that one runner. Timing checks passed;
 changed gameplay prevents treating the delta as equivalent-workload speedup
 evidence. The rules change moves the reference while preserving the **10%
-tolerance**. The [MTG-238 investigation record](research/engine-speed-2026-11.md)
+tolerance**. The [MTG-238 investigation record](../.lf/wave/engine-performance/research/engine-speed-2026-11.md)
 retains the preceding engine improvements and their evidence.
 
 **Previous reference: derived-state caching.** Commit `4b5e9c0e4` was adopted from

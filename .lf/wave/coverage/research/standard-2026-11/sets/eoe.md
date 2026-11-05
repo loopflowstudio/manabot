@@ -55,13 +55,13 @@ The current `CounterKind` lacks charge; append vocabulary and extend all shared
 projections. A level dropping below threshold must remove its derived grants.
 
 **Warp composes costs, provenance and permissions.**
-[`ExileCastGrant`](../../../../managym/src/flow/cast_permission.rs) already has
+[`ExileCastGrant`](../../../../../../managym/src/flow/cast_permission.rs) already has
 exact object identity and an `after_turn` term. Reuse them; do not create a
 parallel warp-card store. Extend cast metadata, delayed effects and alternative
 costs together. Timeline Culler adds graveyard access and life payment; Tannuk
 grants warp to a class of hand cards; enchantments demonstrate that warp is not
 creature-only. Astelli Reclaimer, Unravel and Dyadrine require actual mana spent,
-which current [`SpellOnStack`](../../../../managym/state/src/stack_object.rs)
+which current [`SpellOnStack`](../../../../../../managym/state/src/stack_object.rs)
 does not retain. Announced X, nominal cost and paid mana are different values.
 
 **History must describe events precisely.** Void observes nonland battlefield
@@ -80,7 +80,7 @@ different histories do not by themselves justify new machinery.
 **Unify typed costs and selection continuations.** Steelswarm Operator restricts
 mana by spell type or activation-source type; Mm'menon additionally restricts
 casting origin. The three-subtype bit mask in
-[`ManaUse`](../../../../managym/state/src/mana.rs) cannot represent these terms.
+[`ManaUse`](../../../../../../managym/state/src/mana.rs) cannot represent these terms.
 Gene Pollinator requires a second tap contribution; Secluded Starforge binds X
 to tapped artifacts; Dyadrine selects two counter donors. Generalize contribution
 selection and reservations without greedy choice pruning. Cerebral Download and

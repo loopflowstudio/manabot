@@ -412,7 +412,7 @@ know and where the code lives.
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
-| `docs/` | The guides above, their diagrams, and dated [research](docs/research/) |
+| `docs/` | The guides above and their diagrams |
 | `paper/` | A working paper draft |
 | `deploy/` | Hosted service deployment |
 | `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays; `protocol/` holds its [wire protocol](protocol/experience-protocol-v1.md) and schemas |

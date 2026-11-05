@@ -11,7 +11,7 @@ assessment, not a passing behavior test.
 
 ## Evidence and existing authority
 
-[`cards/src/mkm.rs`](../../../../managym/cards/src/mkm.rs) registers only Proft's
+[`cards/src/mkm.rs`](../../../../../../managym/cards/src/mkm.rs) registers only Proft's
 Eidetic Memory; its directed tests cover entry draw, combat-time count, hand size
 and legendary behavior. The five basics already belong to `lea`. Other simple
 cards are definition candidates, not claims of existing coverage. Reprints
