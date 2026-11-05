@@ -165,4 +165,44 @@ Deleting exact quota is out of scope and waits for this report.
 
 ## Calibration
 
-Pending: one seed (70100) of the complete arm, 30 updates, unscored.
+One seed (70100) of the complete arm, 30 updates, unscored, launched from
+`experiments/elemental_closure_calibration.py` so no evaluation pass sees it.
+
+## Amendment 2026-11-05: study 1 stopped, study 2 recovers capacity overflows
+
+Made before any scored run started.
+
+**Calibration failed, so study 1 stops under its kill criterion.** Run 491fa11b9fdf
+(revision 04c9cba75) trained 9 updates, about 70 s each, then stopped on
+`PyAgentError: observation capacity exceeded: continuation relations 65 > 64`. On the
+current world an Elemental game can outgrow the recipe's v1 input, and without
+game-error recovery one such game ends the run. Exact quota rejects recovery (it settles
+no whole games), so the exact arm cannot run at all, and the complete arm alone answers
+nothing. No quota was set and no closure run launched. Running the comparison needs one
+of: capacity recovery that works under exact quota (discarding a paused stream's
+unfinished rows), a wider continuation-relation capacity applied to both arms, or
+deleting exact quota; each is a decision beyond this protocol. Three earlier calibration
+attempts failed on launch errors of this study's own making (a renamed experiment and an
+undersized dollar limit), not on training; all four are charged to the cap.
+
+**Study 2 enables capacity recovery.** The frozen recipe's game-error policy predates
+`recover_capacity` (MTG-213), so the same overflow would stop the two-seat runs. Every
+lambda arm sets `recover_capacity: true`: an overflowing game's unfinished samples are
+discarded and it counts against the recipe's own allowance (10% over a 100-game window
+after 100 games). It is identical across arms, so the lambda comparison stays
+one-field; the report gives each arm's capacity failures (`resource_limit` games).
+
+**Budget re-sized.** Bills put the calibration attempts at about $1.30; the cap is
+charged their full reservations, $2.04. Study 1's line goes to study 2's windows: 1.5
+hours each (about 70 minutes of training for 75 updates, against an unmeasured two-seat
+pace on this world), reserved at $1.05.
+
+| Line | Ceiling |
+|---|---:|
+| Calibration, four attempts | $2.04 |
+| Study 2 training, 15 runs × $1.05 | $15.75 |
+| Evaluation | $3.00 |
+| Reserve for failed attempts | $4.21 |
+| **Total** | **$25.00** |
+
+Study 1's predictions and analysis above stay as written and are not scored.

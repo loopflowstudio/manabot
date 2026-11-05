@@ -32,9 +32,16 @@ def elemental_recipe(regime_id: str, updates: int) -> TrainingRegime:
     regime = TrainingRegime.model_validate_json(REGIME.read_bytes())
     regime.id = regime_id
     regime.world = managym.WORLD_VERSION
+    stage = _stage(regime)
     # Damped-policy rates follow the absolute iteration, so the endpoint leaves the
     # learning schedule unchanged; the launch sets the watchdog.
-    _stage(regime).updates = updates
+    stage.updates = updates
+    # On the current world a game can exceed the v1 input's 64 continuation
+    # relations, which the frozen recipe treats as fatal (calibration 491fa11b9fdf
+    # stopped at update 9). Recovery discards that game's unfinished samples and
+    # counts it against the recipe's own game-error allowance.
+    if stage.game_errors is not None:
+        stage.game_errors.recover_capacity = True
     return regime
 
 

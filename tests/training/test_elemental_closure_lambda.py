@@ -39,7 +39,13 @@ def test_variants_relabel_the_frozen_recipe_to_the_current_world() -> None:
     current = validate_regime(lambda_sweep(0.5, 0.8, 75)).model_dump(mode="json")
     assert current["world"] == managym.WORLD_VERSION
     assert _changed(frozen, current) == {"id", "world", "stages"}
-    assert _changed(frozen["stages"][0], current["stages"][0]) == {"updates"}
+    assert _changed(frozen["stages"][0], current["stages"][0]) == {
+        "updates",
+        "game_errors",
+    }
+    assert _changed(
+        frozen["stages"][0]["game_errors"], current["stages"][0]["game_errors"]
+    ) == {"recover_capacity"}
 
 
 def test_closure_arms_learn_from_one_seat_and_differ_only_in_closure() -> None:

@@ -43,8 +43,9 @@ budget and results pointer; this file holds working assumptions and open items.
   less batch assembly, times the idle share of stream slots. The one-seat closure study
   gives the direct measurement of finishing games against pausing.
 
-- The calibration run records under experiment `elemental_closure_calibration`
-  (`--calibration`), so no evaluation pass scores it.
+- The calibration launches from `experiments/elemental_closure_calibration.py`: Etude
+  names a run's experiment after its launch file's stem (`ETUDE_EXPERIMENT`), so it
+  stays out of the closure study's evaluation passes.
 - Each run's dollar limit equals its reservation (window + 15 min setup at $.60); the
   launcher refused $.36 for a .6 h window. Protocol amended before any run started.
 
@@ -57,6 +58,11 @@ budget and results pointer; this file holds working assumptions and open items.
   each had a job attempt, and Etude shows `setting_up`/"output not received" until
   the end even on healthy runs (setup is budgeted 900 s). Charge both full
   reservations ($1.02) to the cap. "Not booted" means no attempt id in `etude logs`.
+  Actual cause, found with `etude logs --run ID --follow`: all three (incl. 22:04
+  d167b004c555, which held its machine to ~$.50 until terminated at 23:20) died at once
+  with `experiment_differs_from_launch` from a `--calibration` flag that renamed the
+  experiment. Calibration attempts so far: 3 failed, ~$1.50 reserved/billed.
+- 23:27 calibration 491fa11b9fdf launched from its own file, revision 04c9cba75.
 
 ## Open
 
