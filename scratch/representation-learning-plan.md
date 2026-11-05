@@ -38,20 +38,6 @@ to `64e9eaabf`. Execution state is below in **Recovery execution**.
 
 Verified from code and retained receipts:
 
-- **`SCORING` stays byte-identical.** `study_protocol_sha256` hashes it and
-  `score_for` compares the whole protocol, so editing its "no retries" clause
-  would change the evaluator identity. The amendment is a separate frozen record
-  that overrides that clause for this cohort; the runner reads both.
-- **`concurrent_activity` is free to change.** It is a result field outside
-  `MonitorProtocol`. Pass what is actually concurrent for each job.
-- **Admission uses `run.identities` and `artifact["path"]`.** `checkpoint_manifest`
-  checks world, ABIs, matchup, engine source and content, and exact bytes, so
-  retained `run.json` needs its paths rebased as `restore_check.py` does. This
-  rebasing has not run through a real evaluation.
-- **Idempotence needs a rule.** `evaluate_checkpoint` refuses an existing
-  directory by design. A complete, hash-verified `monitor.json` is skipped. An
-  attempt without a score may repeat in a fresh attempt directory, retained in
-  the denominator; a scored endpoint is never repeated.
 - **Runtime equivalence, rechecked.** `managym/` and `monitor` sources are
   unchanged since `af601877e`. The only runtime module diff is
   `manabot/model/shared_effects.py`: token-index construction yielding the same
@@ -60,30 +46,44 @@ Verified from code and retained receipts:
   the same. Unwatched `supervision.json` now records grace 0 rather than an
   unused 120, and the recovery runner will change again, so new learners bind
   by these identities, not by source hash equality.
-- **Evaluation cost, from CPU-study receipts.** The cohort needs 11,264 games
-  (72 × 128, 8 × 256). Eight retained runs took 0.59–0.68 s/game wall and
-  0.83–0.92 CPU-s/game at two active games, on a different host, 64 actions and
-  weaker policies. That implies about 1.9h sequential or about 15 minutes per
-  learner, against about 16h of training. The sequential 5,400s bound needed
-  0.48 s/game, which those receipts do not support; parallel scheduling removes
-  it as a cohort-wide limit. Measure the first endpoint before committing a CPU
-  allocation; no estimate here is admission evidence.
-- **Control client.** PR84 head `6bfa114ed` is two commits ahead of the lock pin,
-  zero behind, CI passing, still draft. It also carries the Lium launcher work,
-  so a pin covers more than liveness. Run the launcher from that exact commit and
-  leave `uv.lock` and the worker at `64e9eaabf`; earlier attempts already kept
-  separate launcher and worker identities. Untested for this pairing. If
-  they prove incompatible, that is the real approval dependency to expose.
 - **Pool/74212 restart.** Compare its `initial_raw` SHA256 with the retained one
   and record the result; a mismatch needs explanation before that learner is
   scored. The GRU/pool pair at 74212 may train on different hosts. Require the
   same GPU class, record each learner's host, and state this in the amendment.
 
-**Execution shape, accepted by the frozen amendment.** One Etude Run per learner
-and per learner's evaluation. The locked runtime uploads outputs only at attempt
-completion, which is why `e51f61b92931` delivered nothing. Learners use Vast RTX
-3090 rentals; evaluators use RunPod CPU rentals, whose launcher still has the
-single-read rule, so an evaluator can be lost and repeated under the ledger's rules.
+## Recovery execution
+
+Frozen amendment at `051d51b50`; units run from `de65a1600` (`RECOVERY` SHA256
+`a0383ac7…f86f7be`). A score-free pass admitted all 30 retained endpoints at this
+runtime. PR84 opened the launcher store, launched and delivered with workers at
+`64e9eaabf`: pairing proven live on Vast. Its outage path has had no live trigger.
+
+Attempts so far, all in the denominator (`ledger/.../lost.json` where nothing
+delivered): `8cc6b5e185b0` RunPod CPU pod never reached the worker in 15 minutes
+($0.061; cause unknown, no logs, so evaluators moved to Vast). `0023d7a98de6`
+failed our worker's window check, which ignored setup inside Etude's attempt clock
+($0.061; fixed `de65a1600`). `9f47df75e15b` was cancelled before learning, doomed
+by the same check ($0.053). `0fb1f9d4a613` scored pool/74211 update 0 through the
+real relocated path: 128/128 games, 203.6s, 136 CPU-s, $0.071, hash-verified. Host
+Ryzen 9900X with an unused 5060 Ti. Full learner about 37 minutes; evaluators get
+1.5h and $0.50 each, one at a time. The first endpoint was measured after one
+learner had been dispatched, not before; the CPU allocation followed it.
+
+Progress at 19:10 UTC: all three retained learners have all 10 endpoints scored
+and hash-verified (pool/74211 needed a repeat of curve-0032, whose first attempt
+had two zero-decision wall-clock timeouts; unstarted endpoints of that Run also
+received placeholder attempts before a driver fix). Pool/74212 and GRU/74213
+delivered complete learners (3.82h, 3.07h). Their evaluations are queued. Three
+learners remain running after two hosts never booted. Ended cost is $2.65.
+Pool/74212's init mismatch is explained in questions.md.
+
+Operations: `.runs/representation/recovery/`: `drive.py` (state `drive-state.json`,
+log `drive-*.log`), `commitments.md`, `units/`, `deliveries/`, `ledger/`. Resume with
+`ETUDE_HOME=$PWD/.runs/representation/etude SCRIPT=.runs/representation/recovery/drive.py
+.runs/representation/recovery/d <seconds>`. It reads costs and timing, never scores.
+Each learner is capped at 5.75h with setup inside; each purchase must fit
+$12.86053336 with live caps and a $1 evaluation reserve. Supply is the limit: Vast
+often shows no matching 3090 (8 vCPU, 30 GB, under $0.40).
 
 ## Execution record and remaining work
 
@@ -212,11 +212,9 @@ passed in the successful diagnostic without changing learner semantics.
 
 ## Delete — do not maintain
 
-These cuts are complete; no further runtime deletion is justified, and frozen
-learner code stays untouched for the recovery cohort. Next targets for implement:
-`evaluate_arm`'s fixed `concurrent_activity` and `scientific_cohort`'s
-train-all-then-evaluate-all loop, which recovery replaces. Keep the replacements
-below and recover predecessor implementations only from git:
+These cuts are complete; frozen learner code stays untouched for the recovery
+cohort. `evaluate_arm`, `scientific_cohort` and `ScientificAllocation` are gone.
+Keep the replacements below; recover predecessors only from git:
 
 - Per-sample/per-frame projections in `TypedContinuationEncoder.forward` and
   `SharedEffectEncoder.forward`, and per-sequence padded packing in
@@ -413,4 +411,4 @@ Original design/diagram:
 traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: `recipe_digests()` at `aec9f3940` matches all seven retained receipts; recovery tests deferred to implement, broader validation to gate, scientific judgment to demo/review.
+Check: `pytest tests/training/test_state_representation_study.py` 42 passed at `de65a1600`; broader validation to gate, scientific judgment to demo/review.

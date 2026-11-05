@@ -101,19 +101,25 @@ Earlier SDK decisions: `075378dd87600428ad3efa60b7288b327c32cee7:scratch/questio
 original design: `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`.
 All removed detail is committed there.
 
-Assumption (Task operator, 2026-11-05, reversible, for implement): one Etude Run
-per learner and per evaluation replaces the single cohort rental, so a machine
-loss costs at most one learner. "Independent CPU evaluation jobs" and "persist
-each unit incrementally" require this much; the simpler same-rental alternative
-loses undelivered work the way `e51f61b92931` did. It adds about $0.31 of setup.
-If Etude cannot dispatch these Runs, keep the evidence gap visible rather than
-returning to one rental silently.
+Decision: one Etude Run per learner and per evaluation, now frozen in the amendment.
+Assumption: evaluation on Vast hosts with an unused GPU counts as "CPU evaluation";
+device is CPU and no training shares the machine.
+Assumption: the first learner was dispatched beside the first measured endpoint,
+not after all three retained evaluations began, to catch scarce 3090 supply.
 
 Assumption: the `/verify` commit instruction was not applied to Etude PR #84,
-because that skill checks merged work and this PR is an unmerged draft.
+because that skill checks merged work and this PR is an unmerged draft. The same
+applies to commits on PR421's branch.
 
 ## Main sync — MTG-213 context (2026-11-05 UTC)
 
 MTG-213 decisions stay at `e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md`
 and in `experiments/tla-trophy-pilot.md`. That pilot and its separate $10 cap do
 not replace this study's GPU run, $25 total or review boundary.
+
+Decision (operator, 2026-11-05, before any pool/74212 score, reversible in
+analysis): the restarted pool/74212 `initial_raw` differs from the retained one
+only by host QR rounding in `orthogonal_` (≤1.04e-6 in 18 matrices; identical RNG
+streams and other tensors), so it is admitted for scoring. Receipt:
+`.runs/representation/recovery/init-comparison-typed_pool-74212.json`. The
+paused evaluation `664f44738f35` stays an unscored attempt.
