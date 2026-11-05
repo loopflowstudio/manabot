@@ -141,7 +141,7 @@ see. Academy's live play still lowers its protocol-v1 `Command` to a
 positional `step` through `DecisionContext.action_by_offer`; the semantic
 `DecisionFrame` / `Command` / `TransitionReceipt` contract in
 `managym/src/decision.rs` is the engine API, not yet Academy's wire path
-([experience protocol v1](docs/architecture/experience-protocol-v1.md)).
+([experience protocol v1](protocol/experience-protocol-v1.md)).
 
 **Forced decisions are played by the engine.** A decision reaches a player
 only with at least two legal actions (`skip_trivial`, on everywhere). Every
@@ -412,10 +412,10 @@ know and where the code lives.
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
-| `docs/` | The guides above, the [rules authority](docs/rules/), the [Academy wire protocol](docs/architecture/experience-protocol-v1.md) and dated [research](docs/research/) |
+| `docs/` | The guides above, their diagrams, and dated [research](docs/research/) |
 | `paper/` | A working paper draft |
 | `deploy/` | Hosted service deployment |
-| `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
+| `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays; `protocol/` holds its [wire protocol](protocol/experience-protocol-v1.md) and schemas |
 | `.lf/` | Loopflow Waves (`.lf/wave/`), chapters and prompts that organize agent work |
 
 ## Development

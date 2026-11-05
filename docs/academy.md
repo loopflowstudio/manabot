@@ -6,7 +6,7 @@ legality, hidden information and game state; the client renders viewer-safe
 frames and returns Commands bound to the frame that offered them. Module-level
 detail and demo walkthroughs live in [academy/README.md](../academy/README.md);
 the wire contract is
-[experience protocol v1](architecture/experience-protocol-v1.md), with state
+[experience protocol v1](../protocol/experience-protocol-v1.md), with state
 digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 - [Running Academy](#running-academy)

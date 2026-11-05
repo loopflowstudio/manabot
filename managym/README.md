@@ -130,7 +130,7 @@ uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
 
-The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+The [pinned Comprehensive Rules audit](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.
 Card-shell checks and replay agreement do not independently prove rules
 correctness. Prefer directed tests with independently specified outcomes and
@@ -144,7 +144,7 @@ The Prism/Treasure audit probe now follows explicit nested payment decisions
 and passes its final mana, sacrifice and empty-stack assertions. Its original
 failure remains historical evidence; this bounded pass does not certify all
 payment rules. See the audit's
-[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+[ownership review](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/unification.md)
 before using its historical Task attribution.
 
 ## Style
@@ -206,7 +206,7 @@ the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
 
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
-Their [ownership and authoring contract](../docs/rules/optional-payments.md)
+Their [ownership and authoring contract](../docs/engine.md#resolution-contracts)
 covers both ordinary mana and waterbend without a card-specific decision.
 `OptionalManaPaymentX` first chooses an affordable X, then uses the same payment
 progress. Its `WhenYouDo` branch creates a distinct occurrence retaining X;

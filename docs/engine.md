@@ -287,6 +287,40 @@ fn lightning_bolt() -> CardDefinition {
 - Each definition lives in the set file of its first printing and carries that
   printing's Scryfall id; `cargo test` in `managym/` covers all three crates.
 
+## Resolution contracts
+
+Three boundaries inside a transition have fixed contracts.
+
+**Pre-priority stabilization.** `Game::stabilize_before_priority` is the sole
+authority before priority is published: collect triggers from committed events,
+commit one simultaneous batch of state-based actions, repeat until none fire,
+put waiting triggers on the stack in APNAP order, and publish priority only
+when nothing remains. State-based actions discovered together share one
+pre-batch trigger snapshot and commit in `ObjectRef` order; a stale incarnation
+is rejected rather than followed after a zone change.
+
+**Proposed events.** Damage, life change, destruction, counter change and zone
+movement are submitted as a typed `ProposedEvent` before any state mutates.
+Replacement and prevention definitions from the immutable card definitions
+apply once each in `(source ObjectRef, definition index)` order; the surviving
+event commits and emits the ordinary facts, so triggers, observations and
+presentation consume only committed events. Supported replacements are
+prevent N damage, double damage, enters tapped and enters with counters. The
+choice CR 616 gives a player among several replacements is not offered: the
+order is deterministic so replay, training and search stay exact, and a card
+that needs more stays unsupported rather than approximated.
+
+**Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
+with a `PaymentCost` (mana, or waterbend taps against a generic obligation) and
+`if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
+remaining cost and the exact objects already contributed, and completion
+prepends exactly one branch to the effect frame; counter-unless-paid uses the
+same progress with the spell's controller as payer. A mana ability activated
+during payment stays committed if the payment is then declined, and waterbend
+taps are cost payment, never tapping for mana. People and policies see the same
+native offers (pay or not, waterbend, modal colors, discard), with no
+human-only payment flow.
+
 ## Worlds
 
 A world names rules meaning plus observation and action shape, and the running

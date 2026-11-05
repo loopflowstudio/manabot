@@ -147,12 +147,12 @@ An observation/action-shape or rules-meaning change is a world version.
 The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
 including w14 artifacts, are not compatible with w15. Elemental combat,
-[sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
-[ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
+[sacrifice/landfall](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-sacrifice.md) and [Temur](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) compiled admission is implemented;
+[ten-deck Elemental admission](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
-certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
+certification limits remain in the [Learn record](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md).
 
 `manabot sim` accepts `random`, `default`, a local policy `.pt` path, or an
 Etude checkpoint-record `.json` path for each player. Checkpoint records resolve
