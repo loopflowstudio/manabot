@@ -185,3 +185,15 @@ at `d2ff60e6a^:scratch/tla-pilot-demo.md` and
 The complete decisions before this reduction, including A4000/A6000 placement
 assumptions and v9's identity-preserving Job.max_usd amendment, remain in git blob
 `79baeb35620eddc7eea26f3978254d2e4b5d2548`.
+
+## MTG-252 assumptions (2026-11-05 UTC)
+
+- Implemented the optional third arm (`attention_readout`) so the protocol can
+  choose 2 or 3 arms; the brief marks it optional. Reversible: drop the arm.
+- Value-token initialization order left unchanged (it shifts later v7 encoder
+  draws). Moving it would alter fresh initialization of existing token recipes;
+  recorded as a known non-shared-init difference instead.
+- Arms derive from v10's damped rule unchanged; whether to wait for the
+  full-TLA learning-rule review is an open decision in the study doc.
+- The pooling × floor follow-up (w4, 2026-10-06) is prior evidence the Task
+  brief omitted; the study doc cites it.

@@ -16,6 +16,16 @@ from manabot.infra.profiler import Profiler
 from manabot.model.policy_distribution import NumericalError, require
 
 HEALTH_INTERVAL = 25
+# ActorCritic parameter prefixes that only the critic output reads.
+_CRITIC_READOUT = ("value_head.", "value_token", "value_readout.")
+
+
+def _norm(tensors: list[Tensor]) -> float:
+    if not tensors:
+        return 0.0
+    return float(
+        torch.stack([t.detach().double().square().sum() for t in tensors]).sum().sqrt()
+    )
 
 
 class NumericalHealth(TypedDict, total=False):
@@ -34,6 +44,10 @@ class NumericalHealth(TypedDict, total=False):
     sampled_steps: int
     gradient_norm_before: float
     gradient_norm_after: float
+    # Pre-clip norm over critic readout parameters (value_head, value_token,
+    # value_readout). The rest of gradient_norm_before is shared encoder and
+    # actor; encoder gradients from the value loss are not separated.
+    gradient_norm_critic_readout: float
     gradient_missing_tensors: int
     gradient_zero_tensors: int
     gradient_nonzero_tensors: int
@@ -138,6 +152,18 @@ class OptimizerHealth:
         grads = [p.grad for p in parameters if p.grad is not None]
         if not grads:
             raise NumericalError("missing_all_gradients", {"loss": loss})
+        # Read before clipping rescales the gradients in place.
+        critic_norm = (
+            _norm(
+                [
+                    p.grad
+                    for name, p in self.model.named_parameters()
+                    if p.grad is not None and name.startswith(_CRITIC_READOUT)
+                ]
+            )
+            if measured
+            else 0.0
+        )
         try:
             # error_if_nonfinite reads the norm on the host: the device wait
             # that ends the backward timer.
@@ -157,11 +183,8 @@ class OptimizerHealth:
             self.health.update(
                 sampled_steps=1,
                 gradient_norm_before=float(norm),
-                gradient_norm_after=float(
-                    torch.stack([g.detach().double().square().sum() for g in grads])
-                    .sum()
-                    .sqrt()
-                ),
+                gradient_norm_after=_norm(grads),
+                gradient_norm_critic_readout=critic_norm,
                 gradient_missing_tensors=sum(
                     p.requires_grad and p.grad is None for p in parameters
                 ),

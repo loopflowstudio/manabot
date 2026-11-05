@@ -45,11 +45,14 @@ def selected_rows(
     return indices[magnitude[indices] >= minimum]
 
 
+def _magnitude_quantile(advantages: Tensor, quantile: float) -> float:
+    return float(torch.quantile(advantages.detach().abs(), quantile))
+
+
 def selected_moves(advantages: Tensor, quantile: float, minimum: float) -> Tensor:
     """Inclusive magnitude quantile over all [T,E] rows; retain every tie."""
-    magnitude = advantages.detach().abs()
-    threshold = max(float(torch.quantile(magnitude, quantile)), minimum)
-    return magnitude >= threshold
+    threshold = max(_magnitude_quantile(advantages, quantile), minimum)
+    return advantages.detach().abs() >= threshold
 
 
 def selection_mask(
@@ -134,6 +137,64 @@ def selection_diagnostics(
     return result
 
 
+class ValueScale(TypedDict):
+    """Critic and advantage scale over every collected row [T,E] of one batch.
+
+    Predictions are collection-time critic outputs; targets are the update's
+    lambda returns (WDL expectations for categorical critics). Explained variance
+    is 1 - Var(target - prediction) / Var(target), a bootstrapped-target fit,
+    not error against final outcomes; None when targets are constant.
+    `selection_threshold` is the magnitude a quantile filter actually applied;
+    `floor_binds` says the absolute floor, not the quantile, set it. `quantile`
+    is the magnitude quantile, as in selected_moves.
+    """
+
+    prediction_mean: float
+    prediction_std: float
+    target_mean: float
+    target_std: float
+    explained_variance: float | None
+    advantage_std: float
+    selection_threshold: float | None
+    floor_binds: bool | None
+
+
+@torch.no_grad()
+def value_scale(
+    predictions: Tensor,
+    targets: Tensor,
+    advantages: Tensor,
+    *,
+    kind: Literal["top_count", "quantile"],
+    quantile: float,
+    minimum: float,
+) -> ValueScale:
+    """Summarize critic/advantage scale; see ValueScale for target semantics."""
+    predictions = predictions.double()
+    targets = targets.double()
+    target_variance = float(targets.var(correction=0))
+    threshold: float | None = None
+    floor_binds: bool | None = None
+    if kind == "quantile":
+        empirical = _magnitude_quantile(advantages, quantile)
+        threshold = max(empirical, minimum)
+        floor_binds = minimum > empirical
+    return ValueScale(
+        prediction_mean=float(predictions.mean()),
+        prediction_std=float(predictions.std(correction=0)),
+        target_mean=float(targets.mean()),
+        target_std=target_variance**0.5,
+        explained_variance=(
+            1 - float((targets - predictions).var(correction=0)) / target_variance
+            if target_variance > 0
+            else None
+        ),
+        advantage_std=float(advantages.double().std(correction=0)),
+        selection_threshold=threshold,
+        floor_binds=floor_binds,
+    )
+
+
 class UpdateDiagnostics(TypedDict, total=False):
     """Per-iteration measurements, logged once as the update's Etude metrics."""
 
@@ -164,6 +225,7 @@ class UpdateDiagnostics(TypedDict, total=False):
     action_types: list[int]
     selected_action_types: list[int]
     selection_groups: list[SelectionGroup]
+    value_scale: ValueScale
     skipped: str
     loss: float
     policy_loss: float

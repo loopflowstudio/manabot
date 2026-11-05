@@ -34,6 +34,7 @@ from manabot.training.learning.damped_policy import (
 )
 from manabot.training.learning.health import NumericalHealth, OptimizerHealth
 from manabot.training.learning.learner import Learner
+from manabot.training.learning.selection import selected_moves, value_scale
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
@@ -317,6 +318,39 @@ def test_extreme_real_collector_to_learner() -> None:
     )
     assert result["numerical"]["parameter_delta_l2"] > 0
     assert all(torch.isfinite(p).all() for p in agent.parameters())
+    critic = result["numerical"]["gradient_norm_critic_readout"]
+    assert 0 < critic <= result["numerical"]["gradient_norm_before"]
+    scale = result["value_scale"]
+    # Quantile 0 with no floor keeps every row: the threshold is the least |A|.
+    threshold = scale["selection_threshold"]
+    assert threshold is not None and scale["floor_binds"] is False
+    assert threshold <= result["advantage_abs_mean"]
+    assert result["retained"] == result["rows"]
+    assert scale["advantage_std"] > 0 and scale["prediction_std"] >= 0
+
+
+def test_value_scale_reports_target_fit_and_binding_floor() -> None:
+    targets = torch.tensor([[1.0, -1.0], [0.5, -0.5]])
+    predictions = torch.tensor([[0.5, -0.5], [0.5, -0.5]])
+    advantages = torch.tensor([[0.001, -0.002], [0.003, 0.004]])
+    scale = value_scale(
+        predictions, targets, advantages, kind="quantile", quantile=0.75, minimum=0.01
+    )
+    # Residual variance 0.125 of target variance 0.625.
+    assert scale["explained_variance"] == pytest.approx(0.8)
+    assert scale["target_mean"] == 0 and scale["prediction_std"] == 0.5
+    assert scale["selection_threshold"] == 0.01 and scale["floor_binds"] is True
+    assert not selected_moves(advantages, 0.75, 0.01).any()
+    constant = value_scale(
+        predictions,
+        torch.zeros_like(targets),
+        advantages,
+        kind="top_count",
+        quantile=0.75,
+        minimum=0.01,
+    )
+    assert constant["explained_variance"] is None
+    assert constant["selection_threshold"] is None and constant["floor_binds"] is None
 
 
 class _AccountingClock:
