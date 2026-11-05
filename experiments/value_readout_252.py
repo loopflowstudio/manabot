@@ -1,8 +1,10 @@
-"""MTG-252 critic readout arms, derived from the frozen v10 TLA pilot recipe.
+"""MTG-252 critic readout arms, derived from the MTG-183 Elemental recipe.
 
-The comparison changes one serialized field, `agent.value_aggregation`, and
-nothing else: depth, width, heads, capacities, action support, learning rule,
-filter, lambdas and execution stay those of `tla-trophy-213-v10.json`. The
+The base is `elemental-long-183-v1.json` (ten Elemental decks, uniform
+per-game pairings, two-seat self-play) with only its world re-pinned to the
+native runtime's. The comparison then changes one serialized field,
+`agent.value_aggregation`, and nothing else: depth, width, heads, capacities,
+learning rule, filter, lambdas and execution stay those of that base. The
 study design lives in `experiments/value-readout-252.md`; this module owns the
 arm derivation, its single-axis check and the static per-arm model costs that
 the protocol reports before any training.
@@ -13,6 +15,7 @@ remain separate decisions recorded in that document.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,29 +25,68 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ValueAggregation
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_value_aggregation
+from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime
+import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_REGIME = ROOT / "experiments/regimes/tla-trophy-213-v10.json"
-# Canonical order; the baseline is the v10 recipe's own masked mean.
+BASE_REGIME = ROOT / "experiments/regimes/elemental-long-183-v1.json"
+# Canonical order; the baseline is the 183 recipe's own masked mean.
 ARMS: tuple[ValueAggregation, ...] = ("masked_mean", "value_token", "attention_readout")
 
 
 def base() -> TrainingRegime:
-    regime = TrainingRegime.model_validate_json(BASE_REGIME.read_bytes())
-    if regime.agent.value_aggregation != ARMS[0]:
-        raise ValueError("v10 baseline is no longer the masked-mean recipe")
-    return regime
+    """MTG-183's recipe in the native world; the frozen 183 file is unchanged.
+
+    Re-pinning resolves the saved observation at the current fresh policy
+    input. The protocol pins the resulting world, shapes and source.
+    """
+    saved = TrainingRegime.model_validate_json(BASE_REGIME.read_bytes())
+    if saved.agent.value_aggregation != ARMS[0]:
+        raise ValueError("183 baseline is no longer the masked-mean recipe")
+    regime = saved.model_copy(
+        update={"id": "value-readout-252-base", "world": managym.WORLD_VERSION}
+    )
+    return validate_regime(regime)
 
 
 def arm(aggregation: ValueAggregation) -> TrainingRegime:
-    """The v10 recipe with only its critic readout replaced."""
+    """The re-pinned 183 recipe with only its critic readout replaced."""
     regime = base()
     derived = with_value_aggregation(
         regime, id=f"value-readout-252-{aggregation}", aggregation=aggregation
     )
     require_single_axis(regime, derived)
     return derived
+
+
+@dataclass(frozen=True)
+class Run:
+    """One training run: an arm under one shared run seed.
+
+    The run seed fixes initialization and the collection seed
+    (`run seed + 10000`). Native game `k` on stream `s` is seeded
+    `collection + s + k * streams`, and its Elemental pairing and deal are a
+    function of that seed alone, so every arm under one run seed meets the same
+    pairing sequence on every stream whatever its policy does. Arms differ only
+    in how far through that sequence they are at a given update.
+    """
+
+    aggregation: ValueAggregation
+    seed: int
+    regime: TrainingRegime
+
+
+def runs(seeds: Sequence[int]) -> list[Run]:
+    """Every arm under every seed: one seed list, never per-arm seeds."""
+    if not seeds or len(set(seeds)) != len(seeds):
+        raise ValueError("readout runs need distinct seeds shared by every arm")
+    regimes = {aggregation: arm(aggregation) for aggregation in ARMS}
+    return [
+        Run(aggregation=aggregation, seed=seed, regime=regimes[aggregation])
+        for seed in seeds
+        for aggregation in ARMS
+    ]
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:

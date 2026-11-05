@@ -50,3 +50,21 @@ readout arm's actor path equals baseline at init and its params are critic-only.
 Second pass (2026-11-05, after `dc35969a8`): `_CRITIC_READOUT` excludes the
 token, `gradient_norm_value_token` is reported separately, the study doc
 matches. No concept, name or API change; nothing new to implement.
+
+## Direction (Jack Heart, 2026-11-05)
+
+- Base recipe: MTG-183 Elemental (`elemental-long-183-v1`, ten decks, uniform
+  per-game pairings) re-pinned to the current world, not v10 TLA trophy.
+  Applied: `value_readout_252.base()` re-pins world, resolves policy input v6
+  with 183's capacities (60/40/64); 202 objects; costs table updated.
+- Evaluation: (a) random Elemental deck pairings against the heuristic, plus
+  head-to-head between the arms' final policies. Study doc protocol updated
+  (mtg186_eval "rest"-style schedule; pinned SHA at freeze).
+- Still open: arms/seeds/updates/budget/thresholds/schedule size; measure
+  w17 cost per update before budgeting.
+- Fairness (Jack Heart): pairing seed fixed across arms. Training pairings
+  are a pure function of per-game native seed (run seed + 10000 + s + k·streams),
+  so shared run seeds give identical per-stream pairing/deal sequences;
+  `runs(seeds)` builds the arm × seed grid from one list; witness
+  `test_pairings_depend_on_the_run_seed_not_the_arm`. Eval uses one fixed
+  schedule seed for all arms/seeds.
