@@ -409,12 +409,12 @@ impl Game {
 
     fn remembered_references(
         &self,
-        objects: &[ObjectRef],
+        objects: &[crate::state::binding::ObjectBinding],
         viewer: PlayerId,
     ) -> Vec<VisibleReference> {
         objects
             .iter()
-            .map(|object| self.visible_reference(*object, viewer))
+            .map(|binding| self.visible_reference(binding.object, viewer))
             .collect()
     }
 

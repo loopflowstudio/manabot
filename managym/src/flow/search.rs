@@ -92,7 +92,7 @@ impl Game {
             if self.shares_information(perspective, opponent) {
                 self.shuffle_private_library(opponent, &mut rng);
             } else {
-                let (mut known, mut residual) = self.hidden_hand_partition(opponent);
+                let (mut known, mut residual) = self.hidden_hand_partition(opponent, perspective);
                 residual.extend(self.foretold_cards(opponent));
                 residual.sort_unstable_by_key(|card| card.0);
                 residual.shuffle(&mut rng);
@@ -102,7 +102,7 @@ impl Game {
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
                 let mut library = residual.split_off(unknown_slots);
-                let pending = self.pending_library_entries(opponent);
+                let pending = self.sampling_fixed_library_cards(opponent, perspective);
                 if !pending.is_empty() {
                     library.extend(pending);
                     library.shuffle(&mut rng);
@@ -184,7 +184,7 @@ impl Game {
     /// this is exactly the possible-world pool, including any publicly known
     /// hand cards.
     pub fn unseen_cards(&self, owner: PlayerId, viewer: PlayerId) -> Vec<CardId> {
-        let pending_library = self.pending_library_entries(owner);
+        let pending_library = self.sampling_fixed_library_cards(owner, viewer);
         let zones: &[ZoneType] = if owner == viewer {
             &[ZoneType::Library]
         } else {
@@ -203,9 +203,13 @@ impl Game {
 
     /// Canonical physical witnesses for public definition counts, plus the
     /// residual unseen pool. Never pins the physical copy that was revealed.
-    pub(crate) fn hidden_hand_partition(&self, player: PlayerId) -> (Vec<CardId>, Vec<CardId>) {
-        let public = self.pending_public_entries();
-        let pending_library = self.pending_library_entries(player);
+    pub(crate) fn hidden_hand_partition(
+        &self,
+        player: PlayerId,
+        viewer: PlayerId,
+    ) -> (Vec<CardId>, Vec<CardId>) {
+        let public = self.sampling_fixed_objects(viewer);
+        let pending_library = self.sampling_fixed_library_cards(player, viewer);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
             .flat_map(|zone| self.state.zones.zone_cards(zone, player).iter().copied())

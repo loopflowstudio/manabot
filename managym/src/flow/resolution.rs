@@ -893,7 +893,7 @@ impl Game {
                     Some(Decision::SelectCards {
                         player: frame.controller,
                         from: if let ObjectSelector::Zone(zone) = from {
-                            Some(crate::flow::decision::ZoneSelection {
+                            Some(crate::state::binding::ZoneSelection {
                                 owner: frame.controller,
                                 zone: *zone,
                                 predicate: predicate.clone(),
@@ -1576,11 +1576,11 @@ impl Game {
             } => {
                 let remembered = remember
                     .as_ref()
-                    .map_or_else(Vec::new, |what| self.select(what, frame));
+                    .map_or_else(Vec::new, |what| self.capture_bindings(what, frame));
                 let events = match event {
                     DelayedEvent::Dies => remembered
                         .iter()
-                        .copied()
+                        .map(|binding| binding.object)
                         .filter(|object| self.lookup_current_permanent(*object).is_ok())
                         .map(|watched| DelayedTriggerEvent::Leaves {
                             watched,
@@ -1890,20 +1890,26 @@ impl Game {
                 .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())
                 .into_iter()
                 .collect(),
-            ObjectSelector::Moved
-            | ObjectSelector::Remembered
-            | ObjectSelector::CardsThisWay
-            | ObjectSelector::Selected => (match what {
-                ObjectSelector::Moved => &frame.moved,
-                ObjectSelector::Remembered => &frame.remembered,
-                ObjectSelector::CardsThisWay => &frame.this_way,
-                ObjectSelector::Selected => &frame.selected,
-                _ => unreachable!(),
-            })
-            .iter()
-            .copied()
-            .filter(|object| self.current_object_ref(CardId::from(object.entity)) == Some(*object))
-            .collect(),
+            ObjectSelector::Remembered => frame
+                .remembered
+                .iter()
+                .map(|binding| binding.object)
+                .filter(|object| self.current_object_ref(object.entity.into()) == Some(*object))
+                .collect(),
+            ObjectSelector::Moved | ObjectSelector::CardsThisWay | ObjectSelector::Selected => {
+                (match what {
+                    ObjectSelector::Moved => &frame.moved,
+                    ObjectSelector::CardsThisWay => &frame.this_way,
+                    ObjectSelector::Selected => &frame.selected,
+                    _ => unreachable!(),
+                })
+                .iter()
+                .copied()
+                .filter(|object| {
+                    self.current_object_ref(CardId::from(object.entity)) == Some(*object)
+                })
+                .collect()
+            }
             ObjectSelector::Zone(zone) => self
                 .selection_zone_cards(frame.controller, *zone)
                 .into_iter()

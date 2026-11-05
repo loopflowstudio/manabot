@@ -318,9 +318,12 @@ subset constraints: exact weights count only compatible ordered fills, and the
 materializer samples that conditional measure. Commitments are captured before
 zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
 Frozen count-only belief samplers reject these additional constraints before
-inference. These guarantees cover the retained frame/decision chain; private
-captures that outlive their selecting frame still need binding provenance in both
-samplers. Library inspection exposes membership in stable definition/object order,
+inference. `ObjectBinding` carries exact incarnation, captured zone/predicate and
+per-seat exact knowledge through waiting, queued, placing, stack and resolving
+trigger lifetimes. Both samplers use one assignment across those captures and
+active selections; known exact captures remain fixed, and departed incarnations
+never follow a later object. Capturing `Moved` uses its new zone. This binding
+provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
 never draw order. Prospective battlefield entrants are public during replacement
 choices and remain pinned in both samplers.
 

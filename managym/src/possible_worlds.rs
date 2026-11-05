@@ -435,7 +435,7 @@ impl HiddenHandConstraints {
                     .copied(),
             )
         } else {
-            let (known, _) = game.hidden_hand_partition(opponent);
+            let (known, _) = game.hidden_hand_partition(opponent, viewer);
             name_counts(game, known)
         };
         Self {
@@ -544,7 +544,7 @@ impl HiddenHandConstraints {
                     .or_default()
                     .push(card);
             }
-            let public = source.pending_public_entries();
+            let public = source.sampling_fixed_objects(self.viewer);
             for cards in by_name.values_mut() {
                 cards.sort_unstable_by_key(|card| {
                     (
@@ -584,7 +584,7 @@ impl HiddenHandConstraints {
             if !branch.fill_foretold_slots(opponent, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
             }
-            let pending = source.pending_library_entries(opponent);
+            let pending = source.sampling_fixed_library_cards(opponent, self.viewer);
             if !pending.is_empty() {
                 new_library.extend(pending);
                 new_library.shuffle(&mut rng);

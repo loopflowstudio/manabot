@@ -11,6 +11,10 @@ authorized by this direction.
 Use the existing bounded, same-runner Engine Budget procedure and directed
 fixtures, never artificial load. Record exact revisions, configuration, counts
 and digests. Separate unchanged-work comparisons from rules-driven trace changes.
+Include a main/reference-to-candidate comparison on shared supported workloads;
+successive already-modified cuts alone cannot establish net cost. After ordinary
+integration, disclose inherited layer/payment costs separately from MTG-241's
+incremental costs and remeasure the combined head against the standing budget.
 
 - Measure ordinary step time and search total/tail time; include the common
   no-replacement path and representative nested-choice/replacement positions.

@@ -13975,7 +13975,7 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
         .state
         .delayed_triggers
         .iter()
-        .flat_map(|trigger| trigger.remembered.iter().copied())
+        .flat_map(|trigger| trigger.remembered.iter().map(|binding| binding.object))
         .collect();
     assert_eq!(remembered.len(), 2);
     assert_ne!(
@@ -15472,8 +15472,8 @@ fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step()
     attack_and_settle(&mut s, &[ogre], None);
     let boulder = s.battlefield_permanents_named(0, "Ballistic Boulder")[0];
     assert_eq!(
-        s.game().state.delayed_triggers[0].remembered,
-        vec![s.game().permanent_object_ref(boulder).unwrap()]
+        s.game().state.delayed_triggers[0].remembered[0].object,
+        s.game().permanent_object_ref(boulder).unwrap()
     );
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().move_card(source, ZoneType::Graveyard);

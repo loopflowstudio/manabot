@@ -8,6 +8,8 @@ use std::collections::VecDeque;
 
 use rand::seq::SliceRandom;
 
+use crate::state::binding::{ObjectBinding, ZoneSelection};
+
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
@@ -108,7 +110,7 @@ pub struct EffectFrame {
     pub iteration: Option<TargetIteration>,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub remembered: Vec<ObjectRef>,
+    pub remembered: Vec<ObjectBinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<crate::state::card::CardDefId>,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -181,15 +183,6 @@ pub struct EffectFrame {
 pub struct TargetIteration {
     pub remaining: VecDeque<ResolutionTarget>,
     pub effects: Vec<Effect>,
-}
-
-/// Provenance of a zone selection. A sampled world must preserve its number
-/// of commitments and predicate, without pinning choices unknown to its viewer.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct ZoneSelection {
-    pub owner: PlayerId,
-    pub zone: ZoneType,
-    pub predicate: CardPredicate,
 }
 
 impl EffectFrame {

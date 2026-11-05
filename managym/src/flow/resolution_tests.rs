@@ -792,11 +792,14 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert_eq!(game.state.delayed_triggers[0].remembered, vec![captured]);
+            assert_eq!(
+                game.state.delayed_triggers[0].remembered[0].object,
+                captured
+            );
             let source = game.state.delayed_triggers[0].source_card;
             let mut different = game.clone();
-            different.state.delayed_triggers[0].remembered =
-                vec![game.permanent_object_ref(other).unwrap()];
+            different.state.delayed_triggers[0].remembered[0].object =
+                game.permanent_object_ref(other).unwrap();
             assert_ne!(
                 game.state.deterministic_hash(),
                 different.state.deterministic_hash()
@@ -812,7 +815,10 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
             });
             game.process_game_events();
             assert!(game.state.delayed_triggers.is_empty(), "one shot");
-            assert_eq!(game.state.pending_triggers[0].remembered, vec![captured]);
+            assert_eq!(
+                game.state.pending_triggers[0].remembered[0].object,
+                captured
+            );
             assert!(game.flush_triggers().is_none());
             let frame = game
                 .continuation_frames(controller)
@@ -828,8 +834,9 @@ fn delayed_capture_survives_placement_and_choice_forks_without_following_reentry
                     .as_ref()
                     .unwrap()
                     .frame
-                    .remembered,
-                vec![captured]
+                    .remembered[0]
+                    .object,
+                captured
             );
             if !leave_before_firing {
                 game.move_card(subject_card, ZoneType::Exile);
@@ -904,12 +911,12 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.process_game_events();
         assert!(game.state.delayed_triggers.is_empty());
         let pending = &game.state.pending_triggers[0];
-        assert_eq!(pending.remembered, vec![remembered]);
+        assert_eq!(pending.remembered[0].object, remembered);
         assert_eq!(pending.context, Some(Target::StackSpell(cast)));
         assert!(game.flush_triggers().is_none());
         game.resolve_top_of_stack();
         let suspended = game.state.suspended_decision.as_ref().unwrap();
-        assert_eq!(suspended.frame.remembered, vec![remembered]);
+        assert_eq!(suspended.frame.remembered[0].object, remembered);
         assert_eq!(
             suspended.frame.context_target,
             Some(Target::StackSpell(cast))
@@ -958,7 +965,10 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
     );
     game.resolve_top_of_stack();
     let captured = game.current_object_ref(card).unwrap();
-    assert_eq!(game.state.delayed_triggers[0].remembered, vec![captured]);
+    assert_eq!(
+        game.state.delayed_triggers[0].remembered[0].object,
+        captured
+    );
     for viewer in [PlayerId(0), PlayerId(1)] {
         let frame = game
             .continuation_frames(viewer)
@@ -975,6 +985,255 @@ fn delayed_capture_projects_only_viewer_visible_incarnations() {
                 Some(game.state.cards[card].definition_id.0)
             );
         }
+    }
+}
+
+fn completed_private_capture(player: PlayerId) -> Game {
+    let (mut root, _, _) = fixture(player);
+    let capture = Effect::CreateDelayedTrigger {
+        event: DelayedEvent::EndStep { your_turn: false },
+        frequency: DelayedFrequency::Once,
+        expiry: DelayedExpiry::Never,
+        remember: Some(ObjectSelector::Selected),
+        effects: vec![pause(), Effect::exile(ObjectSelector::Remembered)],
+    };
+    stack(
+        &mut root,
+        Entry::Triggered,
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate::default(),
+            min: 1,
+            max: 1.into(),
+            // Two occurrences alias one selected subject; they must receive one
+            // joint assignment even when their execution lifetimes diverge.
+            effects: vec![capture.clone(), capture],
+            if_declined: Vec::new(),
+        }],
+        Vec::new(),
+        Vec::new(),
+    );
+    root.resolve_top_of_stack();
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let card = root.state.zones.zone_cards(ZoneType::Hand, player)[0];
+    checked_command(&mut root, Action::SelectCard { player, card });
+    assert!(root.state.suspended_decision.is_none());
+    assert_eq!(root.state.delayed_triggers.len(), 2);
+    root
+}
+
+#[test]
+fn hidden_selection_completed_capture_stays_in_sampled_hand() {
+    use crate::possible_worlds::PossibleWorldSpace;
+    for player in [PlayerId(0), PlayerId(1)] {
+        let mut root = completed_private_capture(player);
+        let original = root.state.delayed_triggers[0].remembered[0].object;
+        let mut stages = vec![root.clone()];
+        root.emit(GameEvent::StepStarted {
+            step: StepKind::End,
+        });
+        root.process_game_events();
+        assert_eq!(root.state.pending_triggers.len(), 2);
+        stages.push(root.clone());
+        let order = root.flush_triggers().unwrap();
+        root.publish_action_space(order);
+        stages.push(root.clone());
+        let trigger = root.state.trigger_placement.as_ref().unwrap().remaining[0].id;
+        root.choose_trigger(player, trigger).unwrap();
+        assert!(root
+            .state
+            .trigger_placement
+            .as_ref()
+            .unwrap()
+            .placing
+            .is_some());
+        stages.push(root.clone());
+        assert!(root.flush_triggers().is_none());
+        stages.push(root.clone());
+        root.resolve_top_of_stack();
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        stages.push(root);
+        for (stage, root) in stages.iter().enumerate() {
+            for viewer in [player, PlayerId(1 - player.0)] {
+                let space = PossibleWorldSpace::for_viewer(root, viewer);
+                let mut sampled = root.clone();
+                sampled.determinize(viewer, 0).unwrap();
+                let materialized = space.materialize(root, &space.worlds()[0], 0).unwrap();
+                let before = root.continuation_frames(viewer);
+                for branch in [sampled, materialized] {
+                    let bindings = branch.captured_bindings();
+                    assert_eq!(bindings.len(), 2, "stage {stage}");
+                    assert_eq!(
+                        bindings[0].object, bindings[1].object,
+                        "aliases, stage {stage}"
+                    );
+                    let object = bindings[0].object;
+                    assert_eq!(
+                        branch.current_object_ref(object.entity.into()),
+                        Some(object)
+                    );
+                    assert_eq!(
+                        branch.state.zones.zone_of(object.entity.into()),
+                        Some(ZoneType::Hand)
+                    );
+                    if viewer == player {
+                        assert_eq!(object, original);
+                    }
+                    assert_eq!(
+                        branch.continuation_frames(viewer),
+                        before,
+                        "private identity, stage {stage}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn hidden_selection_capture_does_not_follow_a_later_incarnation() {
+    use crate::possible_worlds::PossibleWorldSpace;
+    let player = PlayerId(1);
+    let viewer = PlayerId(0);
+    let mut root = completed_private_capture(player);
+    let original = root.state.delayed_triggers[0].remembered[0].object;
+    let card = CardId::from(original.entity);
+    root.move_card(card, ZoneType::Graveyard);
+    root.move_card(card, ZoneType::Hand);
+    assert_ne!(root.current_object_ref(card), Some(original));
+    assert!(!root.has_hidden_selection(viewer));
+    let space = PossibleWorldSpace::for_viewer(&root, viewer);
+    let mut sampled = root.clone();
+    sampled.determinize(viewer, 0).unwrap();
+    let materialized = space.materialize(&root, &space.worlds()[0], 0).unwrap();
+    for mut branch in [sampled, materialized] {
+        assert_eq!(
+            branch.state.delayed_triggers[0].remembered[0].object,
+            original
+        );
+        branch.emit(GameEvent::StepStarted {
+            step: StepKind::End,
+        });
+        branch.process_game_events();
+        let order = branch.flush_triggers().unwrap();
+        branch.publish_action_space(order);
+        let trigger = branch.state.trigger_placement.as_ref().unwrap().remaining[0].id;
+        branch.choose_trigger(player, trigger).unwrap();
+        assert!(branch.flush_triggers().is_none());
+        branch.resolve_top_of_stack();
+        branch.publish_action_space(branch.suspended_decision_action_space().unwrap());
+        let exile_count = branch.state.zones.size(ZoneType::Exile, player);
+        checked_command(&mut branch, Action::ChooseMode { player, mode: 0 });
+        assert_eq!(
+            branch.state.zones.size(ZoneType::Exile, player),
+            exile_count
+        );
+    }
+}
+
+#[test]
+fn hidden_selection_moved_capture_uses_its_new_zone() {
+    let player = PlayerId(1);
+    let viewer = PlayerId(0);
+    let (mut root, _, _) = fixture(player);
+    let card = root.state.zones.zone_cards(ZoneType::Hand, player)[0];
+    stack(
+        &mut root,
+        Entry::Triggered,
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate::default(),
+            min: 1,
+            max: 1.into(),
+            if_declined: Vec::new(),
+            effects: vec![
+                Effect::put_in_library(ObjectSelector::Selected, LibraryEnd::Bottom),
+                Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::EndStep { your_turn: false },
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::Never,
+                    remember: Some(ObjectSelector::Moved),
+                    effects: vec![Effect::exile(ObjectSelector::Remembered)],
+                },
+            ],
+        }],
+        Vec::new(),
+        Vec::new(),
+    );
+    root.resolve_top_of_stack();
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    checked_command(&mut root, Action::SelectCard { player, card });
+    assert_eq!(
+        root.state.delayed_triggers[0].remembered[0]
+            .selection
+            .as_ref()
+            .unwrap()
+            .zone,
+        ZoneType::Library
+    );
+    let space = crate::possible_worlds::PossibleWorldSpace::for_viewer(&root, viewer);
+    let mut sampled = root.clone();
+    sampled.determinize(viewer, 0).unwrap();
+    for branch in [
+        sampled,
+        space.materialize(&root, &space.worlds()[0], 0).unwrap(),
+    ] {
+        let object = branch.state.delayed_triggers[0].remembered[0].object;
+        assert_eq!(
+            branch.state.zones.zone_of(object.entity.into()),
+            Some(ZoneType::Library)
+        );
+    }
+}
+
+#[test]
+fn hidden_selection_known_capture_pins_the_exact_copy_after_control_expires() {
+    use crate::flow::turn::PlayerControl;
+    use crate::state::ability::PlayerControlDuration;
+    let player = PlayerId(1);
+    let viewer = PlayerId(0);
+    let mut root = completed_private_capture(player);
+    // Re-capture through the rules instruction while the viewer controls this
+    // player, then expire control. The known exact subject survives that expiry.
+    root.state.turn.player_controls.push(PlayerControl {
+        player,
+        controller: viewer,
+        duration: PlayerControlDuration::NextTurn,
+        active: true,
+    });
+    let original = root.state.delayed_triggers[0].remembered[0].object;
+    let mut frame = super::EffectFrame::new(player, Vec::new());
+    frame.remembered = root.state.delayed_triggers[0].remembered.clone();
+    let known = root.capture_bindings(&ObjectSelector::Remembered, &frame);
+    for trigger in &mut root.state.delayed_triggers {
+        trigger.remembered = known.clone();
+    }
+    root.state.turn.player_controls.clear();
+    let before = root.state.deterministic_hash();
+    let mut different = root.clone();
+    different.state.delayed_triggers[0].remembered[0].known_to[viewer.0] = false;
+    assert_ne!(
+        before,
+        different.state.deterministic_hash(),
+        "knowledge is canonical state"
+    );
+    let space = crate::possible_worlds::PossibleWorldSpace::for_viewer(&root, viewer);
+    let mut sampled = root.clone();
+    sampled.determinize(viewer, 0).unwrap();
+    for branch in [
+        sampled,
+        space.materialize(&root, &space.worlds()[0], 0).unwrap(),
+    ] {
+        assert_eq!(
+            branch.state.delayed_triggers[0].remembered[0].object,
+            original
+        );
+        assert_eq!(
+            branch.state.zones.zone_of(original.entity.into()),
+            Some(ZoneType::Hand)
+        );
     }
 }
 
@@ -2563,7 +2822,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
     );
     // Retain the choice-bearing child beneath another scope and saved decision.
     let mut caller = root.state.suspended_decision_mut().take().unwrap();
-    caller.frame.remembered = caller.frame.selected.clone();
+    caller.frame.remembered = root.capture_bindings(&ObjectSelector::Selected, &caller.frame);
     let mut child = EffectFrame::new(viewer, vec![]);
     child.remembered = caller.frame.remembered.clone();
     child.selected = caller.frame.selected.clone();
@@ -2594,8 +2853,11 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             suspended.frame.selected, caller.frame.selected,
             "inherited bindings remap together"
         );
-        assert_eq!(suspended.frame.remembered, caller.frame.selected);
-        assert_eq!(caller.frame.remembered, caller.frame.selected);
+        assert_eq!(
+            suspended.frame.remembered[0].object,
+            caller.frame.selected[0]
+        );
+        assert_eq!(caller.frame.remembered[0].object, caller.frame.selected[0]);
         let selected = CardId::from(caller.frame.selected[0].entity);
         assert!(branch
             .state

@@ -11,14 +11,14 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     flow::{
-        decision::{
-            Decision, EffectFrame, FrameCompletion, ResolutionRef, SuspendedResolution,
-            ZoneSelection,
-        },
+        decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SuspendedResolution},
         game::Game,
     },
     state::{
+        ability::ObjectSelector,
+        binding::{ObjectBinding, ZoneSelection},
         game_object::{CardId, ObjectRef, PlayerId},
+        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -33,7 +33,12 @@ struct ForetoldAllocation {
     ways: u128,
 }
 
-impl ZoneSelection {
+trait SelectionSampling {
+    fn hidden_from(&self, game: &Game, viewer: PlayerId) -> bool;
+    fn matches_slot(&self, game: &Game, owner: PlayerId, zone: ZoneType, card: CardId) -> bool;
+}
+
+impl SelectionSampling for ZoneSelection {
     fn hidden_from(&self, game: &Game, viewer: PlayerId) -> bool {
         matches!(self.zone, ZoneType::Hand | ZoneType::Library)
             && !game.shares_information(viewer, self.owner)
@@ -47,6 +52,109 @@ impl ZoneSelection {
 }
 
 impl Game {
+    /// Capture current membership once. Re-capturing Remembered preserves its
+    /// original knowledge, while Moved starts from the new incarnation/zone.
+    pub(crate) fn capture_bindings(
+        &self,
+        what: &ObjectSelector,
+        frame: &EffectFrame,
+    ) -> Vec<ObjectBinding> {
+        self.select(what, frame)
+            .into_iter()
+            .map(|object| {
+                if let Some(binding) = frame
+                    .remembered
+                    .iter()
+                    .find(|binding| binding.object == object)
+                {
+                    let mut binding = binding.clone();
+                    for viewer in [PlayerId(0), PlayerId(1)] {
+                        binding.known_to[viewer.0] |=
+                            self.visible_reference(object, viewer).object.is_some();
+                    }
+                    return binding;
+                }
+                let card = CardId::from(object.entity);
+                let zone = self.state.zones.zone_of(card);
+                let selection = zone
+                    .filter(|zone| matches!(zone, ZoneType::Hand | ZoneType::Library))
+                    .map(|zone| ZoneSelection {
+                        owner: self.state.cards[card].owner,
+                        zone,
+                        predicate: frame
+                            .selected_from
+                            .as_ref()
+                            .filter(|source| {
+                                frame.selected.contains(&object)
+                                    && source.zone == zone
+                                    && self.card_matches_predicate(card, &source.predicate)
+                            })
+                            .map(|source| source.predicate.clone())
+                            .unwrap_or_default(),
+                    });
+                ObjectBinding {
+                    object,
+                    selection,
+                    known_to: [PlayerId(0), PlayerId(1)].map(|viewer| {
+                        self.visible_reference(object, viewer).object.is_some()
+                            || frame.selected_from.as_ref().is_some_and(|source| {
+                                self.shares_information(viewer, source.owner)
+                                    && frame
+                                        .selected
+                                        .iter()
+                                        .any(|selected| selected.entity == object.entity)
+                            })
+                    }),
+                }
+            })
+            .collect()
+    }
+
+    /// All owners of a captured binding, including a detached placement round.
+    pub(crate) fn captured_bindings(&self) -> Vec<&ObjectBinding> {
+        let mut bindings = Vec::new();
+        for trigger in &self.state.delayed_triggers {
+            bindings.extend(&trigger.remembered);
+        }
+        for trigger in &self.state.pending_triggers {
+            bindings.extend(&trigger.remembered);
+        }
+        if let Some(placement) = &self.state.trigger_placement {
+            for trigger in placement.remaining.iter().chain(placement.placing.iter()) {
+                bindings.extend(&trigger.remembered);
+            }
+        }
+        for object in &self.state.stack_objects {
+            if let StackObject::TriggeredAbility(trigger) = object {
+                bindings.extend(&trigger.remembered);
+            }
+        }
+        if let Some(suspended) = &self.state.suspended_decision {
+            for part in suspended.continuation() {
+                if let ResolutionRef::Frame(frame) = part {
+                    bindings.extend(&frame.remembered);
+                }
+            }
+        }
+        bindings
+    }
+
+    /// Exact objects already known to this viewer must not be exchanged for a
+    /// same-definition copy. Departed incarnations impose no current-zone slot.
+    pub(crate) fn sampling_fixed_objects(&self, viewer: PlayerId) -> Vec<ObjectRef> {
+        let mut fixed = self.pending_public_entries();
+        fixed.extend(
+            self.captured_bindings()
+                .into_iter()
+                .filter(|binding| binding.known_to[viewer.0])
+                .map(|binding| binding.object)
+                .filter(|object| self.current_object_ref(object.entity.into()) == Some(*object)),
+        );
+        fixed.sort_unstable();
+        fixed.dedup();
+        fixed
+    }
+
     /// Prospective battlefield entries are public even while their move awaits
     /// replacement choices. Neither sampler may exchange their exact objects.
     pub(crate) fn pending_public_entries(&self) -> Vec<ObjectRef> {
@@ -66,8 +174,8 @@ impl Game {
         entries
     }
 
-    pub(crate) fn pending_library_entries(&self, owner: PlayerId) -> Vec<CardId> {
-        self.pending_public_entries()
+    pub(crate) fn sampling_fixed_library_cards(&self, owner: PlayerId, viewer: PlayerId) -> Vec<CardId> {
+        self.sampling_fixed_objects(viewer)
             .into_iter()
             .map(|object| object.entity.into())
             .filter(|card| self.state.zones.contains(*card, ZoneType::Library, owner))
@@ -163,7 +271,7 @@ impl Game {
                 )
             })
             .collect();
-        let public = self.pending_public_entries();
+        let public = self.sampling_fixed_objects(viewer);
         let count = self.foretold_cards(owner).len() as u32;
         let mut allocations = Vec::new();
         enumerate_foretold(&bearers, count, 1, &mut BTreeMap::new(), &mut allocations);
@@ -242,7 +350,7 @@ impl Game {
 
     pub(crate) fn hidden_selection_requirements(&self, viewer: PlayerId) -> Requirements {
         let mut requirements = Requirements::new();
-        let public = self.pending_public_entries();
+        let public = self.sampling_fixed_objects(viewer);
         let mut retain = |source: &Option<ZoneSelection>, selected: &[ObjectRef]| {
             let Some(source) = source
                 .as_ref()
@@ -281,6 +389,11 @@ impl Game {
                 }
             }
         }
+        for binding in self.captured_bindings() {
+            if !binding.known_to[viewer.0] {
+                retain(&binding.selection, std::slice::from_ref(&binding.object));
+            }
+        }
         requirements
     }
 
@@ -306,36 +419,30 @@ impl Game {
         rng: &mut ChaCha8Rng,
         requirements: &Requirements,
     ) -> bool {
-        let Some(suspended) = &self.state.suspended_decision else {
-            return true;
-        };
-        if !suspended.continuation().iter().any(|part| {
-            match part {
-                ResolutionRef::Frame(frame) => frame.selected_from.as_ref(),
-                ResolutionRef::Decision(Decision::SelectCards { from, .. }) => from.as_ref(),
-                _ => None,
-            }
-            .is_some_and(|source| source.hidden_from(self, viewer))
-        }) {
-            return true;
-        }
-        if suspended.decisions().any(|decision| match decision {
-            Decision::SelectCards {
-                from: Some(source),
-                min,
-                ..
-            } => {
-                self.selection_zone_cards(source.owner, source.zone)
-                    .into_iter()
-                    .filter(|card| self.card_matches_predicate(*card, &source.predicate))
-                    .count()
-                    < *min
-            }
-            _ => false,
-        }) {
+        if self
+            .state
+            .suspended_decision
+            .as_ref()
+            .is_some_and(|suspended| {
+                suspended.decisions().any(|decision| match decision {
+                    Decision::SelectCards {
+                        from: Some(source),
+                        min,
+                        ..
+                    } => {
+                        self.selection_zone_cards(source.owner, source.zone)
+                            .into_iter()
+                            .filter(|card| self.card_matches_predicate(*card, &source.predicate))
+                            .count()
+                            < *min
+                    }
+                    _ => false,
+                })
+            })
+        {
             return false;
         }
-        let public = self.pending_public_entries();
+        let public = self.sampling_fixed_objects(viewer);
         let old: Vec<_> = requirements.keys().copied().collect();
         let mut candidates = Vec::with_capacity(old.len());
         for constraints in requirements.values() {
@@ -364,11 +471,32 @@ impl Game {
             .into_iter()
             .map(|(object, index)| (old[index], object))
             .collect();
-        let Some(mut suspended) = self.state.suspended_decision_mut().take() else {
-            return true;
-        };
-        self.rebind_suspended_selection(&mut suspended, viewer, &mapping);
-        *self.state.suspended_decision_mut() = Some(suspended);
+        if !mapping.is_empty() {
+            for trigger in &mut self.state.delayed_triggers {
+                rebind_captures(&mut trigger.remembered, &mapping);
+            }
+            for trigger in &mut self.state.pending_triggers {
+                rebind_captures(&mut trigger.remembered, &mapping);
+            }
+            if let Some(placement) = &mut self.state.trigger_placement {
+                for trigger in placement
+                    .remaining
+                    .iter_mut()
+                    .chain(placement.placing.iter_mut())
+                {
+                    rebind_captures(&mut trigger.remembered, &mapping);
+                }
+            }
+            for object in &mut self.state.stack_objects {
+                if let StackObject::TriggeredAbility(trigger) = object {
+                    rebind_captures(&mut trigger.remembered, &mapping);
+                }
+            }
+        }
+        if let Some(mut suspended) = self.state.suspended_decision_mut().take() {
+            self.rebind_suspended_selection(&mut suspended, viewer, &mapping);
+            *self.state.suspended_decision_mut() = Some(suspended);
+        }
         true
     }
 
@@ -397,7 +525,7 @@ impl Game {
         }
         // A child may remember or otherwise alias a selected exact object.
         // The one mapping must follow those aliases as well as `Selected`.
-        rebind(&mut frame.remembered, mapping);
+        rebind_captures(&mut frame.remembered, mapping);
         rebind(&mut frame.moved, mapping);
         rebind(&mut frame.this_way, mapping);
         self.rebind_completion_selection(&mut frame.completion, viewer, mapping);
@@ -531,5 +659,13 @@ fn enumerate_foretold(
             out,
         );
         counts.remove(name);
+    }
+}
+
+fn rebind_captures(bindings: &mut [ObjectBinding], mapping: &BTreeMap<ObjectRef, ObjectRef>) {
+    for binding in bindings {
+        if let Some(object) = mapping.get(&binding.object) {
+            binding.object = *object;
+        }
     }
 }

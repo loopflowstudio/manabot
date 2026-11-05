@@ -12,9 +12,9 @@ deletions and remaining acceptance; [risk validation](mtg-241-risk-validation.md
 records Jack Heart's additional measurement directive. No human judgment is missing.
 
 Reversible choices: shared top/bottom `OrderLibrary` with distinct visibility and
-stable codes; public-result selection before hidden-zone migration; preserve
-MTG-244's successor v8 direction without assigning a competing layout. The plan
-retains the exact contracts and materialization constraints. Actual linked-entry
+stable codes; public-result selection before hidden-zone migration; reconcile
+MTG-244's published v8 at PR #427 (`1930146b0`) without assigning a competing
+layout. The plan retains the exact contracts and materialization constraints. Actual linked-entry
 payment suspension and the migrated hidden selections are now proved. The plan
 records the remaining hidden-state audit, full projection and risk acceptance.
 
@@ -28,6 +28,8 @@ expand this Task; incoming implementation changes remain intact.
 Ownership correction (2026-11-04): the frame-only sampling assumption is disproved
 by a completed selection captured into a delayed trigger. Both samplers retain a
 live reference in the wrong zone. The plan records the reproducer, revised binding
-lifetime and required deletion cut. Dependent implementation stopped at the
-implement skill's architectural-counterexample boundary; no human answer is
-required and no runtime repair is claimed.
+lifetime and required deletion cut. The active implementation repairs those lifetimes with owned bindings and one
+joint assignment; successor projection/admission remains open. No human answer is
+required. PR #427's newly reported performance
+regression belongs to MTG-244, while combined-head risk acceptance remains open
+here. Exact shared evidence and the published schema are recorded in the plan.

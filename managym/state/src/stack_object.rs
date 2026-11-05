@@ -1,3 +1,4 @@
+use crate::binding::ObjectBinding;
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
@@ -58,7 +59,7 @@ pub struct ActivatedAbilityOnStack {
 pub struct TriggeredAbilityOnStack {
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub remembered: Vec<ObjectRef>,
+    pub remembered: Vec<ObjectBinding>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub source_transforms: u32,
     pub id: ObjectId,

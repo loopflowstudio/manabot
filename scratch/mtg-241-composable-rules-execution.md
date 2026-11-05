@@ -5,16 +5,18 @@
 Jack Heart's accepted directive (2026-11-04): one PR through the code Graph,
 stopping at interactive review; no merge, auto-merge, training or retained-evidence
 rewriting. The Task remains **incomplete**. No human judgment is missing.
-Current committed head: `c8ea23d33`, incorporating main `ee85d6fc8` and the
-hidden consumer migration at `724d7437f`. The next implementation cut replaces
-frame-only private binding ownership; its counterexample and design are below.
-The current diff simplifies batch handoff and replacement bookkeeping only.
+Reconciled implementation head: `f1ce0ce13`, incorporating main `ee85d6fc8`,
+the hidden consumer migration at `724d7437f`, and the batch handoff/replacement
+bookkeeping simplification. The active implementation replaces frame-only private binding ownership;
+its correction and focused evidence are below.
 
 The selected Wave is `.lf/wave/coverage/`; its GOAL and full MEMORY were read.
 Jack Heart's dated directive supplies this execution scope without reopening the
 older chapter or authorizing experiments. The approved PRINCIPLES/README guide
 came through PR #425 and remains intact. Earlier implementation and validation
-history is preserved at `c8ea23d33:scratch/mtg-241-composable-rules-execution.md`.
+history is preserved at `f1ce0ce13:scratch/mtg-241-composable-rules-execution.md`.
+Reconciliation on 2026-11-04 inspected the selected Wave directory; it has no
+child memory directories. Its accepted chapter remains unchanged.
 
 ## Surviving ownership and contracts
 
@@ -127,73 +129,45 @@ for automatic and chosen replacements. These cuts preserve frame payloads and
 serialized state. The directed inspection witness covers entry replacement before
 both another selection and remainder ordering, with Command replay/stale checks.
 
-Remaining deletion cut: replace bare remembered-reference transfers that discard
-provenance, frame-only discovery as the exclusive binding authority, and the
-no-suspended-frame shortcut for retained binding refresh. Preserve public delayed
+Completed binding deletion cut: bare remembered-reference transfers, frame-only
+discovery as the exclusive binding authority, and the no-suspended-frame shortcut
+for retained binding refresh are removed. Preserve public delayed
 captures, exact incarnation semantics, existing hidden-selection predicates and
-saved-frame aliases. This requires the binding implementation below; do not polish
-the predecessor. Distinct-land/named searches, Scry and LookAndSelect retain distinct
+saved-frame aliases. The binding implementation below owns that behavior. Distinct-land/named searches, Scry and LookAndSelect retain distinct
 visibility and ordering contracts; their overlap still needs an audit.
 
 ## Ownership revision — 2026-11-04
 
-**The preceding implement step stopped on a demonstrated architectural
-counterexample.** No human judgment is missing; dependent projection work must
-wait for the owned-binding correction. This is not review readiness.
+The completed-private-capture witness is now restored as an ordinary debug
+regression. `ObjectBinding` replaces bare remembered refs and owns the exact
+incarnation, captured zone/predicate and per-seat exact knowledge. `ZoneSelection`
+lives with it in `managym-state`, so stack objects and engine frames use one type.
+Bindings transfer through waiting, queued, detached placement (remaining/placing),
+stack and resolving occurrences. Both samplers collect one joint assignment across
+all those owners and active selections. Known bindings pin exact copies; stale
+incarnations impose no live membership and never follow a later incarnation.
+Moved captures take their new zone, rather than inheriting the old selection zone.
+Canonical state serialization includes binding provenance. Viewer-facing references
+still use native visibility and do not expose private binding identities.
 
-A constructed `SelectCards(Hand, min=1, max=1)` creates an end-step delayed
-trigger remembering `Selected`. A normal SelectCard Command completes the child
-and root; no suspended frame remains. Both direct determinization and count-world
-materialization (seed 0) then leave the remembered exact incarnation in Library,
-although the capture selected a Hand object and no game action moved it. A later
-Remembered effect would execute against that library object. Reproducer:
-[completed-private-capture.patch](completed-private-capture.patch), applied to
-`c8ea23d33`; the temporary test was removed from source after preserving its patch.
-This is a constructed compositional witness, not a claim about a registered card.
-
-Cause: `hidden_selection_requirements` visits suspended frames/decisions only;
-`CreateDelayedTrigger` copies bare `Vec<ObjectRef>` and discards selection
-provenance. `refresh_hidden_selections` returns immediately without a suspended
-decision. Extending observation projection first would encode the wrong sampled
-state faithfully. Pinning the original unknown object or merely refreshing the
-current offer does not repair the conditional world measure.
-
-Revised implementation design (within the accepted exact-object/sampling scope):
-- Replace bare captured-subject storage with one owned binding representation
-  carrying exact incarnation and the constraint/knowledge provenance needed by
-  sampling. Do not introduce a parallel Game-level capture registry.
-- Transfer that representation through `DelayedTrigger`, `PendingTrigger`,
-  `TriggerPlacement` (remaining and placing), `TriggeredAbilityOnStack`, and
-  resolving `EffectFrame`. Selected/moved captures must carry their actual zone
-  and applicable definition/predicate constraints at capture, not infer an old
-  selection predicate after movement or later characteristic changes.
-- Discover all live private bindings before reassignment and use one joint exact
-  assignment across aliases and active selections. Feed the same constraints to
-  count-world weights, foretold allocation, direct sampling and materialization.
-  Known exact bindings remain exact; unknown bindings preserve constraints without
-  exposing their actual identities. Departed incarnations never follow a new one.
-- Extend canonical hashing, capture/projection and input-version admission with
-  the binding contract in the same cut. Exercise waiting, queued, placing, stack
-  and resolving lifetimes, both viewers, known/unknown information and later zone
-  movement. Then restore this reproducer as a passing ordinary regression and
-  resume the retained-payload and performance work below.
-
-Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path
-managym/Cargo.toml --lib hidden_selection_completed_capture_stays_in_sampled_hand`
-ran one debug test and failed as expected: direct/count-world zones were
-`[Library, Library]`, required `[Hand, Hand]` (0.01s test execution). No runtime
-fix for this capture defect or full-suite/performance claim follows. The preceding
-shared read reported MTG-244's open PR #427 at demo; its comments supplied no
-concrete schema reservation. No other checkout was changed.
+The original defect and evidence are retained at
+`f1ce0ce13:scratch/mtg-241-composable-rules-execution.md` and
+`scratch/completed-private-capture.patch`. Its frame-only discovery and refresh
+shortcuts have been removed. Focused checks now cover both viewers, six lifetimes,
+alias agreement, privacy and subsequent zone movement. Full retained-payload
+projection and policy admission remain unfinished; this change does not establish
+learning completeness or all hidden-zone consumers.
 
 ## Remaining implementation and acceptance
 
-1. Complete the real Leaves from the Vine / Caradora / Doubling Season witness,
+1. Owned-binding correction implemented; finish its successor projection/admission
+   with the retained payload cut below. Broader hidden consumer audit remains open.
+2. Complete the real Leaves from the Vine / Caradora / Doubling Season witness,
    including complete definitions and learning/observation coverage. Current
    `ModifyCounters` drivers use `count * multiplier + additional`; no registered
    card uses that replacement yet. The registered Leaves chapter with constructed
    drivers proves simultaneous placement, not those two complete cards.
-2. Finish the hidden-state acceptance audit beyond the migrated consumers.
+3. Finish the hidden-state acceptance audit beyond the migrated consumers.
    Current witnesses cover partial hand/library selections, restricted incompatible
    deals, saved callers/inherited bindings, public precommit entrants, both samplers,
    Commands/replay/stale rejection, divergent forks, frame remembered aliases,
@@ -203,19 +177,28 @@ concrete schema reservation. No other checkout was changed.
    Scry/LookAndSelect callers, preserving viewer-known inspected prefixes. No claim
    of complete hidden-world coverage follows; new support for the frozen learned
    sampler needs an explicit successor contract, not post-sampling rejection.
-3. Project pending batches (including precommit entrants), iteration progress,
+4. Project pending batches (including precommit entrants), iteration progress,
    selected/this-way results, completion events and paid/rule callers. Paired states
    with identical current offers must distinguish consequential viewer-safe payloads
    and hide unavailable bindings. Cover native/Python inputs, learning tokens,
    actual model input, LLM, Academy, replay/fork and reconnect. Reject unrepresentable
    older inputs before inference; obligation codes alone are insufficient.
-4. Reconcile the successor schema with MTG-244 through ordinary integration. Its
-   shared risk directive explicitly names **v8**, but shared comments supplied no
-   concrete layout; this Task has not assigned a competing v8. Preserve v1–v7,
+5. Reconcile the successor schema with MTG-244 through ordinary integration.
+   [PR #427's contract](https://github.com/loopflowstudio/manabot/blob/1930146b08a1f1481af6e3b46a20f87d4a26a8fa/AGENTS.md)
+   at `1930146b08a1f1481af6e3b46a20f87d4a26a8fa` publishes **v8**:
+   v7 object/relation/shared header/member widths, 4096 × 3 effect details,
+   detail kinds 11–19 for learning-token kinds 1–9 with signed i32 values split
+   into 16-bit halves, and local fact kinds 11–14 for copy-exception programs,
+   changed colors, keyword-counter timestamps and captured continuation programs.
+   Continuation programs join by frame index + 1 with token kind/value/ordinal;
+   v8 defaults to 512 local facts, v7 retains 128. This published layer layout
+   is concrete integration evidence, not proof that MTG-241 batches, result
+   bindings or completion payloads fit it. Combined schema/admission work remains;
+   no competing version or layout is assigned here. Preserve v1–v7,
    fresh v6, saved omissions, capacities, original action-prefix indices/Commands
    and omitted-overflow-is-error. World/hash, capture boundaries and new conformance
    corpus remain unfinished.
-5. Complete Jack Heart's [performance/learning-risk acceptance](mtg-241-risk-validation.md).
+6. Complete Jack Heart's [performance/learning-risk acceptance](mtg-241-risk-validation.md).
    Implementation owns bounded ordinary-step/search probes, equivalent-work versus
    added-branching attribution, targeted mitigations and remeasurement, and paired
    policy/model and hidden-information witnesses alongside the new representation.
@@ -224,20 +207,32 @@ concrete schema reservation. No other checkout was changed.
    cannot substitute for the unfinished implementation or its targeted risk work.
    No speed or learning claim follows from the refactors; no experiment was launched.
 
-Complete the owned-binding correction first, then retained-payload projection and
-version admission. The real-card counter witness and bounded risk measurements
+Continue with retained-payload projection and version admission. The real-card counter witness and bounded risk measurements
 remain implementation work. This Task is not ready for review or completion.
 
 ## Integration and evidence
 
-MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. Prior
-status snapshots remain in the committed plan; publication does not establish
-integration. Task comments carry FrameCompletion, the paid-output protocol and
+MTG-242 owns payment resources/search; MTG-243 naming; MTG-244 layers. Shared
+Task reads on 2026-11-04 show all three implementing, with #424 and #427 open
+and no MTG-242 PR. Publication does not establish integration. Task comments
+carry FrameCompletion, the paid-output protocol and
 codes 27–29. MTG-244 received the schema coordination request and
 `ZoneSelection`/`LibraryEnd`/public-entry interfaces (comment
 `dffd3f70-4dc9-462c-8fbc-6706b162ef76`). Other checkouts were neither edited nor
 copied. Main's casting-cost/X fixes and buffer/overflow contracts remain intact;
 the MTG-213 first-64 pilot exception does not authorize truncating new choices.
+
+New shared evidence changes the integration risk, not this Task's ownership.
+Jack Heart's MTG-244 CI-repair direction reports matching checked counts/digests
+but search total 168.192s → 453.756s, worst reply 4.909s → 15.349s and throughput
+12817 → 5654.8 steps/s. Its layer-risk reference fetch also failed before timing;
+MTG-244 owns those repairs. These are reported sibling measurements, not an
+independently reproduced MTG-241 cost. Combined-head measurements must separate
+inherited cost from this branch's overhead and still satisfy the existing budget.
+MTG-242's newly required comparison against main reinforces the need for a net
+cost baseline: comparisons only between already-modified cuts cannot establish
+the cost of the whole change. No baseline reset, accepted cost or speedup claim
+is implied.
 
 Jack Heart's publication handoff makes [#425](https://github.com/loopflowstudio/manabot/pull/425)
 the source of the approved PRINCIPLES.md/README guide, now integrated through
@@ -257,21 +252,12 @@ Rules evidence previously checked:
   (1 × 2) + 1 = 3. These are behavior requirements, not complete card proofs.
 
 Historical focused checks, exact diff hashes and their limits are retained at
-`c8ea23d33:scratch/mtg-241-composable-rules-execution.md`: nested iteration,
+`f1ce0ce13:scratch/mtg-241-composable-rules-execution.md`: nested iteration,
 retained batches, hidden consumers and constructor compression; extension rebuilds,
 text/parity and sampler rejection. They establish those slices, not full-head
 acceptance, complete private-binding support or runtime/learning performance.
 
-Validation (2026-11-04, `c8ea23d33` + `git diff -- managym` SHA256
-`abc3706b46ee1826d22887ae52844c782289542d7c6497cc9f384e409c3fe7c6`):
-`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml`
-with `--lib resolution_tests` / `-p managym-cards --test cards aang_at_the_crossroads`
-passes 41 / 2; root release maturin build and atomic cp312 installation pass;
-`uv run --extra dev pytest tests/semantic/test_text_observation.py` selecting
-`test_shared_mill_selection_reaches_text_commands_and_both_encoders` and
-`test_joo_dee_surveil_and_copy_play_through_the_text_decision` passes 2;
-`cargo fmt --check`, `git diff --check`, reproducer `git apply --check`, and
-`lf context` pass (both context budgets satisfied). Gate owns full affected suites
-and final-head acceptance; implementation owns the binding correction, complete
-projection, real-card witness and bounded risk measurements. No performance or
-learning-efficacy claim follows from these checks.
+Check (2026-11-04, owned-binding implementation over `f1ce0ce13`):
+`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib hidden_selection --no-default-features`
+passes 10 focused debug tests; `git diff --check` and `lf context` pass.
+Final-head affected suites and Engine Budget remain with gate.
