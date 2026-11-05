@@ -6,19 +6,13 @@ one PR for review; no merge, world freeze or training launch. Jack Heart approve
 a successor policy input the same day: "new input version is totally fine".
 Explicit v8 is implemented; fresh v6 and frozen saved versions remain unchanged.
 
-Status, reconciled 2026-11-04 (hosted receipts dated November 5 UTC): published
-head `7851e6765` adds the `ed25b277e` simplification and main's pilot-evidence
-sync to the source-plan/lazy-SBA implementation at `68ef4a63d`. That earlier
-checkpoint now passes the unchanged Engine Budget with matched full scores,
-actions, counts and digests: search 164.461→132.934 s, worst 4.818→3.860 s,
-steps 7.772806→7.104065 s. Its long integration passes; Rust/main integration
-were cancelled, the aggregate failed, and Layer Risk `41956688122` is incomplete.
-Current-head CI `41957935041` and Layer Risk `41957934391` remain running.
-The earlier `a7b0ddaff` failure (10.54% step regression) remains contrary history,
-not the latest budget result. Current-head acceptance is still outstanding.
-[Risk validation](mtg-244-risk-validation.md) owns measurements/limits and
-[CI repair](mtg-244-ci-repair.md) retains earlier failures. No product decision
-is missing and publication does not establish acceptance.
+Status 2026-11-05: `c46e4f3d8` passed the unchanged Engine Budget (search
+171.352→132.322 s) but failed CI `42035238111` (Academy UI, Integration main) and
+Layer Risk `42035237232`, all from the Honest Work content move. The
+[digest repair](#digest-repair) re-records the corpora; its head must earn its own CI
+and Layer Risk. [Risk validation](mtg-244-risk-validation.md) owns measurements/limits
+and [CI repair](mtg-244-ci-repair.md) owns per-head results. No product decision is
+missing and publication does not establish acceptance.
 
 Accepted outcome: one `Game::characteristics` authority composes types, colors,
 abilities and power/toughness for rules and policy consumers, preserving a cheap
@@ -226,30 +220,51 @@ quality. Finer invalidation remains an evidence-dependent implementation candida
 not an unresolved product decision or a new redesign instruction. No runtime
 change, publication or Graph navigation is part of this review.
 
+## Concept review — 2026-11-05, head `c46e4f3d8`
+
+Reviewed the repairs since `7851e6765`. No concept, name or caller lifecycle changes,
+and no open product choice. Jack Heart's accepted witnesses already settle each one:
+
+- Printed instruction order is rules-bearing inside one source: Honest Work's
+  set-then-grant order is the card's text, not a new evaluator concept. Definition
+  order remains the single statement of it (AGENTS.md).
+- Toph and Phoenix Fleet Airship follow the accepted Dress Down/Magus witness
+  (CR 613.6). Those flips are not a product choice; Demo still discloses them.
+- Gained basic types form one modal ability because fixed mana abilities on a card
+  are additive here; the modal form is the engine's representation, not CR 305.6.
+  By source inspection, not a new test, Moon-then-Energybending keeps R plus four gained.
+  The uncommitted `layers.rs` comment corrects that attribution; ship it with the
+  repair below. It changes no behavior.
+
+Non-blocking observation: `Modification::SetTypes` with a basic land subtype grants
+no intrinsic mana ability, but no card definition uses `SetTypes`. Deriving intrinsic
+abilities from the finished layer-4 type line would remove that gap, and would
+change ability grouping and indices. No live witness justifies it now.
+
+### Digest repair
+
+Fixture refresh moved ahead of publication: Jack Heart's steer requires verified
+combined-head CI before Demo, and the graph publishes before Gate. Runtime content is
+`6a818cbc…`. `refresh_academy_fixtures.py` stopped on no label. Re-recorded:
+`semantic-kernel-w17-v2` (14 cases, command counts unchanged), the authored receipt,
+`AUTHORITY_SHA256`/`TERMINAL_STATE`, both parity writers (RUL-9 was available from the
+cache) and four belief v3 pins. No native source changes except a comment. Details and
+contrary findings: [CI repair](mtg-244-ci-repair.md#digest-repair-evidence).
+
 ## Remaining work
 
-1. Current-head CI `41957935041` and Layer Risk `41957934391` must establish
-   matched ordinary/dependency workloads, complete payments and all seven policy
-   cases for `7851e6765`. The implemented redesign has isolated ordinary gains
-   at `68ef4a63d`; the later simplification has local allocation/digest proofs,
-   not isolated timing acceptance. Further per-component invalidation or
-   instruction borrowing remains a candidate only if residual-cost evidence
-   justifies its dynamic dependency/ownership complexity. A green budget alone
-   does not settle the accepted risk outcome or justify a learning claim.
-2. Layer Risk `41955382652` (`a7b0ddaff`) completed with all comparisons matched;
-   `41956688122` (`68ef4a63d`) remains incomplete. Neither replaces the
-   current-head comparison. Completed predecessor run `41952171271`
-   validates the producer and seven policy cases, but its engine regresses.
-   Local measurements preserve full scores, actions, simulations, payment
-   resources and step digests. The tiny comparison passes locally (53.24 s)
-   and hosted long integration passes at `68ef4a63d`. Cancelled Rust checks
-   supply no pass. Same-runner results must remain paired within each run.
-   Source-plan/final evidence bundles are `49f516b3b42188a9e170e59a870907632d17fbcd`
-   and `6baa683f7ec901ea243538ec53e91108429f66ed`.
+1. The repaired head from [digest repair](#digest-repair) must
+   establish full suites, the unchanged budget, matched ordinary/dependency workloads,
+   complete payments and all seven policy cases. Per-component invalidation and
+   instruction borrowing remain candidates only if residual-cost evidence justifies
+   their dynamic dependency/ownership complexity. A green budget alone does not settle
+   the risk outcome or support a learning claim.
+2. Demo must show Jack Heart the two flipped expectations (Toph, Phoenix Fleet
+   Airship): they assert CR 613.6, opposite to the old tests. Same-runner results
+   stay paired within each run; cancelled jobs supply no pass. Evidence bundles
+   for earlier heads are indexed in the risk note.
 3. Gate owns affected suites and current-world admission: full debug Rust,
-   clippy, model/checkpoint/active-training checks, and current Academy receipt/
-   fixture refreshes required by the catalog/state hash. Preserve historical
-   evidence. The unchanged 10% same-runner Engine Budget remains separate.
+   clippy and model/checkpoint/active-training checks. Preserve historical evidence. The unchanged 10% same-runner Engine Budget remains separate.
    The baseline remains unchanged: current checked counts/digests match, and
    no performance cost has been accepted. Fewer choices are not speedup evidence.
 4. Preserve integration boundaries. Main's `action_overflow=first-legal` pilot
@@ -267,7 +282,7 @@ change, publication or Graph navigation is part of this review.
 
 ## Validation and retained sources
 
-Check: `uv run --no-sync python scripts/engine_budget.py compare --artifact .cache/mtg-244-lazy-sba-ci-budget --reference .cache/mtg-244-lazy-sba-ci-budget/reference` — PASS for `68ef4a63d`; current-head full suites and complete isolated comparison remain with Gate/CI.
+Check: `uv run --no-sync pytest tests/semantic/test_text_observation.py -q` — 60 passed; full suites and isolated comparison for `c46e4f3d8` remain with CI/Gate.
 
 Prior simplification validation passes 23 debug layer cases, two cache cases,
 one benchmark fixture test and three native/Python/text/forward/backward/reload

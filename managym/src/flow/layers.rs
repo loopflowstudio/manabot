@@ -1145,8 +1145,9 @@ fn tap_for_mana(effect: Effect) -> ActivatedAbilityDefinition {
     }
 }
 
-/// CR 305.6: basic land types gained together form one ability choosing among
-/// their colors, in WUBRG order.
+/// CR 305.6 gives a land each basic type's intrinsic mana ability. Types gained
+/// by one effect share one modal ability, the engine's form for a tap that
+/// produces one chosen color; modes follow WUBRG order.
 fn intrinsic_mana_ability(gained: impl Fn(&str) -> bool) -> Option<ActivatedAbilityDefinition> {
     let mut outputs: Vec<_> = BASIC_LANDS
         .iter()

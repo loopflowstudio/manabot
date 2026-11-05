@@ -243,13 +243,11 @@ nonfinite/incomplete samples, different configs/storage, incomplete seed/payment
 identities and changed semantic digests. Eighteen injected-receipt checks cover
 that contract. Inventory-only output cannot satisfy timing comparison.
 
-Required evidence now belongs to `7851e6765`: CI `41957935041` and Layer Risk
-`41957934391` are running. Intermediate Layer Risk `41956688122`
-(`68ef4a63d`) remains incomplete; `41955382652` establishes only the source-plan
-checkpoint's complete comparison above. The
-ordinary-budget success above does not replace dependency search, complete
-payments, seven full-policy cases or current-head suites. Residual costs still
-include conservative whole-board invalidation and per-target instructions;
-further redesign needs cost evidence and matched remeasurement. Gate retains
-full-suite acceptance. No baseline adoption, merge, training experiment or
+Layer Risk `41958999383` completed every comparison for `e4e527621`; results
+are in [CI repair](mtg-244-ci-repair.md). `c46e4f3d8` changes `layers.rs`, so
+Layer Risk `42035237232` and CI `42035238111` own current evidence. An ordinary
+budget pass does not replace dependency search, complete payments, seven policy
+cases or suites. Residual costs still include conservative whole-board
+invalidation and per-target instructions; further redesign needs cost evidence
+and matched remeasurement. No baseline adoption, merge, training experiment or
 learning-quality claim is authorized.

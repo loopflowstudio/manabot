@@ -435,6 +435,13 @@ preserves accepted decisions, dated proof limits and source history.
   and viewer projections after catalog-id resolution. Full-suite acceptance is
   distinct from these focused repairs. Exact evidence is retained at
   `1c3cf1819:scratch/mtg-244-ci-repair.md`.
+- Static abilities of one source share a timestamp and apply in definition
+  order, so a definition lists an ability loss before the grant it keeps. Tests
+  written before composable layers can encode pre-layer behavior: Toph and Phoenix
+  Fleet Airship asserted that layer-6 ability loss undoes a layer-4 type effect,
+  contrary to CR 613.6. Check such a failure against the rules before repairing
+  either side; Energybending and Honest Work in the same CI run were real
+  regressions (`c46e4f3d8`, pending CI and Jack Heart's review).
 - A read-only SBA check needs no trigger-source snapshot. `68ef4a63d` defers
   capture until the first relevant mutation while preserving one pre-batch
   source set for simultaneous events. Its same-runner Engine Budget

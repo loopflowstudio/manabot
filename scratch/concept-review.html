@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-244 — Layer concept review</title>
+<title>MTG-244 — Layer concept review, 2026-11-05</title>
 <style>
   :root { color-scheme: light dark; font: 17px/1.65 system-ui, sans-serif; }
   body { margin: 0; background: light-dark(#faf9f5, #191a1b); color: light-dark(#242626, #e8e8e2); }
@@ -21,27 +21,60 @@
 </style>
 <main>
   <header>
-    MTG-244 · concept-review · 2026-11-04<br>
-    Source head: <code>7851e6765</code><br>
+    MTG-244 · concept-review · 2026-11-05<br>
+    Source head: <code>c46e4f3d8</code><br>
     Built from <code>scratch/mtg-244-layers.md</code>,
+    <code>scratch/mtg-244-ci-repair.md</code>,
     <code>scratch/mtg-244-risk-validation.md</code>,
     <code>scratch/mtg-244-speed-direction.md</code>, <code>scratch/questions.md</code>,
-    <code>manabot/README.md</code>, <code>docs/training.md</code>,
-    <code>managym/src/flow/{layers,statics,play,resolution,sba}.rs</code>,
-    <code>managym/src/agent/observation_encoder.rs</code>,
-    <code>tests/model/test_layer_input.py</code> and
-    <code>managym/tests/rules/cr_613_continuous_effects.rs</code>.
+    <code>conformance/README.md</code>, <code>scripts/refresh_academy_fixtures.py</code>,
+    <code>managym/src/flow/layers.rs</code>, <code>managym/cards/src/tla.rs</code>,
+    CI <code>42035238111</code> and its Academy UI failure artifact.
   </header>
 
-  <h1>No further product decision is needed.</h1>
-  <p><strong>Review outcome: nothing further to change; no open product choice.</strong>
-    Explicit v8 selection and rejection recovery are documented in the normal
-    usage guides. The implemented source-plan optimization adds no caller-owned
-    lifecycle. Current-head isolated comparisons and Gate acceptance remain
-    outstanding in the working design.</p>
-  <p>Jack Heart approved a successor input. Fresh configurations remain v6;
-    frozen saved inputs retain their identity. Those decisions already settle
-    the documentation direction.</p>
+  <h1>No product decision is needed, but the pinned corpora must be re-recorded before publishing.</h1>
+  <p><strong>Review outcome: the working design changed; iterate to implement.</strong>
+    No concept, name or caller lifecycle changes. The change is the order of work:
+    the fixture refresh moves from Gate to before publication.</p>
+
+  <h2>The one mismatch on this head</h2>
+  <blockquote>
+    The Honest Work repair corrected the card and moved the w17 content digest.
+    Runtime is <code>6a818cbc…</code>; fixtures pin <code>dca4f719…</code>. Learn
+    and Precision demos now refuse to start: “learn demo content/setup identity
+    differs from this runtime”. Four browser cases fail.
+  </blockquote>
+  <p>The check is doing its job, so the fixtures move, not the check.
+    The design had put this refresh at Gate, but the graph reaches publish and Demo
+    first, and your latest steer asks for verified combined-head CI before Demo.</p>
+  <p><strong>Proposed next step:</strong> run
+    <code>scripts/refresh_academy_fixtures.py</code>, re-record the digest-bound corpora
+    named in <code>conformance/README.md</code>, commit them with the pending
+    comment-only <code>layers.rs</code> correction, then earn CI and Layer Risk on that head.
+    A changed offer label stops the script; that would be a rules change to diagnose.</p>
+
+  <h2>Current evidence</h2>
+  <p>Same-runner Engine Budget on <code>c46e4f3d8</code> passes with all digests
+    matched: search 171.352→132.322 s, worst reply 4.998→3.845 s,
+    12,619→14,205 steps/s. Rust, both Integration jobs and Layer Risk were still
+    running at review.</p>
+
+  <h2>Repairs since the last review</h2>
+  <dl>
+    <dt>Honest Work lists its set before its grant</dt>
+    <dd>Printed order within one source. No new evaluator concept.</dd>
+    <dt>Toph and Phoenix Fleet Airship expectations flipped</dt>
+    <dd>Removing an ability in layer 6 does not undo its layer-4 type effect
+      (CR 613.6, your accepted Dress Down/Magus witness). Settled, and Demo will
+      show both flips.</dd>
+    <dt>Gained basic types share one modal ability</dt>
+    <dd>Fixed mana abilities here are additive, so a tap for one chosen color needs
+      the modal form. That is the engine's representation, not CR 305.6, which the
+      pending comment corrects.</dd>
+  </dl>
+  <p><strong>Not selected:</strong> <code>Modification::SetTypes</code> with a basic land
+    subtype grants no intrinsic mana ability. No card definition uses it, so this
+    stays an observation.</p>
 
   <h2>The earlier mismatch is closed</h2>
   <blockquote>
@@ -135,9 +168,7 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
     Existing witnesses cover these counterexamples. This review adds no new
     runtime or timing evidence.</p>
   <p>These are source-inspection conclusions using retained witnesses; this step
-    did not rerun them. The current-head isolated engine/full-policy comparison and Gate checks
-    remain outstanding. Their absence limits review readiness; it does not reopen
-    the approved input decision. No learning-quality claim follows from bounded
+    did not rerun them. No learning-quality claim follows from bounded
     representation checks.</p>
 
   <h2>Review questions and dispositions</h2>
@@ -148,8 +179,8 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
       <strong>Settled and implemented: yes.</strong> The policy-input section and
       package README now describe both.</li>
     <li>Does anything require a new product decision?
-      <strong>No.</strong> Performance evidence and Gate remain execution work
-      under the existing acceptance plan.</li>
+      <strong>No.</strong> The fixture repair, performance evidence and Gate are
+      execution work under the existing acceptance plan.</li>
     <li>Should source plans become something callers configure or persist?
       <strong>No.</strong> The accepted single-authority contract keeps them
       private and rebuildable; captured programs and saved inputs retain their

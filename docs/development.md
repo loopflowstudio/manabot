@@ -564,7 +564,9 @@ taps on cloned warmed boards. `--payment-only --allocations` instead measures
 eight complete legal Cadets activations from a floating pool and eight using
 two land sources on the dependency board. Receipts retain the complete legal
 action sets, selected actions, mana/life/tap resources, stack and semantic digests
-before and after each action. Setup, forking and receipt serialization are outside
+before and after each action. `scripts/measure_layer_risk.py` builds its `before`
+leg on the candidate's card definitions, so those digests compare engines over
+identical content. Setup, forking and receipt serialization are outside
 the measured step; native step/observation work is included. `benchmark` enables
 inclusive board/dependency/clone timers and counts; allocation traffic is measured
 in the separate `--allocations` run. Never sum overlapping timers or compare a
