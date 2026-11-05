@@ -37,7 +37,9 @@ EXPERIMENTS = ROOT / "experiments"
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
+        "batch_closure",
         "elemental",
+        "lambda_sweep",
         "mtg183-elemental-eval",
         "seat_comparison",
         "tla_pilot_v10",

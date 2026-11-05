@@ -44,6 +44,9 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
     for stage in recipe.stages:
         assert isinstance(stage, TrainSelfPlay)
         stage.learning_seats = learning_seats
+        stage.batch_closure = (
+            "exact-quota" if learning_seats == "one" else "complete-games"
+        )
     if empty_second:
         recipe.stages[1].learning.min_advantage = 100
     with VerifyStore(tmp_path / "runs.sqlite") as store:

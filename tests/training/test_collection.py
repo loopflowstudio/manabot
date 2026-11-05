@@ -36,6 +36,7 @@ def _make_collector(
         seed=seed,
         opponent_mode=opponent_mode,
         learning_seats="one",
+        batch_closure="exact-quota",
         opponent_agent=opponent_agent,
         recovery_max_game_microsteps=recovery_max_game_microsteps,
     )

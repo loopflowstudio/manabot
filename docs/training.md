@@ -125,12 +125,31 @@ GAE and lambda returns stop at each seat's game boundary. `transitions` is a
 **minimum** decision count per native stream counting both seats; the stream
 then finishes its current game, so batches have variable row counts. Complete
 seat trajectories are packed into `[rows, 1]` with terminal separators and no
-padding. `games_per_stream` overrides the quota with complete games per stream
+padding. `games_per_stream` overrides the floor with complete games per stream
 per update ([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)); set it on both arms for an equal-game comparison and report
 learner transitions, environment decisions, games, exposures and cost
 separately. For two live models, use one `SeatRoutedCollector` with
 `opponent_mode="learning"`, `learning_seats="both"` and `opponent_agent`;
 `collect_pair` returns each model's rows.
+
+### Batch closure
+
+`train_self_play.batch_closure` says when a batch ends, independently of who
+learns. `"complete-games"`, the default, treats `transitions` as a per-stream
+floor and finishes the game in progress, so every return ends at a real result;
+finished streams idle until the slowest game ends, recorded as
+`idle_stream_steps`. `"exact-quota"` pauses each stream at exactly `transitions`
+learner rows and bootstraps the mid-game tail from `V(next_obs)`. Exact quota
+needs one learning seat, because at a pause only the acting seat has a next
+observation, and rejects `games_per_stream` and `game_errors`, which settle whole
+games.
+
+A saved stage never declared its closure, so `TrainingRegime` resolves omission
+the way those runs behaved: one seat with neither `games_per_stream` nor
+`game_errors` is exact quota, anything else complete games. Stages serialize the
+field only when it differs from that reading, so saved digests are unchanged and
+a new one-seat complete-game stage writes it out. `AttackPlan` schema 1 retains
+its exact-quota attackers; schema 2 uses the template's closure.
 
 ### Costs and counters
 
