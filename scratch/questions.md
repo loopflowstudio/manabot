@@ -40,3 +40,12 @@ proposals lack that fact, and token creation allocates before any logical creati
 replacement. The plan records the revised deletion cut; no partial Doubling Season
 definition or successor projection was committed on the insufficient model.
 MTG-244 v8 is integrated at `d77bc8676`; full execution projection remains open.
+
+Frozen obligation codes (2026-11-04, reversible; recorded by the headless realign
+pass): codes 5/6/7 were live on `main` and now read 28 on every input version, silently.
+Assumption: frozen versions keep their original code for migrated selections, the
+successor alone writes 28, and 27/29 are rejected on older versions. Alternatives for
+review: (a) reject 28 on old versions, which makes fresh v6 unplayable unless the
+fresh default moves; (b) accept the remap as a scoped change, which contradicts
+"preserve frozen input meanings" and needs Jack Heart's explicit approval. The
+[plan](mtg-241-composable-rules-execution.md) records the evidence. Not yet implemented.

@@ -71,3 +71,11 @@ samplers. Five focused Python checks pass after atomic extension rebuild.
 The plan's CR 614.16/event-creation correction is a new prerequisite for complete
 retained-payload separation. No new engine timing, model-cost or learning-efficacy
 claim is made, and the inherited MTG-244 regression remains unresolved evidence.
+
+Reconciliation (2026-11-04, `660021431`): two learning-facing risks were found without
+new engine timing. Frozen obligation codes 5/6/7 now read 28 on all input versions,
+unadmitted: open, see the plan. The heuristic anchor stopped cracking fetch lands, a
+silent evaluation distortion: fixed, with the regression passing on `main`. Add to the
+review summary: paired frozen-code witnesses per version, the Capacity overflow rate
+under #426 recovery, and the net cost against main. Sequencing: measure only after
+syncing #427's repair, because `1930146b0` carries the reported regression.
