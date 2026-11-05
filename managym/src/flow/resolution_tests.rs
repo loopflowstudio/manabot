@@ -1068,8 +1068,10 @@ fn hidden_selection_completed_capture_stays_in_sampled_hand() {
                 let materialized = space.materialize(root, &space.worlds()[0], 0).unwrap();
                 let before = root.continuation_frames(viewer);
                 for branch in [sampled, materialized] {
-                    let mut objects = Vec::new();
-                    branch.visit_captured_bindings(|binding| objects.push(binding.object));
+                    let objects: Vec<_> = branch
+                        .captured_bindings()
+                        .map(|binding| binding.object)
+                        .collect();
                     assert_eq!(objects.len(), 2, "stage {stage}");
                     assert_eq!(objects[0], objects[1], "aliases, stage {stage}");
                     let object = objects[0];
@@ -1106,7 +1108,7 @@ fn hidden_selection_capture_does_not_follow_a_later_incarnation() {
     root.move_card(card, ZoneType::Graveyard);
     root.move_card(card, ZoneType::Hand);
     assert_ne!(root.current_object_ref(card), Some(original));
-    assert!(!root.has_hidden_selection(viewer));
+    assert!(!root.hidden_commitments(viewer).constrains());
     let space = PossibleWorldSpace::for_viewer(&root, viewer);
     let mut sampled = root.clone();
     sampled.determinize(viewer, 0).unwrap();
