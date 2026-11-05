@@ -189,6 +189,11 @@ to Allies/Lessons per Jack Heart (2026-11-05). Spend $19.26 of $25. No paid runs
 here; the Elemental repeat is a separate Task with its own $25. Next: gate and PR.
 Check 2026-11-05 (implement re-pass): focused tests `tests/training/test_batch_closure.py test_collection.py test_credit_assignment.py tests/eval/test_learning_signal.py tests/infra/test_experiment_data_untracked.py` 64 passed; report.md fetched from R2 with an empty cache matches the manifest digest. `docs/learning.md` is not on main; `docs/training.md` carries the closure docs.
 Live pod `etude-716a7dba8603` ended on its own; it was never this Task's.
+Compress 2026-11-05: the report builder's `analyze` computes each job's curves once and
+`TrainingRecord.row` owns the per-update lookup; old and new `analyze` agree byte for byte
+on synthetic records, focused tests 63 passed. A full rebuild from R2 on the laptop reached
+18 GB RSS without finishing in 20 minutes, so regenerate on a rented machine or with a
+streaming reader; the published results.json stands as built.
 
 Proposed experiments Wave memory (the `code` Graph does not call for writing it):
 one-seat complete games at floor 76 realize 119 rows per stream on the Allies/Lessons

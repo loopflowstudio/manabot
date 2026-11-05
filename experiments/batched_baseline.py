@@ -64,6 +64,7 @@ def scale_ladder() -> TrainingRegime:
     stage.updates = 100_000
     stage.streams = 256
     stage.learning_seats = "one"
+    # The ladder's runs paused at an exact quota; recipes built on it override this.
     stage.batch_closure = "exact-quota"
     stage.learning = move_learning()
     stage.execution = Execution(

@@ -72,9 +72,12 @@ class TrainingRecord:
     stage: dict[str, object]
     updates: list[dict[str, float]]
 
+    def row(self, update: int) -> dict[str, float]:
+        """The metric row at an update, 1-indexed by the metric rows."""
+        return next(row for row in self.updates if row["update"] == update)
+
     def at_update(self, update: int, key: str) -> float:
-        """A cumulative coordinate at an update, 1-indexed by the metric rows."""
-        return next(row[key] for row in self.updates if row["update"] == update)
+        return self.row(update)[key]
 
 
 @dataclass
@@ -267,7 +270,7 @@ def deal_interval(
 
 def residual_by_distance(record: TrainingRecord, update: int) -> dict[str, float]:
     """Critic residual per distance bin, aggregated by rows across action types."""
-    row = next(r for r in record.updates if r["update"] == update)
+    row = record.row(update)
     totals: dict[str, list[float]] = {each: [0.0, 0.0] for each in DISTANCES}
     for key, value in row.items():
         parts = key.split("/")
@@ -290,6 +293,8 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
     decisions = float(cast(int, stage["environment_decisions"]))
     idle = float(cast(int, stage["idle_stream_steps"]))
     rows_total = float(cast(int, stage["learner_transitions"]))
+    collection_seconds = float(cast(float, stage["collection_seconds"]))
+    learning_seconds = float(cast(float, stage["learning_seconds"]))
     return {
         "updates": updates,
         "rows": rows_total,
@@ -297,8 +302,8 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
         "games": float(cast(int, stage["games"])),
         "optimizer_steps": float(cast(int, stage["optimizer_updates"])),
         "environment_decisions": decisions,
-        "collection_seconds": float(cast(float, stage["collection_seconds"])),
-        "learning_seconds": float(cast(float, stage["learning_seconds"])),
+        "collection_seconds": collection_seconds,
+        "learning_seconds": learning_seconds,
         "assembly_seconds": collection["Batch assembly"]["seconds"],
         "targets_seconds": learning["Targets"]["seconds"],
         "diagnostics_seconds": learning["Selection and health diagnostics"]["seconds"],
@@ -318,10 +323,7 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
                 ]
             )
         ),
-        "seconds_per_million_rows": (
-            float(cast(float, stage["collection_seconds"]))
-            + float(cast(float, stage["learning_seconds"]))
-        )
+        "seconds_per_million_rows": (collection_seconds + learning_seconds)
         / rows_total
         * 1e6,
     }
@@ -358,33 +360,23 @@ def analyze(
     views: dict[str, dict[str, object]] = {}
     for kind in ("decisions", "seconds", "seconds_without_assembly", "dollars"):
         grid = matched_grid(usable, scored, kind)
-        curves = {
-            job: np.array(
-                [
-                    curve(r, scored[r.run], kind, grid)
-                    for r in members
-                    if r.run in scored
-                ]
-            )
-            for job, members in jobs.items()
-        }
-        view: dict[str, object] = {"grid": grid.tolist(), "jobs": {}}
-        base_by_seed = {
-            r.seed: curve(r, scored[r.run], kind, grid)
-            for r in baseline
-            if r.run in scored
-        }
-        for job, members in jobs.items():
-            per_seed = {
+        # Each job's curves by seed; the baseline's seeds pair with every other job's.
+        by_seed = {
+            job: {
                 r.seed: curve(r, scored[r.run], kind, grid)
                 for r in members
                 if r.run in scored
             }
+            for job, members in jobs.items()
+        }
+        base_by_seed = by_seed[study.baseline]
+        view: dict[str, object] = {"grid": grid.tolist(), "jobs": {}}
+        for job, per_seed in by_seed.items():
             shared = sorted(set(per_seed) & set(base_by_seed))
             end = [float(per_seed[s][-1] - base_by_seed[s][-1]) for s in shared]
             cast(dict[str, object], view["jobs"])[job] = {
-                "label": label(job, len(members)),
-                "score": np.nanmean(curves[job], axis=0).tolist(),
+                "label": label(job, len(jobs[job])),
+                "score": np.nanmean(list(per_seed.values()), axis=0).tolist(),
                 "difference_at_end": seed_interval(end)
                 if job != study.baseline
                 else None,
