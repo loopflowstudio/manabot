@@ -71,3 +71,23 @@ executes these, so no budget sees their cost. Long conformance tapes
   either (no repo `.cargo/config.toml`, no wrapper script).
 - `cargo-nextest` is installed but unused by the repo and CI.
 - 36 git worktrees exist; 8 have a `managym/target`.
+
+## MTG-241 elapsed time by Graph step
+
+From `lf graph show <id> --processes --json` step start/completion (UTC,
+2026-11-04/05). Step records start 20:14Z, two hours before the brief's 22:16Z
+claim time; the source of that gap is unexplained.
+
+| Graph | Span | implement | compress | sync | realign | loop-or-next | End |
+|---|---|---|---|---|---|---|---|
+| 22ee206e (5 passes) | 249 min | 140 (15→13→22→46→44) | 82 (last pass 56) | 14 (pass 5 failed after 11.6) | 10 | 3 | sync failed |
+| b421d936 (3 passes) | 300 min | 137 (16→26→95) | 24 | 23 (pass 2: 21.7) | 115 (pass 3 failed after 89.5) | 2 | realign failed (lf store mismatch) |
+
+- ~9.2 h wall, no PR. Implement passes grew 3–6× from pass 1 to the last pass
+  in each Graph; that growth coincides with the integrated MTG-244 sibling and
+  full-suite verification under three-agent host contention (brief), not
+  measured here per pass.
+- Tooling/sync failures directly consumed ≥101 min (failed sync 11.6, failed
+  realign 89.5) and ended both Graphs; nothing from them reached review.
+- Not yet split inside implement passes: agent work vs test/build wait vs
+  rework. That needs the per-pass conversation logs.
