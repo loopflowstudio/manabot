@@ -351,9 +351,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         }),
         permanent(Modification::SetColors([Color::Red].into_iter().collect())),
         permanent(Modification::AddColors([Color::Blue].into_iter().collect())),
-        permanent(Modification::GrantActivated(Box::new(
-            ActivatedAbilityDefinition::default(),
-        ))),
+        permanent(Modification::GrantActivated(Box::default())),
         permanent(Modification::GrantTriggered(Box::new(Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourUpkeep,
             intervening_if: None,
@@ -3332,35 +3330,51 @@ fn stack_x_one_and_three_differ_only_in_v5() {
     assert_eq!((opponent_x(&one), opponent_x(&three)), (1.0, 3.0));
 }
 
-fn toph_and_tile(toph_has_abilities: bool) -> (Scenario, PermanentId) {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TophState {
+    Absent,
+    Present,
+    Abilityless,
+}
+
+fn tile_beside(toph: TophState) -> (Scenario, PermanentId) {
     let mut s = five_color_unfunded_setup(&["Toph, the First Metalbender", "White Lotus Tile"]);
-    let toph = s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
     let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
-    if !toph_has_abilities {
-        let affected = on_permanent(&s, toph);
-        apply(&mut s, affected, Modification::LoseAllAbilities);
+    if toph != TophState::Absent {
+        let permanent = s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
+        if toph == TophState::Abilityless {
+            let affected = on_permanent(&s, permanent);
+            apply(&mut s, affected, Modification::LoseAllAbilities);
+        }
     }
     (s, tile)
 }
 
 /// A granted land type reaches the card row's land column (layer 4 types)
 /// in every version; v5 also marks the permanent as granted rather than
-/// printed.
+/// printed. Removing Toph's abilities in layer 6 cannot undo the type effect
+/// that already applied in layer 4 (CR 613.6).
 #[test]
 fn a_toph_granted_land_shows_in_its_card_row_and_the_v5_granted_column() {
-    let (granted, tile) = toph_and_tile(true);
-    let (plain, _) = toph_and_tile(false);
+    let (plain, tile) = tile_beside(TophState::Absent);
+    let (granted, _) = tile_beside(TophState::Present);
+    let (abilityless, _) = tile_beside(TophState::Abilityless);
     let land = |s: &Scenario| {
         let observation = Observation::for_player(s.game(), PlayerId(0));
         card_row(s.game(), &observation, &encoded(s, 0, 5), tile)[11]
     };
-    assert_eq!((land(&plain), land(&granted)), (0.0, 1.0));
+    let granted_land = |s: &Scenario| permanent_value(s, 0, tile, PERMANENT_GRANTED_LAND_INDEX);
+    assert_eq!(
+        (land(&plain), land(&granted), land(&abilityless)),
+        (0.0, 1.0, 1.0)
+    );
     assert_eq!(
         (
-            permanent_value(&plain, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
-            permanent_value(&granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
+            granted_land(&plain),
+            granted_land(&granted),
+            granted_land(&abilityless),
         ),
-        (0.0, 1.0)
+        (0.0, 1.0, 1.0)
     );
 }
 

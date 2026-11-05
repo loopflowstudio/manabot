@@ -30,19 +30,9 @@ Implementation assumptions:
 - Local timing receipts under contention are exploratory. Complete-payment
   allocation/operation attribution is retained. Clean ordinary/dependency and
   full-policy comparisons require the dedicated `layer-risk.yml` producer;
-  standard Engine Budget runs only the original TLA step/search pair. At the
-  2026-11-04 implementation pass, `beaacaa19` CI `41952171449` again fails
-  Engine Budget and the tiny-comparison wall deadline. Layer Risk `41952171271`
-  completed with matched receipts. Source-plan checkpoint `a7b0ddaff` passes
-  hosted long integration but fails the step budget by 10.54%. Later lazy-SBA
-  checkpoint `68ef4a63d` passes the unchanged budget in `41956687926`, with
-  matched full scores/counts/digests and 19.17% less search time, 19.88% less
-  worst-reply time and 8.60% less step time than its same-runner reference.
-  Published head `7851e6765` adds simplification and main's pilot-evidence sync;
-  CI `41957935041` / Layer Risk `41957934391` remain running. Source-plan risk
-  run `41955382652` completed with all comparisons matched; lazy-SBA risk remains
-  incomplete. Publication and prior-head passes do not
-  establish current-head acceptance.
+  standard Engine Budget runs only the original TLA step/search pair. Per-head
+  CI history lives in [mtg-244-ci-repair.md](mtg-244-ci-repair.md). Publication
+  and prior-head passes do not establish current-head acceptance.
 - Historical source archives are measurement inputs, not Task worktrees or
   compatibility paths. The pinned before revision receives instrumentation and
   identical fixtures only. Measurement checkpoint publication does not

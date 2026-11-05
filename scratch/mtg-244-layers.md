@@ -174,6 +174,8 @@ Removed mechanisms (implemented cuts; no remaining deletion target):
   need no write-summary allocation or dependency scan.
 - Temporary `static_sources` vectors: stream the existing immutable board
   iterator in the same order, retaining one debug validation per scan.
+- Triplicated ability-loss and land-mana assembly in `layers.rs`: one loss pair
+  and `intrinsic_mana_ability` own them; `seed` and `buff` leave the hot loops.
 
 No public rules type, saved input, choice or behavior test is removed. Seeds
 validate definition identity/incarnation/timestamp; copy/transform detaches.

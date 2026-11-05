@@ -365,6 +365,8 @@ changes invalidate that source. Intermediate layer objects detach on writes.
 Conservative characteristic read/write summaries skip impossible dependency
 probes; plausible pairs still compare instructions and generating-ability
 existence. Debug rebuilds source plans independently and checks skipped pairs.
+Static abilities of one source share a timestamp and apply in definition order,
+so a definition lists an ability loss before the grant it keeps (Honest Work).
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

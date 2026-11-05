@@ -8,12 +8,12 @@ use crate::{
         ability::{Condition, Effect, EffectiveTrigger},
         card::{
             AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keyword, Keywords,
-            LayerValue, PowerCda, StaticAbility, StaticScope,
+            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
         game_object::{ObjectId, PermanentId, PlayerId},
         mana::Mana,
-        permanent::CounterKind,
+        permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -23,7 +23,7 @@ use std::{
     sync::Arc,
 };
 
-pub(super) const BASIC_LANDS: [(&str, &str); 5] = [
+const BASIC_LANDS: [(&str, &str); 5] = [
     ("Plains", "W"),
     ("Island", "U"),
     ("Swamp", "B"),
@@ -184,6 +184,16 @@ impl ReadSet {
 }
 
 impl SourcePlan {
+    fn on_source(parts: Vec<(Layer, Operation)>) -> Self {
+        Self {
+            cda: false,
+            scope: StaticScope::This,
+            condition: None,
+            parts,
+            reads: ReadSet::default(),
+        }
+    }
+
     fn summarize(mut self) -> Self {
         let mut reads = ReadSet::default();
         match &self.scope {
@@ -239,16 +249,7 @@ impl Node {
             key,
             timestamp,
             targets: Some(vec![source]),
-            plan: Arc::new(
-                SourcePlan {
-                    reads: ReadSet::default(),
-                    cda: false,
-                    scope: StaticScope::This,
-                    condition: None,
-                    parts: vec![part],
-                }
-                .summarize(),
-            ),
+            plan: Arc::new(SourcePlan::on_source(vec![part]).summarize()),
         }
     }
 }
@@ -261,7 +262,7 @@ enum Operation {
     // Expressions resolve before becoming per-target instructions. Indirection
     // keeps their large predicates out of every small resolved modification.
     Power(Box<PowerCda>),
-    Buff(Box<crate::state::card::StaticPtBuff>),
+    Buff(Box<StaticPtBuff>),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
 }
@@ -374,57 +375,7 @@ impl<'a> Context<'a> {
                     && seed.timestamp == p.timestamp
             });
             if !reusable {
-                #[cfg(feature = "benchmark")]
-                crate::benchmark_layers::record(|m| m.source_plans += 1);
-                let mut object = LayerObject {
-                    view: Arc::new(Characteristics {
-                        name: card.name.clone(),
-                        subtypes: card.subtypes.clone(),
-                        types: card.types.clone(),
-                        colors: card.colors(),
-                        mana_abilities: card.mana_abilities.clone(),
-                        triggered_mana_abilities: card.triggered_mana_abilities.clone(),
-                        is_legendary: card.is_legendary(),
-                        keywords: card.keywords,
-                        ward: card.ward().cloned(),
-                        power: card.power.unwrap_or(0),
-                        toughness: card.toughness.unwrap_or(0),
-                        activated_abilities: card.activated_abilities.clone(),
-                        triggered_abilities: card
-                            .abilities
-                            .iter()
-                            .cloned()
-                            .map(|ability| EffectiveTrigger {
-                                ability,
-                                program: false,
-                            })
-                            .collect(),
-                        ..Default::default()
-                    }),
-                    statics: card
-                        .statics
-                        .iter()
-                        .enumerate()
-                        .map(|(i, ability)| StaticEntry {
-                            key: vec![slot, i],
-                            timestamp: p.timestamp,
-                            ability: ability.clone(),
-                        })
-                        .collect(),
-                };
-                Self::finish_object(&mut object, card);
-                let plans = object
-                    .statics
-                    .iter()
-                    .filter_map(|entry| context.node(id, entry))
-                    .collect();
-                seeds[slot] = Some(Arc::new(SourceSeed {
-                    card: card.clone(),
-                    incarnation: p.id,
-                    timestamp: p.timestamp,
-                    object: Arc::new(object),
-                    nodes: plans,
-                }));
+                seeds[slot] = Some(Arc::new(context.seed(id, p, card)));
             }
             let seed = seeds[slot].as_ref().unwrap();
             context.objects.insert(id, seed.object.clone());
@@ -518,9 +469,8 @@ impl<'a> Context<'a> {
             }
             if layer == Layer::ModifyPower {
                 for (&id, object) in &mut context.objects {
-                    let count = game.state.permanents[id]
-                        .as_ref()
-                        .unwrap()
+                    let count = game
+                        .live_permanent(id)
                         .counter_count(CounterKind::PlusOnePlusOne);
                     if count != 0 {
                         let view = Arc::make_mut(&mut Arc::make_mut(object).view);
@@ -532,11 +482,66 @@ impl<'a> Context<'a> {
         }
         for (&id, object) in &mut context.objects {
             if !retain_sources || !Arc::ptr_eq(object, &seeds[id.0].as_ref().unwrap().object) {
-                let card = &game.state.cards[game.state.permanents[id].as_ref().unwrap().card];
+                let card = &game.state.cards[game.live_permanent(id).card];
                 Self::finish_object(Arc::make_mut(object), card);
             }
         }
         context
+    }
+
+    /// The copiable object and bound static plans of one live incarnation.
+    fn seed(&self, id: PermanentId, permanent: &Permanent, card: &Card) -> SourceSeed {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_layers::record(|m| m.source_plans += 1);
+        let mut object = LayerObject {
+            view: Arc::new(Characteristics {
+                name: card.name.clone(),
+                subtypes: card.subtypes.clone(),
+                types: card.types.clone(),
+                colors: card.colors(),
+                mana_abilities: card.mana_abilities.clone(),
+                triggered_mana_abilities: card.triggered_mana_abilities.clone(),
+                is_legendary: card.is_legendary(),
+                keywords: card.keywords,
+                ward: card.ward().cloned(),
+                power: card.power.unwrap_or(0),
+                toughness: card.toughness.unwrap_or(0),
+                activated_abilities: card.activated_abilities.clone(),
+                triggered_abilities: card
+                    .abilities
+                    .iter()
+                    .cloned()
+                    .map(|ability| EffectiveTrigger {
+                        ability,
+                        program: false,
+                    })
+                    .collect(),
+                ..Default::default()
+            }),
+            statics: card
+                .statics
+                .iter()
+                .enumerate()
+                .map(|(i, ability)| StaticEntry {
+                    key: vec![id.0, i],
+                    timestamp: permanent.timestamp,
+                    ability: ability.clone(),
+                })
+                .collect(),
+        };
+        Self::finish_object(&mut object, card);
+        let nodes = object
+            .statics
+            .iter()
+            .filter_map(|entry| self.node(id, entry))
+            .collect();
+        SourceSeed {
+            card: card.clone(),
+            incarnation: permanent.id,
+            timestamp: permanent.timestamp,
+            object: Arc::new(object),
+            nodes,
+        }
     }
 
     fn finish_object(object: &mut LayerObject, card: &Card) {
@@ -721,41 +726,7 @@ impl<'a> Context<'a> {
                                 power: Some(LayerValue::Fixed(self.cda(cda, node.source))),
                                 toughness: None,
                             }),
-                            Operation::Buff(buff) => {
-                                let object = &self.objects[&id].view;
-                                let per_type = buff.per_creature_type_max.map_or(1, |max| {
-                                    (object
-                                        .subtypes
-                                        .iter()
-                                        .filter(|s| !NONCREATURE.contains(&s.as_str()))
-                                        .count() as i32)
-                                        .min(max)
-                                });
-                                let controller = self.game.state.permanents[node.source]
-                                    .as_ref()
-                                    .unwrap()
-                                    .controller;
-                                let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
-                                    self.objects
-                                        .iter()
-                                        .filter(|(id, _)| {
-                                            self.controller(**id) == controller
-                                                && self.matches(**id, p, None)
-                                        })
-                                        .flat_map(|(_, o)| o.view.colors.iter().copied())
-                                        .collect::<BTreeSet<_>>()
-                                        .len() as i32
-                                });
-                                let per_card =
-                                    buff.per_graveyard_matching.as_ref().map_or(1, |p| {
-                                        self.game.count_graveyard_matching(controller, p) as i32
-                                    });
-                                let times = per_type * per_color * per_card;
-                                Operation::Modify(Modification::ModifyPt {
-                                    power: LayerValue::Fixed(buff.power * times),
-                                    toughness: LayerValue::Fixed(buff.toughness * times),
-                                })
-                            }
+                            Operation::Buff(buff) => self.buff(buff, node.source, id),
                             op => op.clone(),
                         };
                         Instruction {
@@ -766,14 +737,43 @@ impl<'a> Context<'a> {
             })
             .collect()
     }
+    fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
+        let per_type = buff.per_creature_type_max.map_or(1, |max| {
+            (self.objects[&id]
+                .view
+                .subtypes
+                .iter()
+                .filter(|s| !NONCREATURE.contains(&s.as_str()))
+                .count() as i32)
+                .min(max)
+        });
+        let controller = self.controller(source);
+        let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
+            self.objects
+                .iter()
+                .filter(|(id, _)| {
+                    self.controller(**id) == controller && self.matches(**id, p, None)
+                })
+                .flat_map(|(_, o)| o.view.colors.iter().copied())
+                .collect::<BTreeSet<_>>()
+                .len() as i32
+        });
+        let per_card = buff.per_graveyard_matching.as_ref().map_or(1, |p| {
+            self.game.count_graveyard_matching(controller, p) as i32
+        });
+        let times = per_type * per_color * per_card;
+        Operation::Modify(Modification::ModifyPt {
+            power: LayerValue::Fixed(buff.power * times),
+            toughness: LayerValue::Fixed(buff.toughness * times),
+        })
+    }
     fn controller(&self, id: PermanentId) -> PlayerId {
-        self.game.state.permanents[id].as_ref().unwrap().controller
+        self.game.live_permanent(id).controller
     }
     fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => self.game.state.cards
-                [self.game.state.permanents[id].as_ref().unwrap().card]
+            LayerValue::ManaValue => self.game.state.cards[self.game.live_permanent(id).card]
                 .mana_value_cost()
                 .map_or(0, |m| i32::from(m.mana_value)),
             LayerValue::GraveyardCardTypes { offset } => {
@@ -795,9 +795,8 @@ impl<'a> Context<'a> {
                 .iter()
                 .filter(|(id, o)| self.controller(**id) == controller && o.view.is_land())
                 .map(|(id, _)| {
-                    self.game.state.permanents[*id]
-                        .as_ref()
-                        .unwrap()
+                    self.game
+                        .live_permanent(*id)
                         .counter_count(CounterKind::PlusOnePlusOne)
                 })
                 .sum(),
@@ -863,13 +862,7 @@ impl<'a> Context<'a> {
         )
     }
     fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
-        let mut plan = SourcePlan {
-            reads: ReadSet::default(),
-            cda: false,
-            scope: StaticScope::This,
-            condition: None,
-            parts: Vec::new(),
-        };
+        let mut plan = SourcePlan::on_source(Vec::new());
         let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
             StaticAbility::Continuous(effect) => {
@@ -942,8 +935,7 @@ impl<'a> Context<'a> {
             }
             StaticAbility::AttachedHas(ability) => {
                 plan.scope = StaticScope::Attached;
-                let card = &self.game.state.cards
-                    [self.game.state.permanents[source].as_ref().unwrap().card];
+                let card = &self.game.state.cards[self.game.live_permanent(source).card];
                 let index = card
                     .attached_grants()
                     .position(|a| a == ability)
@@ -969,11 +961,7 @@ impl<'a> Context<'a> {
                 plan.scope = StaticScope::YouControl(predicate.clone());
                 add(
                     Layer::Ability,
-                    Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
-                        tap_source: true,
-                        effects: vec![Effect::any_color_mana()],
-                        ..Default::default()
-                    })),
+                    Modification::GrantActivated(Box::new(tap_for_mana(Effect::any_color_mana()))),
                 );
             }
             _ => return None,
@@ -1004,17 +992,9 @@ impl<'a> Context<'a> {
                         .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
                     view.subtypes.push(subtype.clone());
                     view.added_subtypes.push(subtype.clone());
-                    view.abilities_lost = true;
-                    view.keywords = Keywords::default();
-                    view.ward = None;
-                    view.mana_abilities.clear();
-                    view.triggered_mana_abilities.clear();
-                    view.activated_abilities.clear();
-                    view.triggered_abilities.clear();
-                    object.statics.clear();
-                    if let Some((_, mana)) = BASIC_LANDS.iter().find(|(name, _)| *name == subtype) {
-                        view.activated_abilities.push(mana_ability(mana));
-                    }
+                    lose_all_abilities(view, &mut object.statics);
+                    view.activated_abilities
+                        .extend(intrinsic_mana_ability(|name| name == subtype));
                 }
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
@@ -1044,17 +1024,17 @@ impl<'a> Context<'a> {
                         view.added_subtypes.extend(types.iter().cloned());
                     }
                     Modification::AddSubtypes(types) => {
+                        if view.is_land() {
+                            let gained = intrinsic_mana_ability(|name| {
+                                types.iter().any(|subtype| subtype == name)
+                                    && !view.subtypes.iter().any(|subtype| subtype == name)
+                            });
+                            view.activated_abilities.extend(gained);
+                        }
                         for subtype in types {
                             if !view.subtypes.contains(subtype) {
                                 view.subtypes.push(subtype.clone());
                                 view.added_subtypes.push(subtype.clone());
-                                if view.is_land() {
-                                    if let Some((_, mana)) =
-                                        BASIC_LANDS.iter().find(|(name, _)| *name == subtype)
-                                    {
-                                        view.activated_abilities.push(mana_ability(mana));
-                                    }
-                                }
                             }
                         }
                     }
@@ -1077,26 +1057,9 @@ impl<'a> Context<'a> {
                         view.keywords = view.keywords.without(*keywords)
                     }
                     Modification::LoseNonManaAbilities => {
-                        view.abilities_lost = true;
-                        view.keywords = Keywords::default();
-                        view.ward = None;
-                        view.firebending = 0;
-                        view.activated_abilities
-                            .retain(|ability| ability.mana_choices().is_some());
-                        view.triggered_abilities.clear();
-                        object.statics.clear();
+                        lose_nonmana_abilities(view, &mut object.statics)
                     }
-                    Modification::LoseAllAbilities => {
-                        view.abilities_lost = true;
-                        view.keywords = Keywords::default();
-                        view.ward = None;
-                        view.firebending = 0;
-                        view.mana_abilities.clear();
-                        view.triggered_mana_abilities.clear();
-                        view.activated_abilities.clear();
-                        view.triggered_abilities.clear();
-                        object.statics.clear();
-                    }
+                    Modification::LoseAllAbilities => lose_all_abilities(view, &mut object.statics),
                     Modification::Firebending(n) => {
                         view.firebending = view.firebending.saturating_add(*n)
                     }
@@ -1121,9 +1084,7 @@ impl<'a> Context<'a> {
                         key.extend([id.0, ordinal]);
                         object.statics.push(StaticEntry {
                             key,
-                            timestamp: node
-                                .timestamp
-                                .max(self.game.state.permanents[id].as_ref().unwrap().timestamp),
+                            timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),
                         });
                     }
@@ -1150,11 +1111,52 @@ impl<'a> Context<'a> {
         }
     }
 }
-fn mana_ability(mana: &str) -> ActivatedAbilityDefinition {
+
+impl Game {
+    /// Layer evaluation only visits battlefield slots, which are always live.
+    fn live_permanent(&self, id: PermanentId) -> &Permanent {
+        self.state.permanents[id].as_ref().unwrap()
+    }
+}
+
+fn lose_nonmana_abilities(view: &mut Characteristics, statics: &mut Vec<StaticEntry>) {
+    view.abilities_lost = true;
+    view.keywords = Keywords::default();
+    view.ward = None;
+    view.firebending = 0;
+    view.activated_abilities
+        .retain(|ability| ability.mana_choices().is_some());
+    view.triggered_abilities.clear();
+    statics.clear();
+}
+
+fn lose_all_abilities(view: &mut Characteristics, statics: &mut Vec<StaticEntry>) {
+    view.mana_abilities.clear();
+    view.triggered_mana_abilities.clear();
+    view.activated_abilities.clear();
+    lose_nonmana_abilities(view, statics);
+}
+
+fn tap_for_mana(effect: Effect) -> ActivatedAbilityDefinition {
     ActivatedAbilityDefinition {
         tap_source: true,
-        effects: vec![Effect::add_mana(Mana::parse(mana))],
+        effects: vec![effect],
         ..Default::default()
+    }
+}
+
+/// CR 305.6: basic land types gained together form one ability choosing among
+/// their colors, in WUBRG order.
+fn intrinsic_mana_ability(gained: impl Fn(&str) -> bool) -> Option<ActivatedAbilityDefinition> {
+    let mut outputs: Vec<_> = BASIC_LANDS
+        .iter()
+        .filter(|(name, _)| gained(name))
+        .map(|(_, mana)| Mana::parse(mana))
+        .collect();
+    match outputs.len() {
+        0 => None,
+        1 => Some(tap_for_mana(Effect::add_mana(outputs.remove(0)))),
+        _ => Some(tap_for_mana(Effect::mana_choice(outputs))),
     }
 }
 

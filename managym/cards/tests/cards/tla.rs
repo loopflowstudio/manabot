@@ -8241,7 +8241,10 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
     }
     assert!(!observed(&s, rival).is_animated);
     until_end_of_turn(&mut s, fleet[0], Modification::LoseAllAbilities);
-    assert!(!observed(&s, fleet[0]).is_animated);
+    assert!(
+        observed(&s, fleet[0]).is_animated,
+        "CR 613.6: the layer-4 type effect continues past layer-6 ability loss"
+    );
     assert!(
         observed(&s, fleet[1]).is_animated,
         "ability loss keeps the name"

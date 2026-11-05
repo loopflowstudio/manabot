@@ -171,7 +171,7 @@ impl ContinuationFrame {
         }
         self.program = crate::cards::tokens::rules_tokens(
             &effects,
-            &crate::cards::content_pack::default_content_pack(),
+            crate::cards::content_pack::default_content_pack(),
         )
         .expect("rules program tokens");
         self.program_description = Some(super::ability_description::effects_description(effects));
