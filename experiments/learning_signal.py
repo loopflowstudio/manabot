@@ -11,6 +11,8 @@ from collections.abc import Iterable
 from decimal import Decimal
 import os
 from pathlib import Path
+import shutil
+from tempfile import TemporaryDirectory
 
 from etude.eval.match import Tables
 from etude.eval.records import (
@@ -30,7 +32,7 @@ from pydantic import BaseModel
 import torch
 
 from manabot.eval.benchmark import evaluation_tables
-from manabot.eval.evaluation import EvaluationRequest, evaluate
+from manabot.eval.evaluation import EvaluationRequest, EvaluationResult, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -231,7 +233,33 @@ def play_deal(match: Match) -> Tables:
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
-    result = evaluate(
+    retained = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+    # The arena syncs every record, which a rented container disk serves at about
+    # .1 s, so a game spends its 120 s limit there. Journal in memory and keep the
+    # same files: a deal that dies is replayed whole, so nothing needs the journal.
+    with TemporaryDirectory(dir=_journal_root()) as journal:
+        try:
+            result = _play(conditions, candidate, opponent, path, key, Path(journal))
+        finally:
+            shutil.copytree(journal, retained, dirs_exist_ok=True)
+    if result.error:
+        raise ValueError(result.error)
+    return evaluation_tables(result.rows)
+
+
+def _journal_root() -> str | None:
+    return "/dev/shm" if Path("/dev/shm").is_dir() else None
+
+
+def _play(
+    conditions: Conditions,
+    candidate: PlayerRegistration,
+    opponent: PlayerRegistration,
+    path: Path,
+    key: EvaluationKey,
+    out_dir: Path,
+) -> EvaluationResult:
+    return evaluate(
         EvaluationRequest(
             key=key,
             candidate=candidate,
@@ -245,11 +273,8 @@ def play_deal(match: Match) -> Tables:
             bootstrap_seed=BOOTSTRAP_SEED,
             purpose=ARENA,
         ),
-        out_dir=Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key,
+        out_dir=out_dir,
     )
-    if result.error:
-        raise ValueError(result.error)
-    return evaluation_tables(result.rows)
 
 
 def learning_report(baseline: str) -> Report:

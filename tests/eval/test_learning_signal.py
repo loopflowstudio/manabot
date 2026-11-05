@@ -44,6 +44,7 @@ def test_a_held_out_deal_scores_all_eight_deck_seat_legs(
     assert len(plays) == 16
     assert {row["matchup"] for row in plays} == {"LvA", "AvL", "LvL", "AvA"}
     assert all(row["valid"] for row in plays)
+    assert (tmp_path / "out" / "arena" / "deal" / "evaluation.json").is_file()
 
 
 def test_scored_deals_are_outside_the_monitoring_namespace() -> None:

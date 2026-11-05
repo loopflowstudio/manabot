@@ -51,7 +51,7 @@ def runs(
 
 
 def eval(state: ExperimentState) -> list[Job]:
-    return evaluation_jobs(state, "lambda-sweep-v1", hours=1.0, usd=1.2)
+    return evaluation_jobs(state, "lambda-sweep-v1", hours=0.75, usd=0.96)
 
 
 def report() -> Report:

@@ -108,8 +108,8 @@ covers the run's wall stop and finalization.
 | 2, each of 5 arms | 15 | 1.0 | $.74 | $11.06 |
 
 Reserved in total with calibration's $1.49 and evaluation's $2.50: $23.55. Evaluation
-jobs pass theirs from `experiments/batch_closure.py` ($.96) and
-`experiments/lambda_sweep.py` ($1.20), inside the line, on a 32-vCPU rental.
+jobs pass theirs from `experiments/batch_closure.py` ($.72) and
+`experiments/lambda_sweep.py` ($.96), inside the line, on a 32-vCPU rental.
 
 ## Kill criteria
 

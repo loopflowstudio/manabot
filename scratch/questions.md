@@ -175,6 +175,9 @@ same jobs, seeds and source. Keep the six failed ids in the report's failure tab
 
 The first study 1 evaluation job (`batch-closure-v1-fec36e74289b-b`) failed at its
 result writer: the job lacked the `evaluation` extra. Fixed before any game was scored.
+The next (`-c`) stopped at 6 of 750 deals: games hit the 120 s limit in durable record
+writes (117 of 120 s) on the container disk, with .7 s of CPU. Its failed deal is
+infrastructure, so it replays; arena journals now run in memory and copy to the run.
 
 Exists: closure separation, docs, tests, both experiment files, calibration.
 Remaining:
