@@ -55,5 +55,5 @@ to MTG-244; this PR does not touch it.
 
 ## Checks
 
-- `tests/infra/test_ci_selection.py` 54 passed; actionlint clean; `cargo fmt
+- `tests/infra/test_ci_selection.py` 54 passed; actionlint clean (re-run after compress step reorder); `cargo fmt
   --check` clean; local nextest ci profile 969 passed. Gate owns the rest.
