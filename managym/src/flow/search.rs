@@ -208,12 +208,14 @@ impl Game {
         player: PlayerId,
         viewer: PlayerId,
     ) -> (Vec<CardId>, Vec<CardId>) {
-        let public = self.sampling_fixed_objects(viewer);
-        let pending_library = self.sampling_fixed_library_cards(player, viewer);
+        let fixed = self.sampling_fixed_objects(viewer);
+        let is_fixed = |card: CardId| fixed.iter().any(|object| object.entity == card.into());
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
             .flat_map(|zone| self.state.zones.zone_cards(zone, player).iter().copied())
-            .filter(|card| !pending_library.contains(card))
+            .filter(|card| {
+                !is_fixed(*card) || !self.state.zones.contains(*card, ZoneType::Library, player)
+            })
             .collect();
         pool.sort_unstable_by_key(|card| card.0);
         let mut counts = self.state.players[player.0].known_hand.clone();
@@ -222,9 +224,7 @@ impl Game {
         // Public entrants in a hand pin the physical witness; ordinary reveals
         // still reserve only a definition minimum, as before.
         pool.retain(|card| {
-            if public.iter().any(|object| object.entity == (*card).into())
-                && self.state.zones.contains(*card, ZoneType::Hand, player)
-            {
+            if is_fixed(*card) && self.state.zones.contains(*card, ZoneType::Hand, player) {
                 known.push(*card);
                 if let Some(count) = counts.get_mut(&self.state.cards[*card].definition_id) {
                     *count = count.saturating_sub(1);

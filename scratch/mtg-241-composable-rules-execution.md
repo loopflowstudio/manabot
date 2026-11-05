@@ -136,6 +136,16 @@ captures, exact incarnation semantics, existing hidden-selection predicates and
 saved-frame aliases. The binding implementation below owns that behavior. Distinct-land/named searches, Scry and LookAndSelect retain distinct
 visibility and ordering contracts; their overlap still needs an audit.
 
+The restored completed-capture regression supersedes the old unapplied patch;
+its original failing form remains at `f1ce0ce13:scratch/completed-private-capture.patch`.
+Capture inspection now visits bindings directly instead of allocating a temporary
+list. Hand partitioning derives fixed hand/library membership from one snapshot;
+minimum-count checks read zone membership without sorting an unused offer.
+Entry replacement discovery borrows shared static abilities and appends matching
+grants directly after own replacements, preserving candidate order and identities.
+These cuts remove repeated collection and program cloning, not legal choices;
+they do not establish a speedup or complete the risk acceptance below.
+
 ## Ownership revision — 2026-11-04
 
 The completed-private-capture witness is now restored as an ordinary debug
@@ -156,7 +166,7 @@ still use native visibility and do not expose private binding identities.
 
 The original defect and evidence are retained at
 `f1ce0ce13:scratch/mtg-241-composable-rules-execution.md` and
-`scratch/completed-private-capture.patch`. Its frame-only discovery and refresh
+`f1ce0ce13:scratch/completed-private-capture.patch`. Its frame-only discovery and refresh
 shortcuts have been removed. Focused checks now cover both viewers, six lifetimes,
 alias agreement, privacy and subsequent zone movement. Full retained-payload
 projection and policy admission remain unfinished; this change does not establish
@@ -318,12 +328,16 @@ retained batches, hidden consumers and constructor compression; extension rebuil
 text/parity and sampler rejection. They establish those slices, not full-head
 acceptance, complete private-binding support or runtime/learning performance.
 
-Check (2026-11-04, binding/schema integration over `d77bc8676`): debug focused
-filters `--lib hidden_selection` (11), `--lib retained_batch` (6), and the two
-`--test rules_tests cr_613_*` integration witnesses (Saga/external grants and
-captured activation after sacrifice/suspension) pass; root maturin release build
-and atomic cp312 install pass; focused pytest captured-continuation model paths,
-count-sampler rejection and shared-selection text/native/Python parity pass (5).
-`git diff --check` and `lf context` pass. Full suites, complete successor payload
-admission, new conformance evidence and performance acceptance remain outstanding;
-gate retains final-head suites/Engine Budget after implementation completes.
+Earlier binding/schema checks remain at `d7ad17df1` in this note; they do not
+certify later edits. Check (2026-11-04, simplification over `d7ad17df1`):
+`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2` with `--lib hidden_selection`,
+`--lib retained_batch`, `--test rules_tests cr_614`, and `-p managym-cards --test
+cards zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers` → 23
+passed; root `uv run --extra play maturin build --release -i .venv/bin/python
+-m managym/Cargo.toml -o managym/target/wheels` → built and atomically installed,
+fresh import passed. `cargo fmt --check` (after removing an inherited extra blank
+line), `git diff --check` and `lf context` pass. `uv run --extra dev pytest` for
+count-sampler retained-subset rejection and shared-mill text/Command/encoder parity
+→ 2 passed. Gate owns full suites/Engine Budget
+after implementation completes. Successor payload admission, conformance and risk
+acceptance remain open.

@@ -111,45 +111,43 @@ impl Game {
     }
 
     /// All owners of a captured binding, including a detached placement round.
-    pub(crate) fn captured_bindings(&self) -> Vec<&ObjectBinding> {
-        let mut bindings = Vec::new();
+    pub(crate) fn visit_captured_bindings(&self, mut visit: impl FnMut(&ObjectBinding)) {
         for trigger in &self.state.delayed_triggers {
-            bindings.extend(&trigger.remembered);
+            trigger.remembered.iter().for_each(&mut visit);
         }
         for trigger in &self.state.pending_triggers {
-            bindings.extend(&trigger.remembered);
+            trigger.remembered.iter().for_each(&mut visit);
         }
         if let Some(placement) = &self.state.trigger_placement {
             for trigger in placement.remaining.iter().chain(placement.placing.iter()) {
-                bindings.extend(&trigger.remembered);
+                trigger.remembered.iter().for_each(&mut visit);
             }
         }
         for object in &self.state.stack_objects {
             if let StackObject::TriggeredAbility(trigger) = object {
-                bindings.extend(&trigger.remembered);
+                trigger.remembered.iter().for_each(&mut visit);
             }
         }
         if let Some(suspended) = &self.state.suspended_decision {
             for part in suspended.continuation() {
                 if let ResolutionRef::Frame(frame) = part {
-                    bindings.extend(&frame.remembered);
+                    frame.remembered.iter().for_each(&mut visit);
                 }
             }
         }
-        bindings
     }
 
     /// Exact objects already known to this viewer must not be exchanged for a
     /// same-definition copy. Departed incarnations impose no current-zone slot.
     pub(crate) fn sampling_fixed_objects(&self, viewer: PlayerId) -> Vec<ObjectRef> {
         let mut fixed = self.pending_public_entries();
-        fixed.extend(
-            self.captured_bindings()
-                .into_iter()
-                .filter(|binding| binding.known_to[viewer.0])
-                .map(|binding| binding.object)
-                .filter(|object| self.current_object_ref(object.entity.into()) == Some(*object)),
-        );
+        self.visit_captured_bindings(|binding| {
+            if binding.known_to[viewer.0]
+                && self.current_object_ref(binding.object.entity.into()) == Some(binding.object)
+            {
+                fixed.push(binding.object);
+            }
+        });
         fixed.sort_unstable();
         fixed.dedup();
         fixed
@@ -393,11 +391,11 @@ impl Game {
                 }
             }
         }
-        for binding in self.captured_bindings() {
-            if !binding.known_to[viewer.0] {
-                retain(&binding.selection, std::slice::from_ref(&binding.object));
-            }
-        }
+        // Known exact captures are already excluded by the fixed-object set,
+        // including when another owner holds an unknown alias of that capture.
+        self.visit_captured_bindings(|binding| {
+            retain(&binding.selection, std::slice::from_ref(&binding.object));
+        });
         requirements
     }
 
@@ -434,9 +432,11 @@ impl Game {
                         min,
                         ..
                     } => {
-                        self.selection_zone_cards(source.owner, source.zone)
-                            .into_iter()
-                            .filter(|card| self.card_matches_predicate(*card, &source.predicate))
+                        self.state
+                            .zones
+                            .zone_cards(source.zone, source.owner)
+                            .iter()
+                            .filter(|card| self.card_matches_predicate(**card, &source.predicate))
                             .count()
                             < *min
                     }

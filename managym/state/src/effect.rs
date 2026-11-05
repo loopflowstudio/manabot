@@ -281,7 +281,6 @@ impl ContinuousEffect {
     pub fn affects_player(&self, player: PlayerId) -> bool {
         self.affected == Affected::Player(player)
     }
-
 }
 
 /// Every continuous-effect record in timestamp order, indexed by whom it

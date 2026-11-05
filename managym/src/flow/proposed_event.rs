@@ -743,33 +743,7 @@ impl Game {
                 // Entry conditions read the prospective controller, including
                 // a spell or reanimation controlled by someone other than its owner.
                 let entering_controller = entry.controller.unwrap_or(self.state.cards[*card].owner);
-                // "[predicate] permanents enter tapped" from the battlefield.
-                let static_tapped = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                    .flat_map(|id| {
-                        self.characteristics(id)
-                            .static_abilities
-                            .clone()
-                            .into_iter()
-                            .enumerate()
-                            .filter(|(_, ability)| {
-                                matches!(ability, StaticAbility::EntersTapped(predicate)
-                                    if self.card_matches_predicate(*card, predicate))
-                            })
-                            .filter_map(move |(index, _)| {
-                                Some(ReplacementCandidate {
-                                    identity: ReplacementId {
-                                        source: self.permanent_object_ref(id)?,
-                                        definition_index: index,
-                                        static_ability: true,
-                                    },
-                                    effect: ReplacementEffect::EntersTapped,
-                                })
-                            })
-                    })
-                    .collect::<Vec<_>>();
-                let mut own: Vec<_> = self.state.cards[*card]
+                let mut entries: Vec<_> = self.state.cards[*card]
                     .replacement_effects
                     .iter()
                     .enumerate()
@@ -804,8 +778,34 @@ impl Game {
                         })
                     })
                     .collect();
-                own.extend(static_tapped);
-                own
+                // Keep own replacements before battlefield grants. Borrow the
+                // shared characteristics; discovering one entry rule must not
+                // clone every static ability's program on each recheck.
+                for id in [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                {
+                    let Some(source) = self.permanent_object_ref(id) else {
+                        continue;
+                    };
+                    for (definition_index, ability) in
+                        self.characteristics(id).static_abilities.iter().enumerate()
+                    {
+                        if matches!(ability, StaticAbility::EntersTapped(predicate)
+                            if self.card_matches_predicate(*card, predicate))
+                        {
+                            entries.push(ReplacementCandidate {
+                                identity: ReplacementId {
+                                    source,
+                                    definition_index,
+                                    static_ability: true,
+                                },
+                                effect: ReplacementEffect::EntersTapped,
+                            });
+                        }
+                    }
+                }
+                entries
             }
             _ => Vec::new(),
         };

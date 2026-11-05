@@ -1068,13 +1068,11 @@ fn hidden_selection_completed_capture_stays_in_sampled_hand() {
                 let materialized = space.materialize(root, &space.worlds()[0], 0).unwrap();
                 let before = root.continuation_frames(viewer);
                 for branch in [sampled, materialized] {
-                    let bindings = branch.captured_bindings();
-                    assert_eq!(bindings.len(), 2, "stage {stage}");
-                    assert_eq!(
-                        bindings[0].object, bindings[1].object,
-                        "aliases, stage {stage}"
-                    );
-                    let object = bindings[0].object;
+                    let mut objects = Vec::new();
+                    branch.visit_captured_bindings(|binding| objects.push(binding.object));
+                    assert_eq!(objects.len(), 2, "stage {stage}");
+                    assert_eq!(objects[0], objects[1], "aliases, stage {stage}");
+                    let object = objects[0];
                     assert_eq!(
                         branch.current_object_ref(object.entity.into()),
                         Some(object)
