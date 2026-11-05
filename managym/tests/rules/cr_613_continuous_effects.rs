@@ -1393,3 +1393,33 @@ fn cr_613_keyword_predicate_dependency_overrides_grant_timestamp() {
         assert!(view.keywords.has(Keyword::Trample));
     }
 }
+
+#[test]
+fn cr_613_copiable_definition_changes_detach_warmed_forks() {
+    use managym::state::card::{LayerValue, StaticScope};
+
+    let (s, ogre) = ogre_scenario();
+    let card = card_of(&s, ogre);
+    let root = s.game();
+    let before = root.characteristics(ogre);
+    let mut branch = root.clone();
+    // Copy exceptions and transformed faces can change copiable values without
+    // assigning a new catalog row. Keep the same slot, row and timestamp here.
+    branch.state.cards[card].power = Some(7);
+    branch.state.cards[card].statics.push(continuous(
+        StaticScope::This,
+        vec![Modification::ModifyPt {
+            power: LayerValue::Fixed(2),
+            toughness: LayerValue::Fixed(3),
+        }],
+    ));
+    assert_eq!(branch.characteristics(ogre).pt(), (9, 5));
+    assert_eq!(root.characteristics(ogre), before);
+    assert_eq!(before.pt(), (2, 2));
+
+    let mut sibling = branch.clone();
+    sibling.state.cards[card].statics.clear();
+    assert_eq!(sibling.characteristics(ogre).pt(), (7, 2));
+    assert_eq!(branch.characteristics(ogre).pt(), (9, 5));
+    assert_eq!(root.characteristics(ogre).pt(), (2, 2));
+}

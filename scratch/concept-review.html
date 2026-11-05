@@ -22,20 +22,23 @@
 <main>
   <header>
     MTG-244 · concept-review · 2026-11-04<br>
-    Source head: <code>64e6bca33</code><br>
+    Source head: <code>7851e6765</code><br>
     Built from <code>scratch/mtg-244-layers.md</code>,
-    <code>scratch/mtg-244-risk-validation.md</code>, <code>scratch/questions.md</code>,
+    <code>scratch/mtg-244-risk-validation.md</code>,
+    <code>scratch/mtg-244-speed-direction.md</code>, <code>scratch/questions.md</code>,
     <code>manabot/README.md</code>, <code>docs/training.md</code>,
-    <code>managym/src/flow/{statics,play,resolution}.rs</code>,
+    <code>managym/src/flow/{layers,statics,play,resolution,sba}.rs</code>,
     <code>managym/src/agent/observation_encoder.rs</code>,
-    <code>manabot/infra/config.py</code> and <code>tests/model/test_layer_input.py</code>.
+    <code>tests/model/test_layer_input.py</code> and
+    <code>managym/tests/rules/cr_613_continuous_effects.rs</code>.
   </header>
 
   <h1>No further product decision is needed.</h1>
   <p><strong>Review outcome: nothing further to change; no open product choice.</strong>
-    Explicit v8 selection and rejection recovery are now documented in the normal
-    usage guides. The earlier amendment is implemented. Isolated risk measurements
-    and Gate checks remain outstanding.</p>
+    Explicit v8 selection and rejection recovery are documented in the normal
+    usage guides. The implemented source-plan optimization adds no caller-owned
+    lifecycle. Current-head isolated comparisons and Gate acceptance remain
+    outstanding in the working design.</p>
   <p>Jack Heart approved a successor input. Fresh configurations remain v6;
     frozen saved inputs retain their identity. Those decisions already settle
     the documentation direction.</p>
@@ -65,6 +68,10 @@
     <dd>Captured activation → <code>ActivatedAbilityOnStack.effects</code> →
       resolution and suspended frame. The selected program survives independently
       of the source's current ability list.</dd>
+    <dt>Explore a search branch, then read its changed board</dt>
+    <dd>Independent game state with shared immutable derived data →
+      <code>Game::clone</code> and <code>Game::characteristics</code> →
+      branch-local changes with no caller cache reset or effect-plan management.</dd>
     <dt>Load an existing checkpoint</dt>
     <dd>Saved architecture identity → <code>ObservationConfig.from_checkpoint</code>
       → ordinary checkpoint/world admission. A loadable architecture is not proof
@@ -90,6 +97,24 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
     keyword-counter timestamps. V7 retains its representable shared effects.
     No default migration or checkpoint conversion is proposed.</p>
 
+  <h2>Less work behind the same interaction</h2>
+  <p><strong>Before the optimization:</strong> board revisions repeatedly rebuilt
+    copiable sources and static plans, and dependency probes cloned whole objects.
+    Unchanged state-based-action checks eagerly captured trigger sources.</p>
+  <p><strong>Implemented:</strong> reuse immutable source plans for the same
+    definition, incarnation and timestamp; detach intermediate objects on writes;
+    use conservative summaries to skip impossible dependencies. Plausible pairs
+    still receive exact checks. Capture one trigger-source snapshot immediately
+    before the batch's first relevant mutation. Fresh debug recomputation remains.</p>
+  <p>The source plan is rebuildable internal data. It does not replace the current
+    view, the captured activation or a saved input identity. Those distinctions
+    protect different lifetimes; merging them would revive the source-lookup bug
+    or silently change checkpoint meaning.</p>
+  <p><strong>Candidate only:</strong> finer invalidation needs residual-cost
+    evidence and matched remeasurement. It is not a newly selected redesign.
+    Earlier ordinary-workload gains support the direction; they do not certify
+    the current head or establish learning quality.</p>
+
   <h2>Failure, then recovery</h2>
   <p>A v6/v7 starting observation can be representable and a later observation
     can require v8. <code>validate_policy_input</code> rejects that payload before
@@ -104,11 +129,13 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
 
   <h2>What would invalidate this account?</h2>
   <p>An older input silently omitting a new program; a program borrowing recurrent
-    state from an unrelated holder; or resolution rediscovering an ability after
-    its source leaves. Existing witnesses cover these counterexamples. This review
-    adds no new runtime or timing evidence.</p>
+    state from an unrelated holder; resolution rediscovering an ability after
+    its source leaves; or a warmed fork reusing a plan after its definition changes.
+    A discovered tap/mana predicate must also invalidate the relevant view.
+    Existing witnesses cover these counterexamples. This review adds no new
+    runtime or timing evidence.</p>
   <p>These are source-inspection conclusions using retained witnesses; this step
-    did not rerun them. The isolated engine/full-policy comparison and combined-head Gate checks
+    did not rerun them. The current-head isolated engine/full-policy comparison and Gate checks
     remain outstanding. Their absence limits review readiness; it does not reopen
     the approved input decision. No learning-quality claim follows from bounded
     representation checks.</p>
@@ -123,6 +150,10 @@ recipe.observation = ObservationConfig(policy_input_version=8)</code></pre>
     <li>Does anything require a new product decision?
       <strong>No.</strong> Performance evidence and Gate remain execution work
       under the existing acceptance plan.</li>
+    <li>Should source plans become something callers configure or persist?
+      <strong>No.</strong> The accepted single-authority contract keeps them
+      private and rebuildable; captured programs and saved inputs retain their
+      separate ownership.</li>
   </ol>
   <p>Decisions and remaining proof live in
     <a href="mtg-244-layers.md">the working design</a>.

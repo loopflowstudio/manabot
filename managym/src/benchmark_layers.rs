@@ -7,6 +7,7 @@ use std::{cell::RefCell, time::Instant};
 #[derive(Clone, Default, serde::Serialize)]
 pub struct Metrics {
     pub boards: u64,
+    pub source_plans: u64,
     pub board_ns: u64,
     pub contexts_cloned: u64,
     pub clone_ns: u64,

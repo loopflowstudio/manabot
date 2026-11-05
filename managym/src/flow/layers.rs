@@ -7,8 +7,8 @@ use crate::{
     state::{
         ability::{Condition, Effect, EffectiveTrigger},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, CardType, Keyword, Keywords, LayerValue,
-            PowerCda, StaticAbility, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keyword, Keywords,
+            LayerValue, PowerCda, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{ObjectId, PermanentId, PlayerId},
@@ -18,7 +18,10 @@ use crate::{
         zone::ZoneType,
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 pub(super) const BASIC_LANDS: [(&str, &str); 5] = [
     ("Plains", "W"),
@@ -77,13 +80,13 @@ struct StaticEntry {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LayerObject {
-    pub view: Characteristics,
+    pub view: Arc<Characteristics>,
     statics: Vec<StaticEntry>,
 }
 #[derive(Clone)]
 pub(super) struct Context<'a> {
     game: &'a Game,
-    pub objects: BTreeMap<PermanentId, LayerObject>,
+    pub objects: BTreeMap<PermanentId, Arc<LayerObject>>,
     /// Includes conditional nodes discovered in any layer, even when an earlier
     /// condition short-circuits or a dependency later removes their source.
     pub reads_mana: bool,
@@ -97,69 +100,156 @@ struct Node {
     source: PermanentId,
     key: Vec<usize>,
     timestamp: ObjectId,
+    targets: Option<Vec<PermanentId>>,
+    plan: Arc<SourcePlan>,
+}
+
+/// Definition-derived instructions, shared across revisions and search forks.
+#[derive(Clone)]
+struct SourcePlan {
     cda: bool,
     scope: StaticScope,
     condition: Option<Condition>,
     parts: Vec<(Layer, Operation)>,
-    targets: Option<Vec<PermanentId>>,
+    reads: ReadSet,
 }
-impl Node {
-    /// Dependencies inspect the same scope/condition/value predicates used to
-    /// resolve instructions. Recurse through alternatives once at this owner.
-    fn reads_predicate(&self, reads: fn(&CardPredicate) -> bool) -> bool {
-        fn predicate_reads(p: &CardPredicate, reads: fn(&CardPredicate) -> bool) -> bool {
-            reads(p) || p.any_of.iter().any(|p| predicate_reads(p, reads))
+
+impl std::ops::Deref for Node {
+    type Target = SourcePlan;
+    fn deref(&self) -> &Self::Target {
+        &self.plan
+    }
+}
+
+/// One live incarnation's copiable object and bound static plans. Holding the
+/// card keeps definition identity valid even when a fixture/copy detaches it.
+#[derive(Clone)]
+pub(super) struct SourceSeed {
+    card: Card,
+    incarnation: ObjectId,
+    timestamp: ObjectId,
+    object: Arc<LayerObject>,
+    nodes: Vec<Node>,
+}
+
+/// Conservative reads used for both dependency pruning and cache invalidation.
+/// Walk each predicate/condition once, including nested alternatives.
+#[derive(Clone, Copy, Default)]
+struct ReadSet {
+    fields: u8,
+    mana: bool,
+    tapped: bool,
+}
+
+impl ReadSet {
+    fn predicate(&mut self, p: &CardPredicate) {
+        if p.namesake {
+            self.fields |= NAME;
         }
-        fn condition_reads(c: &Condition, reads: fn(&CardPredicate) -> bool) -> bool {
-            match c {
-                Condition::ControlsAtLeast { predicate, .. }
-                | Condition::SourceMatches(predicate) => predicate_reads(predicate, reads),
-                Condition::AnyOf(conditions) => {
-                    conditions.iter().any(|c| condition_reads(c, reads))
-                }
-                _ => false,
+        if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
+            self.fields |= CARD_TYPES;
+        }
+        if p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
+            self.fields |= SUBTYPES;
+        }
+        if p.supertype.is_some() {
+            self.fields |= SUPERTYPES;
+        }
+        if p.flying {
+            self.fields |= KEYWORDS;
+        }
+        if p.min_power.is_some() || p.max_power.is_some() {
+            self.fields |= POWER;
+        }
+        self.tapped |= p.tapped;
+        for alternative in &p.any_of {
+            self.predicate(alternative);
+        }
+    }
+
+    fn condition(&mut self, condition: &Condition) {
+        match condition {
+            Condition::ControlsAtLeast { predicate, .. } | Condition::SourceMatches(predicate) => {
+                self.predicate(predicate);
             }
+            Condition::AnyOf(conditions) => {
+                for condition in conditions {
+                    self.condition(condition);
+                }
+            }
+            Condition::SourceTapped => self.tapped = true,
+            _ => self.mana |= condition.reads_mana_pools(),
         }
-        let scope_reads = match &self.scope {
+    }
+}
+
+impl SourcePlan {
+    fn summarize(mut self) -> Self {
+        let mut reads = ReadSet::default();
+        match &self.scope {
             StaticScope::All(p)
             | StaticScope::Other(p)
             | StaticScope::OtherYouControl(p)
             | StaticScope::YouControl(p)
-            | StaticScope::SpellsYouControl(p) => predicate_reads(p, reads),
-            StaticScope::This | StaticScope::Attached => false,
-        };
-        scope_reads
-            || self
-                .condition
-                .as_ref()
-                .is_some_and(|c| condition_reads(c, reads))
-            || self.parts.iter().any(|(_, op)| match op {
+            | StaticScope::SpellsYouControl(p) => reads.predicate(p),
+            StaticScope::This | StaticScope::Attached => {}
+        }
+        if let Some(condition) = &self.condition {
+            reads.condition(condition);
+        }
+        for (_, operation) in &self.parts {
+            match operation {
                 Operation::Buff(buff) => {
-                    buff.per_color_among
-                        .as_ref()
-                        .is_some_and(|p| predicate_reads(p, reads))
-                        || buff
-                            .per_graveyard_matching
-                            .as_ref()
-                            .is_some_and(|p| predicate_reads(p, reads))
+                    if buff.per_creature_type_max.is_some() {
+                        reads.fields |= SUBTYPES;
+                    }
+                    if let Some(predicate) = &buff.per_color_among {
+                        reads.fields |= COLORS;
+                        reads.predicate(predicate);
+                    }
+                    if let Some(predicate) = &buff.per_graveyard_matching {
+                        reads.predicate(predicate);
+                    }
                 }
                 Operation::Power(cda) => match cda.as_ref() {
-                    PowerCda::GraveyardMatching(p) => predicate_reads(p, reads),
-                    _ => false,
+                    PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl => {
+                        reads.fields |= CARD_TYPES;
+                    }
+                    PowerCda::GraveyardMatching(predicate) => reads.predicate(predicate),
                 },
-                _ => false,
-            })
-    }
-
-    fn reads_tapped(&self) -> bool {
-        fn condition_reads(c: &Condition) -> bool {
-            match c {
-                Condition::SourceTapped => true,
-                Condition::AnyOf(conditions) => conditions.iter().any(condition_reads),
-                _ => false,
+                _ => {}
             }
         }
-        self.reads_predicate(|p| p.tapped) || self.condition.as_ref().is_some_and(condition_reads)
+        self.reads = reads;
+        self
+    }
+}
+
+impl Node {
+    /// Counters and resolved records already bind one affected object; their
+    /// existence and membership no longer depend on a generating static ability.
+    fn resolved(
+        source: PermanentId,
+        key: Vec<usize>,
+        timestamp: ObjectId,
+        part: (Layer, Operation),
+    ) -> Self {
+        Self {
+            source,
+            key,
+            timestamp,
+            targets: Some(vec![source]),
+            plan: Arc::new(
+                SourcePlan {
+                    reads: ReadSet::default(),
+                    cda: false,
+                    scope: StaticScope::This,
+                    condition: None,
+                    parts: vec![part],
+                }
+                .summarize(),
+            ),
+        }
     }
 }
 
@@ -175,6 +265,50 @@ enum Operation {
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
 }
+// Intermediate fields that instructions can read or change. State-only reads
+// (zones, counters, mana, controller, printed mana value) cannot change during
+// a layer pass. ABILITIES includes a generating static's continued existence.
+const NAME: u8 = 1;
+const CARD_TYPES: u8 = 2;
+const SUBTYPES: u8 = 4;
+const SUPERTYPES: u8 = 8;
+const COLORS: u8 = 16;
+const KEYWORDS: u8 = 32;
+const POWER: u8 = 64;
+const ABILITIES: u8 = 128;
+
+impl Operation {
+    fn writes(&self) -> u8 {
+        match self {
+            Self::Name(_) => NAME,
+            Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
+            Self::Power(_) | Self::Buff(_) => POWER,
+            Self::Inherit | Self::CatalogTrigger(_) => 0,
+            Self::Modify(m) => match m {
+                Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
+                Modification::AddTypes(_) | Modification::BecomeCreature => CARD_TYPES,
+                Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
+                Modification::Nonlegendary => SUPERTYPES,
+                Modification::SetColors(_) | Modification::AddColors(_) => COLORS,
+                Modification::AddKeywords(_) | Modification::LoseKeywords(_) => KEYWORDS,
+                Modification::LoseAllAbilities | Modification::LoseNonManaAbilities => {
+                    ABILITIES | KEYWORDS
+                }
+                Modification::GrantStatic(_) => ABILITIES,
+                Modification::SetBasePt { .. }
+                | Modification::ModifyPt { .. }
+                | Modification::SwitchPt => POWER,
+                Modification::Firebending(_)
+                | Modification::GrantActivated(_)
+                | Modification::GrantTriggered(_)
+                | Modification::HasAbilitiesOfSource => 0,
+                // Future rules payloads remain conservative until classified.
+                _ => u8::MAX,
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct Instruction {
     target: PermanentId,
@@ -207,12 +341,17 @@ fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
 }
 
 impl<'a> Context<'a> {
-    pub fn evaluate(game: &'a Game) -> Self {
+    pub fn evaluate(game: &'a Game, seeds: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> Self {
         #[cfg(feature = "benchmark")]
         let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
             m.boards += 1;
             m.board_ns += ns;
         });
+        // The debug oracle rebuilds source plans from definitions. Its fresh
+        // objects need no retained seed owner while evaluating modifications.
+        let retain_sources = seeds.is_some();
+        let mut fresh = Vec::new();
+        let seeds = seeds.unwrap_or(&mut fresh);
         let mut context = Self {
             game,
             objects: BTreeMap::new(),
@@ -220,14 +359,25 @@ impl<'a> Context<'a> {
             reads_tapped: false,
         };
         let mut nodes = Vec::new();
+        let mut known = BTreeSet::new();
+        seeds.resize(game.state.permanents.len(), None);
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
-            let Some(p) = permanent else { continue };
+            let Some(p) = permanent else {
+                seeds[slot] = None;
+                continue;
+            };
             let id = PermanentId(slot);
             let card = &game.state.cards[p.card];
-            context.objects.insert(
-                id,
-                LayerObject {
-                    view: Characteristics {
+            let reusable = seeds[slot].as_ref().is_some_and(|seed| {
+                seed.card.shares_definition_with(card)
+                    && seed.incarnation == p.id
+                    && seed.timestamp == p.timestamp
+            });
+            if !reusable {
+                #[cfg(feature = "benchmark")]
+                crate::benchmark_layers::record(|m| m.source_plans += 1);
+                let mut object = LayerObject {
+                    view: Arc::new(Characteristics {
                         name: card.name.clone(),
                         subtypes: card.subtypes.clone(),
                         types: card.types.clone(),
@@ -250,7 +400,7 @@ impl<'a> Context<'a> {
                             })
                             .collect(),
                         ..Default::default()
-                    },
+                    }),
                     statics: card
                         .statics
                         .iter()
@@ -261,56 +411,65 @@ impl<'a> Context<'a> {
                             ability: ability.clone(),
                         })
                         .collect(),
-                },
-            );
+                };
+                Self::finish_object(&mut object, card);
+                let plans = object
+                    .statics
+                    .iter()
+                    .filter_map(|entry| context.node(id, entry))
+                    .collect();
+                seeds[slot] = Some(Arc::new(SourceSeed {
+                    card: card.clone(),
+                    incarnation: p.id,
+                    timestamp: p.timestamp,
+                    object: Arc::new(object),
+                    nodes: plans,
+                }));
+            }
+            let seed = seeds[slot].as_ref().unwrap();
+            context.objects.insert(id, seed.object.clone());
+            known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
+            for node in &seed.nodes {
+                context.reads_mana |= node.reads.mana;
+                context.reads_tapped |= node.reads.tapped;
+                nodes.push(node.clone());
+            }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
-                    nodes.push(Node {
-                        source: id,
-                        key: vec![slot, usize::MAX - 1, kind as usize],
-                        timestamp: p
-                            .keyword_counter_timestamps
+                    nodes.push(Node::resolved(
+                        id,
+                        vec![slot, usize::MAX - 1, kind as usize],
+                        p.keyword_counter_timestamps
                             .get(&kind)
                             .copied()
                             .unwrap_or(p.timestamp),
-                        cda: false,
-                        scope: StaticScope::This,
-                        condition: None,
-                        targets: Some(vec![id]),
-                        parts: vec![(
+                        (
                             Layer::Ability,
                             Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
-                        )],
-                    });
+                        ),
+                    ));
                 }
             }
             for (i, record) in game.effects_on(id).enumerate() {
-                let Some(l) = layer(&record.modification) else {
+                let Some(layer) = layer(&record.modification) else {
                     continue;
                 };
-                nodes.push(Node {
-                    source: id,
-                    key: vec![slot, usize::MAX, i],
-                    timestamp: record.timestamp,
-                    cda: false,
-                    scope: StaticScope::This,
-                    condition: None,
-                    targets: Some(vec![id]),
-                    parts: vec![(
-                        l,
-                        if record.modification == Modification::HasAbilitiesOfSource {
-                            Operation::Inherit
-                        } else {
-                            Operation::Modify(
-                                record.modification.map_amount(|n| LayerValue::Fixed(*n)),
-                            )
-                        },
-                    )],
-                });
+                let operation = if record.modification == Modification::HasAbilitiesOfSource {
+                    Operation::Inherit
+                } else {
+                    Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
+                };
+                nodes.push(Node::resolved(
+                    id,
+                    vec![slot, usize::MAX, i],
+                    record.timestamp,
+                    (layer, operation),
+                ));
             }
         }
-        let mut known = BTreeSet::new();
-        context.discover(&mut nodes, &mut known);
+        if !retain_sources {
+            seeds.clear();
+        }
         for layer in Layer::ALL {
             let mut applied = BTreeSet::new();
             loop {
@@ -363,34 +522,42 @@ impl<'a> Context<'a> {
                         .as_ref()
                         .unwrap()
                         .counter_count(CounterKind::PlusOnePlusOne);
-                    object.view.power += count;
-                    object.view.toughness += count;
+                    if count != 0 {
+                        let view = Arc::make_mut(&mut Arc::make_mut(object).view);
+                        view.power += count;
+                        view.toughness += count;
+                    }
                 }
             }
         }
         for (&id, object) in &mut context.objects {
-            let card = &game.state.cards[game.state.permanents[id].as_ref().unwrap().card];
-            object.view.is_animated = object.view.is_creature() && !card.types.is_creature();
-            object.view.creature_types = if object.view.is_creature() {
-                object
-                    .view
-                    .subtypes
-                    .iter()
-                    .filter(|s| !NONCREATURE.contains(&s.as_str()))
-                    .cloned()
-                    .collect()
-            } else {
-                Vec::new()
-            };
-            object.view.creature_types.sort();
-            object.view.creature_types.dedup();
-            object.view.static_abilities = object
-                .statics
-                .iter()
-                .map(|entry| entry.ability.clone())
-                .collect();
+            if !retain_sources || !Arc::ptr_eq(object, &seeds[id.0].as_ref().unwrap().object) {
+                let card = &game.state.cards[game.state.permanents[id].as_ref().unwrap().card];
+                Self::finish_object(Arc::make_mut(object), card);
+            }
         }
         context
+    }
+
+    fn finish_object(object: &mut LayerObject, card: &Card) {
+        let view = Arc::make_mut(&mut object.view);
+        view.is_animated = view.is_creature() && !card.types.is_creature();
+        view.creature_types = if view.is_creature() {
+            view.subtypes
+                .iter()
+                .filter(|s| !NONCREATURE.contains(&s.as_str()))
+                .cloned()
+                .collect()
+        } else {
+            Vec::new()
+        };
+        view.creature_types.sort();
+        view.creature_types.dedup();
+        view.static_abilities = object
+            .statics
+            .iter()
+            .map(|entry| entry.ability.clone())
+            .collect();
     }
     fn discover(&mut self, nodes: &mut Vec<Node>, known: &mut BTreeSet<Vec<usize>>) {
         // Occurrence provenance preserves duplicate grants, including statics
@@ -399,11 +566,8 @@ impl<'a> Context<'a> {
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(id, entry) {
-                        self.reads_mana |= node
-                            .condition
-                            .as_ref()
-                            .is_some_and(Condition::reads_mana_pools);
-                        self.reads_tapped |= node.reads_tapped();
+                        self.reads_mana |= node.reads.mana;
+                        self.reads_tapped |= node.reads.tapped;
                         nodes.push(node);
                     }
                 }
@@ -422,42 +586,36 @@ impl<'a> Context<'a> {
         instructions: &[Vec<Instruction>],
         layer: Layer,
     ) -> Vec<usize> {
+        if pending.len() == 1 {
+            return vec![0];
+        }
         let timestamp_order = |&a: &usize| {
             let node = &nodes[pending[a]];
             (!node.cda, node.timestamp, &node.key)
         };
-        let pt_independent = layer >= Layer::CharacteristicPower
-            && pending
+        // A disjoint read/write pair cannot change the other's instructions.
+        // Summaries are conservative; true dependencies still use CR 613.8's
+        // before/after semantic comparison. Granted statics force rediscovery.
+        let writes: Vec<_> = instructions
+            .iter()
+            .map(|is| is.iter().fold(0, |fields, i| fields | i.operation.writes()))
+            .collect();
+        let plausible = |a: usize, b: usize| {
+            let node = &nodes[pending[a]];
+            let reads = node.reads.fields | if node.targets.is_none() { ABILITIES } else { 0 };
+            a != b && node.cda == nodes[pending[b]].cda && reads & writes[b] != 0
+        };
+        let independent = !(0..pending.len()).any(|a| (0..pending.len()).any(|b| plausible(a, b)))
+            && !instructions
                 .iter()
-                .all(|&i| !nodes[i].reads_predicate(CardPredicate::reads_power));
-        // These grants cannot remove generating statics or change instructions.
-        // Flying is the only keyword that a current predicate can inspect.
-        // Loss and static grants retain full dependency evaluation.
-        let ability_independent = layer == Layer::Ability
-            && pending
-                .iter()
-                .all(|&i| !nodes[i].reads_predicate(|p| p.flying))
-            && instructions.iter().flatten().all(|i| {
-                matches!(
-                    i.operation,
-                    Operation::CatalogTrigger(_)
-                        | Operation::Inherit
-                        | Operation::Modify(
-                            Modification::AddKeywords(_)
-                                | Modification::LoseKeywords(_)
-                                | Modification::Firebending(_)
-                                | Modification::GrantActivated(_)
-                                | Modification::GrantTriggered(_)
-                        )
-                )
-            });
-        let independent = pt_independent || ability_independent;
+                .flatten()
+                .any(|i| matches!(i.operation, Operation::Modify(Modification::GrantStatic(_))));
         let ordered = || {
             let mut order: Vec<_> = (0..pending.len()).collect();
             order.sort_by_key(timestamp_order);
             order
         };
-        if pending.len() == 1 || (independent && !cfg!(debug_assertions)) {
+        if independent && !cfg!(debug_assertions) {
             return ordered();
         }
         let mut dependencies = vec![vec![false; pending.len()]; pending.len()];
@@ -467,6 +625,9 @@ impl<'a> Context<'a> {
             m.dependency_ns += ns;
         });
         for (b, &index) in pending.iter().enumerate() {
+            if !cfg!(debug_assertions) && !(0..pending.len()).any(|a| plausible(a, b)) {
+                continue;
+            }
             let mut after = {
                 #[cfg(feature = "benchmark")]
                 let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
@@ -478,8 +639,15 @@ impl<'a> Context<'a> {
             after.apply(&nodes[index], &instructions[b]);
             for (a, &other) in pending.iter().enumerate() {
                 if a != b && nodes[other].cda == nodes[index].cda {
+                    if !cfg!(debug_assertions) && !plausible(a, b) {
+                        continue;
+                    }
                     dependencies[a][b] = self.exists(&nodes[other]) != after.exists(&nodes[other])
                         || instructions[a] != after.instructions(&nodes[other], layer);
+                    debug_assert!(
+                        plausible(a, b) || !dependencies[a][b],
+                        "layer read/write summary missed a dependency"
+                    );
                     #[cfg(feature = "benchmark")]
                     crate::benchmark_layers::record(|m| {
                         m.comparisons += 1;
@@ -695,25 +863,22 @@ impl<'a> Context<'a> {
         )
     }
     fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
-        let mut node = Node {
-            source,
-            key: entry.key.clone(),
-            timestamp: entry.timestamp,
+        let mut plan = SourcePlan {
+            reads: ReadSet::default(),
             cda: false,
             scope: StaticScope::This,
             condition: None,
             parts: Vec::new(),
-            targets: None,
         };
-        let mut add = |l, m| node.parts.push((l, Operation::Modify(m)));
+        let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
             StaticAbility::Continuous(effect) => {
-                node.scope = effect.scope.clone();
-                node.condition = effect.condition.clone();
-                node.cda = effect.characteristic_defining;
+                plan.scope = effect.scope.clone();
+                plan.condition = effect.condition.clone();
+                plan.cda = effect.characteristic_defining;
                 for m in &effect.modifications {
                     if let Some(l) = layer(m) {
-                        let layer = if node.cda && l == Layer::BasePower {
+                        let layer = if plan.cda && l == Layer::BasePower {
                             Layer::CharacteristicPower
                         } else {
                             l
@@ -723,38 +888,38 @@ impl<'a> Context<'a> {
                 }
             }
             StaticAbility::TypeGrant(g) => {
-                node.scope = g.scope.clone();
-                node.condition = g.condition.clone();
+                plan.scope = g.scope.clone();
+                plan.condition = g.condition.clone();
                 add(Layer::Type, Modification::AddTypes(g.types.clone()));
                 add(Layer::Type, Modification::AddSubtypes(g.subtypes.clone()));
             }
             StaticAbility::KeywordGrant(g) => {
-                node.scope = g.scope.clone();
-                node.condition = g.condition.clone();
+                plan.scope = g.scope.clone();
+                plan.condition = g.condition.clone();
                 add(Layer::Ability, Modification::AddKeywords(g.keywords));
             }
             StaticAbility::PtBuff(b) => {
-                node.scope = b.scope.clone();
-                node.condition = b.condition.clone();
-                node.parts
+                plan.scope = b.scope.clone();
+                plan.condition = b.condition.clone();
+                plan.parts
                     .push((Layer::ModifyPower, Operation::Buff(Box::new(b.clone()))));
             }
             StaticAbility::CharacteristicPower(cda) => {
-                node.cda = true;
-                node.parts.push((
+                plan.cda = true;
+                plan.parts.push((
                     Layer::CharacteristicPower,
                     Operation::Power(Box::new(cda.clone())),
                 ));
             }
             StaticAbility::SetsLandType(set) => {
-                node.scope = StaticScope::All(set.predicate.clone());
-                node.condition = Some(set.condition.clone());
-                node.parts
+                plan.scope = StaticScope::All(set.predicate.clone());
+                plan.condition = Some(set.condition.clone());
+                plan.parts
                     .push((Layer::Type, Operation::LandType(set.subtype.clone())));
             }
             StaticAbility::AttachedSetsCharacteristics(set) => {
-                node.scope = StaticScope::Attached;
-                node.parts = vec![
+                plan.scope = StaticScope::Attached;
+                plan.parts = vec![
                     (Layer::Name, Operation::Name(set.named.clone())),
                     (
                         Layer::Type,
@@ -776,7 +941,7 @@ impl<'a> Context<'a> {
                 ];
             }
             StaticAbility::AttachedHas(ability) => {
-                node.scope = StaticScope::Attached;
+                plan.scope = StaticScope::Attached;
                 let card = &self.game.state.cards
                     [self.game.state.permanents[source].as_ref().unwrap().card];
                 let index = card
@@ -794,14 +959,14 @@ impl<'a> Context<'a> {
                 );
             }
             StaticAbility::TriggeredGrant(grant) => {
-                node.scope = grant.scope.clone();
-                node.parts.push((
+                plan.scope = grant.scope.clone();
+                plan.parts.push((
                     Layer::Ability,
                     Operation::CatalogTrigger(grant.ability.clone()),
                 ));
             }
             StaticAbility::GrantsAnyColorManaAbility(predicate) => {
-                node.scope = StaticScope::YouControl(predicate.clone());
+                plan.scope = StaticScope::YouControl(predicate.clone());
                 add(
                     Layer::Ability,
                     Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
@@ -813,13 +978,19 @@ impl<'a> Context<'a> {
             }
             _ => return None,
         }
-        Some(node)
+        Some(Node {
+            source,
+            key: entry.key.clone(),
+            timestamp: entry.timestamp,
+            targets: None,
+            plan: Arc::new(plan.summarize()),
+        })
     }
     fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
         for (ordinal, instruction) in instructions.iter().enumerate() {
             let id = instruction.target;
-            let object = self.objects.get_mut(&id).unwrap();
-            let view = &mut object.view;
+            let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
+            let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
                 Operation::Name(name) => {
                     view.name = name.clone();

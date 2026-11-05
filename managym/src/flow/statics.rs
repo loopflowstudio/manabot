@@ -5,7 +5,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{matches_view, Context},
+        layers::{matches_view, Context, SourceSeed},
         triggers::TriggerIndex,
     },
     state::{
@@ -72,6 +72,18 @@ pub struct Characteristics {
 }
 
 impl Characteristics {
+    /// Dynamic outputs and reductions can change without changing source plans.
+    fn has_dynamic_activations(&self) -> bool {
+        self.activated_abilities.iter().any(|ability| {
+            ability.cost_reduction_per.is_some()
+                || matches!(
+                    ability.effects.as_slice(),
+                    [crate::state::ability::Effect::If { .. }
+                        | crate::state::ability::Effect::AddOneColorManaValue { .. }]
+                )
+        })
+    }
+
     pub(crate) fn final_chapter(&self) -> Option<u8> {
         if !self.has_subtype("Saga") {
             return None;
@@ -112,6 +124,8 @@ impl Characteristics {
 pub(crate) struct DerivedCache {
     revisions: Revisions,
     board: Option<Arc<LayerBoard>>,
+    /// Copiable payloads survive unrelated board revisions and are shared by forks.
+    sources: Vec<Option<Arc<SourceSeed>>>,
     /// Indexed by PermanentId, as are the authoritative permanent slots.
     characteristics: Vec<Option<Arc<Characteristics>>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
@@ -172,27 +186,19 @@ impl DerivedCache {
     }
 }
 impl Game {
-    fn compute_board(&self) -> LayerBoard {
-        let context = Context::evaluate(self);
+    fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
+        let context = Context::evaluate(self, sources);
         LayerBoard {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
-            dynamic_activations: context.objects.values().any(|object| {
-                object.view.activated_abilities.iter().any(|ability| {
-                    // Conservatively include every conditional/dynamic output,
-                    // including conditions that do not currently match.
-                    ability.cost_reduction_per.is_some()
-                        || matches!(
-                            ability.effects.as_slice(),
-                            [crate::state::ability::Effect::If { .. }
-                                | crate::state::ability::Effect::AddOneColorManaValue { .. }]
-                        )
-                })
-            }),
+            dynamic_activations: context
+                .objects
+                .values()
+                .any(|object| object.view.has_dynamic_activations()),
             objects: {
                 let mut objects = vec![None; self.state.permanents.len()];
                 for (id, object) in context.objects {
-                    objects[id.0] = Some(Arc::new(object.view));
+                    objects[id.0] = Some(object.view.clone());
                 }
                 objects
             },
@@ -202,10 +208,13 @@ impl Game {
         let revisions = self.state.revisions();
         let cached = self.derived.borrow_mut().at(revisions).board.clone();
         if let Some(board) = cached {
-            debug_assert_eq!(*board, self.compute_board(), "stale layer context");
+            debug_assert_eq!(*board, self.compute_board(None), "stale layer context");
             return board;
         }
-        let board = Arc::new(self.compute_board());
+        let mut sources = std::mem::take(&mut self.derived.borrow_mut().sources);
+        let board = Arc::new(self.compute_board(Some(&mut sources)));
+        self.derived.borrow_mut().sources = sources;
+        debug_assert_eq!(*board, self.compute_board(None), "stale layer source plan");
         self.derived.borrow_mut().at(revisions).board = Some(board.clone());
         board
     }
@@ -288,6 +297,17 @@ impl Game {
             return view;
         };
         let purpose = ManaUse::ability(view.subtypes.iter().map(String::as_str));
+        // Most fixed activations already have an ordinary payment purpose.
+        // Preserve the shared allocation when finalization would write nothing.
+        if !view.has_dynamic_activations()
+            && view
+                .activated_abilities
+                .iter()
+                .all(|ability| ability.mana_cost.purpose == purpose)
+        {
+            return view;
+        }
+
         for ability in &mut Arc::make_mut(&mut view).activated_abilities {
             if let [effect] = ability.effects.as_slice() {
                 if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
@@ -366,23 +386,18 @@ impl Game {
         }
     }
 
-    pub(crate) fn static_sources(&self) -> Vec<(PermanentId, PlayerId, Arc<Characteristics>)> {
-        self.layer_board()
-            .objects
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, view)| {
-                let view = view.as_ref()?;
-                (!view.static_abilities.is_empty()).then(|| {
-                    let id = PermanentId(slot);
-                    (
-                        id,
-                        self.state.permanents[id].as_ref().unwrap().controller,
-                        view.clone(),
-                    )
-                })
+    pub(crate) fn static_sources(
+        &self,
+    ) -> impl Iterator<Item = (PermanentId, PlayerId, Arc<Characteristics>)> + '_ {
+        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .filter(|(_, view)| !view.static_abilities.is_empty())
+            .map(|(id, view)| {
+                (
+                    id,
+                    self.state.permanents[id].as_ref().unwrap().controller,
+                    view,
+                )
             })
-            .collect()
     }
     pub(crate) fn spell_keywords(&self, card: CardId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state.cards[card].keywords;
@@ -459,20 +474,19 @@ impl Game {
     }
 
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {
-        self.static_sources()
-            .into_iter()
-            .any(|(source, controller, view)| {
-                view.static_abilities.iter().any(|ability| {
-                    let StaticAbility::Restriction(restriction) = ability else {
-                        return false;
-                    };
-                    restriction.kind == kind
-                        && restriction.unless.as_ref().is_none_or(|condition| {
-                            !self.check_static_condition(condition, controller)
-                        })
-                        && self.static_scope_applies(&restriction.scope, source, controller, target)
-                })
+        self.static_sources().any(|(source, controller, view)| {
+            view.static_abilities.iter().any(|ability| {
+                let StaticAbility::Restriction(restriction) = ability else {
+                    return false;
+                };
+                restriction.kind == kind
+                    && restriction
+                        .unless
+                        .as_ref()
+                        .is_none_or(|condition| !self.check_static_condition(condition, controller))
+                    && self.static_scope_applies(&restriction.scope, source, controller, target)
             })
+        })
     }
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
