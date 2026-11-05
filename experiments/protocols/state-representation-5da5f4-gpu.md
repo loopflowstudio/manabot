@@ -7,9 +7,11 @@ and Vast use. No winner promotion, merge or MTG-213 allocation is authorized.
 
 Reading scope: the original comparison and allocation sections describe executed
 source `27a126422`. Later dated amendments preserve each attempt's source, recipe
-and budget. The final **Matched batched admission and scientific allocation**
-section records replacement Run `e51f61b92931` at `af601877e` and its launch;
-no plateau result exists. It supersedes the historical spending gates below.
+and budget. The **Matched batched admission and scientific allocation** section
+records replacement Run `e51f61b92931` at `af601877e` and supersedes the historical
+spending gates below. **Terminal scientific outcome** and **Recovery audit** record
+its loss; the audit corrects the terminal section's unknown cause. No plateau
+result exists.
 `scratch/representation-learning-plan.md` owns current progress and remaining
 work. Retained attempt receipts and reported charges remain immutable evidence.
 
@@ -497,3 +499,64 @@ scoring. Pool seed 74212 retains raw weights at updates 0, 32 and 64 only, so ex
 continuation is unavailable. Any retraining needs a prospective amendment of the
 "no retries" failure clause. Evidence is under
 `experiments/data/state-representation-gpu-5da5f4/batched-plateau/recovery-audit-20261105/`.
+
+## Recovery amendment — frozen 2026-11-05, before any scoring
+
+Jack Heart, 2026-11-05: "can we schedule soem evals in paralell with the additional
+training", selecting recovery option A. No endpoint had been scored when this was
+frozen, so nothing below was chosen with knowledge of a result. `RECOVERY` in
+`experiments/state_representation_gpu.py` is the executable form, SHA256
+`a0383ac703f526f27e4bbdbc317ed383cde9f5e1d5b9d2eac0c3a82e2f86f7be`. Each worker writes it to `recovery.json`.
+
+**Unchanged.** `SCORING` stays byte-identical (SHA256
+`f09750f156731db819859f1f6616855edbcc7c277576eca366cd762480f67402`), so every
+evaluation protocol keeps its identity. Also unchanged: seeds 74211–74214, both
+arms, 256 updates × 256 complete games, recipe digests, the checkpoint schedule,
+curve deals 85001–85032, held-out deals 86001–86064, heuristic opponent, 120-second
+game and 10,000-command bounds, bootstrap, CPU evaluator settings (four active
+games, batch 32, 1 GiB residency), plateau criterion and primary comparison.
+Failed Run `e51f61b92931`, its receipts and its three completed learners stay
+immutable and in the denominator.
+
+**What this amends.** Only the `failure` clause's "no retries", for this cohort:
+
+- A learner lost before completion restarts from initialization on its seed in a
+  fresh Run. Retained learners are never retrained.
+- An endpoint with no score may repeat in a fresh attempt directory; the earlier
+  attempt stays in the denominator. An endpoint with a complete, hash-verified
+  `monitor.json` is skipped. A scored endpoint never repeats; one that fails
+  verification stops for a person rather than being played again.
+- Repeats follow from missing evidence alone, never from a score.
+
+**Retained-run admission.** Pool/74211, GRU/74211 and GRU/74212 enter by the
+SHA256 of their retained `run.json`, pinned in `RETAINED_RUNS`, with exact
+checkpoint bytes delivered by digest. Paths in those receipts name a machine that
+no longer exists, so the evaluator reads the delivered bytes and
+`checkpoint_manifest` admits them against world, ABIs, matchup, engine source and
+content at the evaluating runtime. A score-free pass over all 30 retained endpoints
+admitted them at this source, world `w17`, engine source
+`2f968d17…5ee30a2`. That pass played no games.
+
+**Missing learners.** GRU/74213, pool/74213, pool/74214, GRU/74214 and pool/74212,
+the last restarted from initialization rather than resetting Adam, EMA and RNG
+midway. Each compares its `initial_raw` SHA256 where a retained value exists:
+pool/74212's is `db81a9ea…e5e7f7f`. A mismatch is recorded and needs explanation
+before that learner is scored.
+
+**Execution.** One Etude Run per learner and per evaluation, identified by
+`unit_key`, so a machine loss costs one unit. Each learner owns one
+NVIDIA GeForce RTX 3090; hosts may differ, so the amendment fixes the GPU
+class and each learner records its host in `host.json`. The paired learners of a
+seed may therefore run on different hosts, a limitation of inference. New learners
+bind by the identities above, not by source-hash equality with `af601877e`.
+Evaluation runs on CPU rentals alongside training and records what was actually
+concurrent in each result's `concurrent_activity`.
+
+**Interim results.** Partial curves are descriptive. Interim scores select no
+treatment, retry, horizon or checkpoint, and the frozen analysis runs only when
+all 72 curve and eight held-out endpoints are scored. Cost decisions read timing
+receipts only.
+
+The launcher runs from Etude PR #84 head `6bfa114ed`, which keeps a Vast rental
+through a 15-minute outage; workers stay locked to `64e9eaabf`. PR #84 and this
+study are not merged by this amendment. Spending stays inside the original $25.

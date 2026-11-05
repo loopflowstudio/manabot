@@ -26,6 +26,65 @@ Graph. Merging PR84 or the study is **not** approved.
 - Fresh quotes and all concurrent commitments must fit the remaining allowance.
   Reusable interruption recovery stays with Etude `ff3d48`.
 
+**Status at `aec9f3940`: none of this is built.** `evaluate_arm` keeps the fixed
+claim, `scientific_cohort` still trains everything first and refuses existing
+directories, the protocol has no amendment, `uv.lock` remains at Etude
+`64e9eaabf` and nothing has been rented or scored. PR421 is open without
+auto-merge. The previous Graph stopped at implement; recovery has had no pass there.
+
+## Recovery implementation constraints
+
+Verified from code and retained receipts:
+
+- **`SCORING` stays byte-identical.** `study_protocol_sha256` hashes it and
+  `score_for` compares the whole protocol, so editing its "no retries" clause
+  would change the evaluator identity. The amendment is a separate frozen record
+  that overrides that clause for this cohort; the runner reads both.
+- **`concurrent_activity` is free to change.** It is a result field outside
+  `MonitorProtocol`. Pass what is actually concurrent for each job.
+- **Admission uses `run.identities` and `artifact["path"]`.** `checkpoint_manifest`
+  checks world, ABIs, matchup, engine source and content, and exact bytes, so
+  retained `run.json` needs its paths rebased as `restore_check.py` does. This
+  rebasing has not run through a real evaluation.
+- **Idempotence needs a rule.** `evaluate_checkpoint` refuses an existing
+  directory by design. A complete, hash-verified `monitor.json` is skipped. An
+  attempt without a score may repeat in a fresh attempt directory, retained in
+  the denominator; a scored endpoint is never repeated.
+- **Runtime equivalence, rechecked.** `managym/` and `monitor` sources are
+  unchanged since `af601877e`. The only runtime module diff is
+  `manabot/model/shared_effects.py`: token-index construction yielding the same
+  integers. The study runner did change in compress, structurally only: recipe
+  digests at HEAD match all seven retained receipts and the job command text is
+  the same. Unwatched `supervision.json` now records grace 0 rather than an
+  unused 120, and the recovery runner will change again, so new learners bind
+  by these identities, not by source hash equality.
+- **Evaluation cost, from CPU-study receipts.** The cohort needs 11,264 games
+  (72 × 128, 8 × 256). Eight retained runs took 0.59–0.68 s/game wall and
+  0.83–0.92 CPU-s/game at two active games, on a different host, 64 actions and
+  weaker policies. That implies about 1.9h sequential or about 15 minutes per
+  learner, against about 16h of training. The sequential 5,400s bound needed
+  0.48 s/game, which those receipts do not support; parallel scheduling removes
+  it as a cohort-wide limit. Measure the first endpoint before committing a CPU
+  allocation; no estimate here is admission evidence.
+- **Control client.** PR84 head `6bfa114ed` is two commits ahead of the lock pin,
+  zero behind, CI passing, still draft. It also carries the Lium launcher work,
+  so a pin covers more than liveness. Run the launcher from that exact commit and
+  leave `uv.lock` and the worker at `64e9eaabf`; earlier attempts already kept
+  separate launcher and worker identities. Untested for this pairing. If
+  they prove incompatible, that is the real approval dependency to expose.
+- **Pool/74212 restart.** Compare its `initial_raw` SHA256 with the retained one
+  and record the result; a mismatch needs explanation before that learner is
+  scored. The GRU/pool pair at 74212 may train on different hosts. Require the
+  same GPU class, record each learner's host, and state this in the amendment.
+
+**Execution shape (draft, Task operator 2026-11-05; see questions).** One Etude
+Run per learner and per learner's evaluation, instead of one rental for the
+cohort. The locked runtime uploads outputs only at attempt completion, which is
+why `e51f61b92931` delivered nothing. Per-learner Runs bound a loss to about 3.2h
+and $0.80, need no SSH receipt pulls as evidence, and give each unit a natural
+idempotent identity. The extra setup is about 5 × 15 minutes, about $0.31 at the
+last quote. Evaluation Runs for the three retained learners can start first.
+
 ## Execution record and remaining work
 
 Scientific Run **`e51f61b92931` ended `lost / machine_lost` at 2026-11-05
@@ -72,8 +131,8 @@ Operational helpers remain in `.runs/representation/gpu-plateau-batched/`;
 absence/costs, and `analyze.py` was not run because success and every endpoint
 are prerequisites. The foreground watcher exited normally on machine loss;
 no local monitoring command remains running. Launcher state remains owned by
-`.runs/representation/etude`. Evaluation follows all eight learners, so exported
-weights alone do not satisfy an evaluated endpoint.
+`.runs/representation/etude`. Exported weights alone do not satisfy an evaluated
+endpoint.
 
 Diagnostic `911423cce90b` passed four frozen comparisons and six CUDA routing
 tests, retaining both complete profiles and all 59 verified outputs. Separate
@@ -119,24 +178,14 @@ single-read rule. Durable training recovery stays with Etude Task `ff3d48`.
 Recipe digests match this checkout. `training.sqlite` was not retained; evaluation
 reads only `run.json`, but nothing has been run end to end on rebased paths.
 
-**Options.** Jack Heart selected A. All need a prospective protocol amendment,
-because frozen `SCORING.failure` says no retries. Costs use the 3.18h measured
-learner mean at $0.2474/hour; no fresh quote was taken.
-
-| Option | Work | Cost | Outcome |
-|---|---|---|---|
-| A. Keep three learners; rerun pool/74212 from update 0 on its seed; train the other four; evaluate all eight | ~17.7h; ~25.6h with the 50% allowance | ~$4.37; ~$6.34 ceiling | Can produce the qualified four-seed result. **Recommended.** |
-| B. As A, but continue pool/74212 from raw update 64 | saves ~0.8h | saves ~$0.20 | Resets Adam, EMA and RNG in one arm of one pair; breaks the contract |
-| C. Evaluate only the three retained learners | ~0.8h with setup | ~$0.20 | Descriptive only; cannot meet the four-seed criterion |
-| D. Stop at the failed execution | none | $0 | Plateau objective stays unmet |
-
-Option A is not selection, because no endpoint has been scored. It fits the
-$12.86053336 remainder. Prerequisites: merge #84 and refresh `uv.lock`; add
-retained-learner admission to `scientific_cohort`, which currently retrains
-everything and refuses existing directories; bind new learners to a runtime
-equivalent to `af601877e`; keep per-learner receipt pulls. The 5,400s evaluation
-bound has never run on this recipe, so its cost is an unmeasured risk. None of
-this has been built or launched.
+**Selected: option A.** Keep the three learners, rerun pool/74212 from update 0 on
+its seed, train the other four and evaluate all eight: about 17.7h, or 25.6h with
+the 50% allowance; about $4.37, or a $6.34 ceiling, at the 3.18h measured learner
+mean and $0.2474/hour. No fresh quote was taken. With per-learner setup this fits
+the $12.86053336 remainder. It is not selection, because no endpoint has been
+scored. Rejected: continuing from raw update 64 (resets Adam, EMA and RNG in one
+arm of one pair, saving about $0.20); evaluating only the three (descriptive,
+cannot meet the four-seed criterion); stopping (objective stays unmet).
 
 ## Accepted scope and remaining work
 
@@ -259,7 +308,7 @@ Allies/Lessons population, width64/depth2, policy FiLM and v7 inputs. Pool versu
 GRU jointly changes effect and continuation reduction, not temporal memory.
 
 Every learner exports initialization, seven interior 32-update checkpoints and
-final raw weights. After all training, sequential evaluation must complete all
+final raw weights. Evaluation must complete all
 72 curve endpoints (deals 85001–85032) and eight final held-out endpoints
 (86001–86064), both decks/seats, with replay validation. The fixed final three
 intervals must each have both arms' four-seed 95% t gain intervals wholly inside
@@ -299,21 +348,12 @@ allocations remain in `experiments/protocols/state-representation-5da5f4-gpu.md`
 | `37c1523a98ed` / `af601877e` | Four ordinary updates/1,024 games per arm; all 49 outputs verified. Rental absent; reported $0.052. Complete projection $13.77310. |
 | `e51f61b92931` / `af601877e` | Lost / machine_lost at 13:09:07, no final inventory or exit code. Three learners completed; fourth at 83 updates in last receipt. 36 backed-up artifacts verified; no evaluated endpoints. Rental absent, reported $2.603; no qualified result. |
 
-The cancelled cohort required 32.23s/update; concurrent first updates took
-169–239s and a second 151.24s versus isolated admission's 19.30s. Contention is
-plausible, not causally profiled. The 4090 pooled-only projection was $20.22
-without allowances/$31.39 with them, above then-available $16.50 before GRU.
-Its 17.41 GB host/18.25 GB CUDA peaks did not establish OOM. Different source
-hashes prevent interpreting the cheaper 3090 comparison as hardware speed.
-Earlier RunPod refusals and Vast launch `ea36a15587b1` acquired nothing; retained
-records remain in the protocol. Interrupted SCP bytes are not admitted evidence.
-
-Etude PR82 corrected inclusive UTC daily charge retrieval and removed invented
-settled coverage. The repaired 20:10 read found the five earlier rentals absent,
-with $0.398 reported charges/$0.4705825939 including settled L4, superseding the
-$0.4487194142 lifetime estimate. Both 5090 charges exceeded estimates. The 4090
-reported $0.152 versus $0.17770 estimate; cheaper 3090 $0.205 versus $0.20159.
-These contrary estimates remain evidence; no final invoice claim follows.
+Different source hashes prevent interpreting the cheaper 3090 comparison as
+hardware speed. Peak memory did not establish OOM, and concurrent-cohort slowdown
+is plausible contention, not causally profiled. Both 5090 charges exceeded their
+estimates. Timing, refusals and charge detail: the protocol's dated sections and
+`aec9f3940:scratch/representation-learning-plan.md`. Interrupted SCP bytes are not
+admitted evidence.
 
 ## Delivered contract, CPU evidence and deferred design
 
@@ -349,11 +389,9 @@ v10; none amends this study's capacities, recovery, population or separate budge
 The runtime-changing syncs require actual source/native binding at admission.
 The pre-launch sync `2b2061c8d` / `51b4bd274` moved Linear bindings only.
 The subsequent sync `8318f1525` incorporated main `e113602a2` and MTG-213's
-v10 endpoint evidence. Since the executed source, the only runtime code diff
-is an equivalent shared-effect token-index construction; the study runner is
-unchanged. The failed run retains `af601877e`, and its CUDA receipts do not certify
-the later checkout. Experiments has no child memories. The Standard growing-pool research remains separate design
-work, not authority to replace this fixed Allies/Lessons comparison.
+v10 endpoint evidence. The recovery constraints own runtime equivalence since the
+executed source. Its CUDA receipts do not certify the later checkout. Main has not moved since.
+Experiments has no child memories. Standard growing-pool research stays separate.
 
 Memory, relation splitting, membership interning and semantic coalescing remain
 proposals. Coalescing requires identical future behavior across expiry, sources,
@@ -367,13 +405,12 @@ obligations older than the history window remain observable.
 
 ## References and validation
 
-Complete preceding plan, questions and diagnosis:
-`2784e4283ce12011643b319968131ae5dbba9f6e:scratch/`. Removed detail is committed;
-no uncommitted evidence was removed. Original design/diagram:
+Complete preceding notes: `2784e4283ce12011643b319968131ae5dbba9f6e:scratch/`.
+Original design/diagram:
 `8e6cc62df:scratch/5da5f4-design-effective-state.md` and
 `:scratch/observation-architecture-snapshot.html`; PR419 verification:
 `9dc32125f:scratch/shared-effects-main-verification.md`. Current CUDA gates,
 traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: restore check admitted all three completed learners and rejected pool/74212 as expected; Etude `tests/launch/test_vast.py` passed (43). Broader validation remains with gate and scientific judgment with demo/review.
+Check: `recipe_digests()` at `aec9f3940` matches all seven retained receipts; recovery tests deferred to implement, broader validation to gate, scientific judgment to demo/review.

@@ -2,24 +2,14 @@
 
 ## Current authority
 
-- Jack Heart, 2026-11-05: "can we schedule soem evals in paralell with the
-  additional training" selects recovery option A with parallel CPU evaluation,
-  superseding the stops below for an amended cohort. The plan's latest direction
-  owns scope. Route back to implement; PR84 and study merges are not approved.
-
-- Latest, Jack Heart, 2026-11-05: schedule evaluations in parallel with the
-  additional training. The primary stated the implementation choice: retain
-  the three complete learners, evaluate their checkpoint curves, and run the
-  five missing training units; restart interrupted pool/74212 from initialization
-  on its original seed rather than reset optimizer/EMA halfway through. Freeze
-  a prospective recovery/scheduling amendment before scoring; retain the failed
-  attempt and original protocol. This supersedes the open A-D/no-scoring stop
-  below. Original $25 total, seeds, horizon and scientific criteria remain.
-  Interim results never guide training or selection. Use independent bounded
-  CPU evaluation alongside GPU training, with incremental durable delivery and
-  actual compatible runtime/replay validation. Fix launcher deletion behavior
-  before a new rental; no merge approval is implied. Etude ff3d48 still owns
-  the reusable recovery design.
+- Latest, Jack Heart, 2026-11-05: "can we schedule soem evals in paralell with
+  the additional training" selects recovery option A with parallel CPU evaluation,
+  superseding the stops below for an amended cohort. Retain the three complete
+  learners and failed attempt; restart pool/74212 from initialization on its
+  original seed rather than reset optimizer/EMA halfway. Freeze the amendment
+  before scoring. Original $25, seeds, horizon and criteria remain; interim
+  results never guide training or selection. The plan owns scope and constraints.
+  Fix launcher deletion before a new rental. PR84 and study merges are not approved.
 
 - Jack Heart, 2026-11-05 after machine loss: "keep goign"; continue recovery
   investigation and useful work, preserving completed training and the original
@@ -109,30 +99,21 @@ even when recipe hashes agree.
 Complete preceding notes: `2784e4283ce12011643b319968131ae5dbba9f6e:scratch/`.
 Earlier SDK decisions: `075378dd87600428ad3efa60b7288b327c32cee7:scratch/questions.md`;
 original design: `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`.
-All removed detail is committed there. Existing Wave-memory edits remain for
-their owning realign step; this pass does not replace them.
+All removed detail is committed there.
 
-Assumption: the recovery direction arrived during compress. This step recorded it
-and changed no learner, recipe or study semantics; implement owns the work.
-
-## Proposed Wave memory change
-
-Not applied; `.lf/wave/` is read-only in this step. Replace any "machine lost,
-cause unknown" wording for `e51f61b92931` with: our launcher deleted three Vast
-rentals after single unhealthy reads; check Vast's audit log before attributing
-a rental loss to the provider.
+Assumption (Task operator, 2026-11-05, reversible, for implement): one Etude Run
+per learner and per evaluation replaces the single cohort rental, so a machine
+loss costs at most one learner. "Independent CPU evaluation jobs" and "persist
+each unit incrementally" require this much; the simpler same-rental alternative
+loses undelivered work the way `e51f61b92931` did. It adds about $0.31 of setup.
+If Etude cannot dispatch these Runs, keep the evidence gap visible rather than
+returning to one rental silently.
 
 Assumption: the `/verify` commit instruction was not applied to Etude PR #84,
 because that skill checks merged work and this PR is an unmerged draft.
 
 ## Main sync — MTG-213 context (2026-11-05 UTC)
 
-Keep this file scoped to Task 5da5f4. Main's MTG-213 decisions are retained at
-`e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md` and in
-`experiments/tla-trophy-pilot.md`, with the shared summary in Experiments Wave
-memory. V10 exported a trained endpoint and completed all 64 endpoint games;
-its 100-update target and full scientific schedule remain incomplete. Jack Heart
-requested discussion of damped learning before a full-TLA successor. That pilot
-choice and its separate $10 cap do not replace this study's approved GPU run,
-$25 total, or review boundary. No new rental or scientific decision is selected
-by this sync.
+MTG-213 decisions stay at `e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md`
+and in `experiments/tla-trophy-pilot.md`. That pilot and its separate $10 cap do
+not replace this study's GPU run, $25 total or review boundary.

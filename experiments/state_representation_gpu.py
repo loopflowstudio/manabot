@@ -1,9 +1,16 @@
-"""Sequential GPU admission and prospectively budgeted representation learning.
+"""GPU admission and the recovery cohort of the representation plateau study.
 
-The same complete-game executor owns both excluded throughput admission and
-eight independent scientific learners. A frozen allocation binds measured
-throughput and a rental quote before scientific execution; one child owns the
-GPU at a time. Monitoring exports and evaluation retain every scheduled point.
+The same complete-game executor owns excluded throughput admission and each
+scientific learner. After Run `e51f61b92931` was lost, `RECOVERY` freezes the
+amendment that lets three retained learners be evaluated while the other five
+train. `SCORING` is untouched: it stays the evaluator's identity.
+
+Every recovery unit is its own Etude Run, because outputs are delivered only when
+an attempt ends. `LearnerUnit` trains one fresh learner on one GPU;
+`EvaluationUnit` scores endpoints of one learner on CPU, from checkpoints given
+as verified inputs. The ledger (`pending_endpoints`, `verified_result`) reads
+delivered attempts: a complete hash-verified `monitor.json` is never repeated,
+and an unscored attempt stays in the denominator and repeats in a fresh directory.
 """
 
 import argparse
@@ -13,13 +20,14 @@ from datetime import datetime
 from decimal import Decimal
 import os
 from pathlib import Path
+import platform
 import signal
 import subprocess
 import sys
 import time
-from typing import Literal
+from typing import Annotated, Literal
 
-from etude.launch.records import Job, Run
+from etude.launch.records import Input, Job, Run
 from etude.report import Report
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
@@ -43,14 +51,19 @@ from manabot.experiment.checkpoint_evaluation import (
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.experiment.numerics import check_numerics
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.recipes.builders import move_learning
 from manabot.sim.execution import EvalExecution
 from manabot.training.execution import execute_regime
 from manabot.training.panels import ML, PERF
 from manabot.training.records import TrainingCoordinates, TrainingRun
-from manabot.training.regime import IterationSchedule, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    ArtifactReference,
+    IterationSchedule,
+    TrainingRegime,
+    TrainSelfPlay,
+)
 from manabot.verify.store import VerifyStore
 
 EXPERIMENT = "state_representation_gpu"
@@ -82,6 +95,58 @@ SCORING = {
     "plateau": "last three successive 32-update gains: each arm's paired-seed 95% t interval entirely within +/-0.05; fixed final window",
     "primary": "GRU minus pooled at common final update 256 on untouched held-out deals",
     "failure": "missing seeds/checkpoints/games prevent a qualified result; no retries or selection",
+}
+
+# The executed cohort's scheduled order, preserved for the five missing learners.
+ASSIGNMENTS: tuple[tuple[Arm, int], ...] = tuple(
+    (arm, seed)
+    for index, seed in enumerate(SEEDS)
+    for arm in (ARMS if index % 2 == 0 else tuple(reversed(ARMS)))
+)
+GPU_CLASS = "NVIDIA GeForce RTX 3090"
+# SHA256 of each retained run.json, from the 13:00:43 UTC receipt of `e51f61b92931`.
+RETAINED_RUNS: dict[tuple[Arm, int], str] = {
+    ("typed_pool", 74211): (
+        "12fd45fadfdd3202f38d6da63dad8d28e2801a70a72fb7e0411fb6d862da6d82"
+    ),
+    ("typed_gru", 74211): (
+        "704c9f8bcf940da09868d6c68fcdbb2f53679c8320c84eef2589c2f2ca9b8e5c"
+    ),
+    ("typed_gru", 74212): (
+        "154776ff30546249f6eac9ac18e3f913a53da0596137d48fe9f5d52c9f1a678a"
+    ),
+}
+MISSING_LEARNERS = tuple(item for item in ASSIGNMENTS if item not in RETAINED_RUNS)
+# The interrupted learner restarts from initialization on its seed. This digest is
+# compared with the restart and recorded; it does not gate training.
+INTERRUPTED_INITIAL_RAW: dict[tuple[Arm, int], str] = {
+    ("typed_pool", 74212): (
+        "db81a9eacee1bf475a2c90d08f4afb43608f17b59e7e799aa6e51f036d5e7f7f"
+    ),
+}
+RECOVERY = {
+    "name": "state-representation-gpu-recovery-20261105",
+    "scoring_sha256": canonical_sha256(SCORING),
+    "failed_run": "e51f61b92931",
+    "retained_runs": sorted(
+        (arm, seed, digest) for (arm, seed), digest in RETAINED_RUNS.items()
+    ),
+    "missing_learners": MISSING_LEARNERS,
+    "interrupted_initial_raw": sorted(
+        (arm, seed, digest) for (arm, seed), digest in INTERRUPTED_INITIAL_RAW.items()
+    ),
+    "hardware": f"one learner per {GPU_CLASS}; each learner's host recorded",
+    "evaluation": "CPU, four active games, batch 32, 1GiB residency, per-unit Runs",
+    "retry": (
+        "amends SCORING's no-retries clause for this cohort only: a learner lost "
+        "before completion restarts from initialization on its seed; an unscored "
+        "endpoint repeats in a fresh attempt; a scored endpoint never repeats; "
+        "every attempt stays in the denominator"
+    ),
+    "interim": (
+        "partial curves are descriptive; interim scores select no treatment, "
+        "retry, horizon or checkpoint"
+    ),
 }
 
 
@@ -330,51 +395,121 @@ class ProgressWatch:
         return None
 
 
-class ScientificAllocation(BaseModel):
-    """Measured full-cohort allocation; setup and teardown count against the cap.
+class Endpoint(BaseModel):
+    """One attempt at a scheduled curve point or the final held-out cohort."""
 
-    The retained admission digest identifies evidence, not a model score. The
-    operator checks the matching hardware/source and remaining Task allowance
-    before freezing this file. Etude separately enforces the live rental quote.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    admission_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    admission: ThroughputAdmission
-    hourly_usd: Decimal = Field(gt=0, allow_inf_nan=False)
-    max_usd: Decimal = Field(gt=0, le=17, allow_inf_nan=False)
-    hardware: str = Field(min_length=1)
-
-    @property
-    def work_hours(self) -> float:
-        # The projection includes 15 minutes setup; Etude adds that separately.
-        return self.admission.cohort_hours() - SETUP_SECONDS / 3600
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    update: int
+    heldout: bool = False
+    attempt: int = Field(default=1, ge=1)
 
     @model_validator(mode="after")
-    def affordable(self) -> "ScientificAllocation":
-        if self.admission.projected_usd(self.hourly_usd) > self.max_usd:
-            raise ValueError("projected complete cohort exceeds allocation")
+    def scheduled(self) -> "Endpoint":
+        if self.update not in POINTS or (self.heldout and self.update != UPDATES):
+            raise ValueError("undeclared evaluation endpoint")
+        return self
+
+    @property
+    def name(self) -> str:
+        return "heldout" if self.heldout else f"curve-{self.update:04d}"
+
+    def directory(self, arm: Arm, seed: int) -> Path:
+        """This attempt's own place below the ledger root, in delivery and at rest."""
+        return Path(f"{arm}-{seed}", self.name, f"attempt-{self.attempt:04d}")
+
+
+# Curve points in update order, then the held-out cohort: 72 + 8 across the study.
+ENDPOINTS = (
+    *(Endpoint(update=update) for update in POINTS),
+    Endpoint(update=UPDATES, heldout=True),
+)
+
+
+class LearnerUnit(BaseModel):
+    """One learner trained from initialization on one GPU; `attempt` counts restarts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["train"] = "train"
+    arm: Arm
+    seed: int
+    attempt: int = Field(default=1, ge=1)
+
+    @model_validator(mode="after")
+    def missing(self) -> "LearnerUnit":
+        if (self.arm, self.seed) not in MISSING_LEARNERS:
+            raise ValueError("retained learners are immutable and never retrained")
+        return self
+
+
+class EvaluationUnit(BaseModel):
+    """Endpoints of one learner, scored in order; `run_sha256` names its run.json."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["evaluate"] = "evaluate"
+    arm: Arm
+    seed: int
+    run_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    endpoints: tuple[Endpoint, ...] = Field(min_length=1)
+    # What actually shares this job's window, stated at dispatch. A scored result
+    # retains it, so it must not claim anything the operator cannot observe.
+    concurrent_activity: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def distinct(self) -> "EvaluationUnit":
+        if (self.arm, self.seed) not in ASSIGNMENTS:
+            raise ValueError("undeclared learner")
+        names = [endpoint.name for endpoint in self.endpoints]
+        if len(names) != len(set(names)):
+            raise ValueError("an evaluation Run scores each endpoint once")
+        return self
+
+
+RecoveryUnit = Annotated[LearnerUnit | EvaluationUnit, Field(discriminator="kind")]
+
+
+def unit_key(unit: LearnerUnit | EvaluationUnit) -> str:
+    """Stable Etude Run id: declaring the same work again finds the same Run.
+
+    Concurrent activity describes a dispatch, not what the unit computes.
+    """
+    identity = unit.model_dump(mode="json", exclude={"concurrent_activity"})
+    return canonical_sha256({"recovery": RECOVERY, "unit": identity})[:12]
+
+
+class RecoveryAllocation(BaseModel):
+    """One unit's bounds and inputs; the operator checks them against a fresh quote."""
+
+    model_config = ConfigDict(extra="forbid")
+    unit: RecoveryUnit
+    max_hours: float = Field(gt=0)
+    max_usd: Decimal = Field(gt=0, allow_inf_nan=False)
+    inputs: tuple[Input, ...] = ()
+
+    @model_validator(mode="after")
+    def supplied(self) -> "RecoveryAllocation":
+        if isinstance(self.unit, EvaluationUnit) != bool(self.inputs):
+            raise ValueError("evaluation alone reads delivered checkpoints")
         return self
 
 
 class StudyJob(BaseModel):
-    """Source identity and, only after admission, the complete scientific budget."""
+    """Source identity and, for a recovery unit, its frozen allocation."""
 
     model_config = ConfigDict(extra="forbid")
     source_bundle: SourceBundle
-    allocation: ScientificAllocation | None = None
+    recovery: RecoveryAllocation | None = None
     admission_limits: AdmissionLimits = Field(default_factory=AdmissionLimits)
 
 
 # Job declaration and independent learner/evaluator entry points.
 
 
-def runs(revision: str, allocation: str = "", admission_limits: str = "") -> list[Run]:
-    """Default to admission; science requires an explicit frozen allocation file."""
+def runs(revision: str, unit: str = "", admission_limits: str = "") -> list[Run]:
+    """Default to admission; a recovery unit requires its frozen allocation file."""
     root = Path(__file__).resolve().parents[1]
-    admitted = (
-        ScientificAllocation.model_validate_json(Path(allocation).read_bytes())
-        if allocation
+    allocated = (
+        RecoveryAllocation.model_validate_json(Path(unit).read_bytes())
+        if unit
         else None
     )
     limits = (
@@ -384,23 +519,43 @@ def runs(revision: str, allocation: str = "", admission_limits: str = "") -> lis
     )
     spec = StudyJob(
         source_bundle=bundle_at(root, revision),
-        allocation=admitted,
+        recovery=allocated,
         admission_limits=limits,
     )
+    name, until, hours, usd, inputs = (
+        EXPERIMENT,
+        f"updates={ADMISSION_UPDATES}",
+        ADMISSION_WORK_HOURS,
+        Decimal("0.50"),
+        (),
+    )
+    if allocated is not None:
+        work = allocated.unit
+        hours, usd, inputs = allocated.max_hours, allocated.max_usd, allocated.inputs
+        name = f"{EXPERIMENT}-{work.kind}-{work.arm}-{work.seed}"
+        until = (
+            f"updates={UPDATES}"
+            if isinstance(work, LearnerUnit)
+            else f"endpoints={len(work.endpoints)}"
+        )
     job = Job(
-        name=EXPERIMENT,
+        name=name,
         experiment=EXPERIMENT,
         setup=machine_setup(UV_EXTRAS),
         command=f"{TOOLCHAIN_ENV}\nuv run --locked{UV_EXTRAS} python -m experiments.{EXPERIMENT}",
         repo=str(root),
         revision=revision,
         config=spec.model_dump_json(),
-        until=f"updates={UPDATES if admitted else ADMISSION_UPDATES}",
-        max_hours=admitted.work_hours if admitted else ADMISSION_WORK_HOURS,
-        max_usd=admitted.max_usd if admitted else Decimal("0.50"),
+        until=until,
+        max_hours=hours,
+        max_usd=usd,
         max_attempts=1,
+        inputs=inputs,
     )
-    return job.runs(0)
+    return [
+        run.model_copy(update={"id": unit_key(allocated.unit)}) if allocated else run
+        for run in job.runs(0)
+    ]
 
 
 def checkpoints(run: TrainingRun) -> list[Checkpoint]:
@@ -442,7 +597,8 @@ def train_arm(
     """One fresh learner owns CUDA, execution and receipts in either mode.
 
     Admission uses an excluded seed and short horizon without curve milestones;
-    science requires every declared export before evaluation can begin.
+    science requires every declared export before evaluation can begin. A restart
+    uses a fresh Run, so `out` never holds an earlier attempt.
     """
     if seed not in ((ADMISSION_SEED,) if admission else SEEDS):
         raise ValueError("undeclared training seed")
@@ -488,39 +644,183 @@ def train_arm(
         checkpoints(run)
 
 
-def evaluate_arm(arm: Arm, seed: int, out: Path, deadline: float) -> None:
-    """Score all frozen curve points and a separate final held-out cohort."""
-    run = TrainingRun.model_validate_json((out / "training/run.json").read_bytes())
+def checkpoint_input(artifact: ArtifactReference) -> str:
+    """The input name of a checkpoint; delivered bytes are addressed by digest."""
+    return f"{artifact['sha256']}.pt"
+
+
+def evaluation_inputs(
+    run: TrainingRun, run_json: Path, prefix: str
+) -> tuple[Input, ...]:
+    """A learner's run.json and every scheduled checkpoint, as bucket objects."""
+    run_sha256 = file_sha256(run_json)
+    points = [point.artifact for point in checkpoints(run)]
+    return (
+        Input(
+            name="run.json",
+            key=f"{prefix}/{run_sha256}.json",
+            sha256=run_sha256,
+            size_bytes=run_json.stat().st_size,
+        ),
+        *(
+            Input(
+                name=checkpoint_input(artifact),
+                key=f"{prefix}/{artifact['sha256']}.pt",
+                sha256=artifact["sha256"],
+                size_bytes=artifact["bytes"],
+            )
+            for artifact in points
+        ),
+    )
+
+
+class EndpointReceipt(BaseModel):
+    """Hashes of one finished attempt, written beside its monitor.json."""
+
+    model_config = ConfigDict(extra="forbid")
+    recovery_sha256: str
+    run_id: str
+    run_sha256: str
+    artifact_sha256: str
+    status: str
+    # Attempt-relative path to SHA256 for the monitor, its traces and allocations.
+    files: dict[str, str]
+
+
+def _attempt_files(directory: Path) -> dict[str, str]:
+    return {
+        str(path.relative_to(directory)): file_sha256(path)
+        for path in sorted(directory.rglob("*"))
+        if path.is_file() and path.name != "receipt.json"
+    }
+
+
+def evaluate_unit(
+    unit: EvaluationUnit, inputs: Path, out: Path, deadline: float
+) -> None:
+    """Score declared endpoints in order, retaining each before starting the next.
+
+    The retained run.json names checkpoint paths on a machine that no longer
+    exists. Exact bytes come from `inputs`; `checkpoint_manifest` then checks
+    digest, size and world/ABI/engine identities against the running source.
+    """
+    source = inputs / "run.json"
+    run = TrainingRun.model_validate_json(source.read_bytes())
     if (
-        seed not in SEEDS
-        or run.seed != seed
-        or run.regime_digest != recipe_digests()[arm]
+        file_sha256(source) != unit.run_sha256
+        or run.seed != unit.seed
+        or run.regime_digest != recipe_digests()[unit.arm]
     ):
         raise ValueError("run is outside the declared GPU cohort")
-    for point in checkpoints(run):
-        update = point.coordinates.updates
-        for heldout in (False, True) if update == UPDATES else (False,):
-            if time.time() >= deadline:
-                raise RuntimeError("evaluation allocation expired")
-            result = evaluate_checkpoint(
-                run,
-                point.artifact,
-                point.coordinates,
-                out / ("heldout" if heldout else f"curve-{update:04d}"),
-                protocol=evaluation_protocol(heldout=heldout),
-                concurrent_activity="one sequential evaluator; all study training finished",
-                execution=EvalExecution(
-                    device="cpu",
-                    max_active_games=4,
-                    max_batch_rows=32,
-                    resident_model_bytes=1024**3,
-                    deadline_unix=deadline,
-                ),
+    points = {point.coordinates.updates: point for point in checkpoints(run)}
+    for endpoint in unit.endpoints:
+        if time.time() >= deadline:
+            raise RuntimeError("evaluation allocation expired")
+        point = points[endpoint.update]
+        directory = out / endpoint.directory(unit.arm, unit.seed)
+        artifact: ArtifactReference = {
+            **point.artifact,
+            "path": str(inputs / checkpoint_input(point.artifact)),
+        }
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        result = evaluate_checkpoint(
+            run,
+            artifact,
+            point.coordinates,
+            directory,
+            protocol=evaluation_protocol(heldout=endpoint.heldout),
+            concurrent_activity=unit.concurrent_activity,
+            execution=EvalExecution(
+                device="cpu",
+                max_active_games=4,
+                max_batch_rows=32,
+                resident_model_bytes=1024**3,
+                deadline_unix=deadline,
+            ),
+        )
+        atomic_json(
+            directory / "receipt.json",
+            EndpointReceipt(
+                recovery_sha256=canonical_sha256(RECOVERY),
+                run_id=run.id,
+                run_sha256=unit.run_sha256,
+                artifact_sha256=point.artifact["sha256"],
+                status=result.status,
+                files=_attempt_files(directory),
+            ).model_dump(mode="json"),
+        )
+        if result.status != "completed":
+            raise RuntimeError("incomplete evaluation retained in study denominator")
+
+
+# The evaluation ledger: delivered attempts under one root, keyed by directory.
+
+
+def verified_result(directory: Path) -> MonitorResult | None:
+    """A scored attempt's result, or None for one that produced no score.
+
+    A scored attempt is never repeated, so one that fails its hashes is an error
+    for a person to resolve, not a reason to play the endpoint again.
+    """
+    monitor = directory / "monitor.json"
+    if not monitor.exists():
+        return None
+    result = MonitorResult.model_validate_json(monitor.read_bytes())
+    if result.score is None:
+        return None
+    path = directory / "receipt.json"
+    if not path.exists():
+        raise ValueError(f"scored attempt lacks a receipt: {directory}")
+    receipt = EndpointReceipt.model_validate_json(path.read_bytes())
+    if (
+        receipt.status != "completed"
+        or receipt.artifact_sha256 != result.artifact["sha256"]
+        or receipt.files != _attempt_files(directory)
+    ):
+        raise ValueError(f"scored attempt fails hash verification: {directory}")
+    return result
+
+
+def endpoint_attempts(
+    root: Path, arm: Arm, seed: int, endpoint: Endpoint
+) -> tuple[Path, ...]:
+    return tuple(sorted((root / f"{arm}-{seed}" / endpoint.name).glob("attempt-*")))
+
+
+def pending_endpoints(root: Path, arm: Arm, seed: int) -> tuple[Endpoint, ...]:
+    """What this learner still needs: unscored endpoints, each at its next attempt."""
+    pending: list[Endpoint] = []
+    for endpoint in ENDPOINTS:
+        attempts = endpoint_attempts(root, arm, seed, endpoint)
+        scored = [path for path in attempts if verified_result(path) is not None]
+        if len(scored) > 1:
+            raise ValueError(f"endpoint scored more than once: {scored}")
+        if not scored:
+            pending.append(endpoint.model_copy(update={"attempt": len(attempts) + 1}))
+    return tuple(pending)
+
+
+def recovery_comparison(root: Path) -> dict[str, object]:
+    """The frozen analysis, once every endpoint of all eight learners is scored."""
+    curves: list[ArmEvaluation] = []
+    final: list[ArmEvaluation] = []
+    for arm, seed in ASSIGNMENTS:
+        if pending_endpoints(root, arm, seed):
+            raise ValueError(
+                "the frozen analysis needs every endpoint; partial curves are descriptive"
             )
-            if result.status != "completed":
-                raise RuntimeError(
-                    "incomplete evaluation retained in study denominator"
-                )
+        for endpoint in ENDPOINTS:
+            (result,) = filter(
+                None,
+                map(verified_result, endpoint_attempts(root, arm, seed, endpoint)),
+            )
+            (final if endpoint.heldout else curves).append(
+                ArmEvaluation(arm=arm, result=result)
+            )
+    return {
+        "plateau": asdict(plateau(curves)),
+        "heldout": asdict(compare_heldout(final)),
+    }
 
 
 def compare_heldout(results: list[ArmEvaluation]) -> PairedEstimate:
@@ -529,73 +829,78 @@ def compare_heldout(results: list[ArmEvaluation]) -> PairedEstimate:
     )
 
 
-# Sequential execution and child lifetime ownership.
+# Unit execution and child lifetime ownership.
 
 _CHILD = (sys.executable, "-m", f"experiments.{EXPERIMENT}")
 
 
-def scientific_cohort(out: Path, stop: Path, deadline: float) -> None:
-    """Sequential balanced arm order; stop and retain the denominator on failure."""
-    assignments = [
-        (arm, seed)
-        for index, seed in enumerate(SEEDS)
-        for arm in (ARMS if index % 2 == 0 else tuple(reversed(ARMS)))
-    ]
-    atomic_json(
-        out / "cohort.json",
+def host_record() -> dict[str, object]:
+    """What a learner's or evaluator's host was, beside Etude's provider receipt."""
+    cpuinfo = Path("/proc/cpuinfo")
+    models = (
         {
-            "scoring": SCORING,
-            "assignments": assignments,
-            "recipes": {arm: recipe(arm).model_dump(mode="json") for arm in ARMS},
-            "concurrency": 1,
-        },
+            line.split(":", 1)[1].strip()
+            for line in cpuinfo.read_text().splitlines()
+            if line.startswith("model name")
+        }
+        if cpuinfo.exists()
+        else set()
     )
-    for mode in ("train", "evaluate"):
-        phase = out / mode
-        phase.mkdir()
-        for arm, seed in assignments:
-            logs = phase / f"{arm}-{seed}"
-            logs.mkdir()
-            command = [
-                *_CHILD,
-                f"--{mode}-arm",
-                arm,
-                "--seed",
-                str(seed),
-                "--out",
-                str(out / f"{arm}-{seed}"),
-            ]
-            bound = deadline - (
-                EVALUATION_SECONDS if mode == "train" else TEARDOWN_SECONDS
-            )
-            command += (
-                ["--stop", str(stop)] if mode == "train" else ["--deadline", str(bound)]
-            )
-            print(f"{mode}: {arm} seed {seed}", flush=True)
-            _run_child(command, logs, stop, bound)
+    return {
+        "node": platform.node(),
+        "cpu_models": sorted(models),
+        "cpu_count": os.cpu_count(),
+        "cuda_device": (
+            torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+        ),
+        "load": os.getloadavg(),
+    }
 
-    def retained(arm: Arm, path: Path) -> ArmEvaluation:
-        return ArmEvaluation(
-            arm=arm, result=MonitorResult.model_validate_json(path.read_bytes())
-        )
 
-    curves = [
-        retained(arm, out / f"{arm}-{seed}/curve-{update:04d}/monitor.json")
-        for arm, seed in assignments
-        for update in POINTS
-    ]
-    final = [
-        retained(arm, out / f"{arm}-{seed}/heldout/monitor.json")
-        for arm, seed in assignments
-    ]
-    atomic_json(
-        out / "comparison.json",
-        {
-            "plateau": asdict(plateau(curves)),
-            "heldout": asdict(compare_heldout(final)),
-        },
-    )
-    atomic_json(out / "etude-result.json", {"clocks": {"updates": UPDATES}})
+def run_unit(
+    unit: LearnerUnit | EvaluationUnit,
+    out: Path,
+    inputs: Path | None,
+    stop: Path,
+    deadline: float,
+) -> None:
+    """Execute one recovery unit in a bounded child and report Etude's clock."""
+    atomic_json(out / "recovery.json", RECOVERY)
+    logs = out / "logs"
+    logs.mkdir()
+    if isinstance(unit, LearnerUnit):
+        command = [
+            *_CHILD,
+            "--train-arm",
+            unit.arm,
+            "--seed",
+            str(unit.seed),
+            "--out",
+            str(out / f"{unit.arm}-{unit.seed}"),
+            "--stop",
+            str(stop),
+        ]
+        clock = {"updates": UPDATES}
+    else:
+        if inputs is None:
+            raise ValueError("evaluation needs delivered inputs")
+        document = out / "unit.json"
+        atomic_json(document, unit.model_dump(mode="json"))
+        command = [
+            *_CHILD,
+            "--evaluate-unit",
+            str(document),
+            "--inputs",
+            str(inputs),
+            "--out",
+            str(out),
+            "--deadline",
+            str(deadline - TEARDOWN_SECONDS),
+        ]
+        clock = {"endpoints": len(unit.endpoints)}
+    print(f"{unit.kind}: {unit.arm} seed {unit.seed}", flush=True)
+    _run_child(command, logs, stop, deadline - TEARDOWN_SECONDS)
+    atomic_json(out / "etude-result.json", {"clocks": clock})
 
 
 def admit_throughput(
@@ -750,27 +1055,31 @@ def _run_child(
 
 
 def worker() -> None:
-    """Etude owns the capped allocation and every learner/evaluator child."""
+    """Etude owns the capped allocation and the learner or evaluator child."""
     bind_etude_source()
     spec = StudyJob.model_validate_json(Path(os.environ["ETUDE_CONFIG"]).read_bytes())
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     stop = Path(os.environ["ETUDE_STOP_FILE"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
-    work_hours = spec.allocation.work_hours if spec.allocation else ADMISSION_WORK_HOURS
+    work_hours = spec.recovery.max_hours if spec.recovery else ADMISSION_WORK_HOURS
     required = work_hours * 3600 - 180
     if deadline - time.time() < required:
         raise ValueError("remaining allocation cannot cover declared work")
     out.mkdir(parents=True, exist_ok=True)
+    atomic_json(out / "host.json", host_record())
+    if spec.recovery is not None and isinstance(spec.recovery.unit, EvaluationUnit):
+        inputs = Path(os.environ["ETUDE_INPUTS_DIR"])
+        run_unit(spec.recovery.unit, out, inputs, stop, deadline)
+        return
     gate = check_numerics(out, min(time.time() + 300, deadline))
     if gate.status != "completed":
         raise RuntimeError("CUDA numerical admission failed")
-    if spec.allocation:
-        if torch.cuda.get_device_name(0) != spec.allocation.hardware:
-            raise ValueError("scientific hardware differs from throughput admission")
-        atomic_json(out / "allocation.json", spec.allocation.model_dump(mode="json"))
-        scientific_cohort(out, stop, deadline)
-    else:
+    if spec.recovery is None:
         admit_throughput(out, stop, deadline, spec.admission_limits)
+        return
+    if torch.cuda.get_device_name(0) != GPU_CLASS:
+        raise ValueError("learner hardware differs from the amendment's GPU class")
+    run_unit(spec.recovery.unit, out, None, stop, deadline)
 
 
 # Complete-cohort analysis; no partial successes or checkpoint selection.
@@ -844,9 +1153,10 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--admit-arm", choices=ARMS)
     mode.add_argument("--train-arm", choices=ARMS)
-    mode.add_argument("--evaluate-arm", choices=ARMS)
+    mode.add_argument("--evaluate-unit", type=Path)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--deadline", type=float)
+    parser.add_argument("--inputs", type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--stop", type=Path)
     args = parser.parse_args()
@@ -854,17 +1164,15 @@ def main() -> None:
         if args.out is None or args.stop is None:
             parser.error("admission needs output and stop path")
         train_arm(args.admit_arm, ADMISSION_SEED, args.out, args.stop, admission=True)
-    elif args.train_arm or args.evaluate_arm:
-        if args.seed is None or args.out is None:
-            parser.error("scientific worker needs seed and output")
-        if args.train_arm:
-            if args.stop is None:
-                parser.error("training requires stop path")
-            train_arm(args.train_arm, args.seed, args.out, args.stop)
-        else:
-            if args.deadline is None:
-                parser.error("evaluation requires deadline")
-            evaluate_arm(args.evaluate_arm, args.seed, args.out, args.deadline)
+    elif args.train_arm:
+        if args.seed is None or args.out is None or args.stop is None:
+            parser.error("training needs seed, output and stop path")
+        train_arm(args.train_arm, args.seed, args.out, args.stop)
+    elif args.evaluate_unit:
+        if args.inputs is None or args.out is None or args.deadline is None:
+            parser.error("evaluation needs inputs, output and deadline")
+        unit = EvaluationUnit.model_validate_json(args.evaluate_unit.read_bytes())
+        evaluate_unit(unit, args.inputs, args.out, args.deadline)
     else:
         worker()
 

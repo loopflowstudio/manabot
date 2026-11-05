@@ -217,7 +217,8 @@ detailed reports and traces were not delivered. One separate uninstrumented
 pooled update then completed before the rental disappeared at 2026-11-05
 01:12:47 UTC (`lost / machine_lost`). Retained logs establish partial execution,
 not complete matched admission, operator attribution or a scientific endpoint.
-No evidence establishes OOM, host fault or code failure. The attempt record and
+No evidence establishes OOM or code failure; the recovery note below identifies
+who deleted the rental (`59185580`). The attempt record and
 contiguous carried logs are manifest-backed under `complete-operator-profile/`.
 The 01:16:18 UTC accounting confirms all eight Task Vast rentals absent, reported
 new charge $0.038 versus $0.03984744 lifetime estimate, and reported-plus-settled
@@ -277,16 +278,37 @@ the sole Task rental. The 03:01:53 learner receipt records its first pooling
 seed 74211 at 45/256 updates, 11,520 games and 1,333,548 learner transitions,
 with no recorded error. Initialization and update-32 checkpoint bytes match
 their recorded sizes and hashes. Finish-after-work
-was acknowledged, with deadline 2026-11-07 10:09:07 UTC as backstop; this proves
-neither final delivery nor teardown. Sequential balanced seed/arm execution,
-256 updates per learner, initialization/interior exports and complete evaluation
-remain the frozen design. No learner, final inventory or evaluated endpoint is
-complete yet; evaluation is scheduled after all eight learners. A valid partial
-receipt or checkpoint backup cannot establish cohort completion or a plateau.
-Default discovery
-remains admission-only; a live allocation must not be duplicated because an
-earlier planning note still says diagnosis is pending. The plan owns remaining
-acceptance. Evidence is manifest-backed under
+was acknowledged, with deadline 2026-11-07 10:09:07 UTC as backstop. A valid
+partial receipt or checkpoint backup cannot establish cohort completion or a
+plateau. Default discovery remains admission-only.
+
+That run ended `lost / machine_lost` at 2026-11-05 13:09:07 UTC with no final
+inventory: three completed learners (pool/GRU 74211, GRU 74212), a fourth at 83
+updates, no evaluated endpoint and no qualified result. All 36 checkpoint backups
+verify. Reported cost was $2.603; $12.86053336 of the original $25 remained.
+
+**Check the provider's audit log before attributing a rental loss.** Vast's log
+shows our own launcher key deleted `59194544`, `59185580` and `59152469`: Etude
+treated one non-running or failed status read as dead and ended the rental,
+destroying its disk. The triggering status was not retained, so a host fault is
+neither shown nor excluded. Rentals were on-demand; preemption was not the
+mechanism. Etude draft PR #84 tolerates a 15-minute outage; it is not merged.
+Reusable durable training recovery is Etude Task `ff3d48`.
+
+**Delivery lesson.** The locked Etude runtime uploads outputs at attempt
+completion, so a long multi-learner rental risks all of its evidence at once;
+this cost the entire `e51f61b92931` inventory. Prefer a job per durable unit.
+Backups kept raw/EMA/Adam only for completed learners: an interrupted learner's
+periodic raw checkpoints cannot continue exactly, because Adam, EMA and RNG were
+not saved.
+
+Jack Heart, 2026-11-05 ("can we schedule soem evals in paralell with the
+additional training") selected a prospectively amended recovery cohort: keep the
+three learners, restart pool/74212 from initialization on its seed, train the
+other four and evaluate alongside training. Interim scores select nothing; no
+merge is approved. `SCORING` must stay byte-identical because the evaluator's
+protocol identity hashes it, so the amendment is a separate record. The plan owns
+remaining acceptance. Evidence is manifest-backed under
 `experiments/data/state-representation-gpu-5da5f4/`, especially `cuda-traces/`,
 `batched-admission/` and `batched-plateau/`; failed receipts remain immutable.
 These are dated reads, not a fresh provider balance.
