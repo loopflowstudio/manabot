@@ -32,6 +32,9 @@ struct Projection<'a> {
     game: &'a Game,
     viewer: PlayerId,
     tokens: TokenWriter<'static>,
+    /// Whether any retained fact has been written. Nothing retained means no
+    /// execution occurrence at all: no marker, holder or relation row.
+    started: bool,
     references: Vec<VisibleReference>,
     notes: Vec<String>,
     summary: Vec<String>,
@@ -44,6 +47,7 @@ impl<'a> Projection<'a> {
             game,
             viewer,
             tokens: TokenWriter::new(default_content_pack()),
+            started: false,
             references: Vec::new(),
             notes: Vec::new(),
             summary: Vec::new(),
@@ -51,10 +55,19 @@ impl<'a> Projection<'a> {
         }
     }
 
+    /// One retained fact: its name token, then the rules value itself. Serde
+    /// values delimit themselves, so no tuple wrapper is needed. The first
+    /// fact opens the occurrence with a marker that separates it from the
+    /// frame's captured program, which shares the fact id.
     fn field<T: Serialize + std::fmt::Debug>(&mut self, name: &str, value: &T) {
+        if !self.started {
+            self.started = true;
+            self.field("retained execution", &true);
+        }
         self.notes.push(format!("{name}: {value:?}"));
         self.tokens
-            .append_rules(&(name, value))
+            .append_rules(&name)
+            .and_then(|_| self.tokens.append_rules(value))
             .expect("projected rules tokens");
     }
 
@@ -162,6 +175,9 @@ impl<'a> Projection<'a> {
     }
 
     fn finish(mut self, frame: &mut ContinuationFrame) {
+        if !self.started {
+            return;
+        }
         // Fact programs are routed to the controller's player row. Explicitly
         // join that holder even for focus-free choices with no source/targets,
         // so continuation-to-action context can read the retained program.
@@ -180,8 +196,10 @@ impl<'a> Projection<'a> {
 
     fn completion(&mut self, completion: &FrameCompletion) {
         // Caller frames themselves appear once in the borrowed root-first walk.
+        // Restarting priority is the default return of a root ability and
+        // retains nothing; every other destination is a fact.
         match completion {
-            FrameCompletion::Priority => self.field("return", &"priority"),
+            FrameCompletion::Priority => {}
             FrameCompletion::Continue => self.field("return", &"turn action"),
             FrameCompletion::CombatNormal => {
                 self.summary
@@ -609,7 +627,6 @@ pub(crate) fn project_frame(
     frame: &mut ContinuationFrame,
 ) {
     let mut out = Projection::new(game, viewer);
-    out.field("retained execution", &true);
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
     if let Some(source) = effect.source_ref {
