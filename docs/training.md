@@ -680,7 +680,7 @@ recovery, network-filesystem leases and byte-identical replay are unsupported.
 
 ## Game failures
 
-### Tolerating engine failures in training
+### Tolerating game failures in training
 
 A single-stage `TrainSelfPlay` may opt into `game_errors`
 (`GameErrorPolicy`, `manabot.training.state.game_errors`):
@@ -689,23 +689,41 @@ A single-stage `TrainSelfPlay` may opt into `game_errors`
 "game_errors": {"threshold": 0.1, "window": 100, "warmup": 100, "max_game_actions": 40000}
 ```
 
-The denominator is settled native game attempts. After 100 settle, the latest
-100 are assessed: 10 failures are tolerated, 11 stop the run, and the stop
-survives restart and source repair. An engine rejection or native panic
-quarantines only that stream's current game, removing both seats' rows from
-it; other streams advance once. Replacement uses the native next seed and the
-declared matchup distribution; nothing is blacklisted. One-seat collection
-also finishes games before updating when opted in, which changes its batch
-freshness and must be declared. Truncations and the action limit count as
-failures; run interruptions are recorded as `deadline` or `abandoned`
-attempts, not errors. Setup, reset, buffer, numerical and infrastructure
-errors remain fatal; process aborts, OOM and hangs belong to the external
-supervisor.
+An engine rejection or native panic quarantines only that stream's current
+game. Set `recover_capacity: true` in `game_errors` to also recover typed native
+observation-capacity failures during active steps, recorded as `resource_limit`
+separately from engine errors. This option defaults to false and is omitted
+from serialization when false, preserving frozen configurations.
+
+Recovery discards only the affected game's uncommitted samples from both seats;
+earlier completed games, committed updates and other streams survive. Other
+active streams advance once. Replacement uses the native next seed and declared
+matchup distribution, without blacklisting decks or inventing a terminal reward
+or outcome. One-seat collection also finishes games before updating when opted
+in, which changes its batch freshness and must be declared.
+
+The rolling window counts completed games, engine failures, resource limits,
+truncations and action limits once per settled native game. Run interruptions
+are recorded as `deadline` or `abandoned` attempts outside that denominator.
+After warmup, `rate > threshold` stops the run; the stop survives restart and
+source repair. The example above tolerates 10 failures in the latest 100 settled
+games and stops at 11, after a 100-game warmup. The prospective
+[TLA v10 pilot](../experiments/protocols/tla-trophy-213-v10.md) selects capacity
+recovery with threshold `0.25`, window `100` and warmup `100`: 25/100 continues,
+26/100 stops. These are pilot settings, not changed global defaults.
+
+Setup/reset, malformed buffers, invalid provenance, numerical and infrastructure
+failures remain fatal. An unencodable replacement root stops the run; process
+aborts, OOM and hangs belong to the external supervisor. Evaluation retains
+failed/incomplete games in their original scheduled slots, never replacing them
+with successful games. Training replacement biases learning toward games that
+fit the declared limits.
 
 `game-attempts.jsonl` is a private, append-only, fsynced ledger: setup, seed,
 stream, seat, full action prefix including the rejected action, native
-pre-command frame, error and identities. Never publish it as a replay. Replay
-a receipt by its one-based line:
+pre-command frame, error and identities. Resource-limit receipts also retain
+the observation configuration so replay crosses the same encoding boundary.
+Never publish the ledger as a replay. Replay a receipt by its one-based line:
 
 ```sh
 uv run python -m manabot.training.state.game_errors .runs/example/game-attempts.jsonl --attempt 1 --seconds 30

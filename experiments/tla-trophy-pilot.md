@@ -1,4 +1,99 @@
-# TLA trophy pilot: GPU learning reached, action capacity stopped the run
+# TLA trophy pilot: v9 learned, permanent capacity stopped the run
+
+V9 Run **2171156493ca** executed the frozen source
+`6da60684cb628ec9b431dbbb9d7dc91348743622` on a Vast RTX 5090 on
+2026-11-04. CUDA numerical admission passed. It completed **5 learner updates,
+983 optimizer minibatch steps, 251,040 learner transitions and 1,291 games**,
+then failed during collection at **41 agent permanents against capacity 40**.
+The [training receipt](data/mtg213/gpu-v9-20261104/training/run.json) retains
+394.18 stage seconds: 273.48 collecting and 119.87 learning. These clocks
+exclude part of the rental. No trained checkpoint exported before failure;
+only initialization is retained. MTG-213 remains incomplete.
+
+The unexecuted [v10 successor](protocols/tla-trophy-213-v10.md) retains every
+permanent with a 64-row allocation and opts into isolated resource-limit recovery.
+Jack Heart selected a .25 failure threshold over the existing 100-game window
+and warmup. A failed game loses only its own uncommitted samples from both seats;
+other streams and completed updates remain. Resource failures keep replay inputs
+and their encoder configuration. Evaluation keeps failed scheduled slots.
+This introduces selection bias toward games that fit the runtime; it is not a
+lossless solution to unbounded Airship growth or evidence of learning. V10 still
+needs final-source freezing, paid execution and complete paired evaluation.
+
+The [exact replay](data/mtg213/gpu-v9-20261104/capacity-replay.json) identifies
+stream 43, seed 32624, after 371 actions, with a matching pre-command frame.
+Scalar native, vector native and Python encoding reject the same 41-permanent
+position. It contains 25 Phoenix Fleet Airships, 11 lands and five other
+permanents. The Airship definition has a conditional end-step token-copy
+ability; this capacity witness alone establishes no rules defect. A diagnostic
+64-permanent allocation encodes all 41 with scalar native/Python equality.
+That is a repair witness, not a universal bound or a changed v9 protocol.
+Continue with a prospective capacity repair and fresh initialization; never
+rewrite v9 or infer a checkpoint from its progress counters.
+
+[Paired evaluation](data/mtg213/gpu-v9-20261104/analysis.json) completed all
+32 initialization games against the matched-support heuristic: **7 wins,
+25 losses**, no failed or truncated games. Score .21875, 95% whole-pair
+bootstrap interval [.125, .3125]. The frozen 288-game schedule retains
+**256 missing games**, `complete=false`, `success=null`. A final evaluation
+pass found no additional playable comparisons. No trained-policy gain or
+Elemental-relative learning pace is established. MTG-183's .065 → .304 at
+update 50 and .441 at 100 remain historical context: different rules,
+observations, populations, anchors, hardware and variable complete-game batch
+sizes prevent a controlled pace comparison. There is no trained TLA score to
+compare at a matched decision coordinate.
+
+The [cutoff receipt](data/mtg213/gpu-v9-20261104/training/failures/action-cutoff-00c266bf52a9409b91a4aa72a926c44d.json)
+records 302,941 consumed decisions, including the failed collection, and zero
+action overflows/dropped actions. It is an aggregate across participating
+policies, not a learner-only count. This run's stopping error is permanent
+capacity, separate from the accepted action cutoff.
+
+The [launch](data/mtg213/gpu-v9-20261104/launch/launch-20261104-220427.json)
+used 32 vCPUs, 255GB RAM and USD0.962962963/hour. Jack Heart's accepted
+USD1.25 allocation/USD0.97-hour placement amendment replaced the earlier
+USD1 limit; cumulative USD10 remained unchanged. Etude also checks the job's
+spending ceiling against setup plus execution, so the placement copy raised
+`Job.max_usd` to USD1.25. SDK `job_identity`, Run ID, source, configuration,
+recipe and schedule remained equal to the original prepared Run. The quote
+reserved USD1.187654321. No source was frozen again.
+
+[Settlement](data/mtg213/gpu-v9-20261104/settlement.json) confirms the pilot
+rental ended at **22:13:47 UTC** and instance 59168321 is absent. The final
+inventory identifies an unrelated `state_representation_gpu` rental, which was
+left untouched. Whole-rental estimated cost is **USD0.148237115**;
+cumulative billed-plus-estimated cost is **USD0.475343889**, with conservative
+reservations **USD5.101645926 of USD10**. Vast billing remains unavailable;
+these estimates are not final invoices. All available outputs were fetched;
+`etude-result.json` is absent because the training command failed.
+
+Verification on main `3de3a0ebf7b20ae764e0b423089730c5bc710cb6` found only
+documentation changes after merged PR #423; executable code and the frozen
+protocol match. The 106 focused checks passed, as did real local v9 runtime
+admission. The GPU failure is new evidence and a concrete **fix-forward** gap:
+ship a prospective permanent-capacity repair, retain this failed attempt and
+complete trained-export/evaluation acceptance. See the
+[summary receipt](data/mtg213/gpu-v9-20261104/summary.json).
+
+## V9 preflight history
+
+Before the execution above, the 20:59–21:00 UTC recheck obtained L4 and A6000
+whole-rental quotes of USD0.7375 each, but both launch checks refused capacity.
+RTX 5090 exceeded the then-current USD0.81/hour ceiling; RTX 3090 and A4000
+also refused capacity. No submission or new cost followed these checks.
+[Recheck evidence](data/mtg213/gpu-v9-recheck-20261104/outcome.json) and the
+[earlier preflight](data/mtg213/gpu-v9-preflight-20261104/outcome.json) retain
+the exact quotes, refusals and accounting; the prepared source was reused.
+
+At 21:00:52 UTC, inventory contained no rentals or unsettled hardware. The
+separately owned representation rental disappeared independently and was left
+untouched. Historical costs were USD0.32710677365251912, with
+USD3.9139916049382716 conservatively reserved and earlier Vast billing unavailable.
+The subsequent accepted placement and execution supersede this preflight's
+USD1 allocation limit and pending-launch status. Full prior narration is retained
+at `6dff2e919:experiments/tla-trophy-pilot.md`.
+
+## Previous executed pilot: v5
 
 V5 Run **e8c76bc2c06f**, frozen source
 `97a2cfb963d7e3a3b2816f31c45dda72f34cdddd`, ran on a Vast **RTX 5090** on
@@ -192,8 +287,8 @@ The [single-stream input](data/mtg213/gpu-corrected-20261103/capacity-stream.jso
 retain the exact decks, sideboards, seed, actions, buffer shapes and runtime IDs.
 Replay used the same source/world on macOS; native binary bytes differ from Linux.
 
-Encoding errors are deliberately fatal in `step_isolated_into`; they are not
-quarantined gameplay errors. This invalidates the pilot's capacity assumption.
+V1 treated encoding errors as fatal in `step_isolated_into`, outside gameplay
+quarantine. This invalidated that pilot's capacity assumption.
 No facts were truncated, frozen shapes widened, decks removed, actions hidden,
 or failing games replaced. This failure required a shared representation decision;
 the accepted prospective v6 contract is described above. The launcher listed
@@ -311,8 +406,8 @@ Task 5da5f4 delivered it in PR #419, merged as
 V5 subsequently reached GPU learning, as reported above. An admitted trained
 checkpoint, complete paired evaluation and Elemental-relative learning analysis
 remain outstanding. Any successor needs an explicit prospective contract and
-fresh inventory, billing and quote reconciliation within the $1 allocation and
-cumulative $10 caps. Preserve all executed versions; new games cannot fill their
+fresh inventory, billing and quote reconciliation within the accepted allocation
+and cumulative $10 caps. Preserve all executed versions; new games cannot fill their
 missing evaluation slots.
 
 ### Card-capacity repair publication checks (2026-11-04 UTC)
@@ -337,7 +432,7 @@ These checks establish the retained 61-card repair and CPU learner/export/reload
 behavior at 128 cards. They do not execute the prepared v5 GPU Run, establish a
 universal capacity bound, or supply missing trained-checkpoint evaluations.
 
-## Prospective v6 buffer repair (2026-11-04 UTC)
+## Superseded v6 buffer repair (2026-11-04 UTC)
 
 The [v6 protocol](protocols/tla-trophy-213-v6.md) binds current world/content and
 73/56/38 object widths with 512 actions. Native scalar/vector buffers now derive
@@ -346,7 +441,7 @@ finishes before copying any output. V6 prepared the runner and analysis;
 v5 source, protocols and evidence remain frozen. This prepares fresh training
 and evaluation on the same 134 decks; it supplies no new learner or cost result.
 
-## Prospective v7 rules repair (2026-11-04 UTC)
+## Superseded v7 rules repair (2026-11-04 UTC)
 
 The [v7 protocol](protocols/tla-trophy-213-v7.md) supersedes unsubmitted v6 Run
 `bcde93e9ff8c` (source `ad2c3a010f53`), which incurred no rental or scoring.
@@ -361,8 +456,8 @@ of that failure, rather than a rules-correct action contract.
 The repaired retained prefix agrees across scalar/vector/Python paths at
 non-default capacities. A separately retained historical observation tests the
 256-row encoder boundary without generating or playing those illegal actions.
-Directed debug tests check payment, counters and draws. The active runner and
-analysis now select v7, with fresh initialization, the same 134 decks and recipe,
+Directed debug tests check payment, counters and draws. V7 selected fresh
+initialization, the same 134 decks and recipe,
 512 actions and unchanged evaluation and budget limits. Source freezing completed as Run **af3661790ac5** at
 `b5406bb33abd98870af6ca07c3beed63a92b7c1c`. The
 [source receipt](data/mtg213/gpu-v7-preflight-20261104/source.json) records its
@@ -378,7 +473,7 @@ initialization result or trained-policy result exists. Continuation needs
 compatible capacity under the unchanged <=$1/$10 limits; the scientific
 acceptance remains unfinished.
 
-## Prospective v8: explicit legal-action cutoff (2026-11-04)
+## Superseded v8: explicit legal-action cutoff (2026-11-04)
 
 Jack Heart selected 64 action slots with deterministic first 64 legal actions and
 logging (comment 3b0f8826). The [v8 protocol](protocols/tla-trophy-213-v8.md) binds
@@ -393,7 +488,7 @@ the complete rules-state witness unchanged. Airbend and any-type-mana casts
 also reject unavailable X. Prefix tests preserve original native Command mapping,
 scalar/vector/Python parity, masks, collection and bounded replay diagnostics.
 
-V8 is now frozen as Run `f47be2d3c0d8`, source
+V8 was frozen as Run `f47be2d3c0d8`, source
 `900c207502bd28757d7cf66196bd464458e39402`, but remains unsubmitted.
 At 19:10–19:12 UTC, the bounded RTX5090 quote refused its USD0.81/hour ceiling;
 L4 and RTX3090 quotes refused available capacity. No paid allocation or new
@@ -414,7 +509,7 @@ sources retain the preceding 957-pass debug validation (two ignored) and Clippy
 result. Platform CI and the engine performance comparison remain delivery
 checks. These software checks supply no trained checkpoint or learning result.
 
-## Prospective v9: integration and matched support (2026-11-04)
+## V9 implementation: integration and matched support (2026-11-04)
 
 Jack Heart selected the same first-64 legal prefix for the heuristic as for
 learned policies (comment ffd29028). The [v9 protocol](protocols/tla-trophy-213-v9.md)

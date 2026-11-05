@@ -745,7 +745,11 @@ class SeatRoutedCollector:
             seeds = env.current_game_seeds() if self.game_errors else []
             with self.profiler.track("Environment step and encoding"):
                 if self.game_errors:
-                    env.step_isolated_into_buffers(actions.tolist(), active.tolist())
+                    env.step_isolated_into_buffers(
+                        actions.tolist(),
+                        active.tolist(),
+                        self.game_errors.recover_capacity,
+                    )
                 else:
                     env.step_into_buffers(actions.tolist(), active.tolist())
             self.stats.micro_steps += int(active.sum())
@@ -759,7 +763,11 @@ class SeatRoutedCollector:
                     self._game_actions[row].append(int(actions[row]))
                     outcome: GameOutcome
                     if "game_error" in infos[row]:
-                        outcome = "engine_error"
+                        outcome = (
+                            "resource_limit"
+                            if infos[row].get("game_error_kind") == "resource_limit"
+                            else "engine_error"
+                        )
                     elif buffers["truncated"][row]:
                         outcome = "truncated"
                     elif (
@@ -931,6 +939,9 @@ class SeatRoutedCollector:
                 error=error,
                 frame_json=frame_json,
                 native_trace=native_trace,
+                observation=self.observation_space.encoder.config
+                if outcome == "resource_limit"
+                else None,
                 discarded_samples=discarded,
                 valid_samples=valid,
                 seconds=time.perf_counter() - self._game_started[row],
