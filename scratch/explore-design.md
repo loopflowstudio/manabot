@@ -19,9 +19,10 @@ card authors supply interactions and behavior evidence.
 `docs/workflows/2026-11-04-migration.json` preserves the supported operations,
 Task/PR/graph identities, memory provenance and pending provider synchronization.
 The migration includes retiring the concurrent replacement Training Wave after
-moving its live Task intact. No moved backlog was executed. PR #421's original
-memory contributions and empirical reservations must survive integration into
-the Experiments path. MTG-210/211/230/231 mappings remain unselected.
+moving its live Task intact. No moved backlog was executed. Upstream `fe83a6b06`
+now preserves shared-effect evidence and reservations in the Experiments path
+and repairs the Eval archive reference. Later PR #421 contributions still require
+integration review. MTG-210/211/230/231 mappings remain unselected.
 
 `scratch/questions.md` owns current implementation, assumptions, remaining
 ownership and validation. The current review is in
@@ -152,3 +153,26 @@ v1 rejection stays separate from synthetic compatibility. Task 04 retains the
 integrated freeze, actual decks/probes, accepted settings and measured pilot;
 Task 08 retains Validation B. Earlier detailed rationale remains at
 `e5c3dd947:scratch/explore-design.md`; current validation is in the handoff.
+
+## Concept-review outcome — 2026-11-04
+
+No further design change and no open product choice for this handoff. The earlier
+binding direction is implemented: author one prospective entry/manifest binding,
+admit and declare it, then evaluate and read its own retained store from pinned
+source. The usage document and `experiment-freeze` instructions describe that
+same interaction. No additional lifecycle or deletion cut is needed.
+
+The failure/recovery contract remains deliberate: an incompatible source rejects
+execution without preventing retained reads from the pinned checkout; missing
+exports and interrupted exposure stay missing. Reconcile existing work before a
+bounded retry. Changed source, decks or scientific bounds require a prospective
+freeze, not repaired historical identities. A complete favorable exam still
+cannot establish training exposure or useful mechanic execution.
+
+The shared Wave read confirms the four core identities plus Academy, with Study
+historical and no active replacement Training/Eval. This read does not certify
+later PR #421 integration or settle the deferred backlog mappings. Those limits
+remain in the handoff. Task 04's integrated freeze and scientific settings are its
+next authored proof, not an unanswered product choice blocking this review.
+Gate and demo retain their verification boundaries; this review adds no new
+test, scientific result, execution authority or navigation decision.

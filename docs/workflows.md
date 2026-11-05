@@ -100,11 +100,14 @@ unchanged. Eval's chapter and completed Task remain readable with
 `lf wave show 6b12128f-ecde-4982-ab80-04210e4108f1 --json`; its memory is retained at
 `9f42e4e58a88efab347814e6f0c7d83d9bf98a0b:.lf/wave/eval/MEMORY.md`.
 
-Experiments' memory bytes are unchanged. PR #421 still edits the old Training
-memory path in its own checkout: integrate those contributions into the renamed
-path, preserving its reserved empirical decisions. The receipt binds both its
-published head and untouched local memory bytes. Provider project/creation sync
-remains pending; local membership is verified. MTG-210/211/230/231 retain their
+At migration, Experiments' memory bytes were unchanged and PR #421 still edited
+the old Training path. The receipt binds its then-published head and untouched
+local memory bytes. Subsequent upstream commit `fe83a6b06`, integrated here through
+`e5c3dd947`, updated Experiments' memory with an exact Eval archive reference and
+TLA recovery lessons while retaining the shared-effect evidence and reservations.
+This does not certify integration of later contributions from PR #421's checkout.
+Provider project/creation sync was pending in the migration receipt; local
+membership is verified. MTG-210/211/230/231 retain their
 existing memberships pending a separate outcome-based mapping. Academy remains
 separate, and no moved Task was executed by this migration.
 

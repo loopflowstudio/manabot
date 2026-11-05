@@ -27,14 +27,15 @@ li { margin:16px 0; }
 Built from <a href="explore-design.md">the working design</a>,
 <a href="questions.md">implementation handoff</a>,
 <a href="../experiments/protocols/growing-pool-245-v1.md">protocol usage</a>,
-<code>experiments/growing_pool{,_protocol,_exposure,_analysis}.py</code>,
+<code>experiments/growing_pool{,_runtime,_protocol,_exposure,_analysis}.py</code>,
 <a href="../docs/workflows.md">work boundaries</a> and
 <code>.lf/skills/experiment-freeze.md</code>.</header>
 <h1>Select the batch once; keep its identity through the experiment.</h1>
-<p><strong>Outcome: design changed. No open product choice.</strong>
+<p><strong>Outcome: no further design change and no open product choice.</strong>
 The accepted versioned handoff requires the same protocol and experiment selection
 through declaration, evaluation and analysis. The binding is implemented and exercised through controlled fixtures.
-This page retains the design rationale; it supplies no scientific results.</p>
+This review confirms the implemented direction; it supplies no scientific results.
+Loop-or-next owns the next step.</p>
 <blockquote>
 <p><strong>Prior mismatch:</strong> <code>check --protocol next.json</code> selects a file.
 Training jobs, discovered callbacks and the analysis store still select
@@ -42,19 +43,19 @@ Training jobs, discovered callbacks and the analysis store still select
 <p><strong>Implemented:</strong> bind the next manifest and its Etude experiment name
 once in an entry point. All stages consume that binding. V1 retains its identity.</p>
 </blockquote>
-<p>The default read-only check currently rejects the changed engine source.
-That protects frozen evidence. A new JSON alone cannot perform the prospective
-revision required by the docs; copying the full evaluator for each batch would
-create repeated implementations.</p>
+<p>The default read-only check rejects v1 on the changed engine source.
+Task 04 must freeze its integrated source, actual decks and reviewed settings
+in a prospective binding. The existing shared runtime serves that revision;
+v1's manifest and experiment identity remain intact.</p>
 <h2>Actions → concepts → APIs</h2>
 <table>
-<thead><tr><th>Action</th><th>Concept</th><th>Existing owner / required change</th></tr></thead>
+<thead><tr><th>Action</th><th>Concept</th><th>Implemented API / owner</th></tr></thead>
 <tbody>
 <tr><td>Author lists, tickets and splits</td><td>Reference league</td><td><code>Manifest</code>, native <code>Deck</code>, <code>UniformDecks</code>; unchanged</td></tr>
-<tr><td>Select and check a batch revision</td><td>Frozen experiment binding</td><td><code>Protocol.admit()</code>; propagate selected protocol and experiment together</td></tr>
-<tr><td>Declare authorized work</td><td>Training runs</td><td><code>Protocol.job()</code>, <code>runs(revision)</code>; use selected binding and source files</td></tr>
-<tr><td>Evaluate the fixed exam</td><td>Matches and retained evidence</td><td><code>eval(state)</code> → importable <code>play(match)</code>; preserve binding through discovery</td></tr>
-<tr><td>Inspect results and missing work</td><td>Learning, completeness, exposure</td><td><code>analyze()</code>; open the bound experiment store and validate identities</td></tr>
+<tr><td>Select and check a batch revision</td><td>Frozen experiment binding</td><td><code>read_binding()</code> → <code>Protocol.admit()</code>; checks entry, digest and runtime</td></tr>
+<tr><td>Declare bounded work</td><td>Training runs</td><td><code>runs(revision)</code> → <code>training_runs(BINDING, revision)</code>; checks frozen source; launch authority remains separate</td></tr>
+<tr><td>Evaluate the fixed exam</td><td>Matches and retained evidence</td><td><code>eval(state)</code> → canonical <code>play(match)</code>; both delegate with the same binding</td></tr>
+<tr><td>Inspect results and missing work</td><td>Learning, completeness, exposure</td><td><code>analyze(..., binding)</code>; selected store, full expected schedule and independent training receipts</td></tr>
 </tbody></table>
 <h2>Normal path, failure, recovery</h2>
 <p><strong>Normal:</strong> Task 04 authors integrated decks and probes, freezes the
@@ -73,20 +74,22 @@ identity to survive as Experiments. Those earlier review questions are resolved.
 Shared capture now distinguishes opportunity, choice and completed frame; retained
 replay inputs are not replay verification or proof of optimizer use.</p>
 <p>The workflow keeps software integration separate from scientific completion.
-The migration receipt records the identity-preserving moves and preserved histories;
-this review performs no migration or fresh live-state audit. Existing integration
-and memory follow-up remains in the handoff.</p>
+The migration receipt records identity-preserving moves and preserved histories.
+A fresh shared Wave read confirms four core identities plus Academy, with no
+active replacement Training/Eval. Later PR #421 integration and deferred mappings
+remain in the handoff; this review changes no membership or Wave memory.</p>
 <h2>Controlled proof</h2>
-<p>Two distinct bindings passed real Etude discovery, declarations, callback
+<p>Prior implementation fixtures exercised two distinct bindings through real Etude discovery, declarations, callback
 routing and offline analysis with synthetic outcomes. Crossed experiment/protocol
 identities and copied entries retaining the old binding reject. Real-runtime v1
 rejection remains. No games or training were needed; gate and demo/review retain
-their acceptance boundaries.</p>
+their acceptance boundaries. This review inspected the implementation and retained
+proof; it did not rerun those suites.</p>
 <h2>Review conclusions</h2>
 <ol>
 <li><strong>Does this require a new product decision?</strong> No. It follows the
-accepted versioned protocol and frozen-evidence requirements. Use shared functions
-and thin entry points; add no campaign registry.</li>
+accepted versioned protocol and frozen-evidence requirements. Shared functions
+and thin entry points now implement it; no further design cut is needed.</li>
 <li><strong>Are Task 04's scientific settings accepted?</strong> No. Its actual lists,
 probes, numeric settings, integrated freeze and measured pilot remain its work.
 Task 08 retains Validation B.</li>

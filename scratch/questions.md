@@ -58,10 +58,13 @@ concurrent fc6ffb Task created a new generic Training Wave; inspection confirmed
 its experimental outcome and separate $25 authority. It moved to Experiments
 without altering its live Graph or comments, then its empty Wave was retired.
 Final shared reads show the four core Waves plus Academy; abandoned Study remains
-historical. PR #421's published head and uncommitted Training-memory bytes remain
-unchanged in its checkout. Its eventual integration must carry those edits into
-.lf/wave/experiments/MEMORY.md. Provider synchronization remains pending; no auth
-repair or moved-backlog execution occurred. Shared graph defaults await delivery;
+historical. The migration receipt records preservation of PR #421's then-published
+head and uncommitted Training-memory bytes. Upstream `fe83a6b06`, integrated through
+`e5c3dd947`, now supplies the Eval archive reference and TLA recovery lessons in
+Experiments' memory, retaining the shared-effect evidence and reservations.
+Later PR #421 contributions still need integration review; this pass did not
+audit its separate checkout. Provider synchronization was pending in the receipt;
+no auth repair or moved-backlog execution occurred. Shared graph defaults await delivery;
 main's old `iterate` selection is not a replacement of existing captured graphs.
 
 ## Remaining ownership and limits
@@ -103,16 +106,19 @@ main's old `iterate` selection is not a replacement of existing captured graphs.
 
 The 2026-11-04 shared Wave read still has the four accepted core identities plus
 Academy, with Study abandoned. No replacement Training or Eval Wave is active.
-The migration receipts preserve memory provenance; consolidation remains: Experiments'
-memory still links the removed `.lf/wave/eval/MEMORY.md`, and the renamed goal
-files retain Training/Engine headings and their earlier chapter scopes. Proposed
-follow-up within an owning Wave Graph: replace the dead Eval link with its exact
-archive reference in `docs/workflows.md`, incorporate applicable evaluation
-lessons, and reconcile headings/current responsibility with Jack Heart's accepted
+The migration receipts preserve memory provenance. Reconciled 2026-11-04:
+Experiments' memory now references `19bdee944^:.lf/wave/eval/MEMORY.md`, the same
+archived blob named in `docs/workflows.md`; the previously planned link repair is
+complete upstream. The renamed goal files retain Training/Engine headings and
+their earlier chapter scopes. Proposed follow-up within an owning Wave Graph:
+incorporate applicable archived evaluation lessons and reconcile headings/current
+responsibility with Jack Heart's accepted
 2026-11-04 boundaries without overwriting historical chapter scope or PR #421's
 contributions. This unbound Task selects no Wave for memory curation; those files
-remain unchanged. Relevant Experiments and Coverage lessons were read; unrelated
-Wave memories were not audited.
+remain unchanged. Relevant Experiments and Coverage sections were read, including
+the new capacity-recovery lessons; unrelated sections and Wave memories were not
+audited. MTG-213's opt-in recovery and first-64 support do not change this protocol:
+its compiler still supplies no game-error recovery and requires strict overflow.
 
 ## Assumptions and deletion cut
 
@@ -144,7 +150,11 @@ evidence at `e5c3dd947:scratch/questions.md`. The post-sync inspection also pass
 rejection; capacity recovery remains opt-in. Frozen manifests and migration
 receipts are unchanged. No complete game or scientific campaign was run.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py -q` — 52 passed; Ruff lint/format and `git diff --check` passed. Gate owns the full affected suites and acceptance; demo/review remains required. `lf context` is within both limits.
+Prior implementation validation: 52 protocol/analysis tests and Ruff passed at
+`bfac9958e:scratch/questions.md`. No executable code changed in this reconciliation;
+Gate owns the full affected suites and acceptance, and demo/review remains required.
+
+Check: `git diff --check` — passed; both Eval archive references resolve to the same blob; `lf context` remains within both limits.
 
 ## Sync provenance — 2026-11-04
 
