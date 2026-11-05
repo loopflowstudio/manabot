@@ -70,6 +70,18 @@ plus `RecordReducer`'s per-sequence padded packing. Malformed-input rejection an
 schema/semantic tests survive on the batched path. Pre-change source remains at
 `42709fa1b`, not as a runtime fallback. No parameters or tensor contracts changed.
 
+### Delete — do not maintain
+
+Removed `RecordReducer`'s list-of-tensors wrapper and separate `reduce_tokens`
+entry point: every caller now supplies a flat token table and record lengths
+through `forward`, including the frozen-v5 `SharedFactEncoder` consumer. Keep
+its semantic and checkpoint tests; no exclusive predecessor fixtures remain.
+One `join_record_rows` helper owns batch offsets and absent one-based references
+for effects, continuation objects and parent frames. Continuation edges are
+grouped once by handle, then sorted by payload; handles never become features.
+No further deletion targets are identified. Frozen receipts and the existing
+Wave edits are retained; broader validation belongs to gate.
+
 ## Budget and dependency authority
 
 Jack Heart's “keep going” supersedes the operator-created final-settlement-only
@@ -244,4 +256,4 @@ retains the 31 passing focused checks and manifest audit. Gate owns broader
 suites; results demo/review owns scientific judgment. Live watchdog enforcement
 and GPU profiling remain unverified. No rendering proof is claimed.
 
-Validation: focused selections in `uv run --no-sync pytest tests/model/test_shared_effects.py tests/model/test_state_records.py -q` passed (28 distinct tests); saved native forward/gradient oracles, two final ordinary CPU updates, checkpoint reloads and Ruff passed. Gate owns the complete affected suites; CUDA checks and matched GPU admission are deferred by the documented connectivity failure.
+Validation: `uv run --no-sync pytest tests/model/test_state_records.py tests/model/test_shared_effects.py -q -k 'not treatment_trains and not ordinary_learner'` — 34 passed, 4 deselected; Ruff check/format and diff checks pass. Prior saved native oracles and ordinary CPU learner results remain in the diagnosis. Gate owns broader suites; implementation owns CUDA profiling/parity and matched GPU admission after the documented connectivity failure.

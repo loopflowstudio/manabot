@@ -284,7 +284,7 @@ def test_flat_records_preserve_sequence_order_and_gradients(arm: Arm) -> None:
     lengths = [3, 1, 5, 3, 2]
     tokens = torch.randn(sum(lengths), 8, requires_grad=True)
     separate = tokens.detach().clone().requires_grad_()
-    actual = reducer.reduce_tokens(tokens, lengths)
+    actual = reducer(tokens, lengths)
     expected_rows: list[torch.Tensor] = []
     for sequence in separate.split(lengths):
         if reference.gru is None:
@@ -322,6 +322,7 @@ def test_continuation_batches_preserve_independent_frames_and_gradients(
         relations[batch, 2] = relations[batch, 1]
         relations[batch, 2, 0] = 2
         relations[batch, 2, 24] = 3
+    relations[2, 1, 6] = relations[2, 2, 24] = 0
     relations[1, :, :31] = float("nan")
     relations.requires_grad_()
     copies = [

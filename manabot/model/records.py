@@ -4,6 +4,7 @@ Validate live rows and one-based joins before indexing; RecordReducer combines
 within-observation tokens by sum or GRU without retaining temporal state.
 """
 
+from itertools import accumulate
 from typing import Literal
 
 import torch
@@ -34,9 +35,18 @@ def record_indexes(values: torch.Tensor, maximum: int, name: str) -> torch.Tenso
     return values.long()
 
 
-def join_rows(values: torch.Tensor, indexes: torch.Tensor) -> torch.Tensor:
-    """One-based local references; zero is explicit absence, never object zero."""
-    return values[(indexes - 1).clamp_min(0)].masked_fill(
+def join_record_rows(
+    values: torch.Tensor, batches: torch.Tensor, references: torch.Tensor
+) -> torch.Tensor:
+    """Join [batch, row, width] values through validated host-owned references.
+
+    Batches broadcast over one-based references. Zero stays absent
+    even in later batches; only routing moves devices, never learned values.
+    """
+    indexes = torch.where(references > 0, batches * values.shape[1] + references, 0).to(
+        values.device
+    )
+    return values.flatten(0, 1)[(indexes - 1).clamp_min(0)].masked_fill(
         (indexes == 0).unsqueeze(-1), 0
     )
 
@@ -51,12 +61,7 @@ class RecordReducer(nn.Module):
         )
         self.output = nn.Linear(width, width)
 
-    def forward(self, records: list[torch.Tensor]) -> torch.Tensor:
-        return self.reduce_tokens(
-            torch.cat(records), [len(record) for record in records]
-        )
-
-    def reduce_tokens(self, tokens: torch.Tensor, lengths: list[int]) -> torch.Tensor:
+    def forward(self, tokens: torch.Tensor, lengths: list[int]) -> torch.Tensor:
         """Reduce a flat sequence table with host-owned, positive record lengths.
 
         Packing indexes are built on the host once. No per-record device copy,
@@ -71,11 +76,7 @@ class RecordReducer(nn.Module):
             )
         else:
             order = sorted(range(len(lengths)), key=lambda i: -lengths[i])
-            offsets: list[int] = []
-            offset = 0
-            for length in lengths:
-                offsets.append(offset)
-                offset += length
+            offsets = list(accumulate(lengths, initial=0))
             indexes: list[int] = []
             sizes: list[int] = []
             for step in range(max(lengths)):

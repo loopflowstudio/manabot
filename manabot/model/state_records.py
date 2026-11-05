@@ -24,7 +24,7 @@ from manabot.infra.config import ObservationConfig
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
-    join_rows,
+    join_record_rows,
     masked_record_rows,
     record_indexes,
 )
@@ -83,7 +83,7 @@ class SharedFactEncoder(nn.Module):
                 ),
                 1,
             )
-            encoded = self.reducer(list(tokens.unbind(0)))[inverse]
+            encoded = self.reducer(tokens.flatten(0, 1), [5] * len(tokens))[inverse]
             delta = torch.zeros_like(table).index_add(0, links - 1, encoded)
             results[batch] = table + delta
         return torch.stack(results)
@@ -171,39 +171,34 @@ class TypedContinuationEncoder(nn.Module):
                     seen.add(cursor)
                     cursor = parent_map[cursor]
             stack_handles = sorted(handle_list[i] for i in headers if kind_list[i] <= 3)
+            stack_ranks = {
+                handle: rank / RELATION_ROWS
+                for rank, handle in enumerate(stack_handles, start=1)
+            }
+            edges_by_handle: dict[int, list[int]] = {h: [] for h in header_handles}
+            for index in indexes:
+                if row_kind_list[index] != 1:
+                    edges_by_handle[handle_list[index]].append(index)
             for index in headers:
-                if kind_list[index] <= 3:
-                    ranks[index] = (
-                        stack_handles.index(handle_list[index]) + 1
-                    ) / RELATION_ROWS
-                children = [
-                    i
-                    for i in indexes
-                    if handle_list[i] == handle_list[index] and row_kind_list[i] != 1
-                ]
-                children.sort(key=edge_keys.__getitem__)
+                ranks[index] = stack_ranks.get(handle_list[index], 0.0)
+                edges = edges_by_handle[handle_list[index]]
+                # Payload order is canonical; routing handles are not features.
+                edges.sort(key=edge_keys.__getitem__)
                 header_indexes.append(index)
-                token_indexes.extend((index, *children))
-                lengths.append(1 + len(children))
+                token_indexes.extend((index, *edges))
+                lengths.append(1 + len(edges))
         device = objects.device
         batches = positions[:, 0]
         flat_indexes = (batches * RELATION_ROWS + positions[:, 1]).to(device)
         features = relations.reshape(-1, RELATION_DIM_V5)[flat_indexes]
         defs = definitions.reshape(-1, 2, width)[flat_indexes]
-        table = objects.reshape(-1, width)
-        source_links = torch.where(sources > 0, sources + batches * object_count, 0).to(
-            device
-        )
-        target_links = torch.where(targets > 0, targets + batches * object_count, 0).to(
-            device
-        )
         header = torch.tanh(
             self.header(
                 torch.cat(
                     (
                         features[:, self.header_columns],
                         defs[:, 0],
-                        join_rows(table, source_links),
+                        join_record_rows(objects, batches, sources),
                         features.new_tensor(ranks).unsqueeze(-1),
                     ),
                     -1,
@@ -211,7 +206,8 @@ class TypedContinuationEncoder(nn.Module):
             )
         )
         tokens = header
-        edge_indexes = (row_kinds != 1).nonzero().flatten().to(device)
+        edge_rows = (row_kinds != 1).nonzero().flatten()
+        edge_indexes = edge_rows.to(device)
         # Preserve absent gradients for unused modules: Adam treats None
         # differently from a zero gradient when momentum already exists.
         if len(edge_indexes):
@@ -221,14 +217,16 @@ class TypedContinuationEncoder(nn.Module):
                         (
                             features[edge_indexes][:, self.edge_columns],
                             defs[edge_indexes, 1],
-                            join_rows(table, target_links[edge_indexes]),
+                            join_record_rows(
+                                objects, batches[edge_rows], targets[edge_rows]
+                            ),
                         ),
                         -1,
                     )
                 )
             )
             tokens = header.index_copy(0, edge_indexes, edge)
-        local = self.reducer.reduce_tokens(
+        local = self.reducer(
             tokens[torch.tensor(token_indexes, device=device)], lengths
         )
         header_batches = batches[header_indexes]
@@ -239,10 +237,13 @@ class TypedContinuationEncoder(nn.Module):
             0, frame_indexes, local
         )
         header_parents = parents[header_indexes]
-        parent_links = torch.where(
-            header_parents > 0, header_parents + header_batches * RELATION_ROWS, 0
-        ).to(device)
-        resolved = local + self.parent(join_rows(frames, parent_links))
+        resolved = local + self.parent(
+            join_record_rows(
+                frames.reshape(batch, RELATION_ROWS, width),
+                header_batches,
+                header_parents,
+            )
+        )
         frames = frames.index_copy(0, frame_indexes, resolved)
         header_kinds = kinds[header_indexes]
         groups = torch.where(header_kinds <= 3, 0, torch.where(header_kinds <= 6, 1, 2))

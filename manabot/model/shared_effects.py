@@ -20,7 +20,7 @@ from manabot.env.shared_effects import (
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
-    join_rows,
+    join_record_rows,
     masked_record_rows,
     record_indexes,
 )
@@ -124,20 +124,10 @@ class SharedEffectEncoder(nn.Module):
         header_indexes = (batches * EFFECT_ROWS + live_positions[:, 1]).to(device)
         numeric = headers.reshape(-1, EFFECT_DIM)[header_indexes, 2:10].clone()
         numeric[:, -1] /= EFFECT_ROWS
-        global_links = torch.where(
-            links > 0, links + batches[:, None] * object_count, 0
-        ).to(device)
-        table = objects.reshape(-1, width)
-        header = self.header(
-            torch.cat(
-                (
-                    numeric,
-                    join_rows(table, global_links[:, 0]),
-                    join_rows(table, global_links[:, 1]),
-                ),
-                -1,
-            )
-        )
+        controller, source_object = join_record_rows(
+            objects, batches[:, None], links
+        ).unbind(1)
+        header = self.header(torch.cat((numeric, controller, source_object), -1))
         mod = self.modification(
             (((halves[:, 0] << 16) | halves[:, 1]) % 4096).to(device)
         )
@@ -151,11 +141,12 @@ class SharedEffectEncoder(nn.Module):
                 detail_tokens,
             )
         )
-        encoded = self.reducer.reduce_tokens(
+        encoded = self.reducer(
             tokens[torch.tensor(token_indexes, device=device)], lengths
         )
         # Duplicate memberships remain separate scatter additions and gradients.
         routes = (member_batches * object_count + targets - 1).to(device)
         repeated = encoded[torch.tensor(member_records, device=device)]
+        table = objects.reshape(-1, width)
         delta = torch.zeros_like(table).index_add(0, routes, repeated)
         return objects + delta.reshape_as(objects)

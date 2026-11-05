@@ -1,7 +1,9 @@
-# training wave memory
+# Experiments Wave memory
 
-Evaluation memory (hosted LLM comparisons, inference receipts and evidence
-reuse) lives in `.lf/wave/eval/MEMORY.md`.
+The 2026-11-04 Wave reorganization moved Training's memory into Experiments.
+The removed Evaluation memory (hosted LLM comparisons, inference receipts and
+evidence reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md` in git history;
+it is not a current sibling memory file.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 
@@ -99,8 +101,9 @@ the isolated admission's 19.30 seconds/update did not predict aggregate pace.
 Memory headroom does not establish concurrent compute capacity. The first three restart
 admissions then failed: startup loss; a pooled learner paused at 7/8 updates;
 and a 256-stream learner lost without a final output inventory. The last loss
-establishes neither zero exposure nor OOM. No complete two-arm throughput
-admission or replacement scientific cohort exists, and plateau remains unmet.
+establishes neither zero exposure nor OOM. Those attempts supplied no complete
+two-arm throughput admission. A later admission completed both arms as recorded
+below; no replacement scientific cohort exists, and plateau remains unmet.
 
 The 2026-11-04 19:55–19:57 UTC reconciliation found all five Vast instances
 absent and all five runs terminal. Full-day provider charge rows total $0.398;
@@ -137,11 +140,48 @@ collection/learning seconds. It paused at predictive finalization under the
 wall-budget failure, not OOM; all 23 outputs matched the worker inventory and
 the controller retained `failed`. Provider absence was confirmed at 21:00:59
 UTC. Reported-plus-settled compute was $0.6225825939, not final settlement.
-Keeping the additional $0.50 admission reserve leaves $16.50 uncommitted.
+At that point the additional $0.50 admission reserve left $16.50 uncommitted.
 Even the pooled half projects $20.22 before allowances, or $31.39 with the
 declared allowance and setup/evaluation reserve. That partial-arm projection
 does not qualify two-arm throughput or predict every future game length;
 it demonstrates why this measured arrangement cannot fund the whole cohort.
+
+Jack Heart authorized the cheaper 3090 attempt under another $0.50 cap, then
+required implementation diagnosis before blaming the host (22:38 UTC). Run
+`803bcc26e7de`, source `22c10ca55197ab225546e5880cc53709db985901`, completed
+four excluded admission updates and 1,024 games in each arm. All 46 outputs
+matched the worker inventory. Instance `59168556` was deleted and confirmed
+absent at 22:58:28 UTC. Reported charge $0.205 exceeded its $0.20159 lifetime
+estimate; combined reported-plus-settled compute was $0.85458, not a final
+invoice. Reserving $2 earlier compute, $0.50 for each later admission and $6
+ancillary leaves $16 within the original $25. These are dated accounting
+observations, not live inventory or permission to discard unknown commitments.
+
+The completed admission separates recurring work from fixed overhead: pooled
+collection/learning took 843.07/440.84 seconds and GRU 969.56/448.04; exports
+took about 0.6 seconds per arm. Multiplying all child elapsed by the update ratio
+overstates fixed costs. The corrected projection scales only recurring work,
+charges setup/close once per learner, bounds periodic exports separately and
+includes outer orchestration and rental/evaluation reserves. It still projects
+$71.82 at the executed quote; recurring training alone without allowances costs
+$47.58, above $16. Four updates cannot establish later game length. This is an
+unaffordable measured arrangement, not proof that every GPU arrangement fails.
+
+Most collection time was inference/action selection. CUDA placement and one
+thread were confirmed; a single 23% GPU-utilization sample, one CPU core and
+two zero-pressure samples do not establish sustained host contention. Source
+inspection identifies per-record Python loops, scalar reads and CUDA validation
+as plausible dispatch/synchronization costs, without causal operator profiling
+or a demonstrated speedup. The earlier 4090 used different training/native
+sources and cannot isolate hardware performance. Ordinary matched-workload
+profiling must distinguish implementation cost from host limitations.
+
+Prospective admission now freezes startup, no-completed-update and phase-cost
+stop policies, retaining progress/reasons before requesting graceful shutdown
+and reaping children within the rental bound. The ordinary collector consumes
+the executor stop callback. Injected fixtures establish these controls; the
+frozen completed rental does not prove their live enforcement. Capacity stops
+must remain independent of model scores and retain every failed attempt.
 
 Scientific orchestration now exists: sequential balanced seed/arm execution,
 initialization and periodic exports, checkpoint evaluation and strict complete
@@ -156,8 +196,9 @@ not a fresh provider balance.
 Wider complete-game batches change gradient estimates and optimizer exposure;
 they require a prospective identity and fresh paired seeds, even at a matched
 65,536-game horizon. Schedule progress can follow game exposure without implying
-equivalent optimization. Admission must measure both arms' total elapsed time,
-including startup/exports, before projecting cohort cost. Preserve failed attempts,
+equivalent optimization. Admission must measure both arms' phases and total
+elapsed, charging fixed startup/exports separately from recurring training.
+Preserve failed attempts,
 initialization, complete periodic evaluation, separate final scoring and explicit
 uncertainty; a noisy flat curve or poor flat play is not evidence of competence.
 
@@ -175,7 +216,7 @@ viewer/seat ownership, reset, replay/fork and exact restoration contracts.
 Earlier engineering evidence remains under
 `experiments/data/state-representation-5da5f4/`; the Task plan owns remaining
 acceptance and delivery. Filesystem inspection
-found no immediate Training child memory directories on 2026-11-04.
+found no immediate Experiments child directories or child memories on 2026-11-04.
 
 ## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-04 UTC)
 

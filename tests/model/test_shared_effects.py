@@ -189,6 +189,9 @@ def test_batched_effect_routing_matches_independent_gradients(
     )
     headers[1] = 0
     details[1] = members[1] = float("nan")
+    # Absence must not turn into a reference to the preceding batch's objects.
+    headers[2, 0, 12] = 0
+    headers[2, 0, 10] = 2
     # Two memberships of the same payload to one object still add twice.
     members[2, 1, 0] = members[2, 0, 0]
     objects = torch.randn(3, 202, 8, requires_grad=True)
