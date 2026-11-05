@@ -59,3 +59,7 @@ evidence links live in `experiments/tla-trophy-pilot.md`. No new rental is
 selected, and a prospective full-TLA successor awaits the separately requested
 damped-learning review. These are historical coordination facts for MTG-244,
 not authorization to launch training or change this Task's review boundary.
+
+Assumption, 2026-11-05 (MTG-244): merging this catalog change makes executed v10
+non-resumable on main (it rejects `6a818cbc…`); continuing MTG-213 needs a successor
+protocol. Tests now prove that rejection instead of rebinding v10. Demo discloses this.

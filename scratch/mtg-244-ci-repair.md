@@ -16,6 +16,7 @@ launch. Prior detailed note: git blob `6875497e56d3ca5bc041a4f4ef761ec440114d03`
 | `68ef4a63d` lazy SBA | 164.461→132.934 | 4.818→3.860 | step time −8.60% | pass |
 | `e4e527621` CI 41958999646 | 166.560→132.200 | 4.897→3.851 | 12,785→14,369 | pass |
 | `c46e4f3d8` CI 42035238111 | 171.352→132.322 | 4.998→3.845 | 12,619→14,205 | pass |
+| `2bec29b5a` CI 42044402732 | 123.778→99.514 | 3.635→2.893 | 17,633→19,454 | pass |
 
 All checked counts and digests match. Local timing on the shared host stays
 exploratory. Each new head must earn its own CI measurement.
@@ -37,10 +38,7 @@ eight samples: v8 program inference 191.312→180.609 ms, forward/backward
 477.955→422.822 ms versus `fb3555ffb`; ordinary v7/v8 inference
 164.485/161.084 ms, forward/backward 349.779/330.524 ms; bytes at 512 facts
 v7 165360, v8 208368. Measurements only, not learning efficacy or GPU proof.
-Long integration, Academy, clean-machine Play, Python Unit and conformance passed.
-Failed logs: `.cache/mtg-244-current-failed.log`. The steer's
-`scratch/mtg-244-current-ci.md` is in neither this checkout nor git history; the
-steer text and these logs are the sources used.
+Failed logs: `.cache/mtg-244-current-failed.log`.
 
 ## Correctness repairs after e4e527621
 
@@ -68,11 +66,9 @@ reconciliation. No local result replaces hosted evidence.
 
 ## Head c46e4f3d8 evidence
 
-CI `42035238111`: Engine Budget, Python Unit, both conformance jobs, Clean-machine
-Play, Academy Integration and long Integration pass. Academy UI fails four cases and
-Integration main fails two `test_trigger_order` cases (1068 passed), both on stale
-digests. Layer Risk `42035237232` fails at `Payment pool/0 differs: before`.
-Budget search is 22.8% less time, worst reply 23.1% less, steps 12.6% higher.
+CI `42035238111` failed Academy UI (four cases) and Integration main (two
+`test_trigger_order` cases) on stale digests; Layer Risk `42035237232` failed at
+`Payment pool/0 differs: before`.
 
 ## Digest repair evidence
 
@@ -89,3 +85,14 @@ Budget search is 22.8% less time, worst reply 23.1% less, steps 12.6% higher.
   0.0926 > 0.1 and passes on main. Seeds 197/198/199: branch .093/.185/.155, main
   .156/.255/.133 (main's `.so` from Nov 4). Inconclusive at n=3; disclose at Demo,
   threshold unchanged.
+
+## Head 2bec29b5a evidence
+
+CI `42044402732`: every job passes (Rust Tests, Academy UI, conformance, Python Unit,
+Academy/long Integration, Play, budget) except Integration main: six
+`tests/eval/test_tla_pilot.py` cases hit "pilot runtime world differs". Layer Risk
+`42044402101` passes in full. Run `42035238111` was cancelled by the push, so
+`c46e4f3d8` has no Rust Tests result. The v10 protocol pins main's catalog `28a0744e…`;
+this branch's is `6a818cbc…`. Five contract-rejection tests now use the explicit
+`pilot_world` fixture. The real-runtime admission test becomes a frozen/runs/eval
+rejection proof; executed v10 evidence is unchanged (50 pilot tests pass locally).
