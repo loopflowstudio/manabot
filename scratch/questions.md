@@ -179,22 +179,24 @@ The next (`-c`) stopped at 6 of 750 deals: games hit the 120 s limit in durable 
 writes (117 of 120 s) on the container disk, with .7 s of CPU. Its failed deal is
 infrastructure, so it replays; arena journals now run in memory and copy to the run.
 
-Exists: closure separation, docs, tests, both experiment files, calibration.
-Remaining:
-- Commit, then freeze study 1 and study 2 at that revision on `fc6ffb-l4`; reconcile
-  bills, inventory and quotes first. Sequence studies so reservations stay under $25.
-- Evaluate on rented CPU with an explicit dollar limit inside the $2.50 line.
-- Report: wall-time and cost views, row/game/optimizer counts, seed and deal intervals,
-  and critic residual by distance. `selection_groups` keys are per action type, so
-  aggregate by rows across action types. Publish under `experiments/data/closure-lambda-v1/`.
-- Explain batch assembly before any wall-time claim. It is 32 s/update for updates
-  1–8 of the one calibration run, then .9 s; scored runs' per-update series test it.
-- Check whether RunPod bills post anything after 00:00 UTC for the three calibration
-  pods; the $1.49 reservation stands until then.
-Live pod `etude-716a7dba8603` (machine `l4-716a7dba8603`) is not this Task's; leave it.
+Study 2's first evaluation (`lambda-sweep-v1-462d58126cd1-f1`) never booted: no
+bootstrap log, one full window, $.97, no games. Charged to unspent training lines as
+the protocol allows, so evaluation stays inside $2.50. A guard now cancels at 15 minutes.
+
+Exists: closure separation, docs, tests, both experiment files, calibration, both
+studies trained and evaluated, report published, protocol Results filled, all scoped
+to Allies/Lessons per Jack Heart (2026-11-05). Spend $19.26 of $25. No paid runs remain
+here; the Elemental repeat is a separate Task with its own $25. Next: gate and PR.
+Live pod `etude-716a7dba8603` ended on its own; it was never this Task's.
 
 Proposed experiments Wave memory (the `code` Graph does not call for writing it):
 one-seat complete games at floor 76 realize 119 rows per stream on the Allies/Lessons
 current world; exact quota idles too (.47 of slots), so idle share alone does not
 measure closure cost; `usd` on a launcher run understated provider bills by about 3×
 in calibration ($.34 against $.92), so budget from bills and rentals.
+Further proposals from the scored runs: packed `[rows, 1]` batches cost about 1,100 s
+per study 1 run in target and diagnostic scans; assembly stalls are host-side and hit
+exact quota too; arena durable writes need memory-backed scratch on rented disks;
+queue mode undersizes windows when parallel exceeds pending runs; refused creates pin
+a run id; a pod that never boots ignores `cancel`, so terminate it by machine;
+controllers need `caffeinate` on the laptop.

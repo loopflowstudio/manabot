@@ -1,6 +1,6 @@
 """Does more direct game-result credit help on complete games? (Task fc6ffb)
 
-Two-seat complete-game recipe, lambda alone varying above the current .5/.8. At
+Two-seat complete-game Allies/Lessons recipe, lambda alone varying above .5/.8. At
 twenty decisions from the end those traces give the result weight about 1e-6 and
 .012. Protocol: experiments/protocols/closure-lambda-v1.md. Recipe:
 `experiments.batched_baseline.lambda_sweep`. Critic quality by distance from game
@@ -20,7 +20,7 @@ from experiments.learning_signal import evaluation_jobs, learning_report, traini
 EXPERIMENT = "lambda_sweep"
 SEEDS = (65201, 65202, 65203)
 UPDATES = 100
-# (policy, value). The first is the current recipe and the baseline.
+# (policy, value). The first is the baseline, `seat_comparison`'s own lambdas.
 ARMS: tuple[tuple[float, float], ...] = (
     (0.5, 0.8),
     (0.8, 0.8),

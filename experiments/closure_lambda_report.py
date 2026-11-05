@@ -35,6 +35,8 @@ DISTANCES = ("terminal", "1-4", "5+", "censored")
 L4_USD_PER_HOUR = 0.59
 BOOTSTRAP_RESAMPLES = 2000
 INTERVAL = 0.95
+# A healthy assembly takes about a second at these row counts.
+ASSEMBLY_STALL_SECONDS = 5.0
 # Two-sided 95% Student t quantiles by degrees of freedom; studies run 2 to 3 seeds.
 T_95 = {1: 12.706, 2: 4.303}
 
@@ -47,8 +49,16 @@ class Study:
 
 
 STUDIES = (
-    Study("batch_closure", "batch-closure-exact-quota-v1", "Study 1: batch closure"),
-    Study("lambda_sweep", "lambda-sweep-p0.5-v0.8-v1", "Study 2: lambda"),
+    Study(
+        "batch_closure",
+        "batch-closure-exact-quota-v1",
+        "Study 1: batch closure, Allies/Lessons only",
+    ),
+    Study(
+        "lambda_sweep",
+        "lambda-sweep-p0.5-v0.8-v1",
+        "Study 2: lambda, Allies/Lessons only",
+    ),
 )
 
 
@@ -189,6 +199,13 @@ def _clock(record: TrainingRecord, update: int, kind: str) -> float:
     if kind == "decisions":
         return record.at_update(update, "coordinates/learner_transitions")
     seconds = record.at_update(update, "coordinates/active_training_seconds")
+    if kind == "seconds_without_assembly":
+        # Assembly stalls are intermittent and host-side, in both arms (see report.md).
+        return seconds - sum(
+            row.get("time/collection/batch_assembly", 0.0)
+            for row in record.updates
+            if row["update"] <= update
+        )
     return seconds if kind == "seconds" else seconds / 3600 * L4_USD_PER_HOUR
 
 
@@ -287,6 +304,20 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
         "diagnostics_seconds": learning["Selection and health diagnostics"]["seconds"],
         "idle_stream_steps": idle,
         "idle_share": idle / (idle + decisions),
+        "assembly_stalled_updates": float(
+            sum(
+                row.get("time/collection/batch_assembly", 0.0) > ASSEMBLY_STALL_SECONDS
+                for row in record.updates
+            )
+        ),
+        "median_update_seconds": float(
+            np.median(
+                [
+                    row["time/collection"] + row["time/learning"]
+                    for row in record.updates
+                ]
+            )
+        ),
         "seconds_per_million_rows": (
             float(cast(float, stage["collection_seconds"]))
             + float(cast(float, stage["learning_seconds"]))
@@ -325,7 +356,7 @@ def analyze(
     }
     usable = [r for r in records if r.run in scored and scored[r.run].updates]
     views: dict[str, dict[str, object]] = {}
-    for kind in ("decisions", "seconds", "dollars"):
+    for kind in ("decisions", "seconds", "seconds_without_assembly", "dollars"):
         grid = matched_grid(usable, scored, kind)
         curves = {
             job: np.array(
@@ -414,7 +445,7 @@ def _figure(
     study: Study, records: list[TrainingRecord], result: dict[str, object], out: Path
 ) -> None:
     views = cast(dict[str, dict[str, object]], result["views"])
-    figure, axes = plt.subplots(1, 3, figsize=(13, 3.6), sharey=True)
+    figure, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharey=True)
     for axis, (kind, title) in zip(
         axes,
         (
@@ -428,9 +459,10 @@ def _figure(
             axis.plot(view["grid"], values["score"], marker="o", label=values["label"])
         axis.set_xlabel(title)
     axes[0].set_ylabel("Score against the heuristic")
-    axes[0].legend(fontsize=7)
+    handles, labels = axes[0].get_legend_handles_labels()
+    figure.legend(handles, labels, loc="lower center", ncol=3, fontsize=8)
     figure.suptitle(study.title)
-    figure.tight_layout()
+    figure.tight_layout(rect=(0, 0.14, 1, 1))
     figure.savefig(out / f"{study.experiment}-strength.png", dpi=140)
     plt.close(figure)
 

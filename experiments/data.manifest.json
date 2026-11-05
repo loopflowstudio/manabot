@@ -2590,6 +2590,30 @@
    "sha256": "7471dd3676eabc33a9ea5ea7efadac8f970a6fe83f5371495291a37473b0e640",
    "bytes": 9321
   },
+  "experiments/data/closure-lambda-v1/batch_closure-rows-assembly.png": {
+   "sha256": "41c189852b483208765ecaa97e7e0505bce8c3bd4fb63021b35cc899d2e4b349",
+   "bytes": 191878
+  },
+  "experiments/data/closure-lambda-v1/batch_closure-strength.png": {
+   "sha256": "78862a5209c474f36d9ae59ee3bad883db17a4aaef9555100f46293f48325d2b",
+   "bytes": 95626
+  },
+  "experiments/data/closure-lambda-v1/lambda_sweep-rows-assembly.png": {
+   "sha256": "bab288d6afabc33c3610b52e91d42ddc4f4f99bdbae48a6f987028e0802e3283",
+   "bytes": 344353
+  },
+  "experiments/data/closure-lambda-v1/lambda_sweep-strength.png": {
+   "sha256": "b29409133fdb81241c3f4378a6b07752905ecb4ff16b3be9b62aeebd396b3c47",
+   "bytes": 115699
+  },
+  "experiments/data/closure-lambda-v1/report.md": {
+   "sha256": "90ad2047ed1ee052bf17164e16190607e732d68a8393aac4d81d4d2c3d113029",
+   "bytes": 13058
+  },
+  "experiments/data/closure-lambda-v1/results.json": {
+   "sha256": "273593df144647f702e3f9f64d2ec8063c533d7f83c1842b68f1455f7298d1c5",
+   "bytes": 245661
+  },
   "experiments/data/cuda-capacity/calibration-amendment.json": {
    "sha256": "4f855afa28d4c7381acc8a62b37e1853283c9c3e6eb7d551f674880bc8f4d87a",
    "bytes": 587
