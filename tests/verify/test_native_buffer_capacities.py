@@ -153,7 +153,9 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
         for action in game.actions[:-1]:
             vector.step_into_buffers([action, 0], [True, False])
         if isinstance(vector, CapturedVector):
-            _assert_retained_frame(vector.semantic_decision_frames_json()[0], game.frame)
+            _assert_retained_frame(
+                vector.semantic_decision_frames_json()[0], game.frame
+            )
         control = managym.Env(seed=game.seed + 1, skip_trivial=True)
         control.reset(_players())
         obs, *_ = control.step(0)

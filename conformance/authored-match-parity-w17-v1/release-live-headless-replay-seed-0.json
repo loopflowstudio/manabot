@@ -216,7 +216,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "e6e16fed09117a0cfc108a4eed48c13825343e4eb42258385973eb9b74a59a6c"
+          "sha256": "b8be13a5bcfa9b410b55f77c135d1afb6e4a95eb3bcad47e49af61fe144f88b6"
         },
         {
           "path": "managym/src/agent/mod.rs",
@@ -256,7 +256,7 @@
         },
         {
           "path": "managym/src/agent/vector_env.rs",
-          "sha256": "abd02ae56711da54774192bbd23f29c93feea8cd4f2c0b3d9fd5cb7c35f3c567"
+          "sha256": "54c7526eabc4b8bd983458cc3173c20eb39c3c26ed062b7ea8b17f091bef64ed"
         },
         {
           "path": "managym/src/benchmark_allocations.rs",
@@ -380,7 +380,7 @@
         },
         {
           "path": "managym/src/flow/naming_tests.rs",
-          "sha256": "3a3a9777b3bd6461cd72ffd63d705e7b3ed470870227478370dfae088376fe87"
+          "sha256": "639732a66d44467a2336702504ef07a883de7cb9fff57c407bbad2396fb6c8ed"
         },
         {
           "path": "managym/src/flow/play.rs",
@@ -412,7 +412,7 @@
         },
         {
           "path": "managym/src/flow/scenario.rs",
-          "sha256": "4371e8a888fad823e3317e9dadefcaa7fb8ca814d9f9b7d3626f47ec61cbc7f0"
+          "sha256": "b7c8795947921799a99128e8d3660e55593fc9f41ac60d7805334528322f3fb7"
         },
         {
           "path": "managym/src/flow/search.rs",
@@ -476,7 +476,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "01d9daf2d76ffc02ee8bda99e5376463e03dd932af06b8333ac1599398a49d18"
+          "sha256": "2d0958b4e2a6a8c3f43fd7e34d672650e9936aad682aec54725bfd7c9b5854e0"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -492,7 +492,7 @@
         },
         {
           "path": "managym/src/python/vector_env_bindings.rs",
-          "sha256": "715b72963499ede47a7b57dfc1c547917c3b8b3205f7fc97c7e22420eccc2f87"
+          "sha256": "252e2fb927d6b54a13219c1d29005ec4cb325592dca2716106ff2afe9c48d741"
         },
         {
           "path": "managym/src/search_state.rs",
@@ -583,7 +583,7 @@
           "sha256": "2418277760950967fef1763dcf8cc71b4d19bfe9ac0cfb13d0848d12b4e55b06"
         }
       ],
-      "sha256": "b8108ba9cbed1f19eb58b6612d823ada6a6218fb1d8fa2f4dccce17f5dbb2712"
+      "sha256": "d402ed4fcaca1f75611ffc17b7e5fc6318b03e5815c0837b3aea74948cb2643b"
     },
     "seed": 0
   },
