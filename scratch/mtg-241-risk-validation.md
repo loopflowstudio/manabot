@@ -163,3 +163,26 @@ legacy code alone did not preserve admission: the added LibrarySearched completi
 was still rejected. Matching search/Scry/Surveil obligations now imply their
 completion event on frozen inputs; novel same-offer saved events remain v8-only.
 The native check covers v1–v8 and the real fetch path checks both encoders.
+
+## Current-head baseline and simplification direction — 2026-11-05
+
+The 15.8%/13.7% figures above predate merging sibling `e4e527621`. Local Apple
+Silicon, Engine Budget benches with this head's benchmark sources, one serial
+sample per revision. Steps 101,650 and all step/search digests match across all
+three. Wall time was contended (search 173.55 s real, 59.54 s user at head), so
+it is not evidence here. This is a diagnostic, not Engine Budget acceptance.
+
+| Revision | Steps instructions | Search instructions | Search user s |
+| --- | ---: | ---: | ---: |
+| Reference `ea316ff14` | 65.53 B | 1,495.05 B | 74.62 |
+| Layers `e4e527621` | 53.37 B | 1,082.18 B | 59.53 |
+| Head `bf7bf53ad` | 53.99 B | 1,060.54 B | 59.54 |
+
+Head is −17.6% steps / −29.1% search instructions against reference, and
++1.2% / −2.0% against layers. These curated workloads rarely reach nested
+replacement paths, so this says nothing about their cost.
+
+Jack Heart directed (2026-11-05, this conversation) a bigger swing using Fable
+subagents: make the new system radically simpler and more performant so it is a
+win on both. Layers stay MTG-244's. MTG-244 does not depend on this Task; this
+Task contains it, so #427 is expected to land first.
