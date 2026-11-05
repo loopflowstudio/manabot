@@ -1,5 +1,22 @@
 # MTG-243 — complete catalog naming
 
+## Shipping authorization — 2026-11-05
+
+Jack Heart reviewed the sequential naming design and implementation and said
+“ok lg2m ship it”. This authorizes shipping PR #424 through the remaining Task
+steps, merge, verification and completion, superseding earlier review-only
+boundaries below. It does not authorize paid or strength experiments. Full
+end-to-end throughput measurement remains unnecessary before shipping.
+
+Preserve the interactive review's evidence limits in durable PR copy before
+scratch cleanup: the group-gradient and rollout witnesses do not demonstrate
+context-dependent routing between different groups or comparative learning
+quality; the proposed paired-context group witness remains unrun. Group means
+still build a vocabulary-wide prefix sum per forward. No end-to-end speedup is
+claimed. The separate compound/mana-payment learning study acc0fe remains filed
+and unstarted. Reviewed head 833ef4120 has all CI checks passing, including main
+integration and Engine Budget; update the stale pending-CI wording in PR copy.
+
 
 ## CURRENT ACCEPTED REVISION — 2026-11-05, sequential naming and decoder removal
 
@@ -244,3 +261,60 @@ budget record are retained verbatim in
 implementation.
 
 Check: `lf context` and `git diff --check` after this reconciliation; behavioral checks reused, not rerun.
+
+
+### Interactive concept review — group learnability, 2026-11-05 at 833ef4120
+
+Jack Heart asked how the groups are made learnable. Inspection of
+NameCandidateEncoder._groups, ActorCritic._gather_informed_actions and the naming
+tests finds a shared identity mechanism: balanced alphabetical native spans are
+embedded as the arithmetic mean of their trainable member-name vectors. Those
+same name vectors join viewer-visible definitions before card/known-hand/decklist
+pooling. The regular action head can therefore relate group membership to public
+state. Group labels/endpoint magnitudes are not the model's learned meaning, and
+no separate group embedding, learned partition or compound decoder is present.
+Group vectors contain name identities, not pooled executable member programs;
+leaf scoring adds the selected name's optional definition/program vector.
+
+Each member's derivative through the group mean is 1/member_count times the
+group-vector derivative. This shares signal and avoids dead members, but it is
+not targeted credit identifying which member caused a good outcome. Mean pooling
+can dilute a rare useful member or collapse distinct sets; distinct means in one
+seeded test do not prove universal distinguishability. Alphabetical grouping
+supplies no strategic similarity prior. This is a plausible simple baseline,
+not demonstrated learning quality or a reason to reintroduce compound machinery.
+
+Existing witnesses: test_catalog_naming_large_support_learns_and_rejects_wrong_binding
+checks distinguishable seeded group vectors, positive support, one supervised
+SGD step reducing a target group's loss, all member gradients and selected native
+execution. test_equal_rule_names_learn_opposite_public_preferences is explicitly
+a within-leaf, two-state linear-probe representability witness (nonzero FiLM), not
+SGD convergence. test_naming_transitions exercises ordinary rollout/PPO and changed
+name weights, not correct context-dependent group selection. No analogous paired
+public-context witness for different groups was found. Proposed next proof: use
+real native group prompts and two public states whose intended names lie in
+different groups; verify routing preferences can reverse, remain independent of
+action ordering, and lose hidden-information distinctions under closed disclosure.
+A bounded optimization witness would strengthen this beyond a fitted final head.
+This is a recommended engineering proof, not a new strength campaign or permission
+to rewrite implementation/restart a Graph in this concept-review turn.
+
+Performance caveat: _groups builds a full name-table prefix sum once per encoder
+forward, even when all supplied spans are zero. This retains O(vocabulary*width)
+additions per forward; it does not expand every environment's action buffer or
+encode every member program. No new timing or claim of end-to-end speed is made.
+
+Experience/design unchanged: ordinary public group prompt -> leaf prompt ->
+private SearchNamed, final leaf alone commits; recovery retains current scope,
+stale previous-prompt Commands reject, committed exiles survive. Proposed usage
+wording: “Choose a public alphabetical range, then the exact name. Selecting a
+range narrows the pending choice; it does not inspect or exile cards.” Existing
+docs accurately describe that contract; no product docs/skill edits are required.
+Concept outcome: retain the accepted simple sequential design, with the evidence
+limit above visible in review. No new product choice or shipping approval inferred.
+
+Observed delivery: PR #424 is open at 833ef4120bcc71062c33e52c48a8e4a60cee6ff2,
+merge state CLEAN and required checks green (release publish skipped); Graph
+aba71092 completed pr-publish and Task stands at demo. Earlier reconciliation's
+uncommitted-docs/pending-publication statements are historical, superseded by this
+read. CI passing does not supply the missing contextual group-learning witness.

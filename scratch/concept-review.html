@@ -1,69 +1,46 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-243 concept review — sequential catalog naming</title>
-<style>
-  :root { color-scheme: light dark; --fg:#222; --bg:#fbfaf7; --muted:#666; --rule:#ddd; --new:#2f6b3a; --old:#8a4b2a; --code:#f0eee8; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#e6e4df; --bg:#1b1a18; --muted:#a09d97; --rule:#3a3835; --new:#8fd19e; --old:#e0a37f; --code:#2a2926; } }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
-  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
-  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
-  h1 { font-size:1.6rem; margin:0 0 .5rem; } h2 { font-size:1.2rem; margin-top:2.5rem; border-top:1px solid var(--rule); padding-top:1.25rem; }
-  code { font:.85em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; }
-  .lead { font-size:1.1rem; }
-  .flow { display:grid; gap:.75rem; margin:1rem 0; }
-  .step { border-left:3px solid var(--rule); padding:.25rem 0 .25rem 1rem; }
-  .step strong { display:block; }
-  .old { border-color:var(--old); } .new { border-color:var(--new); }
-  .tag { font:.75rem ui-monospace, Menlo, monospace; text-transform:uppercase; letter-spacing:.05em; }
-  .old .tag { color:var(--old); } .new .tag { color:var(--new); }
-  table { border-collapse:collapse; width:100%; font-size:.92rem; }
-  td, th { text-align:left; vertical-align:top; padding:.4rem .5rem; border-bottom:1px solid var(--rule); }
-  ol li { margin:.4rem 0; }
-</style>
-</head>
-<body>
-<main>
-<header>
-  <h1>Sequential catalog naming: concept review</h1>
-  <p>Task MTG-243 · PR #424 · concept-review step (headless) · 2026-11-05</p>
-  <p>Built from <code>scratch/mtg-243-naming.md</code> (current accepted revision), <code>scratch/questions.md</code>, <code>docs/observation-and-model.md</code>, <code>managym/src/agent/structured_offer.rs</code>, <code>managym/src/python/bindings.rs</code></p>
-</header>
-
-<p class="lead"><strong>Decision needed: none.</strong> Jack Heart accepted the design. The implementation at <code>9a4eca36d</code> matches it, and the review turned up no new product choice. What remains before the demo is delivery work.</p>
-
-<h2>One interaction: casting The Rise of Sozin with 928 names</h2>
-<div class="flow">
-  <div class="step old"><span class="tag">before (atomic v8)</span><strong>One prompt with 928 names</strong>v8 widened action capacity to the full vocabulary, so the size of every live buffer depended on the catalog.</div>
-  <div class="step new"><span class="tag">now (accepted, implemented)</span><strong>Prompt 1: 15 groups</strong>“Names A through B”. Choosing a group narrows <code>NameScope</code> and commits nothing: no search, no inspection, no exile.</div>
-  <div class="step new"><span class="tag">now</span><strong>Prompt 2: 61–62 names</strong>“Name X”. Only this choice pushes <code>ExileNamed</code>. The private <code>SearchNamed</code> step keeps optional stopping and fail-to-find.</div>
-  <div class="step new"><span class="tag">recovery</span><strong>Reconnect, replay or fork</strong>Each restores whichever prompt is actually pending. A Command bound to the group prompt is rejected as stale once the name prompt is showing. No back or cancel action exists, because none was authorized. Every name is still reachable exactly once.</div>
-</div>
-
-<h2>Actions → concepts → APIs</h2>
-<table>
-  <tr><th>Action</th><th>Concept</th><th>API / data</th></tr>
-  <tr><td>Choose a group</td><td>Ordinary decision over a balanced, contiguous span of sorted names (at most 64 per prompt)</td><td><code>Decision::NameCard{scope}</code>, <code>ActionOption.name_group=[first,last]</code>, v9 <code>name_candidates[A,4]</code> columns 3–4</td></tr>
-  <tr><td>Choose a name</td><td>Leaf decision; the only commit</td><td>v9 columns 1–2 (name row, definition ref); <code>ExileNamed</code></td></tr>
-  <tr><td>Policy learns either choice</td><td>Regular head, rollout, value and learner; one transition per prompt</td><td>Group vector = exact mean of member name vectors; binding <code>public-groups-v1</code> + <code>naming_branching</code></td></tr>
-  <tr><td>Human or LLM plays</td><td>Existing offer controls and text, with no new UI</td><td>Shared offers, Commands and text projection</td></tr>
-</table>
-
-<h2>Points checked, with no change needed</h2>
-<ol>
-  <li><strong>Retained compound-offer bindings.</strong> <code>compound_offers</code> and <code>compound_commands_json</code> have no Python caller. They belong to the live structured-offer family, though: Academy studies and the action benchmark call <code>structured_offers</code>. They also have Rust rule tests, sit in MTG-241's payment domain, and never touch naming. The decision to keep deletion narrowly about the neural compound architecture keeps them.</li>
-  <li><strong>v1–v7.</strong> These versions see groups as anonymous modal choices. They never carried name identity, so this pretends nothing. v8 rejects group prompts explicitly. This is a reversible assumption recorded in <code>questions.md</code>.</li>
-  <li><strong>Names line up across layers:</strong> <code>NameScope</code>, <code>NAME_BRANCHING</code>, <code>name_group</code> and <code>public-groups-v1</code>.</li>
-</ol>
-
-<h2>Remaining (delivery, not design)</h2>
-<ol>
-  <li>Commit the relocated docs section in <code>docs/observation-and-model.md</code> and the retargeted link in the managym README.</li>
-  <li>Update <code>scratch/pr-review.html</code> and <code>scratch/naming-risks.html</code> to describe group → name prompts, v9 and the decoder removal.</li>
-  <li>Read the PR #424 CI result on the new head, then demo and hand off for interactive review. No merge or Auto-Ship.</li>
-</ol>
-</main>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>MTG-243 · How groups become learnable</title><style>
+:root{color-scheme:light dark;--bg:#fbfaf6;--fg:#252d32;--muted:#616d73;--line:#cbd1d1;--blue:#315f94;--wash:#edf2f7;--green:#2e6b4d;--soft:#edf4ef;--amber:#945124;--code:#f0f0ea}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:36px 26px 60px}header,figcaption,.source{font-size:13px;color:var(--muted)}h1{font-size:clamp(31px,4.5vw,46px);line-height:1.15;letter-spacing:-.035em;margin:22px 0 14px}h2{font-size:24px;line-height:1.3;margin:34px 0 12px}.lead{font-size:21px}.callout{border-left:3px solid var(--amber);padding:5px 0 5px 18px;margin:22px 0}code{font:.87em ui-monospace,monospace;overflow-wrap:anywhere}pre{font:13px/1.7 ui-monospace,monospace;padding:18px;background:var(--code);border:1px solid var(--line);border-radius:6px;overflow:auto}pre code{font:inherit;overflow-wrap:normal}figure{margin:24px 0}.diagram{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--wash)}svg{display:block;width:100%;min-width:660px}svg text{font-family:system-ui,sans-serif;fill:var(--fg);font-size:16px}svg .small{font-size:13px;fill:var(--muted)}svg .strong{font-weight:650}svg rect{fill:var(--bg);stroke:var(--line);stroke-width:1.5}svg .group{fill:var(--soft);stroke:var(--green)}svg path.arrow{fill:none;stroke:var(--blue);stroke-width:2;marker-end:url(#arrow)}figcaption{margin-top:10px}.panel{padding:20px;background:var(--soft);border:1px solid var(--line);border-radius:7px}.controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}select{font:inherit;background:var(--bg);color:var(--fg);padding:7px 14px;border:1px solid var(--line);border-radius:5px}.math{font-size:21px;font-weight:600;color:var(--green)}.hint{font-size:14px;color:var(--muted)}table{border-collapse:collapse;width:100%;font-size:15px}td,th{text-align:left;vertical-align:top;padding:12px 12px;border-bottom:1px solid var(--line)}th{color:var(--muted)}.table{overflow:auto}details{margin-top:26px;border-top:1px solid var(--line);padding-top:14px}summary{font-weight:600;cursor:pointer}a{color:var(--blue)}a:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:4px}footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:18px;margin-top:30px}.questions{padding-left:24px}.questions li{margin:9px 0}@media(prefers-color-scheme:dark){:root{--bg:#1c2227;--fg:#e9edf0;--muted:#b1bcc5;--line:#46545d;--blue:#9bbde9;--wash:#24313e;--green:#a0d4b2;--soft:#26392f;--amber:#edb388;--code:#252d32}}@media(max-width:650px){main{padding:24px 18px 40px}.lead{font-size:18px}h2{font-size:22px}thead{display:none}table,tr,td{display:block}td{border:0;padding:5px 0}tr{border-bottom:1px solid var(--line);padding:9px 0}td:before{content:attr(data-label) ': ';font-weight:600}pre{font-size:12px}.math{font-size:18px}}@media print{.diagram{overflow:visible}svg{min-width:0}main{padding:0}pre{white-space:pre-wrap}}
+</style></head><body><main>
+<header>MTG-243 · interactive concept review at demo · 5 November 2026 · source <code>833ef4120</code><br>Built from <code>cards/names.rs</code>, <code>model/name_candidates.py</code>, <code>model/actor_critic.py</code>, <code>test_catalog_naming.py</code>, <code>test_naming_transitions.py</code> and the working design.</header>
+<h1>A group learns through the names inside it.</h1>
+<p class="lead">Each name has a trainable vector. A group gets the <strong>mean of its member-name vectors</strong>, which the regular policy head scores alongside the available game context.</p>
+<div class="callout"><strong>The consequential evidence gap:</strong> current tests show that group scores can be trained. They do not yet show the bot learning to route to different groups when the useful name changes with public game context. No architecture change is proposed by this review.</div>
+<h2>1. The engine partitions; the model learns the vectors</h2>
+<p>The native engine sorts public names alphabetically and partitions them into balanced contiguous ranges. With 928 names, it offers 15 groups of 61–62 names. The grouping itself is deterministic—not a learned strategic clustering.</p>
+<figure><div class="diagram" tabindex="0" role="region" aria-label="Group embedding diagram; scroll horizontally on narrow screens"><svg viewBox="0 0 850 510" role="img" aria-labelledby="title desc"><title id="title">Name vectors form a group vector; public state and action features reach the regular policy head</title><desc id="desc">Each name has a learned vector. The average of vectors for all members forms the group feature. This joins the action vector and contextual object features before the regular policy head. The same name identities are joined into visible card and deck information. Labels alone are not the group's model representation.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--blue)"/></marker></defs>
+<text x="425" y="33" text-anchor="middle" class="strong">One public group: names [first … last]</text>
+<rect x="40" y="60" width="220" height="65" rx="7"/><rect x="315" y="60" width="220" height="65" rx="7"/><rect x="590" y="60" width="220" height="65" rx="7"/>
+<text x="150" y="87" text-anchor="middle" class="strong">First member’s vector</text><text x="150" y="110" text-anchor="middle" class="small">e₁ · trainable identity</text><text x="425" y="87" text-anchor="middle" class="strong">Other member vectors</text><text x="425" y="110" text-anchor="middle" class="small">e₂ … eₘ₋₁ · all participate</text><text x="700" y="87" text-anchor="middle" class="strong">Last member’s vector</text><text x="700" y="110" text-anchor="middle" class="small">eₘ · trainable identity</text>
+<path d="M150 125V153H425V178" class="arrow"/><path d="M425 125V178" class="arrow"/><path d="M700 125V153H425V178" class="arrow"/>
+<rect x="215" y="183" width="420" height="70" rx="7" class="group"/><text x="425" y="211" text-anchor="middle" class="strong">Group vector g = (e₁ + … + eₘ) / m</text><text x="425" y="236" text-anchor="middle" class="small">Mean of identities; no member-program pooling</text>
+<path d="M425 253V295" class="arrow"/>
+<rect x="215" y="300" width="420" height="70" rx="7" class="group"/><text x="425" y="328" text-anchor="middle" class="strong">Regular action feature builder</text><text x="425" y="353" text-anchor="middle" class="small">Group feature + action / contextual object features</text>
+<rect x="665" y="290" width="160" height="90" rx="7"/><text x="745" y="316" text-anchor="middle" class="strong">Public state</text><text x="745" y="340" text-anchor="middle" class="small">Visible name IDs</text><text x="745" y="361" text-anchor="middle" class="small">reuse the table</text><path d="M665 335H639" class="arrow"/>
+<path d="M425 370V409" class="arrow"/><rect x="215" y="414" width="420" height="65" rx="7"/><text x="425" y="441" text-anchor="middle" class="strong">Regular policy head → group score</text><text x="425" y="466" text-anchor="middle" class="small">Categorical choice; ordinary rollout and learning</text>
+</svg></div><figcaption>Conceptual data flow. Public identity joins go through the existing state/object encoding, attention and optional conditioning. Closed decklists provide no hidden identities. On mobile, scroll the diagram to keep labels readable.</figcaption></figure>
+<h2>2. The implemented calculation</h2>
+<pre><code>names = self.embedding.weight[1:]
+prefix = torch.cat([
+    names.new_zeros((1, names.shape[1])),
+    names.cumsum(0)
+])
+totals = prefix[last] - prefix[(first - 1).clamp(min=0)]
+counts = (last - first + 1).clamp(min=1).unsqueeze(-1)
+return torch.where(present.unsqueeze(-1), totals / counts, 0.0)</code></pre><p class="source"><code>NameCandidateEncoder._groups</code> · existing code, formatting condensed. First/last are one-based inclusive rows; row zero is padding.</p>
+<p>The action head receives the group’s membership summary, rather than treating a numeric group index or its “Names A through B” label as meaning. At the leaf, it receives the individual name vector and, when available, its executable-definition embedding. Group features deliberately omit member programs.</p>
+<h2>3. What learning changes</h2>
+<p>Training can adjust both the regular policy network and the name vectors. A loss on a group sends gradient to <em>every</em> member through the mean. Training a leaf also changes the vector used in that name’s containing groups.</p>
+<div class="panel"><div class="controls"><label for="members">Names in this example group</label><select id="members"><option value="2">2</option><option value="8">8</option><option value="62" selected>62 · 928-name fixture</option><option value="64">64</option></select></div><p class="math" id="fraction" aria-live="polite">Each member gets 1/62 of the group-vector gradient.</p><p><code>∂L/∂eᵢ = (1/m) × ∂L/∂g</code></p><p class="hint">This is only the gradient through the mean. Other uses of the same name vector can add gradient. It is not a prediction of learning speed.</p></div>
+<p><strong>The weak spot:</strong> one useful name is mixed with many unrelated names. Group credit is spread across members, and an average can discard useful distinctions. Equal group sizes make scales comparable; they do not make alphabetical neighbors strategically related or guarantee unique vectors.</p>
+<h2>4. What the existing proofs establish</h2>
+<div class="table"><table><thead><tr><th>Witness</th><th>What it establishes</th><th>What it leaves open</th></tr></thead><tbody>
+<tr><td data-label="Witness">Large-vocabulary group test</td><td data-label="Established">Distinct vectors in the seeded fixture; positive support; one supervised SGD step improves the target group; member gradients and native execution</td><td data-label="Open">Learning which group is useful in different game states</td></tr>
+<tr><td data-label="Witness">Two public states, two names</td><td data-label="Established">A fitted final head with FiLM can express opposite preferences for names within the same leaf; closed information loses the distinction</td><td data-label="Open">Different groups, SGD convergence, sample efficiency</td></tr>
+<tr><td data-label="Witness">Ordinary rollout + PPO</td><td data-label="Established">Both prompt types enter the usual learner, retain behavior evidence and update name weights</td><td data-label="Open">Whether updates learn strategically correct routing or improve play</td></tr>
+</tbody></table></div>
+<div class="callout"><strong>Recommended next proof:</strong> keep the real group prompt fixed, change only public state so the useful name moves between groups, and check that routing preferences can reverse. Retain action-order and privacy controls. A bounded optimization witness would add more evidence than fitting a final head alone. This is a proposal, not a completed test or a full training campaign.</div>
+<h2>One interaction, including recovery</h2><p><strong>Choose range → choose name → inspect/search.</strong> The range choice narrows <code>NameScope</code> through an ordinary native Command. Only the leaf starts <code>ExileNamed</code> / <code>SearchNamed</code>. Each prompt is a separate ordinary learner transition.</p><p>Reconnecting restores the current scope. A Command from an earlier scope is stale. Group navigation reveals no private cards, and committed exiles remain committed. No new back/cancel action or human-only game semantics are introduced.</p>
+<details><summary>Version, cost and delivery boundaries</summary><p>Explicit v9 carries <code>name_candidates[A,4]</code> at configured action capacity. V8 rejects groups; v1–v7 carry anonymous modal choices. Fresh defaults remain v6. Vocabulary, joins and branching are checkpoint-bound.</p><p>The prefix sum is linear in vocabulary size × embedding width, once per encoder forward. Currently it is also built when supplied group spans are all zero. It avoids per-member program encoding and catalog-sized live action buffers, but does not make all catalog-dependent work disappear. This review adds no timing measurement.</p><p>PR #424 is open at <code>833ef4120</code>, with required CI checks green and merge state CLEAN on inspection. The completed Graph is at demo. Passing CI does not establish contextual group learning. Compound learning, including mana payment, remains separate research; the neural compound decoder is removed.</p></details>
+<h2>Review questions</h2><ol class="questions"><li><strong>Does this change the accepted interaction?</strong> No: ordinary sequential engine decisions and one regular policy remain the direction.</li><li><strong>What would make the learnability claim stronger?</strong> Proposed: the two-state group-routing witness above, while retaining mean pooling as the simple baseline. No new grouping architecture or strength experiment has been approved.</li></ol>
+<footer>Concept review: design retained; the group-learning evidence limit is explicit. No implementation, Graph restart, publication or merge in this review. Working record: <a href="mtg-243-naming.md">mtg-243-naming.md</a>.</footer>
+</main><script>document.getElementById('members').addEventListener('change',e=>{document.getElementById('fraction').textContent=`Each member gets 1/${e.target.value} of the group-vector gradient.`;});</script></body></html>
