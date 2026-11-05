@@ -589,10 +589,6 @@ def write_dashboard(
             ),
             guide_html,
         )
-        guide_html = guide_html.replace(
-            'href="evidence/',
-            'href="https://github.com/loopflowstudio/manabot/blob/main/docs/evidence/',
-        )
         guide_path.write_text(
             '<!doctype html><html lang="en"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'

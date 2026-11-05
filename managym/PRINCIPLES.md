@@ -132,7 +132,7 @@ Historical examples include the [two-deck foundation](https://github.com/loopflo
 [policy choice distinctions](https://github.com/loopflowstudio/manabot/pull/289)
 and [composable effects](https://github.com/loopflowstudio/manabot/pull/412).
 These are dated evidence, not a current defect inventory.
-The [speed investigation](../docs/research/engine-speed-2026-11.md) retains
+The [speed investigation](../.lf/wave/engine-performance/research/engine-speed-2026-11.md) retains
 measurements and rejected optimizations. Use the [engine README](README.md),
 [repository conventions](../AGENTS.md) and
 [validation guide](../docs/development.md#validation-by-change-area) for current

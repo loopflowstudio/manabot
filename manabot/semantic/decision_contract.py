@@ -6,8 +6,8 @@ build an atomic :class:`~managym.decision.Command`, apply it, and return the
 fail-closed :class:`~managym.decision.TransitionReceipt` plus the next
 composite :class:`~managym.decision.Observation`.
 
-This is the manabot-side vertical slice of ``docs/ARCHITECTURE.md`` step 1 /
-Rules R1. Legal-action identity comes from the authoritative action space via
+This is the manabot-side slice of the README's one-rules-authority contract.
+Legal-action identity comes from the authoritative action space via
 ``structured_search_offers``; the contract is revision-bound and fail-closed.
 It does not migrate the legacy positional ``Env.step`` path or duplicate
 world-space ownership (RUL-8).
