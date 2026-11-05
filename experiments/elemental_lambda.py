@@ -29,7 +29,7 @@ EXPERIMENT = "elemental_lambda"
 SEEDS = "70201,70202,70203"
 UPDATES = 75
 HOURS = 1.15
-USD_PER_RUN = 0.68
+USD_PER_RUN = 0.84
 # (policy, value). The first is the baseline, the recipe's own lambdas.
 ARMS: tuple[tuple[float, float], ...] = (
     (0.5, 0.8),

@@ -134,13 +134,16 @@ reach its target.
 | Reserve for failed attempts | $2.20 |
 | **Total** | **$25.00** |
 
-| Study | Runs | Window hours | Job dollars | Reserved |
+| Study | Runs | Window hours | Window at $.59 | Reserved |
 |---|---:|---:|---:|---:|
 | Calibration, complete games, 30 updates | 1 | .6 | $.36 | $.51 |
 | 1, each arm | 3 | 1.5 | $.89 | $3.15 |
 | 2, each of 5 arms | 3 | 1.15 | $.68 | $2.52 |
 
-Each arm launches as its own all-or-nothing cohort (MTG-251's queue mode undersized
+Each run's dollar limit is its own reservation (window plus setup at $.60: $.51, $1.05
+and $.84), because Etude refuses a launch whose limit does not cover that; amended
+2026-11-05 before any run started, after the calibration launch was refused for it.
+The table's totals already reserved these amounts. Each arm launches as its own all-or-nothing cohort (MTG-251's queue mode undersized
 windows). Evaluation passes pass their own limits from the experiment files ($1.20 and
 $1.80) inside the line. Ceilings are reservations; an unspent line may cover a failed
 attempt elsewhere, and the total may not move.

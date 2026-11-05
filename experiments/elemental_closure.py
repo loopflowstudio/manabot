@@ -9,7 +9,7 @@ experiments/protocols/closure-lambda-elemental-v1.md. Recipe:
     uv run etude launch experiments/elemental_closure.py --rent 07c490-l4 \\
         --cohort elemental-closure-exact --parallel 3 --revision COMMIT --arms exact-quota
     uv run etude launch experiments/elemental_closure.py --rent 07c490-l4 --revision COMMIT \\
-        --arms complete-games --seeds 70100 --updates 30 --hours .6 --usd-per-run .36 --calibration
+        --arms complete-games --seeds 70100 --updates 30 --hours .6 --usd-per-run .51 --calibration
     uv run etude eval experiments/elemental_closure.py --rent 07c490-cpu32 --source r2://manabot/jobs
     uv run etude report experiments/elemental_closure.py --source r2://manabot/jobs --open
 """
@@ -34,7 +34,7 @@ SEEDS = "70101,70102,70103"
 UPDATES = 150
 # Rental hours and dollars per run at the L4 rate the protocol budgets.
 HOURS = 1.5
-USD_PER_RUN = 0.89
+USD_PER_RUN = 1.05
 ARMS: tuple[BatchClosure, ...] = ("exact-quota", "complete-games")
 BASELINE = "elemental-closure-exact-quota-v1"
 
