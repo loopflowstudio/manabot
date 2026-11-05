@@ -9,8 +9,8 @@ routing tests, including float64-reference gradient checks. All 59 outputs
 absent. Separate uninstrumented admission `37c1523a98ed` completed four updates
 per arm; all 49 outputs verified and rental absent. Its full-cohort projection is
 55.66970 hours / $13.77310, below the freshly reconciled $15.50 allowance.
-Scientific Run **`e51f61b92931` is running** at that exact source: its first
-training child is pooling seed 74211. All four paired
+At the retained 02:34:17 UTC handoff, scientific Run **`e51f61b92931` was running**
+at that exact source; its first child was pooling seed 74211. All four paired
 seeds, horizon, curve/held-out schedules and criteria are unchanged. No plateau
 or architecture result exists yet. The diagnosis owns detailed accounting and
 trace interpretation; `batched-plateau/` retains the prospective allocation.
@@ -18,116 +18,64 @@ At 02:34:17 UTC, instance `59194544` was the sole Task rental. The worker
 acknowledged `finish when done` at 02:32:32: final delivery and self-deletion
 follow its one job, with rental deadline 2026-11-07 10:09:07 UTC as backstop.
 Completed scientific update counts are not available in the carried parent log.
-The local wait client was stopped after this handoff; the managed run continues.
+The local wait client was stopped after this managed-run handoff. This compress
+pass performs no new provider read or allocation.
 
-Jack Heart's direction (2026-11-04 22:38 UTC): diagnose implementation
-before assigning host fault; separate setup, collection/inference, learning,
-exports and unclassified time, and add prospective startup/progress/affordability
-stops. Check actual CUDA, threads, batching, memory and available telemetry with
-ordinary workloads, never synthetic load. Preserve the original **$25 total**
-and **$0.50 attempt cap**; no competing allocation.
+## Accepted scope and remaining work
 
-His 23:15 UTC continuation explicitly authorizes bounded ordinary-learner
-profiling, measured repairs and matched throughput admission within that same
-allowance. An unaffordable pre-repair projection does not close this work.
+Jack Heart requires actual GPU training to the beginning of a sustained plateau;
+the completed CPU comparison is insufficient for architecture selection. His
+2026-11-04 22:38 direction and 23:15 continuation authorize diagnosing implementation,
+measured repairs and bounded admission within the original **$25 total**, with
+**$0.50 per diagnostic/admission attempt**. Necessary Etude SDK work and Vast use
+are authorized. Diagnose ordinary workloads without synthetic load. Results stop
+at demo/review: no study merge, model/default promotion, temporal memory
+implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
 
-The authorized cheaper 3090 admission completed both arms: source `22c10ca55`,
-run `803bcc26e7de`, four updates/1,024 games per arm. All 46 outputs
-(131,204,931 bytes) verified. Instance `59168556` was deleted and confirmed
-absent at 22:58:28 UTC. Corrected pre-repair full-cohort cost is **$71.82**, or **$47.58**
-for recurring training alone without allowances, versus **$16** available.
-No replacement science launched; the requested plateau remains unmet.
-`scratch/vast-host-diagnosis.md` owns measured phases, attribution limits,
-cleanup/accounting and the prospective controls. These are dated observations,
-not a live provider inventory or a matched-source hardware comparison.
+The complete CUDA profiles, parity reports and matched four-update admission
+are now retained. No further runtime repair is justified by the first-step
+profiles alone. The scientific run must complete all training, exports and
+scheduled evaluations, retain its verified inventory and confirm teardown.
+Preserve seeds, horizon, score/plateau criteria and every failed attempt. A missing
+endpoint remains missing; no score-based retries, survivors or shortened study.
+The historical loss of `59185580` remains unexplained. `b153cc2e5a77` failed a
+float32 tolerance before learning; independent float64 checks in `af601877e`
+passed in the successful diagnostic without changing learner semantics.
 
-Jack Heart requested actual GPU training through the beginning of a sustained
-plateau; the completed 128-update CPU study is insufficient for architecture
-selection. His “start it when you can”, “seems fine”, “keep going” and later
-“thats ok lets try” authorize execution repair and bounded admission under the
-same cumulative allowance. Necessary Etude SDK work and Vast use are authorized.
-The latest cheaper-host attempt is completed, not an instruction to repeat it.
-Results stop at demo/review: no study merge, model/default promotion, temporal
-memory implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
+## Delete — do not maintain
 
-Implementation update, 2026-11-05: `59ec1bd24` batches shared-effect and
-continuation projections/reducers after one host metadata admission per buffer.
-The pooled ordinary CPU learner completed identical 256-game/51,095-decision/
-200-minibatch work before and after: collection plus learning fell from 202.86s
-to 121.71s, with encoder call time 30.36s to 2.71s. CProfile ran in both;
-the final run additionally captured two operator traces. This is bounded local
-evidence, not CUDA synchronization attribution or scientific affordability.
-Native multi-position outputs and all parameter/object/definition gradients agree
-with the saved pre-change oracle; focused tests include duplicate memberships,
-canonical ordering, padding and absent gradients for unused Adam parameters.
+These cuts are complete; there is no pending runtime deletion target:
 
-Matched GPU source/workload admission must still demonstrate affordability
-before the four-paired-seed cohort. Repeating the eight-context
-failure, substituting CPU evidence, shortening the learning objective or treating
-cleanup as completion does not satisfy acceptance. Every failed attempt remains
-in the denominator; no score-based retries or selection.
+- Per-sample/per-frame projections in `TypedContinuationEncoder.forward` and
+  `SharedEffectEncoder.forward`, and per-sequence padded packing in
+  `RecordReducer` (`59ec1bd24`). The pre-change implementation is retained at
+  `42709fa1b`, not as a fallback. Live-row validation, canonical order, duplicate
+  memberships and input/parameter gradients remain required on the batched path.
+- The combined diagnostic/admission job. `scripts/profile_representation.py`
+  ends after two one-update profiles so Etude delivers traces before separate
+  throughput work. Keep bounded log summaries, failure traces and verification
+  of the final inventory; a progress log alone is insufficient.
+- Total-elapsed horizon scaling and its exclusive expected-value fixture;
+  `ArmThroughput` separates recurring and fixed costs. The duplicate `admit_arm`
+  executor, eight-context launcher (`27a126422`), and v5 timing/canary runner
+  (`9dc32125f`) remain historical. Keep native effect fixtures used by transport
+  and model tests, frozen-v5 compatibility, and archived study recipes.
+- Registry-only SDK pins and daily-charge timestamp-to-final-coverage conversion.
+  Locked source selection and honest reported/lifetime accounting survive.
 
-Accepted direction remains Jack Heart's GPU plateau comparison; the proposed
-profiling/optimization route does not guarantee that it fits the cap. If that
-route cannot establish affordability, the unchanged objective remains unmet.
-No product decision is needed for bounded diagnosis; changing the budget,
-population, horizon or scientific criterion remains outside accepted scope.
-
-## Implementation cut — encoder dispatch diagnosis
-
-The excluded local diagnosis profiles the ordinary executor, first at smoke
-size and then one update of the actual 256-stream recipe on CPU (seed 74200).
-It cannot measure CUDA synchronization or qualify GPU affordability. A measured
-dispatch repair must preserve checkpoint parameters, complete live-row validation,
-canonical token order, joins, duplicate memberships and input/parameter gradients.
-
-Deleted in `59ec1bd24`: per-sample/per-frame neural projections and reducer
-dispatch in `TypedContinuationEncoder.forward` and `SharedEffectEncoder.forward`,
-plus `RecordReducer`'s per-sequence padded packing. Malformed-input rejection and
-schema/semantic tests survive on the batched path. Pre-change source remains at
-`42709fa1b`, not as a runtime fallback. No parameters or tensor contracts changed.
-
-### Completed implementation
-
-`RecordReducer` uses flat tokens/lengths for all consumers, including frozen-v5
+`RecordReducer` consumes flat tokens and lengths for every caller, including
 `SharedFactEncoder`; `join_record_rows` owns batch offsets and absent one-based
-joins. There is no per-record runtime fallback. `6c0e33d4b` captures the first
-ordinary forward through backward, clipping, Adam and health checks, retaining
-a partial trace on failure. Focused tests preserve exact updates and verify
-actual operator coverage. Forward-only tracing is no longer an implementation gap.
+joins. Shared-effect token indexes remain necessary to gather header/detail
+sequences without per-record device operations. They are routing, not features.
+Unused continuation modules retain absent gradients: Adam treats None differently
+from zero with existing momentum. No parameters or tensor contracts changed.
 
-The combined profile/admission job is removed. `scripts/profile_representation.py`
-directly declares a diagnostic with four frozen reference inputs, both reducers'
-CUDA routing gates and two one-update profiles. It ends there, with bounded
-parity/operator summaries also printed to the carried log. The 30-minute work
-bound, one attempt and $0.50 ceiling preserve ordinary execution supervision.
-This corrects the delivery boundary exposed by the lost rental; the subsequent
-`911423cce90b` inventory establishes successful delivery of both complete profiles.
-
-### Remaining execution and conditional repairs
-
-1. The complete CUDA profiles and parity reports are now retained. In the first
-   learning minibatch, effect/continuation host scopes total 13.09ms pooled and
-   15.45ms GRU, but CUDA stream waits within them total only 0.099/0.093ms.
-   First-step module loading and sampled health work prevent interpreting these
-   traces as recurring throughput. Both complete profiled updates take about
-   82s collection plus learning. No further runtime change is justified before
-   the separate ordinary admission; semantics and gradient contracts are intact.
-2. Admission `37c1523a98ed` is complete: pooled recurring collection/learning
-   136.4431/122.2212s, GRU 132.4886/111.1156s; total child/orchestration time
-   516.7714s. Its complete phase projection and fresh matching quote qualify
-   `e51f61b92931` for the unchanged study under $25 cumulative.
-3. The scientific run must complete all training, exports and scheduled
-   evaluations, retain the inventory and confirm teardown. Results remain at
-   demo/review; no population, horizon, seed diversity, score or plateau criterion
-   changes, score-based retries, model promotion or automatic merge are accepted.
-
-The historical loss of `59185580` remains unexplained. Later `b153cc2e5a77`
-stopped before learning on one float32 gradient
-tolerance failure; `af601877e` adds independent float64 checks and bounded
-accumulation tolerance, passing on the subsequent successful diagnostic. All
-failures remain in the denominator. Earlier CPU artifacts/oracles keep their
-old identities; CUDA evidence is separately retained under `cuda-traces/`.
+`OperatorTraces` captures the first ordinary forward through backward, clipping,
+Adam and numerical health, with separate inference and partial-failure traces.
+Four retained reference inputs and both reducers' CUDA routing gates precede
+profiles. The diagnostic has a 30-minute work bound, one attempt and $0.50 ceiling;
+setup/teardown and other rental costs still need a fresh whole-rental quote.
+Measured CPU/CUDA costs and delivery evidence belong in `vast-host-diagnosis.md`.
 
 ## Budget and dependency authority
 
@@ -188,34 +136,23 @@ final raw weights. After all training, sequential evaluation must complete all
 72 curve endpoints (deals 85001–85032) and eight final held-out endpoints
 (86001–86064), both decks/seats, with replay validation. The fixed final three
 intervals must each have both arms' four-seed 95% t gain intervals wholly inside
-+/-0.05. A nonsignificant slope or flat poor play establishes neither a plateau
-under this criterion nor competence. Missing seeds/games/checkpoints prevent a
-qualified result. No best-checkpoint selection or shortened horizon.
++/-0.05. A nonsignificant slope alone does not meet this criterion; a qualifying
+plateau in poor play still establishes no competence. Missing seeds, games or
+checkpoints prevent a qualified result. No best-checkpoint selection or shortened horizon.
 
-Implemented: total-elapsed scaling and its exclusive expected-value fixture
-are removed. `ArmThroughput` owns
-recurring collection/learning/bookkeeping versus fixed initialization/close and
-exports; only recurring work scales with update count and the 50% allowance.
-Periodic exports, outer orchestration, setup, evaluation and teardown remain
-charged. `elapsed_seconds` owns the measured phase total used for admission.
-
-`ProgressWatch` uses an absent progress timestamp for startup, then completed
-updates for progress; completed work without declared placement is rejected.
-The child supervisor requests stop once, waits only within grace/rental bounds,
-and always reaps its group and retains exit status. Nonrecoverable collection
-consumes the existing executor stop/resource callback. These prospective controls
-have fixture validation, not a claim of live enforcement on frozen rentals.
-
-The duplicate `admit_arm` executor, failed eight-context launcher (`27a126422`),
-v5 timing/canary runner (`9dc32125f`), registry-only SDK pins and SDK daily-charge
-timestamp-to-coverage conversion are retired. Archived executions use pinned
-sources. Native effect fixtures remain for transport/model tests.
-`ArmEvaluation.score_for` owns complete-row/protocol/recipe admission; each
-analysis owns its seed/update schedule and duplicate detection.
+`ArmThroughput` scales only recurring collection/learning/bookkeeping with the
+update horizon and 50% allowance; initialization/close, exports, outer orchestration,
+setup, evaluation and teardown remain charged. `ProgressWatch` distinguishes
+startup, completed-update progress and phase cost, rejects wrong placement,
+retains its reason, requests stop once and reaps the child group within grace and
+rental bounds. The ordinary collector consumes the executor stop/resource callback.
+Fixture validation establishes these controls, not live enforcement on frozen
+rentals. `ArmEvaluation.score_for` owns complete-row/protocol/recipe admission;
+analyses own their schedules and duplicate detection.
 
 ## Attempt denominator and frozen evidence
 
-Rows through `803bcc26e7de` are 2026-11-04 UTC; the final row is 2026-11-05.
+Rows through `803bcc26e7de` are 2026-11-04 UTC; subsequent rows are 2026-11-05.
 Evidence is manifest-backed under
 `experiments/data/state-representation-gpu-5da5f4/`; amendments and exact
 allocations remain in `experiments/protocols/state-representation-5da5f4-gpu.md`.
@@ -280,27 +217,12 @@ recipes retain 64 actions; unscored smoke and GPU study use 512 with overflow
 rejection. MTG-213's explicit first-64 pilot exception and $10 are separate.
 Replacement science needs its own actual source/native freeze and admission.
 
-Upstream reconciliation, 2026-11-04: merge `70d5893aa` moved the selected Wave
-from Training to Experiments and removed the Eval memory file; the objective
-is unchanged and Experiments has no child memories. The incoming Standard
-research distinguishes engine architecture from measured learner throughput
-(`docs/research/standard-2026-11/rl-engine-contract.md`). Its growing-pool
-protocol Task is separate design work, not evidence for this comparison or
-authority to replace the fixed Allies/Lessons population. The merge introduces
-research and Wave changes, not an encoder optimization or new GPU result.
-
-The subsequent main sync `a608a9ce7` incorporates `ee85d6fc8` and MTG-213 v10:
-permanent64 and opt-in per-game capacity recovery at .25 with a 100/100
-window/warmup. Those pilot choices do not amend this study's capacities,
-overflow rejection, recovery policy, schedule or separate budget. The shared
-runtime changed, so the next admission needs its actual source/native binding;
-unchanged recipe hashes alone are insufficient. The Wave has no immediate
-child directories or child memories at the 2026-11-05 reconciliation.
-
-Latest main sync `2b2061c8d` incorporates `51b4bd274`: existing Linear Wave
-bindings moved into supported configuration. It changes no learner, engine,
-protocol or budget. The Experiments objective and child-memory coverage remain
-unchanged; this merge supplies no new experimental result.
+Main syncs moved the selected Wave to Experiments and incorporated MTG-213
+v10; none amends this study's capacities, recovery, population or separate budget.
+The runtime-changing syncs require actual source/native binding at admission.
+The latest sync `2b2061c8d` / `51b4bd274` moved Linear bindings only. Experiments
+has no child memories. The Standard growing-pool research remains separate design
+work, not authority to replace this fixed Allies/Lessons comparison.
 
 Memory, relation splitting, membership interning and semantic coalescing remain
 proposals. Coalescing requires identical future behavior across expiry, sources,
@@ -314,19 +236,13 @@ obligations older than the history window remain observable.
 
 ## References and validation
 
-The pre-compression sources are retained at
-`45ecf9f45471ca68252a9f9a2c3039fbc2bb16ca:scratch/`; no uncommitted evidence
-was removed. Complete preceding plan, questions and diagnosis are retained at
-`c1b5c46166496434242dfb121c1a174eaf5f72c7:scratch/`.
-Earlier design/diagram: `8e6cc62df:scratch/5da5f4-design-effective-state.md`
-and `:scratch/observation-architecture-snapshot.html`. PR419 verification:
-`9dc32125f:scratch/shared-effects-main-verification.md`. Earlier decisions:
-`1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`; historical validation and
-accounting: `37511d297611aa8720c52453a0034991c753be06:scratch/representation-learning-plan.md`.
-Earlier validation and native rebuild results remain in those revisions. The
-current CUDA reference/routing gates, complete traces and matched admission are
-retained and verified. Gate owns broader suites; results demo/review owns
-scientific judgment. The live study has no final inventory or plateau conclusion.
-No rendering proof is claimed.
+Complete preceding plan, questions and diagnosis:
+`2784e4283ce12011643b319968131ae5dbba9f6e:scratch/`. Removed detail is committed;
+no uncommitted evidence was removed. Original design/diagram:
+`8e6cc62df:scratch/5da5f4-design-effective-state.md` and
+`:scratch/observation-architecture-snapshot.html`; PR419 verification:
+`9dc32125f:scratch/shared-effects-main-verification.md`. Current CUDA gates,
+traces and admission are retained and verified. Gate owns broader suites;
+demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: `uv run --locked --extra dev --extra artifacts pytest tests/model/test_shared_effects.py -k batched_effect_routing -q` — 2 passed, 2 local CUDA skips; the remote six-case CUDA gate passed. Four frozen reference comparisons, all 108 successful diagnostic/admission outputs, Ruff, the untracked-data guard and diff checks pass; broader validation remains with gate.
+Check: `uv run --locked --extra dev --extra artifacts pytest tests/model/test_shared_effects.py -k 'memberships_share_gradients or batched_effect_routing' -q` — 3 passed, 2 local CUDA skips; compilation, Ruff and diff checks pass. Gate owns broader validation; the frozen-source remote CUDA gates remain historical evidence.

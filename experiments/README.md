@@ -185,7 +185,9 @@ the allocation budget. `state_representation_gpu.py` defaults to a capped,
 excluded two-arm throughput admission for sequential 256-stream learners;
 science requires an explicit frozen allocation backed by measured affordability.
 Wider batches change optimization; the prospective recipe retains the original
-complete-game horizon. The cheaper 3090 admission completed both four-update
-arms, but its phase-based cohort projection of $71.82 exceeds the remaining $16.
-No replacement scientific cohort, plateau or architecture advantage is
-established; the completed CPU study remains frozen.
+complete-game horizon. After encoder batching, matched four-update admission
+projected $13.77310 for the full cohort, within the reconciled $15.50 allocation.
+At the retained 2026-11-05 02:34 UTC handoff, scientific Run `e51f61b92931`
+was running at frozen source `af601877e`, with managed delivery and teardown.
+Final inventory, evaluation and cleanup remain pending; no plateau or architecture
+advantage is established. The completed CPU study remains frozen.

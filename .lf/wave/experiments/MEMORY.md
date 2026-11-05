@@ -190,19 +190,48 @@ parameters. A zero gradient is not equivalent to None when optimizer momentum
 exists. Checkpoint parameters and fixed input contracts remain unchanged.
 
 Host metadata copies and routing loops survive the batching repair; their CUDA
-cost remains unmeasured. The profiler's learning trace wraps the grad-enabled
-forward only, not backward or optimizer operators. Aggregate phase clocks cannot
-replace that missing causal coverage. The final GRU CPU diagnosis completed too,
-but has no matched full-batch baseline. Neither CPU receipt establishes a
-post-repair GPU cohort price, plateau or preferred representation.
+cost remains unmeasured. The initial learning trace covered only grad-enabled
+forward. `6c0e33d4b` extended it through backward, clipping, Adam and numerical
+health, with partial traces on failure. Focused tests verify actual operators
+and unchanged weights/gradients across two ordinary updates. Aggregate phase
+clocks still cannot replace retained causal CUDA evidence. The final GRU CPU
+diagnosis completed too, but has no matched full-batch baseline. Neither CPU
+receipt establishes a post-repair GPU cohort price, plateau or preferred
+representation.
 
 A subsequent $0.19 diagnostic quote under the $0.50 cap failed at source
 publication during GitHub/Doppler connectivity timeouts, before any run or rental
 was created. No allocation expense or live commitment resulted; the conservative
 $16 remainder persisted. This is a dated failed attempt, not current provider
-availability or connectivity. Local profile/oracle evidence remained unpublished
-after the outage; the Task diagnosis retains its paths and the plan owns CUDA
-coverage, matched admission and publication still needed.
+availability or connectivity. The four CPU profiles and pre-batching oracles
+were subsequently manifest-published under the study's `cpu-operator-profiles/`
+and `encoder-reference/` directories, preserving their original identities.
+
+After connectivity recovered, CUDA run `a46e80b31212` at source `66ec957fe`
+passed the four reference comparisons and six directed routing gates by control
+flow evidence: both subsequent profile children completed an update. Their
+detailed reports and traces were not delivered. One separate uninstrumented
+pooled update then completed before the rental disappeared at 2026-11-05
+01:12:47 UTC (`lost / machine_lost`). Retained logs establish partial execution,
+not complete matched admission, operator attribution or a scientific endpoint.
+No evidence establishes OOM, host fault or code failure. The attempt record and
+contiguous carried logs are manifest-backed under `complete-operator-profile/`.
+The 01:16:18 UTC accounting confirms all eight Task Vast rentals absent, reported
+new charge $0.038 versus $0.03984744 lifetime estimate, and reported-plus-settled
+compute $0.89258259. Conservative compute/ancillary reserves of $3.50/$6 leave
+$15.50 within the original $25; these are dated observations, not final bills.
+
+This loss exposed a delivery boundary: the locked Etude runtime uploads ordinary
+outputs at attempt completion. Combining completed diagnosis with later throughput
+can therefore lose the diagnostic artifacts if that later work loses its machine.
+The maintained diagnostic now ends after its two one-update profiles and emits
+bounded parity/operator summaries into carried logs. It has a 30-minute work
+bound and retains the $0.50 attempt ceiling; setup and other rental costs also
+need a fresh quote. Successful delivery of complete traces remains unproved.
+Separate uninstrumented admission remains necessary before science. Neither
+the split nor a successful progress log replaces a verified output inventory.
+Jack Heart's bounded diagnosis authorization remains in force; the loss does
+not replenish the allowance, shorten the cohort or select a representation.
 
 Prospective admission now freezes startup, no-completed-update and phase-cost
 stop policies, retaining progress/reasons before requesting graceful shutdown

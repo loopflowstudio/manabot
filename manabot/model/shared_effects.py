@@ -72,6 +72,9 @@ class SharedEffectEncoder(nn.Module):
         member_records: list[int] = []
         token_indexes: list[int] = []
         lengths: list[int] = []
+        # Projections produce all three-token headers, then all details. Gather
+        # them into header/detail sequences without per-record device operations.
+        header_token_count = 3 * len(live)
         previous_batch = -1
         d_end = m_end = 0
         for i, ((b, _), (d, count, m, targets)) in enumerate(
@@ -89,13 +92,9 @@ class SharedEffectEncoder(nn.Module):
             ):
                 raise ValueError("invalid effect CSR partition")
             d_end, m_end = d + count, m + targets
-            token_indexes.extend((3 * i, 3 * i + 1, 3 * i + 2))
-            token_indexes.extend(
-                range(
-                    3 * len(live) + len(detail_indexes),
-                    3 * len(live) + len(detail_indexes) + count,
-                )
-            )
+            detail_start = header_token_count + len(detail_indexes)
+            token_indexes.extend(range(3 * i, 3 * i + 3))
+            token_indexes.extend(range(detail_start, detail_start + count))
             lengths.append(3 + count)
             detail_indexes.extend(range(b * DETAIL_ROWS + d, b * DETAIL_ROWS + d_end))
             member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
