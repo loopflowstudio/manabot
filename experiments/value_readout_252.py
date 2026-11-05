@@ -7,10 +7,15 @@ native runtime's. The comparison then changes one serialized field,
 learning rule, filter, lambdas and execution stay those of that base. The
 study design lives in `experiments/value-readout-252.md`; this module owns the
 arm derivation, its single-axis check and the static per-arm model costs that
-the protocol reports before any training.
+the protocol reports before any training, and `runs()`, the Etude launch of
+every arm under one shared seed list (3 arms x 3 seeds x 150 updates inside a
+USD20 study cap that also covers evaluation):
 
-No launch path lives here. Execution, budget and the frozen scoring protocol
-remain separate decisions recorded in that document.
+    doppler run -p etude -c prd -- doppler run -p manabot -c prd \\
+        --preserve-env=RUNPOD_API_KEY -- \\
+        uv run --with "etude-sdk[s3,eval]==0.2.14" etude launch \\
+        experiments/value_readout_252.py --rent 07c490-l4 --cohort mtg252 \\
+        --parallel 9 --max-usd 13.05 --revision COMMIT
 """
 
 from __future__ import annotations
@@ -19,20 +24,30 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from etude.launch.records import Run as EtudeRun
 import torch
 
+from experiments.learning_signal import training_runs
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ValueAggregation
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_value_aggregation
 from manabot.training.execution import validate_regime
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_REGIME = ROOT / "experiments/regimes/elemental-long-183-v1.json"
 # Canonical order; the baseline is the 183 recipe's own masked mean.
 ARMS: tuple[ValueAggregation, ...] = ("masked_mean", "value_token", "attention_readout")
+EXPERIMENT = "value_readout_252"
+SEEDS = "25201,25202,25203"
+UPDATES = 150
+# MTG-186 trained this two-seat Elemental recipe at about 44 s/update on an L4
+# (w13); 150 updates is about 1.8 h, plus 15 min setup and 5 min finalization.
+# The watchdog stops a slower run with its exports; the L4 ceiling is $0.60/h.
+HOURS = 2.4
+USD_PER_RUN = 1.45
 
 
 def base() -> TrainingRegime:
@@ -50,9 +65,18 @@ def base() -> TrainingRegime:
     return validate_regime(regime)
 
 
-def arm(aggregation: ValueAggregation) -> TrainingRegime:
-    """The re-pinned 183 recipe with only its critic readout replaced."""
+def arm(aggregation: ValueAggregation, updates: int | None = None) -> TrainingRegime:
+    """The re-pinned 183 recipe with only its critic readout replaced.
+
+    `updates` sets the stage's absolute target for every arm alike. Damped
+    learning rates follow the absolute iteration, so a shorter target leaves
+    the learning schedule unchanged.
+    """
     regime = base()
+    if updates is not None:
+        stage = regime.stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        stage.updates = updates
     derived = with_value_aggregation(
         regime, id=f"value-readout-252-{aggregation}", aggregation=aggregation
     )
@@ -77,16 +101,37 @@ class Run:
     regime: TrainingRegime
 
 
-def runs(seeds: Sequence[int]) -> list[Run]:
+def grid(seeds: Sequence[int], updates: int | None = None) -> list[Run]:
     """Every arm under every seed: one seed list, never per-arm seeds."""
     if not seeds or len(set(seeds)) != len(seeds):
         raise ValueError("readout runs need distinct seeds shared by every arm")
-    regimes = {aggregation: arm(aggregation) for aggregation in ARMS}
+    regimes = {aggregation: arm(aggregation, updates) for aggregation in ARMS}
     return [
         Run(aggregation=aggregation, seed=seed, regime=regimes[aggregation])
         for seed in seeds
         for aggregation in ARMS
     ]
+
+
+def runs(
+    revision: str,
+    seeds: str = SEEDS,
+    updates: int = UPDATES,
+    hours: float = HOURS,
+    usd_per_run: float = USD_PER_RUN,
+) -> list[EtudeRun]:
+    """Etude training runs: every arm under the same comma-separated seeds."""
+    chosen = tuple(int(seed) for seed in seeds.split(","))
+    planned = grid(chosen, updates)
+    return training_runs(
+        (arm(aggregation, updates) for aggregation in ARMS),
+        updates=updates,
+        revision=revision,
+        experiment=EXPERIMENT,
+        seeds=tuple(sorted({run.seed for run in planned})),
+        hours=hours,
+        usd_per_run=usd_per_run,
+    )
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:

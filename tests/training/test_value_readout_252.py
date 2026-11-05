@@ -47,13 +47,14 @@ def test_static_costs_and_initialization_sharing() -> None:
 
 
 def test_every_arm_runs_under_the_same_seeds() -> None:
-    grid = value_readout_252.runs([25201, 25202])
+    grid = value_readout_252.grid([25201, 25202], updates=150)
     for seed in (25201, 25202):
         assert sorted(r.aggregation for r in grid if r.seed == seed) == sorted(
             value_readout_252.ARMS
         )
+    assert all(r.regime.stages[0].updates == 150 for r in grid)
     with pytest.raises(ValueError, match="distinct seeds"):
-        value_readout_252.runs([25201, 25201])
+        value_readout_252.grid([25201, 25201])
 
 
 def test_pairings_depend_on_the_run_seed_not_the_arm() -> None:

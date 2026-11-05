@@ -1,8 +1,10 @@
 # Critic readout comparison — MTG-252
 
-**Status: draft protocol. Nothing is frozen, scored or launched.** Budget,
-arm count, seed count and numeric thresholds are open decisions listed below;
-no compute is authorized by this document or the software that supports it.
+**Status: training authorized, scoring protocol not frozen.** Jack Heart
+(2026-11-05) authorized 3 arms × 3 seeds (25201–25203) × 150 updates inside a
+USD20 cap covering training, evaluation and retries. Training launches as Etude
+cohort `mtg252` (9 runs, at most USD1.45 each, USD13.05 reserved). Thresholds and
+evaluation schedule size are still open and are fixed before any score is read.
 
 ## Question
 
