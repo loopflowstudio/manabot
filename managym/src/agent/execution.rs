@@ -218,16 +218,8 @@ impl<'a> Projection<'a> {
                     _ => unreachable!("only operation completion events are retained"),
                 }
             }
-            FrameCompletion::Spell { card, attach_to }
-            | FrameCompletion::SpellResolved { card, attach_to } => {
-                self.field(
-                    "return",
-                    &if matches!(completion, FrameCompletion::Spell { .. }) {
-                        "finish spell"
-                    } else {
-                        "spell entered"
-                    },
-                );
+            FrameCompletion::Spell { card, attach_to } => {
+                self.field("return", &"finish spell");
                 self.card("spell", *card);
                 if let Some(object) = attach_to {
                     self.object("attach to", *object);
@@ -402,20 +394,11 @@ impl<'a> Projection<'a> {
     }
 
     fn batch(&mut self, batch: &EventBatch) {
-        self.field(
-            "batch",
-            &(
-                batch.cursor,
-                batch.committed,
-                batch.child_returns_results,
-                batch.events.len(),
-            ),
-        );
+        self.field("batch", &(batch.cursor, batch.events.len()));
         self.notes.push(format!(
-            "{} proposed events; {} replacements completed; committed {}",
+            "{} proposed events; {} replacements completed",
             batch.events.len(),
             batch.cursor,
-            batch.committed
         ));
         for pending in &batch.events {
             self.field("event ordinal", &pending.ordinal);
@@ -542,9 +525,6 @@ impl<'a> Projection<'a> {
                 self.card("sacrificed object", card);
                 self.field("sacrificing player", &controller);
             }
-            if let Some(lki) = &pending.departing_lki {
-                self.lki(lki);
-            }
             // One ordered rules record per identity, reusing visible source
             // slots. Empty means no replacement has applied; it needs no tokens.
             if !pending.applied.is_empty() {
@@ -559,24 +539,6 @@ impl<'a> Projection<'a> {
                     })
                     .collect();
                 self.field("applied replacements", &applied);
-            }
-        }
-        if !batch.sources.is_empty() {
-            self.field("retained trigger sources", &batch.sources.len());
-        }
-        for source in &batch.sources {
-            self.lki(&source.lki);
-        }
-        if !batch.results.is_empty() {
-            self.field("committed results", &batch.results.len());
-        }
-        for result in &batch.results {
-            self.field(
-                "result",
-                &(result.ordinal, result.committed, result.excess_damage),
-            );
-            if let Some(object) = result.moved {
-                self.object("result object", object);
             }
         }
         match &batch.binding {
@@ -594,9 +556,6 @@ impl<'a> Projection<'a> {
             }
             // These variants contain only rules values and player identities.
             binding => self.field("bind result", binding),
-        }
-        if let Some(child) = &batch.child {
-            self.batch(child);
         }
         self.field("end batch", &true);
     }

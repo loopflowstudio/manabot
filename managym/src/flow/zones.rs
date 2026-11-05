@@ -298,7 +298,7 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
-        let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
+        let batch = self.event_batch(vec![ProposedEvent::CreateTokens {
             definition: Box::new(crate::flow::proposed_event::TokenDefinition::Registered(
                 name.into(),
             )),
@@ -309,18 +309,11 @@ impl Game {
                 ..Default::default()
             },
         }]);
-        assert!(
-            matches!(
-                self.advance_event_batch(&mut batch),
-                crate::flow::proposed_event::BatchProgress::Complete
-            ),
-            "token creation requiring a choice needs a retained caller"
-        );
-        for object in batch.results.iter().filter_map(|result| result.moved) {
+        let results = self.complete_immediate_batch(batch);
+        for object in results.iter().filter_map(|result| result.moved) {
             self.finish_created_token(CardId::from(object.entity), tapped_and_attacking);
         }
-        batch
-            .results
+        results
             .iter()
             .filter_map(|result| result.moved)
             .find_map(|object| self.lookup_current_permanent(object).ok())
