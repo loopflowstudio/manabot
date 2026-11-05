@@ -1,0 +1,83 @@
+diff --git a/managym/src/flow/mana.rs b/managym/src/flow/mana.rs
+index 512f5fcba..7f431f3f9 100644
+--- a/managym/src/flow/mana.rs
++++ b/managym/src/flow/mana.rs
+@@ -521,7 +521,7 @@ impl PaymentModel<'_> {
+ 
+     fn witness(
+         &self,
+-        state: PaymentSearchState,
++        mut state: PaymentSearchState,
+         policy: SourcePolicy,
+         visited: &mut std::collections::HashSet<PaymentSearchState>,
+     ) -> Option<Vec<PaymentStep>> {
+@@ -533,6 +533,20 @@ impl PaymentModel<'_> {
+         if state.obligations.is_empty() {
+             return Some(Vec::new());
+         }
++        // A payable final obligation needs no more resource search. Keep the
++        // ordinary class-aware spending order without cloning/hashing the
++        // inventory or constructing an optimistic bound for a known success.
++        if let [Obligation::Pay { cost, .. }] = state.obligations.as_slice() {
++            if state.pool.can_pay(cost) {
++                state.pool.pay(cost);
++                #[cfg(feature = "benchmark")]
++                measurement::update(|c| {
++                    c.payment_remainders += 1;
++                    c.max_remainders = c.max_remainders.max(1);
++                });
++                return Some(vec![PaymentStep::Spend(state.pool)]);
++            }
++        }
+         if !self.can_cover(&state, policy) {
+             #[cfg(feature = "benchmark")]
+             measurement::update(|c| c.pruned += 1);
+@@ -676,17 +690,10 @@ impl PaymentModel<'_> {
+                 }
+             }
+             Obligation::Pay { cost, waterbend } => {
+-                // With no parent obligation, alternative class allocations
+-                // cannot affect feasibility. Retain the ordinary spending order
+-                // without materializing every equivalent successful remainder.
++                // A payable terminal cost returned above. Nested payments
++                // retain every allocation that could preserve their parent.
+                 let remainders = if rest.is_empty() {
+-                    if pool.can_pay(cost) {
+-                        let mut remainder = pool.clone();
+-                        remainder.pay(cost);
+-                        vec![remainder]
+-                    } else {
+-                        Vec::new()
+-                    }
++                    Vec::new()
+                 } else {
+                     pool.payment_options(cost)
+                 };
+@@ -719,15 +726,15 @@ impl PaymentModel<'_> {
+                     if resources[index].departed {
+                         continue;
+                     }
+-                    let mut tapped = resources.clone();
+-                    tapped[index].tapped = true;
+                     if let Some(output) = source.fixed.as_ref().filter(|_| !resources[index].tapped)
+                     {
++                        let mut tapped = resources.clone();
++                        tapped[index].tapped = true;
+                         let mut next = pool.clone();
+                         next.add(output);
+                         if let Some(mut path) = self.witness(
+                             PaymentSearchState {
+-                                resources: tapped.clone(),
++                                resources: tapped,
+                                 pool: next,
+                                 life,
+                                 obligations: obligations.clone(),
+@@ -776,6 +783,8 @@ impl PaymentModel<'_> {
+                         && !resources[index].tapped
+                         && cost.generic() > 0
+                     {
++                        let mut tapped = resources.clone();
++                        tapped[index].tapped = true;
+                         let mut next = vec![Obligation::Pay {
+                             cost: cost.reduced_generic(1),
+                             waterbend: true,

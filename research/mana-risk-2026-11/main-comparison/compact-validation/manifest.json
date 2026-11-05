@@ -1,0 +1,48 @@
+{
+  "candidate_commit": "0c6eef11118f73e99e22bc5d856adaa0d20b3d75",
+  "started_utc": "2026-11-05T00:52:40.190892+00:00",
+  "order": [
+    [
+      "base",
+      "main",
+      "compact"
+    ],
+    [
+      "compact",
+      "main",
+      "base"
+    ],
+    [
+      "main",
+      "base",
+      "compact"
+    ]
+  ],
+  "commands": [
+    "bench_steps 128",
+    "bench_search 3"
+  ],
+  "build": "cargo build -j 2 --release --locked --manifest-path managym/Cargo.toml --example bench_search --example bench_steps (default empty features)",
+  "binary_sha256": {
+    "base": {
+      "bench_steps": "ac234bf4d7ff37fa9d74a27bfa4e83163a87e1728ee21249e90a6ecaea987620",
+      "bench_search": "f2fcd5965fa290970a4111437a766ac3668650a7483993b673005d6c5a286e26"
+    },
+    "main": {
+      "bench_steps": "fb18add371c74ae7b2d0fe07b9e85f683380b692fa6a4c97e64d9eb9407f1ff4",
+      "bench_search": "1c53cd5882f1c766be965621971838445ea6cc3579b2c98d365e2cd8d35cdbd5"
+    },
+    "compact": {
+      "bench_steps": "223435e458bca1825b7811a4e495e1f1027f5e58e068d30dabc08ddc044cc815",
+      "bench_search": "94c02d04331740deb92e2cc4d269a1e2bd18a7f3cf68857e94625597a08fc545"
+    }
+  },
+  "scope": "Bounded serial same-runner comparison, followed by focused debug checks. More games reduce short-process noise. Wrapper records process user/system CPU time to help distinguish scheduling delay from computation; it does not replace wall-time guardrails. No concurrent build/test/benchmark started by this session. Ambient activity uncontrolled. Full CI Engine Budget remains separate.",
+  "finished_utc": "2026-11-05T00:54:04.148937+00:00",
+  "candidate_label": "compact refers to candidate_commit, including every mitigation in that revision",
+  "reference_commits": {
+    "base": "4463e57f5a92ebd3b60e2fb50c046b84ac2c0372",
+    "main": "fe83a6b068dace2187613e1bf124f9677b077ff3"
+  },
+  "pre_mitigation_commit": "78cc5a8ba277ce2f3bc5fa14fe2e3697e229c8a9"
+}

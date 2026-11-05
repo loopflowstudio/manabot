@@ -1,0 +1,66 @@
+{
+  "revisions": {
+    "base": "4463e57f5a92ebd3b60e2fb50c046b84ac2c0372",
+    "main": "fe83a6b068dace2187613e1bf124f9677b077ff3",
+    "candidate": "78cc5a8ba277ce2f3bc5fa14fe2e3697e229c8a9"
+  },
+  "started_utc": "2026-11-05T00:40:54.511464+00:00",
+  "runner": "macOS-26.0.1-arm64-arm-64bit",
+  "cpu": "Apple M4 Max",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: aarch64-apple-darwin\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "build": "cargo build -j 2 --release --locked --manifest-path <snapshot>/managym/Cargo.toml --example bench_search --example bench_steps",
+  "snapshots": "git archive <revision> managym content; identical candidate bench_steps.rs, bench_search.rs and examples/curated copied to each snapshot; independent build directories",
+  "benchmark_sources_sha256": {
+    "managym/examples/bench_steps.rs": "52c2e82664b7d7abede454e1072fc514c736eeea7865fb65b4dcc443f4f4cd7b",
+    "managym/examples/bench_search.rs": "ae90ac9e867d0cf8b153067d7dbeee1443beeba16742981a2878b97cfad34199",
+    "managym/examples/curated/mod.rs": "4c12f90599d6f1540a1865e14c4b016fd4b4447f7ad2c8641598184af025e63e"
+  },
+  "binary_sha256": {
+    "base": {
+      "bench_steps": "ac234bf4d7ff37fa9d74a27bfa4e83163a87e1728ee21249e90a6ecaea987620",
+      "bench_search": "f2fcd5965fa290970a4111437a766ac3668650a7483993b673005d6c5a286e26"
+    },
+    "main": {
+      "bench_steps": "fb18add371c74ae7b2d0fe07b9e85f683380b692fa6a4c97e64d9eb9407f1ff4",
+      "bench_search": "1c53cd5882f1c766be965621971838445ea6cc3579b2c98d365e2cd8d35cdbd5"
+    },
+    "candidate": {
+      "bench_steps": "1370b4bc4d21f2a293f1880d3bfcdc60f412b60877eca8f7e7343f057628f365",
+      "bench_search": "8f964b0d0b5a02122b0077a4edc7f433eea6ce0888fb30f1a251ec362499c8f1"
+    }
+  },
+  "engine_tree": {
+    "base": "35db09717edddfb59c90b24a0049479b87a84a32",
+    "main": "9a9d709d4c6922f2b3df3fa994400995480ee310",
+    "candidate": "8080445a062e0db5ed1d409500e80975161bafb3"
+  },
+  "cargo_lock_sha256": {
+    "base": "5af291f0b6007ce2f9a174742020db8e32fbe84f4f8966eae9f18080e6743784",
+    "main": "5af291f0b6007ce2f9a174742020db8e32fbe84f4f8966eae9f18080e6743784",
+    "candidate": "5af291f0b6007ce2f9a174742020db8e32fbe84f4f8966eae9f18080e6743784"
+  },
+  "round_order": [
+    [
+      "base",
+      "main",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "main",
+      "base"
+    ],
+    [
+      "main",
+      "base",
+      "candidate"
+    ]
+  ],
+  "commands": [
+    "bench_steps 32",
+    "bench_search 3"
+  ],
+  "features": "default empty feature set; benchmark counters disabled",
+  "scope": "Same host, serial processes, 3 rounds. Ambient activity uncontrolled. Bounded scalar engine attribution, not full CI Engine Budget; no policy encoding or model inference. Search-64 uses 16 worlds x 4 rollouts, 2000-step cap, seeds 1-3. New-mechanic absolute costs remain separately in prior instrumented receipts, without baseline ratios.",
+  "finished_utc": "2026-11-05T00:42:21.486312+00:00"
+}

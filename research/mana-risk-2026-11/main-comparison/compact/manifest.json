@@ -1,0 +1,37 @@
+{
+  "parent": "78cc5a8ba277ce2f3bc5fa14fe2e3697e229c8a9",
+  "patch_sha256": "d1e44258bbac96c86884f382f2094b350c4da3ca7624157e5a75ed554f8b88e7",
+  "binary_sha256": {
+    "main": {
+      "bench_steps": "fb18add371c74ae7b2d0fe07b9e85f683380b692fa6a4c97e64d9eb9407f1ff4",
+      "bench_search": "1c53cd5882f1c766be965621971838445ea6cc3579b2c98d365e2cd8d35cdbd5"
+    },
+    "terminal": {
+      "bench_steps": "d267c975d199d6a18bca1bff47323917363d047047036a1eec6659b3f0cbb553",
+      "bench_search": "b824ee577f643f5dca76d9059867b5c77de6e942ae5a4548f2b28f38e74ca0fe"
+    },
+    "compact": {
+      "bench_steps": "223435e458bca1825b7811a4e495e1f1027f5e58e068d30dabc08ddc044cc815",
+      "bench_search": "94c02d04331740deb92e2cc4d269a1e2bd18a7f3cf68857e94625597a08fc545"
+    }
+  },
+  "order": [
+    [
+      "main",
+      "compact"
+    ],
+    [
+      "compact",
+      "main"
+    ],
+    [
+      "main",
+      "compact"
+    ]
+  ],
+  "commands": [
+    "bench_steps 32",
+    "bench_search 3"
+  ],
+  "scope": "Same uninstrumented release build and workloads as initial manifest; compact contains terminal-exit, lazy tap-state cloning, sparse activation history and shared immutable spending snapshots. No engine choices removed."
+}

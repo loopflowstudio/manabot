@@ -1,0 +1,27 @@
+{
+  "candidate_commit": "6519f3f759b7bab997d68781e51b09366d2019ac",
+  "payment_pairs": 15,
+  "decision_traces": 5,
+  "outcomes": "All 10 payment outcomes/concrete remainders and five offer fixture identities match retained pre-mitigation receipts. Five Command/fork traces match after removing encoding times, including facts, decisions, choices and final resources.",
+  "benchmark_binary_sha256": "1a75f648f6ee7c66a78ea5f656d6e95b3c3e34391321fdb18f9a814240244fdc",
+  "benchmark_source_sha256": "862bd81e4de3f94a6ce52174ceb38fe815a5c56abb13c8932a90b9ac13630e1e",
+  "build": "cargo build -j 2 --release --locked --manifest-path managym/Cargo.toml --features benchmark --example bench_mana",
+  "scope": "Ten instrumented samples per constructed payment/offer; separately labeled absolute costs, not ratios versus original base/current main. Ordinary step/search comparisons use uninstrumented binaries.",
+  "medians_microseconds": {
+    "fixed/payable": 1.2705,
+    "fixed/unpayable": 0.20800000000000002,
+    "fixed/offers": 1.6875,
+    "restrictions/payable": 0.625,
+    "restrictions/unpayable": 0.29200000000000004,
+    "restrictions/offers": 0.9375,
+    "shared_taps/payable": 34.813,
+    "shared_taps/unpayable": 0.625,
+    "shared_taps/offers": 4.625,
+    "prism_treasure/payable": 4.2705,
+    "prism_treasure/unpayable": 0.5415,
+    "prism_treasure/offers": 6.0625,
+    "variable/payable": 3.8125,
+    "variable/unpayable": 6.1875,
+    "variable/offers": 6.4375
+  }
+}

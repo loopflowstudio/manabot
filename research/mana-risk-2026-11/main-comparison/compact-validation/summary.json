@@ -1,0 +1,510 @@
+{
+  "base": {
+    "steps_elapsed_samples_s": [
+      0.935,
+      0.952,
+      0.927
+    ],
+    "steps_elapsed_median_s": 0.935,
+    "search_total_samples_s": [
+      7.987,
+      7.96,
+      8.303
+    ],
+    "search_total_median_s": 7.987,
+    "search_worst_samples_s": [
+      1.523,
+      1.523,
+      1.537
+    ],
+    "search_worst_median_s": 1.523,
+    "search_max_reply_s": 1.537,
+    "game_max_s": 0.032536542,
+    "process_cpu_samples_s": {
+      "bench_steps": [
+        0.925297,
+        0.9288780000000016,
+        0.9249029999999948
+      ],
+      "bench_search": [
+        7.84997,
+        7.906988999999999,
+        8.029485999999999
+      ]
+    },
+    "steps": 26277,
+    "games_per_round": 128,
+    "steps_digest": 12846914795350978435,
+    "bench_steps_cpu_median_s": 0.925297,
+    "bench_search_cpu_median_s": 7.906988999999999
+  },
+  "main": {
+    "steps_elapsed_samples_s": [
+      0.912,
+      0.919,
+      0.939
+    ],
+    "steps_elapsed_median_s": 0.919,
+    "search_total_samples_s": [
+      7.901,
+      8.03,
+      7.908
+    ],
+    "search_total_median_s": 7.908,
+    "search_worst_samples_s": [
+      1.512,
+      1.631,
+      1.523
+    ],
+    "search_worst_median_s": 1.523,
+    "search_max_reply_s": 1.631,
+    "game_max_s": 0.035263042,
+    "process_cpu_samples_s": {
+      "bench_steps": [
+        0.913475999999999,
+        0.9193760000000031,
+        0.927923999999999
+      ],
+      "bench_search": [
+        7.8631660000000005,
+        7.874189999999995,
+        7.875290000000003
+      ]
+    },
+    "steps": 26277,
+    "games_per_round": 128,
+    "steps_digest": 12846914795350978435,
+    "bench_steps_cpu_median_s": 0.9193760000000031,
+    "bench_search_cpu_median_s": 7.874189999999995
+  },
+  "compact": {
+    "steps_elapsed_samples_s": [
+      1.006,
+      1.021,
+      1.024
+    ],
+    "steps_elapsed_median_s": 1.021,
+    "search_total_samples_s": [
+      8.999,
+      8.77,
+      9.072
+    ],
+    "search_total_median_s": 8.999,
+    "search_worst_samples_s": [
+      1.69,
+      1.695,
+      1.692
+    ],
+    "search_worst_median_s": 1.692,
+    "search_max_reply_s": 1.695,
+    "game_max_s": 0.033695625,
+    "process_cpu_samples_s": {
+      "bench_steps": [
+        1.007645000000001,
+        1.018355000000001,
+        1.0186240000000053
+      ],
+      "bench_search": [
+        8.721502999999998,
+        8.723273999999998,
+        8.811251000000007
+      ]
+    },
+    "steps": 26277,
+    "games_per_round": 128,
+    "steps_digest": 12846914795350978435,
+    "bench_steps_cpu_median_s": 1.018355000000001,
+    "bench_search_cpu_median_s": 8.723273999999998
+  },
+  "comparisons": {
+    "base": {
+      "steps_elapsed_median_s": 9.197860962566828,
+      "search_total_median_s": 12.670589708275948,
+      "search_worst_median_s": 11.096520026263956,
+      "bench_steps_cpu_median_s": 10.057095181331066,
+      "bench_search_cpu_median_s": 10.323588410202667
+    },
+    "main": {
+      "steps_elapsed_median_s": 11.099020674646344,
+      "search_total_median_s": 13.796155791603448,
+      "search_worst_median_s": 11.096520026263956,
+      "bench_steps_cpu_median_s": 10.765889037781884,
+      "bench_search_cpu_median_s": 10.783128169373658
+    }
+  },
+  "engine_budget_checks": [
+    {
+      "round": 1,
+      "reference": "base",
+      "digest_checks": [
+        {
+          "name": "candidate search seed 1 digest",
+          "expected": "11657142727395602030",
+          "measured": "11657142727395602030",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 2 digest",
+          "expected": "6313088441976958652",
+          "measured": "6313088441976958652",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 3 digest",
+          "expected": "16285494958208215301",
+          "measured": "16285494958208215301",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps games",
+          "expected": "128",
+          "measured": "128",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps count",
+          "expected": "26277",
+          "measured": "26277",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps digest",
+          "expected": "12846914795350978435",
+          "measured": "12846914795350978435",
+          "failure": ""
+        }
+      ],
+      "timing_checks": [
+        {
+          "name": "search worst reply",
+          "expected": "1.523 s",
+          "measured": "1.690 s",
+          "failure": "over 1.675 s (+10%)"
+        },
+        {
+          "name": "search total",
+          "expected": "7.987 s",
+          "measured": "8.999 s",
+          "failure": "over 8.786 s (+10%)"
+        },
+        {
+          "name": "steps throughput",
+          "expected": "28117.3/s",
+          "measured": "26111.7/s",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "reference": "main",
+      "digest_checks": [
+        {
+          "name": "candidate search seed 1 digest",
+          "expected": "11657142727395602030",
+          "measured": "11657142727395602030",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 2 digest",
+          "expected": "6313088441976958652",
+          "measured": "6313088441976958652",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 3 digest",
+          "expected": "16285494958208215301",
+          "measured": "16285494958208215301",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps games",
+          "expected": "128",
+          "measured": "128",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps count",
+          "expected": "26277",
+          "measured": "26277",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps digest",
+          "expected": "12846914795350978435",
+          "measured": "12846914795350978435",
+          "failure": ""
+        }
+      ],
+      "timing_checks": [
+        {
+          "name": "search worst reply",
+          "expected": "1.512 s",
+          "measured": "1.690 s",
+          "failure": "over 1.663 s (+10%)"
+        },
+        {
+          "name": "search total",
+          "expected": "7.901 s",
+          "measured": "8.999 s",
+          "failure": "over 8.691 s (+10%)"
+        },
+        {
+          "name": "steps throughput",
+          "expected": "28802.1/s",
+          "measured": "26111.7/s",
+          "failure": "under 26183.7/s (-10%)"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "reference": "base",
+      "digest_checks": [
+        {
+          "name": "candidate search seed 1 digest",
+          "expected": "11657142727395602030",
+          "measured": "11657142727395602030",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 2 digest",
+          "expected": "6313088441976958652",
+          "measured": "6313088441976958652",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 3 digest",
+          "expected": "16285494958208215301",
+          "measured": "16285494958208215301",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps games",
+          "expected": "128",
+          "measured": "128",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps count",
+          "expected": "26277",
+          "measured": "26277",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps digest",
+          "expected": "12846914795350978435",
+          "measured": "12846914795350978435",
+          "failure": ""
+        }
+      ],
+      "timing_checks": [
+        {
+          "name": "search worst reply",
+          "expected": "1.523 s",
+          "measured": "1.695 s",
+          "failure": "over 1.675 s (+10%)"
+        },
+        {
+          "name": "search total",
+          "expected": "7.960 s",
+          "measured": "8.770 s",
+          "failure": "over 8.756 s (+10%)"
+        },
+        {
+          "name": "steps throughput",
+          "expected": "27615.8/s",
+          "measured": "25741.6/s",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "reference": "main",
+      "digest_checks": [
+        {
+          "name": "candidate search seed 1 digest",
+          "expected": "11657142727395602030",
+          "measured": "11657142727395602030",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 2 digest",
+          "expected": "6313088441976958652",
+          "measured": "6313088441976958652",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 3 digest",
+          "expected": "16285494958208215301",
+          "measured": "16285494958208215301",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps games",
+          "expected": "128",
+          "measured": "128",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps count",
+          "expected": "26277",
+          "measured": "26277",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps digest",
+          "expected": "12846914795350978435",
+          "measured": "12846914795350978435",
+          "failure": ""
+        }
+      ],
+      "timing_checks": [
+        {
+          "name": "search worst reply",
+          "expected": "1.631 s",
+          "measured": "1.695 s",
+          "failure": ""
+        },
+        {
+          "name": "search total",
+          "expected": "8.030 s",
+          "measured": "8.770 s",
+          "failure": ""
+        },
+        {
+          "name": "steps throughput",
+          "expected": "28608.0/s",
+          "measured": "25741.6/s",
+          "failure": "under 26007.3/s (-10%)"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "reference": "base",
+      "digest_checks": [
+        {
+          "name": "candidate search seed 1 digest",
+          "expected": "11657142727395602030",
+          "measured": "11657142727395602030",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 2 digest",
+          "expected": "6313088441976958652",
+          "measured": "6313088441976958652",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 3 digest",
+          "expected": "16285494958208215301",
+          "measured": "16285494958208215301",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps games",
+          "expected": "128",
+          "measured": "128",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps count",
+          "expected": "26277",
+          "measured": "26277",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps digest",
+          "expected": "12846914795350978435",
+          "measured": "12846914795350978435",
+          "failure": ""
+        }
+      ],
+      "timing_checks": [
+        {
+          "name": "search worst reply",
+          "expected": "1.537 s",
+          "measured": "1.692 s",
+          "failure": "over 1.691 s (+10%)"
+        },
+        {
+          "name": "search total",
+          "expected": "8.303 s",
+          "measured": "9.072 s",
+          "failure": ""
+        },
+        {
+          "name": "steps throughput",
+          "expected": "28338.7/s",
+          "measured": "25661.5/s",
+          "failure": "under 25762.5/s (-10%)"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "reference": "main",
+      "digest_checks": [
+        {
+          "name": "candidate search seed 1 digest",
+          "expected": "11657142727395602030",
+          "measured": "11657142727395602030",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 2 digest",
+          "expected": "6313088441976958652",
+          "measured": "6313088441976958652",
+          "failure": ""
+        },
+        {
+          "name": "candidate search seed 3 digest",
+          "expected": "16285494958208215301",
+          "measured": "16285494958208215301",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps games",
+          "expected": "128",
+          "measured": "128",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps count",
+          "expected": "26277",
+          "measured": "26277",
+          "failure": ""
+        },
+        {
+          "name": "candidate steps digest",
+          "expected": "12846914795350978435",
+          "measured": "12846914795350978435",
+          "failure": ""
+        }
+      ],
+      "timing_checks": [
+        {
+          "name": "search worst reply",
+          "expected": "1.523 s",
+          "measured": "1.692 s",
+          "failure": "over 1.675 s (+10%)"
+        },
+        {
+          "name": "search total",
+          "expected": "7.908 s",
+          "measured": "9.072 s",
+          "failure": "over 8.699 s (+10%)"
+        },
+        {
+          "name": "steps throughput",
+          "expected": "27982.7/s",
+          "measured": "25661.5/s",
+          "failure": ""
+        }
+      ]
+    }
+  ],
+  "method": "scripts.engine_budget read_run/digest_checks/timing_checks, unchanged 10% tolerance; all raw rounds retained. Median summaries are descriptive, not a replacement for the full CI budget. CPU times diagnose elapsed-time noise, not a different acceptance threshold."
+}

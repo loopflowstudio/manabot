@@ -1,0 +1,6 @@
+{
+  "command": "sample <candidate bench_search 3 pid> 3 -file profile.txt",
+  "samples": 2525,
+  "sha256": "6fce59635aca763d99a89588dd768849ab8bc88af7fec15c04f982466c1aea5a",
+  "scope": "Separate profiling run; none of its timings enters the comparison. Top-of-stack SourceResources::clone: 137 samples; DefaultHasher::write: 213; allocator/free also prominent. This motivates avoiding resource clones on unavailable transitions and skipping hashing/bounds for already-payable terminal costs; sample proportions are not precise causal overhead fractions."
+}

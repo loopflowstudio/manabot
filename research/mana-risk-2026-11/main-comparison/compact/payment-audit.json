@@ -1,0 +1,8 @@
+{
+  "payment_pairs": 15,
+  "decision_traces": 5,
+  "outcomes": "All 10 payment outcomes/concrete remainders and five offer fixture identities match retained pre-mitigation receipts. Five Command/fork traces match after removing encoding times, including facts, decisions, choices and final resources.",
+  "benchmark_binary_sha256": "efc3c0b9e6340efc1ca0d5d43709506e1e5eea3440c2c429ebb9380383db54d0",
+  "build": "cargo build -j 2 --release --locked --manifest-path managym/Cargo.toml --features benchmark --example bench_mana",
+  "scope": "Ten instrumented samples per constructed payment/offer; separately labeled absolute costs, not ratios versus original base/current main. Both same-runner broad comparisons use uninstrumented binaries."
+}
