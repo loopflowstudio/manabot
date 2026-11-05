@@ -406,7 +406,8 @@ impl HiddenHandConstraints {
             game.decklist_known(opponent, viewer),
             "possible worlds require the opponent's open decklist"
         );
-        let unseen = game.unseen_cards(opponent, viewer);
+        let commitments = game.hidden_commitments(viewer);
+        let unseen = commitments.unseen_cards(game, opponent);
         let foretell = unseen
             .iter()
             .filter(|card| game.state.cards[**card].foretell().is_some())
@@ -435,7 +436,7 @@ impl HiddenHandConstraints {
                     .copied(),
             )
         } else {
-            let (known, _) = game.hidden_hand_partition(opponent, viewer);
+            let (known, _) = game.hidden_hand_partition(opponent, &commitments);
             name_counts(game, known)
         };
         Self {
@@ -447,7 +448,7 @@ impl HiddenHandConstraints {
             known_hand,
             foretold,
             foretell,
-            retained_selection: game.has_hidden_selection(viewer),
+            retained_selection: commitments.constrains(),
         }
     }
 }
@@ -528,6 +529,7 @@ impl HiddenHandConstraints {
 
         let mut branch = source.clone();
         let opponent = self.opponent;
+        let commitments = source.hidden_commitments(self.viewer);
 
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         // An active search exposes exact cards and their zones. Preserve
@@ -538,20 +540,14 @@ impl HiddenHandConstraints {
             // Group the opponent's unseen CardIds by name, sorted ascending so
             // the lowest CardIds of each name go to the hand deterministically.
             let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
-            for card in branch.unseen_cards(opponent, self.viewer) {
+            for card in commitments.unseen_cards(&branch, opponent) {
                 by_name
                     .entry(branch.state.cards[card].name.clone())
                     .or_default()
                     .push(card);
             }
-            let public = source.sampling_fixed_objects(self.viewer);
             for cards in by_name.values_mut() {
-                cards.sort_unstable_by_key(|card| {
-                    (
-                        !public.iter().any(|object| object.entity == (*card).into()),
-                        card.0,
-                    )
-                });
+                cards.sort_unstable_by_key(|card| (!commitments.pins_card(*card), card.0));
             }
 
             let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
@@ -571,9 +567,9 @@ impl HiddenHandConstraints {
             new_hand.sort_unstable_by_key(|c| c.0);
             new_library.shuffle(&mut rng);
 
-            if source.has_hidden_selection(self.viewer)
+            if commitments.constrains()
                 && !source.prepare_selection_foretell(
-                    self.viewer,
+                    &commitments,
                     &world.hand,
                     &mut new_library,
                     &mut rng,
@@ -584,7 +580,7 @@ impl HiddenHandConstraints {
             if !branch.fill_foretold_slots(opponent, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
             }
-            let pending = source.sampling_fixed_library_cards(opponent, self.viewer);
+            let pending = commitments.pinned_library_cards(source, opponent);
             if !pending.is_empty() {
                 new_library.extend(pending);
                 new_library.shuffle(&mut rng);
@@ -601,15 +597,9 @@ impl HiddenHandConstraints {
             branch.shuffle_private_library(opponent, &mut rng);
         }
         branch.shuffle_private_library(self.viewer, &mut rng);
-        if !branch.refresh_hidden_selections(
-            self.viewer,
-            &mut rng,
-            &source.hidden_selection_requirements(self.viewer),
-        ) {
+        if !branch.rebind_commitments(&commitments, &mut rng) {
             return Err(MaterializeError::InconsistentWorld);
         }
-
-        branch.repin_revealed_library_cards();
 
         // Fail closed: the realized hand name-multiset must equal the world.
         let hand = branch.state.zones.zone_cards(ZoneType::Hand, opponent);
@@ -869,7 +859,8 @@ impl PossibleWorldSpace {
     /// foretold name multiset; `H` is the opponent's current hand size.
     pub fn for_viewer(game: &Game, viewer: PlayerId) -> Self {
         let mut space = Self::from_constraints(HiddenHandConstraints::for_viewer(game, viewer));
-        if game.has_hidden_selection(viewer) {
+        let commitments = game.hidden_commitments(viewer);
+        if commitments.constrains() {
             for world in &mut space.worlds {
                 let bearers = space
                     .foretell
@@ -879,7 +870,7 @@ impl PossibleWorldSpace {
                 // The prior measure includes every foretold fill; replace only
                 // that factor, preserving the exact hand-subset multiplicity.
                 world.weight = world.weight / falling(bearers, space.foretold)
-                    * game.selection_foretold_weight(viewer, &world.hand);
+                    * game.selection_foretold_weight(&commitments, &world.hand);
             }
             space.worlds.retain(|world| world.weight > 0);
             space.total_weight = space.worlds.iter().map(|world| world.weight).sum();
@@ -1122,7 +1113,7 @@ impl PossibleWorldSpace {
             known_hand: self.known_hand.clone(),
             foretold: self.foretold,
             foretell: self.foretell.clone(),
-            retained_selection: source.has_hidden_selection(self.viewer),
+            retained_selection: source.hidden_commitments(self.viewer).constrains(),
         }
         .materialize_validated(source, world, seed, mode)
     }
