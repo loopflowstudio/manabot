@@ -42,7 +42,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "seat_comparison",
         "state_representation_v7",
         "state_representation_gpu",
-        "tla_pilot_v9",
+        "tla_pilot_v10",
         "two_seat",
     }
 

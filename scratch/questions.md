@@ -73,3 +73,15 @@ Earlier SDK delivery: `075378dd87600428ad3efa60b7288b327c32cee7:scratch/question
 Earlier combined design: `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`.
 No uncommitted evidence was removed; existing Training Wave edits are preserved
 for their owning realign step.
+
+## Main sync — MTG-213 v10 context
+
+Sync target `ee85d6fc82ed631d7b460e68c73e7ac27f0458ff` adds the pilot's
+prospective v10: permanent64, isolated per-game capacity recovery at .25 with
+100/100 window/warmup, and fresh initialization. V9 completed five updates
+before the 41-permanent/40-capacity failure; no trained endpoint exists and
+256 scheduled evaluation games remain missing. Its evidence stays frozen.
+These pilot-specific choices do not change this representation study's input
+capacities, recovery policy, scientific schedule or separate $25 ceiling.
+The pilot's full decisions and $10 accounting remain at that target's
+`scratch/questions.md` and in `experiments/tla-trophy-pilot.md`.
