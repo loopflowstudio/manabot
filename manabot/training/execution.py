@@ -592,6 +592,7 @@ def _execute_regime(
                     "games",
                 )
             },
+            "idle_stream_steps": sum(s.idle_stream_steps for s in run.stages),
             "rss_bytes": psutil.Process().memory_info().rss,
             "host_load_1m": os.getloadavg()[0],
             "process_cpu_seconds": time.process_time()
@@ -1259,6 +1260,7 @@ def _execute_regime(
                         else "self",
                         opponent_agent=opponent_agent,
                         learning_seats=stage.learning_seats,
+                        batch_closure=stage.batch_closure,
                         games_per_stream=stage.games_per_stream,
                         recovery_max_microsteps=regime.recovery_max_microsteps,
                         game_errors=stage.game_errors,
@@ -1507,6 +1509,9 @@ def _execute_regime(
                     record.games = collector.stats.games - before.games
                     record.environment_decisions = (
                         collector.stats.micro_steps - before.micro_steps
+                    )
+                    record.idle_stream_steps = (
+                        collector.stats.idle_stream_steps - before.idle_stream_steps
                     )
                     record.learner_transitions = (
                         collector.stats.learner_transitions - before.learner_transitions

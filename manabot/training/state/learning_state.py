@@ -224,6 +224,7 @@ def admit_learning_state(
         "behavior",
         "opponent",
         "learning_seats",
+        "batch_closure",
         "games_per_stream",
     ):
         if getattr(definition, name) != getattr(stage, name):
