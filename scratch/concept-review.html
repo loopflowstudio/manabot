@@ -1,99 +1,57 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-245 — One binding through a batch revision</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-245 · From more cards to evidence of learning</title>
 <style>
-:root { color-scheme:light dark; --paper:#faf8f1; --ink:#262922; --muted:#5d6258; --line:#b9beb0; --accent:#455f31; }
-@media(prefers-color-scheme:dark) { :root { --paper:#1c201b; --ink:#eeeede; --muted:#b6bdae; --line:#596250; --accent:#b5d297; } }
-* { box-sizing:border-box; }
-body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.65 system-ui,sans-serif; }
-main { max-width:850px; margin:auto; padding:40px 24px 64px; }
-header,small { color:var(--muted); font-size:.84rem; }
-h1 { font:600 clamp(1.8rem,5vw,2.7rem)/1.2 Georgia,serif; }
-h2 { margin-top:32px; font-size:1.18rem; }
-a { color:var(--accent); }
-code { font-size:.88em; overflow-wrap:anywhere; }
-blockquote { margin:24px 0; padding:2px 20px; border-left:3px solid var(--accent); }
-table { width:100%; border-collapse:collapse; font-size:.9rem; }
-th,td { padding:12px 10px 12px 0; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
-li { margin:16px 0; }
-@media(max-width:540px) { main { padding:24px 16px 40px; } table { font-size:.78rem; } th,td { padding-right:6px; } }
+:root{color-scheme:light dark;--paper:#faf8f1;--ink:#242a25;--muted:#5e665e;--line:#bcc4b9;--accent:#476138;--wash:#edf0e6}
+@media(prefers-color-scheme:dark){:root{--paper:#1b211c;--ink:#edf0e5;--muted:#b7c1b5;--line:#536351;--accent:#bed49e;--wash:#263026}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:36px 24px 60px}header,small{font-size:.8rem;color:var(--muted)}h1{font:600 clamp(1.9rem,5vw,2.7rem)/1.15 Georgia,serif;max-width:720px}h2{font-size:1.15rem;margin-top:30px}p{margin:14px 0}a{color:var(--accent)}code{font-size:.86em;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{text-align:left;vertical-align:top;padding:12px 10px 12px 0;border-bottom:1px solid var(--line)}blockquote{margin:24px 0;padding:2px 20px;border-left:3px solid var(--accent)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--wash);padding:16px;font-size:.84rem}li{margin:12px 0}details{margin-top:18px}summary{cursor:pointer;color:var(--accent)}@media(max-width:560px){main{padding:24px 16px}table,thead,tbody,tr,td,th{display:block}thead{display:none}tr{padding:10px 0;border-bottom:1px solid var(--line)}td{padding:3px 0;border:0}td:first-child{font-weight:650}}
 </style>
 </head>
 <body><main>
-<header>MTG-245 · concept-review · 2026-11-04<br>
-Built from <a href="explore-design.md">the working design</a>,
-<a href="questions.md">implementation handoff</a>,
-<a href="../experiments/protocols/growing-pool-245-v1.md">protocol usage</a>,
-<code>experiments/growing_pool{,_runtime,_protocol,_exposure,_analysis}.py</code>,
-<a href="../docs/workflows.md">work boundaries</a> and
-<code>.lf/skills/experiment-freeze.md</code>.</header>
-<h1>Select the batch once; keep its identity through the experiment.</h1>
-<p><strong>Outcome: no further design change and no open product choice.</strong>
-The accepted versioned handoff requires the same protocol and experiment selection
-through declaration, evaluation and analysis. The binding is implemented and exercised through controlled fixtures.
-This review confirms the implemented direction; it supplies no scientific results.
-Loop-or-next owns the next step.</p>
-<blockquote>
-<p><strong>Prior mismatch:</strong> <code>check --protocol next.json</code> selects a file.
-Training jobs, discovered callbacks and the analysis store still select
-<code>growing_pool</code> / v1.</p>
-<p><strong>Implemented:</strong> bind the next manifest and its Etude experiment name
-once in an entry point. All stages consume that binding. V1 retains its identity.</p>
-</blockquote>
-<p>The default read-only check rejects v1 on the changed engine source.
-Task 04 must freeze its integrated source, actual decks and reviewed settings
-in a prospective binding. The existing shared runtime serves that revision;
-v1's manifest and experiment identity remain intact.</p>
-<h2>Actions → concepts → APIs</h2>
-<table>
-<thead><tr><th>Action</th><th>Concept</th><th>Implemented API / owner</th></tr></thead>
-<tbody>
-<tr><td>Author lists, tickets and splits</td><td>Reference league</td><td><code>Manifest</code>, native <code>Deck</code>, <code>UniformDecks</code>; unchanged</td></tr>
-<tr><td>Select and check a batch revision</td><td>Frozen experiment binding</td><td><code>read_binding()</code> → <code>Protocol.admit()</code>; checks entry, digest and runtime</td></tr>
-<tr><td>Declare bounded work</td><td>Training runs</td><td><code>runs(revision)</code> → <code>training_runs(BINDING, revision)</code>; checks frozen source; launch authority remains separate</td></tr>
-<tr><td>Evaluate the fixed exam</td><td>Matches and retained evidence</td><td><code>eval(state)</code> → canonical <code>play(match)</code>; both delegate with the same binding</td></tr>
-<tr><td>Inspect results and missing work</td><td>Learning, completeness, exposure</td><td><code>analyze(..., binding)</code>; selected store, full expected schedule and independent training receipts</td></tr>
+<header>MTG-245 · conversation concept-review at demo · 2026-11-04<br>
+Sources: <a href="explore-design.md">working design</a>, <a href="../docs/workflows.md">workflows</a>,
+<code>.lf/graphs/{coverage,experiment}.yaml</code>, <code>.lf/skills/experiment-{analysis,evidence-review}.md</code>,
+<code>experiments/growing_pool_analysis.py</code> and <code>tests/training/test_growing_pool_analysis.py</code>.</header>
+<h1>More cards, then evidence of what the learner can do.</h1>
+<p><strong>Recommendation: keep the four Waves and their loops. Tighten the experiment report's conclusion.</strong>
+A positive learning criterion must not look like completed validation when required training receipts are missing.
+This follows the accepted evidence requirements; no new scope decision is needed.</p>
+<h2>The experience already implemented</h2>
+<table><thead><tr><th>Your intended action</th><th>Concept</th><th>Workflow and authority</th></tr></thead><tbody>
+<tr><td>Expand the card file</td><td>Coverage batch</td><td><code>coverage</code>: get it working → make it scale → optimize it. Each has its own implementation/review loop; the batch has one delivery boundary.</td></tr>
+<tr><td>Find out what improves the agent</td><td>Experiment</td><td><code>experiment</code>: design → optional software → freeze → execution → analysis. Architecture, regime and new cards are lenses within this lifecycle.</td></tr>
+<tr><td>Make the engine faster</td><td>Engine performance</td><td><code>engine-performance</code>: measured changes across workloads, preserving behavior.</td></tr>
+<tr><td>Maintain the supporting systems</td><td>Infrastructure</td><td>Builtin <code>code</code>. Academy stays separate for the browser experience.</td></tr>
 </tbody></table>
-<h2>Normal path, failure, recovery</h2>
-<p><strong>Normal:</strong> Task 04 authors integrated decks and probes, freezes the
-binding and settings, checks admission/discovery, then obtains execution authority.
-Its report keeps learning and exposure distinct.</p>
-<p><strong>Failure:</strong> a changed engine source rejects the old binding before
-execution. Missing exports or interrupted captures remain missing. A favorable
-exam cannot establish that the learner encountered the intended mechanic.</p>
-<p><strong>Recovery:</strong> reconcile jobs and receipts under their original pinned
-binding and cumulative allowance. A changed population or source gets a new
-prospective binding and admitted controls. Preserve original receipts and checkpoint
-identities. No implicit retry, relabeling or campaign launch.</p>
-<h2>What is already settled</h2>
-<p>Jack Heart selected A, retained training-exposure capture, and selected Training's
-identity to survive as Experiments. Those earlier review questions are resolved.
-Shared capture now distinguishes opportunity, choice and completed frame; retained
-replay inputs are not replay verification or proof of optimizer use.</p>
-<p>The workflow keeps software integration separate from scientific completion.
-The migration receipt records identity-preserving moves and preserved histories.
-A fresh shared Wave read confirms four core identities plus Academy, with no
-active replacement Training/Eval. Later PR #421 integration and deferred mappings
-remain in the handoff; this review changes no membership or Wave memory.</p>
-<h2>Controlled proof</h2>
-<p>Prior implementation fixtures exercised two distinct bindings through real Etude discovery, declarations, callback
-routing and offline analysis with synthetic outcomes. Crossed experiment/protocol
-identities and copied entries retaining the old binding reject. Real-runtime v1
-rejection remains. No games or training were needed; gate and demo/review retain
-their acceptance boundaries. This review inspected the implementation and retained
-proof; it did not rerun those suites.</p>
-<h2>Review conclusions</h2>
+<p><small>Training's original Wave identity survives as Experiments. Eval's open Tasks moved into it. These are implemented responsibility changes; the repository graph defaults are in the published PR.</small></p>
+<h2>One batch through the handoff</h2>
+<p>A card author delivers Adventure/prepare behavior, shared rules structure, measured performance and interaction examples. Validation reads that committed snapshot and authors functional decks. It freezes one <code>ProtocolBinding</code> tying together source, manifest and experiment identity, then executes within its accepted bounds.</p>
+<p>The report uses <code>AnalysisResult</code> to keep learning, evidence completeness and training exposure separate. A delivered card batch does not claim a trained agent. A negative or inconclusive result can still answer an honestly specified experiment.</p>
+<h2>The consequential mismatch: “true” is easy to overread</h2>
+<p><strong>Existing output</strong> can contain this combination. The sealed-league fixture has all 800 evaluation games and no training receipts. This is a controlled counterexample, not an experiment result.</p>
+<pre><code>modest_check: true
+complete: false
+training_exposure_complete: false</code></pre>
+<blockquote><p><strong>Proposed human-facing conclusion — not implemented</strong></p>
+<p><strong>Evidence incomplete.</strong> Required training-exposure receipts are missing.<br>
+Primary learning criterion: met.<br>
+Training exposure: unknown.<br>
+The experiment's required evidence is not yet delivered.</p></blockquote>
+<p>Keep the independent fields and frozen criteria. Derive this conclusion from their existing values and issue lists; add no new lifecycle or persisted verdict. “Evidence complete” would still not mean “learning demonstrated.”</p>
+<h2>Failure and recovery</h2>
+<p>First locate receipts from the existing run and rerun offline analysis. If they were never retained, leave exposure unknown. Reconcile any authorized recovery against the original binding and cumulative bounds. Changed decks or source require a prospective freeze. A favorable evaluation never fills a missing training record.</p>
+<p>Native card support remains unchanged. The frozen v1 proxy is currently rejected by the changed engine source; Task 04 must author its integrated binding and actual decks before its pilot. No scientific result is claimed here.</p>
+<details><summary>Proposed usage and skill wording</summary>
+<p><strong>Usage:</strong> Read evidence status first, then the primary learning criterion, uncertainty and exposure. Missing required evidence keeps the outcome open; complete evidence can support an inconclusive conclusion.</p>
+<p><strong>Analysis / evidence review:</strong> Lead with required-evidence completeness and missing items. Never summarize <code>modest_check=true</code> alone as “validation passed.” Apply the frozen acceptance without adding a scientific threshold.</p>
+</details>
+<h2>Review questions, resolved by the accepted direction</h2>
 <ol>
-<li><strong>Does this require a new product decision?</strong> No. It follows the
-accepted versioned protocol and frozen-evidence requirements. Shared functions
-and thin entry points now implement it; no further design cut is needed.</li>
-<li><strong>Are Task 04's scientific settings accepted?</strong> No. Its actual lists,
-probes, numeric settings, integrated freeze and measured pilot remain its work.
-Task 08 retains Validation B.</li>
+<li><strong>Should every card batch launch training?</strong> No. Validation owns the decks and bounded experiment; Coverage supplies the committed behavior and interaction handoff.</li>
+<li><strong>Can a positive learning criterion replace missing exposure?</strong> No. Keep both measurements and make the missing evidence the report's leading conclusion.</li>
+<li><strong>Does this require three experiment workflows?</strong> No. Use one lifecycle with question-specific design and evidence.</li>
 </ol>
-<small>The working design owns the direction. Loop-or-next owns navigation.
-This headless review requests no answer and claims no empirical validation.</small>
+<p><small>Next proof: present complete-positive, complete-inconclusive and missing-receipt fixture cases through the actual report entry point. This review updated scratch only. MTG-245 remains at demo; PR #428 is published, not landed.</small></p>
 </main></body></html>

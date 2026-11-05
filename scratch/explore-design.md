@@ -176,3 +176,58 @@ remain in the handoff. Task 04's integrated freeze and scientific settings are i
 next authored proof, not an unanswered product choice blocking this review.
 Gate and demo retain their verification boundaries; this review adds no new
 test, scientific result, execution authority or navigation decision.
+
+## Conversation concept review — 2026-11-04
+
+The broader workflow matches Jack Heart's accepted experience: four core Waves,
+three independently revisable Coverage code loops, one experiment lifecycle,
+and validation-owned deck authorship. Preserve those decisions. The earlier
+headless review settled protocol binding; this conversation review examines the
+person reading the resulting experiment report.
+
+One report refinement is proposed for implementation, not implemented here:
+lead with evidence completeness before the primary learning criterion. The
+actual `AnalysisResult` can have `modest_check=true`, `complete=false` and
+`training_exposure_complete=false`. The sealed-league fixture explicitly covers
+800 valid evaluation games with no training receipts. This is correct independent
+measurement, but a person can mistake the positive criterion for overall
+validation. Keep the measurements; make their interpretation explicit.
+
+Draft usage addition for the existing protocol/report documentation:
+
+> Read the report's evidence status first. “Evidence incomplete” names the
+> missing required artifacts even when the primary learning criterion is met.
+> Then read the learning criterion, uncertainty and training exposure separately.
+> An inconclusive learning result with complete required evidence can finish an
+> honestly specified experiment; missing required evidence cannot. Neither
+> conclusion changes native card support or the delivered Coverage outcome.
+
+Draft addition to `experiment-analysis` and `experiment-evidence-review`:
+
+> Lead the human-facing conclusion with required-evidence completeness and its
+> missing items. Report the primary learning criterion independently underneath.
+> Never summarize `modest_check=true` alone as “validation passed.” Review the
+> frozen acceptance against both measurements; do not invent a new scientific
+> threshold or treat completeness as proof of learning.
+
+This needs only a derived report presentation, not another persisted lifecycle,
+campaign state, registry or changes to frozen JSON/analysis fields. The existing
+`AnalysisResult`/`SeedAnalysis` and issue lists remain the authority. Do not
+collapse the independent fields into one scientific boolean. No open scope
+choice is needed: the accepted requirements already preserve the distinction.
+The exact presentation is a recommendation from this review, not a new decision
+attributed to Jack Heart.
+
+Normal path: a batch completes its three loops and delivers a committed handoff;
+validation authors decks, freezes its admitted binding, executes within existing
+authority and reports both learning and exposure. Failure: evaluation completes
+favorably but training receipts are absent. Recovery: locate the existing
+receipts first and rerun offline analysis; if evidence was never retained, keep
+it missing and review only explicitly authorized recovery within original bounds.
+Changed source/decks require prospective binding. Never retrain simply to turn
+the report green. This counterexample must remain visible in the presentation.
+
+Next proof: show the complete-positive, complete-inconclusive and missing-receipt
+cases through the actual report entry point using existing controlled fixtures.
+No scientific run is needed. This review changed only scratch design/presentation;
+it did not restart the Graph, change implementation, publish or approve shipping.
