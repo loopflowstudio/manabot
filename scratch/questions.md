@@ -21,3 +21,13 @@ The repair uses a fixed candidate/reference/reference/candidate plan and median
 durations to balance run order, with the existing 10% tolerance and digest
 requirements unchanged. This is a measurement-method change for review, not
 permission to reset the reference or explain old CI failures without telemetry.
+
+## Sync with main — 2026-11-04
+
+Main `ee85d6fc82ed631d7b460e68c73e7ac27f0458ff` adds retained permanent-capacity
+and isolated-stream recovery tests. Keep those alongside this branch's v8
+capacity coverage. Compare historical schema-7 frames using the existing
+schema/fingerprint transition exclusion; preserve every decision/offer field
+and the frozen receipt bytes. Main's MTG-213 decisions remain available at
+`ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md`; they do not
+authorize pilot execution or change this Task's interactive review boundary.
