@@ -289,8 +289,9 @@ if _digest(current_binding_form(binding)) != _digest(expected):
 
 ## What win rate hides
 
-An earlier search pilot used flat Monte Carlo over sampled hidden cards. It
-beat random in 91.7% to 99% of games, and more simulations made it stronger
+An earlier search pilot used flat Monte Carlo over sampled hidden cards. With
+16 rollouts per decision and no network it beat every trained policy of the
+time in 84–93% of games, and more rollouts made it stronger
 ([exp-02](../experiments/exp-02-flat-mc.md)).
 
 Then a test gave it Pyroclasm against two Gray Ogres, with two more in the

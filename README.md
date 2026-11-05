@@ -178,8 +178,9 @@ Earlier findings are tabulated in the
 
 From the earlier search era, in older encodings:
 
-- **Search was strong and cheap.** Flat determinized Monte Carlo with 256
-  rollouts beat random 99% of the time
+- **Cheap search beat everything training had produced.** Flat determinized
+  Monte Carlo with 16 rollouts per decision, 7 ms and no network, beat every
+  trained policy of the time 84–93% of games, and 64 rollouts beat them 94–96%
   ([exp-02](experiments/exp-02-flat-mc.md)).
 - **Win rate hid incompetence.** That same pilot could not play a control
   deck, and random beat it in 3 of 5 competency scenarios
