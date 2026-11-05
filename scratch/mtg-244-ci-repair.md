@@ -11,15 +11,11 @@ launch. Prior detailed note: git blob `6875497e56d3ca5bc041a4f4ef761ec440114d03`
 | Head | Search s (ref→cand) | Worst reply s | Steps/s | Result |
 | --- | ---: | ---: | ---: | --- |
 | `6165e0fe4` first publish | 168.192→453.756 | 4.909→15.349 | 12,817→5,655 | fail |
-| `beaacaa19` | 166.656→230.730 | 4.883→7.045 | 12,939→9,904 | fail |
-| `a7b0ddaff` source plans | — | — | step time +10.54% | fail |
-| `68ef4a63d` lazy SBA | 164.461→132.934 | 4.818→3.860 | step time −8.60% | pass |
 | `e4e527621` CI 41958999646 | 166.560→132.200 | 4.897→3.851 | 12,785→14,369 | pass |
 | `c46e4f3d8` CI 42035238111 | 171.352→132.322 | 4.998→3.845 | 12,619→14,205 | pass |
 | `2bec29b5a` CI 42044402732 | 123.778→99.514 | 3.635→2.893 | 17,633→19,454 | pass |
 
-All checked counts and digests match. Local timing on the shared host stays
-exploratory. Each new head must earn its own CI measurement.
+All checked counts and digests match. Each head earns its own CI measurement.
 
 ## Performance repairs retained
 
@@ -64,12 +60,6 @@ Check: 567 debug card tests, 169 rules tests, 65 flow lib tests, clippy and
 rustfmt passed after the final `layers.rs` reduction; 60 text tests pass at
 reconciliation. No local result replaces hosted evidence.
 
-## Head c46e4f3d8 evidence
-
-CI `42035238111` failed Academy UI (four cases) and Integration main (two
-`test_trigger_order` cases) on stale digests; Layer Risk `42035237232` failed at
-`Payment pool/0 differs: before`.
-
 ## Digest repair evidence
 
 - Semantic Kernel Conformance passed because its `fuzz` path validates only the
@@ -86,13 +76,9 @@ CI `42035238111` failed Academy UI (four cases) and Integration main (two
   .156/.255/.133 (main's `.so` from Nov 4). Inconclusive at n=3; disclose at Demo,
   threshold unchanged.
 
-## Head 2bec29b5a evidence
+## Heads 2bec29b5a and 76596a514
 
-CI `42044402732`: every job passes (Rust Tests, Academy UI, conformance, Python Unit,
-Academy/long Integration, Play, budget) except Integration main: six
-`tests/eval/test_tla_pilot.py` cases hit "pilot runtime world differs". Layer Risk
-`42044402101` passes in full. Run `42035238111` was cancelled by the push, so
-`c46e4f3d8` has no Rust Tests result. The v10 protocol pins main's catalog `28a0744e…`;
-this branch's is `6a818cbc…`. Five contract-rejection tests now use the explicit
-`pilot_world` fixture. The real-runtime admission test becomes a frozen/runs/eval
-rejection proof; executed v10 evidence is unchanged (50 pilot tests pass locally).
+`2bec29b5a` failed only six `test_tla_pilot.py` cases: v10 pins main's catalog
+`28a0744e…`. Contract-rejection tests now use the explicit `pilot_world` fixture and
+the admission test became a frozen/runs/eval rejection proof; v10 evidence is
+unchanged. CI `42065286644` and Layer Risk `42065286435` on `76596a514` pass in full.

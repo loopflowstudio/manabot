@@ -241,6 +241,15 @@ no intrinsic mana ability, but no card definition uses `SetTypes`. Deriving intr
 abilities from the finished layer-4 type line would remove that gap, and would
 change ability grouping and indices. No live witness justifies it now.
 
+### Subtype categories — 2026-11-05
+
+Jack Heart's review called the inherited `NONCREATURE` list hacky; it omitted
+Shrine, Cave and Lesson, so an earthbent Secret Tunnel had creature type "Cave".
+`managym-state::subtype` is now the one CR 205.3 category table (names stay
+strings; no serialized input moves); layers read `is_creature_type`,
+debug rejects an unlisted name, and a catalog walk requires every authored subtype
+to classify. Its directed Cave test failed before the fix. Jack Heart approved shipping after it.
+
 ### Digest repair
 
 Fixture refresh moved ahead of publication: Jack Heart's steer requires verified

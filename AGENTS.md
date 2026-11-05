@@ -292,6 +292,11 @@ id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
 checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
 online, never in CI). Rebuild the extension after card changes.
 
+Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
+table of their categories. Add a new subtype there (the cards crate's
+`every_authored_subtype_has_a_category` fails otherwise), and read creature
+types through `is_creature_type`, never by excluding other subtypes.
+
 Declare a parameterless keyword once in the rules enum's `keywords!` declaration
 and use `Keywords::of`. Storage grows with the vocabulary; append variants to
 preserve present-keyword serialization order and values. When changing storage,

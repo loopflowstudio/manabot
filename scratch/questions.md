@@ -1,5 +1,15 @@
 # MTG-244 decisions — 2026-11-04
 
+## Latest approval — 2026-11-05
+
+Jack Heart reviewed the PR and said "other than that, lg2m and ship it",
+referring to the NONCREATURE subtype-classification finding. Fix and verify
+that finding, preserve the required correctness and performance checks, then
+ship and complete this Task. This supersedes the earlier review-only/no-merge
+boundary below. It does not authorize training experiments or weakening checks.
+The subtype finding and requested shared classification repair are recorded in
+Task comment d4435845-de35-4852-b626-08464d18ca15.
+
 Latest direction: Jack Heart asked to keep optimizing, said this "needs more
 ambitious rethinking", and requested "make it stupidly fast". The accepted
 architecture/performance direction is in

@@ -15,6 +15,7 @@ use crate::{
         mana::Mana,
         permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
+        subtype::is_creature_type,
         zone::ZoneType,
     },
 };
@@ -29,20 +30,6 @@ const BASIC_LANDS: [(&str, &str); 5] = [
     ("Swamp", "B"),
     ("Mountain", "R"),
     ("Forest", "G"),
-];
-const NONCREATURE: &[&str] = &[
-    "Plains",
-    "Island",
-    "Swamp",
-    "Mountain",
-    "Forest",
-    "Clue",
-    "Food",
-    "Treasure",
-    "Equipment",
-    "Vehicle",
-    "Saga",
-    "Aura",
 ];
 
 /// Evaluation order, including the four distinct power/toughness sublayers.
@@ -550,7 +537,7 @@ impl<'a> Context<'a> {
         view.creature_types = if view.is_creature() {
             view.subtypes
                 .iter()
-                .filter(|s| !NONCREATURE.contains(&s.as_str()))
+                .filter(|s| is_creature_type(s))
                 .cloned()
                 .collect()
         } else {
@@ -743,7 +730,7 @@ impl<'a> Context<'a> {
                 .view
                 .subtypes
                 .iter()
-                .filter(|s| !NONCREATURE.contains(&s.as_str()))
+                .filter(|s| is_creature_type(s))
                 .count() as i32)
                 .min(max)
         });
@@ -1017,10 +1004,9 @@ impl<'a> Context<'a> {
                 }
                 Operation::Modify(modification) => match modification {
                     Modification::SetCreatureTypes(types) => {
-                        view.subtypes.retain(|s| NONCREATURE.contains(&s.as_str()));
+                        view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());
-                        view.added_subtypes
-                            .retain(|s| NONCREATURE.contains(&s.as_str()));
+                        view.added_subtypes.retain(|s| !is_creature_type(s));
                         view.added_subtypes.extend(types.iter().cloned());
                     }
                     Modification::AddSubtypes(types) => {
