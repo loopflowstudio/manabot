@@ -15,7 +15,7 @@ USD20 study cap that also covers evaluation):
         --preserve-env=RUNPOD_API_KEY -- \\
         uv run --with "etude-sdk[s3,eval]==0.2.14" etude launch \\
         experiments/value_readout_252.py --rent 07c490-l4 --cohort mtg252 \\
-        --parallel 9 --max-usd 13.05 --revision COMMIT
+        --parallel 9 --max-usd 12.15 --revision COMMIT
 """
 
 from __future__ import annotations
@@ -43,11 +43,12 @@ ARMS: tuple[ValueAggregation, ...] = ("masked_mean", "value_token", "attention_r
 EXPERIMENT = "value_readout_252"
 SEEDS = "25201,25202,25203"
 UPDATES = 150
-# MTG-186 trained this two-seat Elemental recipe at about 44 s/update on an L4
-# (w13); 150 updates is about 1.8 h, plus 15 min setup and 5 min finalization.
-# The watchdog stops a slower run with its exports; the L4 ceiling is $0.60/h.
-HOURS = 2.4
-USD_PER_RUN = 1.45
+# MTG-181 measured 28-36 s per two-seat update at 256 streams on an L4, so 150
+# updates need at most 90 min; the 2 h window leaves 100 min after 15 min setup
+# and 5 min finalization. Etude reserves window plus setup at the $0.60/h ceiling.
+# The watchdog stops a slower run with its exports.
+HOURS = 2.0
+USD_PER_RUN = 1.35
 
 
 def base() -> TrainingRegime:

@@ -69,5 +69,5 @@ matches. No concept, name or API change; nothing new to implement.
   `test_pairings_depend_on_the_run_seed_not_the_arm`. Eval uses one fixed
   schedule seed for all arms/seeds.
 - Budget (Jack Heart, 2026-11-05): 3 arms × 3 seeds × 150 updates, USD20 cap
-  incl. evaluation. Training: cohort mtg252 on 07c490-l4, 2.4 h / USD1.45 per run.
+  incl. evaluation. Training: cohort mtg252 on 07c490-l4, 2 h / USD1.35 per run.
   Evaluation (random-pair vs heuristic + head-to-head) still to be built; ~USD7 left.

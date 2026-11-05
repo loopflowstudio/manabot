@@ -3,7 +3,7 @@
 **Status: training authorized, scoring protocol not frozen.** Jack Heart
 (2026-11-05) authorized 3 arms × 3 seeds (25201–25203) × 150 updates inside a
 USD20 cap covering training, evaluation and retries. Training launches as Etude
-cohort `mtg252` (9 runs, at most USD1.45 each, USD13.05 reserved). Thresholds and
+cohort `mtg252` (9 runs, at most USD1.35 each, USD12.15 reserved). Thresholds and
 evaluation schedule size are still open and are fixed before any score is read.
 
 ## Question
