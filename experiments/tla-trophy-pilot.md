@@ -50,8 +50,8 @@ or dropped actions; the cutoff and finite object capacities remain part of the
 contract. Recovery still biases learning toward games that fit the runtime.
 
 [Settlement](data/mtg213/gpu-v10-20261105/settlement.json) confirms this rental
-ended at **01:25:19 UTC**, and fresh provider inventory is empty. Vast refused a
-price change above USD0.97/hour before admission; the already-authorized L4
+ended at **01:25:19 UTC**, and the 01:33:52 UTC provider inventory was empty.
+Vast refused a price change above USD0.97/hour before admission; the already-authorized L4
 alternative cost USD0.59/hour with a USD0.7375 whole-rental reservation.
 Whole-rental estimated cost is **USD0.438120592**; cumulative billed-plus-estimated
 cost is **USD0.913464481**, with conservative reservations **USD5.839145926 of
@@ -240,6 +240,6 @@ uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg213
 Detailed historical validation, source pins, bootstrap intervals and operational
 narration remain at
 `07f1b2745cb43a9d774133086078dc7712c44dd2:experiments/tla-trophy-pilot.md`.
-The complete report before this reduction, including v10, is retained locally as
-git blob `3c1b548f0db42e42ae4b665dd7f1c770a94bf50d`. The receipts and manifest remain
+An earlier v10 report is retained at
+`aa218f156:experiments/tla-trophy-pilot.md`. The receipts and manifest remain
 unchanged; this summary replaces obsolete launch instructions with dated history.
