@@ -139,7 +139,7 @@ tests, retaining both complete profiles and all 59 verified outputs. Separate
 admission `37c1523a98ed` completed four updates per arm with all 49 outputs
 verified. Both rentals are absent. The 55.66970-hour / $13.77310 full-cohort
 projection qualified the $15.50 allocation at the same `af601877e` source.
-`vast-host-diagnosis.md` owns detailed measurements and their limitations;
+`85cf29970:scratch/vast-host-diagnosis.md` owns detailed measurements;
 completed diagnosis/admission remain engineering evidence, not scientific results.
 
 ## Recovery audit and options — 2026-11-05
