@@ -589,6 +589,7 @@ def _execute_regime(
                     "games",
                 )
             },
+            "idle_stream_steps": sum(s.idle_stream_steps for s in run.stages),
             "rss_bytes": psutil.Process().memory_info().rss,
             "host_load_1m": os.getloadavg()[0],
             "process_cpu_seconds": time.process_time()

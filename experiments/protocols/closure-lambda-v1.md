@@ -4,6 +4,8 @@ Task fc6ffb, Jack Heart, 2026-11-04. Authorized: $25 total, a hard cumulative ca
 covering training, evaluation, failures and machine setup for both studies.
 Spending beyond it needs Jack Heart's explicit approval. This protocol is committed
 before any scored run. Calibration runs are unscored and charged to the cap.
+The 2026-11-05 calibration amendment below changed the seeds, updates and per-run
+limits before any scored run; predictions stand as first written.
 
 Two separable studies share only the evaluation and launch scaffolding in
 `experiments/learning_signal.py`. Each conclusion stands alone; neither study's arms
@@ -26,9 +28,10 @@ Recipe: `experiments.batched_baseline.closure_comparison`. It is
 `seat_comparison("one")` (width 64, depth 2, 256 cross-balanced Allies/Lessons
 streams, damped policy learning with absolute-iteration schedules and EMA .999,
 CUDA) on the current world, from scratch. Resolved regimes differ only in ID,
-`batch_closure` and `transitions`: the exact arm's quota is 106 rows per stream, and
-the complete arm's floor is set from calibration so that realized rows per update
-match. Seeds 65101–65104 give both arms identical initial weights per seed.
+`batch_closure` and `transitions`: the complete arm's floor is 76 rows per stream,
+and the exact arm's quota is 106, the rows that floor realized in calibration once
+game length settled. Seeds 65101–65103 give both arms identical initial weights per
+seed. Target: 200 updates.
 
 Predictions at the last update every run reached:
 
@@ -43,7 +46,7 @@ Question: on complete games, does giving the game result more direct weight help
 
 Recipe: `experiments.batched_baseline.lambda_sweep`, the two-seat complete-game
 `seat_comparison("both")` with only `policy_lambda` and `value_lambda` varied.
-Seeds 65201–65203.
+Seeds 65201–65203. Target: 100 updates.
 
 | Arm (policy / value) | Result weight 20 decisions out (policy / value) | Purpose |
 |---|---|---|
@@ -68,8 +71,9 @@ the `selection_groups` metrics, read per arm at the same updates.
 The same 25 held-out deals (seeds 6510000000–6510000024, reserved here) × all 8
 deck/seat legs against the fixed heuristic, through the replay-checked arena on rented
 CPU, never the laptop. Raw exports are scored, not EMA, matching seat-comparison v1.
-Scored updates: 0, 20, 40, 75, 150, 300, and each run's endpoint. Deals are fixed
-before any scoring.
+Scored updates: 20, 40, 75, 150 where a run reaches them, and each run's endpoint.
+Update 0 is not scored: a seed's arms share their initial weights, so it compares
+nothing. Deals are fixed before any scoring.
 
 Analysis per study: mean over seeds per arm on the learner-decision clock, then at
 matched wall time and cost. Seed-level variation and deal-resampled intervals are
@@ -92,6 +96,18 @@ Ceilings are conservative reservations, not estimates. An unspent line may cover
 failed attempt in another line; the total may not move. Evaluation stays a small
 fraction of training.
 
+Per-run limits fit those lines at the calibrated L4 rate. Etude reserved 1.10× a
+job's dollars in calibration, which the reservations below assume.
+
+| Study | Runs | Hours per run | Job dollars | Reserved |
+|---|---:|---:|---:|---:|
+| 1, exact quota | 3 | 1.9 | $1.14 | $3.77 |
+| 1, complete games | 3 | 2.5 | $1.50 | $4.96 |
+| 2, each of 5 arms | 15 | 1.2 | $.72 | $11.90 |
+
+Reserved in total with calibration's $1.49 and evaluation's $2.50: $24.60. Evaluation
+jobs carry no dollar limit of their own, so each launch passes one inside its line.
+
 ## Kill criteria
 
 - Stop launching when billed plus reserved spend would exceed $25. Keep every failure
@@ -107,7 +123,56 @@ Deleting exact quota is out of scope and waits for this report.
 
 ## Calibration
 
-Pending.
+Run 2026-11-04 on three RunPod L4 rentals at $.59/hour: one seed (65000), 30 updates,
+unscored, at a quota of 106. All three completed, and every rental ended. Each pod ran
+45 minutes for a 12–19 minute job: setup took 2–6 minutes, then the laptop lost its
+network from about 23:22 to 23:59 UTC, so no controller ended the idle rentals before
+their windows closed. Provider bills through 00:00 UTC total $1.21, about $.08 more
+was still to post, and the launcher's per-run `usd` understates this. The $1.49
+reservation stays charged until the bills settle. Scored launches keep a controller
+running so a finished rental ends promptly.
+
+| Run | Arm | Rows/update | Games/update | Optimizer steps per 1k rows | Collection s/update | Learning s/update | Idle share of stream slots |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `d349ae373c72` | Exact quota 106 | 27,136 | 523 | 3.91 | 16.8 | 6.2 | .47 |
+| `c9b784359edb` | Complete games, floor 76 | 30,461 | 503 | 3.92 | 27.4 | 11.1 | .54 |
+| `adc13704d466` | Lambda .5 / .8 | 30,090 | 256 | 3.92 | 14.1 | 17.6 | .65 |
+
+The table's means are 30-update means, and they mislead for the complete arm, whose
+rows fall as games shorten:
+
+| Run | Rows, updates 1–8 | Rows, updates 11–30 | Collection s, 11–30 | Learning s, 11–30 | Assembly s, 1–8 / 11–30 |
+|---|---:|---:|---:|---:|---:|
+| Exact quota 106 | 27,136 | 27,136 | 15.7 | 6.2 | 1.0 / 1.0 |
+| Complete games, floor 76 | 37,825 | 27,264 | 15.5 | 9.9 | 32 / .9 |
+| Lambda .5 / .8 | 46,269 | 23,654 | 10.7 | 13.9 | 2.2 / 1.1 |
+
+The whole-run gap of 12.3% is past the 10% kill line, but it is the opening transient:
+after it the arms sit .5% apart, and 8 of 200 updates move the run's mean by about 1.5%.
+A first amendment moved the quota to 119 to match the 30-update mean. It was reversed
+before any freeze, because 119 would fit only those opening updates and leave the arms
+about 12% apart for the rest of the run. The quota stays 106, and each run's counters
+report cumulative drift.
+
+Against the predictions above, which stay as written: complete games took 45% more
+collection time per learner decision, not 10–25%, and idle slots were .54, not
+15–35%. Exact quota idles too (.47), so idle share does not isolate complete games.
+
+The 45% is almost entirely batch assembly, 287 s of 820. That is not a steady cost: it
+ran about 32 s per update for updates 1–8, then fell to .9 s and stayed there, when
+collection matched the exact arm. The two-seat run packs more rows through the same
+code in 2.2 s, so row count alone does not produce it. The cause is not established;
+the scored runs test it, since each records assembly per update on separate hosts.
+A wall-time result must name it. Packed complete-game batches also carry a measured
+implementation cost: targets and health diagnostics scan one `[rows, 1]` column, 3–7 s
+and 1–2 s per update against about .05 s for exact quota's `[quota, 256]`. That is the
+learning-time gap, and it comes from the batch shape, not from the closure.
+
+At the 30-update pace 300 updates and the original seeds would cost about $41, so
+the studies were cut before launch: study 1 to three seeds per the kill criteria, and
+both to fewer updates, since three seeds of study 2 could not reach 300 inside its line.
+Runs wall-stop at their hour limit and keep their exports. Both windows are early
+training, 6M and 3M learner decisions: a null here says nothing about later learning.
 
 ## Results
 

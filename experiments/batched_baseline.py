@@ -14,7 +14,8 @@ from manabot.training.regime import (
 )
 import managym
 
-# Rows per stream per update; experiments/protocols/closure-lambda-v1.md calibrates.
+# Rows per stream per update. Past the opening updates, a floor of 76 realized 106
+# rows per stream in calibration (experiments/protocols/closure-lambda-v1.md).
 CLOSURE_QUOTA = 106
 CLOSURE_COMPLETE_FLOOR = 76
 
@@ -108,11 +109,11 @@ def scale_ladder_both() -> TrainingRegime:
 def closure_comparison(closure: BatchClosure, updates: int) -> TrainingRegime:
     """One-seat `seat_comparison` differing only in when each batch closes.
 
-    The exact arm's quota is the learner decisions per stream that
-    `seat_comparison`'s two whole games yield. The complete arm's floor sits below
-    it by the mean overshoot of finishing the game in progress, so both arms take
-    about the same rows per update and sit at the same point of the absolute
-    iteration schedules at equal learner decisions. Recorded counters verify this.
+    The complete arm's floor sits below the exact arm's quota by the calibrated
+    mean overshoot of finishing the game in progress, so both arms take about the
+    same rows per update and sit at the same point of the absolute iteration
+    schedules at equal learner decisions. Game length moves with the policy, so
+    recorded counters verify the match in each run.
     """
     regime = seat_comparison("one", updates)
     regime.id = f"batch-closure-{closure}-v1"

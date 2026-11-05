@@ -153,3 +153,36 @@ Assumptions, each reversible:
 - The lambda study uses the two-seat recipe, since two-seat is settled as the recipe;
   the closure study stays one-seat as the Task states.
 Protocol: `experiments/protocols/closure-lambda-v1.md`.
+
+Realigned 2026-11-05 after unscored calibration; the protocol's Calibration section
+holds the figures and owns the design.
+
+Assumptions, each reversible before scoring:
+- Quota stays 106. A first amendment chose 119 from the 30-update mean; the per-update
+  series showed that mean is an 8-update opening transient (complete rows 37.8k, then
+  27.3k vs exact 27.1k), so 119 would hold the arms about 12% apart. Reversed pre-freeze.
+- 300 updates with the original seeds would cost about $41. Kept all five lambda arms
+  and three seeds per study; cut updates to 200 (study 1) and 100 (study 2). Dropping
+  lambda arms for longer runs is the alternative and needs Jack Heart's view.
+- Update 0 unscored: a seed's arms share initial weights, so it compares nothing.
+  (`learner_transitions-0` is an Etude checkpoint; the earlier note was wrong.)
+
+Exists: closure separation, docs, tests, both experiment files, calibration.
+Remaining:
+- Commit, then freeze study 1 and study 2 at that revision on `fc6ffb-l4`; reconcile
+  bills, inventory and quotes first. Sequence studies so reservations stay under $25.
+- Evaluate on rented CPU with an explicit dollar limit inside the $2.50 line.
+- Report: wall-time and cost views, row/game/optimizer counts, seed and deal intervals,
+  and critic residual by distance. `selection_groups` keys are per action type, so
+  aggregate by rows across action types. Publish under `experiments/data/closure-lambda-v1/`.
+- Explain batch assembly before any wall-time claim. It is 32 s/update for updates
+  1–8 of the one calibration run, then .9 s; scored runs' per-update series test it.
+- Check whether RunPod bills post anything after 00:00 UTC for the three calibration
+  pods; the $1.49 reservation stands until then.
+Live pod `etude-716a7dba8603` (machine `l4-716a7dba8603`) is not this Task's; leave it.
+
+Proposed experiments Wave memory (the `code` Graph does not call for writing it):
+one-seat complete games at floor 76 realize 119 rows per stream on the Allies/Lessons
+current world; exact quota idles too (.47 of slots), so idle share alone does not
+measure closure cost; `usd` on a launcher run understated provider bills by about 3×
+in calibration ($.34 against $.92), so budget from bills and rentals.

@@ -51,8 +51,7 @@ DEALS = tuple(range(6_510_000_000, 6_510_000_025))
 GAME_SECONDS = 120.0
 MAX_COMMANDS = 10_000
 BOOTSTRAP_SEED = 6510
-UPDATES = 300
-SCORED_UPDATES = (0, 20, 40, 75, 150, 300)
+SCORED_UPDATES = (20, 40, 75, 150)
 SETUP_SECONDS = 900
 FINALIZATION_SECONDS = 300
 
@@ -97,7 +96,7 @@ def training_runs(
             TrainingJob(
                 regime=TrainingRegime.model_validate(recipe.model_dump(mode="json")),
                 experiment=experiment,
-                milestones=tuple(u for u in SCORED_UPDATES if 0 < u < updates),
+                milestones=tuple(u for u in SCORED_UPDATES if u < updates),
                 finalization_seconds=FINALIZATION_SECONDS,
             )
             .job(
