@@ -86,13 +86,6 @@ jobs:
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py
 
-      - name: Long integration tests
-        if: matrix.group == 'long'
-        run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
-            tests/training/test_experiment_runner.py \
-            tests/training/test_monitor_evaluation.py
-
       - name: Two-seat and Etude evaluation integration
         if: matrix.group == 'evaluation'
         run: |
@@ -116,3 +109,10 @@ jobs:
         if: matrix.group == 'evaluation'
         run: |
           uv run --python 3.12 manabot train --out .runs/ci-local-smoke
+
+      - name: Long integration tests
+        if: matrix.group == 'long'
+        run: |
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
+            tests/training/test_experiment_runner.py \
+            tests/training/test_monitor_evaluation.py

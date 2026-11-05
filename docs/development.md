@@ -44,13 +44,12 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo nextest run   # or cargo test
 ```
 
-The dev and test profiles build at opt-level 1, which keeps debug assertions
-and overflow checks while running the suite about 3x faster than opt-level 0;
-release-only passes are not enough. `cargo nextest run` runs every test of every
-binary in parallel and reports each failure as it finishes, where `cargo test`
-runs binaries one after another; `--profile ci` adds CI's 5-minute per-test
-limit (`managym/.config/nextest.toml`). Use `-j 2` and `--test-threads 2` on
-shared hosts, and name the binary or test while iterating
+The dev profile builds at opt-level 1, keeping debug assertions and overflow
+checks while running the suite about 3x faster; release-only passes are not
+enough. `cargo nextest run` runs every binary's tests in parallel, where
+`cargo test` runs binaries one after another; `--profile ci` adds CI's 5-minute
+per-test limit (`managym/.config/nextest.toml`). Use `-j 2` and
+`--test-threads 2` on shared hosts, and select a binary while iterating
 (`cargo nextest run -E 'binary(rules_tests)'`). Keep one Cargo operation per
 build directory. `--all-features` builds the PyO3 bindings; if the default `python3`
 is newer than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python`. A failure of
