@@ -252,3 +252,48 @@ Proposed experiments Wave memory (the `code` Graph does not call for writing it)
   windows when `parallel` exceeds pending runs; refused creates pin a run id; a pod that
   never boots ignores `cancel` (2 of 7 CPU pods here), so terminate it by machine and
   count its window; controllers need `caffeinate` on the laptop.
+
+### Concept review — 2026-11-05 UTC (code Graph, no person)
+
+Outcome: **no design change and no open product choice for this Task.** The
+implemented contract is the accepted one, and the usage docs (`docs/training.md`
+"Batch closure", `manabot/README.md`) already say what the code does; nothing is
+proposed there. Checked against source, tests and the published report, with no
+new games or paid runs.
+
+| Action | Concept | API / persistence |
+| --- | --- | --- |
+| Author a stage: who learns, when the batch closes | `learning_seats` and `batch_closure` are separate declarations; `transitions` is a quota under exact quota and a per-stream floor under complete games; `games_per_stream` replaces the floor with whole games | `TrainSelfPlay`; serialized only when it differs from `_implied_closure`, so frozen digests hold |
+| Load a saved recipe | Omission means what the run did: one seat with neither `games_per_stream` nor `game_errors` is exact quota, anything else complete games | `TrainingRegime.read_saved_stages`; `AttackPlan` schema 1 (always serialized) keeps exact-quota attackers |
+| Continue from a learning state | Closure is part of the recipe identity | `admit_learning_state`, continuation validator |
+| See the cost of finishing games | `idle_stream_steps` counts slots idle while the slowest stream closes, in either closure | `CollectorStats`, `StageRecord`, PERF panel |
+| Read the two studies | Each conclusion stands alone, labelled Allies/Lessons | `experiments/batch_closure.py`, `lambda_sweep.py`, report under `experiments/data/closure-lambda-v1/` |
+
+The one consequential mismatch is naming: `transitions` means two different
+things by closure, and the three closure shapes (quota, floor, whole games) sit
+across two fields rather than one tagged value. A clearer shape exists, but it
+would restructure every saved stage and move frozen digests, which the accepted
+constraints forbid; the field comment and docs carry the distinction instead.
+Not pursued, recorded here so a later reader does not mistake it for an oversight.
+
+Consequence of the "omission means saved" rule: a hand-written JSON one-seat
+stage with no `batch_closure` reads as exact quota, exactly like a saved one;
+only stage instances built in code take the complete-games default. The docs
+state the omission reading, so JSON authors can see it; no change proposed.
+
+Normal path, failure, recovery: a new one-seat frozen-opponent stage closes on
+complete games and writes the field; exact quota with both seats, a game error
+policy or `games_per_stream` is rejected at validation and again by the
+collector; a saved exact-quota run continues only into an exact-quota stage.
+Counterexamples held: saved regime digests pinned in `test_batch_closure.py`,
+`scale_ladder` keeps its exact quota and digest, `seat_comparison("one")`'s
+digest moved as recorded above.
+
+Unresolved for later, not blocking, outside this Task by Jack Heart's
+constraint ("Deleting exact quota is out of scope. Decide that after the
+comparison reports"): **should exact quota be deleted now that the report
+exists?** Evidence: no detectable strength difference on Allies/Lessons early
+training (−.019, interval −.076 to +.039); exact quota keeps the `[quota, 256]`
+fast target path (24 s against 1,114 s of scans per run); the Elemental repeat
+Jack Heart directed has not run. That decision is his and belongs to a separate
+Task. Nothing else is open; the next step for this Task is publication.
