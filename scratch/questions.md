@@ -57,3 +57,19 @@ handoff (available at `264041f991afd3bd451cefa4f50a761577a5eb50:scratch/question
 it confers no authority on MTG-243. Main deleted docs/ARCHITECTURE.md and
 docs/search-and-beliefs.md and moved policy inputs to
 docs/observation-and-model.md, so the catalog naming section now lives there.
+
+Sync blocker found at gate, 2026-11-05: main `423dd2fcd` (MTG-244, merged
+22:52 UTC after reviewed head `833ef4120`) took the number **policy input v8**
+for layer state (4096 × 3 effect details, fact kinds 11–14, 512 local facts).
+This branch also defines v8 (`name_candidates[A,2]`, rejects groups) and v9
+(v7 layouts + `name_candidates[A,4]`). PR #424 is CONFLICTING (config/bindings
+version ranges, encoder errors, `__init__.pyi`, AGENTS.md, Academy fixtures,
+conformance replays, parity digests). Gate did not perform the sync; it belongs
+to land's sync step. Assumption for that resolution (reversible until merge):
+main's v8 keeps its number and meaning; this branch's naming input becomes the
+next explicit version, composing main's v8 layout with `name_candidates[A,4]`;
+the branch-only `[A,2]` input was never on main and should not claim v8 (drop it
+or renumber it explicitly — never reinterpret main v8 rows). Re-record fixtures
+and parity digests from the merged engine; never hand-merge digests. Fresh v6
+defaults stay. Re-run debug cargo tests, Engine Budget and integration on the
+merged head; earlier green CI does not cover it.
