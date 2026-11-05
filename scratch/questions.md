@@ -232,3 +232,46 @@ Focused plan (one runner at a time):
 - The four CLI demo cases already passed; reuse that dated evidence rather than
   claiming it ran against the new source. Focused analysis tests construct fresh
   source-bound fixtures after sync. No measured learning/performance claim.
+
+## Gate results — 2026-11-05
+
+Gate is complete; the existing Graph's delivery step still owns publishing and
+landing, and verification still owns Task completion. Main `41981b3ab` merged
+locally through `786d20c39`; all four conflicts were reconciled. Upstream Wave
+IDs/Linear bindings and its documentation consolidation survive. The guide-map
+link now lives in README.md and both Standard milestone links follow the moved
+Coverage research path. Frozen protocol JSON and migration receipts are unchanged.
+
+One defect was reproduced and fixed: the exposure reader previously admitted
+closed-deck or non-submitted player configurations when their lists matched.
+It now compares complete PlayerSetup values from the existing UniformDecks
+source. Two controlled regressions failed before the repair and pass afterward.
+No new sampler, native behavior, schema or training setting was introduced.
+The protocol guide records this contract and the prior synthetic CLI demo's
+meaningful outcomes so that added scratch cleanup cannot erase that evidence.
+
+Commands and results (all headless, one runner/build operation at a time):
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::card_capture::tests -j 2` — 4 passed, debug assertions enabled.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -p managym --lib agent::vector_env::tests -j 2` — 17 passed in 2.43 s.
+- `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py tests/eval/test_card_evaluation.py tests/eval/test_experiment_files.py tests/training/test_regimes.py tests/test_package_boundaries.py tests/training/test_automatic_game_capture.py tests/training/test_game_error_recovery.py tests/training/test_recovery.py tests/infra/test_ci_selection.py tests/infra/test_release.py -q --durations=10` — 243 passed in 332.87 s before the targeted admission repair; bounded native replay and multi-stage recovery fixtures dominate duration, no timeout.
+- `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_training_exposure.py -k changed_player_setup -q` — reproduced both missing rejections before the repair (2 failed as expected).
+- `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py -q --durations=5` — 58 passed in 88.47 s after the repair; unchanged suites retain their preceding results.
+- `uv run --extra dev ruff format tests/training/test_training_exposure.py` followed by `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_training_exposure.py -q` — formatting corrected; 6 passed in 1.54 s.
+- Exact `Two-seat and Etude evaluation integration` CI paths with `--collect-only -q` — 385 collected, no basename collisions (the two new regression parameters account for the increase from 383).
+- `uv run python scripts/check_loopflow_workflows.py` — seven graphs compile; references, three Coverage loops, delivery order and scientific completion boundaries pass.
+- `uv run --extra dev ruff check --fix <18 changed/untracked Python paths>` and `ruff format --check` over those paths — lint passes; one new test decorator needed formatting, corrected and rechecked. The other 17 files were already formatted.
+- `cargo fmt --manifest-path managym/Cargo.toml --check` — passed.
+- `PYO3_PYTHON="$PWD/.venv/bin/python" CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -j 2 -- -D warnings` — passed in 2.28 s.
+- `git diff --check` and local-link checks for the protocol/workflow guides — passed.
+
+The published pre-integration head `a1927892d` has successful full CI, including
+Rust Tests, both integration groups, Academy, package/install and Engine Budget.
+The native implementation is byte-identical to that tested head; no rebuild or
+repeat full Rust suite was needed. The merged revision and exposure-reader fix
+still require delivery CI; their wider matrix is deferred there, not marked
+passed. No new before/after performance number was measured. Capture overhead,
+actual exposure and learning remain for the authorized pilot; v1's runtime
+admission still correctly rejects its older engine-source binding (covered by
+the real-runtime rejection test). No campaign, rental, spending, migration replay,
+publication or Task completion occurred in gate. No servers/watchers remain.

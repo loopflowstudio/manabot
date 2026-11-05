@@ -231,3 +231,12 @@ Next proof: show the complete-positive, complete-inconclusive and missing-receip
 cases through the actual report entry point using existing controlled fixtures.
 No scientific run is needed. This review changed only scratch design/presentation;
 it did not restart the Graph, change implementation, publish or approve shipping.
+
+## Shipping direction — 2026-11-05
+
+Jack Heart approved shipping the reviewed MTG-245 outcome: “lg2m ship it”.
+This supersedes earlier publish-only/no-shipping boundaries. Continue the Task's
+remaining delivery steps, reconcile main, validate, merge and verify completion.
+The report-headline refinement remains a recorded proposal, not a new shipping
+requirement. Scientific campaigns, rentals and spending remain outside this
+approval; Task 04 still owns the actual pilot.

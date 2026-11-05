@@ -188,6 +188,10 @@ files never become observed zero. Replay inputs are retained, not replay-verifie
 Counts concern observed collection, not proof that every transition contributed
 to a successful optimizer update.
 
+Receipt admission compares each sampled player setup with the frozen ticket
+source, including main deck, sideboard, world submission and decklist disclosure.
+Matching card lists alone cannot admit play under a different information boundary.
+
 Resolution rows attribute completed effect frames to the source physical copy's
 initial captured definition and exact source incarnation. They are not a new
 mechanics taxonomy or counts of successful instructions; dynamic copied/granted
@@ -391,7 +395,7 @@ control. Resetting streams/RNG is a new segment, not exact recovery. Weights-onl
 warm starts and new vocabularies are distinct transfer interventions. No new
 continuation route is implemented here.
 
-In the integrated [Standard milestone](../../docs/research/standard-2026-11/milestone.md),
+In the integrated [Standard milestone](../../.lf/wave/coverage/research/standard-2026-11/milestone.md),
 Task 04 owns Validation A after the casting/history foundations; Task 08 owns
 Validation B after the battlefield, planeswalker and procedure cohorts. Each
 authors its actual integrated lists and probes. These bounded checks precede
@@ -497,3 +501,11 @@ Each measured validation outcome then requires actual
 update/throughput/exposure/crash receipts. MTG-245's protocol handoff and Task 04's
 experimental completion are separate outcomes. No design audit or successful
 discovery test is evidence of learning.
+
+The 2026-11-05 headless software demo exercised the actual offline report CLI
+with synthetic complete-positive, complete-flat and missing-exposure inputs.
+All retained the 800-game evaluation denominator; complete flat evidence reported
+no improvement, and favorable scores with absent training receipts remained
+incomplete. These were authored fixture records, not played or trained games.
+The maintained protocol, analysis and exposure tests also cover crossed identities,
+missing schedules, observed zero versus missing capture, and altered player setups.

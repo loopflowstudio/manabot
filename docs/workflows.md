@@ -69,7 +69,7 @@ and explicit splits. Lists, shares and budgets remain proposals until accepted.
 Training exposure is separate from evaluation draws and committed action counts;
 the latter never substitute for training capture. Task 04 owns actual first-pilot
 execution/results and Task 08 Validation B on the expanded mechanism cohort.
-The [Standard milestone](research/standard-2026-11/milestone.md) keeps the deeper
+The [Standard milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md) keeps the deeper
 strength/generalization track separate, first after full FDN. Tiny runs may
 prove execution while leaving learning inconclusive.
 

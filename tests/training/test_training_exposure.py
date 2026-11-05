@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -220,6 +221,24 @@ def test_complete_budget_and_changed_identity(protocol: Protocol) -> None:
             seed=protocol.budget.seeds[0],
             run_id="learner",
             identities={"world": "wrong"},
+            protocol=protocol,
+        )
+
+
+@pytest.mark.parametrize(("world", "disclosure"), [(None, "open"), ("world", "closed")])
+def test_training_exposure_rejects_changed_player_setup(
+    protocol: Protocol, world: str | None, disclosure: Literal["open", "closed"]
+) -> None:
+    observed = receipt(protocol)
+    player = observed.game.trace.player_configs[0]
+    player.world = world
+    player.disclosure = disclosure
+    with pytest.raises(ValueError, match="player setup"):
+        training_exposure(
+            [observed],
+            seed=protocol.budget.seeds[0],
+            run_id="learner",
+            identities={"engine_extension_sha256": "e" * 64},
             protocol=protocol,
         )
 

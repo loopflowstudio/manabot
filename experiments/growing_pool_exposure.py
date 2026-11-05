@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
 from experiments.growing_pool_protocol import Protocol
 from manabot.env.card_capture import CapturedCards, Seat
-from manabot.env.failures import BufferSpec, TrainingExposureReceipt
+from manabot.env.failures import BufferSpec, PlayerSetup, TrainingExposureReceipt
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.card_evidence import GameEvidence
 
@@ -234,8 +234,10 @@ def training_exposure(
     )
     seen: set[int] = set()
     population = protocol.manifest.source()
-    assert population.entry_ids is not None
-    deck_by_name = dict(zip(population.entry_ids, population.decks, strict=True))
+    # The sampled setup includes disclosure and native admission, not only lists.
+    players_by_name = {
+        player.name: PlayerSetup.retain(player) for player in population.players()
+    }
     for receipt in receipts:
         if receipt.context.get("seed") != seed:
             continue
@@ -272,13 +274,10 @@ def training_exposure(
             raise ValueError("duplicate training game exposure")
         seen.add(key)
         for player in receipt.game.trace.player_configs:
-            deck = deck_by_name.get(player.name)
-            if (
-                deck is None
-                or player.decklist != deck.main
-                or player.sideboard != deck.sideboard
-            ):
-                raise ValueError("training exposure deck is outside the frozen tickets")
+            if player != players_by_name.get(player.name):
+                raise ValueError(
+                    "training exposure player setup is outside the frozen tickets"
+                )
         report.receipts.append(receipt.sha256)
         if not receipt.game.terminal:
             report.interrupted_games += 1
