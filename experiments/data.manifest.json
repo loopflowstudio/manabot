@@ -4510,6 +4510,26 @@
    "sha256": "dbb1bffe1baeebd37e08c8e763a22150b9c136dced75f559fd79d89bdafea125",
    "bytes": 5733
   },
+  "experiments/data/learnability/baseline-qualification.json": {
+   "sha256": "a10b45ecaedfc4db63e77c2e2fe2c51e975f87c40bebd49e856ed51df201e96a",
+   "bytes": 82149
+  },
+  "experiments/data/learnability/qualification.json": {
+   "sha256": "d4d0b2dd597c1a52b39e911f86f5b17a47bdb1204b769adbb078593182f93c59",
+   "bytes": 73754
+  },
+  "experiments/data/learnability/search-control.json": {
+   "sha256": "e230ebf047e7d8919335bb5bb883d0434c2ac27787431a42b4fc25075a3ec648",
+   "bytes": 25094
+  },
+  "experiments/data/learnability/search-focused.json": {
+   "sha256": "d30b02e0cc5ccd12503d92304e041ae20796c2a1592bddf28edc45e8a621641c",
+   "bytes": 23224
+  },
+  "experiments/data/learnability/search-primary.json": {
+   "sha256": "18e72b5c202b42fce0c746fa28ec4ef91089cbd7ffc6de367f799d3216e0080d",
+   "bytes": 45369
+  },
   "experiments/data/longer-learning-017/allocation.json": {
    "sha256": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6",
    "bytes": 5872
@@ -39237,6 +39257,94 @@
   "experiments/data/rul-9-played-workloads-v1.measurement.json": {
    "sha256": "9a3933a570772e8d3e04b59526faaf1d51b5fc0e26ba8c02e08eae36599bc951",
    "bytes": 4926123
+  },
+  "experiments/data/rules-audit-2026-10/README.md": {
+   "sha256": "bcc7c3592fb209085d22a5a2c7ba19e8fc3a24b3198482b9db67868ad8f2750c",
+   "bytes": 6520
+  },
+  "experiments/data/rules-audit-2026-10/ci-evidence.json": {
+   "sha256": "afc3fac95c70667a3e5d133f3d7b57921e8ac2507aa18acf62027ee65aa2b265",
+   "bytes": 44577
+  },
+  "experiments/data/rules-audit-2026-10/ci.md": {
+   "sha256": "e1d1ed5ff61256e06c5d73b036343072939e98ef0f984c87db6d43f50770e2f8",
+   "bytes": 7640
+  },
+  "experiments/data/rules-audit-2026-10/citation-locations.json": {
+   "sha256": "dbaf279317964babc89319818dfd3b52eae686db4a171f3f599443f95850675b",
+   "bytes": 12281
+  },
+  "experiments/data/rules-audit-2026-10/coverage-map.md": {
+   "sha256": "1e90630169210e1ffa4d561b711a8455bc3bdfe3e134e24ba7079f7cbd04de11",
+   "bytes": 7089
+  },
+  "experiments/data/rules-audit-2026-10/evidence.md": {
+   "sha256": "c22fdd7c5043cae7fcffcafd68547fdf3a4ed1af824cc3ccce37a4808903e7b8",
+   "bytes": 14114
+  },
+  "experiments/data/rules-audit-2026-10/index.jsonl": {
+   "sha256": "def37c431d895cf6e4814b8a20422a68ca9edfb2ac864aa07d3ceb31212791cd",
+   "bytes": 1788437
+  },
+  "experiments/data/rules-audit-2026-10/learnability-w12-canonical.json": {
+   "sha256": "4f03cceb84e957be0cc30be6bfdfa05641b72ef1055193927c68740fa21cf885",
+   "bytes": 59104
+  },
+  "experiments/data/rules-audit-2026-10/learnability-w12-gate.json": {
+   "sha256": "09fe9a777eb7b3d80eba77b8657b04d03cad5b61c7f633a095835710413b2d97",
+   "bytes": 59115
+  },
+  "experiments/data/rules-audit-2026-10/learnability-w12-integrated.json": {
+   "sha256": "062e4cbfa56ce8b680ed03399dfd11d7e0747c0f04e889cfa7c2129a459c68d1",
+   "bytes": 59119
+  },
+  "experiments/data/rules-audit-2026-10/learnability-w13-integration.json": {
+   "sha256": "6b434f0dd32578a30a673c8cb2516297611ceb0d08b9d56629a0f538f3b3884c",
+   "bytes": 59106
+  },
+  "experiments/data/rules-audit-2026-10/line-accounting.json": {
+   "sha256": "f14cfe85bc6c837d878b98a23290efd8ca1513f6a2330fd4c934d8427a15ab94",
+   "bytes": 29641
+  },
+  "experiments/data/rules-audit-2026-10/obligation-validation.json": {
+   "sha256": "efc038dafe5ad7625e5a4375f47a23109528409a9aafc12150d778cd5ecd866e",
+   "bytes": 15347
+  },
+  "experiments/data/rules-audit-2026-10/resolution-shipping.json": {
+   "sha256": "c78e02255212bfe2c69465de22cc1a321f81625c49bb134aae625e2bb82f7481",
+   "bytes": 155727
+  },
+  "experiments/data/rules-audit-2026-10/resolution-shipping.md": {
+   "sha256": "fd41bdfcda911b5d93d9d41d20fade169f95ad19f421f4b7ff977565e4ddfb55",
+   "bytes": 7253
+  },
+  "experiments/data/rules-audit-2026-10/resolution-validation.json": {
+   "sha256": "83af58fd4c119881ec5942f090d8df62c16fd2182067361b76ad154cfe26456a",
+   "bytes": 62358
+  },
+  "experiments/data/rules-audit-2026-10/reviews.json": {
+   "sha256": "5a163fb2ba8d05c483864065e1ce9d426880d8b5e0f2cfbe367fbc89f1c0f226",
+   "bytes": 168839
+  },
+  "experiments/data/rules-audit-2026-10/shipping-integration.json": {
+   "sha256": "5e4c244bca377ca093cc4ba35bd224f11d2339252ef8001df1ea165ece84db4a",
+   "bytes": 13545
+  },
+  "experiments/data/rules-audit-2026-10/source.json": {
+   "sha256": "fd5660252738986b87e3af24fb6ff24c6d2cf877aa39c8b367252fb23c672f06",
+   "bytes": 835
+  },
+  "experiments/data/rules-audit-2026-10/unification-validation.json": {
+   "sha256": "672d335464de892d052f35b518d43ff88410732eb3e10c45f4156d5ef202078c",
+   "bytes": 59188
+  },
+  "experiments/data/rules-audit-2026-10/unification.md": {
+   "sha256": "c16554babcf46963caef7f75d56ab233ee20f839461bfb09888f67b71e378cfe",
+   "bytes": 15804
+  },
+  "experiments/data/rules-audit-2026-10/validation.json": {
+   "sha256": "3bf475f017eed17b44cf30e6112af2ce6cf994ec4bf18739ca7c6c53b5cbed96",
+   "bytes": 25693
   },
   "experiments/data/sampler-uncertainty-synthetic/analysis.md": {
    "sha256": "3f31ea7a149e49c6ccd43fee007c13eea7e0cc659c0f3eae9fbaf6bccbd40f33",
