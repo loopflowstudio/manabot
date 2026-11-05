@@ -467,41 +467,40 @@ pub enum ReplacementEffect {
     UnspentManaBecomesRed,
 }
 
+/// A fixed mana mode has exactly one production effect and no other work.
+fn fixed_mana_output(effects: &[Effect]) -> Option<&Mana> {
+    match effects {
+        [Effect::AddMana {
+            mana,
+            amount: EffectValue::Fixed(1),
+            until_end_of_combat: false,
+        }] => Some(mana),
+        _ => None,
+    }
+}
+
 impl ActivatedAbilityDefinition {
     /// Structural mana-ability classification, independent of current output.
     pub fn is_mana_ability(&self) -> bool {
-        self.mana_choices().is_some()
-            || matches!(
-                self.effects.as_slice(),
-                [Effect::AddOneColorManaValue { .. }]
-            )
-            || matches!(self.effects.as_slice(),
-            [Effect::If { then, otherwise, .. }] if [then, otherwise].iter().all(|branch|
-                matches!(branch.as_slice(), [Effect::AddMana { until_end_of_combat: false, .. }])))
+        match self.effects.as_slice() {
+            [Effect::Modal { modes }] => modes
+                .iter()
+                .all(|effects| fixed_mana_output(effects).is_some()),
+            [Effect::AddOneColorManaValue { .. }] => true,
+            [Effect::If { then, otherwise, .. }] => [then, otherwise].iter().all(|branch| {
+                matches!(branch.as_slice(), [Effect::AddMana { until_end_of_combat: false, .. }])
+            }),
+            effects => fixed_mana_output(effects).is_some(),
+        }
     }
 
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        let [effect] = self.effects.as_slice() else {
-            return None;
-        };
-        match effect {
-            Effect::AddMana {
-                mana,
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: false,
-            } => Some(vec![mana.clone()]),
-            Effect::Modal { modes } => modes
+        match self.effects.as_slice() {
+            [Effect::Modal { modes }] => modes
                 .iter()
-                .map(|effects| match effects.as_slice() {
-                    [Effect::AddMana {
-                        mana,
-                        amount: EffectValue::Fixed(1),
-                        until_end_of_combat: false,
-                    }] => Some(mana.clone()),
-                    _ => None,
-                })
+                .map(|effects| fixed_mana_output(effects).cloned())
                 .collect(),
-            _ => None,
+            effects => fixed_mana_output(effects).map(|mana| vec![mana.clone()]),
         }
     }
 

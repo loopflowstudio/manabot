@@ -977,72 +977,11 @@ impl Game {
     }
 
     fn payment_model(&self, player: PlayerId, sacrifice: Option<PermanentId>) -> PaymentModel<'_> {
-        let mut reserved = Vec::new();
-        if let Some(source) = sacrifice {
-            reserved.push(SourceReservation {
-                permanent: source,
-                tap: false,
-                sacrifice: true,
-                ability: None,
-            });
-        }
-        if let Some(crate::flow::game::PendingChoice::ManaPayment {
-            payment, sacrifice, ..
-        }) = &self.pending_choice
-        {
-            if let Some(reservation) = self.payment_reservation(payment) {
-                reserved.push(reservation);
-            }
-            if let Some(source) = sacrifice {
-                reserved.push(SourceReservation {
-                    permanent: *source,
-                    tap: false,
-                    sacrifice: true,
-                    ability: None,
-                });
-            }
-        }
-        if let Some(crate::flow::game::PendingChoice::SacrificePayment { payment, .. }) =
-            &self.pending_choice
-        {
-            if let Some(reservation) = self.payment_reservation(payment) {
-                reserved.push(reservation);
-            }
-        }
-        fn reserve(
-            decision: &crate::flow::decision::Decision,
-            game: &Game,
-            reserved: &mut Vec<SourceReservation>,
-        ) {
-            use crate::flow::decision::Decision;
-            match decision {
-                Decision::ManaUpfront {
-                    permanent,
-                    ability_index,
-                    resume,
-                    ..
-                } => {
-                    let ability =
-                        &game.characteristics(*permanent).activated_abilities[*ability_index];
-                    reserved.push(SourceReservation {
-                        permanent: *permanent,
-                        tap: ability.tap_source,
-                        sacrifice: ability.sacrifice_source,
-                        ability: Some(*ability_index),
-                    });
-                    if let Some(next) = resume {
-                        reserve(next, game, reserved);
-                    }
-                }
-                Decision::ManaChoice {
-                    resume: Some(next), ..
-                } => reserve(next, game, reserved),
-                _ => {}
-            }
-        }
-        if let Some(suspended) = &self.state.suspended_decision {
-            reserve(&suspended.decision, self, &mut reserved);
-        }
+        use crate::flow::{
+            decision::Decision,
+            game::{Payment, PendingChoice},
+        };
+
         let sources: Vec<ManaSource> = self
             .iter_battlefield_permanents(player)
             .map(|permanent| {
@@ -1110,33 +1049,78 @@ impl Game {
                 }
             })
             .collect();
-        let mut life = self.state.players[player.0].life.max(0) as u32;
-        if let Some(
-            crate::flow::game::PendingChoice::ManaPayment { payment, .. }
-            | crate::flow::game::PendingChoice::SacrificePayment { payment, .. },
-        ) = &self.pending_choice
-        {
-            if let crate::flow::game::Payment::Activation {
+        let resources = vec![SourceResources::default(); sources.len()];
+        let mut model = PaymentModel {
+            game: self,
+            player,
+            sources,
+            life: self.state.players[player.0].life.max(0) as u32,
+            reserved: resources,
+        };
+        // Reserve directly in the inventory. Pending outer costs reduce what
+        // probes can use; they have not committed to the live game yet.
+        if let Some(permanent) = sacrifice {
+            model.reserve(SourceReservation {
+                permanent,
+                tap: false,
+                sacrifice: true,
+                ability: None,
+            });
+        }
+        let pending_payment = match &self.pending_choice {
+            Some(PendingChoice::ManaPayment {
+                payment, sacrifice, ..
+            }) => {
+                if let Some(permanent) = sacrifice {
+                    model.reserve(SourceReservation {
+                        permanent: *permanent,
+                        tap: false,
+                        sacrifice: true,
+                        ability: None,
+                    });
+                }
+                Some(payment)
+            }
+            Some(PendingChoice::SacrificePayment { payment, .. }) => Some(payment),
+            _ => None,
+        };
+        if let Some(payment) = pending_payment {
+            if let Some(reservation) = self.payment_reservation(payment) {
+                model.reserve(reservation);
+            }
+            if let Payment::Activation {
                 source,
                 ability_index,
                 ..
             } = payment.as_ref()
             {
                 if let Some(ability) = self.activation_ability(*source, *ability_index) {
-                    life = life.saturating_sub(ability.life_cost);
+                    model.life = model.life.saturating_sub(ability.life_cost);
                 }
             }
         }
-        let resources = vec![SourceResources::default(); sources.len()];
-        let mut model = PaymentModel {
-            game: self,
-            player,
-            sources,
-            life,
-            reserved: resources,
-        };
-        for reservation in reserved {
-            model.reserve(reservation);
+        let mut decision = self.state.suspended_decision.as_ref().map(|s| &s.decision);
+        while let Some(current) = decision {
+            decision = match current {
+                Decision::ManaUpfront {
+                    permanent,
+                    ability_index,
+                    resume,
+                    ..
+                } => {
+                    let ability =
+                        &self.characteristics(*permanent).activated_abilities[*ability_index];
+                    model.reserve(SourceReservation {
+                        permanent: *permanent,
+                        tap: ability.tap_source,
+                        sacrifice: ability.sacrifice_source,
+                        ability: Some(*ability_index),
+                    });
+                    resume.as_deref()
+                }
+                Decision::ManaChoice { resume, .. } => resume.as_deref(),
+                _ => None,
+            };
         }
         model
     }

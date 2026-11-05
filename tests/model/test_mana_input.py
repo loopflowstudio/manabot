@@ -6,11 +6,17 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import (
+    FACT_KIND_INDEX,
+    FACT_MANA_LOCATION,
+    RELATION_MANA_TAPS_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
 from manabot.managym.enums import ActionEnum
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.verify.mana_risk import tensor_batch
 from manabot.verify.text_observation import priority_root
 import managym
 
@@ -41,13 +47,9 @@ def test_v8_mana_policy_trains_and_reloads(tmp_path: Path, arm: StateEncoder) ->
     )
     # Historical viewer JSON has no continuation frames. Exercise the live tap
     # decision and the synthetic open-subtype pool as separate batch entries.
-    restricted = space.encode(obs)
-    values = {
-        key: torch.stack((torch.from_numpy(value), torch.from_numpy(restricted[key])))
-        for key, value in space.encode(pending).items()
-    }
-    assert (values["relations"][..., 49] == 2).any()
-    assert (values["facts"][..., 1] == 13).any()
+    values = tensor_batch(space.encode(pending), space.encode(obs))
+    assert (values["relations"][..., RELATION_MANA_TAPS_INDEX] == 2).any()
+    assert (values["facts"][..., FACT_KIND_INDEX] == FACT_MANA_LOCATION).any()
     logits, value = model(values)
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     (

@@ -5,7 +5,13 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationEncoder
+from manabot.env.observation import (
+    FACT_KIND_INDEX,
+    FACT_MANA_LOCATION,
+    FACT_VALID_INDEX,
+    RELATION_MANA_TAPS_INDEX,
+    ObservationEncoder,
+)
 from manabot.infra.config import ObservationConfig
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision
@@ -40,7 +46,7 @@ def test_v8_pending_taps_have_scalar_parity_and_explicit_legacy_rejection() -> N
     )
     obs, *_ = env.step(index)
     encoded = _parity(env, obs)
-    assert (encoded["relations"][:, 49] == 2).any()
+    assert (encoded["relations"][:, RELATION_MANA_TAPS_INDEX] == 2).any()
     assert "tap 2 more permanents" in capture_text_decision(env).text
     for version in range(1, 8):
         with pytest.raises(ValueError, match="requires policy input v8"):
@@ -86,7 +92,7 @@ def test_v8_chosen_output_preserves_restrictions_before_they_enter_the_pool() ->
     )
     obs, *_ = env.step(index)
     encoded = _parity(env, obs)
-    assert (encoded["facts"][:, 1] == 13).any()
+    assert (encoded["facts"][:, FACT_KIND_INDEX] == FACT_MANA_LOCATION).any()
     assert obs.continuation[-1].mana_outputs[0].restrictions[0].spells == ["Lesson"]
     assert "only for Lesson spells" in capture_text_decision(env).text
 
@@ -130,7 +136,7 @@ def test_v9_projection_is_byte_identical_and_capacity_remains_explicit() -> None
     )
     obs, *_ = env.step(choice)
     expected = _parity(env, obs)
-    count = int(expected["facts"][:, 11].sum())
+    count = int(expected["facts"][:, FACT_VALID_INDEX].sum())
     assert count > 1
     for capacity in (count, 512):
         encoded = _parity(

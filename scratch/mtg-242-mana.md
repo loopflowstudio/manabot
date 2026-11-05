@@ -51,8 +51,12 @@ cannot disagree with the inventory. Initial search state and activation policy
 have single constructors/checks. Fixed output choices are borrowed, tap bonuses
 are evaluated once per set of choices, and inventories no longer implement Clone.
 Inventory construction classifies fixed/variable output once; pending-cost probes
-borrow the ability and copy only its cost. Output transitions consume their owned
-resource state. This is local reuse, not a persistent cache or a performance claim.
+borrow the ability and copy only its cost. Reservations now apply directly to the
+inventory, with one pending-payment read and an iterative continuation walk; the
+temporary reservation list and recursive collector are removed. Boolean ability
+classification borrows the same fixed-output matcher as choice materialization,
+so checking a modal source no longer clones its mana choices. Output transitions
+consume their owned resource state. This is local reuse, not a persistent cache or a performance claim.
 V8/v9 parity checks share one configured test path; policy probes derive object
 capacities from the model and use the projection's named field constants.
 
@@ -101,12 +105,10 @@ Conservative resource bounds are separate from exact witness transitions; both
 bounds share the supported activation-use calculation. V8 fact kinds and its
 tap-count column have named constants on the Python projection/model boundary.
 
-Retained implementation evidence covers 34 focused debug Rust tests and seven
-projection/model tests, library Clippy, formatting and changed Python lint.
 The w18 conformance corpus retains 14 cases / 3473 Commands and 15 Phase rows;
-w17 remains unchanged. These bounded results do not establish full-suite or
-post-integration acceptance; their prior record is at
-`7e6aa4933:scratch/mtg-242-mana.md`.
+w17 remains unchanged. Earlier implementation and validation details remain at
+`7e6aa4933:scratch/mtg-242-mana.md`; these bounded results do not establish
+full-suite or post-integration acceptance.
 
 ## Integration findings and remaining work — 2026-11-04
 
@@ -222,16 +224,11 @@ headless remains with gate/CI or demo. Review must resolve the MTG-241 integrati
 boundary before claiming completion; no new product decision is otherwise needed.
 Publication and review remain later Graph steps.
 
-Retained checks at `68a2094dc:scratch/mtg-242-mana.md`: 40 focused debug Rust
-tests and seven projection/model tests passed after the release wheel rebuild
-and atomic extension installation; the validation-order repair selection had
-123 passes. These results are reused, not rerun for this notes-only reconciliation.
-
-The simplification checkpoint `f9f55efb1:scratch/mtg-242-mana.md` records
-24 focused debug Rust tests, the rebuilt/atomically installed extension,
-13 projection/model tests, focused Clippy, formatting and Ruff. These retained
-results are reused for this notes-only reconciliation; broader suites and
-post-integration Engine Budget remain with gate.
+Prior focused debug, rebuilt-extension, projection/model, Clippy and formatting
+results are retained in the plans at `68a2094dc` and `f9f55efb1`. The latest
+pre-simplification check is retained at
+`13c9ae522e9e7304fb0db738c7efe729c36ae5e3:scratch/mtg-242-mana.md`.
+Broader suites and post-integration Engine Budget remain with gate.
 
 ## Accepted risk measurement and mitigation — 2026-11-04
 
@@ -409,4 +406,4 @@ mitigations; their bounded, host-noisy results do not replace dedicated gate
 acceptance. No training claim follows, and no product decision is missing. The authorized delivery boundary
 remains review; publication and landing are not part of this checkpoint.
 
-Check (2026-11-04): focused debug Cargo filters (`mana::tests`, `flow::mana::tests`, `cr_106_mana`, `roe::`, shared taps/filter/variable/waterbend witnesses) pass 41 tests; rebuilt/atomically installed release extension and `uv run --extra dev pytest tests/verify/test_mana_payment_projection.py -q` pass six cases; receipt audit matches 15 payment/offer cases, five decision traces and every step/search count/digest; formatting, `git diff --check` and `lf context` pass. Full suites, dedicated Engine Budget and post-integration acceptance remain gate-owned.
+Check (2026-11-04): `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2` with library `mana::tests`, rules `cr_106_mana` and card `roe::`/`supportive_parents`/`scarecrow_guide`/`white_lotus` filters passes 42 tests; the prescribed release wheel rebuild and atomic cp312 installation pass; `uv run --extra dev pytest tests/model/test_mana_input.py tests/model/test_mana_separability.py tests/verify/test_mana_payment_projection.py -q` passes 13 cases; library all-feature Clippy, Cargo/Ruff formatting, changed Python lint, `git diff --check` and `lf context` pass. Retained measurements are unchanged; full suites, dedicated Engine Budget and post-integration acceptance remain gate-owned.
