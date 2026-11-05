@@ -67,7 +67,9 @@ fn matches_slot(
     zone: ZoneType,
     card: CardId,
 ) -> bool {
-    source.owner == owner && source.zone == zone && game.card_matches_predicate(card, &source.predicate)
+    source.owner == owner
+        && source.zone == zone
+        && game.card_matches_predicate(card, &source.predicate)
 }
 
 impl HiddenCommitments {
@@ -111,7 +113,12 @@ fn pinned_library_cards(game: &Game, owner: PlayerId, pinned: &[ObjectRef]) -> V
         .collect()
 }
 
-fn unseen_cards(game: &Game, owner: PlayerId, viewer: PlayerId, pinned: &[ObjectRef]) -> Vec<CardId> {
+fn unseen_cards(
+    game: &Game,
+    owner: PlayerId,
+    viewer: PlayerId,
+    pinned: &[ObjectRef],
+) -> Vec<CardId> {
     let pinned_library = pinned_library_cards(game, owner, pinned);
     let zones: &[ZoneType] = if owner == viewer {
         &[ZoneType::Library]
@@ -134,9 +141,10 @@ impl GameState {
     /// continuation: waiting, queued, in the detached placement round, and
     /// on the stack.
     fn trigger_bindings(&self) -> impl Iterator<Item = &ObjectBinding> {
-        let placing = self.trigger_placement.iter().flat_map(|placement| {
-            placement.remaining.iter().chain(placement.placing.iter())
-        });
+        let placing = self
+            .trigger_placement
+            .iter()
+            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.iter()));
         let stacked = self.stack_objects.iter().filter_map(|object| match object {
             StackObject::TriggeredAbility(trigger) => Some(trigger),
             _ => None,
@@ -144,7 +152,11 @@ impl GameState {
         self.delayed_triggers
             .iter()
             .flat_map(|trigger| &trigger.remembered)
-            .chain(self.pending_triggers.iter().flat_map(|trigger| &trigger.remembered))
+            .chain(
+                self.pending_triggers
+                    .iter()
+                    .flat_map(|trigger| &trigger.remembered),
+            )
             .chain(placing.flat_map(|trigger| &trigger.remembered))
             .chain(stacked.flat_map(|trigger| &trigger.remembered))
     }
@@ -247,9 +259,7 @@ impl Game {
                     ResolutionRef::Decision(_) => None,
                 })
         });
-        self.state
-            .trigger_bindings()
-            .chain(frames.flatten())
+        self.state.trigger_bindings().chain(frames.flatten())
     }
 
     /// Exact objects already known to this viewer must not be exchanged for a
@@ -572,7 +582,8 @@ impl Game {
                     .iter()
                     .enumerate()
                     .filter(|(_, (zone, card))| {
-                        source.zone == *zone && self.card_matches_predicate(*card, &source.predicate)
+                        source.zone == *zone
+                            && self.card_matches_predicate(*card, &source.predicate)
                     })
                     .map(|(index, _)| index)
                     .collect();
@@ -631,19 +642,20 @@ impl Game {
         let Some(assigned) = complete_assignment(&candidates) else {
             return false;
         };
-        let mapping: BTreeMap<_, _> = assigned
-            .into_iter()
-            .map(|(object, index)| (old[index], object))
-            .collect();
-        if !mapping.is_empty() {
-            for binding in self.state.trigger_bindings_mut() {
-                if let Some(object) = mapping.get(&binding.object) {
-                    binding.object = *object;
-                }
-            }
-        }
+        let rebinding = Rebinding::new(
+            commitments.viewer,
+            assigned
+                .into_iter()
+                .map(|(object, index)| (old[index], object)),
+        );
+        rebind(
+            self.state
+                .trigger_bindings_mut()
+                .map(|binding| &mut binding.object),
+            &rebinding.objects,
+        );
         if let Some(mut suspended) = self.state.suspended_decision_mut().take() {
-            self.rebind_suspended_selection(&mut suspended, commitments.viewer, &mapping);
+            self.rebind_suspended_selection(&mut suspended, &rebinding);
             *self.state.suspended_decision_mut() = Some(suspended);
         }
         self.repin_revealed_library_cards();
@@ -653,59 +665,45 @@ impl Game {
     fn rebind_suspended_selection(
         &self,
         suspended: &mut SuspendedResolution,
-        viewer: PlayerId,
-        mapping: &BTreeMap<ObjectRef, ObjectRef>,
+        rebinding: &Rebinding,
     ) {
-        self.rebind_frame_selection(&mut suspended.frame, viewer, mapping);
-        self.rebind_decision_selection(&mut suspended.decision, viewer, mapping);
+        self.rebind_frame_selection(&mut suspended.frame, rebinding);
+        self.rebind_decision_selection(&mut suspended.decision, rebinding);
     }
 
-    fn rebind_frame_selection(
-        &self,
-        frame: &mut EffectFrame,
-        viewer: PlayerId,
-        mapping: &BTreeMap<ObjectRef, ObjectRef>,
-    ) {
+    fn rebind_frame_selection(&self, frame: &mut EffectFrame, rebinding: &Rebinding) {
         // Eligibility belongs to the joint mapping, not this alias's selector.
         // A selection from Remembered has no zone marker of its own, and a
         // child may remember or otherwise alias a selected exact object.
-        rebind(frame.selected.iter_mut(), mapping);
+        let objects = &rebinding.objects;
+        rebind(frame.selected.iter_mut(), objects);
         rebind(
-            frame.remembered.iter_mut().map(|binding| &mut binding.object),
-            mapping,
+            frame
+                .remembered
+                .iter_mut()
+                .map(|binding| &mut binding.object),
+            objects,
         );
-        rebind(frame.moved.iter_mut(), mapping);
-        rebind(frame.this_way.iter_mut(), mapping);
-        rebind(frame.created.iter_mut(), mapping);
-        self.rebind_completion_selection(&mut frame.completion, viewer, mapping);
+        rebind(frame.moved.iter_mut(), objects);
+        rebind(frame.this_way.iter_mut(), objects);
+        rebind(frame.created.iter_mut(), objects);
+        self.rebind_completion_selection(&mut frame.completion, rebinding);
     }
 
-    fn rebind_completion_selection(
-        &self,
-        completion: &mut FrameCompletion,
-        viewer: PlayerId,
-        mapping: &BTreeMap<ObjectRef, ObjectRef>,
-    ) {
+    fn rebind_completion_selection(&self, completion: &mut FrameCompletion, rebinding: &Rebinding) {
         match completion {
             FrameCompletion::Frame(parent) | FrameCompletion::Event { frame: parent, .. } => {
-                self.rebind_frame_selection(parent, viewer, mapping)
+                self.rebind_frame_selection(parent, rebinding)
             }
-            FrameCompletion::Decision(parent) => {
-                self.rebind_suspended_selection(parent, viewer, mapping)
-            }
+            FrameCompletion::Decision(parent) => self.rebind_suspended_selection(parent, rebinding),
             FrameCompletion::StateBased { next } => {
-                self.rebind_completion_selection(next, viewer, mapping)
+                self.rebind_completion_selection(next, rebinding)
             }
             _ => {}
         }
     }
 
-    fn rebind_decision_selection(
-        &self,
-        decision: &mut Decision,
-        viewer: PlayerId,
-        mapping: &BTreeMap<ObjectRef, ObjectRef>,
-    ) {
+    fn rebind_decision_selection(&self, decision: &mut Decision, rebinding: &Rebinding) {
         match decision {
             Decision::SelectCards {
                 from,
@@ -713,10 +711,10 @@ impl Game {
                 selected,
                 ..
             } => {
-                rebind(selected.iter_mut(), mapping);
+                rebind(selected.iter_mut(), &rebinding.objects);
                 if let Some(source) = from
                     .as_ref()
-                    .filter(|source| hidden_from(self, source, viewer))
+                    .filter(|source| hidden_from(self, source, rebinding.viewer))
                 {
                     *candidates = self
                         .selection_zone_cards(source.owner, source.zone)
@@ -725,7 +723,7 @@ impl Game {
                         .filter_map(|card| self.current_object_ref(card))
                         .collect();
                 } else {
-                    rebind(candidates.iter_mut(), mapping);
+                    rebind(candidates.iter_mut(), &rebinding.objects);
                 }
             }
             Decision::Scry {
@@ -736,17 +734,17 @@ impl Game {
                 ..
             } => {
                 for cards in [looked, remaining, top, bottom] {
-                    rebind_cards(cards, mapping);
+                    rebind(cards.iter_mut(), &rebinding.cards);
                 }
             }
             Decision::Surveil {
                 looked, graveyard, ..
             } => {
-                rebind_cards(looked, mapping);
-                rebind_cards(graveyard, mapping);
+                rebind(looked.iter_mut(), &rebinding.cards);
+                rebind(graveyard.iter_mut(), &rebinding.cards);
             }
-            Decision::LookAndSelect { looked, .. } => rebind_cards(looked, mapping),
-            Decision::OrderLibrary { cards, .. } => rebind_cards(cards, mapping),
+            Decision::LookAndSelect { looked, .. } => rebind(looked.iter_mut(), &rebinding.cards),
+            Decision::OrderLibrary { cards, .. } => rebind(cards.iter_mut(), &rebinding.cards),
             Decision::ManaUpfront {
                 resume: Some(parent),
                 ..
@@ -754,8 +752,42 @@ impl Game {
             | Decision::ManaChoice {
                 resume: Some(parent),
                 ..
-            } => self.rebind_decision_selection(parent, viewer, mapping),
+            } => self.rebind_decision_selection(parent, rebinding),
             _ => {}
+        }
+    }
+}
+
+/// One joint exact-object assignment, also keyed by physical card for the
+/// inspected-library decisions that retain cards rather than objects.
+struct Rebinding {
+    viewer: PlayerId,
+    objects: BTreeMap<ObjectRef, ObjectRef>,
+    cards: BTreeMap<CardId, CardId>,
+}
+
+impl Rebinding {
+    fn new(viewer: PlayerId, mapping: impl Iterator<Item = (ObjectRef, ObjectRef)>) -> Self {
+        let objects: BTreeMap<_, _> = mapping.collect();
+        let cards = objects
+            .iter()
+            .map(|(old, new)| (CardId::from(old.entity), CardId::from(new.entity)))
+            .collect();
+        Self {
+            viewer,
+            objects,
+            cards,
+        }
+    }
+}
+
+fn rebind<'a, K: Copy + Ord + 'a>(
+    items: impl Iterator<Item = &'a mut K>,
+    mapping: &BTreeMap<K, K>,
+) {
+    for item in items {
+        if let Some(replacement) = mapping.get(item) {
+            *item = *replacement;
         }
     }
 }
@@ -794,30 +826,6 @@ fn assign<T: Copy + Ord>(
         }
     }
     false
-}
-
-/// Inspected library cards are retained by physical card; follow the mapping
-/// of their current exact object.
-fn rebind_cards(cards: &mut [CardId], mapping: &BTreeMap<ObjectRef, ObjectRef>) {
-    for card in cards {
-        if let Some((_, replacement)) = mapping
-            .iter()
-            .find(|(old, _)| CardId::from(old.entity) == *card)
-        {
-            *card = CardId::from(replacement.entity);
-        }
-    }
-}
-
-fn rebind<'a>(
-    objects: impl Iterator<Item = &'a mut ObjectRef>,
-    mapping: &BTreeMap<ObjectRef, ObjectRef>,
-) {
-    for object in objects {
-        if let Some(replacement) = mapping.get(object) {
-            *object = *replacement;
-        }
-    }
 }
 
 /// Enumerate name allocations, counting physical subsets without enumerating
