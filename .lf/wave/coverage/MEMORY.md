@@ -62,6 +62,13 @@ ambiguity or safety-critical invariants, not substitute products.
   test without a CPU-load explanation or a claim that SGD converges. Reordered
   legal-row GEMMs also need float32 tolerance for erased-channel ties while
   learned-preference thresholds, privacy and execution checks stay strict.
+  Later Linux run `41942374422` passed those solver/learning assertions but
+  rejected bitwise closed-information logits (maximum difference 1.49e-7).
+  The repair checks closed inputs bitwise and bounds outputs with the existing
+  float32 tolerance. A pinned Linux final-layer-only probe did not reproduce
+  the difference, so its exact operation remains unisolated; this is not
+  evidence of CPU load or a privacy leak. The repaired full test still needs
+  Linux validation.
 - Main `ee85d6fc8` adds opt-in isolated observation-capacity recovery with
   retained input contracts; default rejection and fatal buffer/payload errors
   stay intact. The shared writer now returns typed `ObservationWriteError`;
@@ -225,9 +232,15 @@ preserves accepted decisions, dated proof limits and source history.
   and more context switches show scheduling contributed to variation, without
   per-reply attribution of the full spike. Reference process-launch delays did
   not enter the timed step loop. Neither noise nor ordering balance clears a
-  failed budget, proves a naming-only cost, or justifies retrying until green;
-  final-source Linux CI remains necessary. Detailed raw evidence and limits
-  remain in MTG-243's plan and `.lf/logs/naming-budget-paired/`.
+  failed budget, proves a naming-only cost, or justifies retrying until green.
+  Subsequent Linux run `41942374422` at `bca261295` passed the unchanged budget:
+  worst reply +5.1%, total search +4.8%, time/step +8.0%, with exact digests.
+  Both orders had consistent process CPU and wall durations, so scheduling
+  does not explain that repeatable within-budget cost. The comparison includes
+  engine changes since reference `ea316ff14`, not naming alone. It neither
+  explains the earlier failures nor certifies later source; final-source CI
+  remains necessary. Detailed raw evidence and limits remain in MTG-243's plan,
+  `.lf/logs/naming-budget-paired/` and `.lf/logs/naming-budget-final-linux/`.
 - Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
   indexed records and cache-carrying clones. Run 41555845634 (2026-11-03 UTC)
   measured that engine at `4b5e9c0e4` against `88dc8c1ad` on one runner:

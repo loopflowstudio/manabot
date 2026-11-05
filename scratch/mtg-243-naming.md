@@ -11,21 +11,26 @@ through both learners and incidents, bounded same-host costs, paired public-stat
 competency, actual executable-program attribution, and the five CI compatibility
 failures. The risk reduction is committed at `5a57096f2`, the accepted proof and
 diagnostic repairs at `a643a344b`, and the upstream integration repair at
-`bca261295`. PR #424 now publishes `bca261295`; its description and review
-artifacts still describe earlier proof. The rounding repair and subsequent model,
-test and documentation simplifications remain uncommitted. Current-source
+`bca261295`. The rounding repair and model, test and documentation
+simplifications were committed at `bca3ff438`; PR #424 now publishes the
+subsequent configuration-only sync `c52b70a53`. Its description and review
+artifacts still describe earlier proof. Current-source
 acceptance and interactive review remain outstanding. No auto-merge, paid
 execution or strength experiment is authorized.
 
 The original implementation and publication evidence are retained at
 `9db184b9:scratch/mtg-243-naming.md`; the uncommitted research/accepted-pass text
 was preserved at `.lf/logs/naming-risk/plan-before-reduction.md` before curation.
-The 2026-11-04 reconciliation follows the accepted Task directive and records
-durable lessons in the selected coverage Wave through the code Graph.
 Earlier T7 direction is historical at
 `4463e57f5:scratch/questions.md`.
 
 ## Reconciled upstream context — 2026-11-04
+
+The latest main sync, `51b4bd274` at `c52b70a53`, only restores existing
+Linear Wave bindings in supported configuration; it changes no runtime or tests
+relative to `bca3ff438`. Current-head CI `41945242063` is running as of this
+reconciliation, not passing evidence. Completed run `41942374422` belongs to
+`bca261295`, before the rounding repair and simplifications.
 
 Main `1546aae3f` added the published Standard roadmap and
 `managym/PRINCIPLES.md`, renamed the Wave directory from engine to coverage,
@@ -216,7 +221,7 @@ packing/materialization times, are recorded separately in the JSON.
 Published CI run `41914195610` passed Engine Budget with unchanged digests:
 search 116.194 → 121.779 s (+4.8%), worst reply 3.417 → 3.621 s (+6.0%),
 steps 18,749.7 → 17,511.8/s (−6.6%). Its reference is `ea316ff14`, not this PR's
-immediate base `8e8d702f8`; do not attribute its whole delta to naming. Final-head
+immediate base `8e8d702f8`; its whole delta cannot be attributed to naming. Later
 Linux measurements appear below. Prior native allocation attribution remains at the
 published design reference above; no naming-engine algorithm changed this pass.
 
@@ -245,7 +250,7 @@ of the current repair.
 The publication check at `2acc50a37` stopped on a real gap: the large-vocabulary
 model test fabricated observation rows while vector and Academy still used the
 344-name installed catalog. The accepted repair below replaces that split proof.
-PR #424's head is now `bca261295` (verified 2026-11-04), with auto-merge disabled.
+PR #424's head is now `c52b70a53` (verified 2026-11-04), with auto-merge disabled.
 Its description still calls the >512 proofs separate and omits the compact
 storage/scoring, public identity repair and diagnostic limitations. Its older
 suggestion that the hash transition requires a budget-reference adoption is
@@ -370,7 +375,7 @@ No workload, aggregation or tolerance changed, and no timing was repeated.
 The local budget failure above remains visible. `lf context` reports memory and
 scratch below both token and byte targets after condensing the earlier review.
 
-### Final-head Linux measurement — 2026-11-04 (run dated November 5 UTC)
+### Published `bca261295` Linux measurement — 2026-11-04 (run dated November 5 UTC)
 
 Run `41942374422` completed Engine Budget successfully for `bca261295` on
 one AMD EPYC 9V74 runner. The downloaded artifact is retained at
@@ -378,7 +383,7 @@ one AMD EPYC 9V74 runner. The downloaded artifact is retained at
 all digests, counts and the unchanged 10% timing limits. No benchmark was rerun,
 no sample was discarded, and no reference, tolerance or frozen evidence changed.
 
-| Final-head Linux metric | Reference `ea316ff14` | Candidate | Difference |
+| Linux metric at `bca261295` | Reference `ea316ff14` | Candidate | Difference |
 | --- | ---: | ---: | ---: |
 | Worst search reply | 3.652 s | 3.839 s | +5.1% |
 | Search total | 123.708 s | 129.587 s | +4.8% |
@@ -396,7 +401,7 @@ Thus CPU load and ordering noise do **not** explain away the repeatable
 candidate/reference cost in this run. It is within budget and includes the
 intervening engine changes since `ea316ff14`; it is not isolated to naming.
 The earlier local 6.498-second spike and historical CI throughput failure remain
-retained contrary evidence with incomplete attribution. The final-head Linux
+retained contrary evidence with incomplete attribution. This Linux
 run does not reproduce either budget violation, but cannot retrospectively
 prove their causes. No speculative runtime optimization is justified by these
 samples alone. Native diff inspection found no new catalog enumeration in
@@ -420,7 +425,7 @@ row checks. The 0.001 fitted margins and all learning/support assertions stay
 unchanged. No production model, native engine, budget or frozen evidence changed.
 
 The focused test passed locally; Ruff check/format and diff checks passed.
-A bounded probe exported the real closed final-head inputs/weights and executed
+A bounded probe exported the real closed fitted-head inputs/weights and executed
 only that linear operation on pinned x86 Linux `torch==2.10.0+cpu`. Its inputs
 and outputs were exactly equal; it does not isolate the full model's CI rounding
 difference to the last linear layer. Evidence is retained in
@@ -428,19 +433,66 @@ difference to the last linear layer. Evidence is retained in
 An earlier container attempt could not unpack Torch through the host-mounted
 cache (too many open files); the internal-cache attempt completed and its
 container exited. No host limits were changed or artificial load introduced.
-The complete repaired test still requires Linux gate/CI validation.
+The complete repaired test still requires Linux gate/CI validation. The repair
+and subsequent simplifications are committed at `bca3ff438`; the current
+`c52b70a53` sync adds configuration changes only. Existing local validation
+passed all 17 catalog-naming cases and all three Academy named-search recovery
+cases after those simplifications. Those results are reused here, not rerun.
+
+### Concept review at `c52b70a53` — 2026-11-04
+
+Outcome: nothing to change in the accepted design and no open product choice
+within this Task. Jack Heart's acceptance in comment `d4db22c5` remains the
+authority. This review inspected the current implementation, consumer tests and
+usage guidance; it ran no gameplay, model, benchmark or browser checks.
+
+The experience remains one deliberate name choice followed by the existing
+private search. Filtering changes visible offers without submitting a Command.
+The immutable vocabulary identifies public names; optional definition joins
+provide learning semantics without admitting cards. A bound Command selects one
+candidate and resumes the suspended frame with one `ExileNamed`. A stale Command
+must leave that frame unchanged. Retained-session reconnect restores either the
+uncommitted naming decision or the search's remaining choices and inspection;
+committed exiles survive and stopping search cannot undo them. This does not
+promise process-crash recovery.
+
+The consequential model distinction is still public name identity versus hidden
+membership: equal-rule cards need distinguishable visible identities, while a
+closed opponent's deck supplies none. V8's shared name vectors and strict
+vocabulary binding express that distinction. Complete legal-row scoring and
+packed behavior storage remove padding work without changing choices, original
+slots or learner evidence. The repaired native scenario now lets all consumers
+exercise the same large vocabulary; it adds no production admission lifecycle.
+
+Counterexamples remain a missing score beyond 511, preferences changing with
+offer order, hidden membership affecting closed inputs, a reconnect remapping a
+Command, or packing losing behavior mass. Existing directed checks target these
+contracts; their current-source acceptance remains below. Solver rank failures,
+float32 output differences and scheduling variation are separate evidence
+questions, not reasons to weaken the contract or the 10% Engine Budget.
+
+`docs/training.md` and the package READMEs already describe explicit v8 and the
+installed-catalog boundary accurately. No usage or skill redesign is proposed.
+Broader production names, fresh-default adoption and training strength remain
+outside this acceptance. The next proof is the existing gate, not a new product
+decision. The refreshed `scratch/concept-review.html` records this disposition;
+it is an illustration without rendering proof. No Graph navigation, publication
+or merge was performed by this step.
 
 ### Remaining acceptance and review
 
 Gate owns affected suites, full debug Rust/Clippy, current-source receipts,
 browser coverage and Linux validation of the test-only repair, including the
-evaluation/report/smoke steps skipped after the failed integration step. Engine Budget passed
-on the final head; the retained local worst-reply failure still has incomplete
-attribution, and no out-of-budget persistent cost has been accepted. Publication preparation still owes PR #424's description and
+evaluation/report/smoke steps skipped after the failed integration step. Current
+CI `41945242063` is running on `c52b70a53`; no result from it is claimed.
+Engine Budget passed on `bca261295`, whose native engine and sampler are
+unchanged at the current head. The retained local worst-reply failure still has
+incomplete attribution, and no out-of-budget persistent cost has been accepted.
+Publication preparation still owes PR #424's description and
 review artifacts an account of the repaired tree and remaining limits.
 Interactive review is the accepted endpoint; prior green Graph steps do not
 establish current acceptance. GPU behavior, intended-size throughput and strength
 remain unmeasured. No new product decision is needed for installed-catalog
 naming; additional production names and default v8 adoption remain separate.
 
-Check: `uv run --extra dev pytest tests/model/test_catalog_naming.py -q` — 17 passed; `uv run --extra dev --extra play pytest tests/academy/test_named_search_recovery.py -q` — 3 passed. Ruff and diff checks pass; context fits both budgets. Full repaired Linux integration and current-source acceptance remain with gate. Final-head Linux budget artifact comparison passed previously; no benchmark rerun, and the earlier local worst-reply failure remains retained.
+Check: `uv run --extra dev python scripts/engine_budget.py compare --artifact .lf/logs/naming-budget-final-linux --reference .lf/logs/naming-budget-final-linux/reference` — PASS; same comparison on `.lf/logs/naming-budget-paired` — retained FAIL (worst reply 4.290 s > 2.399 s); no benchmarks rerun. Current-source Linux/full-suite acceptance remains with gate.
