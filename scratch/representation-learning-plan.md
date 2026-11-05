@@ -1,36 +1,79 @@
 # V7 representation learning — Task 5da5f4
 
-## Current direction, result and remaining work
+## Latest direction — recovery cohort, routed to implement
 
-Scientific Run **`e51f61b92931` remains active** at frozen source `af601877e`.
-The 2026-11-05 02:58:02 UTC learner receipt records typed_pool seed 74211 at
-**39/256 updates, 9,984 games and 1,155,622 learner transitions**, CUDA:0 / one
-thread, with no recorded error. Collection/learning total 787.37/724.20 seconds.
-Initialization and update-32 raw checkpoints match their recorded sizes/SHA256.
-No learner or evaluation endpoint has completed; all eight learners, 72 curve
-endpoints, eight held-out endpoints, final inventory and teardown remain required.
-This is partial execution evidence, not a plateau or architecture result.
+Jack Heart, 2026-11-05: "can we schedule soem evals in paralell with the
+additional training". This selects option A below and supersedes the
+failure-only/no-survivor-scoring stop for a prospectively amended recovery
+cohort, within the original $25. Implement and execute it; do not launch another
+Graph. Merging PR84 or the study is **not** approved.
 
-Fresh launcher status reports `running`, approximately $0.12. At 02:58:26 UTC,
-all eleven preceding rentals remained absent and `59194544` was the sole Task
-rental. Prior reported/lifetime maxima remain $1.04590824; $3.50 prior compute +
-$6 ancillary + $15.50 live commitment reserve the original $25. Live charges count
-inside that commitment, not in addition. No final settlement is claimed.
-The worker acknowledged finish-after-work at 02:32:32; delivery and self-deletion
-remain pending, with rental deadline 2026-11-07 10:09:07 UTC as backstop.
-Continue this run without another allocation, retry or source change.
+- Preserve the three completed learners and the failed attempt; the original
+  protocol stays immutable. Train the five missing learners, restarting
+  pool/74212 from initialization on its original seed.
+- Before any scoring, freeze the amendment, retained-run admission and unchanged
+  seeds, horizon, evaluator and plateau criteria. Interim scores select no
+  treatment, retry, horizon or checkpoint; partial curves are labelled descriptive.
+- Dispatch independent CPU evaluation jobs from durable checkpoints alongside the
+  GPU learner, with bounded resources that avoid GPU contention. Require fresh
+  actual-runtime/world compatibility and replay validation.
+- Replace `evaluate_arm`'s hardcoded `concurrent_activity`, which claims all
+  training finished. Persist each evaluation and training unit incrementally with
+  hashes and idempotent job identity; do not wait for all eight learners.
+- Use the launcher liveness repair before another rental. SDK repair is authorized;
+  a tested exact control-client source pin may avoid changing frozen learner code.
+  Expose any real compatibility or approval dependency rather than assuming merge.
+- Fresh quotes and all concurrent commitments must fit the remaining allowance.
+  Reusable interruption recovery stays with Etude `ff3d48`.
+
+## Execution record and remaining work
+
+Scientific Run **`e51f61b92931` ended `lost / machine_lost` at 2026-11-05
+13:09:07 UTC**, at unchanged frozen source `af601877e`. The launcher retained no
+child exit code or final output inventory. The provider confirmed rental
+`59194544` absent and no Task rentals live at 13:09:35 UTC. No cancellation was
+requested, and the frozen deadline was still two days away. The recovery audit
+below supersedes the earlier "cause unknown" reading: our own launcher deleted
+the rental. What the provider reported first remains unknown.
+
+The last hash-verified receipts, 13:00:43 UTC, retain three completed learners
+(pool/GRU seed 74211 and GRU seed 74212), each with 256 updates and 65,536 games.
+Pool seed 74212 had reached 83 updates and 21,248 games. Recorded exposure is
+**851 updates, 217,856 games and 27,682,451 learner transitions**; work after that
+snapshot is unknown. All **36 backed-up artifacts / 371,853,657 bytes** match
+their receipt sizes/SHA256, including all nine scheduled raw checkpoints for
+each completed learner and initialization/update-32/update-64 for the fourth.
+These backups are partial recovery, not a delivered final inventory.
+
+No curve or held-out endpoints were retained. Five learners remain uncompleted
+in the evidence, and all 72 curve and eight held-out endpoints are missing.
+The study therefore has **no qualified plateau, improvement or architecture
+result**. No survivor analysis, scoring, retry, shortened horizon or replacement
+allocation ran. The scientific objective remains unmet; this failed cohort and
+its identities stay preserved under the recovery direction above.
+
+Fresh accounting reports $2.603 for this rental versus a conservative full-life
+estimate of $2.63946664. Prior per-rental reported/lifetime maxima plus settled
+L4 remain $1.04590824, covered by the existing $3.50 prior-compute reserve.
+Including $6 ancillary and the larger current-rental figure gives **$12.13946664
+accounted/reserved**, leaving $12.86053336 under the original $25 ceiling. There
+are no live commitments. This is operational accounting, not a final invoice
+or authorization to spend the remainder.
 
 Evidence is manifest-backed under
-`experiments/data/state-representation-gpu-5da5f4/batched-plateau/`:
-`launch-handoff.json` retains the original launch;
-`progress-20261105T025439Z/` retains the first receipt, both verified checkpoint
-backups and collection helpers; `progress-20261105T025802Z/` retains the fresh
-receipt, accounting and launcher logs. Operational helpers live in
-`.runs/representation/gpu-plateau-batched/`: `observe.py` reads receipts and backs
-up checkpoints; `collect.py` requires and verifies the terminal output inventory;
-`analyze.py` requires success and every endpoint before recomputing the frozen
-comparison. Use `ETUDE_HOME="$PWD/.runs/representation/etude"` for launcher reads.
-No partial score analysis has run.
+`experiments/data/state-representation-gpu-5da5f4/batched-plateau/`.
+`terminal-20261105T130907Z/` retains the terminal attempt/status, carried logs,
+empty delivered inventory, final accounting, all collected progress receipts,
+36 independently reverified backups and operational helpers. Earlier launch
+and progress directories remain immutable, including the published first
+completed learner in `progress-20261105T071645Z/`.
+Operational helpers remain in `.runs/representation/gpu-plateau-batched/`;
+`collect.py` retained the failed terminal outcome, `final_account.py` confirmed
+absence/costs, and `analyze.py` was not run because success and every endpoint
+are prerequisites. The foreground watcher exited normally on machine loss;
+no local monitoring command remains running. Launcher state remains owned by
+`.runs/representation/etude`. Evaluation follows all eight learners, so exported
+weights alone do not satisfy an evaluated endpoint.
 
 Diagnostic `911423cce90b` passed four frozen comparisons and six CUDA routing
 tests, retaining both complete profiles and all 59 verified outputs. Separate
@@ -38,7 +81,62 @@ admission `37c1523a98ed` completed four updates per arm with all 49 outputs
 verified. Both rentals are absent. The 55.66970-hour / $13.77310 full-cohort
 projection qualified the $15.50 allocation at the same `af601877e` source.
 `vast-host-diagnosis.md` owns detailed measurements and their limitations;
-completed diagnosis/admission need no repetition while science runs.
+completed diagnosis/admission remain engineering evidence, not scientific results.
+
+## Recovery audit and options — 2026-11-05
+
+Evidence: `batched-plateau/recovery-audit-20261105/` (read-only, $0, no scoring).
+
+**Who ended the rental.** Vast's audit log shows `api.instance_DELETE` for
+`59194544` at 13:09:07.30 from account key `36003339` at the launcher's address.
+The same holds for the other two `machine_lost` rentals, `59185580` and
+`59152469`. Normal completions self-delete with instance-scoped keys. The
+launcher's "deletion confirmed" followed 0.48s later. `VastMachines.alive` treats
+one `offline`/`exited`/`stopped`/`error` status or a missing read as dead, and the
+scheduler then calls `end()`, destroying the disk. The worker's `out/ended` was
+404 at 13:09:05.96, and pool/74212 last recorded progress at 13:00:26. The
+triggering status was never retained, so a host fault is neither shown nor
+excluded; whether the host would have returned is unknown.
+
+**Rental mode.** On-demand by construction: the search uses `type: ondemand` and
+the create request carries no bid price. No retained provider field reads this
+back. Interruption by a higher bid is not the mechanism. Account credit was
+$96.20 at the audit read, so depletion is unlikely.
+
+**Delivery fix.** Etude draft PR
+[#84](https://github.com/loopflowstudio/etude/pull/84) keeps a Vast rental through
+a 15-minute outage and retains the status that opened it. It is unmerged and not
+in `uv.lock`, so no rental has this protection yet. RunPod and Lium keep the
+single-read rule. Durable training recovery stays with Etude Task `ff3d48`.
+
+**What the backups restore** (`restore-check.json`):
+
+| Learner | State | Result |
+|---|---|---|
+| pool/74211, GRU/74211, GRU/74212 | 256 updates; raw, EMA, Adam, all nine curve points | Pass the study's curve admission, hashes and loader after path rebasing. Evaluation can use them without retraining. Max Adam step equals each receipt; lower per-parameter steps match absent gradients. |
+| pool/74212 | 83 updates recorded; raw at 0/32/64 only | Exact continuation is **unavailable**: no Adam, EMA or RNG was saved. Updates 65–83 have no checkpoint at all. |
+
+Recipe digests match this checkout. `training.sqlite` was not retained; evaluation
+reads only `run.json`, but nothing has been run end to end on rebased paths.
+
+**Options.** Jack Heart selected A. All need a prospective protocol amendment,
+because frozen `SCORING.failure` says no retries. Costs use the 3.18h measured
+learner mean at $0.2474/hour; no fresh quote was taken.
+
+| Option | Work | Cost | Outcome |
+|---|---|---|---|
+| A. Keep three learners; rerun pool/74212 from update 0 on its seed; train the other four; evaluate all eight | ~17.7h; ~25.6h with the 50% allowance | ~$4.37; ~$6.34 ceiling | Can produce the qualified four-seed result. **Recommended.** |
+| B. As A, but continue pool/74212 from raw update 64 | saves ~0.8h | saves ~$0.20 | Resets Adam, EMA and RNG in one arm of one pair; breaks the contract |
+| C. Evaluate only the three retained learners | ~0.8h with setup | ~$0.20 | Descriptive only; cannot meet the four-seed criterion |
+| D. Stop at the failed execution | none | $0 | Plateau objective stays unmet |
+
+Option A is not selection, because no endpoint has been scored. It fits the
+$12.86053336 remainder. Prerequisites: merge #84 and refresh `uv.lock`; add
+retained-learner admission to `scientific_cohort`, which currently retrains
+everything and refuses existing directories; bind new learners to a runtime
+equivalent to `af601877e`; keep per-learner receipt pulls. The 5,400s evaluation
+bound has never run on this recipe, so its cost is an unmeasured risk. None of
+this has been built or launched.
 
 ## Accepted scope and remaining work
 
@@ -53,18 +151,23 @@ implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
 
 The complete CUDA profiles, parity reports and matched four-update admission
 are now retained. No further runtime repair is justified by the first-step
-profiles alone. The scientific run must complete all training, exports and
-scheduled evaluations, retain its verified inventory and confirm teardown.
-Preserve seeds, horizon, score/plateau criteria and every failed attempt. A missing
-endpoint remains missing; no score-based retries, survivors or shortened study.
-The historical loss of `59185580` remains unexplained. `b153cc2e5a77` failed a
+profiles alone. The scientific run ended in machine loss; its missing training
+and evaluations cannot be repaired by analyzing surviving learners. Teardown is
+confirmed. Preserve seeds, horizon, score/plateau criteria and every failed
+attempt. A missing endpoint stays missing until the amended cohort scores it; no
+score-based retries, survivor-only conclusions or shortened study.
+The launcher's delete of `59185580` is explained in the recovery audit; what it
+observed first is not. `b153cc2e5a77` failed a
 float32 tolerance before learning; independent float64 checks in `af601877e`
 passed in the successful diagnostic without changing learner semantics.
 
 ## Delete — do not maintain
 
-These cuts are complete; no further runtime deletion is justified. Keep their
-replacements below and recover predecessor implementations only from git:
+These cuts are complete; no further runtime deletion is justified, and frozen
+learner code stays untouched for the recovery cohort. Next targets for implement:
+`evaluate_arm`'s fixed `concurrent_activity` and `scientific_cohort`'s
+train-all-then-evaluate-all loop, which recovery replaces. Keep the replacements
+below and recover predecessor implementations only from git:
 
 - Per-sample/per-frame projections in `TypedContinuationEncoder.forward` and
   `SharedEffectEncoder.forward`, and per-sequence padded packing in
@@ -82,6 +185,9 @@ replacements below and recover predecessor implementations only from git:
   and model tests, frozen-v5 compatibility, and archived study recipes.
 - Registry-only SDK pins and daily-charge timestamp-to-final-coverage conversion.
   Locked source selection and honest reported/lifetime accounting survive.
+- Study-runner duplication: `compare_cohort` owns both paired comparisons,
+  `excluded_recipe` both short horizons, and `ProgressWatch.stop` replaces
+  `_run_child`'s separate `child_stop`. Recipe digests and job commands are unchanged.
 
 `RecordReducer` consumes flat tokens and lengths for every caller, including
 `SharedFactEncoder`; `join_record_rows` owns batch offsets and absent one-based
@@ -110,8 +216,9 @@ compute reserve is max($3.50, twice that fresh total), plus $6 ancillary and
 full unknown/live commitments. This rule was fixed before admission completed
 and releases unused ended-attempt ceilings under Jack Heart's no-double-counting
 direction. It changes no historical receipt or $25 total and claims no final
-invoice. The $15.50 scientific allocation is now fully reserved; its live
-whole-rental quote is $13.77310. No competing allocation or additional funds.
+invoice. The $15.50 scientific allocation was fully reserved against its
+$13.77310 whole-rental quote; confirmed absence released the unused commitment.
+The final operational reconciliation is above. No additional allocation ran.
 Before another purchase, reconcile a fresh locked-SDK read of Task instances and
 reported charges against whole rental lifetimes, quotes and disk/transfer terms.
 Larger costs reduce the allowance; charges and their reservations count only
@@ -190,7 +297,7 @@ allocations remain in `experiments/protocols/state-representation-5da5f4-gpu.md`
 | `b153cc2e5a77` / `2b2061c8d` | Frozen CUDA references passed; 1/6 routing tests failed a float32 parameter-gradient tolerance. No learner. Both reports verified; rental absent, reported $0.013. |
 | `911423cce90b` / `af601877e` | Four reference comparisons and six routing tests passed, both profiles completed 256 games. All 59 outputs verified; rental absent, reported $0.030. |
 | `37c1523a98ed` / `af601877e` | Four ordinary updates/1,024 games per arm; all 49 outputs verified. Rental absent; reported $0.052. Complete projection $13.77310. |
-| `e51f61b92931` / `af601877e` | Affordable four-paired-seed study running; first pooling seed 74211 started. Finish-after-work acknowledged; no qualified result yet. |
+| `e51f61b92931` / `af601877e` | Lost / machine_lost at 13:09:07, no final inventory or exit code. Three learners completed; fourth at 83 updates in last receipt. 36 backed-up artifacts verified; no evaluated endpoints. Rental absent, reported $2.603; no qualified result. |
 
 The cancelled cohort required 32.23s/update; concurrent first updates took
 169–239s and a second 151.24s versus isolated admission's 19.30s. Contention is
@@ -244,7 +351,7 @@ The pre-launch sync `2b2061c8d` / `51b4bd274` moved Linear bindings only.
 The subsequent sync `8318f1525` incorporated main `e113602a2` and MTG-213's
 v10 endpoint evidence. Since the executed source, the only runtime code diff
 is an equivalent shared-effect token-index construction; the study runner is
-unchanged. The live run retains `af601877e`, and its CUDA receipts do not certify
+unchanged. The failed run retains `af601877e`, and its CUDA receipts do not certify
 the later checkout. Experiments has no child memories. The Standard growing-pool research remains separate design
 work, not authority to replace this fixed Allies/Lessons comparison.
 
@@ -269,4 +376,4 @@ no uncommitted evidence was removed. Original design/diagram:
 traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: `git diff --check` passed; `lf context` is within both limits; four fresh evidence files published and hash-verified. Runtime unchanged, so no test rerun; gate owns broader validation and demo/review owns scientific judgment.
+Check: restore check admitted all three completed learners and rejected pool/74212 as expected; Etude `tests/launch/test_vast.py` passed (43). Broader validation remains with gate and scientific judgment with demo/review.

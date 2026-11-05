@@ -435,3 +435,65 @@ scientific updates are not exposed in that log. The worker acknowledged
 2026-11-07 10:09:07 UTC. Launch and lifecycle receipts are published alongside
 the allocation; the final scientific inventory, evaluation and teardown remain
 pending. No plateau, improvement or architecture conclusion follows yet.
+
+## Terminal scientific outcome — 2026-11-05
+
+Run `e51f61b92931`, at the unchanged `af601877e9700bbd4ede5baf4ce17163f6b62283`
+source, ended **`lost / machine_lost` at 13:09:07 UTC**. The launcher retained
+no child exit code and zero delivered output files. No cancellation was requested;
+the rental deadline was 2026-11-07 10:09:07 UTC. The cause beyond machine loss
+is unknown: these records do not establish OOM, a learner defect or host fault.
+
+Read-only backups preserve these last receipts at 13:00:43 UTC:
+
+| Arm / seed | Retained status | Updates | Games | Learner transitions |
+|---|---|---:|---:|---:|
+| Pool / 74211 | Completed | 256 | 65,536 | 8,535,559 |
+| GRU / 74211 | Completed | 256 | 65,536 | 8,391,124 |
+| GRU / 74212 | Completed | 256 | 65,536 | 8,334,093 |
+| Pool / 74212 | Running at last observation | 83 | 21,248 | 2,421,675 |
+
+Recorded exposure totals 851 updates, 217,856 games and 27,682,451 learner
+transitions. Final exposure after that snapshot is unknown. All 36 backed-up
+artifacts (371,853,657 bytes) were independently checked against their receipt
+sizes and SHA256: each completed learner's nine scheduled raw checkpoints plus
+EMA/optimizer exports, and initialization/update-32/update-64 for the fourth.
+The other four learners have no retained receipts. Backups do not constitute
+the missing final worker inventory.
+
+**No qualified scientific comparison is available.** None of the 72 curve or
+eight held-out endpoints was retained. No partial score analysis, survivor
+selection, retry, shortened horizon or replacement allocation ran. The original
+plateau and architecture criteria remain unmet; successful engineering gates
+and completed training alone do not answer them.
+
+At 13:09:35 UTC the provider confirmed instance `59194544` absent, all eleven
+preceding rentals absent, and no live Task rentals. Reported current compute is
+$2.603; the full-lifetime estimate is $2.63946664. Prior reported/lifetime maxima
+plus settled L4 remain $1.04590824. Keeping the $3.50 prior-compute and $6 ancillary
+reserves plus the larger current-rental figure accounts/reserves $12.13946664,
+leaving $12.86053336 under the original $25. There are no live commitments; this
+is operational reconciliation, not final settlement or a new spending decision.
+
+Terminal attempt/status, carried logs, empty delivered inventory, accounting,
+all collected progress receipts, verified backups and collection helpers are
+retained under `experiments/data/state-representation-gpu-5da5f4/batched-plateau/terminal-20261105T130907Z/`
+through the artifact manifest. Earlier launch, failed attempts and protocol
+identities remain unchanged. The foreground watcher exited on the terminal
+outcome. Broader validation belongs to gate; scientific and recovery judgment
+belongs to demo/review.
+
+## Recovery audit — 2026-11-05
+
+This section adds evidence and changes no frozen criterion, seed or receipt. The
+retained cause `machine_lost` stays as recorded. Vast's audit log attributes the
+delete of `59194544`, and of `59185580` and `59152469`, to the launcher's account
+key: Etude deleted each rental after one unhealthy provider read. The status it
+read was not retained, so a host fault is neither shown nor excluded. Rentals were
+requested on-demand.
+
+The three completed learners pass curve admission, hash and loader checks without
+scoring. Pool seed 74212 retains raw weights at updates 0, 32 and 64 only, so exact
+continuation is unavailable. Any retraining needs a prospective amendment of the
+"no retries" failure clause. Evidence is under
+`experiments/data/state-representation-gpu-5da5f4/batched-plateau/recovery-audit-20261105/`.

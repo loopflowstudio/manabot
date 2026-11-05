@@ -233,18 +233,20 @@ def paired_interval(differences: tuple[float, ...]) -> PairedEstimate:
     return PairedEstimate(differences, mean, mean - radius, mean + radius)
 
 
-def compare(results: list[ArmEvaluation]) -> PairedEstimate:
+def compare_cohort(
+    results: list[ArmEvaluation],
+    seeds: tuple[int, ...],
+    updates: int,
+    protocol: MonitorProtocol,
+    recipe_digests: dict[Arm, str],
+) -> PairedEstimate:
     """Reject missing/duplicate/incomplete attempts rather than select successful seeds."""
-    expected = {(arm, seed) for arm in ARMS for seed in SEEDS}
-    protocol = evaluation_protocol()
-    recipe_digests = {
-        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
-    }
+    expected = {(arm, seed) for arm in ARMS for seed in seeds}
     found: dict[tuple[Arm, int], float] = {}
     for item in results:
         result = item.result
         key = item.arm, result.training_seed
-        if key not in expected or key in found or result.coordinates.updates != UPDATES:
+        if key not in expected or key in found or result.coordinates.updates != updates:
             raise ValueError(
                 "evaluation is duplicate, incomplete or outside the frozen cohort"
             )
@@ -252,8 +254,15 @@ def compare(results: list[ArmEvaluation]) -> PairedEstimate:
     if set(found) != expected:
         raise ValueError("every declared arm and independent seed must be present")
     return paired_interval(
-        tuple(found["typed_gru", seed] - found["typed_pool", seed] for seed in SEEDS)
+        tuple(found["typed_gru", seed] - found["typed_pool", seed] for seed in seeds)
     )
+
+
+def compare(results: list[ArmEvaluation]) -> PairedEstimate:
+    digests = {
+        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
+    }
+    return compare_cohort(results, SEEDS, UPDATES, evaluation_protocol(), digests)
 
 
 def train_arm(arm: Arm, seed: int, out: Path) -> TrainingRun:

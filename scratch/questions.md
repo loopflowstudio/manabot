@@ -2,6 +2,35 @@
 
 ## Current authority
 
+- Jack Heart, 2026-11-05: "can we schedule soem evals in paralell with the
+  additional training" selects recovery option A with parallel CPU evaluation,
+  superseding the stops below for an amended cohort. The plan's latest direction
+  owns scope. Route back to implement; PR84 and study merges are not approved.
+
+- Latest, Jack Heart, 2026-11-05: schedule evaluations in parallel with the
+  additional training. The primary stated the implementation choice: retain
+  the three complete learners, evaluate their checkpoint curves, and run the
+  five missing training units; restart interrupted pool/74212 from initialization
+  on its original seed rather than reset optimizer/EMA halfway through. Freeze
+  a prospective recovery/scheduling amendment before scoring; retain the failed
+  attempt and original protocol. This supersedes the open A-D/no-scoring stop
+  below. Original $25 total, seeds, horizon and scientific criteria remain.
+  Interim results never guide training or selection. Use independent bounded
+  CPU evaluation alongside GPU training, with incremental durable delivery and
+  actual compatible runtime/replay validation. Fix launcher deletion behavior
+  before a new rental; no merge approval is implied. Etude ff3d48 still owns
+  the reusable recovery design.
+
+- Jack Heart, 2026-11-05 after machine loss: "keep goign"; continue recovery
+  investigation and useful work, preserving completed training and the original
+  budget. He noted Vast may be interruptible and requested a separate Etude SDK
+  design task for training robust to an interruptible compute layer. Captured as
+  Etude inbox Task `ff3d48`, `loopflow://etude/task/ff3d48`; not launched.
+  Audit result: the rental was on-demand, and our launcher deleted it after one
+  non-running read. Completed learners restore; pool/74212 cannot continue
+  exactly. Do not silently alter the study's trajectory or discard the completed
+  learners.
+
 - Jack Heart authorized actual GPU learning through the beginning of a sustained
   plateau within the **original cumulative $25**, including necessary Etude SDK
   work and Vast use. The completed CPU comparison is insufficient for architecture
@@ -30,9 +59,14 @@
 ## Current handoff and implementation decisions
 
 The plan owns fresh scientific progress, accounting, evidence paths and remaining
-acceptance. Run `e51f61b92931` at `af601877e` is active on rental `59194544`;
-continue that allocation without repeating diagnosis/admission. The completed
-CUDA gates and matched throughput qualified its launch, not a scientific result.
+acceptance. Run `e51f61b92931` at `af601877e` ended `lost / machine_lost` on
+2026-11-05 at 13:09:07 UTC, with no final inventory or child exit code. Rental
+`59194544` is absent and no Task rentals remain live. Three learners completed;
+the fourth reached 83 updates in the last retained receipt. All 36 checkpoint
+backups verify, but no curve/held-out endpoint survives. The plan's recovery
+audit owns the deletion cause. The completed CUDA gates and matched throughput
+qualified the launch, not a scientific result. New science needs the frozen
+amendment and a launcher with the liveness repair.
 Instance-only SSH attachment of the existing local public key enabled read-only
 receipt/checkpoint collection; no source, recipe, deadline or provider account
 changed. The diagnosis owns detailed measurement and delivery evidence.
@@ -77,6 +111,19 @@ Earlier SDK decisions: `075378dd87600428ad3efa60b7288b327c32cee7:scratch/questio
 original design: `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`.
 All removed detail is committed there. Existing Wave-memory edits remain for
 their owning realign step; this pass does not replace them.
+
+Assumption: the recovery direction arrived during compress. This step recorded it
+and changed no learner, recipe or study semantics; implement owns the work.
+
+## Proposed Wave memory change
+
+Not applied; `.lf/wave/` is read-only in this step. Replace any "machine lost,
+cause unknown" wording for `e51f61b92931` with: our launcher deleted three Vast
+rentals after single unhealthy reads; check Vast's audit log before attributing
+a rental loss to the provider.
+
+Assumption: the `/verify` commit instruction was not applied to Etude PR #84,
+because that skill checks merged work and this PR is an unmerged draft.
 
 ## Main sync — MTG-213 context (2026-11-05 UTC)
 

@@ -30,6 +30,7 @@ from experiments.state_representation_v7 import (
     Arm,
     ArmEvaluation,
     PairedEstimate,
+    compare_cohort,
     paired_interval,
 )
 from manabot.env.observation import ObservationConfig
@@ -53,6 +54,7 @@ from manabot.training.regime import IterationSchedule, TrainingRegime, TrainSelf
 from manabot.verify.store import VerifyStore
 
 EXPERIMENT = "state_representation_gpu"
+UV_EXTRAS = " --extra dev --extra artifacts --extra evaluation"
 SEEDS = (74211, 74212, 74213, 74214)
 STREAMS = 256
 UPDATES = 256
@@ -117,6 +119,28 @@ def recipe(arm: Arm) -> TrainingRegime:
     stage.execution.wall_seconds = 66000
     regime.wall_seconds = 66000
     return TrainingRegime.model_validate(regime.model_dump())
+
+
+def excluded_recipe(
+    arm: Arm,
+    regime_id: str,
+    updates: int,
+    seconds: int,
+    device: Literal["cpu", "cuda"] = "cuda",
+) -> TrainingRegime:
+    """The study recipe under a short excluded horizon; never a scored learner."""
+    regime = recipe(arm)
+    regime.id = regime_id
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = updates
+    stage.execution.device = device
+    stage.execution.wall_seconds = regime.wall_seconds = seconds
+    return TrainingRegime.model_validate(regime.model_dump())
+
+
+def recipe_digests() -> dict[Arm, str]:
+    return {arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS}
 
 
 def evaluation_protocol(*, heldout: bool = False) -> MonitorProtocol:
@@ -262,6 +286,8 @@ class ProgressWatch:
 
     arm: Arm
     path: Path
+    # Touching this file asks the child to flush its evidence and exit.
+    stop: Path
     limits: AdmissionLimits
     started: float
     # None means no ready CUDA record has been observed yet.
@@ -364,8 +390,8 @@ def runs(revision: str, allocation: str = "", admission_limits: str = "") -> lis
     job = Job(
         name=EXPERIMENT,
         experiment=EXPERIMENT,
-        setup=machine_setup(" --extra dev --extra artifacts --extra evaluation"),
-        command=f"{TOOLCHAIN_ENV}\nuv run --locked --extra dev --extra artifacts --extra evaluation python -m experiments.state_representation_gpu",
+        setup=machine_setup(UV_EXTRAS),
+        command=f"{TOOLCHAIN_ENV}\nuv run --locked{UV_EXTRAS} python -m experiments.{EXPERIMENT}",
         repo=str(root),
         revision=revision,
         config=spec.model_dump_json(),
@@ -424,14 +450,16 @@ def train_arm(
         raise RuntimeError("this study requires CUDA")
     # One learner owns the device; leave room for contexts and workspaces.
     torch.cuda.set_per_process_memory_fraction(0.80)
-    regime = recipe(arm)
-    if admission:
-        regime.id = f"representation-gpu-admission-{arm}"
-        stage = regime.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
-        stage.updates = ADMISSION_UPDATES
-        stage.execution.wall_seconds = regime.wall_seconds = ADMISSION_ARM_SECONDS
-        regime = TrainingRegime.model_validate(regime.model_dump())
+    regime = (
+        excluded_recipe(
+            arm,
+            f"representation-gpu-admission-{arm}",
+            ADMISSION_UPDATES,
+            ADMISSION_ARM_SECONDS,
+        )
+        if admission
+        else recipe(arm)
+    )
     out.mkdir(parents=True, exist_ok=False)
     with VerifyStore(out / "training.sqlite") as store:
         run = execute_regime(
@@ -466,7 +494,7 @@ def evaluate_arm(arm: Arm, seed: int, out: Path, deadline: float) -> None:
     if (
         seed not in SEEDS
         or run.seed != seed
-        or run.regime_digest != canonical_sha256(recipe(arm).model_dump(mode="json"))
+        or run.regime_digest != recipe_digests()[arm]
     ):
         raise ValueError("run is outside the declared GPU cohort")
     for point in checkpoints(run):
@@ -496,29 +524,14 @@ def evaluate_arm(arm: Arm, seed: int, out: Path, deadline: float) -> None:
 
 
 def compare_heldout(results: list[ArmEvaluation]) -> PairedEstimate:
-    expected = {(arm, seed) for arm in ARMS for seed in SEEDS}
-    protocol = evaluation_protocol(heldout=True)
-    recipe_digests = {
-        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
-    }
-    scores: dict[tuple[Arm, int], float] = {}
-    for item in results:
-        key = item.arm, item.result.training_seed
-        if (
-            key not in expected
-            or key in scores
-            or item.result.coordinates.updates != UPDATES
-        ):
-            raise ValueError("duplicate or undeclared held-out endpoint")
-        scores[key] = item.score_for(protocol, recipe_digests[item.arm])
-    if set(scores) != expected:
-        raise ValueError("every held-out arm and seed is required")
-    return paired_interval(
-        tuple(scores["typed_gru", seed] - scores["typed_pool", seed] for seed in SEEDS)
+    return compare_cohort(
+        results, SEEDS, UPDATES, evaluation_protocol(heldout=True), recipe_digests()
     )
 
 
 # Sequential execution and child lifetime ownership.
+
+_CHILD = (sys.executable, "-m", f"experiments.{EXPERIMENT}")
 
 
 def scientific_cohort(out: Path, stop: Path, deadline: float) -> None:
@@ -528,7 +541,6 @@ def scientific_cohort(out: Path, stop: Path, deadline: float) -> None:
         for index, seed in enumerate(SEEDS)
         for arm in (ARMS if index % 2 == 0 else tuple(reversed(ARMS)))
     ]
-    base = [sys.executable, "-m", "experiments.state_representation_gpu"]
     atomic_json(
         out / "cohort.json",
         {
@@ -544,7 +556,8 @@ def scientific_cohort(out: Path, stop: Path, deadline: float) -> None:
         for arm, seed in assignments:
             logs = phase / f"{arm}-{seed}"
             logs.mkdir()
-            command = base + [
+            command = [
+                *_CHILD,
                 f"--{mode}-arm",
                 arm,
                 "--seed",
@@ -560,27 +573,21 @@ def scientific_cohort(out: Path, stop: Path, deadline: float) -> None:
             )
             print(f"{mode}: {arm} seed {seed}", flush=True)
             _run_child(command, logs, stop, bound)
-    curves: list[ArmEvaluation] = []
-    final: list[ArmEvaluation] = []
-    for arm, seed in assignments:
-        directory = out / f"{arm}-{seed}"
-        for update in POINTS:
-            curves.append(
-                ArmEvaluation(
-                    arm=arm,
-                    result=MonitorResult.model_validate_json(
-                        (directory / f"curve-{update:04d}/monitor.json").read_bytes()
-                    ),
-                )
-            )
-        final.append(
-            ArmEvaluation(
-                arm=arm,
-                result=MonitorResult.model_validate_json(
-                    (directory / "heldout/monitor.json").read_bytes()
-                ),
-            )
+
+    def retained(arm: Arm, path: Path) -> ArmEvaluation:
+        return ArmEvaluation(
+            arm=arm, result=MonitorResult.model_validate_json(path.read_bytes())
         )
+
+    curves = [
+        retained(arm, out / f"{arm}-{seed}/curve-{update:04d}/monitor.json")
+        for arm, seed in assignments
+        for update in POINTS
+    ]
+    final = [
+        retained(arm, out / f"{arm}-{seed}/heldout/monitor.json")
+        for arm, seed in assignments
+    ]
     atomic_json(
         out / "comparison.json",
         {
@@ -607,24 +614,22 @@ def admit_throughput(
             f"admission: {arm}, {STREAMS} streams, {ADMISSION_UPDATES} updates",
             flush=True,
         )
-        child_stop = batch / "stop"
         child_started = time.monotonic()
         watch = ProgressWatch(
             arm,
             phase / arm / "training/run.json",
+            batch / "stop",
             limits,
             child_started,
         )
         command = [
-            sys.executable,
-            "-m",
-            "experiments.state_representation_gpu",
+            *_CHILD,
             "--admit-arm",
             arm,
             "--out",
             str(phase / arm),
             "--stop",
-            str(child_stop),
+            str(watch.stop),
         ]
         _run_child(
             command,
@@ -635,7 +640,6 @@ def admit_throughput(
                 time.time() + ADMISSION_ARM_SECONDS + limits.grace_seconds,
             ),
             watch=watch,
-            child_stop=child_stop,
         )
         run = TrainingRun.model_validate_json(watch.path.read_bytes())
         if run.status != "completed":
@@ -658,9 +662,12 @@ def _run_child(
     deadline: float,
     *,
     watch: ProgressWatch | None = None,
-    child_stop: Path | None = None,
 ) -> None:
-    """Bound one worker and its descendants by the rental on every exit."""
+    """Bound one worker and its descendants by the rental on every exit.
+
+    A watched child gets a graceful stop and its grace period; any other child
+    is terminated directly.
+    """
     # The learner owns local tracking; it must not attach to the launcher run.
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("ETUDE_")
@@ -677,11 +684,11 @@ def _run_child(
         except OSError:
             atomic_json(out / "processes.json", {"exit_codes": []})
             raise
-    grace = watch.limits.grace_seconds if watch else 120
+    grace = watch.limits.grace_seconds if watch else 0
     try:
         while child.poll() is None:
             reason = None
-            if stop.exists() or time.time() >= deadline - (grace if child_stop else 0):
+            if stop.exists() or time.time() >= deadline - grace:
                 reason = "worker cancelled or allocation expired"
             elif watch is not None:
                 run = (
@@ -710,8 +717,8 @@ def _run_child(
                         "updates": watch.updates if watch else None,
                     },
                 )
-                if child_stop is not None:
-                    child_stop.touch()
+                if watch is not None:
+                    watch.stop.touch()
                     # Once stopped, only evidence flush and exit remain. Waiting
                     # here avoids a second polling state and cannot extend the lease.
                     with suppress(subprocess.TimeoutExpired):
@@ -800,16 +807,14 @@ def plateau(points: list[ArmEvaluation]) -> PlateauResult:
         (arm, seed, update) for arm in ARMS for seed in SEEDS for update in POINTS
     }
     protocol = evaluation_protocol()
-    recipe_digests = {
-        arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS
-    }
+    digests = recipe_digests()
     scores: dict[tuple[Arm, int, int], float] = {}
     for item in points:
         result = item.result
         key = item.arm, result.training_seed, result.coordinates.updates
         if key in scores or key not in expected:
             raise ValueError("duplicate or undeclared curve point")
-        scores[key] = item.score_for(protocol, recipe_digests[item.arm])
+        scores[key] = item.score_for(protocol, digests[item.arm])
     if set(scores) != expected:
         return PlateauResult(False, len(scores), len(expected))
     intervals: list[PlateauInterval] = []

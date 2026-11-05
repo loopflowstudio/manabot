@@ -272,13 +272,18 @@ leaving $15.50 within the original $25. This supersedes accumulated ended-attemp
 cap reservations above, without asserting final settlement or adding funds.
 
 Scientific Run `e51f61b92931` launched at `af601877e` with that full $15.50
-allocation reserved. At the retained 02:34:17 UTC read, instance `59194544` was
-the sole Task rental, running its first pooling seed 74211. Finish-after-work
+allocation reserved. At the retained 03:01:54 UTC read, instance `59194544` was
+the sole Task rental. The 03:01:53 learner receipt records its first pooling
+seed 74211 at 45/256 updates, 11,520 games and 1,333,548 learner transitions,
+with no recorded error. Initialization and update-32 checkpoint bytes match
+their recorded sizes and hashes. Finish-after-work
 was acknowledged, with deadline 2026-11-07 10:09:07 UTC as backstop; this proves
 neither final delivery nor teardown. Sequential balanced seed/arm execution,
 256 updates per learner, initialization/interior exports and complete evaluation
-remain the frozen design. No completed scientific update count, final inventory
-or qualified plateau result is available in that handoff. Default discovery
+remain the frozen design. No learner, final inventory or evaluated endpoint is
+complete yet; evaluation is scheduled after all eight learners. A valid partial
+receipt or checkpoint backup cannot establish cohort completion or a plateau.
+Default discovery
 remains admission-only; a live allocation must not be duplicated because an
 earlier planning note still says diagnosis is pending. The plan owns remaining
 acceptance. Evidence is manifest-backed under

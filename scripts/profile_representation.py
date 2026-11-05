@@ -27,11 +27,12 @@ from experiments.state_representation_gpu import (
     ADMISSION_SEED,
     ARMS,
     EXPERIMENT,
+    UV_EXTRAS,
     AdmissionLimits,
     ProgressWatch,
     StudyJob,
     _run_child,
-    recipe,
+    excluded_recipe,
 )
 from manabot.data import load_manifest
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
@@ -42,10 +43,25 @@ from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.state_records import TypedContinuationEncoder
 from manabot.training.execution import execute_regime
 from manabot.training.learning.health import OptimizerHealth
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 REFERENCE = "experiments/data/state-representation-gpu-5da5f4/encoder-reference"
+# Float32 CUDA/CPU accumulation order differs. The absolute floor also admits
+# near-zero gradients; retained checks record the actual error.
+TOLERANCE = 2e-4
+
+
+def _reference_error(
+    actual: torch.Tensor | None, expected: torch.Tensor | None
+) -> float:
+    """Require matching absent gradients, or return a within-tolerance error."""
+    if expected is None:
+        assert actual is None
+        return 0.0
+    assert actual is not None
+    actual = actual.detach().cpu()
+    torch.testing.assert_close(actual, expected, rtol=TOLERANCE, atol=TOLERANCE)
+    return float((actual - expected).abs().max())
 
 
 def check_references(root: Path, out: Path, device: str) -> None:
@@ -68,10 +84,14 @@ def check_references(root: Path, out: Path, device: str) -> None:
                 isinstance(t, torch.Tensor) for t in inputs
             )
             tensors = [t.to(device).detach().clone() for t in inputs]
-            object_index = 3 if kind == "effects" else 1
-            tensors[object_index].requires_grad_()
-            if kind == "continuation":
-                tensors[2].requires_grad_()
+            # Input positions whose gradients the retained fixture records.
+            differentiable = (
+                {3: "object_grad"}
+                if kind == "effects"
+                else {1: "object_grad", 2: "definition_grad"}
+            )
+            for index in differentiable:
+                tensors[index].requires_grad_()
             encoder = (
                 SharedEffectEncoder(8, arm)
                 if kind == "effects"
@@ -80,41 +100,31 @@ def check_references(root: Path, out: Path, device: str) -> None:
             encoder.load_state_dict(saved["state"], strict=True)
             result = encoder(*tensors)
             outputs = [result] if isinstance(result, torch.Tensor) else list(result)
-            max_error = 0.0
-
-            def compare(
-                actual: torch.Tensor | None, expected: torch.Tensor | None
-            ) -> None:
-                nonlocal max_error
-                if expected is None:
-                    assert actual is None
-                    return
-                assert actual is not None
-                actual = actual.detach().cpu()
-                # Float32 CUDA/CPU accumulation order differs. The absolute
-                # floor also admits near-zero gradients; record the actual error.
-                torch.testing.assert_close(actual, expected, rtol=2e-4, atol=2e-4)
-                max_error = max(max_error, float((actual - expected).abs().max()))
-
-            for actual, expected in zip(outputs, saved["outputs"], strict=True):
-                compare(actual, expected)
             sum(t.square().sum() for t in outputs).backward()
-            compare(tensors[object_index].grad, saved["object_grad"])
-            if kind == "continuation":
-                compare(tensors[2].grad, saved["definition_grad"])
-            for name, parameter in encoder.named_parameters():
-                compare(parameter.grad, saved["gradients"][name])
+            pairs = [
+                *zip(outputs, saved["outputs"], strict=True),
+                *((tensors[i].grad, saved[key]) for i, key in differentiable.items()),
+                *(
+                    (parameter.grad, saved["gradients"][name])
+                    for name, parameter in encoder.named_parameters()
+                ),
+            ]
             results.append(
                 {
                     "arm": arm,
                     "kind": kind,
-                    "max_absolute_error": max_error,
+                    "max_absolute_error": max(
+                        _reference_error(actual, expected) for actual, expected in pairs
+                    ),
                     "absent_parameter_gradients": sum(
                         p.grad is None for p in encoder.parameters()
                     ),
                 }
             )
-    atomic_json(out, {"device": device, "rtol": 2e-4, "atol": 2e-4, "checks": results})
+    atomic_json(
+        out,
+        {"device": device, "rtol": TOLERANCE, "atol": TOLERANCE, "checks": results},
+    )
 
 
 class OperatorTraces:
@@ -240,8 +250,8 @@ def runs(revision: str) -> list[Run]:
     job = Job(
         name="representation-operator-profile",
         experiment=EXPERIMENT,
-        setup=machine_setup(" --extra dev --extra artifacts --extra evaluation"),
-        command=f"{TOOLCHAIN_ENV}\nuv run --locked --extra dev --extra artifacts --extra evaluation python scripts/profile_representation.py --worker",
+        setup=machine_setup(UV_EXTRAS),
+        command=f"{TOOLCHAIN_ENV}\nuv run --locked{UV_EXTRAS} python scripts/profile_representation.py --worker",
         repo=str(root),
         revision=revision,
         config=spec.model_dump_json(),
@@ -289,7 +299,13 @@ def worker() -> None:
     for arm in ARMS:
         logs = out / f"{arm}-supervision"
         logs.mkdir(parents=True)
-        child_stop = logs / "stop"
+        watch = ProgressWatch(
+            arm,
+            out / arm / "training/run.json",
+            logs / "stop",
+            spec.admission_limits,
+            time.monotonic(),
+        )
         _run_child(
             [
                 sys.executable,
@@ -301,18 +317,12 @@ def worker() -> None:
                 "--out",
                 str(out / arm),
                 "--stop",
-                str(child_stop),
+                str(watch.stop),
             ],
             logs,
             stop,
             min(deadline - 120, time.time() + 720),
-            watch=ProgressWatch(
-                arm,
-                out / arm / "training/run.json",
-                spec.admission_limits,
-                time.monotonic(),
-            ),
-            child_stop=child_stop,
+            watch=watch,
         )
         print((out / arm / "diagnosis.json").read_text(), flush=True)
         for phase in ("inference", "learning"):
@@ -335,14 +345,13 @@ def main() -> None:
     parser.add_argument("--seconds", type=int, default=600)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
-    plan = recipe(args.arm)
-    plan.id = f"excluded-operator-diagnosis-{args.arm}"
-    stage = plan.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = 1
-    stage.execution.device = args.device
-    stage.execution.wall_seconds = plan.wall_seconds = args.seconds
-    plan = TrainingRegime.model_validate(plan.model_dump())
+    plan = excluded_recipe(
+        args.arm,
+        f"excluded-operator-diagnosis-{args.arm}",
+        1,
+        args.seconds,
+        args.device,
+    )
     if args.device == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA diagnosis requires CUDA")

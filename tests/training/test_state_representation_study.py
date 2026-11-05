@@ -371,7 +371,7 @@ def test_gpu_curve_refuses_failed_or_duplicate_endpoints(failure: str) -> None:
 
 
 def test_gpu_heldout_requires_all_seeds() -> None:
-    with pytest.raises(ValueError, match="every held-out"):
+    with pytest.raises(ValueError, match="every declared"):
         gpu.compare_heldout([])
 
 
@@ -395,14 +395,20 @@ def _progress(updates: int, active_seconds: float) -> TrainingRun:
     return run
 
 
+def _watch(directory: Path, limits: gpu.AdmissionLimits) -> gpu.ProgressWatch:
+    return gpu.ProgressWatch(
+        "typed_pool", directory / "run.json", directory / "child-stop", limits, 0
+    )
+
+
 def test_admission_watchdog_distinguishes_startup_progress_and_cost(
     tmp_path: Path,
 ) -> None:
     limits = gpu.AdmissionLimits()
-    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
+    watch = _watch(tmp_path, limits)
     assert watch.observe(None, 179) is None
     assert watch.observe(None, 180) == "startup produced no ready training record"
-    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
+    watch = _watch(tmp_path, limits)
     assert watch.observe(_progress(0, 0), 10) is None
     assert watch.observe(_progress(1, 40), 50) is None
     assert watch.observe(_progress(2, 80), 90) is None
@@ -411,7 +417,7 @@ def test_admission_watchdog_distinguishes_startup_progress_and_cost(
         watch.observe(_progress(2, 80), 90 + limits.progress_seconds)
         == "no completed update within workload allowance"
     )
-    expensive = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
+    expensive = _watch(tmp_path, limits)
     # One slow first update cannot choose a treatment or trigger the cost rule.
     assert expensive.observe(_progress(1, 400), 410) is None
     assert (
@@ -442,7 +448,7 @@ def test_supervisor_gives_cancelled_child_time_to_retain_evidence(
 ) -> None:
     stop = tmp_path / "cancel"
     stop.touch()
-    child_stop = tmp_path / "child-stop"
+    watch = _watch(tmp_path, gpu.AdmissionLimits())
     retained = tmp_path / "retained.json"
     # Bounded sleeping fixture; it performs no training or synthetic load.
     script = (
@@ -452,9 +458,9 @@ def test_supervisor_gives_cancelled_child_time_to_retain_evidence(
         " if stop.exists():\n  retained.write_text('saved'); break\n"
         " time.sleep(0.01)\n"
     )
-    command = [sys.executable, "-c", script, str(child_stop), str(retained)]
+    command = [sys.executable, "-c", script, str(watch.stop), str(retained)]
     with pytest.raises(RuntimeError, match="cancelled"):
-        gpu._run_child(command, tmp_path, stop, time.time() + 10, child_stop=child_stop)
+        gpu._run_child(command, tmp_path, stop, time.time() + 10, watch=watch)
     assert retained.read_text() == "saved"
     receipt = json.loads((tmp_path / "processes.json").read_text())
     assert receipt["exit_codes"] == [0]
@@ -470,7 +476,7 @@ def test_supervisor_reaps_child_that_ignores_graceful_stop(
         stop.touch()
     # An expired rental cannot spend the configured grace period waiting.
     limits = gpu.AdmissionLimits(grace_seconds=120 if expired else 0.01)
-    watch = gpu.ProgressWatch("typed_pool", tmp_path / "run.json", limits, 0)
+    watch = _watch(tmp_path, limits)
     with pytest.raises(RuntimeError, match="cancelled or allocation expired"):
         gpu._run_child(
             [sys.executable, "-c", "import time; time.sleep(20)"],
@@ -478,7 +484,6 @@ def test_supervisor_reaps_child_that_ignores_graceful_stop(
             stop,
             time.time() - 1 if expired else time.time() + 10,
             watch=watch,
-            child_stop=tmp_path / "child-stop",
         )
     receipt = json.loads((tmp_path / "processes.json").read_text())
     assert receipt["forced_termination"] and receipt["exit_codes"][0] != 0

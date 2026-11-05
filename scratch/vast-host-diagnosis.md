@@ -1,10 +1,14 @@
 # Vast diagnosis and admission — completed evidence through 2026-11-05 02:34 UTC
 
 The plan owns current scientific progress and accounting; this note retains the
-completed diagnosis and admission evidence. Run `e51f61b92931` is still active;
-its partial learner receipts do not establish final inventory or qualified
-results. Fresh reads and the original launch handoff are retained separately
-under `batched-plateau/`, preserving their observation times.
+completed diagnosis and admission evidence. Run `e51f61b92931` ended
+`lost / machine_lost` at 2026-11-05 13:09:07 UTC without final inventory or exit
+code. Three completed learners and a fourth at 83 updates survive in verified
+backups; no evaluated endpoints survive. Rental absence and costs are confirmed.
+The plan's recovery audit shows our launcher issued the delete, on this rental
+and on `59185580` and `59152469`; "lost" below does not mean provider-removed.
+The plan and `batched-plateau/terminal-20261105T130907Z/` own terminal evidence.
+The launch/admission observations below retain their original times.
 
 ## Retained CUDA diagnosis, admission and scientific handoff
 
@@ -205,6 +209,7 @@ rental and process-group reaping afterward. Controlled tests establish these
 paths; no live enforcement claim follows for older frozen rentals.
 
 Current code, acceptance and validation ownership are in
-`representation-learning-plan.md`. The outstanding work is the unchanged
-scientific cohort, full output inventory, evaluation and confirmed teardown.
+`representation-learning-plan.md`. The scientific cohort and evaluation remain
+incomplete after machine loss; verified partial backups and confirmed rental
+absence establish no qualified result.
 Earlier full diagnosis and command/results remain at the precise revision above.

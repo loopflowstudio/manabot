@@ -185,9 +185,7 @@ the allocation budget. `state_representation_gpu.py` defaults to a capped,
 excluded two-arm throughput admission for sequential 256-stream learners;
 science requires an explicit frozen allocation backed by measured affordability.
 Wider batches change optimization; the prospective recipe retains the original
-complete-game horizon. After encoder batching, matched four-update admission
-projected $13.77310 for the full cohort, within the reconciled $15.50 allocation.
-At the retained 2026-11-05 02:34 UTC handoff, scientific Run `e51f61b92931`
-was running at frozen source `af601877e`, with managed delivery and teardown.
-Final inventory, evaluation and cleanup remain pending; no plateau or architecture
-advantage is established. The completed CPU study remains frozen.
+complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
+on 2026-11-05 after three of eight learners completed, with no curve or held-out
+endpoint, so no plateau or architecture result exists. Recovery is an amendment
+to the protocol, not a change to that record. The completed CPU study remains frozen.
