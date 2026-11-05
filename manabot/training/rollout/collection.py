@@ -578,10 +578,11 @@ class SeatRoutedCollector:
     ) -> RolloutBatch:
         """Collect a batch closed at an exact quota or after complete games.
 
-        With games_per_stream, a stream stops after that many whole games.
-        Otherwise num_steps is a floor on the stream's retained decisions, the
-        total across seats when both learn. No sampled action crosses the update
-        boundary.
+        Exact quota pauses each stream at num_steps learner rows, and its game
+        continues in the next batch. Complete games treat num_steps as a floor on
+        the stream's retained decisions, the total across seats when both learn;
+        games_per_stream replaces the floor with that many whole games, and no
+        sampled action crosses the update boundary.
         """
 
         if self.opponent_mode == "learning":

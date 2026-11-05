@@ -1,6 +1,7 @@
 """Validated recipe definitions: stages, learning settings and execution admission."""
 
-from typing import Annotated, Literal, TypedDict, cast
+from collections.abc import Mapping
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import (
     BaseModel,
@@ -359,18 +360,20 @@ class LearningStateOrigin(Strict):
     )
 
 
-def _implied_closure(
-    learning_seats: str, games_per_stream: int | None, game_errors: object
-) -> BatchClosure:
+def _default_seats(behavior: object) -> Literal["one", "both"]:
+    return "one" if behavior in ("random", "frozen") else "both"
+
+
+def _implied_closure(stage: Mapping[str, object]) -> BatchClosure:
     """What a serialized stage omitting `batch_closure` declares.
 
     Closure was once inferred from these fields, and saved recipes rely on it:
-    only one-seat recipes with neither field stopped at an exact quota.
+    only one-seat recipes with neither optional field stopped at an exact quota.
     """
     complete = (
-        learning_seats == "both"
-        or games_per_stream is not None
-        or game_errors is not None
+        stage["learning_seats"] == "both"
+        or stage.get("games_per_stream") is not None
+        or stage.get("game_errors") is not None
     )
     return "complete-games" if complete else "exact-quota"
 
@@ -425,12 +428,8 @@ class TrainSelfPlay(Stage):
     @model_validator(mode="before")
     @classmethod
     def default_learning_seats(cls, value: object) -> object:
-        if (
-            isinstance(value, dict)
-            and "learning_seats" not in value
-            and value.get("behavior") in ("random", "frozen")
-        ):
-            return {**value, "learning_seats": "one"}
+        if isinstance(value, dict) and "learning_seats" not in value:
+            return {**value, "learning_seats": _default_seats(value.get("behavior"))}
         return value
 
     @model_serializer(mode="wrap")
@@ -439,9 +438,7 @@ class TrainSelfPlay(Stage):
     ) -> dict[str, object]:
         # Regime digests hash these bytes, and saved stages never held the field.
         values: dict[str, object] = handler(self)
-        if self.batch_closure == _implied_closure(
-            self.learning_seats, self.games_per_stream, self.game_errors
-        ):
+        if self.batch_closure == _implied_closure(values):
             values.pop("batch_closure")
         return values
 
@@ -635,17 +632,9 @@ class RecoveryPolicy(Strict):
 def _read_saved_self_play(
     stage: dict[str, object], one_seat: bool
 ) -> dict[str, object]:
-    if one_seat:
-        stage = {**stage, "learning_seats": stage.get("learning_seats", "one")}
-    seats = stage.get("learning_seats")
-    if seats is None:
-        seats = "one" if stage.get("behavior") in ("random", "frozen") else "both"
-    closure = _implied_closure(
-        str(seats),
-        cast(int | None, stage.get("games_per_stream")),
-        stage.get("game_errors"),
-    )
-    return {"batch_closure": closure, **stage}
+    seats = "one" if one_seat else _default_seats(stage.get("behavior"))
+    resolved = {"learning_seats": seats, **stage}
+    return {"batch_closure": _implied_closure(resolved), **resolved}
 
 
 class TrainingRegime(Strict):

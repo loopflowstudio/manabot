@@ -3,7 +3,9 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from etude.eval.records import Code
+from etude.eval.records import Code, Matchup
+from etude.experiment import read_experiment
+from etude.jobs import evaluation_spec
 import pytest
 import torch
 
@@ -46,3 +48,21 @@ def test_a_held_out_deal_scores_all_eight_deck_seat_legs(
 
 def test_scored_deals_are_outside_the_monitoring_namespace() -> None:
     assert not set(learning_signal.DEALS) & set(range(1_910_101_000, 1_910_101_025))
+
+
+@pytest.mark.parametrize("name", ["batch_closure", "lambda_sweep"])
+def test_discovered_studies_keep_the_evaluation_callback_importable(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = [Path(learning_signal.__file__)]
+    heuristic = Code(name="heuristic", source=source)
+    matchup = Matchup(
+        name="fixture", players=(heuristic, heuristic), conditions=({},), games=8
+    )
+    monkeypatch.setattr(learning_signal, "scheduled_matchups", lambda _: [matchup])
+    experiment = read_experiment(learning_signal.ROOT / f"experiments/{name}.py")
+    state = SimpleNamespace(runs=(None,))
+    (job,) = experiment.eval(state)  # type: ignore[arg-type]
+    callback = evaluation_spec(job).play
+    assert callback.module == "experiments.learning_signal"
+    assert callback.load(job.repo) is learning_signal.play_deal

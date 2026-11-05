@@ -794,11 +794,10 @@ shared encoder receives both losses.
 Collection freezes learner weights within each batch; complete-game closure
 finishes games before updating, while an exact-quota game may span updates. One
 epoch still changes parameters between minibatches, so per-action ratios remain
-necessary. No replay buffer,
-trajectory ratio product or state-occupancy correction is implemented.
-Filtering changes the training-state measure, as in the source, and
-advantages are not renormalized after filtering. Truncation fails rather than
-becoming a draw; opponent actions are traversed, not trained on.
+necessary. No replay buffer, trajectory ratio product or state-occupancy
+correction is implemented. Filtering changes the training-state measure, as in
+the source, and advantages are not renormalized after filtering. Truncation fails
+rather than becoming a draw; opponent actions are traversed, not trained on.
 
 Optional controls: `filter_scope="actor"` keeps all critic rows;
 `behavior="ema-self"` collects and bootstraps with averaged weights

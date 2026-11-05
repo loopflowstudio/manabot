@@ -5,7 +5,7 @@ covering training, evaluation, failures and machine setup for both studies.
 Spending beyond it needs Jack Heart's explicit approval. This protocol is committed
 before any scored run. Calibration runs are unscored and charged to the cap.
 
-Two separable studies share only the evaluation in
+Two separable studies share only the evaluation and launch scaffolding in
 `experiments/learning_signal.py`. Each conclusion stands alone; neither study's arms
 feed the other's comparison.
 

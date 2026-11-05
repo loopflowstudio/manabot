@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from pydantic import ValidationError
@@ -143,10 +143,26 @@ def test_exact_quota_rejects_settings_that_need_whole_games(
 
 
 def test_a_game_error_policy_does_not_choose_the_closure() -> None:
-    policy = GameErrorPolicy()
     without = _stage(learning_seats="one")
-    with_policy = _stage(learning_seats="one", game_errors=policy)
+    with_policy = _stage(learning_seats="one", game_errors=GameErrorPolicy())
     assert without.batch_closure == with_policy.batch_closure == "complete-games"
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"learning_seats": "both"},
+        {"learning_seats": "one", "games_per_stream": 2},
+        {
+            "learning_seats": "one",
+            "game_errors": GameErrorPolicy(),
+            "record_attempt": lambda _: None,
+        },
+    ],
+)
+def test_collector_rejects_exact_quota_with_whole_game_settings(
+    fields: dict[str, Any],
+) -> None:
     with pytest.raises(ValueError, match="exact quota"):
         SeatRoutedCollector(
             _agent().observation_space,
@@ -154,23 +170,8 @@ def test_a_game_error_policy_does_not_choose_the_closure() -> None:
             Reward(RewardConfig()),
             num_envs=2,
             opponent_mode="self",
-            learning_seats="one",
             batch_closure="exact-quota",
-            game_errors=policy,
-            record_attempt=lambda _: None,  # type: ignore[arg-type, return-value]
-        )
-
-
-def test_collector_rejects_both_seats_at_exact_quota() -> None:
-    with pytest.raises(ValueError, match="exact quota"):
-        SeatRoutedCollector(
-            _agent().observation_space,
-            Match(),
-            Reward(RewardConfig()),
-            num_envs=2,
-            opponent_mode="self",
-            learning_seats="both",
-            batch_closure="exact-quota",
+            **fields,
         )
 
 

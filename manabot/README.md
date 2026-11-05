@@ -111,7 +111,8 @@ New self-play training learns from both seats by default (`baseline-v3`).
 Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
 saved schema-1 recipes retain their historical one-seat behavior.
 Batches close after complete games by default, whoever learns; `batch_closure`
-declares it, and `"exact-quota"` is the one-seat alternative. See [batch closure](../docs/training.md#batch-closure).
+declares it, and `"exact-quota"` is the one-seat alternative. See
+[batch closure](../docs/training.md#batch-closure).
 Use `games_per_stream` on both arms to match complete-game budgets. Distinct
 learning models can use `PairedLearners` to update both independent optimizers
 from their own seat trajectories. See [both-seat learning](../docs/training.md#regimes-and-stages)
