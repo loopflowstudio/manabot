@@ -265,7 +265,8 @@ impl Game {
         ) || (zone == Some(ZoneType::Hand)
             && self.shares_information(viewer, card.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
-                && self.searches_private_zones(viewer, card.owner))
+                && (self.searches_private_zones(viewer, card.owner)
+                    || self.decision_reveals(card_id, viewer)))
             || self.pending_public_entries().contains(&object);
         if !visible || (self.is_foretold(card_id) && !self.shares_information(viewer, card.owner)) {
             return VisibleReference::default();
@@ -280,6 +281,23 @@ impl Game {
             definition: Some(card.definition_id.0),
             player: None,
         }
+    }
+
+    /// A hidden-zone card a suspended decision shows its chooser: the exact
+    /// cards it looks at, orders or has revealed, or the whole zone a card
+    /// selection reads. The observation lists these same cards for that viewer,
+    /// so their reference slots join its rows instead of reading as unrevealed.
+    fn decision_reveals(&self, card: CardId, viewer: PlayerId) -> bool {
+        let Some(suspended) = &self.state.suspended_decision else {
+            return false;
+        };
+        let (owner, zone) = (self.state.cards[card].owner, self.state.zones.zone_of(card));
+        suspended.decisions().any(|decision| {
+            self.shares_information(viewer, decision.player())
+                && (decision.revealed_cards().contains(&card)
+                    || matches!(decision, Decision::SelectCards { from: Some(source), .. }
+                        if source.owner == owner && Some(source.zone) == zone))
+        })
     }
 
     pub(crate) fn card_reference(&self, card: CardId, viewer: PlayerId) -> VisibleReference {
