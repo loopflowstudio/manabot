@@ -310,9 +310,12 @@ changed and pending; a pending turn action cannot enter priority stabilization.
 Immediate fixture/arithmetic helpers require completion without a question and
 fail explicitly if used for a choice-bearing event. Sacrifice facts match their
 pre-move subjects after replacement choices and before any batch member leaves;
-trigger placement still waits for resolution. Complete versioned pending-payload
-projection remains under implementation; obligation codes alone do not represent
-those payloads.
+trigger placement still waits for resolution. Explicit input v8 projects the
+retained program, results, completion and proposals through fact-kind 14, with
+viewer-safe reference slots in relation kind 10. Academy's pending-resolution
+summary and LLM text consume that same native projection. Earlier inputs reject
+novel retained state before buffer writes; migrated searches retain their frozen
+obligation codes and implied completion events.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with

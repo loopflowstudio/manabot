@@ -247,20 +247,22 @@ impl Game {
         }
         let card = &self.state.cards[card_id];
         let zone = self.state.zones.zone_of(card_id);
-        let visible = self.pending_public_entries().contains(&object)
-            || matches!(
-                zone,
-                Some(
-                    ZoneType::Battlefield
-                        | ZoneType::Graveyard
-                        | ZoneType::Stack
-                        | ZoneType::Exile
-                        | ZoneType::Command
-                )
+        // Ordinary visibility needs no walk of retained event batches. Only
+        // otherwise hidden objects need the prospective-entry permission.
+        let visible = matches!(
+            zone,
+            Some(
+                ZoneType::Battlefield
+                    | ZoneType::Graveyard
+                    | ZoneType::Stack
+                    | ZoneType::Exile
+                    | ZoneType::Command
             )
-            || (zone == Some(ZoneType::Hand) && self.shares_information(viewer, card.owner))
+        ) || (zone == Some(ZoneType::Hand)
+            && self.shares_information(viewer, card.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
-                && self.searches_private_zones(viewer, card.owner));
+                && self.searches_private_zones(viewer, card.owner))
+            || self.pending_public_entries().contains(&object);
         if !visible || (self.is_foretold(card_id) && !self.shares_information(viewer, card.owner)) {
             return VisibleReference::default();
         }

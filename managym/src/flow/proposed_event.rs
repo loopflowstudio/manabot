@@ -828,21 +828,24 @@ impl Game {
                 let source_controller =
                     source.and_then(|source| self.damage_source_controller(source));
                 let mut out = Vec::new();
-                for (index, permanent) in
+                // Preserve permanent-slot order while sharing one immutable
+                // board read across the replacement scan.
+                let ids =
                     self.state
                         .permanents
                         .iter()
                         .enumerate()
                         .filter_map(|(index, permanent)| {
-                            permanent.as_ref().map(|permanent| (index, permanent))
-                        })
-                {
-                    if self.characteristics(PermanentId(index)).abilities_lost {
+                            permanent.as_ref().map(|_| PermanentId(index))
+                        });
+                for (id, view) in self.layer_views(ids) {
+                    if view.abilities_lost {
                         continue;
                     }
-                    let Some(source) = self.permanent_object_ref(PermanentId(index)) else {
+                    let Some(source) = self.permanent_object_ref(id) else {
                         continue;
                     };
+                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                     let affected_side = permanent.controller == affected_controller;
                     let source_side = source_controller == Some(permanent.controller)
                         && permanent.controller != affected_controller;
@@ -971,8 +974,8 @@ impl Game {
             _ => None,
         };
         if let Some((card, controller)) = recipient {
-            for id in self.battlefield_permanents(controller) {
-                if self.characteristics(id).abilities_lost {
+            for (id, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
+                if view.abilities_lost {
                     continue;
                 }
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");

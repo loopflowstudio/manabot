@@ -192,6 +192,16 @@ Their required behavior survives in the authorities above. No adapter/flag/secon
 executor remains. Original completed-capture failure evidence stays at
 `f1ce0ce13:scratch/completed-private-capture.patch`.
 
+No further predecessor path is selected for deletion. Surviving projection now
+dispatches completion once, shares target-reference formatting and renders each
+effect description once. Ordinary visibility precedes retained-entry discovery;
+damage/counter replacement scans share an immutable layer-board read while
+preserving candidate order and the debug oracle. These remove repeated work
+without changing stored state or input semantics. Inherited sibling notes are
+consolidated in [MTG-244 context](mtg-244-layers.md), with exact historical sources.
+
+Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib resolution_tests` — 50 passed; all 12 regenerated paired captures/digests/arrays unchanged. Rebuilt/atomically installed extension: `uv run --extra dev pytest tests/verify/test_retained_execution_input.py tests/semantic/test_text_observation.py -q` — 64 passed. Formatting/diff checks pass; final suites and performance acceptance remain gate-owned.
+
 ## Implementation closeout and remaining acceptance
 
 The bounded reference / published-layers / combined comparison and mitigations are

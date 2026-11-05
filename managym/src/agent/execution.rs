@@ -112,6 +112,10 @@ impl<'a> Projection<'a> {
         self.reference(name, self.game.card_reference(card, self.viewer));
     }
 
+    fn target(&mut self, name: &str, target: Target) {
+        self.reference(name, self.game.target_reference(target, self.viewer));
+    }
+
     fn objects(&mut self, name: &str, objects: &[ObjectRef]) {
         if objects.is_empty() {
             return;
@@ -150,11 +154,10 @@ impl<'a> Projection<'a> {
 
     fn effects(&mut self, name: &str, effects: &[Effect]) {
         if !effects.is_empty() {
-            self.summary
-                .push(format!("{name}: {}", effects_description(effects)));
+            let description = format!("{name}: {}", effects_description(effects));
+            self.summary.push(description.clone());
             self.field(name, &effects);
-            self.notes
-                .push(format!("{name}: {}", effects_description(effects)));
+            self.notes.push(description);
         }
     }
 
@@ -176,34 +179,28 @@ impl<'a> Projection<'a> {
     }
 
     fn completion(&mut self, completion: &FrameCompletion) {
-        match completion {
-            FrameCompletion::Paid { .. } | FrameCompletion::Activated { .. } => self.summary.push(
-                "Paid costs stay committed; finish the announcement after these choices.".into(),
-            ),
-            FrameCompletion::CombatNormal => self
-                .summary
-                .push("Normal combat damage follows these choices.".into()),
-            FrameCompletion::StateBased { .. } => self
-                .summary
-                .push("Finish the pending state-based actions before priority.".into()),
-            FrameCompletion::Event { event, .. } => self.summary.push(format!(
-                "Complete the {:?} event after these choices.",
-                event.kind()
-            )),
-            _ => {}
-        }
         // Caller frames themselves appear once in the borrowed root-first walk.
         match completion {
             FrameCompletion::Priority => self.field("return", &"priority"),
             FrameCompletion::Continue => self.field("return", &"turn action"),
-            FrameCompletion::CombatNormal => self.field("return", &"normal combat damage"),
+            FrameCompletion::CombatNormal => {
+                self.summary
+                    .push("Normal combat damage follows these choices.".into());
+                self.field("return", &"normal combat damage");
+            }
             FrameCompletion::StateBased { next } => {
+                self.summary
+                    .push("Finish the pending state-based actions before priority.".into());
                 self.field("return", &"finish state-based actions");
                 self.completion(next);
             }
             FrameCompletion::Frame(_) => self.field("return", &"caller frame"),
             FrameCompletion::Decision(_) => self.field("return", &"saved decision"),
             FrameCompletion::Event { event, .. } => {
+                self.summary.push(format!(
+                    "Complete the {:?} event after these choices.",
+                    event.kind()
+                ));
                 self.field("return", &"commit completion event");
                 // These are precisely the operation events retained by
                 // complete_with_event, not arbitrary serialized game events.
@@ -237,6 +234,7 @@ impl<'a> Projection<'a> {
                 }
             }
             FrameCompletion::Paid { player, payment } => {
+                self.paid_summary();
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
                 match payment {
@@ -252,10 +250,7 @@ impl<'a> Projection<'a> {
                         self.field("mode", mode);
                         self.field("target clauses", target_req_indices);
                         for target in targets {
-                            self.reference(
-                                "target",
-                                self.game.target_reference(*target, self.viewer),
-                            );
+                            self.target("target", *target);
                         }
                     }
                     Payment::Activation {
@@ -265,20 +260,15 @@ impl<'a> Projection<'a> {
                         x,
                     } => {
                         match source {
-                            ActivationSource::Permanent(id) => self.reference(
-                                "paid source",
-                                self.game
-                                    .target_reference(Target::Permanent(*id), self.viewer),
-                            ),
+                            ActivationSource::Permanent(id) => {
+                                self.target("paid source", Target::Permanent(*id))
+                            }
                             ActivationSource::Card(card) => self.card("paid source", *card),
                         }
                         self.field("ability", ability_index);
                         self.field("X", x);
                         for target in targets {
-                            self.reference(
-                                "target",
-                                self.game.target_reference(*target, self.viewer),
-                            );
+                            self.target("target", *target);
                         }
                     }
                 }
@@ -287,6 +277,7 @@ impl<'a> Projection<'a> {
                 ability,
                 source_after_cost,
             } => {
+                self.paid_summary();
                 self.field("return", &"paid activation");
                 self.object("activation source", ability.source_ref);
                 self.field("controller", &ability.controller);
@@ -296,7 +287,7 @@ impl<'a> Projection<'a> {
                 self.field("inherited definition", &ability.inherited_from);
                 self.effects("captured activation", &ability.effects);
                 for target in &ability.targets {
-                    self.reference("target", self.game.target_reference(*target, self.viewer));
+                    self.target("target", *target);
                 }
                 if let Some(object) = ability.attached {
                     self.object("attached at activation", object);
@@ -310,6 +301,11 @@ impl<'a> Projection<'a> {
                 }
             }
         }
+    }
+
+    fn paid_summary(&mut self) {
+        self.summary
+            .push("Paid costs stay committed; finish the announcement after these choices.".into());
     }
 
     fn lki(&mut self, lki: &ObjectLki) {
@@ -664,10 +660,7 @@ pub(crate) fn project_frame(
         out.field("remaining iteration subjects", &iteration.remaining.len());
         for target in &iteration.remaining {
             out.retained_target(target.target);
-            out.reference(
-                "remaining target",
-                game.target_reference(target.target, viewer),
-            );
+            out.target("remaining target", target.target);
             out.field("target eligibility", &(target.requirement, target.legal));
         }
         out.effects("iteration instructions", &iteration.effects);
@@ -793,7 +786,7 @@ pub(crate) fn project_decision(
                 out.field("once each turn ability", &key.1);
             }
             if let Some(target) = progress.counters_on_decline {
-                out.reference("counter on decline", game.target_reference(target, viewer));
+                out.target("counter on decline", target);
             }
         }
         Decision::ChoosePaymentX { if_paid, .. } => out.effects("if paid", if_paid),
@@ -807,10 +800,7 @@ pub(crate) fn project_decision(
             out.field("choice", &(predicate, optional));
             out.effects("chosen instruction", std::slice::from_ref(effect));
             if let Some(id) = excluded {
-                out.reference(
-                    "excluded",
-                    game.target_reference(Target::Permanent(*id), viewer),
-                );
+                out.target("excluded", Target::Permanent(*id));
             }
         }
         Decision::DistributeCounters {
@@ -857,10 +847,7 @@ pub(crate) fn project_decision(
         } => {
             out.field("maximum total power", max_total_power);
             for id in kept {
-                out.reference(
-                    "kept creature",
-                    game.target_reference(Target::Permanent(*id), viewer),
-                );
+                out.target("kept creature", Target::Permanent(*id));
             }
         }
         Decision::ChooseToExile {
@@ -871,10 +858,7 @@ pub(crate) fn project_decision(
         } => {
             out.field("exile choice", &(controller, predicate));
             for id in chosen {
-                out.reference(
-                    "chosen to exile",
-                    game.target_reference(Target::Permanent(*id), viewer),
-                );
+                out.target("chosen to exile", Target::Permanent(*id));
             }
         }
         Decision::LegendRule { groups, keep, .. } => {
@@ -889,10 +873,7 @@ pub(crate) fn project_decision(
             may_keep,
             ..
         } => {
-            out.reference(
-                "retargeted stack object",
-                game.target_reference(*object, viewer),
-            );
+            out.target("retargeted stack object", *object);
             out.field("retarget", &(slot, may_keep));
         }
         Decision::ExileLinked {

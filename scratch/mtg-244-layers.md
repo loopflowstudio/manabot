@@ -1,34 +1,51 @@
 # Integrated MTG-244 context
 
-Published source `1930146b08a1f1481af6e3b46a20f87d4a26a8fa` is integrated through
-`d77bc8676`. Full accepted design, sources and historical checks remain at
-`1930146b0:scratch/mtg-244-layers.md`; its complete risk receipts and contrary
-results remain at `1930146b0:scratch/mtg-244-risk-validation.md`.
+MTG-241 integrates published #427 repair
+`beaacaa198acddb4162e5081cd570b1ec133ba05` at `457a779fa`.
+Jack Heart approved Beorn/Kellan, historical interaction fixtures and explicit
+v8 on 2026-11-04. One characteristics authority owns dependency/timestamp order,
+granted abilities, copy exceptions and captured activation programs. Debug
+recomputation remains mandatory. The shared v8 contract and MTG-241's extension
+are in [the active plan](mtg-241-composable-rules-execution.md).
 
-Jack Heart approved Beorn/Kellan as real cards, the historical layer pair fixtures,
-and explicit successor input v8 on 2026-11-04. Review only, no merge/training.
-One characteristics authority applies dependency ordering, timestamps, granted
-abilities and copy exceptions. Layered activations capture their programs before
-source departure; stack resolution/retargeting consume those programs. Saga
-chapter rules read effective characteristics, and keyword counters retain their
-own timestamps. Debug builds recompute caches; mana-independent raw views survive
-pool writes, while tap-dependent layers still invalidate.
+The repair batches independent layer instructions and immutable board reads,
+tracks tap/mana dependencies, shares finalized activations when independent,
+boxes large operation payloads, and repairs exact-reference acquisition and
+artifact upload. These changes preserve rules, policy schemas and complete
+choices. Historical focused passes do not validate the combined head.
 
-V8 retains v7 object/relation/header/member widths, uses 4096 x 3 effect details
-(kinds 11–19 = learning token kinds 1–9, signed values split into 16-bit halves),
-and local fact kinds 11–14 for copy programs, colors, keyword timestamps and
-continuation programs. Fact 14 joins frame index + 1 and token kind/value/ordinal.
-V8 defaults to 512 local facts; fresh defaults stay v6 and v1–v7 stay frozen.
-Native/Python admission rejects unsupported layer payloads before encoding.
-This published contract does not yet project MTG-241 retained execution payloads.
+## Contrary evidence and ownership
 
-The integrated code includes eleven interaction pairs, real Kellan/Beorn shells,
-v8 model/parity fixtures and a bounded layer-risk producer. Its historical focused
-passes do not certify this combined head. MTG-244's first published CI reported
-matching counts/digests but severe performance regression: search 168.192s to
-453.756s, worst reply 4.909s to 15.349s, steps 12817/s to 5654.8/s. Its reference
-fetch failed before layer-risk timing. MTG-244 owns repair; this Task must still
-measure inherited versus incremental costs and preserve the 10% budget. Neither
-publication nor a reference reset establishes acceptance. Broader integration and
-model timings remain unproved. Historical local timings under contention are not
-clean performance comparisons; raw receipts and exact revisions are in git above.
+First CI run `41933042842`, Engine Budget job `126934566262`, compared reference
+`ea316ff14bc6376dcc302b65d7c9c9330cd512e9` with the first candidate: search
+168.192→453.756 s, worst reply 4.909→15.349 s, steps/s 12,817→5,654.8.
+Counts/full digests matched. Layer Risk run `41933042919` failed before timing
+because the reference commit was absent; main Integration and Rust Tests were
+cancelled, not passed. The reference and 10% budget remain unchanged.
+
+Intermediate local search was also slower (77.341→127.581 s); contended step
+comparisons varied from 6% to 62% slower. Stopped partial runs are not timing
+acceptance. The repaired tiny-comparison workflow passed with debug assertions,
+but that is workflow evidence, not isolated release-speed acceptance. Earlier
+packed-program/payment allocation improvements are bounded component results,
+not combined-head performance or learning-quality evidence. V8 default arrays
+remain 208,368 bytes versus v7/128 facts 146,928; training efficacy, accelerators
+and generalization remain unmeasured.
+
+Jack Heart's later "make it stupidly fast" direction authorizes architectural
+speed work within MTG-244, aiming beyond the minimum budget without fewer
+choices, weaker invariants, baseline resets, merge or training. That independent
+work remains sibling-owned. MTG-241 owns its combined/reference comparison and
+incremental attribution in [risk validation](mtg-241-risk-validation.md).
+
+## Exact historical sources
+
+- Accepted design and original risk receipts:
+  `1930146b08a1f1481af6e3b46a20f87d4a26a8fa:scratch/mtg-244-layers.md` and
+  `1930146b08a1f1481af6e3b46a20f87d4a26a8fa:scratch/mtg-244-risk-validation.md`.
+- Complete repair, checks and later speed directive:
+  `fa05d837fb697d08950cd1db7ee3199a89523389:scratch/mtg-244-ci-repair.md` and
+  `fa05d837fb697d08950cd1db7ee3199a89523389:scratch/mtg-244-speed-direction.md`.
+- Raw repair diagnostics, contrary timings, logs and source/provenance: gzip tar
+  git blob `36d7913583675575fdeaf15969a3cb2b00d78dc5`. Original operator note:
+  git blob `a40377be3672235b07c3932fa3545fa878280149`.
