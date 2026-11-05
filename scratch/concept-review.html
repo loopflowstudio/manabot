@@ -27,12 +27,12 @@
 <body>
 <main>
 <header>
-  <h1>Critic readouts: one diagnostic mislabels the token</h1>
+  <h1>Critic readouts: concepts hold; the token diagnostic is fixed</h1>
   <p>Task MTG-252 · concept-review step (headless) · 2026-11-05</p>
   <p>Built from <code>experiments/value-readout-252.md</code>, <code>manabot/model/actor_critic.py</code>, <code>manabot/training/learning/health.py</code>, <code>scratch/value-readout-252.md</code>, Task brief</p>
 </header>
 
-<p><strong>Decision needed:</strong> none for this change. The fix below follows from the accepted brief. Execution still waits on the open protocol choices listed at the end.</p>
+<p><strong>Decision needed:</strong> none for this change. Second pass (after checkpoint <code>dc35969a8</code>): the fix below is implemented in <code>health.py</code> and tested; no new mismatch. Execution still waits on the open protocol choices listed at the end.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <table>

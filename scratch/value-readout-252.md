@@ -46,3 +46,7 @@ summary the critic MLP reads. Its one finding (`value_token` counted as
 critic-only) is fixed above. Remaining choices are the execution items listed
 under Remaining; they block freezing/launch, not this change. Checked: the
 readout arm's actor path equals baseline at init and its params are critic-only.
+
+Second pass (2026-11-05, after `dc35969a8`): `_CRITIC_READOUT` excludes the
+token, `gradient_norm_value_token` is reported separately, the study doc
+matches. No concept, name or API change; nothing new to implement.
