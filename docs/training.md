@@ -1,11 +1,12 @@
 # Training manabot
 
-This is the current-system guide to training a manabot: how a run is declared
-and executed, how comparisons and remote jobs are built, what the monitoring and
-numerical-health records mean, how interrupted or failed work is recovered, and
-which learning rule the default recipes implement. Metric definitions for the
-experiment report live in [experiment-metrics.md](experiment-metrics.md);
-evaluation protocols live in [evaluation.md](evaluation.md).
+[How a manabot learns](learning.md) explains the learning loop itself. This is
+the operations guide to training a manabot: how a run is declared and executed,
+how remote jobs are built, what the monitoring and numerical-health records
+mean, and how interrupted or failed work is recovered. Comparisons are declared
+in [experiments.md](experiments.md); metric definitions live in
+[experiment-metrics.md](experiment-metrics.md); evaluation protocols live in
+[evaluation.md](evaluation.md).
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
@@ -81,7 +82,7 @@ interpretation and serialized identity.
 | `train_compound` | Ragged compound-decision policy; see [compound decisions](#compound-decisions). |
 | `import_policy` | Admit a frozen TrainingRun export's raw or EMA checkpoint without training. |
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
-| `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [search-and-beliefs.md](search-and-beliefs.md). |
+| `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](../README.md#beside-the-loop). |
 
 Every stage declares device, float32 precision, worker count, Torch thread
 count, wall and memory limits (`Execution`). `execution.workers` accepts 1
@@ -115,9 +116,8 @@ consume the training clock.
 
 `train_self_play.learning_seats` defaults to `"both"` for current-self and
 EMA-self training; `"one"` is the ablation control. Random and frozen
-opponents default to one seat and are never trained on. The default was
-selected by Jack Heart on 2026-10-20 and does not by itself establish a
-strength or cost gain.
+opponents default to one seat and are never trained on. The default is a
+choice, not a measured strength or cost gain.
 
 Both-seat collection records each acting seat's behavior outputs; each seat
 gets its own trajectory and terminal win/loss/draw reward (draws zero), and
@@ -126,7 +126,7 @@ GAE and lambda returns stop at each seat's game boundary. `transitions` is a
 then finishes its current game, so batches have variable row counts. Complete
 seat trajectories are packed into `[rows, 1]` with terminal separators and no
 padding. `games_per_stream` overrides the quota with complete games per stream
-per update; set it on both arms for an equal-game comparison and report
+per update ([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)); set it on both arms for an equal-game comparison and report
 learner transitions, environment decisions, games, exposures and cost
 separately. For two live models, use one `SeatRoutedCollector` with
 `opponent_mode="learning"`, `learning_seats="both"` and `opponent_agent`;
@@ -236,102 +236,8 @@ consumer.
 
 ## Experiments
 
-`manabot.experiment.config.Experiment` declares a typed comparison. `resolve()`
-returns complete validated `TrainingRegime` values plus a provenance receipt;
-it never builds a model, opens a store or launches work.
-
-```python
-from experiments.batched_baseline import batched_baseline
-from manabot.experiment.config import Axis, Baseline, Case, Experiment, ModelOverride
-from manabot.infra.config import ModelConfig
-
-experiment = Experiment(
-    name="value-output",
-    baseline=Baseline.capture("control", batched_baseline()),
-    matrix=(Axis("output", (
-        Case("scalar", (ModelOverride(ModelConfig(value_kind="scalar")),), "Scalar"),
-        Case("wdl", (ModelOverride(ModelConfig(value_kind="categorical_wdl")),), "WDL"),
-    )),),
-)
-resolved = experiment.resolve()
-regime = resolved.regimes["value-output-wdl"]
-receipt = resolved.receipt()
-```
-
-`cases` vary together; `matrix` axes cross, last axis fastest. IDs join
-experiment, case and choice names with hyphens; names are lowercase
-alphanumeric. Labels are presentation only.
-
-| Component | Owns |
-| --- | --- |
-| `ModelOverride(ModelConfig(...))` | Explicitly supplied `agent.*` fields. |
-| `Environment(world=, match=, observation=)` | World, matchup, input capacity; a supplied deck map replaces the whole map. |
-| `LearningRule(Learning(...) \| DampedPolicyLearning(...))` | The complete learning rule on every self-play stage. |
-| `Resources(execution=, wall_seconds=)` | Explicit execution fields on every stage and the run deadline. |
-| `Pipeline(stages=(...))` | The complete ordered stage list. |
-| `RunControl(...)` | `schedule_clock` (default `iteration_fraction`), `recovery_max_microsteps`, `selection`, `recovery_every_updates`. |
-
-Every setting has exactly one owner. Writes from common overrides, cases and
-axes may replace a baseline value but never each other, even with equal
-values; overlapping parent/child writes fail (so `Pipeline` cannot accompany
-`LearningRule`). There is no last-write-wins. Pydantic's explicitly-set fields
-define a patch, so an explicit default still counts as an override.
-Resolution runs `validate_regime`; artifact existence and runtime binding stay
-execution checks.
-
-`Baseline.capture(name, regime)` freezes all current serialized defaults into
-immutable bytes; its identity is the full snapshot. `ResolvedCase.digest` is
-the canonical regime digest; `ResolvedCase.identity` also hashes label,
-baseline and provenance. Tests use the small categorical-WDL baseline in
-`tests/training/wdl_baseline.py`, built with `ataraxos_baseline`. A
-declaration is not a study type: the arena studies in
-`manabot.experiment.study` admit only their own arms, seeds and budgets.
-
-### Execute locally
-
-`Experiment.schedule = ExperimentSchedule(...)` declares seeds, hardware,
-`wall_seconds`, `process_seconds`, `MonitoringBudget` and `checkpoint_updates`.
-`manabot.experiment.runner.run_experiment(experiment, hardware, out)` executes
-it and records actual attempts in `ExperimentRun`.
-
-```python
-hardware = HardwareInventory.model_validate_json(Path("hardware.json").read_text())
-result = run_experiment(experiment, hardware, Path(".runs/my-comparison"))
-result = run_experiment(experiment, hardware, out, resume=True)              # pending work only
-result = run_experiment(experiment, hardware, out, resume=True, recover=(0,))  # recover attempt 0
-```
-
-`HardwareInventory` lists resource names, exact hostnames, `backend:
-"local-cpu"`, `cpu_threads` and optional `dollars_per_hour`. Only that host and
-CPU are admitted; there is no discovery, provisioning or device fallback. One
-learner and at most one evaluator run concurrently; reserve a thread for
-evaluation. `wall_seconds` bounds the whole execution; `process_seconds`
-bounds additive learner plus evaluator time. The full monitoring allocation
-is reserved before each learner; jobs that do not fit stay pending rather than
-shrink. Failed learners keep their exported checkpoints; stopped evaluations
-are not retried; resume grants no extra budget. `active_runtime=True` requires
-the [current-game recovery policy](#current-game-recovery) on every learner.
-A `pause.request` file in the output directory requests a pause at the next
-learning boundary.
-
-The report is one editable `comparison.ipynb` per execution directory, created
-only when absent so edits survive; it reads retained files only and renders
-`comparison.html`. `demo_declaration()` in
-`tests/training/test_experiment_runner.py` is a complete small declaration;
-the retained [demo HTML](../tests/fixtures/experiment-demo/comparison.html)
-and [evidence note](../tests/fixtures/experiment-demo/README.md) show the
-output. Interpretation belongs to the experiment author, never the runner.
-
-### Freeze step targets
-
-`manabot.experiment.execution.StepCalibration.from_export(path)` reads a
-completed single-stage fresh self-play `run.json` and measures completed
-iterations per collection-plus-learning second; `updates_for(hours)` floors to
-whole iterations. Use a representative, separately authorized pilot per
-capacity; apply each target to `TrainSelfPlay.updates` and one shared interval
-to every `checkpoint_updates`; commit the frozen declaration before launch.
-Execution never consults pilot rates. Equal steps do not mean equal
-transitions, exposures, active time or dollars.
+Declaring, executing and calibrating a comparison is in
+[experiments.md](experiments.md#declaring-a-comparison).
 
 ## Remote training
 
@@ -357,7 +263,7 @@ def runs(revision: str):
 ```
 
 ```sh
-uv run etude launch experiments/<name>.py --revision COMMIT --rent l4 --max-usd 10
+uv run etude launch experiments/<name>.py --revision COMMIT --cohort <name>-1 --rent l4 --max-usd 10
 uv run etude report experiments/<name>.py --source r2://manabot/jobs --open
 ```
 
@@ -461,14 +367,14 @@ uv run python -m manabot.reports.training --evaluations a/monitor.json b/monitor
 uv run python -m manabot.experiment.monitor_worker --import-manifest manifest.json --import-rows rows.json --out .runs/imported-monitor
 ```
 
-`--destination` (directory or `s3://bucket/prefix`) and `--experiment` select
-delivery; settled rows are never rewritten and a changed prefix is rejected.
+For `manabot.reports.training`, `--destination` (directory or
+`s3://bucket/prefix`) and `--experiment` select delivery; settled rows are never rewritten and a changed prefix is rejected.
 
 ### Stored bytes
 
-Jack Heart selected `s3://etudefantasia/manabot/` for retained bytes and
-`loopflow-studio/etude` for W&B metrics on 2026-10-06 (bucket in `us-west-2`,
-public access blocked, AES256, versioned). Use the standard AWS credential
+Retained bytes live in `s3://etudefantasia/manabot/` and W&B metrics under
+`loopflow-studio/etude` (bucket in `us-west-2`, public access blocked, AES256,
+versioned). Use the standard AWS credential
 chain; never put keys in recipes. Training exports are retained as Etude
 checkpoints; experiment results are published with
 `uv run --extra artifacts python -m manabot.data publish <path>`. Older
@@ -759,140 +665,13 @@ Engine failures in evaluation get no loss, draw or strength credit.
 
 ## Ataraxos
 
-The default move-learning rule adapts the Ataraxos Stratego method to MTG. It
-is not an exact reproduction or a strength result. Sources (checked
-2026-10-04 and 2026-10-05): the
-[final Nature paper](https://www.nature.com/articles/s41586-026-11036-y) and
-[supplement S3.2–S3.7, Tables S7/S10](https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41586-026-11036-y/MediaObjects/41586_2026_11036_MOESM1_ESM.pdf)
-(SHA-256 `74f217e942cd824140dd5221c02d8c36821a715664f47aee6f489f0ca6932a08`).
-The damped move update **does use clipped importance ratios**.
-
-```bash
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run manabot train --regime-name ataraxos_move --seed 601 --out .runs/move
-uv run manabot train --regime-name ataraxos_move:ataraxos_move_scalar --seed 601 --out .runs/move-scalar
-```
-
-These `experiments/ataraxos_move.py` recipes are bounded two-stage, one-thread,
-180-second proofs. Ablation recipes are in `experiments/ataraxos_ablation.py`.
-
-### Objective
-
-`manabot/training/learning/damped_policy.py` owns the objective; recipes select
-`DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
-inputs decode at the compatibility boundary with their original tag and
-digest. Per retained observation the policy loss is the negative clipped-ratio
-advantage surrogate plus `collection_kl * KL(current || behavior)` and
-`tau * KL(current || magnet)`, summed over all legal offers. Advantages use
-signed expected outcomes with their own lambda. Outcome targets are three-way
-lambda mixtures stored in **loss, draw, win** order with one-hot terminals; the
-critic gets cross-entropy, equally weighted with the policy loss. The scalar
-ablation uses squared-error lambda returns instead. Only current logits receive
-gradients: behavior, references, estimates and targets are detached; the
-shared encoder receives both losses.
-
-Collection freezes learner weights within each batch; both-seat and
-`games_per_stream` collection finish games before updating, while one-seat
-quota collection may span updates. One epoch still changes parameters between
-minibatches, so per-action ratios remain necessary. No replay buffer,
-trajectory ratio product or state-occupancy correction is implemented.
-Filtering changes the training-state measure, as in the source, and
-advantages are not renormalized after filtering. Truncation fails rather than
-becoming a draw; opponent actions are traversed, not trained on.
-
-Optional controls: `filter_scope="actor"` keeps all critic rows;
-`behavior="ema-self"` collects and bootstraps with averaged weights
-([protocol](../experiments/ataraxos-omitted-controls.md)). EMA evaluation
-outputs are selected explicitly at arena registration.
-
-### Fidelity table
-
-| Technique / source | Implementation | Boundary |
-| --- | --- | --- |
-| S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; both clipping branches tested | Same loss |
-| Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and magnet | Finite legal log support required; rounded zeros counted, no smoothing |
-| Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control | MTG action types replace piece-then-move groups |
-| Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace same-player positions |
-| Outcome estimator, eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap | Loss/draw/win storage order is a permutation |
-| Value representation, S3.4 | Categorical head with CE | Scalar MSE is an explicit ablation |
-| Filtering, S3.4/Table S7 | Inclusive .75 quantile and .01 minimum; ties included | Torch linear quantile; source interpolation unspecified |
-| Optimizer damping, Table S7 | Adam, clip=.2, collection KL=.1, max norm=.267, value weight=1 | Adam betas .9/.999, epsilon 1e-5 (source unspecified) |
-| Schedules, Table S7 | LR clip(.5 / iteration^1.1, 5e-6, 1e-4); tau=.05 / iteration^.3 | One-based iterations; no elapsed-budget substitution |
-| Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
-| EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation only |
-| S3.3 setup learning | Not implemented | MTG has no learned setup |
-| S3.5 belief, S3.7 search | Outside this trainer | See [search-and-beliefs.md](search-and-beliefs.md) |
-| S3.6 network scale | Semantic Agent, small width, CPU float32 | The paper uses an 8-layer width-384 network on GPUs |
-
-**Unresolved source details:** Adam epsilon/betas, iteration origin, EMA
-initialization, quantile interpolation and exact bootstrap pseudocode at a
-collection boundary. The choices above are explicit implementations, not
-recovered details. Supplement S5–S7 recipes are not blended in; DeepNash's
-R-NaD is not implemented. Departures also include post-normalization
-attention (the paper specifies pre-normalization), the value token as a local
-choice, and missing ordered past-move inputs.
-
-Before any scientific comparison of PPO, categorical and scalar move learning,
-freeze a protocol, independent seeds, budgets, world and code identities,
-held-out paired deals with both seat/deck assignments and the raw/EMA choice;
-keep all failures and compare overlapping cost intervals. The technique
-inventory is [ataraxos-technique-screen](../experiments/ataraxos-technique-screen.md);
-ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.md).
+The objective and the fidelity table are in
+[how a manabot learns](learning.md#fidelity-to-the-sources).
 
 ## Policy inputs
 
-### Current continuation input
-
-Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.
-V6 retains v5's fact columns and all other tensor layouts; v5 keeps exactly
-128 fact rows. Facts remain one row per object/detail with source, duration and
-timestamp rank. The model divides fact timestamp ranks by **128** in both
-versions; capacity does not change the numeric scale. Larger finite buffers
-still reject overflow rather than dropping state. Configuration owns allocation,
-native scalar/vector buffer shapes, model shape checks and checkpoint receipts.
-
-A native `relations[64,49]` float32 buffer carries ordered stack entries,
-announced targets and clauses, chosen modes and abilities, kicker, reserved
-sacrifices, suspended payments and waiting triggers. V5/v6 player, card and
-permanent widths are 67/55/38. Native buffers bind relation semantics by width
-(32 for v2/v3, 33 for v4, 49 for v5/v6); validity stays at column 31. The fact
-axis binds capacity; at 128 rows v5 and v6 encode identically, while the saved
-configuration still distinguishes their identities. Checkpoints omitting the
-version load as v1 through `ObservationConfig.from_checkpoint`; legacy configs
-omit `max_facts`, preserving historical architecture hashes.
-`agent/continuation.rs` projects the facts once per observation and
-`manabot/env/observation.py` is the matching reference encoder. Only the
-acting viewer receives private continuation; overflow fails rather than
-truncating. Transport IDs are joins to the card catalog and object table,
-never numeric features. At `Decision::ManaChoice` the activation source is
-unavailable because rules state has discarded it.
-Waiting delayed abilities (frame kind 10) carry event codes independently of
-frequency and expiry. In v5/v6, relation row kind 9 carries frequency in column
-28 (1 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
-objects remain kind-8 reference rows, separate from event context. Historical
-captures without a frequency field retain unknown frequency rather than
-inferring it from the event. V1–v4 omit these delayed facts.
-
-Encode-only benchmark: `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`.
-Matched full-vector benchmarks use `scripts/bench_breakdown.py --matched-corpus`
-and `scripts/bench_observation_pair.py` on a release extension built with the
-`benchmark` feature. On 2026-10-26 the paired comparison on a 32-vCPU EPYC
-host showed full-step ratios of 0.978–1.051, which met Jack Heart's revised
-2026-10-26 shipping acceptance permitting small measured overheads.
-
-### Optional recent public events
-
-`ModelConfig(recent_events=True)` (or `with_recent_events` / `ModelOverride`)
-adds shared policy/value context from a bounded suffix of public events; the
-regime derives `observation.policy_history_version=1`. `Game::emit` maintains
-the projection at the same append as the rules ledger, keeping at most 32
-rows; private arrivals produce no row, and owner (not controller) is recorded.
-History-on uses an `[E,12]` tensor (`1 <= E <= 32`) with a validity mask:
-kind (public arrival, damage, life change, spell cast, resolved, countered),
-signed amount, and source/target references `(definition+1, owner_role,
-zone+1, context_index, availability)`. Valid rows are mean-pooled and added to
-shared object embeddings; an empty window gives exactly zero context.
-History-off keeps the historical `[E,7]` tensor and parameters. This is not
-complete decision history, and no training benefit has been measured.
+The continuation input, capacities and the optional recent-event input are in
+[observations and the policy network](observation-and-model.md#policy-inputs).
 
 ## Distributed training
 

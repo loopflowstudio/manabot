@@ -1,9 +1,3 @@
----
-id: 54bc9162-c883-4574-bab1-af589526c1ad
-linear:
-  initiative: 427144c1-6896-40e1-a23e-6e7fe9bc9fc4
----
-
 # Training
 
 ## Objective

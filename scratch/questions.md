@@ -197,3 +197,38 @@ changed engine source; Task 04 must author and freeze its integrated prospective
 binding, lists/probes and settings before authorized execution. Engine-budget CI,
 demo, delivery and post-merge verification retain their own boundaries. Publish
 for review only; do not merge, arm auto-merge or complete MTG-245.
+
+## Gate integration and validation plan — 2026-11-05
+
+Syncing main `41981b3abb326e656d06d3b6aacea9a2d73f79ed` preserves upstream Wave IDs and Linear bindings while
+selecting the accepted `coverage` and `experiment` graphs (retiring `workflow:
+iterate`). Preserve upstream's removal of docs/README.md and put this branch's
+workflow guide link in the root guide map. Follow the moved Standard milestone
+in Coverage's research directory. These are mechanical integration choices.
+MTG-213's separate assumptions remain at `41981b3abb326e656d06d3b6aacea9a2d73f79ed:scratch/questions.md` and
+its durable pilot report; this file continues to own MTG-245 only. The shipping
+direction in explore-design.md supersedes the historical publish-only boundary.
+
+Comparison: Task base `fe83a6b0` before sync; main `41981b3abb326e656d06d3b6aacea9a2d73f79ed` after integration.
+The pre-sync published head `a1927892d` passed all CI checks, including debug
+Rust, both Python integrations, package/install, Academy and Engine Budget.
+No implementation defect was found in the capture/reporting review.
+
+Focused plan (one runner at a time):
+- experiments/growing_pool*.py and protocols, capture/failures, TrainingJob and
+  execution, card-evidence imports: protocol/analysis/exposure, card evaluation,
+  experiment discovery, regimes, package-boundary and failure/recovery tests.
+- Native capture, env/vector, frame finalization and bindings: directed debug
+  card_capture and vector_env tests; retain the unchanged full debug and engine
+  budget CI results. Incoming native test changes only relocate existing data.
+- .lf graphs/skills/configs and docs/workflows.md: real lf discovery/compilation
+  and boundary validator. No Wave migration or other Task execution is repeated.
+- CI integration path addition: exact two-seat/evaluation collection plus CI
+  selection/release tests. The changed-aware selector is .github/ci/select-tests.sh;
+  it selects all jobs for native source and has no local result cache. Keep the
+  local plan focused and leave the wider matrix to CI on the integrated revision.
+- Ruff lint/format for changed Python, cargo fmt and all-target/all-feature Clippy,
+  git diff --check, and local links in branch documentation. No UI changes.
+- The four CLI demo cases already passed; reuse that dated evidence rather than
+  claiming it ran against the new source. Focused analysis tests construct fresh
+  source-bound fixtures after sync. No measured learning/performance claim.
