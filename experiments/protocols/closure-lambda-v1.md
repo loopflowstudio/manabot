@@ -96,16 +96,18 @@ Ceilings are conservative reservations, not estimates. An unspent line may cover
 failed attempt in another line; the total may not move. Evaluation stays a small
 fraction of training.
 
-Per-run limits fit those lines at the calibrated L4 rate. Etude reserved 1.10× a
-job's dollars in calibration, which the reservations below assume.
+Per-run limits fit those lines at the calibrated L4 rate. The launcher reserves a
+job's window plus 15 minutes of setup at the hourly rate, so launch passes these limits
+over the frozen job's own. Limits sit outside a job's identity, and each window still
+covers the run's wall stop and finalization.
 
-| Study | Runs | Hours per run | Job dollars | Reserved |
+| Study | Runs | Window hours | Job dollars | Reserved |
 |---|---:|---:|---:|---:|
-| 1, exact quota | 3 | 1.9 | $1.14 | $3.77 |
-| 1, complete games | 3 | 2.5 | $1.50 | $4.96 |
-| 2, each of 5 arms | 15 | 1.2 | $.72 | $11.90 |
+| 1, exact quota | 3 | 1.85 | $1.24 | $3.72 |
+| 1, complete games | 3 | 2.45 | $1.60 | $4.78 |
+| 2, each of 5 arms | 15 | 1.0 | $.74 | $11.06 |
 
-Reserved in total with calibration's $1.49 and evaluation's $2.50: $24.60. Evaluation
+Reserved in total with calibration's $1.49 and evaluation's $2.50: $23.55. Evaluation
 jobs carry no dollar limit of their own, so each launch passes one inside its line.
 
 ## Kill criteria
