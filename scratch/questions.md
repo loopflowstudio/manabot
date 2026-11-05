@@ -66,13 +66,31 @@ main's old `iterate` selection is not a replacement of existing captured graphs.
 
 ## Remaining ownership and limits
 
+- The concept-review binding cut is implemented. `ProtocolBinding` selects the
+  importable entry module and protocol path/digest; Etude's file stem supplies
+  the experiment name. Thin entries validate their discovery path and delegate
+  to `growing_pool_runtime.py`. Declarations freeze the selected entry/manifest,
+  callbacks validate experiment and protocol conditions, and offline analysis
+  opens the selected store. `--experiment` replaces path-only `--protocol`.
+  No registry or copied scientific pipeline was added. Controlled two-binding
+  fixtures exercise actual Etude discovery/job readers, imported callbacks and
+  sealed offline stores, including crossed identities and a misnamed entry.
+  These fixtures are not runtime admission or scientific results.
+  Regime compilation is separate from runtime admission: offline health and
+  exposure reconstruct frozen settings, while job creation, evaluation and CLI
+  admission still reject an incompatible engine. Analysis shares one parsed
+  declaration and delegates checkpoint ownership checks to the schedule builder.
+
+- Reconciled 2026-11-04: the frozen proxy is not currently admitted. Its engine
+  source predates training-exposure capture; the same world label and valid decks
+  cannot establish compatibility. The protocol documentation now states this at
+  its entry point and commands. V1 JSON remains unchanged. Task 04 must freeze the
+  integrated prospective protocol, actual Adventure/prepare lists and shared
+  probe IDs, numeric settings and execution authority. Neither synthetic fixtures
+  nor the proxy lists establish learning, throughput, real exposure or playable
+  coverage.
 - Gate owns the affected Rust/Python suites and full automated acceptance checks;
   focused checks cover the directed debug fixtures and Python capture/report path. Demo/review remains the next product boundary.
-- The frozen v1 JSON is unchanged. Instrumentation changes native source identity,
-  so it correctly rejects a changed runtime. Task 04 must freeze the integrated
-  prospective protocol, actual Adventure/prepare lists and shared probe IDs,
-  numeric settings and execution authority. Neither synthetic fixtures nor the
-  proxy lists establish learning, throughput, real exposure or playable coverage.
 - Task 08 owns operational Validation B. The deeper strength/generalization track
   begins separately after full FDN; its execution Task is still unassigned.
 - Tasks 01/03 remain owners of broader shared history/crash receipts. This change
@@ -82,6 +100,19 @@ main's old `iterate` selection is not a replacement of existing captured graphs.
   Eval and resolving the recreated Training identity does not select that backlog.
 - PR #421's empirical reservations and fc6ffb/MTG-213's separate budgets confer no
   scientific execution authority on MTG-245.
+
+The 2026-11-04 shared Wave read still has the four accepted core identities plus
+Academy, with Study abandoned. No replacement Training or Eval Wave is active.
+The migration receipts preserve memory provenance; consolidation remains: Experiments'
+memory still links the removed `.lf/wave/eval/MEMORY.md`, and the renamed goal
+files retain Training/Engine headings and their earlier chapter scopes. Proposed
+follow-up within an owning Wave Graph: replace the dead Eval link with its exact
+archive reference in `docs/workflows.md`, incorporate applicable evaluation
+lessons, and reconcile headings/current responsibility with Jack Heart's accepted
+2026-11-04 boundaries without overwriting historical chapter scope or PR #421's
+contributions. This unbound Task selects no Wave for memory curation; those files
+remain unchanged. Relevant Experiments and Coverage lessons were read; unrelated
+Wave memories were not audited.
 
 ## Assumptions and deletion cut
 
@@ -94,14 +125,23 @@ pilot evidence; performance/cost remain for the authorized pilot to measure.
 Downloaded job-output directories are explicit analysis inputs so the instrument
 does not invent a second Etude checkpoint/artifact store or assume bucket layout.
 
-Delete — do not maintain (completed; no remaining targets): the constant “training exposure unavailable; acceptance
+Delete — do not maintain (completed; no remaining targets): implicit runtime
+admission inside the offline regime compiler; duplicate analysis declaration
+parsing/export checks; implicit v1 defaults
+in shared execution/analysis, the path-only CLI selector and monolithic entry
+point; the constant “training exposure unavailable; acceptance
 unresolved” report field; the old sim-owned native capture model definitions;
 the retired Eval graph config. Existing historical capture bytes and evaluation
-readers retain their meanings. The plan's prior review is retained in
-scratch/concept-review.html; its two acceptance questions were resolved by the
+readers retain their meanings. The current review replaces the prior page at
+scratch/concept-review.html; its earlier acceptance questions were resolved by the
 named 2026-11-04 steers. Earlier exploration detail is at
 190b0c603d70e790f2217c61c970c38f82544d08:scratch/explore-design.md, and earlier
 protocol/workflow implementation context at a72b5ef1a:scratch/questions.md.
 
-Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/{test_training_exposure,test_growing_pool_protocol,test_growing_pool_analysis}.py -q` — 53 passed; `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib exposure_` — 3 passed; rebuilt/atomically installed cp312 extension and 6 native-roundtrip, journal-durability and evaluation-reader checks passed; `uv run python scripts/check_loopflow_workflows.py`, Ruff, rustfmt and `git diff --check` passed. Gate owns affected suites/full acceptance.
-No campaign or complete game was run; native proofs use controlled positions only.
+Prior implementation evidence remains applicable to unchanged code: 53 focused
+Python capture/protocol/analysis checks, three debug native exposure fixtures,
+six native-roundtrip/journal/evaluation-reader checks, workflow compilation and
+formatting passed. These checks were not repeated for documentation reconciliation.
+
+Check: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py -q` — 56 passed, including two bindings, runtime/job rejection and offline exposure without runtime admission; Ruff, formatting and `git diff --check` passed. Prior workflow compilation remains applicable. Gate owns full affected suites/acceptance; demo/review remains required. Frozen JSON bytes are unchanged.
+No campaign or complete game was run; all new evaluation/training records are synthetic.

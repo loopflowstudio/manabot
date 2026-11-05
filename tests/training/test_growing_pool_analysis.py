@@ -16,11 +16,14 @@ from etude.train.run import track
 import numpy as np
 import pytest
 
-from experiments import growing_pool, growing_pool_analysis
+from experiments import (
+    growing_pool as entry,
+    growing_pool_analysis,
+    growing_pool_runtime as growing_pool,
+)
+from experiments.growing_pool import BINDING
 from experiments.growing_pool_analysis import AnalysisResult, analyze, main
 from experiments.growing_pool_protocol import (
-    EXPERIMENT,
-    PROTOCOL,
     ROOT,
     Protocol,
     World,
@@ -35,6 +38,9 @@ from manabot.sim.registration import PlayerRegistration
 from tests.eval.test_card_evaluation import card_fixture
 from tests.eval.test_local_evaluation import _replayed_rows
 from tests.training.test_training_exposure import receipt as training_receipt
+
+EXPERIMENT = BINDING.experiment
+PROTOCOL = BINDING.protocol_path
 
 
 @dataclass
@@ -220,7 +226,7 @@ def league(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SealedLeague]:
         matches = [
             match
             for run in state.runs
-            for slot in growing_pool.comparisons(run, protocol)
+            for slot in growing_pool.comparisons(run, protocol, experiment=EXPERIMENT)
             if slot.matchup
             for match in slot.matchup.matches()
         ]
@@ -232,7 +238,7 @@ def league(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SealedLeague]:
                 config={"status": protocol.status},
             ),
             matches=matches,
-            play=growing_pool.play,
+            play=entry.play,
             directory=source,
             run="synthetic-evaluation",
         )
@@ -250,7 +256,7 @@ def db(league: SealedLeague) -> Iterator[duckdb.DuckDBPyConnection]:
 
 
 def report(league: SealedLeague, db: duckdb.DuckDBPyConnection) -> AnalysisResult:
-    return analyze(league.state, league.training, db, league.source, league.protocol)
+    return analyze(league.state, league.training, db, league.source, BINDING)
 
 
 def test_complete_sealed_league_uses_paired_whole_deals_per_seed(
@@ -292,7 +298,7 @@ def test_wholly_absent_seed_does_not_shrink_exam(
         [d for d in league.training if d.name == first.name],
         db,
         league.source,
-        league.protocol,
+        BINDING,
     )
     assert result.counts.expected == 800
     assert result.counts.missing == 400
@@ -306,7 +312,7 @@ def test_no_runs_retains_both_declared_seeds(
     league: SealedLeague, db: duckdb.DuckDBPyConnection
 ) -> None:
     result = analyze(
-        ExperimentState(experiment=EXPERIMENT), [], db, league.source, league.protocol
+        ExperimentState(experiment=EXPERIMENT), [], db, league.source, BINDING
     )
     assert result.counts.missing == result.counts.expected == 800
     assert result.counts.missing_matches == 200 and not result.complete
@@ -467,7 +473,7 @@ def test_absent_export_keeps_planned_slots(
         league.training,
         db,
         league.source,
-        league.protocol,
+        BINDING,
     )
     assert result.counts.expected == 800 and result.counts.missing == 320
     assert all(r.exports[32] is None for r in result.seeds)
@@ -492,7 +498,9 @@ def test_analysis_cli_reports_empty_store_without_playing(
 
 
 def test_analysis_includes_complete_training_exposure(
-    league: SealedLeague, db: duckdb.DuckDBPyConnection
+    league: SealedLeague,
+    db: duckdb.DuckDBPyConnection,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Sealed synthetic training and evaluation are matched by declaration IDs.
     receipts = []
@@ -521,8 +529,15 @@ def test_analysis_includes_complete_training_exposure(
                     }
                 )
             )
+
+    def unavailable_runtime(cls: type[World]) -> World:
+        raise AssertionError("offline evidence must not require runtime admission")
+
+    # Retained declarations and exposure are checked against their frozen regime,
+    # even when the current runtime cannot execute it.
+    monkeypatch.setattr(World, "current", classmethod(unavailable_runtime))
     result = analyze(
-        league.state, league.training, db, league.source, league.protocol, receipts
+        league.state, league.training, db, league.source, BINDING, receipts
     )
     assert result.complete and result.training_exposure_complete
     assert all(r.exposure.terminal_games == expected for r in result.seeds)

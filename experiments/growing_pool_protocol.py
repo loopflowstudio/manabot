@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 from typing import Literal
 
+from etude.eval.match import Result
+from etude.eval.records import Match
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from manabot.env.observation import ObservationSpace
@@ -32,8 +36,6 @@ import managym
 from managym import Deck
 
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL = ROOT / "experiments/protocols/growing-pool-245-v1.json"
-EXPERIMENT = "growing_pool"
 
 type Group = Literal["anchor", "new", "mixed", "test"]
 type Anchor = Literal["heuristic", "initial"]
@@ -507,7 +509,11 @@ class Protocol(StrictModel):
         audit_decks(self.manifest)
 
     def regime(self) -> TrainingRegime:
-        self.admit()
+        """Compile frozen settings for execution or offline identity comparison.
+
+        Runtime admission belongs at job/callback boundaries. Retained evidence
+        must remain readable when today's engine no longer admits this world.
+        """
         budget = self.budget
         return TrainingRegime(
             id=self.id,
@@ -538,10 +544,11 @@ class Protocol(StrictModel):
             ],
         )
 
-    def job(self) -> TrainingJob:
+    def job(self, *, experiment: str) -> TrainingJob:
+        self.admit()
         return TrainingJob(
             regime=self.regime(),
-            experiment=EXPERIMENT,
+            experiment=experiment,
             milestones=self.budget.milestones,
             finalization_seconds=120,
             stop_reserve_seconds=120,
@@ -550,22 +557,76 @@ class Protocol(StrictModel):
         )
 
 
-def read_protocol(path: Path = PROTOCOL) -> Protocol:
-    protocol = Protocol.model_validate_json(path.read_bytes())
-    protocol.admit()
-    return protocol
+class ProtocolBinding(StrictModel):
+    """One frozen protocol and its canonical Etude entry point.
+
+    Etude names experiments after file stems. Deriving that name from the
+    importable module keeps declarations, discovery and result stores aligned.
+    Offline reads check the digest but do not admit today's runtime world.
+    """
+
+    module: str = Field(pattern=r"^[a-zA-Z_]\w*(\.[a-zA-Z_]\w*)*$")
+    protocol_path: Path
+    protocol_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @property
+    def experiment(self) -> str:
+        return self.module.rsplit(".", 1)[-1]
+
+    @property
+    def entry_point(self) -> Path:
+        module = import_module(self.module)
+        if getattr(module, "BINDING", None) != self or module.__file__ is None:
+            raise ValueError("entry point differs from selected protocol binding")
+        path = Path(module.__file__).resolve()
+        if path.stem != self.experiment:
+            raise ValueError("entry point stem differs from experiment identity")
+        return path
+
+    @property
+    def callback(self) -> Callable[[Match], Result]:
+        # The worker imports this symbol, so never pass a runpy wrapper or partial.
+        self.entry_point
+        callback = getattr(import_module(self.module), "play", None)
+        if not callable(callback) or callback.__module__ != self.module:
+            raise ValueError("binding requires a canonical importable play callback")
+        return callback
+
+    def check_entry(self, path: Path) -> None:
+        """Reject copied or renamed discovery files still pointing at another entry."""
+        if path.resolve() != self.entry_point:
+            raise ValueError("discovered file differs from bound entry point")
+
+    def read(self, *, admit: bool = False) -> Protocol:
+        self.entry_point
+        protocol = Protocol.model_validate_json(self.protocol_path.read_bytes())
+        if protocol.digest != self.protocol_sha256:
+            raise ValueError("protocol digest differs from selected binding")
+        if admit:
+            protocol.admit()
+        return protocol
+
+
+def read_binding(module: str) -> ProtocolBinding:
+    """Read the authored binding, never infer a protocol from an experiment name."""
+    binding = getattr(import_module(module), "BINDING", None)
+    if not isinstance(binding, ProtocolBinding) or binding.module != module:
+        raise ValueError("entry point does not declare its own protocol binding")
+    binding.entry_point
+    return binding
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("check", "regime"))
-    parser.add_argument("--protocol", type=Path, default=PROTOCOL)
+    parser.add_argument("--experiment", default="experiments.growing_pool")
     args = parser.parse_args()
-    protocol = read_protocol(args.protocol)
+    binding = read_binding(args.experiment)
+    protocol = binding.read(admit=True)
     if args.command == "regime":
         print(protocol.regime().model_dump_json(indent=2))
     else:
-        print(f"{protocol.id}: {protocol.digest}")
+        print(f"{binding.experiment} / {protocol.id}: {protocol.digest}")
         print(
             f"{len(protocol.manifest.entries)} decks; {len(protocol.manifest.source().decks)} sampling tickets"
         )
@@ -578,4 +639,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import_module("experiments.growing_pool_protocol").main()

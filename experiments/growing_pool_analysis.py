@@ -23,23 +23,23 @@ from etude.train.read import RunData, read_all
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
-from experiments.growing_pool import (
-    comparisons,
-    deck_matchup,
-    policy_source,
-    policy_source_sha256,
-)
 from experiments.growing_pool_exposure import (
     TrainingExposure,
     read_training_exposure,
     training_exposure,
 )
 from experiments.growing_pool_protocol import (
-    EXPERIMENT,
-    PROTOCOL,
     Anchor,
     Panel,
     Protocol,
+    ProtocolBinding,
+    read_binding,
+)
+from experiments.growing_pool_runtime import (
+    comparisons,
+    deck_matchup,
+    policy_source,
+    policy_source_sha256,
 )
 from manabot.env.failures import TrainingExposureReceipt
 from manabot.eval.evaluation import EvaluationResult
@@ -118,6 +118,7 @@ class SeedAnalysis(StrictModel):
 
 
 class AnalysisResult(StrictModel):
+    experiment: str
     protocol_sha256: str
     bootstrap_seed: int
     bootstrap_resamples: int
@@ -147,30 +148,34 @@ def _total(counts: Sequence[Counts]) -> Counts:
     )
 
 
-def _health(data: RunData | None, protocol: Protocol, training_source: str) -> Health:
+def _health(
+    data: RunData | None,
+    config: _TrainingConfig | None,
+    protocol: Protocol,
+    training_source: str,
+) -> Health:
     if data is None or data.file is None:
         return Health(
             complete=False, passed=None, issues=["Training declaration missing."]
         )
     declaration = data.file.declaration
-    config = _Config.model_validate_json(declaration.config_json or "{}")
+    assert config is not None
     if (
         sha256((declaration.config_json or "").encode()).hexdigest()
         != declaration.config_sha256
     ):
         raise ValueError("training configuration digest differs")
     if (
-        canonical_sha256(config.training.regime)
+        canonical_sha256(config.regime)
         != canonical_sha256(protocol.regime().model_dump(mode="json"))
-        or config.training.identities.get("world") != protocol.world.world_version
-        or config.training.identities.get("engine_source_sha256")
+        or config.identities.get("world") != protocol.world.world_version
+        or config.identities.get("engine_source_sha256")
         != protocol.world.engine_source_sha256
-        or config.training.identities.get("content_digest")
-        != protocol.world.card_digest
-        or config.training.identities.get("deck_source_sha256")
+        or config.identities.get("content_digest") != protocol.world.card_digest
+        or config.identities.get("deck_source_sha256")
         != protocol.manifest.source().digest
         or declaration.continues is not None
-        or config.training.identities.get("training_source_sha256") != training_source
+        or config.identities.get("training_source_sha256") != training_source
     ):
         raise ValueError("training regime/source or fresh-run identity differs")
     if len(data.attempts) != 1:
@@ -489,7 +494,7 @@ def analyze(
     training: Sequence[RunData],
     db: duckdb.DuckDBPyConnection,
     source: str | Path,
-    protocol: Protocol,
+    binding: ProtocolBinding,
     exposure_receipts: Sequence[TrainingExposureReceipt] = (),
 ) -> AnalysisResult:
     """Reconcile declared seeds first; missing evidence never shrinks the exam.
@@ -498,8 +503,9 @@ def analyze(
     exports, callbacks, games or health metrics produce an incomplete report.
     Secondary panels remain descriptive and cannot secretly become a score gate.
     """
-    if state.experiment != EXPERIMENT:
-        raise ValueError("analysis requires the growing-pool experiment")
+    protocol = binding.read()
+    if state.experiment != binding.experiment:
+        raise ValueError("analysis state differs from selected experiment")
     if any(
         r.context.get("seed") not in protocol.budget.seeds for r in exposure_receipts
     ):
@@ -507,7 +513,7 @@ def analyze(
     by_seed: dict[int, RunData] = {}
     for data in training:
         if (
-            data.experiment != EXPERIMENT
+            data.experiment != binding.experiment
             or data.file is None
             or data.file.declaration.kind == "evaluation"
         ):
@@ -527,29 +533,26 @@ def analyze(
         data = by_seed.get(seed)
         run = state.run(data.name) if data is not None else None
         run_state = run.state if run is not None else "missing"
-        if run is not None and any(
-            c.run != run.name or c.line != run.name or c.experiment != EXPERIMENT
-            for c in run.checkpoints
-        ):
-            raise ValueError("checkpoint is not from this fresh learner")
-        health = _health(data, protocol, training_source)
         config = (
-            _Config.model_validate_json(data.file.declaration.config_json or "{}")
+            _Config.model_validate_json(
+                data.file.declaration.config_json or "{}"
+            ).training
             if data is not None and data.file is not None
             else None
         )
+        health = _health(data, config, protocol, training_source)
         exposure = training_exposure(
             exposure_receipts,
             seed=seed,
-            run_id=config.training.run_id if config else None,
-            identities=config.training.identities if config else {},
+            run_id=config.run_id if config else None,
+            identities=config.identities if config else {},
             protocol=protocol,
         )
         contrasts = []
         exports: dict[int, str | None] = {
             update: None for update in protocol.budget.export_updates
         }
-        for slot in comparisons(run, protocol):
+        for slot in comparisons(run, protocol, experiment=binding.experiment):
             panel = slot.panel
             matches = (
                 slot.matchup.matches() if slot.matchup else [None] * len(panel.deals)
@@ -621,6 +624,7 @@ def analyze(
             )
         )
     return AnalysisResult(
+        experiment=binding.experiment,
         protocol_sha256=protocol.digest,
         bootstrap_seed=protocol.analysis.bootstrap_seed,
         bootstrap_resamples=protocol.analysis.bootstrap_resamples,
@@ -637,18 +641,19 @@ def analyze(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True)
-    parser.add_argument("--protocol", type=Path, default=PROTOCOL)
+    parser.add_argument("--experiment", default="experiments.growing_pool")
     parser.add_argument("--training-evidence", action="append", type=Path, default=[])
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    protocol = Protocol.model_validate_json(args.protocol.read_bytes())
-    with statsdb(EXPERIMENT, args.source) as db:
+    binding = read_binding(args.experiment)
+    binding.read()
+    with statsdb(binding.experiment, args.source) as db:
         result = analyze(
-            observe(args.source, EXPERIMENT),
+            observe(args.source, binding.experiment),
             read_all(args.source),
             db,
             args.source,
-            protocol,
+            binding,
             read_training_exposure(args.training_evidence),
         )
     atomic_json(args.out, result.model_dump(mode="json"))

@@ -249,8 +249,9 @@ The prospective [growing-pool reference league](../experiments/protocols/growing
 freezes authored decks, sampling tickets and held-out experience splits through
 the existing deck source, training job and replay evaluator. Its read-only
 `uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
-admits the manifest without playing games. Task 04 owns actual pilot results;
-the protocol and its current-world proxy are not evidence of learning.
+checks admission without playing games; v1 rejects the changed engine source.
+Task 04 owns the integrated freeze and actual pilot results. The frozen proxy
+is not evidence of learning.
 
 The reference league's TrainingJob enables private exposure capture through the
 ordinary native vector collector. Digest-bound game receipts preserve actual

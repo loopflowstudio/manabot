@@ -1,111 +1,95 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MTG-245 — Reference league concept review</title>
-  <style>
-    :root { color-scheme: light dark; --ink:#262922; --paper:#faf8f1; --muted:#5d6258; --line:#b9beb0; --accent:#455f31; }
-    @media (prefers-color-scheme:dark) { :root { --ink:#eeeede; --paper:#1c201b; --muted:#b6bdae; --line:#596250; --accent:#b5d297; } }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.65 system-ui,sans-serif; }
-    main { max-width:850px; margin:auto; padding:42px 24px 72px; }
-    header { font-size:.84rem; color:var(--muted); }
-    h1 { font:600 clamp(1.8rem,5vw,2.7rem)/1.15 Georgia,serif; margin:24px 0; }
-    h2 { font-size:1.18rem; margin-top:38px; }
-    p { margin:14px 0; }
-    a { color:var(--accent); }
-    code { font-size:.88em; overflow-wrap:anywhere; }
-    blockquote { margin:24px 0; padding:2px 20px; border-left:3px solid var(--accent); }
-    ol { padding-left:24px; }
-    li { margin:18px 0; }
-    table { width:100%; border-collapse:collapse; font-size:.9rem; }
-    th,td { padding:12px 10px 12px 0; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
-    th { font-weight:600; }
-    .source { font-size:.82rem; color:var(--muted); }
-    @media(max-width:540px) { main { padding:26px 18px 48px; } table { font-size:.79rem; } th,td { padding-right:6px; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-245 — One binding through a batch revision</title>
+<style>
+:root { color-scheme:light dark; --paper:#faf8f1; --ink:#262922; --muted:#5d6258; --line:#b9beb0; --accent:#455f31; }
+@media(prefers-color-scheme:dark) { :root { --paper:#1c201b; --ink:#eeeede; --muted:#b6bdae; --line:#596250; --accent:#b5d297; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.65 system-ui,sans-serif; }
+main { max-width:850px; margin:auto; padding:40px 24px 64px; }
+header,small { color:var(--muted); font-size:.84rem; }
+h1 { font:600 clamp(1.8rem,5vw,2.7rem)/1.2 Georgia,serif; }
+h2 { margin-top:32px; font-size:1.18rem; }
+a { color:var(--accent); }
+code { font-size:.88em; overflow-wrap:anywhere; }
+blockquote { margin:24px 0; padding:2px 20px; border-left:3px solid var(--accent); }
+table { width:100%; border-collapse:collapse; font-size:.9rem; }
+th,td { padding:12px 10px 12px 0; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+li { margin:16px 0; }
+@media(max-width:540px) { main { padding:24px 16px 40px; } table { font-size:.78rem; } th,td { padding-right:6px; } }
+</style>
 </head>
-<body>
-<main>
-<p><strong>Resolved, 4 November:</strong> Training retains its identity and becomes Experiments; Eval’s Tasks move into it with both histories preserved. Training-exposure capture remains required implementation. The review below is retained context; MTG-245 has resumed the remaining work.</p>
-  <header>MTG-245 · concept-review · 2026-11-04<br>
-    Built from <a href="explore-design.md">scratch/explore-design.md</a>,
-    <a href="../experiments/protocols/growing-pool-245-v1.md">the protocol</a>,
-    <code>growing_pool{,_protocol,_exposure,_analysis}.py</code>,
-    <a href="../docs/workflows.md">work boundaries</a> and the
-    <a href="../docs/workflows/2026-11-04-migration.json">migration receipt</a>.
-  </header>
-
-  <h1>What evidence must the first handoff deliver?</h1>
-  <p><strong>Review outcome: open choices.</strong> The reference league is accepted.
-    Shared training-exposure capture is still missing. The alternative of accepting
-    evaluation-only exposure for the first handoff needs an explicit scope decision.</p>
-
-  <blockquote>
-    <p><strong>Existing report can say:</strong> “The exam is complete and both seeds improved;
-      training exposure is unavailable.”</p>
-    <p><strong>Accepted experience still requires:</strong> “Show what the learner encountered,
-      the meaningful decisions it made, and what it learned.”</p>
-  </blockquote>
-  <p>A learner could improve against the anchors without ever facing the intended
-    new mechanic during training. Evaluation draws and committed choices cannot
-    rule that out. This is the consequential mismatch.</p>
-
-  <h2>One experiment, from action to evidence</h2>
-  <table>
-    <thead><tr><th>Your action</th><th>Concept</th><th>Existing API</th></tr></thead>
-    <tbody>
-      <tr><td>Author decks and freeze the exam</td><td>League, tickets, splits</td><td><code>Manifest</code><br><code>Protocol.admit()</code></td></tr>
-      <tr><td>Bind source and obtain execution authority</td><td>Frozen experiment</td><td><code>Protocol.job()</code><br><code>runs(revision)</code></td></tr>
-      <tr><td>Run the authorized schedule</td><td>Runs and matches</td><td><code>TrainingJob</code><br><code>eval(state)</code> → <code>play(match)</code></td></tr>
-      <tr><td>Inspect results and missing work</td><td>Evidence report</td><td><code>analyze()</code><br><code>AnalysisResult</code></td></tr>
-    </tbody>
-  </table>
-
-  <h2>Before and after</h2>
-  <p><strong>Implemented:</strong> aggregate training clocks and health; replay-linked
-    evaluation draws and committed action types; separate completeness and learning results.</p>
-  <p><strong>Required but unimplemented:</strong> observed training exposure and meaningful
-    decisions through shared capture. Proposed implementation direction is to extend
-    existing native capture and training collection, coordinated with Tasks 01/03.
-    Opportunity, selection and resolution remain different measurements.</p>
-  <p><strong>Unaccepted alternative:</strong> a narrower first handoff, with training
-    exposure explicitly retained as separately owned work. Selecting A did not accept this reduction.</p>
-
-  <h2>Interruption keeps the same exam</h2>
-  <p>If an endpoint export or callback is missing, its expected slots stay missing.
-    Reconcile existing Etude jobs and receipts before an authorized retry, keeping
-    cumulative cost. Changed source, world or decks require a prospective protocol;
-    restarting weights with reset streams is a new segment.</p>
-  <p>Next proof for shared capture: controlled fixtures distinguishing an opportunity
-    declined, an action selected but not resolved, an observed zero, and an interrupted
-    training record. No games or training were run for this review.</p>
-
-  <h2>One scientific responsibility, two retained histories</h2>
-  <p><strong>Accepted destination:</strong> Experiments, Coverage, Engine performance,
-    Infrastructure; Academy remains separate. <strong>Existing transition:</strong>
-    Training and Eval both use the experiment graph and remain separate Wave identities.
-    The fresh Wave listing confirms consolidation is unfinished.</p>
-  <p>A surviving identity must preserve both histories, memory provenance and live work.
-    The receipt records PR #421's Training-memory contributions. Its current PR status
-    was not rechecked here. Default reuse alone does not settle this mapping.</p>
-
-  <h2>Unresolved decisions</h2>
-  <ol>
-    <li><strong>What must MTG-245 deliver before handoff?</strong><br>
-      <strong>1a.</strong> Shared training-exposure capture, preserving the existing requirement.<br>
-      <strong>1b.</strong> Explicitly accept evaluation-only exposure for this first handoff,
-      while retaining and assigning the remaining training-exposure obligation.</li>
-    <li><strong>Which Wave identity becomes Experiments?</strong><br>
-      <strong>2a.</strong> Training survives.<br>
-      <strong>2b.</strong> Eval survives.<br>
-      Either decision also needs the other Wave's chapter, memory and membership
-      mapping. No duplicate Wave or history deletion is implied.</li>
-  </ol>
-  <p class="source">Questions are recorded for later judgment; this headless review does
-    not request or infer an answer. Decisions remain in the working design.
-    Loop-or-next owns the next Graph outcome.</p>
-</main>
-</body>
-</html>
+<body><main>
+<header>MTG-245 · concept-review · 2026-11-04<br>
+Built from <a href="explore-design.md">the working design</a>,
+<a href="questions.md">implementation handoff</a>,
+<a href="../experiments/protocols/growing-pool-245-v1.md">protocol usage</a>,
+<code>experiments/growing_pool{,_protocol,_exposure,_analysis}.py</code>,
+<a href="../docs/workflows.md">work boundaries</a> and
+<code>.lf/skills/experiment-freeze.md</code>.</header>
+<h1>Select the batch once; keep its identity through the experiment.</h1>
+<p><strong>Outcome: design changed. No open product choice.</strong>
+The accepted versioned handoff requires the same protocol and experiment selection
+through declaration, evaluation and analysis. The working design records this
+as the next implementation direction; this review changes no runtime code.</p>
+<blockquote>
+<p><strong>Existing:</strong> <code>check --protocol next.json</code> selects a file.
+Training jobs, discovered callbacks and the analysis store still select
+<code>growing_pool</code> / v1.</p>
+<p><strong>Proposed:</strong> bind the next manifest and its Etude experiment name
+once in an entry point. All stages consume that binding. V1 retains its identity.</p>
+</blockquote>
+<p>The default read-only check currently rejects the changed engine source.
+That protects frozen evidence. A new JSON alone cannot perform the prospective
+revision required by the docs; copying the full evaluator for each batch would
+create repeated implementations.</p>
+<h2>Actions → concepts → APIs</h2>
+<table>
+<thead><tr><th>Action</th><th>Concept</th><th>Existing owner / required change</th></tr></thead>
+<tbody>
+<tr><td>Author lists, tickets and splits</td><td>Reference league</td><td><code>Manifest</code>, native <code>Deck</code>, <code>UniformDecks</code>; unchanged</td></tr>
+<tr><td>Select and check a batch revision</td><td>Frozen experiment binding</td><td><code>Protocol.admit()</code>; propagate selected protocol and experiment together</td></tr>
+<tr><td>Declare authorized work</td><td>Training runs</td><td><code>Protocol.job()</code>, <code>runs(revision)</code>; use selected binding and source files</td></tr>
+<tr><td>Evaluate the fixed exam</td><td>Matches and retained evidence</td><td><code>eval(state)</code> → importable <code>play(match)</code>; preserve binding through discovery</td></tr>
+<tr><td>Inspect results and missing work</td><td>Learning, completeness, exposure</td><td><code>analyze()</code>; open the bound experiment store and validate identities</td></tr>
+</tbody></table>
+<h2>Normal path, failure, recovery</h2>
+<p><strong>Normal:</strong> Task 04 authors integrated decks and probes, freezes the
+binding and settings, checks admission/discovery, then obtains execution authority.
+Its report keeps learning and exposure distinct.</p>
+<p><strong>Failure:</strong> a changed engine source rejects the old binding before
+execution. Missing exports or interrupted captures remain missing. A favorable
+exam cannot establish that the learner encountered the intended mechanic.</p>
+<p><strong>Recovery:</strong> reconcile jobs and receipts under their original pinned
+binding and cumulative allowance. A changed population or source gets a new
+prospective binding and admitted controls. Preserve original receipts and checkpoint
+identities. No implicit retry, relabeling or campaign launch.</p>
+<h2>What is already settled</h2>
+<p>Jack Heart selected A, retained training-exposure capture, and selected Training's
+identity to survive as Experiments. Those earlier review questions are resolved.
+Shared capture now distinguishes opportunity, choice and completed frame; retained
+replay inputs are not replay verification or proof of optimizer use.</p>
+<p>The workflow keeps software integration separate from scientific completion.
+The migration receipt records the identity-preserving moves and preserved histories;
+this review performs no migration or fresh live-state audit. Existing integration
+and memory follow-up remains in the handoff.</p>
+<h2>Next proof</h2>
+<p>Exercise two distinct bindings through real Etude discovery, declarations,
+callback routing and offline analysis using controlled fixtures. Reject crossed
+experiment/protocol identities. Preserve real-runtime v1 rejection. No games,
+training or spending are required for this proof.</p>
+<h2>Review conclusions</h2>
+<ol>
+<li><strong>Does this require a new product decision?</strong> No. It follows the
+accepted versioned protocol and frozen-evidence requirements. Use shared functions
+and thin entry points; add no campaign registry.</li>
+<li><strong>Are Task 04's scientific settings accepted?</strong> No. Its actual lists,
+probes, numeric settings, integrated freeze and measured pilot remain its work.
+Task 08 retains Validation B.</li>
+</ol>
+<small>The working design owns the direction. Loop-or-next owns navigation.
+This headless review requests no answer and claims no empirical validation.</small>
+</main></body></html>

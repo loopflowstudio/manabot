@@ -99,8 +99,9 @@ history.
 
 [Growing card pools, MTG-245](protocols/growing-pool-245-v1.md): **prospective,
 unexecuted** — authored reference league, frozen mixtures and separate retention,
-expansion and generalization panels. Includes an executable current-world proxy
-and bounded Task 04 handoff; no training or strength results.
+expansion and generalization panels. Includes a frozen proxy and bounded Task 04
+handoff; its older engine source requires a prospective freeze before execution.
+No training or strength results.
 
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to

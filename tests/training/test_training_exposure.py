@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from experiments.growing_pool import BINDING
 from experiments.growing_pool_exposure import read_training_exposure, training_exposure
-from experiments.growing_pool_protocol import PROTOCOL, Protocol, World
+from experiments.growing_pool_protocol import Protocol, World
 from manabot.env.failures import (
     CapturedVector,
     CaptureScope,
@@ -20,7 +21,7 @@ import managym
 
 @pytest.fixture
 def protocol(monkeypatch: pytest.MonkeyPatch) -> Protocol:
-    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    protocol = Protocol.model_validate_json(BINDING.protocol_path.read_bytes())
     # This compatible-world fixture is only for synthetic reader evidence.
     monkeypatch.setattr(World, "current", classmethod(lambda cls: protocol.world))
     return protocol

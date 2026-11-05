@@ -8,14 +8,19 @@ Task 08 owns Validation B on the expanded mechanism cohort. The deeper track
 begins after full FDN, separately from those two operational validations. This
 document grants no allocation.
 
-The executable current-world example is
+The frozen executable example is
 [growing-pool-245-v1.json](growing-pool-245-v1.json), consumed by
 [growing_pool.py](../growing_pool.py). It is a **40-card Elemental proxy league**,
 not a claim that the emerging post-rotation Standard pool is ready, that these
 are Standard decks, or that a generated population is a metagame. Validation A
 must freeze its declared integrated engine snapshot and actual batch decks in a
-new protocol before execution. The proxy is runnable from its pinned checkout;
-it is not a substitute for Task 04's real training campaign.
+new protocol before execution. V1 binds the engine source from before the
+training-exposure instrumentation. It is not admitted on this implementation's
+changed runtime, even if the world label and deck lists still match. Its retained
+configuration describes the proxy; Task 04's prospective freeze must bind the
+integrated capture implementation as well as its actual batch decks. Neither
+historical admission nor synthetic reader fixtures establish that integration
+or substitute for Task 04's real training campaign.
 
 ## Recommendation and alternatives
 
@@ -64,9 +69,10 @@ owns support. All defined non-token cards remain playable regardless of this
 study's exclusions or known bugs. `Manifest` owns experimental membership;
 `UniformDecks` owns seeded independent per-seat draws; `TrainingRegime` and
 `TrainingJob` own training and bounds. `EvaluationRequest` owns execution,
-Commands, replay and failure denominators. `GameEvidence`/`card_metrics` own
-card captures; Etude owns jobs, blocks and blobs. No engine, model or card
-representation is replaced.
+Commands, replay and failure denominators. Native `CardCapture` and
+`manabot.env.card_capture` own shared card facts; `GameEvidence`/`card_metrics`
+own their evaluation evidence and aggregation. Etude owns jobs, blocks and blobs.
+No engine, model or card representation is replaced.
 
 The JSON pins native world/card identity, engine source digest, all input
 capacities, full model/learning configuration, decks, construction provenance,
@@ -422,6 +428,39 @@ Read-only admission and regime export (no training):
 uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check
 uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol regime > /tmp/growing-pool-regime.json
 ```
+
+On the current implementation both commands reject v1's older engine-source
+binding. That rejection preserves the frozen contract; it is not a launch-ready
+check result. Task 04's new protocol and experiment identity must use the
+integrated source before admission, declaration or evaluation can succeed.
+
+Each prospective revision has a thin importable entry point, using
+`growing_pool.py` as the template. Its `BINDING` records the canonical module,
+protocol path and canonical `Protocol.digest`. The module's file stem is the
+Etude experiment name; it is also the name used by training and offline stores.
+Change all three binding fields for a new revision, preserving v1's entry point
+and JSON. Shared declaration/evaluation logic lives in `growing_pool_runtime.py`;
+do not copy that implementation. The entry point's `play` wrapper must remain
+defined in its canonical module so Etude's runpy discovery can name it for workers.
+
+Both admission and offline analysis select the entry point with
+`--experiment experiments.<new_module>` (the default is
+`experiments.growing_pool`). The former `--protocol` path-only selector is removed:
+changing a JSON path cannot also choose a callback or a result store. For Etude's
+job, evaluation and report readers, pass the corresponding
+`experiments/<new_module>.py` file. Declaration rejects a revision missing or
+changing the selected manifest, entry point or shared source. A digest mismatch,
+foreign experiment state or crossed callback conditions fails before execution.
+Offline analysis reports the selected experiment and protocol digest and retains
+the full expected schedule when records are missing. It reconstructs the frozen
+regime for identity checks without admitting today's engine; job creation and
+evaluation still require runtime admission.
+
+Freeze both the reviewed manifest and its entry point before declaring work.
+Verify discovery and declaration without execution; then use that same binding
+from pinned source for authorized evaluation and analysis. Recover missing work
+under its original binding and cumulative bounds. Changed decks/source require
+a new prospective binding and admitted controls, never relabeled receipts.
 
 From the reviewed committed revision, `runs(revision=...)` or Etude's normal
 job-file reader produces two `Run` declarations with `TrainingJob` payloads.

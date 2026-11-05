@@ -24,8 +24,8 @@ memory contributions and empirical reservations must survive integration into
 the Experiments path. MTG-210/211/230/231 mappings remain unselected.
 
 `scratch/questions.md` owns current implementation, assumptions, remaining
-ownership and validation. The historical review is retained in
-`scratch/concept-review.html`; its two questions are resolved by Jack Heart's
+ownership and validation. The current review is in
+`scratch/concept-review.html`; the prior review's two questions are resolved by Jack Heart's
 2026-11-04 continuation, not open scope-waiver decisions. Its counterexample still
 matters: favorable evaluation and a complete exam cannot establish what the
 learner encountered. Training exposure must remain independent evidence.
@@ -90,6 +90,18 @@ training exposure or require B's generator to obtain it.
 
 ## Delete — do not maintain
 
+Completed binding cut: removed the shared pipeline's implicit v1 path/experiment defaults,
+the path-only CLI selector, and the monolithic v1 entry point. Preserved its
+protocol JSON, experiment name, canonical callback name, schedules and readers.
+The surviving owners use a digest-bound protocol and importable entry module;
+the module's stem supplies Etude's experiment name. Shared execution lives in
+`growing_pool_runtime.py`; thin entries contain the binding and wrappers only.
+Runtime admission is owned by job creation, evaluation and the admission CLI.
+`Protocol.regime()` only compiles frozen settings: offline health/exposure checks
+must reconstruct that identity without requiring today's engine to admit it.
+Analysis parses each declaration once for health and exposure, and the shared
+comparison builder owns fresh-learner export checks. No deletion targets remain.
+
 Completed: missing `workflow: iterate` replaced by the shared experiment default;
 Engine renamed Coverage; Training renamed Experiments; redundant Eval and the
 concurrently recreated Training retired through lf after preserving work/history.
@@ -108,3 +120,60 @@ owns run/source/deck admission and frozen budgets. This keeps interrupted/missin
 records separate from observed zero without rebuilding counters inside each game.
 Receipt hashing and durable writes share one JSONL serialization, and native
 training/evaluation exports share the card projection without a JSON text roundtrip.
+
+## Concept review — one binding through a batch revision
+
+Outcome: **design changed; implementation direction, no open product choice**.
+Jack Heart's accepted versioned handoff implies selecting a new protocol and
+experiment identity once, then using that selection for admission, declaration,
+evaluation and analysis. This accepts no new settings or execution authority.
+
+The reviewed mismatch was at that transition. `check --protocol` accepted a path,
+but job creation, discovery, callbacks and analysis still selected `growing_pool`
+and default v1. A new JSON alone could not produce the experiment required by the
+docs. Copying the evaluator/reader for every batch would duplicate ownership.
+The read-only default admission check rejects the changed engine source, as it
+should; overwriting v1 or weakening admission would hide the mismatch.
+
+**Usage contract (implemented):** “Author a prospective
+protocol and its Etude entry point. Bind the protocol path/digest and experiment
+name together. Check without games; declare, evaluate and analyze through that
+binding from pinned source. A new batch uses a new binding. The retained v1 entry
+point continues to name v1.”
+
+**Freeze-skill contract (implemented):** “Verify that discovery, TrainingJob,
+the importable worker callback and offline analysis select the same binding.
+Checking a JSON path alone is insufficient. Include the selected manifest and
+entry point in frozen source; reject mismatched experiment/protocol identities.”
+Existing review and authorization instructions remain unchanged.
+
+The implementation carries one explicit binding through existing owners. Thin
+per-experiment entry points bind shared functions, with no registry, campaign
+manager, sampler or copied evaluator/reader. Preserve v1 JSON and its meaning.
+Etude owns discovery, persistence and execution; callbacks must remain importable
+after runpy discovery. Analysis must open and validate the selected experiment,
+without falling back to v1. This removes the need to maintain parallel scientific
+plumbing for each revision, not the distinct identities of frozen experiments.
+
+Normal path: the integrated batch author binds reviewed decks/settings, checks
+admission/discovery, obtains authority, and reads separate learning, completeness
+and training-exposure results. Failure: old source bindings reject before
+execution; missing exports and interrupted captures remain missing. Recovery:
+reconcile original jobs under their pinned binding; changed source/decks require
+a prospective binding and admitted controls, never relabeled checkpoints or an
+implicit fresh retry allowance.
+
+Preserve these counterexamples: changing only a protocol path must not send jobs
+to the old experiment, install its callback or read its result store. A complete,
+favorable exam with absent training receipts remains incomplete. Opportunities
+and completed frames do not establish useful mechanic execution or optimizer use.
+Software verification must not finish the parent scientific outcome.
+
+Focused proof passed: controlled two-binding fixtures through actual Etude discovery,
+declaration, callback routing and offline analysis, rejecting crossed identities.
+Copied entry files retaining the old binding also reject before declaration.
+Keep real-runtime v1 rejection; fixture compatibility is not admission. No games
+or training are needed. Task 04 retains the integrated prospective freeze, actual
+Adventure/prepare lists/probes, accepted numeric settings and measured pilot;
+Task 08 retains Validation B. This direction changes reusable handoff plumbing,
+not Wave migration, scientific scope or those ownership boundaries.

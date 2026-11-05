@@ -706,8 +706,8 @@ def _execute_regime(
                 "allocation_deadline": run.allocation_deadline,
                 "parent_run_id": run.parent_run_id,
             },
+            training_exposure=training_exposure,
         )
-        failures.training_exposure = training_exposure
         resources.enter_context(capture_scope(failures))
         # Set when stop_reserve_seconds ends the (single) stage before its target.
         wall_bounded = False
