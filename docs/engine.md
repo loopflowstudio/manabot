@@ -295,12 +295,6 @@ freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md
 - **Collection dominates cost.** 75–83% of active training time across the
   profiled runs, 82.5% in the L4 run
   ([training time](../experiments/training-time.md)).
-- **Determinized search fuses strategies.** Flat Monte Carlo over redrawn hands
-  beat every trained policy of its day with 16 rollouts
-  ([exp-02](../experiments/exp-02-flat-mc.md)) and still failed a control-deck
-  competency suite, where uniform random beat it on three
-  of five scenarios ([exp-09](../experiments/exp-09-control-competency.md)). The engine makes the
-  search cheap; it doesn't make it sound.
 - **Hidden-pool ordering once leaked.** Reordering a hidden zone changed search
   evidence between viewer-equivalent states. Viewer equivalence, replay and
   leakage checks are now hard gates ([research program](../manabot/RESEARCH.md#earlier-the-search-era)).

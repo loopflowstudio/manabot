@@ -135,9 +135,6 @@ sit beside it:
   over 400 games, without slower decisions
   ([heuristic strength](../experiments/heuristic-strength.md)). Ratings are
   pinned to an anchor version.
-- **Win rate hid incompetence.** The 256-rollout search pilot of exp-02 beat
-  random 99% of the time and could not play a control deck: uniform random beat it on three
-  of five scenarios ([exp-09](../experiments/exp-09-control-competency.md)).
 - **Matchup tables measure the pilot and the cards.** A four-card swap moved a
   matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)).
 - **A matched-budget exploiter reached 23.5–26.0%** against the distilled

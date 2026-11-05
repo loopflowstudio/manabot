@@ -24,7 +24,6 @@ hard:
 - [Filter](#filter)
 - [Update](#update)
 - [Outside the loop](#outside-the-loop)
-- [What win rate hides](#what-win-rate-hides)
 - [Open questions](#open-questions)
 - [Where to go next](#where-to-go-next)
 
@@ -286,26 +285,6 @@ if _digest(current_binding_form(binding)) != _digest(expected):
   matching world number alone isn't enough.
 - Results don't carry across worlds, and a run on an open world makes no
   comparability claim ([WORLDS.md](../WORLDS.md)).
-
-## What win rate hides
-
-An earlier search pilot used flat Monte Carlo over sampled hidden cards. With
-16 rollouts per decision and no network it beat every trained policy of the
-time in 84–93% of games, and more rollouts made it stronger
-([exp-02](../experiments/exp-02-flat-mc.md)).
-
-Then a test gave it Pyroclasm against two Gray Ogres, with two more in the
-opponent's hand. Waiting a turn wipes four creatures rather than two, for 4
-damage at 20 life. Search cast it on turn 1 in 300 of 300 runs at every
-strength. Uniform random waited by accident and took the correct line 23% of the time
-([exp-09](../experiments/exp-09-control-competency.md)).
-
-The likely cause is strategy fusion: each sampled world is judged as if the
-player could see it, so a line that needs patience under uncertainty never
-looks best. One replay shows the misplay, while the aggregate number doesn't.
-That's why strength here is measured against held-out opponents and specific
-test positions, and why exploitability is reported only as a lower bound from
-attacks we can afford ([evaluation](evaluation.md)).
 
 ## Open questions
 

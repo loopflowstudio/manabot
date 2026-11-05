@@ -176,22 +176,6 @@ Earlier findings are tabulated in the
 - **Search and beliefs run end to end but add no strength yet**
   ([search and beliefs](docs/search-and-beliefs.md)).
 
-From the earlier search era, in older encodings:
-
-- **Cheap search beat everything training had produced.** Flat determinized
-  Monte Carlo with 16 rollouts per decision, 7 ms and no network, beat every
-  trained policy of the time 84–93% of games, and 64 rollouts beat them 94–96%
-  ([exp-02](experiments/exp-02-flat-mc.md)).
-- **Win rate hid incompetence.** That same pilot could not play a control
-  deck, and random beat it in 3 of 5 competency scenarios
-  ([exp-09](experiments/exp-09-control-competency.md)). Matchup tables mostly
-  measured the pilot and card quality
-  ([exp-08b](experiments/exp-08b-ancestral-dose.md)).
-- **Distillation beat PPO at equal cost**, 90.5% versus 52.7% against random
-  ([exp-03](experiments/exp-03-distillation.md)), but expert iteration did not
-  compound: round 1 lost 74–26 to round 0
-  ([exp-07](experiments/exp-07-expert-iteration.md)).
-
 ## Not built yet
 
 - **A trained agent on the trophy population.** The pilot's first run stopped
