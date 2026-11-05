@@ -53,6 +53,7 @@ def test_v8_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -
         num_envs=1,
         opponent_mode="self",
         learning_seats="one",
+        batch_closure="exact-quota",
     )
     try:
         model = ActorCritic(space, recipe.agent)

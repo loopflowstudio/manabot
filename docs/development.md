@@ -81,6 +81,11 @@ endpoint checks use injected durations, so never mix host elapsed time into an
 exact-update-count assertion.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
+Collector or batch-closure changes also require
+`uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+Fixtures asserting exact rollout shapes or transition counts must explicitly
+select `batch_closure="exact-quota"` as well as one learning seat; whole-game
+closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
