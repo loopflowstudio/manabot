@@ -1,7 +1,9 @@
 # docs/
 
-Start with [ARCHITECTURE.md](ARCHITECTURE.md): the system picture, the
-training loop, and who owns which truth. Experiment reports live in
+Start with [How a manabot learns](learning.md): one training iteration, from a
+game's first decision to the weight update. Then read
+[ARCHITECTURE.md](ARCHITECTURE.md) for the system picture and who owns which
+truth. Experiment reports live in
 [experiments/](../experiments/README.md), and world versioning lives in
 [WORLDS.md](../WORLDS.md).
 
@@ -9,6 +11,8 @@ training loop, and who owns which truth. Experiment reports live in
 
 | Doc | What |
 |---|---|
+| [learning.md](learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run |
+| [observation-and-model.md](observation-and-model.md) | What the policy sees and how the network produces action probabilities and values |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Packages, authorities and data flow across managym, manabot and Academy |
 | [development.md](development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
 | [training.md](training.md) | Regimes and stages, experiments, remote training, monitoring, numerical health, recovery, Ataraxos, policy inputs |

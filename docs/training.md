@@ -1,6 +1,7 @@
 # Training manabot
 
-This is the current-system guide to training a manabot: how a run is declared
+[How a manabot learns](learning.md) explains the learning loop itself. This is
+the operations guide to training a manabot: how a run is declared
 and executed, how comparisons and remote jobs are built, what the monitoring and
 numerical-health records mean, how interrupted or failed work is recovered, and
 which learning rule the default recipes implement. Metric definitions for the
@@ -126,7 +127,7 @@ GAE and lambda returns stop at each seat's game boundary. `transitions` is a
 then finishes its current game, so batches have variable row counts. Complete
 seat trajectories are packed into `[rows, 1]` with terminal separators and no
 padding. `games_per_stream` overrides the quota with complete games per stream
-per update; set it on both arms for an equal-game comparison and report
+per update ([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)); set it on both arms for an equal-game comparison and report
 learner transitions, environment decisions, games, exposures and cost
 separately. For two live models, use one `SeatRoutedCollector` with
 `opponent_mode="learning"`, `learning_seats="both"` and `opponent_agent`;

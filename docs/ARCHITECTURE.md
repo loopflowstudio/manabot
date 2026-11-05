@@ -47,7 +47,8 @@ honestly. Three decisions anchor the design:
 
 ## The training loop
 
-The primary path is self-play reinforcement learning.
+The primary path is self-play reinforcement learning
+([how a manabot learns](learning.md)).
 Search and belief models are policy-improvement steps on top of it, not the
 main engine. The loop is declared as data and executed by one runner:
 

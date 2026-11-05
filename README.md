@@ -24,155 +24,34 @@ Airbender* set.
 > - **[Etude](https://github.com/loopflowstudio/etude)** launches training and evaluation
 >   runs and tracks what they record. 
 
-## Technical approach
+## How a manabot learns
 
-**A rules engine built for learning.** managym runs a full game of Magic:
-priority, the stack, combat, triggers, and state-based actions. It is
-deterministic given a seed, steps many games in lockstep, and can clone a game
-state exactly. That makes batched self-play, search over possible futures,
-and replay verification cheap. At every decision it gives each player an
-observation of only what that player can see: players, cards, and permanents
-as typed objects, plus the list of legal actions with the objects each one
-targets.
+![One training iteration: play, assign credit, filter and update, then repeat with new weights. Weights also feed an EMA, checkpoints and evaluation, which never feed back into the loss.](docs/images/learning-loop.svg)
 
-**Cards as typed programs.** Cards are not parsed from Oracle text and not
-hand-coded per card name. Each card is one Rust function returning the
-engine's own `CardDefinition`, written in its rules types
-([content/semantic/](content/semantic/README.md)), and new behavior is a new
-rules variant rather than card-specific logic. The model can embed what a card
-*does* as well as its name: learning tokens derive from the same definitions. Rules behavior is pinned by conformance
-fixtures ([conformance/](conformance/)).
+A manabot learns from self-play, and the only feedback is who won. Each
+iteration has four steps:
 
-**Versioned worlds.** The observation and action encoding is versioned as a
-*world* ([WORLDS.md](WORLDS.md)). Checkpoints only load in the world they were
-trained in, and the nightly baseline check refuses encodings that make two
-different choices look identical.
+1. **Play.** Many games step in lockstep so inference is batched, and one
+   network plays them. By default both seats learn.
+2. **Assign credit.** The game result becomes a per-decision advantage and a
+   value target, computed once with generalized advantage estimation.
+3. **Filter.** Only decisions with the largest advantages, about a quarter of
+   the batch, stay in the update.
+4. **Update.** One pass of a clipped policy gradient, regularized toward both
+   the policy that played the batch and a fixed reference policy. The batch is
+   then discarded.
 
-**One network, one action head.** One network encodes every visible object,
-mixes them with attention, and scores each legal action together with its
-focus objects. A value head predicts the game outcome. Every decision, from
-casting and targeting to attacking, blocking, and paying costs, goes through
-that single action head.
-
-**Self-play from terminal reward.** The agent plays both decks against current
-copies of itself, and many games step in lockstep so that inference is
-batched. The update is a clipped policy gradient, regularized toward both the
-collection policy and a fixed reference policy, with advantage filtering,
-annealed step sizes, and an EMA of the weights for evaluation. Those choices
-follow [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) (Sokota et al.,
-2026), and each one is a separate switch that we test on Magic rather than
-adopt on the paper's authority ([research program](manabot/RESEARCH.md)).
-Reward is win or loss only: our shaped rewards lost to it
+An EMA of the weights, annealed step sizes and head-to-head evaluation complete
+the recipe. These choices follow
+[Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) (Sokota et al., 2026),
+and each one is a separate switch that we test on Magic rather than adopt on the
+paper's authority ([research program](manabot/RESEARCH.md)). Reward is win or
+loss only: our shaped rewards lost to it
 ([exp-04](experiments/exp-04-potential-shaping.md)).
 
-**Hidden information and search.** Belief samplers learn a distribution over
-the opponent's hidden cards from a frozen policy's own games
-([belief sampler](docs/search-and-beliefs.md#belief-sampler)). Search samples hands from that
-belief and uses the frozen policy for continuations at play time
-([local policy search](docs/search-and-beliefs.md#local-policy-search)). It has not yet shown a
-strength gain over the policy alone.
-
-**Evaluation by head-to-head play.** Trained agents play each other. A
-*Tournament* file names a roster of checkpoints and fixed opponents, and the
-runner plays every pairing on the same held-out deals, with both decks and
-both seats ([head-to-head](experiments/head-to-head.md)). The evaluation library fits
-ratings across the whole population (`manabot/eval/`), and a rule-based
-`heuristic` bot gives a stable reference point across runs. Every game is
-replay-verified.
-
-**Preregistered experiments.** The question, numeric prediction, kill
-criteria, and cost cap are committed to git before a run; without that commit
-a result is exploratory, not evidence. Frozen contracts record the hashes of
-their inputs, claims about a training method need independent training seeds,
-and refutations stay on the record ([experiments/](experiments/README.md)).
-
-Right now the main open question is the training curriculum: which matchups,
-opponents, and mix of self-play the agent should learn from (for example,
-mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
-just enough to compare curricula, rather than testing current agents across a
-wide range of environments.
-
-## Observation and neural architecture
-
-The [full illustrated walkthrough](docs/observation-architecture.html) explains
-the observation tensors, card-program encoder, effects, attention and policy/value
-heads. Download or open the HTML locally for its interactive tensor explorer and
-fact-capacity example; it is self-contained and works offline.
-
-The observation boundary belongs to managym. It supplies viewer-safe state and
-the complete legal decision before the neural network sees either.
-
-```mermaid
-flowchart LR
-    G[Authoritative game state] --> V[Viewer-safe observation]
-    V --> O[Players, visible cards, effective permanents]
-    V --> F[Local facts, object links, current continuation]
-    V --> FX[Complete shared effects + memberships]
-    FX --> E
-    V --> K[Known hand and disclosed decklists]
-    V --> A[Legal actions and focus objects]
-    D[Native card definitions] --> T[Typed rules tokens]
-    T --> S[Semantic card encoder]
-    O --> E[Typed object embeddings]
-    F --> E
-    K --> E
-    S --> E
-    E --> N[Shared policy/value network]
-    A --> N
-```
-
-For the TLA pilot, each object has 64 channels. Two self-attention blocks, each
-with four heads, mix up to 202 padded object slots: two players, 120 cards and
-80 permanents. V7 encodes each complete shared effect once and sums its vector into every
-explicitly named affected object before attention. Duplicate memberships retain
-multiplicity, and every affected object’s loss reaches the shared encoder. Local
-facts remain a separate sum. Neither path adds attention tokens.
-
-```mermaid
-flowchart TD
-    C[Card-program tokens] --> GRU[Token embedding + GRU]
-    GRU --> E[Object projections + definitions + knowledge]
-    F[Local facts + attachment/blocking links + continuation] --> E
-    FX[Complete shared payloads] --> J[Explicit memberships / shared gradients]
-    J --> E
-    E --> X[202 object slots x 64 channels]
-    X --> AT[2 self-attention blocks / 4 heads / masked padding]
-    AT --> FO[Gather up to 2 focus objects per action]
-    A[Action projection + continuation context] --> AC[Concatenate: 64 + 2 x 64 = 192]
-    FO --> AC
-    AC --> P[192 to 64 to 64 / policy head to 1 logit per action]
-    P --> L[Legal-action mask + categorical distribution]
-    AT --> M[Per-object projection + masked mean]
-    M --> VAL[Scalar value head]
-```
-
-The GRU encodes a card's rules program, not game history. This pilot has no
-recurrent game memory and does not enable the optional recent-event encoder.
-Current continuation describes the pending decision. Permanent rows already
-include effective characteristics; complete shared records retain duration,
-timestamp, controller and exact source bindings that can change future behavior.
-
-Select `ObservationConfig(policy_input_version=7)` for the new transport: 128
-headers × 18 columns, 512 detail tokens × 3, and 2,048 memberships × 2, plus a
-configurable local-fact table (128 rows by default). Overflow fails explicitly.
-The retained 140/270-fragment Drill positions become 7/9 complete payloads and
-70/135 memberships. All original timestamps and duplicate edges survive; no
-rules records are deleted or semantically coalesced.
-
-The three padded effect arrays use 31,744 bytes per observation; local facts add
-6,144. This exceeds v6/256's 12,288-byte fact array, although the retained
-270-fragment case needs only 1,944 active effect bytes. The HTML documents the
-layout, routing, parameters and sum/normalization tradeoff. These engineering
-proofs establish no learning-quality advantage. Persistent memory remains future
-work. Fresh defaults remain v6; frozen v1–v6 checkpoints and the TLA pilot’s
-protocols/receipts keep their original meanings.
-
-## Versioned installs
-
-Versioned PyPI release preparation, platform support, CPU/CUDA installation and
-maintainer publishing are described in [the release guide](docs/development.md#releases).
-[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
-the source workflow below remains available.
+**[Read how a manabot learns](docs/learning.md)** for the full path from a game
+result to a weight change, with worked numbers and answers to questions like
+what happens to games a batch cuts off.
 
 ## Quickstart
 
@@ -191,7 +70,7 @@ uv run manabot train          # small CPU training run, under a minute, local Et
 `uv run manabot train` trains a small agent and saves checkpoints to
 `.runs/local/`. Training recipes are typed *regimes* composed in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
-[manabot/training/builders.py](manabot/training/builders.py). The current GPU
+[manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
 baseline is
 `uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
 [manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
@@ -228,6 +107,73 @@ self-play moved to learning from both seats.
 Learning-rate schedules currently count iterations, not decisions. The same
 recipe run at a different batch size therefore decays at a different number
 of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe.
+
+## Technical approach
+
+**A rules engine built for learning.** managym runs a full game of Magic:
+priority, the stack, combat, triggers, and state-based actions. It is
+deterministic given a seed, steps many games in lockstep, and can clone a game
+state exactly. That makes batched self-play, search over possible futures,
+and replay verification cheap. At every decision it gives each player an
+observation of only what that player can see: players, cards, and permanents
+as typed objects, plus the list of legal actions with the objects each one
+targets.
+
+**Cards as typed programs.** Cards are not parsed from Oracle text and not
+hand-coded per card name. Each card is one Rust function returning the
+engine's own `CardDefinition`, written in its rules types
+([content/semantic/](content/semantic/README.md)), and new behavior is a new
+rules variant rather than card-specific logic. The model can embed what a card
+*does* as well as its name: learning tokens derive from the same definitions. Rules behavior is pinned by conformance
+fixtures ([conformance/](conformance/)).
+
+**Versioned worlds.** The observation and action encoding is versioned as a
+*world* ([WORLDS.md](WORLDS.md)). Checkpoints only load in the world they were
+trained in, and the nightly baseline check refuses encodings that make two
+different choices look identical.
+
+**One network, one action head.** One network encodes every visible object,
+mixes them with attention, and scores each legal action together with its
+focus objects. A value head predicts the game outcome. Every decision, from
+casting and targeting to attacking, blocking, and paying costs, goes through
+that single action head.
+
+**Hidden information and search.** Belief samplers learn a distribution over
+the opponent's hidden cards from a frozen policy's own games
+([belief sampler](docs/search-and-beliefs.md#belief-sampler)). Search samples hands from that
+belief and uses the frozen policy for continuations at play time
+([local policy search](docs/search-and-beliefs.md#local-policy-search)). It has not yet shown a
+strength gain over the policy alone.
+
+**Evaluation by head-to-head play.** Trained agents play each other. A
+*Tournament* file names a roster of checkpoints and fixed opponents, and the
+runner plays every pairing on the same held-out deals, with both decks and
+both seats ([head-to-head](experiments/head-to-head.md)). The evaluation library fits
+ratings across the whole population (`manabot/eval/`), and a rule-based
+`heuristic` bot gives a stable reference point across runs. Every game is
+replay-verified.
+
+**Preregistered experiments.** The question, numeric prediction, kill
+criteria, and cost cap are committed to git before a run; without that commit
+a result is exploratory, not evidence. Frozen contracts record the hashes of
+their inputs, claims about a training method need independent training seeds,
+and refutations stay on the record ([experiments/](experiments/README.md)).
+
+Right now the main open question is the training curriculum: which matchups,
+opponents, and mix of self-play the agent should learn from (for example,
+mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
+just enough to compare curricula, rather than testing current agents across a
+wide range of environments.
+
+The observation boundary and network are described in
+[Observations and the policy network](docs/observation-and-model.md).
+
+## Versioned installs
+
+Versioned PyPI release preparation, platform support, CPU/CUDA installation and
+maintainer publishing are described in [the release guide](docs/development.md#releases).
+[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
+the source workflow below remains available.
 
 ## Earlier results
 
@@ -266,11 +212,11 @@ not comparable with today's checkpoints:
 | `managym/` | Rust rules engine, vectorized env, and PyO3 bindings ([README](managym/README.md)) |
 | `manabot/` | Agents: models, training, search, beliefs, evaluation, verification ([README](manabot/README.md)) |
 | `experiments/` | Preregistered experiment reports, protocols, and data |
-| `content/` | Card and deck definitions compiled to a typed IR |
+| `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
-| `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
+| `docs/` | How learning works, architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
-| `ops/`, `deploy/` | Remote training hardware and deployment |
+| `deploy/` | Hosted service deployment |
 | `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
 | `.lf/` | Loopflow Waves (`.lf/wave/`), chapters and prompts that organize agent work |
 
