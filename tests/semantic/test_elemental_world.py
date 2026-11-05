@@ -189,6 +189,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
                 streams=2,
                 transitions=8,
                 learning_seats="one",
+                batch_closure="exact-quota",
                 learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
             )
         ],
