@@ -51,3 +51,9 @@ Sync resolution: main's MTG-213 pilot assumptions remain available at
 results in `experiments/tla-trophy-pilot.md`. They describe a separate Task and
 supply no execution or delivery authority for MTG-243. Keep this file scoped to
 the naming branch; preserve the incoming pilot report and artifact manifest.
+
+Sync resolution 2026-11-05: main `264041f99` replaced this file with MTG-245's
+handoff (available at `264041f991afd3bd451cefa4f50a761577a5eb50:scratch/questions.md`);
+it confers no authority on MTG-243. Main deleted docs/ARCHITECTURE.md and
+docs/search-and-beliefs.md and moved policy inputs to
+docs/observation-and-model.md, so the catalog naming section now lives there.

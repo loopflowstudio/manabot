@@ -80,6 +80,8 @@ class StageRecord(Strict):
     updates: int = Field(default=0, ge=0)
     games: int = 0
     environment_decisions: int = 0
+    # Slots idled while slower streams closed the batch; 0 in older records.
+    idle_stream_steps: int = Field(default=0, ge=0, exclude_if=lambda value: not value)
     learner_transitions: int = 0
     optimizer_exposures: int = 0
     # Completed optimizer.step calls; unknown in older or unsupported learners.

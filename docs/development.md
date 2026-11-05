@@ -111,6 +111,12 @@ Training CLI changes need the installed-wheel smoke from
 [Build and verify](#build-and-verify); a source-tree smoke cannot verify the
 installed entry point.
 
+**Loopflow workflows.** With `lf` installed, run
+`uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
+It uses real compilation/discovery and checks iteration, delivery and experiment
+review boundaries without launching agents, games or training. The
+[work boundaries](workflows.md) document defaults and migration limits.
+
 **New Python test modules.** Basenames must be unique across unpackaged test
 directories. Collect new modules with the existing tests of their CI invocation
 (`uv run pytest --collect-only`); isolated file runs miss name collisions.
@@ -295,7 +301,7 @@ the step digest changed, with 101,650 steps instead of 99,923 across 512 games
 These are the two measurements from that one runner. Timing checks passed;
 changed gameplay prevents treating the delta as equivalent-workload speedup
 evidence. The rules change moves the reference while preserving the **10%
-tolerance**. The [MTG-238 investigation record](research/engine-speed-2026-11.md)
+tolerance**. The [MTG-238 investigation record](../.lf/wave/engine-performance/research/engine-speed-2026-11.md)
 retains the preceding engine improvements and their evidence.
 
 **Previous reference: derived-state caching.** Commit `4b5e9c0e4` was adopted from
@@ -422,7 +428,7 @@ tags publish. Tag builds reject inconsistent versions, commits not on main and
 already-published versions. Only the publish job gets OIDC `id-token: write`;
 no PyPI token is stored, and uploads carry attestations. The trusted publisher
 is project `manabot`, owner `loopflowstudio`, repository `manabot`, workflow
-`release.yml`, environment `pypi`. The pending publisher submitted by Jack Heart
+`release.yml`, environment `pypi`. The pending publisher
 was used successfully on 2026-10-22; the GitHub `pypi` environment restricts
 deployment to `v*` tags and requires review. Verify these settings before
 tagging.
@@ -467,7 +473,7 @@ Chromium context shows a connected WebSocket, the default Search 64 opponent,
 `UR Lessons vs GW Allies`, an enabled authoritative legal action, and pack
 treatments for every visible card with no fallback. The budget is 90,000 ms. It
 was 60,000 ms until 2026-09-30; the release native build alone had reached about
-52 s on GitHub's runner, so Jack Heart accepted 90 s. The receipt records
+52 s on GitHub's runner, so the budget became 90 s. The receipt records
 `elapsed_to_playable_ms`, `budget_ms` and `within_budget`; CI reports the time
 and warns, but does not fail, when over budget, because runner variance decides
 it. The proof fails if the launch is not ready within 600 s or any playable or

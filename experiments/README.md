@@ -15,10 +15,10 @@ instruments.
 | --- | --- | --- |
 | [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
-| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/training.md#ataraxos)) | `manabot train` |
+| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | `manabot train` |
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
 
 The compound-decision study (`compound_decisions.py`) is no longer runnable;
 reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
@@ -28,7 +28,7 @@ reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 ```sh
 uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --max-usd 60
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for
@@ -98,6 +98,12 @@ history.
    changes that break them are failing changes regardless of green tests.
 
 ## Index
+
+[Growing card pools, MTG-245](protocols/growing-pool-245-v1.md): **prospective,
+unexecuted** — authored reference league, frozen mixtures and separate retention,
+expansion and generalization panels. Includes a frozen proxy and bounded Task 04
+handoff; its older engine source requires a prospective freeze before execution.
+No training or strength results.
 
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to

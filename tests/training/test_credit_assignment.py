@@ -20,7 +20,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.training.learning.damped_policy import _targets
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.regime import BatchClosure, DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 
@@ -164,6 +164,7 @@ def collector_for(
     second: TableAgent | None = None,
     draw: bool = False,
     truncated: bool = False,
+    closure: BatchClosure = "complete-games",
 ) -> SeatRoutedCollector:
     collector = SeatRoutedCollector(
         agent.observation_space,
@@ -173,6 +174,7 @@ def collector_for(
         opponent_mode="self" if second is None else "learning",
         opponent_agent=second,
         learning_seats=seats,
+        batch_closure=closure,
         games_per_stream=games,
     )
     collector._env = CreditGames(
@@ -286,7 +288,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     kind: Kind,
 ) -> None:
     agent = TableAgent(kind)
-    collector = collector_for(agent, "one", games=None)
+    collector = collector_for(agent, "one", games=None, closure="exact-quota")
     batch = collector.collect(agent, 2)
     # Stream 0 has taken 0,1 and pauses before 3 (after opponent 2).
     # Stream 1 has taken 10,12 and terminated. Its reset value is irrelevant.

@@ -46,6 +46,7 @@ def test_capacity_export_and_real_legal_policy(
         Reward(RewardConfig()),
         num_envs=2,
         seed=102,
+        batch_closure="exact-quota",
     )
     batch = collector.collect(agent, 2)
     obs = {

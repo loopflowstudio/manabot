@@ -42,8 +42,8 @@ PACK = "elemental-world-v2"
 
 
 def test_exact_accepted_lists_match_inventory() -> None:
-    accepted = json.loads(Path("docs/rules/elemental/decks.json").read_text())
-    with Path("docs/rules/elemental/cube-snapshot.csv").open(newline="") as stream:
+    accepted = json.loads(Path("tests/semantic/fixtures/elemental/decks.json").read_text())
+    with Path("tests/semantic/fixtures/elemental/cube-snapshot.csv").open(newline="") as stream:
         inventory = Counter(row["name"] for row in csv.DictReader(stream))
     basics = {"Plains", "Island", "Swamp", "Mountain", "Forest"}
     assert len(accepted["decks"]) == 10
@@ -189,6 +189,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
                 streams=2,
                 transitions=8,
                 learning_seats="one",
+                batch_closure="exact-quota",
                 learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
             )
         ],

@@ -21,7 +21,7 @@ key.
 file defines it as a non-token card. Tokens, rules fixtures and unknown cards
 are rejected. Known rules bugs are tracked as Tasks without revoking
 playability; playable does not mean bug-free. Rules tests are ordinary tests;
-they never gate support. See the [TLA notes](../../docs/rules/tla/README.md) for
+they never gate support. See the [TLA notes](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/tla/README.md) for
 the open TLA work.
 
 ## The catalog and identity

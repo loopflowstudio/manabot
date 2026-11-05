@@ -51,6 +51,7 @@ def _collector(
         seed=17402,
         opponent_mode="self",
         learning_seats=learning_seats,
+        batch_closure="exact-quota" if learning_seats == "one" else "complete-games",
         matchup_curriculum="elemental-uniform",
         recovery_max_microsteps=200000 if recovery == "exact" else None,
         recovery_max_game_microsteps=200000 if recovery == "current" else None,

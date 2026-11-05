@@ -12,7 +12,7 @@ number. A run on an open world makes no comparability claim.
 | **w0** | pre-2026-07-09 (first-light era) | 26 / 29 / 5 / 7 | none (all superseded) | exp-04 terminal-only 60–75% |
 | **w1** | rules stage 1–2 (`2d124c9`..`50e0a1f`) | 27 / 37 / 7 / 14 | none (exp-07 artifacts dead per exp-10) | exp-07 student_r0 87%, ladder ≈N=7 |
 | **w2** | rules stage 3–4 + conformance (`cb80331`..`a9f1f91`, max_actions 32 @ `55a0b4b`) | 28 / 38 / 24 / 14 | exp-10 V + BC student; exp-11 arms (incl. ported student_r0, validated 86.5%) | exp-06 PPO 60–77%; exp-10/11 (pending merge) |
-| **w3** | corrected Learn evidence, 2026-09-24–29 (certification unfinished) | 28 / 39 / 24 / 16 | frozen Learn/checkpoint evidence; see [Learn record](docs/rules/learn-lesson.md) | no completed new baseline certification |
+| **w3** | corrected Learn evidence, 2026-09-24–29 (certification unfinished) | 28 / 39 / 24 / 16 | frozen Learn/checkpoint evidence; see [Learn record](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md) | no completed new baseline certification |
 | **w4** | ETU-88, 2026-09-29 | 28 / 39 / 25 / 16; 13 decision kinds | Gran-Gran, Proft's Eidetic Memory, Combustion Technique and required base rules | no strength baseline yet |
 | **w5** | attack declaration encoding, 2026-10-15 | 28 / 39 / 25 / 16; action width 18 including declaration and validity | no promoted checkpoints | no strength baseline yet |
 | **w6** | action identity audit, 2026-10-15 | 28 / 39 / 26 / 16; action width 20 | no promoted checkpoints | no strength baseline yet |
@@ -249,7 +249,7 @@ their attackers (CR 500.8) are scheduled on the turn state. Bending events
 history, a spell on the stack can be airbent, spell costs can be reduced by
 colored mana that also reduces generic (CR 118.7c), and a permanent can have
 another card's activated and triggered abilities through an effect record.
-All 16 T6 cards are supported (335 supported definitions in `world`). The
+All 16 T6 cards are supported (336 supported definitions in `world`). The
 policy input adds player columns for the four bending kinds, extra turns and
 additional combats (67 → 73) and a card column for "until the end of your next
 turn" play permissions (55 → 56); decision code 26 is the each-player
@@ -345,7 +345,7 @@ native/Python encoders, text and Academy expose the same authority. State hash
 contract 15 includes control schedules alongside T6's delayed lifetimes. The optional Academy `player_controls`
 projection distinguishes historical absence from a live empty list; protocol
 version 1 is unchanged. No frozen historical evidence is rewritten.
-The [full-file reconciliation](docs/rules/tla/acceptance.md) accounts for all
+The [full-file reconciliation](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/tla/acceptance.md) accounts for all
 286 identities / 294 faces and records concrete interaction coverage limits.
 T6 schedule/selector capture, delayed lifetimes and main's v6 capacity are
 integrated from published T6 `7c790f78e`. Mutable w17 receipts are rebound to
@@ -399,7 +399,7 @@ validation and world freeze remain with gate; no new training or strength
 comparison is certified by these checks.
 
 Gate's current limits are recorded in
-[Elemental contracts](docs/rules/elemental-combat.md#gate-evidence-and-remaining-limits--2026-10-20).
+[Elemental contracts](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-combat.md).
 The w7 authored-match authority and replay parity have separate versioned
 receipts; historical public-commitment/RUL-9 checks and pinned Linux visual
 validation remain unresolved. w7 is not frozen.
@@ -456,7 +456,7 @@ w3 and w4 results retain their original input contracts and evidence limits.
 
 ## w4: complete UR additions
 
-Jack Heart accepted a new world on 2026-09-29 for ETU-88. This world adds
+w4 was opened on 2026-09-29 for ETU-88. This world adds
 mandatory discard and legend-rule decisions, seven-card cleanup and Proft's
 hand-limit exemption, conditional spell-cost reduction, combat/draw-count
 abilities, and temporary death-to-exile replacement. The permanent tensor
@@ -466,7 +466,7 @@ using the existing SelectCard action. Match-state hashes use v3 and semantic
 decisions/observations use v6. Visible card records now carry registered rules
 text, including owned outside candidates.
 
-The authored UR and GW decklists are unchanged. Jack's revised 40-card UR list
+The authored UR and GW decklists are unchanged. A revised 40-card UR list
 is a custom setup for ETU-87 to measure, not an adopted authored deck. The
 new definitions use the ordinary declarative card registry and effect
 interpreter; they are not added to the frozen compiled two-deck semantic IR.
@@ -477,7 +477,7 @@ rules and legal decisions.
 Frozen receipts, checkpoints, and prior win-rate measurements keep their
 original identities. The earlier 38% Search-64 result is context, not a w4
 baseline. Re-run both authored and candidate lists under matched w4 consumers
-before comparing strength. See [ETU-88 evidence](docs/rules/ur-lessons-increment.md).
+before comparing strength. See [ETU-88 evidence](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/ur-lessons-increment.md).
 
 ## Semantic input compatibility
 
@@ -500,9 +500,6 @@ top of tensor dimensions:
   zero silent truncation. Token-count and overflow receipts travel with
   experiment results.
 
-The full rationale and required controls are in
-[`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
-
 ## w8: Sacrifice and landfall (not yet frozen)
 
 MTG-162 adds selected sacrifice costs, payment alternatives, immediate chosen-color
@@ -522,7 +519,7 @@ World freeze and release certification remain separate from implementation.
 
 ## w9: Temur mana and graveyard casting (not yet frozen)
 
-[The Temur rules contract](docs/rules/elemental-temur.md) covers six added real
+[The Temur rules contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) covers six added real
 cards, granted mana abilities, Lesson-restricted mana, Iroh flashback, and Ran
 and Shaw's nonlegendary token. Player features grow from 28 to 40 to retain both
 ordinary and Lesson-restricted W/U/B/R/G/C pool counts. Card features grow from
@@ -540,7 +537,7 @@ integration changes, without a strength claim or a promoted checkpoint.
 ## w10: one ten-deck Elemental world
 
 `elemental-world-v1` adds the exact ten accepted 40-card decks and outside-game
-Lesson pools in [the Elemental contract](docs/rules/elemental/world.md). Its closure
+Lesson pools in [the Elemental contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md). Its closure
 contains 89 selected nonbasic cards, five basics and six token definitions.
 Earlier authored packs and receipts retain their bytes and setup meanings.
 
@@ -570,7 +567,7 @@ Match-state hash 8 identifies the changed serialized state; learning schema 7
 and opcode 65 identify authored payment branches. Tensor dimensions stay fixed.
 Frozen opcode 61 lowers to the shared runtime. Earlier sources, schemas and
 receipts remain unchanged; w10 checkpoints are rejected. See
-[optional payments](docs/rules/optional-payments.md) for ownership and authoring.
+[optional payments](docs/engine.md#resolution-contracts) for ownership and authoring.
 
 The shared-payment repair uses executable witnesses for offers and nested mana
 costs within development w11. Its source-bound corpus is

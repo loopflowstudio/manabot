@@ -15,7 +15,7 @@ timing, trustworthy learning evidence, and measured runtime/search performance.
 managym is Manabot's authoritative world: match execution, semantic
 Commands, viewer Observations, deterministic replay, exact forks, and the
 meaning and materialization of possible worlds. The cross-package contracts
-and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+are in the [README](../README.md#contracts-the-code-enforces).
 
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
@@ -41,13 +41,6 @@ decklist data separate from card behavior; see
 Dependencies flow: python → agent → flow → state/infra, and across crates
 `managym` → `managym-cards` → `managym-state`. `cargo test` in this directory
 runs all three (the workspace's default members).
-
-[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md) is the
-dated 2026-07-15 research record on typed card programs, exact object identity,
-structured offers and proposed events; conformance fixtures live under
-[conformance/](../conformance/). Its undo, journal and page-COW sections were
-superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
-and the w2-182/198/199 benchmark reports under `experiments/`).
 
 Authored setups come from `AuthoredSetup::player_config` (Python:
 `managym.authored_deck_setup(setup, deck_key)`, naming the setup by preset or
@@ -151,7 +144,7 @@ uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
 
-The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+The [pinned Comprehensive Rules audit](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.
 Card-shell checks and replay agreement do not independently prove rules
 correctness. Prefer directed tests with independently specified outcomes and
@@ -165,7 +158,7 @@ The Prism/Treasure audit probe now follows explicit nested payment decisions
 and passes its final mana, sacrifice and empty-stack assertions. Its original
 failure remains historical evidence; this bounded pass does not certify all
 payment rules. See the audit's
-[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+[ownership review](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/unification.md)
 before using its historical Task attribution.
 
 ## Style
@@ -193,7 +186,7 @@ Academy legal action sets remain complete. Other capacity excesses still fail.
 Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
 
-The optional [policy-history v1 projection](../docs/training.md#policy-inputs) is a bounded
+The optional [policy-history v1 projection](../docs/observation-and-model.md#policy-inputs) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
 clone and diagnostic injection must preserve its documented lifecycle.
 
@@ -203,7 +196,7 @@ order, so authored setups are decklists over the world pool, not packs.
 `PlayerConfig.submitted` (Python: `world="world"`, `managym.WORLD_SETUP`, set by
 `Deck.player()`) submits a deck to the installed world: it must pass
 `development-v1` admission against the world's supported cards (see [decklist
-import](../docs/decklist-import.md)) or reset fails. Fixed setups and tests leave
+import](../docs/engine.md#decks)) or reset fails. Fixed setups and tests leave
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 
@@ -227,7 +220,7 @@ the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
 
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
-Their [ownership and authoring contract](../docs/rules/optional-payments.md)
+Their [ownership and authoring contract](../docs/engine.md#resolution-contracts)
 covers both ordinary mana and waterbend without a card-specific decision.
 `OptionalManaPaymentX` first chooses an affordable X, then uses the same payment
 progress. Its `WhenYouDo` branch creates a distinct occurrence retaining X;
@@ -273,7 +266,7 @@ resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
-[the observation input contract](../docs/training.md#policy-inputs).
+[the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 

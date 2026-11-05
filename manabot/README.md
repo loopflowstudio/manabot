@@ -3,54 +3,9 @@
 The trainable agent of Manabot: environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
 
-## Shared effect inputs
-
-`ObservationConfig(policy_input_version=7)` admits complete resolved effects
-before per-holder fact expansion. `env/shared_effects.py` mirrors the native
-128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
-subtypes, names, used abilities and copy exceptions still use `facts` (default
-128 rows). The model encodes each payload once and routes its contribution into
-named objects before attention; action focus remains addressable. Sum reduction
-preserves edge multiplicity and shared gradients; it is learned compression,
-not a proof of injective embeddings or improved play. See the
-[architecture walkthrough](../docs/observation-architecture.html).
-
-The version is explicit in saved observation/configuration identities. Fresh
-construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
-retain their meanings. Historical captures without shared provenance cannot be
-promoted to v7 by guessing a source/controller. Text representation
-`manabot-text-6` renders each native payload once with exact public source and
-member labels and timestamp ranks. Its within-observation token reducer is not
-persistent game memory.
-
-## Naming policies
-
-Naming a card is a sequence of ordinary decisions: groups of at most 64 sorted
-names, then a name. Explicit input v9 encodes each group by its public span of
-names and each name by categorical identity plus its definition's learning
-tokens, at ordinary action capacity; each group and name choice is one ordinary
-rollout transition. Names with no executable definition can have a vocabulary
-identity without becoming playable cards. Checkpoints bind ordered names,
-definition joins and the branching bound. See the
-[naming input contract](../docs/training.md#catalog-naming-input).
-
-## Policy action capacity
-
-Observation overflow raises an error by default. The TLA pilot explicitly uses
-`ObservationConfig(max_actions=64, action_overflow="first-legal")` to keep the
-first 64 legal actions in native order. Retained indices and Commands are
-unchanged; the engine and Academy still expose the complete legal set. Learned
-checkpoint evaluation uses the saved policy configuration. The prospective TLA
-benchmark gives its heuristic opponent the same prefix before scoring, including
-its fallback; the chosen original index is never clamped or remapped.
-
-Capture reports count consumed decisions, overflows and dropped actions by
-decision kind across all participating policies, with bounded replay samples.
-These aggregate counts are not learner-only or actor-specific rates.
-Collector/game close and vector
-reseeding flush exact totals, including zero-overflow runs. The approximation
-and its evaluation limits are specified in the
-[TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
+The central loop is self-play: play a batch, turn game results into per-decision
+credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
+explains it, and [training.md](../docs/training.md) covers running it.
 
 ## Quickstart
 
@@ -121,6 +76,9 @@ lease and spending limits remain in hours/dollars. See [cadence and continuation
 New self-play training learns from both seats by default (`baseline-v3`).
 Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
 saved schema-1 recipes retain their historical one-seat behavior.
+Batches close after complete games by default, whoever learns; `batch_closure`
+declares it, and `"exact-quota"` is the one-seat alternative. See
+[batch closure](../docs/training.md#batch-closure).
 Use `games_per_stream` on both arms to match complete-game budgets. Distinct
 learning models can use `PairedLearners` to update both independent optimizers
 from their own seat trajectories. See [both-seat learning](../docs/training.md#regimes-and-stages)
@@ -192,12 +150,12 @@ An observation/action-shape or rules-meaning change is a world version.
 The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
 including w14 artifacts, are not compatible with w15. Elemental combat,
-[sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
-[ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
+[sacrifice/landfall](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-sacrifice.md) and [Temur](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) compiled admission is implemented;
+[ten-deck Elemental admission](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
-certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
+certification limits remain in the [Learn record](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md).
 
 `manabot sim` accepts `random`, `default`, a local policy `.pt` path, or an
 Etude checkpoint-record `.json` path for each player. Checkpoint records resolve
@@ -208,8 +166,8 @@ admission. Simulation results are recorded locally through Etude.
 
 manabot owns memory, beliefs, planning, policy/value learning,
 self-play, evaluation, and promotion evidence over the authoritative managym
-world. The cross-package contracts and convergence status are in
-[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+world. The cross-package contracts are in the
+[README](../README.md#contracts-the-code-enforces).
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
@@ -240,20 +198,20 @@ Training regimes can [import a published raw/EMA policy](../docs/training.md#reg
 without retraining, preserving producer provenance and separate sunk costs.
 They can freeze a policy, collect private whole-game supervision,
 and fit a constrained autoregressive hand sampler without exact enumeration.
-See [frozen-policy belief sampling](../docs/search-and-beliefs.md#belief-sampler). This separately
+See [frozen-policy belief sampling](../README.md#beside-the-loop). This separately
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
-[Frozen-policy local search](../docs/search-and-beliefs.md#local-policy-search) plays through the
+[Frozen-policy local search](../README.md#beside-the-loop) plays through the
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.
 
 The existing `agent_puct` player accepts flat checkpoints;
-see [PUCT policy/value compatibility](../docs/search-and-beliefs.md#local-policy-search)
+see [PUCT policy/value compatibility](../README.md#beside-the-loop)
 for critic units and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
-Declare training comparisons with [typed Python experiments](../docs/training.md#experiments).
+Declare training comparisons with [typed Python experiments](../docs/experiments.md#declaring-a-comparison).
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.
 
@@ -261,6 +219,24 @@ Each current experiment is one module in [experiments/](../experiments/), holdin
 its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
+
+The prospective [growing-pool reference league](../experiments/protocols/growing-pool-245-v1.md)
+freezes authored decks, sampling tickets and held-out experience splits through
+the existing deck source, training job and replay evaluator. Its read-only
+`uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
+checks admission without playing games; v1 rejects the changed engine source.
+Task 04 owns the integrated freeze and actual pilot results. The frozen proxy
+is not evidence of learning.
+
+The reference league's TrainingJob enables private exposure capture through the
+ordinary native vector collector. Digest-bound game receipts preserve actual
+sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
+card draws and completed effect frames. They live under `training/exposure`,
+separate from checkpoints and evaluation evidence. The offline analysis accepts
+these downloaded directories with `--training-evidence`; missing or interrupted
+capture leaves the report incomplete. Focus opportunities and completed frames
+are measurements of decisions/program completion, not strategic benefit. Other
+jobs keep capture disabled unless they explicitly select it.
 
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in
@@ -284,7 +260,44 @@ custom-deck root requires its exact checkpoint setup binding.
 
 For capacity configuration, component counts, versioned architecture receipts and
 bounded CPU calibration, see [capacity accounting](model/agent.md#capacity-identity-and-accounting)
-and [the calibration command](../docs/training.md#freeze-step-targets).
+and [the calibration command](../docs/experiments.md#freeze-step-targets).
+
+## Shared effect inputs
+
+`ObservationConfig(policy_input_version=7)` admits complete resolved effects
+before per-holder fact expansion. `env/shared_effects.py` mirrors the native
+128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
+subtypes, names, used abilities and copy exceptions still use `facts` (default
+128 rows). The model encodes each payload once and routes its contribution into
+named objects before attention; action focus remains addressable. Sum reduction
+preserves edge multiplicity and shared gradients; it is learned compression,
+not a proof of injective embeddings or improved play.
+
+The version is explicit in saved observation/configuration identities. Fresh
+construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
+retain their meanings. Historical captures without shared provenance cannot be
+promoted to v7 by guessing a source/controller. Text representation
+`manabot-text-6` renders each native payload once with exact public source and
+member labels and timestamp ranks. Its within-observation token reducer is not
+persistent game memory.
+
+## Policy action capacity
+
+Observation overflow raises an error by default. The TLA pilot explicitly uses
+`ObservationConfig(max_actions=64, action_overflow="first-legal")` to keep the
+first 64 legal actions in native order. Retained indices and Commands are
+unchanged; the engine and Academy still expose the complete legal set. Learned
+checkpoint evaluation uses the saved policy configuration. The prospective TLA
+benchmark gives its heuristic opponent the same prefix before scoring, including
+its fallback; the chosen original index is never clamped or remapped.
+
+Capture reports count consumed decisions, overflows and dropped actions by
+decision kind across all participating policies, with bounded replay samples.
+These aggregate counts are not learner-only or actor-specific rates.
+Collector/game close and vector
+reseeding flush exact totals, including zero-overflow runs. The approximation
+and its evaluation limits are specified in the
+[TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
 
 ## Research program
 
@@ -324,7 +337,7 @@ Self-play update diagnostics live only in the run's Etude metrics;
 TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
-Optional [public recent-event input](../docs/training.md#policy-inputs) uses the existing
+Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing
 semantic catalog and a bounded native history suffix. Recipe history-on/off is
 independent of capacity and learning rules; comparison plans remain unexecuted.
 
@@ -472,7 +485,7 @@ serialized `arena_key`, `arena_version`, seed identifiers and retained artifact
 paths preserve their original meaning; current source identities use the new paths.
 
 For a standalone, inspectable pretrained-model decision over supplied text and
-legal references, see the optional [LLM harness](../docs/llm.md). It owns
+legal references, see the optional [LLM players](../docs/evaluation.md#llm-players). It owns
 protocol recovery and inference evidence; observation rendering and Command
 execution remain outside it.
 
@@ -510,5 +523,5 @@ receipts. This uses bounded public policy history v1; it loads no model and has
 no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
 
-[Decklist file import](../docs/decklist-import.md) admits novel development decks
+[Decklist file import](../docs/engine.md#decks) admits novel development decks
 against the installed world for simulation and Academy play.

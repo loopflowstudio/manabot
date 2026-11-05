@@ -817,6 +817,7 @@ impl Game {
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
+        self.capture_resolution(&frame);
         if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
             // A spell that exiled itself ("Exile Avatar's Wrath") has
             // already left the stack (CR 608.2n).
