@@ -59,3 +59,15 @@ At demo/review, summarize each risk with its witness/metric, original result,
 mitigation, final result and remaining limitation. Identify exact tested heads;
 earlier focused passes do not validate later edits. Keep residual risks visible
 and scoped rather than treating the full suite as proof of all interactions.
+
+Current correction (2026-11-04): `91517292c` repairs completed private captures;
+`d77bc8676` integrates the published v8 layer schema. Eleven focused hidden-selection
+tests cover both viewers, all six capture lifetimes, aliases, moved captures,
+privacy, expired control, departed incarnations and selections from Remembered. These establish execution/
+representation properties of binding ownership, not successor policy completeness.
+The final alias correction over `d77bc8676` additionally updates selections from
+Remembered and their legal offers; the restored Command witness passes in both
+samplers. Five focused Python checks pass after atomic extension rebuild.
+The plan's CR 614.16/event-creation correction is a new prerequisite for complete
+retained-payload separation. No new engine timing, model-cost or learning-efficacy
+claim is made, and the inherited MTG-244 regression remains unresolved evidence.

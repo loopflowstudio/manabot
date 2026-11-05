@@ -1257,7 +1257,7 @@ fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspen
         source,
         Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
             sacrifice_source: true,
-            effects: vec![Effect::OptionalDiscardDraw { count: 1, up_to: 1 }],
+            effects: vec![Effect::discard_draw(1, 1)],
             ..Default::default()
         })),
     );

@@ -2,7 +2,11 @@
 //! Bindings travel with their trigger occurrence, including after its selecting
 //! frame finishes. Sampling may change an unknown witness, never its constraints.
 
-use crate::{game_object::{ObjectRef, PlayerId}, predicate::CardPredicate, zone::ZoneType};
+use crate::{
+    game_object::{ObjectRef, PlayerId},
+    predicate::CardPredicate,
+    zone::ZoneType,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ZoneSelection {

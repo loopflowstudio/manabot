@@ -5,9 +5,9 @@
 Jack Heart's accepted directive (2026-11-04): one PR through the code Graph,
 stopping at interactive review; no merge, auto-merge, training or retained-evidence
 rewriting. The Task remains **incomplete**. No human judgment is missing.
-Reconciled implementation head: `f1ce0ce13`, incorporating main `ee85d6fc8`,
-the hidden consumer migration at `724d7437f`, and the batch handoff/replacement
-bookkeeping simplification. The active implementation replaces frame-only private binding ownership;
+Binding checkpoint: `91517292c`; MTG-244 published v8/layers integrated at
+`d77bc8676` from `1930146b0`. Earlier execution and hidden-consumer work remains
+in the ancestry through `f1ce0ce13`. The active implementation replaces frame-only private binding ownership;
 its correction and focused evidence are below.
 
 The selected Wave is `.lf/wave/coverage/`; its GOAL and full MEMORY were read.
@@ -147,6 +147,10 @@ stack and resolving occurrences. Both samplers collect one joint assignment acro
 all those owners and active selections. Known bindings pin exact copies; stale
 incarnations impose no live membership and never follow a later incarnation.
 Moved captures take their new zone, rather than inheriting the old selection zone.
+A later `SelectCards(Remembered)` has no zone marker; the joint assignment now
+updates its candidates and selected child anyway, and direct determinization
+refreshes that offer. Its directed Command witness originally retained entity 64
+while the capture remapped to 41; the marker-gated predecessor is removed.
 Canonical state serialization includes binding provenance. Viewer-facing references
 still use native visibility and do not expose private binding identities.
 
@@ -158,11 +162,68 @@ alias agreement, privacy and subsequent zone movement. Full retained-payload
 projection and policy admission remain unfinished; this change does not establish
 learning completeness or all hidden-zone consumers.
 
+## Event-model correction — 2026-11-04
+
+The binding repair is implemented, but the complete real-card counter witness
+exposes a second missing domain fact. `ProposedEvent::CounterChange` retains
+`target/kind/delta/by`; none distinguishes an effect, a cost or a turn-based
+placement. `ModifyCounters` applies to every positive matching placement.
+Consequently it cannot author Doubling Season faithfully. This is a source-level
+representation counterexample, not a newly failing real-card test: Doubling
+Season is not registered, and the constructed 3/4 driver never claimed its full
+semantics. No current test result proves that missing behavior.
+
+The pinned 2026-09-25 CR text (git blob
+`4dc4fead596288be1ca6aa9c913ea1739c680a29`) makes the distinction explicit:
+614.16 admits a resolving effect and also a replacement/prevention effect even
+when the original event was not an effect. 714.3a makes entry lore an intrinsic
+replacement, while 714.3c is the precombat turn action. The
+[Foundations notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
+confirm that adding loyalty as a cost is not doubled. The
+[April 2026 bulletin](https://magic.wizards.com/en/news/announcements/secrets-of-strixhaven-update-bulletin)
+confirms the Saga-entry change. The original source of a placement alone is
+therefore insufficient: replacement history can make a later effect applicable.
+
+There is a second part of the same card contract: `CreateToken` currently calls
+`prepare_token` for each token before creating a zone-move batch. That can replace
+entry but cannot replace the number of tokens in the logical creation event.
+A counter-only Doubling Season definition would be incomplete. Caradora's full
+search trigger and creature/Vehicle predicate also remain required.
+
+Revised internal cut, within the existing single-PR boundary:
+- A retained proposal owns initial cause and the replacement-produced effect
+  status needed by CR 614.16. Costs remain costs for completion/payment ownership;
+  the replacement applicability question reads causal provenance, not `by`.
+- The single `ModifyCounters` rules type gains an explicit applicability filter;
+  it does not gain a card-specific twin. Rechecking after a transformation reads
+  the updated provenance, preserving exact applied identities and chooser order.
+- Token creation becomes a retained logical proposal before token allocation,
+  retaining count, definition/copy terms, controller and entry/attachment terms.
+  After creation replacement choices, allocate the final group and use the existing
+  simultaneous entry batch. No second token executor or count-only wrapper.
+- Delete the eager per-token allocation path in `Effect::CreateToken` and
+  `CreateTokenCopy` when moving their consumers. Preserve copied exceptions,
+  created-result ordinals, tapped/attacking and attachment behavior, entry choices,
+  trigger timing and once-only completion. Do not repair that predecessor.
+- Directed acceptance distinguishes effect placement, unmodified cost/turn action,
+  a non-effect modified by another replacement, intrinsic Saga/loyalty/defense
+  entry, and token multiplicity with retained entry terms, alongside the actual
+  Leaves/Caradora/Doubling Season 3-versus-4 choice and complete definitions.
+
+Dependent retained-payload projection is stopped at this correction: encoding
+only the current amount/owner would preserve an insufficient event model. The
+successor projection must include causal and logical-creation payloads after this
+cut. No new schema was committed. The published MTG-244 v8 integration is retained;
+its layout is not evidence of complete execution-state representation. No human
+judgment or new authorization is missing, and no weakened card definition was
+added. The Task remains incomplete and is not ready for review.
+
 ## Remaining implementation and acceptance
 
 1. Owned-binding correction implemented; finish its successor projection/admission
    with the retained payload cut below. Broader hidden consumer audit remains open.
-2. Complete the real Leaves from the Vine / Caradora / Doubling Season witness,
+2. Complete the event-model correction above, then the real Leaves from the Vine /
+   Caradora / Doubling Season witness,
    including complete definitions and learning/observation coverage. Current
    `ModifyCounters` drivers use `count * multiplier + additional`; no registered
    card uses that replacement yet. The registered Leaves chapter with constructed
@@ -183,7 +244,7 @@ learning completeness or all hidden-zone consumers.
    and hide unavailable bindings. Cover native/Python inputs, learning tokens,
    actual model input, LLM, Academy, replay/fork and reconnect. Reject unrepresentable
    older inputs before inference; obligation codes alone are insufficient.
-5. Reconcile the successor schema with MTG-244 through ordinary integration.
+5. Extend the integrated MTG-244 successor schema after the event-model correction.
    [PR #427's contract](https://github.com/loopflowstudio/manabot/blob/1930146b08a1f1481af6e3b46a20f87d4a26a8fa/AGENTS.md)
    at `1930146b08a1f1481af6e3b46a20f87d4a26a8fa` publishes **v8**:
    v7 object/relation/shared header/member widths, 4096 × 3 effect details,
@@ -207,7 +268,7 @@ learning completeness or all hidden-zone consumers.
    cannot substitute for the unfinished implementation or its targeted risk work.
    No speed or learning claim follows from the refactors; no experiment was launched.
 
-Continue with retained-payload projection and version admission. The real-card counter witness and bounded risk measurements
+The event-model correction precedes retained-payload projection and version admission. The real-card counter witness and bounded risk measurements
 remain implementation work. This Task is not ready for review or completion.
 
 ## Integration and evidence
@@ -257,7 +318,12 @@ retained batches, hidden consumers and constructor compression; extension rebuil
 text/parity and sampler rejection. They establish those slices, not full-head
 acceptance, complete private-binding support or runtime/learning performance.
 
-Check (2026-11-04, owned-binding implementation over `f1ce0ce13`):
-`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --lib hidden_selection --no-default-features`
-passes 10 focused debug tests; `git diff --check` and `lf context` pass.
-Final-head affected suites and Engine Budget remain with gate.
+Check (2026-11-04, binding/schema integration over `d77bc8676`): debug focused
+filters `--lib hidden_selection` (11), `--lib retained_batch` (6), and the two
+`--test rules_tests cr_613_*` integration witnesses (Saga/external grants and
+captured activation after sacrifice/suspension) pass; root maturin release build
+and atomic cp312 install pass; focused pytest captured-continuation model paths,
+count-sampler rejection and shared-selection text/native/Python parity pass (5).
+`git diff --check` and `lf context` pass. Full suites, complete successor payload
+admission, new conformance evidence and performance acceptance remain outstanding;
+gate retains final-head suites/Engine Budget after implementation completes.

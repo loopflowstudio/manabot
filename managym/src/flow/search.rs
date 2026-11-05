@@ -129,7 +129,7 @@ impl Game {
                     || suspended.decision.player() == opponent
                         && matches!(
                             suspended.decision,
-                            Decision::SelectCards { from: Some(_), .. }
+                            Decision::SelectCards { .. }
                                 | Decision::Learn { .. }
                                 | Decision::Discard { .. }
                                 | Decision::SearchDistinctLands { .. }

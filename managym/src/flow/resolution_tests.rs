@@ -1243,6 +1243,103 @@ fn hidden_selection_known_capture_pins_the_exact_copy_after_control_expires() {
     }
 }
 
+#[test]
+fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
+    let player = PlayerId(1);
+    let viewer = PlayerId(0);
+    let mut root = completed_private_capture(player);
+    for trigger in &mut root.state.delayed_triggers {
+        trigger.effects = vec![Effect::SelectCards {
+            from: ObjectSelector::Remembered,
+            predicate: CardPredicate::default(),
+            min: 1,
+            max: 1.into(),
+            if_declined: Vec::new(),
+            effects: vec![
+                Effect::ForPlayer {
+                    player: crate::state::ability::PlayerSelector::EachOpponent,
+                    effects: vec![pause()],
+                },
+                Effect::exile(ObjectSelector::Selected),
+            ],
+        }];
+    }
+    root.emit(GameEvent::StepStarted {
+        step: StepKind::End,
+    });
+    root.process_game_events();
+    let order = root.flush_triggers().unwrap();
+    root.publish_action_space(order);
+    let trigger = root.state.trigger_placement.as_ref().unwrap().remaining[0].id;
+    root.choose_trigger(player, trigger).unwrap();
+    assert!(root.flush_triggers().is_none());
+    root.resolve_top_of_stack();
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let choosing = root.clone();
+    let card = CardId::from(
+        root.state
+            .suspended_decision
+            .as_ref()
+            .unwrap()
+            .frame
+            .remembered[0]
+            .object
+            .entity,
+    );
+    checked_command(&mut root, Action::SelectCard { player, card });
+    for (selected, source) in [(false, choosing), (true, root)] {
+        let space = crate::possible_worlds::PossibleWorldSpace::for_viewer(&source, viewer);
+        let mut sampled = source.clone();
+        sampled.determinize(viewer, 0).unwrap();
+        for mut branch in [
+            sampled,
+            space
+                .materialize_index(
+                    &source,
+                    0,
+                    0,
+                    if selected {
+                        crate::possible_worlds::MaterializeMode::PreserveViewerRoot
+                    } else {
+                        crate::possible_worlds::MaterializeMode::RefreshOpponentCommitment
+                    },
+                )
+                .unwrap(),
+        ] {
+            let frame = &branch.state.suspended_decision.as_ref().unwrap().frame;
+            let captured = frame.remembered[0].object;
+            if selected {
+                assert_eq!(frame.selected, vec![captured]);
+            } else {
+                let super::Decision::SelectCards { candidates, .. } =
+                    &branch.state.suspended_decision.as_ref().unwrap().decision
+                else {
+                    panic!("selection")
+                };
+                assert_eq!(candidates, &vec![captured]);
+                checked_command(
+                    &mut branch,
+                    Action::SelectCard {
+                        player,
+                        card: captured.entity.into(),
+                    },
+                );
+            }
+            checked_command(
+                &mut branch,
+                Action::ChooseMode {
+                    player: viewer,
+                    mode: 0,
+                },
+            );
+            assert_eq!(
+                branch.state.zones.zone_of(captured.entity.into()),
+                Some(ZoneType::Exile)
+            );
+        }
+    }
+}
+
 fn delay_life_gain(
     game: &mut Game,
     event: DelayedEvent,

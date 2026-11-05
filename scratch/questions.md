@@ -33,3 +33,10 @@ joint assignment; successor projection/admission remains open. No human answer i
 required. PR #427's newly reported performance
 regression belongs to MTG-244, while combined-head risk acceptance remains open
 here. Exact shared evidence and the published schema are recorded in the plan.
+
+Event-model correction (2026-11-04): pinned CR 614.16 requires effect-versus-cost/
+turn-action provenance and replacement-produced eligibility. Current counter
+proposals lack that fact, and token creation allocates before any logical creation
+replacement. The plan records the revised deletion cut; no partial Doubling Season
+definition or successor projection was committed on the insufficient model.
+MTG-244 v8 is integrated at `d77bc8676`; full execution projection remains open.

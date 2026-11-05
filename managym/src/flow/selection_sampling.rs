@@ -174,7 +174,11 @@ impl Game {
         entries
     }
 
-    pub(crate) fn sampling_fixed_library_cards(&self, owner: PlayerId, viewer: PlayerId) -> Vec<CardId> {
+    pub(crate) fn sampling_fixed_library_cards(
+        &self,
+        owner: PlayerId,
+        viewer: PlayerId,
+    ) -> Vec<CardId> {
         self.sampling_fixed_objects(viewer)
             .into_iter()
             .map(|object| object.entity.into())
@@ -516,13 +520,9 @@ impl Game {
         viewer: PlayerId,
         mapping: &BTreeMap<ObjectRef, ObjectRef>,
     ) {
-        if frame
-            .selected_from
-            .as_ref()
-            .is_some_and(|source| source.hidden_from(self, viewer))
-        {
-            rebind(&mut frame.selected, mapping);
-        }
+        // Eligibility belongs to the joint mapping, not this alias's selector.
+        // A selection from Remembered has no zone marker of its own.
+        rebind(&mut frame.selected, mapping);
         // A child may remember or otherwise alias a selected exact object.
         // The one mapping must follow those aliases as well as `Selected`.
         rebind_captures(&mut frame.remembered, mapping);
@@ -559,18 +559,25 @@ impl Game {
     ) {
         match decision {
             Decision::SelectCards {
-                from: Some(source),
+                from,
                 candidates,
                 selected,
                 ..
-            } if source.hidden_from(self, viewer) => {
+            } => {
                 rebind(selected, mapping);
-                *candidates = self
-                    .selection_zone_cards(source.owner, source.zone)
-                    .into_iter()
-                    .filter(|card| self.card_matches_predicate(*card, &source.predicate))
-                    .filter_map(|card| self.current_object_ref(card))
-                    .collect();
+                if let Some(source) = from
+                    .as_ref()
+                    .filter(|source| source.hidden_from(self, viewer))
+                {
+                    *candidates = self
+                        .selection_zone_cards(source.owner, source.zone)
+                        .into_iter()
+                        .filter(|card| self.card_matches_predicate(*card, &source.predicate))
+                        .filter_map(|card| self.current_object_ref(card))
+                        .collect();
+                } else {
+                    rebind(candidates, mapping);
+                }
             }
             Decision::ManaUpfront {
                 resume: Some(parent),

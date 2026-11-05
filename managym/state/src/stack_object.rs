@@ -1,7 +1,7 @@
-use crate::binding::ObjectBinding;
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
+use crate::binding::ObjectBinding;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
