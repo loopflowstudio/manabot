@@ -96,12 +96,10 @@ diagnosis also completed: 256 games, 54,184 decisions, 212 minibatches;
 collection/learning 77.51/72.61s. It has no matched full-batch CPU baseline.
 Both final diagnoses exported checkpoints and retained inference/learning traces.
 
-Trace coverage audit, 2026-11-05: `scripts/profile_representation.py` closes its
-Torch profiler when `ActorCritic.forward_distribution` returns. The learning
-trace therefore covers grad-enabled forward only, not backward/clipping or
-optimizer operators. StageRecord retains their aggregate clocks, but causal CUDA
-diagnosis still requires bounded coverage of those phases. Host metadata copies
-and routing loops remain; batching does not establish synchronization-free CUDA.
+The initial profiler closed at `ActorCritic.forward_distribution`, covering only
+grad-enabled forward. `6c0e33d4b` replaced that boundary with the complete step
+described above. Host metadata copies and routing loops remain; batching does
+not establish synchronization-free CUDA, and retained CUDA traces are still missing.
 
 Fresh 23:21:22 UTC accounting found all seven Task Vast instances absent and
 reported-plus-settled compute $0.8545825939. Existing $3 compute/$6 ancillary
@@ -116,7 +114,8 @@ remains under the existing conservative accounting, not a new allowance.
 Remote ref publication is unknown; that cannot create a rental. No final bill
 or fresh provider inventory after the outage is claimed.
 
-Evidence remains local (network prevented artifact publication):
+Original local evidence paths (the CPU profiles/oracles were subsequently
+manifest-published as recorded above; outage logs remain local):
 `.runs/representation-profile-batch256-before/`,
 `.runs/representation-profile-batch256-after/` (interim),
 `.runs/representation-profile-final-pool/`,

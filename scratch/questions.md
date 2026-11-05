@@ -16,12 +16,12 @@
   matched pooled CPU collection/learning from 202.86s to 121.71s. GPU diagnosis
   failed before allocation because GitHub/Doppler connectivity timed out;
   no new compute charge, no science, and no change to the $25 cap. The 2026-11-05
-  reconciliation found that the learning operator trace covers forward only;
-  bounded backward/optimizer coverage remains implementation work before CUDA
-  attribution. No new product decision is required for that authorized diagnosis.
+  reconciliation identified forward-only trace coverage, repaired by `6c0e33d4b`
+  before the later CUDA attempt above. Retained complete CUDA traces remain
+  missing. No new product decision is required for that authorized diagnosis.
   Diagnosis owns local evidence paths and outstanding GPU acceptance.
 
-- Current result: the cheaper 3090 completed both excluded admission arms;
+- Pre-repair result: the cheaper 3090 completed both excluded admission arms;
   all outputs verified and rental deleted. Corrected pre-repair cohort projection
   $71.82 exceeds the $16 science allowance; even recurring work alone costs
   $47.58. No replacement science or plateau. The live plan owns accounting,
@@ -41,8 +41,9 @@
 - Jack Heart's “keep going” superseded the operator-created final-settlement-only
   deadlock. Reconcile reported/lifetime costs with conservative reserves;
   no nonexistent settlement watermark is required. Current reservations leave
-  $16 for science. Unknown live commitments stay reserved; no final-invoice
-  claim or double counting. The plan retains every attempt and contrary estimate.
+  $15.50; the plan owns accounting. Unknown live commitments stay reserved;
+  no final-invoice claim or double counting. The plan retains every attempt
+  and contrary estimate.
 - Jack Heart selected latest public Etude Git main, with exact `uv.lock` source
   for launcher and worker. Refresh only before freezing a new run. Retained
   protocols, locks and receipts remain immutable; no SDK release is claimed.

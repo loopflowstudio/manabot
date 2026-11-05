@@ -4,7 +4,7 @@ The Training Wave was renamed experiments in `9f42e4e58` on 2026-11-04.
 The removed Eval memory (hosted LLM comparisons, inference receipts and evidence
 reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md`; it is historical context,
 not an active scope or new campaign authorization. Filesystem inspection of
-experiments on 2026-11-04 found no immediate child directories or child memories.
+experiments on 2026-11-05 found no immediate child directories or child memories.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 
@@ -170,12 +170,39 @@ unaffordable measured arrangement, not proof that every GPU arrangement fails.
 
 Most collection time was inference/action selection. CUDA placement and one
 thread were confirmed; a single 23% GPU-utilization sample, one CPU core and
-two zero-pressure samples do not establish sustained host contention. Source
-inspection identifies per-record Python loops, scalar reads and CUDA validation
-as plausible dispatch/synchronization costs, without causal operator profiling
-or a demonstrated speedup. The earlier 4090 used different training/native
-sources and cannot isolate hardware performance. Ordinary matched-workload
-profiling must distinguish implementation cost from host limitations.
+two zero-pressure samples do not establish sustained host contention. The earlier
+4090 used different training/native sources and cannot isolate hardware
+performance. Jack Heart explicitly authorized bounded ordinary-learner diagnosis
+and measured repairs on 2026-11-04 at 23:15 UTC within the same cumulative $25;
+the pre-repair projection does not establish that every implementation is
+unaffordable or close the remaining work.
+
+The subsequent CPU diagnosis supported batching effect/continuation neural
+projections and record reduction (`59ec1bd24`, simplified in `678419e00`).
+Matched pooled work completed 256 games, 51,095 decisions and 200 minibatches
+before and after: collection plus learning fell from 202.86s to 121.71s;
+encoder call time fell from 30.36s to 2.71s. Both used cProfile and the final
+run also captured operator traces, so these are bounded instrumented CPU
+measurements, not a CUDA speedup or scientific admission. Native multi-position
+oracles and focused tests preserve outputs, parameter/object/definition gradients,
+duplicate memberships, canonical order and absent gradients for unused Adam
+parameters. A zero gradient is not equivalent to None when optimizer momentum
+exists. Checkpoint parameters and fixed input contracts remain unchanged.
+
+Host metadata copies and routing loops survive the batching repair; their CUDA
+cost remains unmeasured. The profiler's learning trace wraps the grad-enabled
+forward only, not backward or optimizer operators. Aggregate phase clocks cannot
+replace that missing causal coverage. The final GRU CPU diagnosis completed too,
+but has no matched full-batch baseline. Neither CPU receipt establishes a
+post-repair GPU cohort price, plateau or preferred representation.
+
+A subsequent $0.19 diagnostic quote under the $0.50 cap failed at source
+publication during GitHub/Doppler connectivity timeouts, before any run or rental
+was created. No allocation expense or live commitment resulted; the conservative
+$16 remainder persisted. This is a dated failed attempt, not current provider
+availability or connectivity. Local profile/oracle evidence remained unpublished
+after the outage; the Task diagnosis retains its paths and the plan owns CUDA
+coverage, matched admission and publication still needed.
 
 Prospective admission now freezes startup, no-completed-update and phase-cost
 stop policies, retaining progress/reasons before requesting graceful shutdown
@@ -188,8 +215,9 @@ Scientific orchestration now exists: sequential balanced seed/arm execution,
 initialization and periodic exports, checkpoint evaluation and strict complete
 cohort analysis. Default discovery remains admission-only; an explicit affordable
 allocation selects science. No replacement scientific cohort ran, and plateau
-remains unmet. Missing affordability, not a settlement watermark or missing
-orchestration, limits continuation. Evidence is manifest-backed under
+remains unmet. Post-repair GPU evidence and affordability remain unresolved;
+neither a settlement watermark nor missing orchestration prevents authorized
+diagnosis. Completed rental evidence is manifest-backed under
 `experiments/data/state-representation-gpu-5da5f4/`, including `operational-restart/`;
 older accounting and failed receipts remain immutable. These are dated reads,
 not a fresh provider balance.

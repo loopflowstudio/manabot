@@ -1,13 +1,13 @@
 """Bounded operator diagnosis through the ordinary representation-study learner.
 
 One excluded update retains normal training receipts, Python call costs, one
-inference trace and one complete learning minibatch through Adam. These are diagnosis, not study
-scores or uninstrumented throughput admission. CUDA runs require the caller's
-existing quoted rental, deadline, stop file and teardown owner.
+inference trace and one complete learning minibatch through Adam. These are
+diagnosis, not study scores or uninstrumented throughput admission. CUDA runs
+require the caller's existing quoted rental, deadline, stop file and teardown owner.
 """
 
 import argparse
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 import cProfile
 from datetime import datetime
@@ -18,24 +18,25 @@ import pstats
 import subprocess
 import sys
 import time
-from typing import Callable
 from unittest.mock import patch
 
-from etude.launch.records import Input, Run
+from etude.launch.records import Input, Job, Run
 import torch
 
 from experiments.state_representation_gpu import (
     ADMISSION_SEED,
+    ARMS,
+    EXPERIMENT,
     AdmissionLimits,
     ProgressWatch,
     StudyJob,
     _run_child,
     recipe,
-    runs as admission_runs,
 )
 from manabot.data import load_manifest
+from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.files import atomic_json
-from manabot.infra.source import bind_etude_source
+from manabot.infra.source import bind_etude_source, bundle_at
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.state_records import TypedContinuationEncoder
@@ -55,7 +56,7 @@ def check_references(root: Path, out: Path, device: str) -> None:
     """
     torch.set_num_threads(1)
     results: list[dict[str, str | float | int]] = []
-    for arm in ("typed_pool", "typed_gru"):
+    for arm in ARMS:
         for kind in ("effects", "continuation"):
             path = root / f"{arm}-{kind}.pt"
             # The trusted retained boundary contains only tensors/collections;
@@ -220,10 +221,11 @@ class OperatorTraces:
 
 def runs(revision: str) -> list[Run]:
     """Declare one capped diagnostic rental; no scientific seed is used."""
-    (run,) = admission_runs(revision)
-    assert run.job.config is not None
-    spec = StudyJob.model_validate_json(run.job.config)
-    spec.admission_limits = AdmissionLimits(scientific_usd=Decimal("15.50"))
+    root = Path(__file__).resolve().parents[1]
+    spec = StudyJob(
+        source_bundle=bundle_at(root, revision),
+        admission_limits=AdmissionLimits(scientific_usd=Decimal("15.50")),
+    )
     manifest = load_manifest()
     inputs = tuple(
         Input(
@@ -234,19 +236,20 @@ def runs(revision: str) -> list[Run]:
         )
         for path in manifest.select([REFERENCE])
     )
-    job = run.job.model_copy(
-        update={
-            "name": "representation-operator-profile",
-            "command": run.job.command.replace(
-                "-m experiments.state_representation_gpu",
-                "scripts/profile_representation.py --worker",
-            ),
-            "until": "updates=1",
-            "max_hours": 0.5,
-            "max_usd": Decimal("0.50"),
-            "config": spec.model_dump_json(),
-            "inputs": inputs,
-        }
+    # This job must deliver its traces before separate throughput admission.
+    job = Job(
+        name="representation-operator-profile",
+        experiment=EXPERIMENT,
+        setup=machine_setup(" --extra dev --extra artifacts --extra evaluation"),
+        command=f"{TOOLCHAIN_ENV}\nuv run --locked --extra dev --extra artifacts --extra evaluation python scripts/profile_representation.py --worker",
+        repo=str(root),
+        revision=revision,
+        config=spec.model_dump_json(),
+        inputs=inputs,
+        until="updates=1",
+        max_hours=0.5,
+        max_usd=Decimal("0.50"),
+        max_attempts=1,
     )
     return job.runs(0)
 
@@ -282,7 +285,7 @@ def worker() -> None:
             stderr=subprocess.STDOUT,
         )
     print((out / "cuda-routing-tests.txt").read_text(), flush=True)
-    for arm in ("typed_pool", "typed_gru"):
+    for arm in ARMS:
         logs = out / f"{arm}-supervision"
         logs.mkdir(parents=True)
         child_stop = logs / "stop"
@@ -324,7 +327,7 @@ def main() -> None:
         worker()
         return
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--arm", choices=("typed_pool", "typed_gru"), required=True)
+    parser.add_argument("--arm", choices=ARMS, required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--stop", type=Path, required=True)
@@ -345,9 +348,7 @@ def main() -> None:
         torch.cuda.set_per_process_memory_fraction(0.8)
     traces = OperatorTraces(args.out, args.device)
     calls = cProfile.Profile()
-    with ExitStack() as stack:
-        stack.enter_context(traces.capture())
-        store = stack.enter_context(VerifyStore(args.out / "training.sqlite"))
+    with traces.capture(), VerifyStore(args.out / "training.sqlite") as store:
         try:
             with calls:
                 run = execute_regime(

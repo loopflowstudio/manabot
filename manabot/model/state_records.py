@@ -1,12 +1,13 @@
-"""Experimental typed record encoders over the frozen, viewer-safe v5 tensors.
+"""Typed continuation encoding and frozen-v5 shared-fact compatibility.
 
 SharedFactEncoder factors *complete fact fragments*, not native effects: equal
 payloads share computation but retain every object membership and multiplicity.
+It retains v5's limits and missing exact effect-source links. V7 instead uses
+SharedEffectEncoder in shared_effects.py for complete native effect payloads.
 TypedContinuationEncoder separates frame headers from their variable-length
 edge lists, uses parent handles only as joins, and pools stack, execution and
-trigger frames separately. Both treatments read identical fields; their only
-within-record difference is a sum versus a GRU. Neither retains temporal state.
-The v5 admission limits and missing exact effect-source links still apply.
+trigger frames separately over the relation layout shared by v5–v7. Pool and
+GRU treatments read identical fields; neither retains temporal state.
 """
 
 import torch

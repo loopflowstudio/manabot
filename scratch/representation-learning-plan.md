@@ -51,12 +51,6 @@ Native multi-position outputs and all parameter/object/definition gradients agre
 with the saved pre-change oracle; focused tests include duplicate memberships,
 canonical ordering, padding and absent gradients for unused Adam parameters.
 
-The CUDA profiling attempt failed at source publication: its diagnostic quote was $0.19
-under a $0.50 cap, but Etude source publication stalled on GitHub before any
-run/rental was created. A bounded publication attempt also timed out, and
-GitHub HTTPS/Doppler reads timed out. No new provider allocation or expense
-was incurred. These are retained outage observations, not a fresh connectivity
-check. Details and retained local evidence are in the diagnosis.
 Matched GPU source/workload admission must still demonstrate affordability
 before the four-paired-seed cohort. Repeating the eight-context
 failure, substituting CPU evidence, shortening the learning objective or treating
@@ -83,17 +77,19 @@ plus `RecordReducer`'s per-sequence padded packing. Malformed-input rejection an
 schema/semantic tests survive on the batched path. Pre-change source remains at
 `42709fa1b`, not as a runtime fallback. No parameters or tensor contracts changed.
 
-### Completed simplification
+### Delete — do not maintain
 
-Removed `RecordReducer`'s list-of-tensors wrapper and separate `reduce_tokens`
-entry point: every caller now supplies a flat token table and record lengths
-through `forward`, including the frozen-v5 `SharedFactEncoder` consumer. Semantic
-and checkpoint coverage remains; no exclusive predecessor fixtures remain.
-One `join_record_rows` helper owns batch offsets and absent one-based references
-for effects, continuation objects and parent frames. Continuation edges are
-grouped once by handle, then sorted by payload; handles never become features.
-The failed combined diagnostic/admission orchestration is also removed: profiling now finishes and delivers before the separate existing admission runner. No further deletion targets are identified. Frozen receipts and the existing
-Wave edits are retained; broader validation belongs to gate.
+- Removed: `RecordReducer`'s list wrapper and `reduce_tokens` entry point; all
+  consumers, including frozen-v5 `SharedFactEncoder`, use flat tokens/lengths.
+  One `join_record_rows` owns batch offsets and absent one-based joins.
+- Removed: combined diagnostic/admission orchestration. Profiling delivers before
+  the existing separate throughput runner; no predecessor fixtures survive.
+- Removed: `scripts/profile_representation.py:runs`' intermediate admission job,
+  config round-trip and command rewriting. Declare the diagnostic directly using
+  shared source/setup primitives, retaining its exact inputs, limits and identity.
+
+No remaining deletion targets. Keep `SharedFactEncoder` for frozen checkpoints
+and its semantic tests. Historical receipts and existing Wave edits stay intact.
 
 ### Remaining implementation and evidence
 
@@ -297,23 +293,18 @@ obligations older than the history window remain observable.
 
 ## References and validation
 
-Complete preceding plan, questions and diagnosis are retained at
-`c1b5c46166496434242dfb121c1a174eaf5f72c7:scratch/`; no uncommitted evidence was
-removed. Earlier design/diagram: `8e6cc62df:scratch/5da5f4-design-effective-state.md`
+The pre-compression sources are retained at
+`45ecf9f45471ca68252a9f9a2c3039fbc2bb16ca:scratch/`; no uncommitted evidence
+was removed. Complete preceding plan, questions and diagnosis are retained at
+`c1b5c46166496434242dfb121c1a174eaf5f72c7:scratch/`.
+Earlier design/diagram: `8e6cc62df:scratch/5da5f4-design-effective-state.md`
 and `:scratch/observation-architecture-snapshot.html`. PR419 verification:
 `9dc32125f:scratch/shared-effects-main-verification.md`. Earlier decisions:
 `1b2ddcdfadcb09df76b2dda450152cbdfa60c8c2:scratch/`; historical validation and
 accounting: `37511d297611aa8720c52453a0034991c753be06:scratch/representation-learning-plan.md`.
-Prior phase/watchdog/executor checks and native rebuild are recorded in the
-existing diagnosis; the pre-reconciliation plan at `70d5893aa:scratch/representation-learning-plan.md`
-retains the 31 passing focused checks and manifest audit. Gate owns broader
-suites; results demo/review owns scientific judgment. Live watchdog enforcement
-and GPU profiling remain unverified. No rendering proof is claimed.
+Earlier validation and native rebuild results remain in those revisions. Gate
+owns broader suites; implementation owns retained CUDA traces/parity and matched
+admission; results demo/review owns scientific judgment. Remote gates returned
+success, but their detailed artifacts were lost. No rendering proof is claimed.
 
-The preceding pass recorded 34 focused encoder tests passing (4 deselected),
-Ruff checks and saved native-oracle agreement; those checks were not rerun for
-this documentation reconciliation. Retained CPU run JSON confirms the stated
-game/decision/minibatch counts and phase times. Gate owns broader suites;
-implementation owns the trace coverage, CUDA parity and matched admission above.
-
-Check: two operator tests and six CPU routing cases passed; six local CUDA cases skipped. Profile-only declaration, Ruff and diff checks pass; broader validation stays with gate. Remote gates returned success but final detailed artifacts were lost.
+Check: `uv run --locked --extra dev --extra artifacts pytest tests/training/test_representation_operator_trace.py -q` — 2 passed; direct/discovered job parity, Ruff and diff checks pass. Gate owns broader suites; implementation owns CUDA evidence and admission.
