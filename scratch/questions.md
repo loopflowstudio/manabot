@@ -17,8 +17,14 @@ than selecting a new default or approving a performance cost.
 Historical decisions and rejected alternatives remain at
 `fa05d837fb697d08950cd1db7ee3199a89523389:scratch/questions.md`.
 Incoming MTG-213 pilot evidence/capacity decisions remain at
-`ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md` and
+`e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md` and
 `experiments/tla-trophy-pilot.md`; inherited T7 history is at
 `4463e57f5:scratch/questions.md`. They do not expand this Task's authorization.
 Sibling layer direction/evidence is summarized in
 [MTG-244 context](mtg-244-layers.md); its independent speed work is not selected here.
+
+Sync resolution: retain this Task's decisions here and reference the incoming
+MTG-213 notes at the exact merged revision above. Its v10 trained endpoint and
+64 endpoint games do not complete the 100-update target or scientific schedule.
+The prospective full-TLA recipe discussion remains separate; no new rental or
+experiment is selected. The incoming report and artifact manifest are preserved.
