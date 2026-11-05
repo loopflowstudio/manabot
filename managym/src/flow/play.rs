@@ -177,7 +177,8 @@ impl Game {
                 subtypes: card_ref.subtypes.iter().cloned().collect(),
                 types: card_ref.types.types.clone(),
                 colors: card_ref.colors(),
-            },
+            }
+            .into(),
         };
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
@@ -1097,7 +1098,8 @@ impl Game {
                 subtypes: card_ref.subtypes.iter().cloned().collect(),
                 types: card_ref.types.types.clone(),
                 colors: card_ref.colors(),
-            },
+            }
+            .into(),
         };
         self.price_activation(player, purpose, &mut ability);
         Some(ability)

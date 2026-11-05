@@ -382,7 +382,8 @@ impl Game {
                     subtypes: view.subtypes.iter().cloned().collect(),
                     types: view.types.types.clone(),
                     colors: card.colors(),
-                },
+                }
+                .into(),
             };
             for ability in &mut view.activated_abilities {
                 self.price_activation(permanent.controller, purpose.clone(), ability);

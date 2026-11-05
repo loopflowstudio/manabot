@@ -6,5 +6,5 @@ description = "Rules vocabulary and game-state types of the managym engine"
 
 [dependencies]
 rand = "0.8"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 smallvec = "1"

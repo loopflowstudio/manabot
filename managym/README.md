@@ -247,6 +247,10 @@ layered view for these outputs. Ordinary fixed sources do not clone the game.
 Activation and selected-tap offer probes share one source inventory per
 enumeration, with independent resource states. There is no cache across decisions:
 mana, life, taps, usage, turn and pending payment all matter.
+Announced spending characteristics are immutable shared snapshots; cloning a
+cost or game retains their values without following later source changes.
+Fixed-source search states allocate no activation history. Used and pending
+ability indices remain unbounded lists when an activation needs them.
 Performance remains subject to the same-runner Engine Budget.
 
 Explicit input v8 preserves v7 object widths and shared effects. Relations have

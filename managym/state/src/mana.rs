@@ -1,7 +1,7 @@
 // mana.rs
 // Mana costs and pools, including exact two-color hybrid payment.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[repr(u8)]
@@ -136,27 +136,29 @@ pub struct SpendingCharacteristics {
 
 /// Why mana is being spent. Ordinary resolving payments never inherit a
 /// spell's casting permission. Activations retain the exact source and zone.
+/// Announced characteristics are immutable snapshots shared by payment costs,
+/// witness branches and game forks; sharing never follows live characteristics.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum SpendingContext {
     #[default]
     Resolving,
     Cast {
-        characteristics: SpendingCharacteristics,
+        characteristics: Arc<SpendingCharacteristics>,
     },
     Activate {
         source: Option<crate::game_object::ObjectRef>,
         zone: crate::zone::ZoneType,
-        characteristics: SpendingCharacteristics,
+        characteristics: Arc<SpendingCharacteristics>,
     },
 }
 
 impl SpendingContext {
     pub fn spell<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Self {
         Self::Cast {
-            characteristics: SpendingCharacteristics {
+            characteristics: Arc::new(SpendingCharacteristics {
                 subtypes: subtypes.into_iter().map(String::from).collect(),
                 ..Default::default()
-            },
+            }),
         }
     }
 
@@ -164,10 +166,10 @@ impl SpendingContext {
         Self::Activate {
             source: None,
             zone: crate::zone::ZoneType::Battlefield,
-            characteristics: SpendingCharacteristics {
+            characteristics: Arc::new(SpendingCharacteristics {
                 subtypes: subtypes.into_iter().map(String::from).collect(),
                 ..Default::default()
-            },
+            }),
         }
     }
 
@@ -748,6 +750,22 @@ impl Mana {
 #[cfg(test)]
 mod tests {
     use super::{Mana, ManaCost, ManaRestriction, SpendingContext};
+
+    #[test]
+    fn spending_snapshot_keeps_forked_payment_independent() {
+        let restriction = ManaRestriction::spell(["Citizen"]);
+        let mut cost = ManaCost::parse("U");
+        cost.purpose = SpendingContext::spell(["Citizen"]);
+        let mut fork_cost = cost.clone();
+        let SpendingContext::Cast { characteristics } = &mut fork_cost.purpose else {
+            unreachable!();
+        };
+        std::sync::Arc::make_mut(characteristics).subtypes = ["Elf".into()].into();
+        let pool = Mana::restricted_to(restriction, [0, 1, 0, 0, 0, 0]);
+        assert!(pool.can_pay(&cost));
+        assert!(!pool.can_pay(&fork_cost));
+        assert_eq!(cost.purpose, SpendingContext::spell(["Citizen"]));
+    }
 
     #[test]
     fn hybrid_payment_backtracks_and_preserves_required_colors() {

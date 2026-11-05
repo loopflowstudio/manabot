@@ -216,6 +216,13 @@ struct SourceResources {
     tapped: bool,
     departed: bool,
     sacrifice_reserved: bool,
+    /// Fixed sources carry no activation history. Keep their search keys small;
+    /// only a reserved activation allocates this source's unbounded index lists.
+    activations: Option<Box<ActivationUsage>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+struct ActivationUsage {
     used: Vec<usize>,
     pending: Vec<usize>,
 }
@@ -226,21 +233,37 @@ impl SourceResources {
         !self.departed
             && !(self.tapped && ability.tap_source)
             && !(self.sacrifice_reserved && ability.sacrifice_source)
-            && !self.used.contains(&ability.ability_index)
+            && !self
+                .activations
+                .as_ref()
+                .is_some_and(|usage| usage.used.contains(&ability.ability_index))
     }
 
     fn admits(&self, ability: &ManaActivation) -> bool {
         self.has_resources(ability)
-            && (self.pending.is_empty() || !ability.sacrifice_source)
-            && !self.pending.contains(&ability.ability_index)
+            && !self.activations.as_ref().is_some_and(|usage| {
+                (!usage.pending.is_empty() && ability.sacrifice_source)
+                    || usage.pending.contains(&ability.ability_index)
+            })
     }
 
     fn reserve(&mut self, ability: &ManaActivation) {
         self.tapped |= ability.tap_source;
         self.sacrifice_reserved |= ability.sacrifice_source;
-        self.pending.push(ability.ability_index);
+        let usage = self.activations.get_or_insert_with(Default::default);
+        usage.pending.push(ability.ability_index);
         if ability.limited {
-            self.used.push(ability.ability_index);
+            usage.used.push(ability.ability_index);
+        }
+    }
+
+    fn finish_activation(&mut self, ability_index: usize) {
+        if let Some(usage) = &mut self.activations {
+            usage.pending.retain(|index| *index != ability_index);
+            // Canonical empty history lets equivalent resource paths deduplicate.
+            if usage.pending.is_empty() && usage.used.is_empty() {
+                self.activations = None;
+            }
         }
     }
 }
@@ -347,7 +370,11 @@ impl PaymentModel<'_> {
             resources.tapped |= reservation.tap;
             resources.sacrifice_reserved |= reservation.sacrifice;
             if let Some(ability) = reservation.ability {
-                resources.pending.push(ability);
+                resources
+                    .activations
+                    .get_or_insert_with(Default::default)
+                    .pending
+                    .push(ability);
             }
         }
     }
@@ -521,7 +548,7 @@ impl PaymentModel<'_> {
 
     fn witness(
         &self,
-        state: PaymentSearchState,
+        mut state: PaymentSearchState,
         policy: SourcePolicy,
         visited: &mut std::collections::HashSet<PaymentSearchState>,
     ) -> Option<Vec<PaymentStep>> {
@@ -532,6 +559,20 @@ impl PaymentModel<'_> {
         });
         if state.obligations.is_empty() {
             return Some(Vec::new());
+        }
+        // A payable final obligation needs no more resource search. Keep the
+        // ordinary class-aware spending order without cloning/hashing the
+        // inventory or constructing an optimistic bound for a known success.
+        if let [Obligation::Pay { cost, .. }] = state.obligations.as_slice() {
+            if state.pool.can_pay(cost) {
+                state.pool.pay(cost);
+                #[cfg(feature = "benchmark")]
+                measurement::update(|c| {
+                    c.payment_remainders += 1;
+                    c.max_remainders = c.max_remainders.max(1);
+                });
+                return Some(vec![PaymentStep::Spend(state.pool)]);
+            }
         }
         if !self.can_cover(&state, policy) {
             #[cfg(feature = "benchmark")]
@@ -641,9 +682,7 @@ impl PaymentModel<'_> {
                     .position(|candidate| candidate.permanent == *source)
                 {
                     after_cost[index].departed |= sacrifice;
-                    after_cost[index]
-                        .pending
-                        .retain(|index| index != ability_index);
+                    after_cost[index].finish_activation(*ability_index);
                 }
                 if *life_cost > life {
                     return None;
@@ -676,17 +715,10 @@ impl PaymentModel<'_> {
                 }
             }
             Obligation::Pay { cost, waterbend } => {
-                // With no parent obligation, alternative class allocations
-                // cannot affect feasibility. Retain the ordinary spending order
-                // without materializing every equivalent successful remainder.
+                // A payable terminal cost returned above. Nested payments
+                // retain every allocation that could preserve their parent.
                 let remainders = if rest.is_empty() {
-                    if pool.can_pay(cost) {
-                        let mut remainder = pool.clone();
-                        remainder.pay(cost);
-                        vec![remainder]
-                    } else {
-                        Vec::new()
-                    }
+                    Vec::new()
                 } else {
                     pool.payment_options(cost)
                 };
@@ -719,15 +751,15 @@ impl PaymentModel<'_> {
                     if resources[index].departed {
                         continue;
                     }
-                    let mut tapped = resources.clone();
-                    tapped[index].tapped = true;
                     if let Some(output) = source.fixed.as_ref().filter(|_| !resources[index].tapped)
                     {
+                        let mut tapped = resources.clone();
+                        tapped[index].tapped = true;
                         let mut next = pool.clone();
                         next.add(output);
                         if let Some(mut path) = self.witness(
                             PaymentSearchState {
-                                resources: tapped.clone(),
+                                resources: tapped,
                                 pool: next,
                                 life,
                                 obligations: obligations.clone(),
@@ -776,6 +808,8 @@ impl PaymentModel<'_> {
                         && !resources[index].tapped
                         && cost.generic() > 0
                     {
+                        let mut tapped = resources.clone();
+                        tapped[index].tapped = true;
                         let mut next = vec![Obligation::Pay {
                             cost: cost.reduced_generic(1),
                             waterbend: true,
