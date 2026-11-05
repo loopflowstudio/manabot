@@ -187,6 +187,7 @@ Exists: closure separation, docs, tests, both experiment files, calibration, bot
 studies trained and evaluated, report published, protocol Results filled, all scoped
 to Allies/Lessons per Jack Heart (2026-11-05). Spend $19.26 of $25. No paid runs remain
 here; the Elemental repeat is a separate Task with its own $25. Next: gate and PR.
+Check 2026-11-05 (implement re-pass): focused tests `tests/training/test_batch_closure.py test_collection.py test_credit_assignment.py tests/eval/test_learning_signal.py tests/infra/test_experiment_data_untracked.py` 64 passed; report.md fetched from R2 with an empty cache matches the manifest digest. `docs/learning.md` is not on main; `docs/training.md` carries the closure docs.
 Live pod `etude-716a7dba8603` ended on its own; it was never this Task's.
 
 Proposed experiments Wave memory (the `code` Graph does not call for writing it):
