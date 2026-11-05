@@ -96,6 +96,10 @@ fn stack(
                 ..Default::default()
             }];
             StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+                effects: game.state.cards[source_card].activated_abilities[0]
+                    .effects
+                    .clone(),
+                program: false,
                 source_transforms: 0,
                 inherited_from: None,
                 id,
@@ -111,6 +115,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            program: false,
             remembered: Vec::new(),
             source_transforms: 0,
             id,
@@ -669,6 +674,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_card = game.state.permanents[source].as_ref().unwrap().card;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        program: false,
         remembered: Vec::new(),
         source_transforms: 0,
         id,

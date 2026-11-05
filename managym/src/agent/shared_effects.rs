@@ -108,6 +108,14 @@ pub const EFFECT_ROWS: usize = 128;
 pub const EFFECT_DIM: usize = 18;
 pub const DETAIL_ROWS: usize = 512;
 pub const DETAIL_DIM: usize = 3;
+pub const V8_DETAIL_ROWS: usize = 4096;
+pub fn detail_rows(version: u8) -> usize {
+    if version >= 8 {
+        V8_DETAIL_ROWS
+    } else {
+        DETAIL_ROWS
+    }
+}
 pub const MEMBER_ROWS: usize = 2048;
 pub const MEMBER_DIM: usize = 2;
 
@@ -131,7 +139,8 @@ pub fn encode(
     let detail_count: usize = records
         .iter()
         .map(|record| {
-            record.effect.keywords.len()
+            record.effect.program.len()
+                + record.effect.keywords.len()
                 + record.effect.subtypes.len()
                 + usize::from(record.effect.color.is_some())
         })
@@ -139,7 +148,7 @@ pub fn encode(
     let member_count: usize = records.iter().map(|record| record.members.len()).sum();
     for (field, actual, capacity) in [
         ("effects", records.len(), EFFECT_ROWS),
-        ("effect_details", detail_count, DETAIL_ROWS),
+        ("effect_details", detail_count, details.len() / DETAIL_DIM),
         ("effect_members", member_count, MEMBER_ROWS),
     ] {
         if actual > capacity {
@@ -216,6 +225,11 @@ pub fn encode(
         {
             details[d * DETAIL_DIM] = kind;
             details[d * DETAIL_DIM + 1..(d + 1) * DETAIL_DIM].copy_from_slice(&split_id(token));
+            d += 1;
+        }
+        for &(kind, value) in &effect.program {
+            details[d * DETAIL_DIM] = 10.0 + f32::from(kind);
+            details[d * DETAIL_DIM + 1..(d + 1) * DETAIL_DIM].copy_from_slice(&split_id(value));
             d += 1;
         }
         row[14] = d as f32 - row[13];

@@ -1,5 +1,5 @@
 """
-Policy-input v5/v6 fact rows, joined to the player or permanent each describes.
+Policy-input fact rows, joined to the player or permanent each describes.
 
 A fact row states one open-vocabulary fact (a counter kind, an added subtype, a
 set name or creature type, a spent ability, a continuous-effect record) about
@@ -10,18 +10,25 @@ amounts, duration, timestamp rank and source, then summed into its object's
 pre-attention embedding. The output layer starts at zero, so a fresh model's
 objects are unchanged until the facts earn weight; gradients reach every fact
 row that names a valid object.
+
+V8 also encodes captured programs in row order and preserves signed numeric
+tokens. Earlier inputs retain their kind embeddings and row-only architecture.
 """
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_sequence, unpack_sequence
 
 from manabot.env.observation import (
+    FACT_CONTINUATION_PROGRAM,
     FACT_DETAIL_INDEX,
     FACT_DIM,
     FACT_DURATION_INDEX,
+    FACT_EFFECT_PROGRAM,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_KINDS,
+    FACT_KINDS_V8,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
     FACT_SOURCE_INDEX,
@@ -29,19 +36,32 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
 )
+from manabot.model.records import program_number
 
 
 class FactEncoder(nn.Module):
-    def __init__(self, width: int, max_facts: int, buckets: int = 4096) -> None:
+    def __init__(
+        self,
+        width: int,
+        max_facts: int,
+        buckets: int = 4096,
+        *,
+        kinds: int = FACT_KINDS,
+    ) -> None:
         super().__init__()
         self.buckets = buckets
         self.max_facts = max_facts
-        self.kind = nn.Embedding(FACT_KINDS + 1, width)
+        self.kinds = kinds
+        self.kind = nn.Embedding(kinds + 1, width)
         self.ident = nn.Embedding(buckets, width)
         self.detail = nn.Embedding(buckets, width)
         self.source = nn.Embedding(buckets, width)
         # Amounts (2), duration one-hot (2) and timestamp rank.
         self.numeric = nn.Linear(5, width)
+        self.program_numeric = nn.Linear(1, width) if kinds >= FACT_KINDS_V8 else None
+        self.program_sequence = (
+            nn.GRU(width, width, batch_first=True) if kinds >= FACT_KINDS_V8 else None
+        )
         self.output = nn.Linear(width, width)
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
@@ -51,6 +71,66 @@ class FactEncoder(nn.Module):
         high = rows[..., index].long()
         low = rows[..., index + 1].long()
         return ((high << 16) | low) % self.buckets
+
+    def _programs(
+        self, hidden: torch.Tensor, facts: torch.Tensor, program: torch.Tensor
+    ) -> torch.Tensor:
+        """Reduce each complete program independently, visiting only live tokens.
+
+        Native/Python encoders emit contiguous programs with zero-based ordinals.
+        An ordinal reset starts a new occurrence, even for duplicate grants with
+        identical provenance. Padding and independent program order carry no
+        meaning; token order within each program does. No state crosses programs.
+        """
+        if (
+            self.program_sequence is None
+            or self.program_numeric is None
+            or not program.any()
+        ):
+            return hidden
+        positions = program.nonzero()
+        rows = facts[program]
+        ordinals = rows[:, FACT_VALUE_INDEX + 1]
+        starts = (ordinals == 0).nonzero().flatten().tolist()
+        if not starts or starts[0] != 0:
+            raise ValueError("fact program must start at ordinal zero")
+        ends = [*starts[1:], len(rows)]
+        lengths = [end - start for start, end in zip(starts, ends, strict=True)]
+        expected = torch.cat(
+            [torch.arange(length, device=facts.device) for length in lengths]
+        )
+        if not torch.equal(ordinals, expected):
+            raise ValueError("fact program ordinals must be consecutive")
+        # A sequence cannot change batch, holder, kind, frame/modification ID,
+        # duration, timestamp or source halfway through its program.
+        owners = torch.cat(
+            (
+                positions[:, :1],
+                rows[:, :FACT_DETAIL_INDEX],
+                rows[:, FACT_DURATION_INDEX:FACT_VALID_INDEX],
+            ),
+            -1,
+        )
+        expected_owners = torch.repeat_interleave(
+            owners[starts], owners.new_tensor(lengths, dtype=torch.long), dim=0
+        )
+        if not torch.equal(owners, expected_owners):
+            raise ValueError("fact program changes owner or provenance")
+        word = (rows[:, FACT_DETAIL_INDEX].long() << 16) | rows[
+            :, FACT_DETAIL_INDEX + 1
+        ].long()
+        signed = torch.where(word >= 2**31, word - 2**32, word).float()
+        token_kind = rows[:, FACT_VALUE_INDEX]
+        # TokenKind Integer (4) and Boolean (5) retain their numeric value.
+        number = torch.where((token_kind == 4) | (token_kind == 5), signed, 0)
+        tokens = hidden[program] + self.program_numeric(
+            program_number(number).unsqueeze(-1)
+        )
+        packed, _ = self.program_sequence(
+            pack_sequence(list(tokens.split(lengths)), enforce_sorted=False)
+        )
+        sequence = torch.cat(unpack_sequence(packed))
+        return hidden.masked_scatter(program.unsqueeze(-1), tokens + sequence)
 
     def forward(self, facts: torch.Tensor, objects: torch.Tensor) -> torch.Tensor:
         """Add each valid fact's embedding to its object; `objects` is [B,N,D]."""
@@ -66,7 +146,7 @@ class FactEncoder(nn.Module):
             (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
         ).all():
             raise ValueError("invalid fact object reference")
-        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
+        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= self.kinds)).all():
             raise ValueError("invalid fact kind")
         duration = facts[..., FACT_DURATION_INDEX]
         numeric = torch.stack(
@@ -86,6 +166,11 @@ class FactEncoder(nn.Module):
             + self.source(facts[..., FACT_SOURCE_INDEX].long() % self.buckets)
             + self.numeric(numeric)
         )
+        if self.program_sequence is not None and self.program_numeric is not None:
+            program = (kinds == FACT_EFFECT_PROGRAM) | (
+                kinds == FACT_CONTINUATION_PROGRAM
+            )
+            hidden = self._programs(hidden, facts, program)
         encoded = self.output(torch.tanh(hidden))
         linked = (valid.bool() & (links > 0)).unsqueeze(-1)
         targets = (

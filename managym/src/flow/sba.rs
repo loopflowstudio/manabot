@@ -249,8 +249,7 @@ impl Game {
                 let Some(permanent) = self.state.permanents[id].as_ref() else {
                     return false;
                 };
-                let card = &self.state.cards[permanent.card];
-                let Some(last) = card.final_chapter() else {
+                let Some(last) = self.characteristics(id).final_chapter() else {
                     return false;
                 };
                 permanent.counter_count(CounterKind::Lore) >= i32::from(last)

@@ -41,10 +41,10 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7] = Field(
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
-    # V6 and v7 carry a configurable local-fact capacity. Omission on older inputs
+    # V6 onward carries a configurable local-fact capacity. Omission on older inputs
     # preserves their serialized architecture receipts, including v1 defaults.
     max_facts: int | None = Field(
         default=None, gt=0, exclude_if=lambda value: value is None

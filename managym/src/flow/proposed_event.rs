@@ -747,12 +747,11 @@ impl Game {
                 let static_tapped = [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| !self.characteristics(*id).abilities_lost)
                     .flat_map(|id| {
-                        let permanent = self.state.permanents[id].as_ref().unwrap();
-                        self.state.cards[permanent.card]
-                            .statics
-                            .iter()
+                        self.characteristics(id)
+                            .static_abilities
+                            .clone()
+                            .into_iter()
                             .enumerate()
                             .filter(|(_, ability)| {
                                 matches!(ability, StaticAbility::EntersTapped(predicate)
@@ -1047,13 +1046,21 @@ impl Game {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));
         }
+        let timestamp =
+            (delta > 0 && kind.keyword().is_some()).then(|| self.state.id_gen_mut().next_id());
         let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
             return false;
         };
         if !permanent.change_counters(kind, delta) {
             return false;
         }
+        if let Some(timestamp) = timestamp {
+            permanent.keyword_counter_timestamps.insert(kind, timestamp);
+        }
         let total = permanent.counter_count(kind);
+        if total == 0 {
+            permanent.keyword_counter_timestamps.remove(&kind);
+        }
         if let Some(by) = by.filter(|_| delta > 0) {
             self.emit(GameEvent::CountersPut {
                 permanent: permanent_id,

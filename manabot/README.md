@@ -5,8 +5,9 @@ training, and verification. You train *a* manabot; this package is how.
 
 ## Shared effect inputs
 
-`ObservationConfig(policy_input_version=7)` admits complete resolved effects
-before per-holder fact expansion. `env/shared_effects.py` mirrors the native
+`ObservationConfig(policy_input_version=7)` encodes representable resolved effects
+once, before per-holder fact expansion. It cannot encode every composable layer
+payload. `env/shared_effects.py` mirrors the native
 128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
 subtypes, names, used abilities and copy exceptions still use `facts` (default
 128 rows). The model encodes each payload once and routes its contribution into
@@ -15,8 +16,18 @@ preserves edge multiplicity and shared gradients; it is learned compression,
 not a proof of injective embeddings or improved play. See the
 [architecture walkthrough](../docs/observation-architecture.html).
 
+For new runs requiring structured granted, copy-exception or continuation
+programs, changed colors or keyword-counter timestamps, explicitly select
+`ObservationConfig(policy_input_version=8)` before constructing the model and
+collector. V8 keeps v7's header/member layouts, expands details to 4,096 × 3
+and defaults to 512 local fact rows. Both encoders reject unrepresentable
+v1–v7 layer payloads before inference, naming v8 as the required input.
+Defined-card eligibility does not guarantee policy-input compatibility. See
+[input selection and recovery](../docs/training.md#policy-inputs) for a recipe
+example and the separate saved-checkpoint/world admission requirements.
+
 The version is explicit in saved observation/configuration identities. Fresh
-construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
+construction remains v6/512; frozen v1–v7 inputs and omitted historical fields
 retain their meanings. Historical captures without shared provenance cannot be
 promoted to v7 by guessing a source/controller. Text representation
 `manabot-text-6` renders each native payload once with exact public source and

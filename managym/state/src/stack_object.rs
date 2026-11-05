@@ -29,6 +29,11 @@ pub struct SpellOnStack {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityOnStack {
+    /// Chosen effects, captured before costs; resolution never re-reads a source.
+    pub effects: Vec<Effect>,
+    /// No catalog identity describes this dynamically granted program.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub program: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub source_transforms: u32,
     /// The definition lending the activated ability, fixed at activation.
@@ -57,6 +62,8 @@ pub struct ActivatedAbilityOnStack {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectBinding>,

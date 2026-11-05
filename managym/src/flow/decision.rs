@@ -102,6 +102,9 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    /// Original dynamically granted program, retained across branch selection.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub program: Vec<Effect>,
     /// The current instruction owns this batch through replacement and child choices.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) batch: Option<EventBatch>,
@@ -201,6 +204,7 @@ impl EffectFrame {
     /// their source and targets; only a root spell supplies finalization.
     pub(crate) fn new(controller: PlayerId, effects: Vec<Effect>) -> Self {
         Self {
+            program: Vec::new(),
             batch: None,
             iteration: None,
             remembered: Vec::new(),
@@ -232,6 +236,7 @@ impl EffectFrame {
 
     fn child_scope(&self, effects: Vec<Effect>) -> Self {
         Self {
+            program: self.program.clone(),
             selected: self.selected.clone(),
             selected_from: self.selected_from.clone(),
             remembered: self.remembered.clone(),

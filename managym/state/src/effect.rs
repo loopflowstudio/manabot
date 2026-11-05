@@ -21,15 +21,36 @@
 use std::collections::BTreeMap;
 
 use super::{
-    card::{CardDefId, CardDefinition, CardType, Keywords},
+    ability::Ability,
+    card::{
+        ActivatedAbilityDefinition, CardDefId, CardDefinition, CardType, Keywords, StaticAbility,
+    },
     game_object::{ObjectId, ObjectRef, PlayerId},
-    mana::Color,
+    mana::{Color, Colors},
 };
 
 /// What a continuous effect changes. `N` is the type of its P/T amounts:
 /// `EffectValue` in a card definition, `i32` once resolved into a record.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Modification<N = i32> {
+    /// Replace creature subtypes, retaining land/artifact/enchantment types.
+    SetCreatureTypes(Vec<String>),
+    /// Add card types without replacing existing ones.
+    AddTypes(Vec<CardType>),
+    /// Replace card types and subtypes ("is a land ...").
+    SetTypes {
+        types: Vec<CardType>,
+        subtypes: Vec<String>,
+    },
+    /// Layer 5 color replacement or addition.
+    SetColors(Colors),
+    AddColors(Colors),
+    /// Layer 6 abilities granted by a continuous effect.
+    GrantActivated(Box<ActivatedAbilityDefinition>),
+    GrantTriggered(Box<Ability>),
+    GrantStatic(Box<StaticAbility>),
+    /// Layer 7d, after setters, modifiers and counters.
+    SwitchPt,
     /// Layer 4: adds creature subtypes ("becomes an Ally in addition to its
     /// other types").
     AddSubtypes(Vec<String>),
@@ -46,6 +67,8 @@ pub enum Modification<N = i32> {
     AddKeywords(Keywords),
     /// Layer 6: loses all abilities (CR 613.1f).
     LoseAllAbilities,
+    /// Layer 6: retain mana abilities (Blood Sun).
+    LoseNonManaAbilities,
     /// Layer 6: gains firebending N; grants add up.
     Firebending(u8),
     /// Layer 7b: sets base power and/or toughness; an absent value leaves
@@ -55,7 +78,10 @@ pub enum Modification<N = i32> {
         toughness: Option<N>,
     },
     /// Layer 7c: gets +power/+toughness.
-    ModifyPt { power: N, toughness: N },
+    ModifyPt {
+        power: N,
+        toughness: N,
+    },
     /// Rules effect: can't be blocked.
     CantBeBlocked,
     /// Rules effect: can't block (CR 509.1b).
@@ -75,10 +101,14 @@ pub enum Modification<N = i32> {
     /// Layer 2 (CR 613.1b): the record's controller controls the object;
     /// when the record ends with the object still theirs, control returns
     /// to `previous`. Only resolutions create it (`Effect::GainControl`).
-    ControlChanged { previous: PlayerId },
+    ControlChanged {
+        previous: PlayerId,
+    },
     /// The source's triggered ability chose mode `mode` ("choose one that
     /// hasn't been chosen"); lasts as long as the object.
-    ModeChosen { mode: u8 },
+    ModeChosen {
+        mode: u8,
+    },
     /// "has all activated and triggered abilities of" the record's source
     /// definition (Koh, the Face Stealer's last chosen card), layer 6.
     HasAbilitiesOfSource,
@@ -86,13 +116,30 @@ pub enum Modification<N = i32> {
 
 impl<N> Modification<N> {
     /// The record's form, with every amount resolved.
-    pub fn resolve(&self, mut amount: impl FnMut(&N) -> i32) -> Modification<i32> {
+    pub fn resolve(&self, amount: impl FnMut(&N) -> i32) -> Modification<i32> {
+        self.map_amount(amount)
+    }
+
+    pub fn map_amount<M>(&self, mut amount: impl FnMut(&N) -> M) -> Modification<M> {
         match self {
+            Self::SetCreatureTypes(types) => Modification::SetCreatureTypes(types.clone()),
+            Self::AddTypes(types) => Modification::AddTypes(types.clone()),
+            Self::SetTypes { types, subtypes } => Modification::SetTypes {
+                types: types.clone(),
+                subtypes: subtypes.clone(),
+            },
+            Self::SetColors(colors) => Modification::SetColors(colors.clone()),
+            Self::AddColors(colors) => Modification::AddColors(colors.clone()),
+            Self::GrantActivated(ability) => Modification::GrantActivated(ability.clone()),
+            Self::GrantTriggered(ability) => Modification::GrantTriggered(ability.clone()),
+            Self::GrantStatic(ability) => Modification::GrantStatic(ability.clone()),
+            Self::SwitchPt => Modification::SwitchPt,
             Self::AddSubtypes(subtypes) => Modification::AddSubtypes(subtypes.clone()),
             Self::BecomeCreature => Modification::BecomeCreature,
             Self::Nonlegendary => Modification::Nonlegendary,
             Self::AddKeywords(keywords) => Modification::AddKeywords(*keywords),
             Self::LoseAllAbilities => Modification::LoseAllAbilities,
+            Self::LoseNonManaAbilities => Modification::LoseNonManaAbilities,
             Self::Firebending(amount) => Modification::Firebending(*amount),
             Self::SetBasePt { power, toughness } => Modification::SetBasePt {
                 power: power.as_ref().map(&mut amount),
@@ -125,6 +172,16 @@ impl Modification {
     /// (no definition authors one as an exception).
     pub fn apply_copiable(&self, definition: &mut CardDefinition) -> bool {
         match self {
+            Self::LoseNonManaAbilities
+            | Self::SetCreatureTypes(_)
+            | Self::AddTypes(_)
+            | Self::SetTypes { .. }
+            | Self::SetColors(_)
+            | Self::AddColors(_)
+            | Self::GrantActivated(_)
+            | Self::GrantTriggered(_)
+            | Self::GrantStatic(_)
+            | Self::SwitchPt => return false,
             Self::AddSubtypes(subtypes) => {
                 for subtype in subtypes {
                     if !definition.subtypes.contains(subtype) {
@@ -225,12 +282,6 @@ impl ContinuousEffect {
         self.affected == Affected::Player(player)
     }
 
-    /// Whether the record's timestamp is later than `after` (no bound:
-    /// always), so an earlier ability loss or characteristic-setting does
-    /// not remove it (CR 613.7).
-    pub fn follows(&self, after: Option<ObjectId>) -> bool {
-        after.is_none_or(|after| self.timestamp > after)
-    }
 }
 
 /// Every continuous-effect record in timestamp order, indexed by whom it

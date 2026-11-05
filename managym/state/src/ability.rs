@@ -19,6 +19,17 @@ pub enum Ability {
 }
 
 impl Ability {
+    /// The triggered rule represented by printed or granted ward (CR 702.21).
+    pub fn ward(cost: PaymentCost) -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::BecomesTargeted {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::CounterUnlessPays { cost }],
+        }
+    }
+
     pub fn effects(&self) -> &[Effect] {
         match self {
             Ability::Triggered { effects, .. } => effects,
@@ -247,6 +258,8 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// The exact ability source has these current characteristics.
+    SourceMatches(CardPredicate),
     /// Triggering question: the permanent whose event fired the trigger has
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
@@ -278,6 +291,7 @@ impl Condition {
         match self {
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters => true,
             Condition::ControlsAtLeast { predicate, .. } => predicate.reads_source(),
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
@@ -310,6 +324,7 @@ impl Condition {
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
             | Condition::YourTurn
             | Condition::Always
@@ -1787,4 +1802,12 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
         }
     }
     bound
+}
+
+/// Effective triggered ability with the provenance needed after its source leaves.
+/// Catalog grants have retained input joins; a continuous-effect program does not.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct EffectiveTrigger {
+    pub ability: Ability,
+    pub program: bool,
 }

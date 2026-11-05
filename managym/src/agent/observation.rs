@@ -438,6 +438,11 @@ pub struct StackObjectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuousEffectData {
+    /// Complete grant/type/color payload in the learning catalog vocabulary.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub program: Vec<(u16, i32)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// The `Modification` variant (`ModifyPt`, `AddKeywords`, ...).
     pub modification: String,
     /// P/T amounts: the change for `ModifyPt`, the base for `SetBasePt`
@@ -547,6 +552,38 @@ impl ContinuousEffectData {
             ..Default::default()
         };
         data.modification = match modification {
+            Modification::SetCreatureTypes(subtypes) => {
+                data.subtypes = subtypes.clone();
+                "SetCreatureTypes"
+            }
+            Modification::AddTypes(_)
+            | Modification::SetTypes { .. }
+            | Modification::SetColors(_)
+            | Modification::AddColors(_)
+            | Modification::GrantActivated(_)
+            | Modification::GrantTriggered(_)
+            | Modification::GrantStatic(_) => {
+                data.description = Some(super::ability_description::continuous_description(
+                    &crate::state::ability::ObjectSelector::This,
+                    &modification.map_amount(|n| crate::state::ability::EffectValue::Fixed(*n)),
+                    crate::state::effect::EffectDuration::Indefinite,
+                ));
+                data.program =
+                    crate::cards::tokens::rules_tokens(modification, &default_content_pack())
+                        .expect("registered rules payload");
+                match modification {
+                    Modification::AddTypes(_) => "AddTypes",
+                    Modification::SetTypes { .. } => "SetTypes",
+                    Modification::SetColors(_) => "SetColors",
+                    Modification::AddColors(_) => "AddColors",
+                    Modification::GrantActivated(_) => "GrantActivated",
+                    Modification::GrantTriggered(_) => "GrantTriggered",
+                    Modification::GrantStatic(_) => "GrantStatic",
+                    _ => unreachable!(),
+                }
+            }
+            Modification::SwitchPt => "SwitchPt",
+            Modification::LoseNonManaAbilities => "LoseNonManaAbilities",
             Modification::AddSubtypes(subtypes) => {
                 data.subtypes = subtypes.clone();
                 "AddSubtypes"
@@ -611,6 +648,11 @@ impl ContinuousEffectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermanentData {
+    /// Effective colors when a layer changes the copiable colors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colors: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub keyword_counter_timestamps: BTreeMap<String, i32>,
     /// Transformations of this exact permanent; repeated flips still count.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
@@ -1201,6 +1243,20 @@ impl Observation {
     ) {
         let characteristics = game.characteristics(perm_id);
         let pdat = PermanentData {
+            colors: (characteristics.colors != game.state.cards[permanent.card].colors()).then(
+                || {
+                    characteristics
+                        .colors
+                        .iter()
+                        .map(|c| format!("{c:?}"))
+                        .collect()
+                },
+            ),
+            keyword_counter_timestamps: permanent
+                .keyword_counter_timestamps
+                .iter()
+                .map(|(kind, timestamp)| (kind.name().to_string(), timestamp.0 as i32))
+                .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
@@ -1376,6 +1432,9 @@ impl Observation {
     fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
         StackObjectData {
             description: match stack_object {
+                StackObject::ActivatedAbility(a) => {
+                    Some(super::ability_description::effects_description(&a.effects))
+                }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
                         &game.state.cards[a.source_card],

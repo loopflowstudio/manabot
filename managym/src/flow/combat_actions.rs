@@ -24,11 +24,8 @@ impl Game {
         if self.has_restriction(id, Restriction::CantAttackOrBlock) {
             return false;
         }
-        if self.characteristics(id).abilities_lost {
-            return true;
-        }
-        self.state.cards[permanent.card]
-            .statics
+        self.characteristics(id)
+            .static_abilities
             .iter()
             .all(|ability| match ability {
                 StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => self
@@ -280,15 +277,11 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        let card = &self.state.cards[permanent.card];
-        let defender_applies = self
-            .characteristics(permanent_id)
-            .keywords
-            .has(Keyword::Defender)
-            && card.attacks_despite_defender().is_none_or(|condition| {
-                !self.check_static_condition(condition, permanent.controller)
-            });
-        self.characteristics(permanent_id).is_creature()
+        let view = self.characteristics(permanent_id);
+        let defender_applies = view.keywords.has(Keyword::Defender)
+            && !view.static_abilities.iter().any(|ability| matches!(ability,
+                StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, permanent.controller)));
+        view.is_creature()
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
             && self.combat_condition_met(permanent_id)
@@ -327,30 +320,30 @@ impl Game {
         let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
             return false;
         };
-        let blocker_card = &self.state.cards[blocker.card];
-        let attacker_card = &self.state.cards[attacker.card];
+        let blocker_view = self.characteristics(blocker_id);
+        let attacker_view = self.characteristics(attacker_id);
 
         if blocker.tapped
-            || !self.characteristics(blocker_id).is_creature()
+            || !blocker_view.is_creature()
             || !self.combat_condition_met(blocker_id)
             || self.cant_block(blocker_id)
         {
             return false;
         }
 
-        if !self.characteristics(blocker_id).abilities_lost
-            && blocker_card.statics.iter().any(|ability| {
-                matches!(
-                    ability,
-                    StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
-                        if self.permanent_matches_predicate(attacker_id, predicate)
-                )
-            })
-        {
+        if blocker_view.static_abilities.iter().any(|ability| {
+            matches!(
+                ability,
+                StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
+                    if self.permanent_matches_predicate(attacker_id, predicate)
+            )
+        }) {
             return false;
         }
-        if !self.characteristics(attacker_id).abilities_lost
-            && attacker_card.statics.iter().any(|ability| match ability {
+        if attacker_view
+            .static_abilities
+            .iter()
+            .any(|ability| match ability {
                 StaticAbility::CantBeBlockedIf(condition) => {
                     self.check_static_condition(condition, attacker.controller)
                 }

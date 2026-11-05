@@ -1,6 +1,7 @@
-# Engine memory
+# Coverage memory
 
-Carried from the legacy `rules` wave (renamed Engine).
+Carried from the legacy `rules` wave, subsequently named Engine and renamed
+`coverage` on 2026-11-04 (`da355b562`).
 
 ## Operating principle
 
@@ -342,6 +343,80 @@ preserves accepted decisions, dated proof limits and source history.
   still allocates a timestamp: they are not complete state/hash no-ops.
   This is the MTG-238/derived-state-cache merge's ownership invariant, not a
   new performance claim.
+
+## Composable layers and successor inputs (2026-11-04; pending review)
+
+- Jack Heart accepted MTG-244 as one layer-evaluation Task: Beorn/Kellan are
+  real definitions, with historical interactions as rules fixtures. The one
+  `Game::characteristics` authority owns type/color/ability/P/T composition and
+  dependency ordering; adjacent execution and mana refactors retain their own
+  responsibilities. Focused witnesses are not exhaustive Magic conformance.
+- Jack Heart approved a new input version on 2026-11-04. The implementation
+  selects explicit v8 while retaining fresh v6 and frozen saved versions.
+  Native/Python parity alone cannot prove compatibility: identical arrays can
+  both exceed a retained model's embedding vocabulary. New payloads need the
+  selected version's model-forward and checkpoint proofs as well as shared
+  pre-inference rejection on older inputs. Card admission stays definition-based.
+- Explicit successor selection and failure recovery are part of the caller's
+  usage contract, following Jack Heart's 2026-11-04 successor-input approval.
+  Select v8 before constructing a new collector/model; observation admission
+  can reject a later state after earlier observations succeed. It is neither
+  whole-game preflight nor rollback of committed actions. Preserve failed-run
+  evidence and load saved configurations through `from_checkpoint`, including
+  absent-version v1 semantics. Architecture loading and current-world admission
+  remain separate; changing a saved version or reshaping weights is not recovery.
+  The recipe and selected-space layouts are documented in
+  `docs/training.md#policy-inputs`; this does not authorize a default migration.
+- An activation offered and paid from layered abilities must resolve the
+  captured program, including after source departure. A printed-definition
+  lookup at resolution discarded a granted activation in the directed witness.
+  Catalog provenance can compress observation input; it is not resolution
+  authority. Pending program projection belongs alongside the retained frame.
+- Program ownership is a model invariant as well as an engine invariant.
+  A GRU spanning all local fact rows let one holder's program influence another.
+  Independent live-program reduction fixes that counterexample and avoids
+  recurrence on ordinary states. The bounded CPU component comparison reduced
+  ordinary inference from 15.36 to 3.94 ms and two-program inference from 15.61
+  to 4.76 ms (batch 16, width 64, 512 facts, ten samples, one thread). Exact
+  receipts/configuration are retained in MTG-244's risk note at
+  `043705783:scratch/mtg-244-risk-validation.md`. These are component costs,
+  not full-policy performance, accelerator behavior or learning-quality results.
+- Jack Heart also required risk measurement and attempted mitigation before
+  review readiness. An anthem board does not exercise same-layer dependency
+  ordering, and combining added games with the old step total conceals the
+  ordinary-workload comparison. Separate workload results, retain complete
+  action/score digests and counts, and attribute rebuild/dependency costs before
+  choosing optimizations. Tap-state predicates require characteristic
+  invalidation. The subsequent implementation (`b2fb06cba`) retains the raw board
+  across mana writes unless a discovered layer condition reads mana, including
+  nested conditions and newly granted statics. Finalized activation outputs and
+  trigger indexes still refresh; debug recomputation remains the correctness
+  oracle. Eight warmed-board pool-write probes fell from 471 to 10 allocations
+  each. Subsequent complete-payment attribution (`fb264f7c7`, retained bundle
+  `88d6abd34d8b56a9606c3ec58696063955d08226`) preserves every legal action,
+  selected action, resource, captured program and digest across eight pool-funded
+  and eight land-funded Cadets activations. Allocations fall 1,176→510 and
+  2,882→1,668 respectively; land payment retains both necessary tap rebuilds.
+  This closes payment attribution, not whole-game throughput acceptance.
+  Neither a digest refresh nor a component speedup waives the 10% Engine Budget.
+  The standard CI budget runs only the original TLA workloads; added dependency
+  and policy harnesses have a separate sequential `layer-risk.yml` producer.
+  Its presence establishes an execution path, not successful hosted execution
+  or comparative performance; no isolated artifact is yet retained.
+- Exact numeric transport does not guarantee meaningful model separation.
+  V8 integers 4096/8192 shared an embedding bucket and saturated the raw numeric
+  projection to identical local-program outputs. Signed log magnitudes repair
+  that counterexample in local/shared v8 reducers while retained versions keep
+  their paths. Independent shared programs are batched without sharing recurrent
+  state. Join/order/padding/gradient and real collector/checkpoint-selection
+  checks support these mechanisms, not general injectivity or learning quality.
+  Exact receipts and limitations are at
+  `fb264f7c7:scratch/mtg-244-risk-validation.md`. All seven before/after input
+  inventories agree in native/Python arrays, configurations and storage. Inventory
+  parity is not a policy timing receipt. Full-model comparative latency and final
+  engine/search remeasurement remain open; contended timings establish neither
+  regression nor acceptance. Training outcomes need separately authorized
+  experiments.
 
 ## Architecture convergence (accepted 2026-07-17)
 

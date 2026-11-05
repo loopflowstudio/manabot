@@ -248,6 +248,9 @@ fn condition_text(condition: &Condition) -> String {
             predicate_description(predicate, "permanent")
         ),
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
+        Condition::SourceMatches(predicate) => {
+            format!("this is {}", predicate_description(predicate, "permanent"))
+        }
         Condition::SourceTapped => "this is tapped".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
         Condition::CardsThisWayMatch(predicate) => format!(
@@ -856,7 +859,7 @@ fn copy_description(of: Option<&TargetSpec>, exceptions: &[Modification<EffectVa
 }
 
 /// One sentence for a continuous effect: whom, what, how long.
-fn continuous_description(
+pub(super) fn continuous_description(
     affected: &ObjectSelector,
     modification: &Modification<EffectValue>,
     duration: EffectDuration,
@@ -878,6 +881,65 @@ fn continuous_description(
         None => "unchanged".to_string(),
     };
     match modification {
+        Modification::SetCreatureTypes(types) => {
+            format!("{subject} becomes {}{until}", types.join(" "))
+        }
+        Modification::AddTypes(types) => format!(
+            "{subject} is also {}{until}",
+            types
+                .iter()
+                .map(|t| card_type(*t))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+        Modification::SetTypes { types, subtypes } => format!(
+            "{subject} becomes {} — {}{until}",
+            types
+                .iter()
+                .map(|t| card_type(*t))
+                .collect::<Vec<_>>()
+                .join(" "),
+            subtypes.join(" ")
+        ),
+        Modification::SetColors(colors) => format!(
+            "{subject} becomes {}{until}",
+            colors
+                .iter()
+                .map(|c| format!("{c:?}").to_lowercase())
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ),
+        Modification::AddColors(colors) => format!(
+            "{subject} is also {}{until}",
+            colors
+                .iter()
+                .map(|c| format!("{c:?}").to_lowercase())
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ),
+        Modification::GrantActivated(ability) => {
+            format!("{subject} gains an activated ability: {ability:?}{until}")
+        }
+        Modification::GrantTriggered(ability) => {
+            let crate::state::ability::Ability::Triggered {
+                condition,
+                intervening_if,
+                effects,
+            } = ability.as_ref();
+            let intervening = intervening_if
+                .as_ref()
+                .map(|c| format!(", if {}", condition_text(c)))
+                .unwrap_or_default();
+            format!(
+                "{subject} gains ‘{}{intervening}, {}’{until}",
+                condition_description(condition),
+                effects_description(effects)
+            )
+        }
+        Modification::GrantStatic(ability) => {
+            format!("{subject} gains a static ability: {ability:?}{until}")
+        }
+        Modification::SwitchPt => format!("Switch {subject}'s power and toughness{until}"),
         Modification::AddSubtypes(subtypes) => format!(
             "{subject} becomes {} in addition to its other types{until}",
             subtypes.join(" ")
@@ -888,6 +950,9 @@ fn continuous_description(
         Modification::Nonlegendary => format!("{subject} isn't legendary{until}"),
         Modification::AddKeywords(keywords) => {
             format!("{subject} gains {}{until}", keywords_description(keywords))
+        }
+        Modification::LoseNonManaAbilities => {
+            format!("{subject} loses all abilities except mana abilities{until}")
         }
         Modification::LoseAllAbilities => format!("{subject} loses all abilities{until}"),
         Modification::Firebending(n) => format!("{subject} gains firebending {n}{until}"),

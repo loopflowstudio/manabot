@@ -69,6 +69,9 @@ pub struct ObjectLki {
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<crate::card::CardDefId>,
+    /// Effective grants retained at the event boundary, including after ability loss.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub granted_abilities: Vec<crate::ability::EffectiveTrigger>,
     pub keywords: crate::card::Keywords,
     /// Its creature types as it last existed (CR 608.2h), sorted; read when
     /// a departed target's partners must share one (Secret Tunnel).

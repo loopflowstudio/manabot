@@ -21,7 +21,7 @@ use crate::{
             LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
             TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardDefId, CardDefinition, Keyword},
+        card::{CardDefId, CardDefinition, Keyword},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Counters, Permanent},
@@ -230,35 +230,13 @@ impl Game {
         }
     }
 
-    /// The definition retained by an activation, shared by resolution and
-    /// retargeting. Printed, inherited and attached grants keep their source
-    /// even when that source leaves or the permanent chooses new abilities.
-    pub(crate) fn stacked_activated_ability(
-        &self,
-        ability: &ActivatedAbilityOnStack,
-    ) -> Option<&ActivatedAbilityDefinition> {
-        if let Some(grant) = ability.granted_by {
-            return self.state.cards[CardId::from(grant.grantor.entity)]
-                .attached_grants()
-                .nth(grant.index);
-        }
-        let printed = &self
-            .source_face(ability.source_card, ability.source_definition_id)?
-            .activated_abilities;
-        printed.get(ability.ability_index).or_else(|| {
-            default_content_pack()
-                .definition(ability.inherited_from?)?
-                .activated_abilities
-                .get(ability.ability_index - printed.len())
-        })
-    }
-
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        let Some(definition) = self.stacked_activated_ability(&ability).cloned() else {
-            return;
+        let effects = ability.effects;
+        let program = if ability.program {
+            effects.clone()
+        } else {
+            Vec::new()
         };
-
-        let effects = definition.effects;
         let requirements = crate::state::ability::effect_target_requirements(&effects);
         // The object an Aura or Equipment was attached to as the ability was
         // activated (last known information once the source has left).
@@ -276,6 +254,7 @@ impl Game {
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
         let frame = EffectFrame {
+            program,
             source: Some(ability.source_card),
             source_ref: Some(ability.source_ref),
             inherited_from: ability.inherited_from,
@@ -293,6 +272,11 @@ impl Game {
     }
 
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
+        let program = if triggered.program {
+            triggered.inline_effects.clone().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let source_card = triggered
             .source_lki
             .as_ref()
@@ -359,6 +343,7 @@ impl Game {
         let resolutions_this_turn = *count;
 
         let frame = EffectFrame {
+            program,
             remembered: triggered.remembered,
             source: Some(source_card),
             source_ref: triggered.source_ref,

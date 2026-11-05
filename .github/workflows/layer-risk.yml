@@ -1,0 +1,73 @@
+name: Layer Risk Measurements
+
+# One bounded comparison, not a training launch or an Engine Budget override.
+# Dispatch the published candidate ref; all legs run sequentially on this VM.
+on:
+  workflow_dispatch:
+  # A new workflow is not dispatchable by name until it exists on the default
+  # branch. Publishing the measurement change as a PR runs its first receipt.
+  pull_request:
+    paths:
+      - '.github/workflows/layer-risk.yml'
+      - 'scripts/measure_layer_risk.py'
+      - 'managym/perf/layers-attribution.patch'
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - name: Install matched CPU dependencies
+        run: |
+          uv venv --python 3.12
+          uv export --frozen --extra dev --extra play --no-emit-project --prune torch --output-file /tmp/layer-requirements.txt
+          uv pip install --requirements /tmp/layer-requirements.txt
+          uv pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+      - name: Prepare historical sources and record provenance
+        run: |
+          uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-risk
+          lscpu > .cache/layer-risk/cpu.txt
+          uv pip freeze > .cache/layer-risk/dependencies.txt
+      - name: Measure ordinary reference and unmitigated and mitigated engines
+        run: |
+          for leg in baseline before after; do
+            uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-risk --leg "$leg"
+          done
+      - name: Measure encoding and full policy in fresh case processes
+        run: |
+          for leg in before after; do
+            uv run --no-sync python scripts/measure_layer_risk.py model --out .cache/layer-risk --leg "$leg"
+          done
+      - name: Require matched workloads and payment resources
+        run: uv run --no-sync python scripts/measure_layer_risk.py compare --out .cache/layer-risk
+      - name: Retain all completed receipts including on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer-risk
+          path: |
+            .cache/layer-risk/measurement.json
+            .cache/layer-risk/candidate.patch
+            .cache/layer-risk/cpu.txt
+            .cache/layer-risk/dependencies.txt
+            .cache/layer-risk/comparison.json
+            .cache/layer-risk/*/*.json
+            .cache/layer-risk/*/*.jsonl
+          if-no-files-found: warn
