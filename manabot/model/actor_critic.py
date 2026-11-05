@@ -241,7 +241,7 @@ class ActorCritic(nn.Module):
         self.continuation: ContinuationEncoder | TypedContinuationEncoder | None
         if config.state_encoder != "rows":
             self.continuation = TypedContinuationEncoder(
-                embed_dim, config.state_encoder
+                embed_dim, config.state_encoder, version=enc.config.policy_input_version
             )
         else:
             self.continuation = (

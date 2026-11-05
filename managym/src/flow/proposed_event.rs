@@ -61,6 +61,50 @@ pub(crate) enum ProposedDamageTarget {
     Object(ObjectRef),
 }
 
+/// Initial cause is retained even after a replacement makes the placement an
+/// effect for CR 614.16. Payment/turn completion still belongs to its caller.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub(crate) enum EventCause {
+    Effect,
+    // The causal domain includes costs even before a registered ability pays
+    // positive counters. Directed CR 614.16 witnesses exercise this boundary.
+    #[allow(dead_code)]
+    Cost,
+    TurnAction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct CounterProvenance {
+    pub cause: EventCause,
+    pub replaced: bool,
+}
+
+impl CounterProvenance {
+    pub(crate) const fn new(cause: EventCause) -> Self {
+        Self {
+            cause,
+            replaced: false,
+        }
+    }
+
+    fn is_effect(self) -> bool {
+        self.cause == EventCause::Effect || self.replaced
+    }
+}
+
+/// Copiable values are captured before a creation can suspend. No physical
+/// token or identity exists until creation replacements have finished.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub(crate) enum TokenDefinition {
+    Registered(String),
+    Copy {
+        definition_id: crate::state::card::CardDefId,
+        definition: std::sync::Arc<crate::state::card::CardDefinition>,
+        copy: Option<crate::state::effect::CopyEffect>,
+        exceptions: Vec<crate::state::effect::Modification>,
+    },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) enum ProposedEvent {
     Damage {
@@ -79,7 +123,14 @@ pub(crate) enum ProposedEvent {
     Sacrifice {
         target: ObjectRef,
     },
+    CreateTokens {
+        definition: Box<TokenDefinition>,
+        controller: PlayerId,
+        count: i32,
+        entry: ZoneEntry,
+    },
     CounterChange {
+        provenance: CounterProvenance,
         target: ObjectRef,
         kind: CounterKind,
         delta: i32,
@@ -98,15 +149,15 @@ pub(crate) enum ProposedEvent {
 /// at index zero on the same object are different effects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct ReplacementId {
-    source: ObjectRef,
-    definition_index: usize,
-    static_ability: bool,
+    pub(crate) source: ObjectRef,
+    pub(crate) definition_index: usize,
+    pub(crate) static_ability: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ReplacementCandidate {
     identity: ReplacementId,
-    effect: ReplacementEffect,
+    pub(crate) effect: ReplacementEffect,
 }
 
 impl ReplacementCandidate {
@@ -132,6 +183,9 @@ impl ReplacementCandidate {
                 format!("Increase damage by this source's {kind:?} counters")
             }
             ReplacementEffect::UnspentManaBecomesRed => "Unspent mana becomes red".into(),
+            ReplacementEffect::MultiplyTokens { multiplier } => {
+                format!("Create {multiplier} times as many tokens")
+            }
             ReplacementEffect::ModifyCounters {
                 multiplier,
                 additional,
@@ -144,10 +198,10 @@ impl ReplacementCandidate {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct PendingEvent {
     pub event: ProposedEvent,
-    ordinal: usize,
-    sacrifice: Option<(CardId, PlayerId)>,
-    departing_lki: Option<ObjectLki>,
-    applied: Vec<ReplacementId>,
+    pub(crate) ordinal: usize,
+    pub(crate) sacrifice: Option<(CardId, PlayerId)>,
+    pub(crate) departing_lki: Option<ObjectLki>,
+    pub(crate) applied: Vec<ReplacementId>,
 }
 
 /// A logical simultaneous event. No proposal is committed while another
@@ -157,10 +211,13 @@ pub(crate) struct PendingEvent {
 pub(crate) struct EventBatch {
     pub events: Vec<PendingEvent>,
     pub cursor: usize,
-    sources: Vec<TriggerSourceSnapshot>,
+    pub(crate) sources: Vec<TriggerSourceSnapshot>,
     pub results: Vec<EventResult>,
-    committed: bool,
-    child: Option<Box<EventBatch>>,
+    pub(crate) committed: bool,
+    pub(crate) child: Option<Box<EventBatch>>,
+    /// Creation's entry batch returns its objects; consequential linked returns
+    /// preserve the parent's original results instead.
+    pub(crate) child_returns_results: bool,
     pub binding: EventBinding,
 }
 
@@ -216,7 +273,6 @@ pub(crate) enum EventBinding {
     },
     Created {
         attacking: bool,
-        attach_source: bool,
     },
 }
 
@@ -309,6 +365,7 @@ impl Game {
             results: Vec::new(),
             committed: false,
             child: None,
+            child_returns_results: false,
             binding: EventBinding::None,
         }
     }
@@ -347,7 +404,12 @@ impl Game {
         self.process_game_events();
         if let Some(child) = batch.child.as_mut() {
             match self.advance_event_batch(child) {
-                BatchProgress::Complete => batch.child = None,
+                BatchProgress::Complete => {
+                    if batch.child_returns_results {
+                        batch.results = std::mem::take(&mut child.results);
+                    }
+                    batch.child = None;
+                }
                 choice => return choice,
             }
         }
@@ -372,6 +434,53 @@ impl Game {
                     }
                 }
             }
+        }
+        // Token entry is nested within creation (CR 616.1g). Finish all
+        // creation replacements before allocating any object, then retain the
+        // ordinary simultaneous entry batch across its own replacement choices.
+        if let [PendingEvent {
+            event:
+                ProposedEvent::CreateTokens {
+                    definition,
+                    controller,
+                    count,
+                    entry,
+                },
+            ..
+        }] = batch.events.as_slice()
+        {
+            let mut entries = Vec::new();
+            for _ in 0..*count {
+                let card = match definition.as_ref() {
+                    TokenDefinition::Registered(name) => self.prepare_token(name, *controller),
+                    TokenDefinition::Copy {
+                        definition_id,
+                        definition,
+                        copy,
+                        exceptions,
+                    } => {
+                        let mut template = crate::state::card::Card::from_definition(
+                            crate::state::game_object::ObjectId(0),
+                            *controller,
+                            *definition_id,
+                            std::sync::Arc::clone(definition),
+                        );
+                        template.copy = copy.clone();
+                        Some(self.prepare_token_copy(template, *controller, exceptions.clone()))
+                    }
+                };
+                if let Some(card) = card {
+                    entries.push(self.zone_move_proposal(
+                        card,
+                        ZoneType::Battlefield,
+                        entry.clone(),
+                    ));
+                }
+            }
+            batch.committed = true;
+            batch.child_returns_results = true;
+            batch.child = Some(Box::new(self.event_batch(entries)));
+            return self.advance_event_batch(batch);
         }
         let mut followups = Vec::new();
         let mut died = Vec::new();
@@ -579,6 +688,7 @@ impl Game {
             ProposedEvent::Damage { target, .. } => self
                 .damage_target_controller(*target)
                 .expect("current target"),
+            ProposedEvent::CreateTokens { controller, .. } => *controller,
             ProposedEvent::LifeChange { player, .. } => *player,
             ProposedEvent::Destroy { target }
             | ProposedEvent::Sacrifice { target }
@@ -631,6 +741,9 @@ impl Game {
                         }
                     }
             }
+            ProposedEvent::CreateTokens {
+                controller, count, ..
+            } => *count > 0 && self.state.players.get(controller.0).is_some(),
             ProposedEvent::LifeChange { player, delta } => {
                 *delta != 0 && self.state.players.get(player.0).is_some()
             }
@@ -674,6 +787,35 @@ impl Game {
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
         let mut candidates = match event {
+            ProposedEvent::CreateTokens {
+                controller, count, ..
+            } if *count > 0 => {
+                let mut out = Vec::new();
+                for (id, view) in self.layer_views(self.iter_battlefield_permanents(*controller)) {
+                    if view.abilities_lost {
+                        continue;
+                    }
+                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                    for (definition_index, effect) in self.state.cards[permanent.card]
+                        .replacement_effects
+                        .iter()
+                        .enumerate()
+                    {
+                        if matches!(effect, ReplacementEffect::MultiplyTokens { .. }) {
+                            out.push(ReplacementCandidate {
+                                identity: ReplacementId {
+                                    source: self.permanent_object_ref(id).expect("battlefield"),
+                                    definition_index,
+                                    static_ability: false,
+                                },
+                                effect: effect.clone(),
+                            });
+                        }
+                    }
+                }
+                out
+            }
+
             ProposedEvent::Damage {
                 source,
                 target,
@@ -788,9 +930,7 @@ impl Game {
                     let Some(source) = self.permanent_object_ref(id) else {
                         continue;
                     };
-                    for (definition_index, ability) in
-                        view.static_abilities.iter().enumerate()
-                    {
+                    for (definition_index, ability) in view.static_abilities.iter().enumerate() {
                         if matches!(ability, StaticAbility::EntersTapped(predicate)
                             if self.card_matches_predicate(*card, predicate))
                         {
@@ -842,7 +982,10 @@ impl Game {
                     .enumerate()
                 {
                     let ReplacementEffect::ModifyCounters {
-                        kind, predicate, ..
+                        kind,
+                        predicate,
+                        effects_only,
+                        ..
                     } = effect
                     else {
                         continue;
@@ -864,7 +1007,17 @@ impl Game {
                         }
                         _ => unreachable!("counter placement"),
                     };
-                    if matches_card && matches_kind {
+                    let matches_cause = !effects_only
+                        || match event {
+                            ProposedEvent::CounterChange { provenance, .. } => {
+                                provenance.is_effect()
+                            }
+                            // Enters-with counters are replacement effects, including
+                            // intrinsic Saga/loyalty/defense entry rules (CR 614.16).
+                            ProposedEvent::ZoneMove { .. } => true,
+                            _ => false,
+                        };
+                    if matches_card && matches_kind && matches_cause {
                         candidates.push(ReplacementCandidate {
                             identity: ReplacementId {
                                 source: self.permanent_object_ref(id).expect("battlefield"),
@@ -913,13 +1066,22 @@ impl Game {
         pending.applied.push(candidate.identity);
         match (&mut pending.event, &candidate.effect) {
             (
-                ProposedEvent::CounterChange { delta, .. },
+                ProposedEvent::CreateTokens { count, .. },
+                ReplacementEffect::MultiplyTokens { multiplier },
+            ) => {
+                *count = count.saturating_mul(*multiplier).max(0);
+            }
+            (
+                ProposedEvent::CounterChange {
+                    delta, provenance, ..
+                },
                 ReplacementEffect::ModifyCounters {
                     multiplier,
                     additional,
                     ..
                 },
             ) => {
+                provenance.replaced = true;
                 *delta = delta
                     .saturating_mul(*multiplier)
                     .saturating_add(*additional)
@@ -1006,6 +1168,7 @@ impl Game {
                 combat,
             } => self.commit_damage(source, target, amount, combat),
             ProposedEvent::LifeChange { player, delta } => self.commit_life_change(player, delta),
+            ProposedEvent::CreateTokens { .. } => unreachable!("creation owns an entry batch"),
             ProposedEvent::Destroy { .. } | ProposedEvent::Sacrifice { .. } => {
                 unreachable!("normalized before replacement")
             }
@@ -1014,6 +1177,7 @@ impl Game {
                 kind,
                 delta,
                 by,
+                ..
             } => self.commit_counter_change(target, kind, delta, by),
             ProposedEvent::ZoneMove {
                 card,
@@ -1083,6 +1247,7 @@ impl Game {
             return false;
         };
         self.apply_immediate_event(ProposedEvent::CounterChange {
+            provenance: CounterProvenance::new(EventCause::Effect),
             target,
             kind,
             delta,
@@ -1100,7 +1265,7 @@ mod tests {
         state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
     };
 
-    use super::{CounterKind, ProposedEvent, ZoneEntry};
+    use super::{CounterKind, CounterProvenance, EventCause, ProposedEvent, ZoneEntry};
 
     fn game_with_ogre() -> (Game, crate::state::game_object::PermanentId) {
         let deck = BTreeMap::from([("Gray Ogre".to_string(), 16), ("Mountain".to_string(), 24)]);
@@ -1119,6 +1284,83 @@ mod tests {
     }
 
     #[test]
+    fn counter_cause_survives_replacement_and_controls_effect_only_applicability() {
+        use crate::state::card::ReplacementEffect;
+        use crate::state::predicate::CardPredicate;
+        for cause in [EventCause::Effect, EventCause::Cost, EventCause::TurnAction] {
+            for modified in [false, true] {
+                let (mut game, target) = game_with_ogre();
+                for (effects_only, multiplier, additional) in [(true, 2, 0), (false, 1, 1)] {
+                    if !effects_only && !modified {
+                        continue;
+                    }
+                    let source = game
+                        .scenario_force_battlefield(PlayerId(0), "Mountain", true)
+                        .unwrap();
+                    let card = game.state.permanents[source].as_ref().unwrap().card;
+                    game.state.cards[card].replacement_effects =
+                        vec![ReplacementEffect::ModifyCounters {
+                            effects_only,
+                            kind: None,
+                            predicate: CardPredicate::default(),
+                            multiplier,
+                            additional,
+                        }];
+                }
+                let mut batch = game.event_batch(vec![ProposedEvent::CounterChange {
+                    target: game.permanent_object_ref(target).unwrap(),
+                    kind: CounterKind::Loyalty,
+                    delta: 1,
+                    by: Some(PlayerId(0)),
+                    provenance: CounterProvenance::new(cause),
+                }]);
+                while let super::BatchProgress::Choice { candidates, .. } =
+                    game.advance_event_batch(&mut batch)
+                {
+                    // Apply the unconditional +1 first when both are initially
+                    // eligible. For costs/turn actions it is initially the only
+                    // replacement; its result then admits the effect-only one.
+                    let candidate = candidates
+                        .iter()
+                        .find(|candidate| {
+                            matches!(
+                                candidate.effect,
+                                ReplacementEffect::ModifyCounters {
+                                    effects_only: false,
+                                    ..
+                                }
+                            )
+                        })
+                        .unwrap();
+                    game.choose_replacement(&mut batch, candidate);
+                }
+                let expected = if modified {
+                    4
+                } else if cause == EventCause::Effect {
+                    2
+                } else {
+                    1
+                };
+                assert_eq!(
+                    game.state.permanents[target]
+                        .as_ref()
+                        .unwrap()
+                        .counter_count(CounterKind::Loyalty),
+                    expected
+                );
+                let ProposedEvent::CounterChange { provenance, .. } = batch.events[0].event else {
+                    panic!("counter event")
+                };
+                assert_eq!(
+                    provenance.cause, cause,
+                    "replacement never rewrites cost/turn ownership"
+                );
+                assert_eq!(provenance.replaced, modified || cause == EventCause::Effect);
+            }
+        }
+    }
+
+    #[test]
     fn exact_object_refs_gate_counter_destruction_and_zone_commits() {
         let (mut game, permanent) = game_with_ogre();
         let card = game.state.permanents[permanent]
@@ -1133,6 +1375,7 @@ mod tests {
         let current_permanent = game.state.card_to_permanent[card].expect("new permanent");
 
         assert!(!game.apply_immediate_event(ProposedEvent::CounterChange {
+            provenance: CounterProvenance::new(EventCause::Effect),
             target: stale,
             kind: CounterKind::PlusOnePlusOne,
             delta: 2,
@@ -1156,6 +1399,7 @@ mod tests {
         );
 
         assert!(game.apply_immediate_event(ProposedEvent::CounterChange {
+            provenance: CounterProvenance::new(EventCause::Effect),
             target: current,
             kind: CounterKind::PlusOnePlusOne,
             delta: 2,

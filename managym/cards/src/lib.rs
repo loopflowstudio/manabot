@@ -13,6 +13,7 @@
 mod afr;
 mod blb;
 mod bro;
+mod dft;
 mod eld;
 mod fdn;
 mod fin;
@@ -31,6 +32,7 @@ mod ons;
 mod ori;
 mod por;
 mod ptk;
+mod rav;
 mod roe;
 mod rtr;
 mod soi;
@@ -60,10 +62,11 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 32] = [
+const SETS: [fn() -> Vec<CardDefinition>; 34] = [
     afr::cards,
     blb::cards,
     bro::cards,
+    dft::cards,
     eld::cards,
     fdn::cards,
     fin::cards,
@@ -82,6 +85,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 32] = [
     ori::cards,
     por::cards,
     ptk::cards,
+    rav::cards,
     roe::cards,
     rtr::cards,
     soi::cards,

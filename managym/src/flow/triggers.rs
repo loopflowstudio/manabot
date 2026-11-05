@@ -44,9 +44,9 @@ struct FiredTrigger {
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct TriggerSourceSnapshot {
-    card: CardId,
-    controller: PlayerId,
-    lki: ObjectLki,
+    pub(crate) card: CardId,
+    pub(crate) controller: PlayerId,
+    pub(crate) lki: ObjectLki,
 }
 
 /// A set of `EventKind`s, one bit per variant.

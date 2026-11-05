@@ -167,7 +167,13 @@ checkpoints or experiment evidence.
   V8 defaults to 512 local facts; v7 retains 128 and fresh input remains v6.
   Shared admission rejects new unrepresentable layer payloads on v1–v7 before
   either encoder writes buffers. A stacked activation owns its chosen effects;
-  catalog joins are observation provenance, never resolution lookup authority.
+  catalog joins are observation provenance, never resolution lookup authority. V8
+  also carries retained execution as a separate fact-kind-14 occurrence (ordinal
+  reset), with one-based visible reference slots in relation kind 10. The native
+  frame/batch owners project rules payloads; raw storage identities never enter
+  these tokens. Frozen selection obligations retain codes 5/6/7 on v1–v7, while
+  v8 uses 28. Novel retained execution rejects earlier inputs before buffer writes;
+  fact/relation overflow is a typed Capacity error, never truncation.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

@@ -21,6 +21,7 @@
 //! Entry point: [`learning_catalog`].
 
 use serde::ser::{self, Serialize};
+use std::borrow::Cow;
 
 use super::ContentError;
 use crate::cards::content_pack::ContentPack;
@@ -102,15 +103,11 @@ pub fn definition_tokens(
     pack: &ContentPack,
 ) -> Result<Vec<(TokenKind, i32)>, ContentError> {
     let mut writer = TokenWriter::new(pack);
-    definition.serialize(&mut writer)?;
-    let mut out = writer.tokens;
-    for (kind, tokens) in definition_programs_of(definition, pack)? {
-        out.push((TokenKind::ProgramKind, kind as i32, None));
-        out.extend(tokens);
-    }
-    Ok(out
+    writer.append_definition(definition)?;
+    Ok(writer
+        .tokens
         .into_iter()
-        .map(|(kind, value, _)| (kind, value))
+        .map(|(kind, value, reference)| (kind, reference.unwrap_or(value)))
         .collect())
 }
 
@@ -120,12 +117,8 @@ pub fn rules_tokens<T: Serialize>(
     pack: &ContentPack,
 ) -> Result<Vec<(u16, i32)>, ContentError> {
     let mut writer = TokenWriter::new(pack);
-    value.serialize(&mut writer)?;
-    Ok(writer
-        .tokens
-        .into_iter()
-        .map(|(kind, value, _)| (kind as u16, value))
-        .collect())
+    writer.append_rules(value)?;
+    Ok(writer.into_rules_tokens())
 }
 
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
@@ -221,7 +214,7 @@ fn definition_programs_of(
 // ---------------------------------------------------------------------------
 // The serializer.
 
-struct TokenWriter<'p> {
+pub(crate) struct TokenWriter<'p> {
     pack: &'p ContentPack,
     tokens: Span,
     /// Name of the struct field being written, for `token_name` references.
@@ -231,13 +224,37 @@ struct TokenWriter<'p> {
 }
 
 impl<'p> TokenWriter<'p> {
-    fn new(pack: &'p ContentPack) -> Self {
+    pub(crate) fn new(pack: &'p ContentPack) -> Self {
         Self {
             pack,
             tokens: Vec::new(),
             field: None,
             depth: 0,
         }
+    }
+
+    /// Append to one retained-program stream without allocating a writer per field.
+    pub(crate) fn append_rules<T: Serialize>(&mut self, value: &T) -> Result<(), ContentError> {
+        value.serialize(self)
+    }
+
+    pub(crate) fn append_definition(
+        &mut self,
+        definition: &CardDefinition,
+    ) -> Result<(), ContentError> {
+        definition.serialize(&mut *self)?;
+        for (kind, tokens) in definition_programs_of(definition, self.pack)? {
+            self.push(TokenKind::ProgramKind, kind as i32);
+            self.tokens.extend(tokens);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn into_rules_tokens(self) -> Vec<(u16, i32)> {
+        self.tokens
+            .into_iter()
+            .map(|(kind, value, reference)| (kind as u16, reference.unwrap_or(value)))
+            .collect()
     }
 
     fn push(&mut self, kind: TokenKind, value: i32) {
@@ -249,7 +266,13 @@ impl<'p> TokenWriter<'p> {
     }
 
     fn close(&mut self, name: &str) {
-        self.push(TokenKind::Structure, name_value(&format!("/{name}")));
+        let mut hash = blake3::Hasher::new();
+        hash.update(b"/");
+        hash.update(name.as_bytes());
+        let bytes = hash.finalize();
+        let value =
+            (u32::from_le_bytes(bytes.as_bytes()[..4].try_into().unwrap()) & 0x7fff_ffff) as i32;
+        self.push(TokenKind::Structure, value);
     }
 
     fn integer(&mut self, value: i64) -> Result<(), ContentError> {
@@ -413,7 +436,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     ) -> Result<Compound<'a, 'p>, ContentError> {
         let path = format!("{name}::{variant}");
         self.push(TokenKind::Variant, name_value(&path));
-        Ok(Compound::new(self, path, false))
+        Ok(Compound::new(self, path.into(), false))
     }
     fn serialize_map(self, _: Option<usize>) -> Result<Compound<'a, 'p>, ContentError> {
         unsupported("maps")
@@ -438,19 +461,19 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         let path = format!("{name}::{variant}");
         self.push(TokenKind::Variant, name_value(&path));
         self.depth += 1;
-        Ok(Compound::new(self, path, false))
+        Ok(Compound::new(self, path.into(), false))
     }
 }
 
-struct Compound<'a, 'p> {
+pub(crate) struct Compound<'a, 'p> {
     writer: &'a mut TokenWriter<'p>,
-    name: String,
+    name: Cow<'static, str>,
     /// The definition's own struct: identity and program fields are skipped.
     definition: bool,
 }
 
 impl<'a, 'p> Compound<'a, 'p> {
-    fn new(writer: &'a mut TokenWriter<'p>, name: String, definition: bool) -> Self {
+    fn new(writer: &'a mut TokenWriter<'p>, name: Cow<'static, str>, definition: bool) -> Self {
         Self {
             writer,
             name,
@@ -616,6 +639,20 @@ mod tests {
         ];
         for (name, kind) in programs {
             assert_eq!(schema["program_kinds"][name], kind as i32, "{name}");
+        }
+    }
+
+    #[test]
+    fn retained_rules_tokens_preserve_created_definition_identity() {
+        let pack = default_content_pack();
+        let food = rules_tokens(&Effect::create_tokens("Food", 1), pack).unwrap();
+        let ally = rules_tokens(&Effect::create_tokens("Ally", 1), pack).unwrap();
+        assert_ne!(food, ally);
+        for (name, tokens) in [("Food", food), ("Ally", ally)] {
+            assert!(tokens.contains(&(
+                TokenKind::DefinitionRef as u16,
+                pack.definition_id(name).unwrap().0 as i32
+            )));
         }
     }
 

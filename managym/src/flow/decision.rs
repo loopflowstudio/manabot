@@ -155,9 +155,10 @@ pub struct EffectFrame {
     /// running over a `Chosen` selector; cleared once it has run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chosen: Option<ObjectRef>,
-    /// The token this resolution created last ("that token").
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub created: Option<PermanentId>,
+    /// All exact objects from the latest creation, including replacement
+    /// multiplicity. A following "that token" refers to the whole result.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub created: Vec<ObjectRef>,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -222,7 +223,7 @@ impl EffectFrame {
             selected_from: None,
             moved: Vec::new(),
             chosen: None,
-            created: None,
+            created: Vec::new(),
             targets: Vec::new(),
             active_requirement: 0,
             context_target: None,
@@ -381,6 +382,27 @@ pub enum ResolutionCastOffer {
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
+/// The retained input meaning of migrated selections. This records their
+/// original domain, never an alternate executor. New domains require v8.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum SelectionOrigin {
+    Milled,
+    Library,
+    Hand,
+    Other,
+}
+
+impl SelectionOrigin {
+    pub(crate) fn legacy_code(self) -> Option<u8> {
+        match self {
+            Self::Milled => Some(5),
+            Self::Library => Some(6),
+            Self::Hand => Some(7),
+            Self::Other => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
     OrderReplacement {
@@ -439,6 +461,7 @@ pub enum Decision {
     },
     /// Select exact objects without moving them until the subset is complete.
     SelectCards {
+        origin: SelectionOrigin,
         player: PlayerId,
         from: Option<ZoneSelection>,
         candidates: Vec<ObjectRef>,
@@ -623,6 +646,29 @@ impl Decision {
             | Decision::Learn { player }
             | Decision::Discard { player, .. }
             | Decision::LegendRule { player, .. } => *player,
+        }
+    }
+
+    /// Private inspection domains that survive library resampling. Search
+    /// offers over an entire zone have a different membership authority.
+    pub(crate) fn library_inspection(&self) -> Option<(PlayerId, &[CardId])> {
+        match self {
+            Self::Scry { player, looked, .. }
+            | Self::Surveil { player, looked, .. }
+            | Self::LookAndSelect { player, looked, .. } => Some((*player, looked)),
+            Self::OrderLibrary {
+                player,
+                cards,
+                next,
+                end,
+            } => Some((
+                *player,
+                match end {
+                    LibraryEnd::Top => cards,
+                    LibraryEnd::Bottom => &cards[*next..],
+                },
+            )),
+            _ => None,
         }
     }
 
@@ -1185,19 +1231,10 @@ impl Game {
                     }
                 }
             }
-            EventBinding::Created {
-                attacking,
-                attach_source,
-            } => {
-                for object in moved {
-                    let card = CardId::from(object.entity);
-                    self.finish_created_token(card, attacking);
-                    if let Ok(id) = self.lookup_current_permanent(object) {
-                        frame.created = Some(id);
-                        if attach_source {
-                            self.attach_source_to(frame, id);
-                        }
-                    }
+            EventBinding::Created { attacking } => {
+                frame.created = moved.collect();
+                for object in &frame.created {
+                    self.finish_created_token(CardId::from(object.entity), attacking);
                 }
             }
             EventBinding::Damage { result: measured } => {
@@ -1963,6 +2000,9 @@ impl Game {
                 };
                 let batch = self.event_batch(vec![
                     crate::flow::proposed_event::ProposedEvent::CounterChange {
+                        provenance: crate::flow::proposed_event::CounterProvenance::new(
+                            crate::flow::proposed_event::EventCause::Effect,
+                        ),
                         target: self
                             .permanent_object_ref(selected)
                             .expect("chosen permanent"),

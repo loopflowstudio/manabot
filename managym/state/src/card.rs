@@ -469,11 +469,17 @@ pub enum ReplacementEffect {
     /// `count * multiplier + additional` counters. Entry counters are placements
     /// too (CR 122.6). `None` matches every counter kind.
     ModifyCounters {
+        /// Only placements caused by effects, including replacement effects
+        /// applied to an original cost or turn action (CR 614.16).
+        effects_only: bool,
         kind: Option<CounterKind>,
         predicate: CardPredicate,
         multiplier: i32,
         additional: i32,
     },
+    /// Replace a logical creation under your control, before any token enters
+    /// (CR 616.1g). Entry and copy terms belong to every resulting token.
+    MultiplyTokens { multiplier: i32 },
 }
 
 impl ActivatedAbilityDefinition {
@@ -1038,6 +1044,11 @@ impl Card {
         }
     }
 
+    /// Snapshot the current copiable face without copying its ability programs.
+    pub fn copiable_definition(&self) -> Arc<CardDefinition> {
+        Arc::clone(&self.definition)
+    }
+
     pub fn shares_definition_with(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.definition, &other.definition)
     }
@@ -1075,7 +1086,7 @@ impl Card {
             return None;
         }
         self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::AttachSourceTo { target } => Some(target),
+            Effect::AttachSourceTo { what } => what.target_spec(),
             _ => None,
         })
     }

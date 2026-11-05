@@ -11,7 +11,9 @@ use crate::{
         },
         event::GameEvent,
         game::Game,
-        proposed_event::{EventBinding, ProposedDamageTarget, ProposedEvent, ZoneEntry},
+        proposed_event::{
+            EventBinding, ProposedDamageTarget, ProposedEvent, TokenDefinition, ZoneEntry,
+        },
         trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
     },
@@ -591,6 +593,9 @@ impl Game {
                     .into_iter()
                     .filter_map(|id| self.permanent_object_ref(id))
                     .map(|target| ProposedEvent::CounterChange {
+                        provenance: crate::flow::proposed_event::CounterProvenance::new(
+                            crate::flow::proposed_event::EventCause::Effect,
+                        ),
                         target,
                         kind: *kind,
                         delta: amount,
@@ -610,6 +615,9 @@ impl Game {
                 {
                     for (kind, delta) in counters.iter() {
                         events.push(ProposedEvent::CounterChange {
+                            provenance: crate::flow::proposed_event::CounterProvenance::new(
+                                crate::flow::proposed_event::EventCause::Effect,
+                            ),
                             target,
                             kind,
                             delta,
@@ -876,6 +884,18 @@ impl Game {
                     None
                 } else {
                     Some(Decision::SelectCards {
+                        origin: match from {
+                            ObjectSelector::CardsThisWay => {
+                                super::decision::SelectionOrigin::Milled
+                            }
+                            ObjectSelector::Zone(ZoneType::Library) => {
+                                super::decision::SelectionOrigin::Library
+                            }
+                            ObjectSelector::Zone(ZoneType::Hand) => {
+                                super::decision::SelectionOrigin::Hand
+                            }
+                            _ => super::decision::SelectionOrigin::Other,
+                        },
                         player: frame.controller,
                         from: if let ObjectSelector::Zone(zone) = from {
                             Some(crate::state::binding::ZoneSelection {
@@ -1298,16 +1318,18 @@ impl Game {
                         _ => return None,
                     },
                 };
-                let card = self.prepare_token_copy(copied, frame.controller, exceptions);
-                let mut batch = self.event_batch(vec![self.zone_move_proposal(
-                    card,
-                    ZoneType::Battlefield,
-                    Default::default(),
-                )]);
-                batch.binding = EventBinding::Created {
-                    attacking: false,
-                    attach_source: false,
-                };
+                let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
+                    definition: Box::new(TokenDefinition::Copy {
+                        definition_id: self.state.cards[copied].definition_id,
+                        definition: self.state.cards[copied].copiable_definition(),
+                        copy: self.state.cards[copied].copy.clone(),
+                        exceptions,
+                    }),
+                    controller: frame.controller,
+                    count: 1,
+                    entry: ZoneEntry::default(),
+                }]);
+                batch.binding = EventBinding::Created { attacking: false };
                 frame.batch = Some(batch);
                 None
             }
@@ -1383,32 +1405,25 @@ impl Game {
                 token_name,
                 count,
                 tapped_and_attacking,
-                attach_source,
             } => {
                 let count = self.effect_value(count, frame).max(0);
-                let mut events = Vec::new();
-                for _ in 0..count {
-                    if let Some(card) = self.prepare_token(token_name, frame.controller) {
-                        events.push(self.zone_move_proposal(
-                            card,
-                            ZoneType::Battlefield,
-                            ZoneEntry {
-                                tapped: *tapped_and_attacking,
-                                ..Default::default()
-                            },
-                        ));
-                    }
-                }
-                let mut batch = self.event_batch(events);
+                let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
+                    definition: Box::new(TokenDefinition::Registered(token_name.clone())),
+                    controller: frame.controller,
+                    count,
+                    entry: ZoneEntry {
+                        tapped: *tapped_and_attacking,
+                        ..Default::default()
+                    },
+                }]);
                 batch.binding = EventBinding::Created {
                     attacking: *tapped_and_attacking,
-                    attach_source: *attach_source,
                 };
                 frame.batch = Some(batch);
                 None
             }
-            Effect::AttachSourceTo { .. } => {
-                if let Target::Permanent(permanent_id) = self.present_primary_target(frame)? {
+            Effect::AttachSourceTo { what } => {
+                for permanent_id in self.selected_permanents(what, frame) {
                     if let FrameCompletion::Spell { attach_to, .. } = &mut frame.completion {
                         *attach_to = self.permanent_object_ref(permanent_id);
                     } else {
@@ -1751,6 +1766,9 @@ impl Game {
                     self.animate_permanent(permanent_id, frame.source, controller);
                     // Earthbend 0 still animates the land and creates its return trigger.
                     events.push(ProposedEvent::CounterChange {
+                        provenance: crate::flow::proposed_event::CounterProvenance::new(
+                            crate::flow::proposed_event::EventCause::Effect,
+                        ),
                         target: watched,
                         kind: CounterKind::PlusOnePlusOne,
                         delta: count,
@@ -1869,7 +1887,12 @@ impl Game {
                 _ => None,
             }),
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
-            ObjectSelector::CreatedThisWay => permanent(frame.created),
+            ObjectSelector::CreatedThisWay => frame
+                .created
+                .iter()
+                .copied()
+                .filter(|object| self.lookup_current_permanent(*object).is_ok())
+                .collect(),
             ObjectSelector::Grantor => frame
                 .grantor
                 .filter(|grantor| self.lookup_current_permanent(*grantor).is_ok())

@@ -433,6 +433,7 @@ impl EncodedObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
     UnsupportedLayerInput(u8),
+    UnsupportedExecutionInput(u8),
     InvalidShared(&'static str),
     Capacity {
         field: &'static str,
@@ -449,6 +450,10 @@ pub enum ObservationEncodeError {
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedExecutionInput(version) => write!(
+                f,
+                "policy input v{version} cannot represent retained execution; select v8"
+            ),
             Self::UnsupportedLayerInput(version) => write!(
                 f,
                 "policy input v{version} cannot represent layer payload; select v8"
@@ -523,6 +528,14 @@ pub fn validate_policy_input(obs: &Observation, version: u8) -> Result<(), Obser
     }
     if version == 8 {
         return Ok(());
+    }
+    if obs.continuation.iter().any(|frame| {
+        frame.execution_requires_v8
+            || frame.kind == 6
+                && (matches!(frame.decision, 27 | 29)
+                    || (frame.decision == 28 && frame.legacy_decision.is_none()))
+    }) {
+        return Err(ObservationEncodeError::UnsupportedExecutionInput(version));
     }
     let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     let novel = |e: &ContinuousEffectData| {
@@ -892,6 +905,7 @@ pub fn encode_into(
             &ranks,
             out.facts,
             config.policy_input_version >= 7,
+            config.policy_input_version >= 8,
         )?;
         if config.policy_input_version >= 7 {
             super::shared_effects::encode(
@@ -909,6 +923,7 @@ pub fn encode_into(
         super::continuation::encode_into(
             &obs.continuation,
             obs.agent.player_index as usize,
+            config.policy_input_version,
             &object_to_index,
             out.relations,
         )?;
@@ -1240,7 +1255,7 @@ struct Fact {
 
 /// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
 /// object order (agent, opponent, agent permanents, opponent permanents).
-fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
+fn facts(obs: &Observation, shared: bool, execution: bool) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
         out.push(Fact {
@@ -1327,19 +1342,22 @@ fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
         }
     }
     for (index, frame) in obs.continuation.iter().enumerate() {
-        for (ordinal, &(kind, value)) in frame.program.iter().enumerate() {
-            out.push(Fact {
-                object: if frame.controller == obs.agent.player_index as usize {
-                    obs.agent.id
-                } else {
-                    obs.opponent.id
-                },
-                kind: FactKind::ContinuationProgram,
-                id: (index + 1) as i32,
-                detail: value,
-                values: [kind as f32, ordinal as f32],
-                effect: None,
-            });
+        for program in std::iter::once(&frame.program).chain(execution.then_some(&frame.execution))
+        {
+            for (ordinal, &(kind, value)) in program.iter().enumerate() {
+                out.push(Fact {
+                    object: if frame.controller == obs.agent.player_index as usize {
+                        obs.agent.id
+                    } else {
+                        obs.opponent.id
+                    },
+                    kind: FactKind::ContinuationProgram,
+                    id: (index + 1) as i32,
+                    detail: value,
+                    values: [kind as f32, ordinal as f32],
+                    effect: None,
+                });
+            }
         }
         if let Some(attackers) = &frame.attackers {
             out.push(Fact {
@@ -1495,8 +1513,9 @@ fn encode_facts(
     ranks: &BTreeMap<i32, f32>,
     out: &mut [f32],
     shared: bool,
+    execution: bool,
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs, shared);
+    let facts = facts(obs, shared, execution);
     let capacity = out.len() / FACT_DIM;
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {

@@ -2361,6 +2361,7 @@ fn counter_replacement_drivers(game: &mut Game, player: PlayerId) {
             .unwrap();
         let card = game.state.permanents[id].as_ref().unwrap().card;
         game.state.cards[card].replacement_effects = vec![ReplacementEffect::ModifyCounters {
+            effects_only: false,
             kind: Some(CounterKind::PlusOnePlusOne),
             predicate: CardPredicate::default(),
             multiplier,
@@ -3410,5 +3411,427 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
                 .iter()
                 .all(|card| branch.state.cards[*card].name == "Lightning Bolt"));
         }
+    }
+}
+
+#[test]
+fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    use crate::state::card::ReplacementEffect;
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let card = game.state.permanents[source].as_ref().unwrap().card;
+    game.state.cards[card].replacement_effects =
+        vec![ReplacementEffect::EntersWithPlusOneCounters {
+            count: 1,
+            condition: None,
+        }];
+    for multiplier in [2, 3] {
+        let id = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        let card = game.state.permanents[id].as_ref().unwrap().card;
+        game.state.cards[card].replacement_effects =
+            vec![ReplacementEffect::MultiplyTokens { multiplier }];
+    }
+    counter_replacement_drivers(&mut game, player);
+    let mut frame = EffectFrame::new(
+        player,
+        vec![
+            Effect::CreateTokenCopy {
+                of: None,
+                exceptions: vec![Modification::SetBasePt {
+                    power: Some(EffectValue::Fixed(4)),
+                    toughness: Some(EffectValue::Fixed(5)),
+                }],
+            },
+            Effect::gain_life(3),
+        ],
+    );
+    frame.source = Some(card);
+    frame.source_ref = game.permanent_object_ref(source);
+    frame.completion = FrameCompletion::Continue;
+    let cards_before = game.state.cards.len();
+    game.run_frame(frame);
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    assert_eq!(
+        game.state.cards.len(),
+        cards_before,
+        "no allocation before creation choice"
+    );
+    let measure = |game: &Game| {
+        use crate::agent::observation::Observation;
+        use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        let obs = Observation::for_player(game, player);
+        let config = ObservationEncoderConfig {
+            policy_input_version: 8,
+            max_facts: 4096,
+            ..Default::default()
+        };
+        let encoded = encode(&obs, &config).unwrap();
+        let facts = encoded
+            .facts
+            .chunks_exact(12)
+            .filter(|row| row[11] == 1.0)
+            .count();
+        let relations = encoded
+            .relations
+            .chunks_exact(49)
+            .filter(|row| row[31] == 1.0)
+            .count();
+        serde_json::json!({"facts":facts,"relations":relations,"default_overflow":facts > 512})
+    };
+    let mut occupancy = vec![measure(&game)];
+    let root = crate::search_state::witness(&game);
+    let mut replay = game.clone();
+    for (branch_index, branch) in [&mut game, &mut replay].into_iter().enumerate() {
+        checked_command(branch, Action::ChooseMode { player, mode: 0 });
+        assert_eq!(branch.state.cards.len(), cards_before + 6);
+        for _ in 0..6 {
+            if branch_index == 0 {
+                occupancy.push(measure(branch));
+            }
+            assert_eq!(branch.state.players[0].life, 20, "suffix waits for entries");
+            assert!(branch
+                .state
+                .cards
+                .iter()
+                .enumerate()
+                .skip(cards_before)
+                .all(|(id, _)| branch.state.zones.zone_of(CardId(id)).is_none()));
+            checked_command(branch, Action::ChooseMode { player, mode: 0 });
+        }
+        let tokens: Vec<_> = branch
+            .state
+            .cards
+            .iter()
+            .enumerate()
+            .skip(cards_before)
+            .map(|(id, card)| {
+                assert!(card.is_token);
+                branch.state.card_to_permanent[CardId(id)].unwrap()
+            })
+            .collect();
+        for token in tokens {
+            let permanent = branch.state.permanents[token].as_ref().unwrap();
+            assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 4);
+            assert_eq!(branch.characteristics(token).pt(), (8, 9));
+        }
+        assert_eq!(branch.state.players[0].life, 23);
+    }
+    assert_eq!(
+        crate::search_state::witness(&game),
+        crate::search_state::witness(&replay)
+    );
+    assert_ne!(crate::search_state::witness(&game), root);
+    if let Ok(path) = std::env::var("TOKEN_CREATION_OCCUPANCY") {
+        std::fs::write(path, serde_json::to_string_pretty(&occupancy).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unknown_ones() {
+    use crate::{
+        flow::decision::EffectFrame,
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+    };
+    for effect in [
+        Effect::Scry { count: 3 },
+        Effect::Surveil { count: 3 },
+        Effect::LookAndSelect {
+            random_order: false,
+            reveal: false,
+            to_battlefield: false,
+            look: 3.into(),
+            min_select: 1,
+            max_select: 1,
+            predicate: CardPredicate::default(),
+        },
+    ] {
+        let player = PlayerId(0);
+        let viewer = PlayerId(1);
+        let (mut root, _, _) = fixture(player);
+        root.run_frame(EffectFrame::new(player, vec![effect]));
+        root.publish_action_space(root.suspended_decision_action_space().unwrap());
+        let before = root
+            .state
+            .suspended_decision
+            .as_ref()
+            .unwrap()
+            .decision
+            .library_inspection()
+            .unwrap()
+            .1
+            .to_vec();
+        let mut known = root.clone();
+        known.determinize(player, 241).unwrap();
+        assert_eq!(known.library_top(player, 3), before);
+        assert_eq!(
+            known.state.suspended_decision,
+            root.state.suspended_decision
+        );
+        let mut unknown = root.clone();
+        unknown.determinize(viewer, 241).unwrap();
+        let space = PossibleWorldSpace::for_viewer(&root, viewer);
+        let materialized = space
+            .materialize_index(&root, 0, 241, MaterializeMode::RefreshOpponentCommitment)
+            .unwrap();
+        for mut branch in [unknown, materialized] {
+            let looked = branch
+                .state
+                .suspended_decision
+                .as_ref()
+                .unwrap()
+                .decision
+                .library_inspection()
+                .unwrap()
+                .1
+                .to_vec();
+            assert_eq!(looked.len(), 3);
+            assert_eq!(looked, branch.library_top(player, 3));
+            assert_ne!(
+                looked, before,
+                "the unknown prefix is sampled, not secretly pinned"
+            );
+            assert!(looked.iter().all(|card| branch.state.zones.contains(
+                *card,
+                ZoneType::Library,
+                player
+            )));
+            let observation = crate::agent::observation::Observation::for_player(&branch, viewer);
+            assert!(!observation
+                .agent_cards
+                .iter()
+                .chain(&observation.opponent_cards)
+                .any(|card| card.zone == ZoneType::Library));
+            let action = branch.action_space().unwrap().actions[0].clone();
+            checked_command(&mut branch, action);
+        }
+    }
+}
+
+/// Equal current choices can retain different work. These are constructed
+/// positions, serialized for the stateless Python encoder/model witness below.
+#[test]
+fn frozen_operation_obligations_admit_their_implied_completion_events() {
+    use crate::agent::observation::Observation;
+    use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
+    use crate::flow::decision::EffectFrame;
+    for effect in [
+        Effect::Scry { count: 1 },
+        Effect::Surveil { count: 1 },
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate: CardPredicate::basic_land(),
+            min: 0,
+            max: EffectValue::Fixed(1),
+            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            if_declined: vec![],
+        },
+    ] {
+        let player = PlayerId(0);
+        let (mut game, _, _) = fixture(player);
+        game.run_frame(EffectFrame::new(player, vec![effect]));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let observation = Observation::for_player(&game, player);
+        for version in 1..=8 {
+            encode(
+                &observation,
+                &ObservationEncoderConfig {
+                    policy_input_version: version,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn retained_execution_inputs_separate_results_iteration_and_completion() {
+    use crate::agent::observation::Observation;
+    use crate::agent::observation_encoder::{
+        encode, ObservationEncodeError, ObservationEncoderConfig,
+    };
+    use crate::flow::decision::{
+        Decision, EffectFrame, FrameCompletion, ResolutionTarget, SuspendedResolution,
+        TargetIteration,
+    };
+    use crate::flow::proposed_event::{
+        CounterProvenance, EventBinding, EventCause, ProposedEvent, TokenDefinition, ZoneEntry,
+    };
+    let player = PlayerId(0);
+    let (base, first, second) = fixture(player);
+    let mut evidence = Vec::new();
+    for case in [
+        "selected",
+        "iteration",
+        "completion",
+        "counter_cause",
+        "token_count",
+        "departed_source",
+    ] {
+        let mut observations = Vec::new();
+        let mut inputs = Vec::new();
+        let mut private = Vec::new();
+        for choice in 0..2 {
+            let mut game = base.clone();
+            let subject = if choice == 0 { first } else { second };
+            let mut frame = EffectFrame::new(player, vec![Effect::gain_life(1)]);
+            match case {
+                "selected" => {
+                    frame
+                        .selected
+                        .push(game.permanent_object_ref(subject).unwrap());
+                    frame.queue = vec![Effect::Tap {
+                        what: ObjectSelector::Selected,
+                    }]
+                    .into();
+                }
+                "iteration" => {
+                    frame.iteration = Some(TargetIteration {
+                        remaining: vec![ResolutionTarget {
+                            target: Target::Permanent(subject),
+                            requirement: 0,
+                            legal: true,
+                        }]
+                        .into(),
+                        effects: vec![Effect::Tap {
+                            what: ObjectSelector::Targets(TargetSpec::Creature),
+                        }],
+                    })
+                }
+                "completion" => {
+                    frame.completion = FrameCompletion::Event {
+                        event: if choice == 0 {
+                            GameEvent::Scried { player }
+                        } else {
+                            GameEvent::Surveilled { player }
+                        },
+                        frame: Box::new(EffectFrame::new(player, vec![])),
+                    }
+                }
+                "counter_cause" => {
+                    frame.batch = Some(game.event_batch(vec![ProposedEvent::CounterChange {
+                        provenance: CounterProvenance::new(if choice == 0 {
+                            EventCause::Effect
+                        } else {
+                            EventCause::TurnAction
+                        }),
+                        target: game.permanent_object_ref(first).unwrap(),
+                        kind: CounterKind::PlusOnePlusOne,
+                        delta: 1,
+                        by: Some(player),
+                    }]))
+                }
+                "token_count" => {
+                    let mut batch = game.event_batch(vec![ProposedEvent::CreateTokens {
+                        definition: Box::new(TokenDefinition::Registered("Food".into())),
+                        controller: player,
+                        count: choice + 1,
+                        entry: ZoneEntry::default(),
+                    }]);
+                    batch.binding = EventBinding::Created { attacking: false };
+                    frame.batch = Some(batch);
+                }
+                "departed_source" => {
+                    let card = game.state.permanents[first].as_ref().unwrap().card;
+                    let source = game.permanent_object_ref(first).unwrap();
+                    game.move_card(card, ZoneType::Graveyard);
+                    let mut lki = game.object_lki(source).unwrap().clone();
+                    // Two possible histories with the same present board and
+                    // offers, but a consequential captured power of 2 versus 3.
+                    lki.power += choice;
+                    game.record_object_lki(lki);
+                    frame.source = Some(card);
+                    frame.source_ref = Some(source);
+                    frame.queue = vec![Effect::GainLife {
+                        amount: EffectValue::SourcePower,
+                    }]
+                    .into();
+                    frame.completion = FrameCompletion::Event {
+                        event: GameEvent::Scried { player },
+                        frame: Box::new(EffectFrame::new(player, vec![])),
+                    };
+                }
+                _ => unreachable!(),
+            }
+            game.state.suspended_decision = Some(SuspendedResolution {
+                frame,
+                decision: Decision::Modal {
+                    player,
+                    modes: vec![vec![], vec![Effect::gain_life(2)]],
+                },
+            });
+            game.publish_action_space(game.suspended_decision_action_space().unwrap());
+            let obs = Observation::for_player(&game, player);
+            let config = ObservationEncoderConfig {
+                policy_input_version: 8,
+                ..Default::default()
+            };
+            let input = encode(&obs, &config).unwrap();
+            let used = input
+                .facts
+                .chunks_exact(12)
+                .filter(|row| row[11] == 1.0)
+                .count();
+            let relations = input
+                .relations
+                .chunks_exact(49)
+                .filter(|row| row[31] == 1.0)
+                .count();
+            assert!(matches!(
+                encode(
+                    &obs,
+                    &ObservationEncoderConfig {
+                        max_facts: 1,
+                        ..config
+                    }
+                ),
+                Err(ObservationEncodeError::Capacity { field: "facts", .. })
+            ));
+            {
+                for version in 1..8 {
+                    assert!(matches!(
+                        encode(
+                            &obs,
+                            &ObservationEncoderConfig {
+                                policy_input_version: version,
+                                ..config
+                            }
+                        ),
+                        Err(ObservationEncodeError::UnsupportedExecutionInput(_))
+                    ));
+                }
+            }
+            let capture = game.capture_decision(player, 0).unwrap();
+            evidence.push(serde_json::json!({"case":case,"choice":choice,"capture":capture,
+                "facts": &input.facts[..used * 12], "relations": &input.relations[..relations * 49]}));
+            assert_eq!(
+                game.clone().capture_decision(player, 0).unwrap().digest,
+                capture.digest
+            );
+            private.push(game.continuation_frames(PlayerId(1)));
+            observations.push(obs.to_json());
+            inputs.push(input);
+        }
+        assert_eq!(
+            observations[0], observations[1],
+            "same present offers: {case}"
+        );
+        assert_eq!(
+            private[0], private[1],
+            "opponent cannot inspect private execution: {case}"
+        );
+        assert!(
+            inputs[0].facts != inputs[1].facts || inputs[0].relations != inputs[1].relations,
+            "retained distinction: {case}"
+        );
+    }
+    if let Ok(path) = std::env::var("RETAINED_EXECUTION_EVIDENCE") {
+        std::fs::write(path, serde_json::to_string(&evidence).unwrap()).unwrap();
     }
 }

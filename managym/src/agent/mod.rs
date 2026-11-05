@@ -3,6 +3,7 @@ pub mod action;
 pub mod behavior_tracker;
 pub mod continuation;
 pub mod env;
+pub(crate) mod execution;
 pub mod observation;
 pub mod observation_encoder;
 pub mod observation_json;

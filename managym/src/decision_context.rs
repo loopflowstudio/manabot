@@ -241,6 +241,7 @@ impl Game {
         let player = space.actions.first().map(|action| action.player())?;
         let actor = space.player?;
         let mut view = DecisionContextView {
+            pending: Vec::new(),
             actor: actor.0 as u8,
             stage: "priority".into(),
             instruction: "Choose an explicit legal offer to commit one decision.".into(),
@@ -256,6 +257,10 @@ impl Game {
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
+        view.pending = frames
+            .iter()
+            .flat_map(|frame| frame.execution_summary.iter().cloned())
+            .collect();
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames

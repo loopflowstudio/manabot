@@ -166,6 +166,19 @@ impl Game {
             }
             ids.extend(frame.context.and_then(|r| r.definition));
             ids.extend(frame.remembered.iter().filter_map(|r| r.definition));
+            ids.extend(
+                frame
+                    .execution_references
+                    .iter()
+                    .filter_map(|r| r.definition),
+            );
+            ids.extend(frame.inherited_from.and_then(|r| r.definition));
+            ids.extend(frame.program.iter().chain(&frame.execution).filter_map(
+                |&(kind, value)| {
+                    (kind == crate::cards::tokens::TokenKind::DefinitionRef as u16)
+                        .then_some(value as u32)
+                },
+            ));
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
         let mut definitions = BTreeMap::new();

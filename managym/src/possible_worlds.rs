@@ -601,7 +601,6 @@ impl HiddenHandConstraints {
             branch.shuffle_private_library(opponent, &mut rng);
         }
         branch.shuffle_private_library(self.viewer, &mut rng);
-        branch.repin_revealed_library_cards();
         if !branch.refresh_hidden_selections(
             self.viewer,
             &mut rng,
@@ -609,6 +608,8 @@ impl HiddenHandConstraints {
         ) {
             return Err(MaterializeError::InconsistentWorld);
         }
+
+        branch.repin_revealed_library_cards();
 
         // Fail closed: the realized hand name-multiset must equal the world.
         let hand = branch.state.zones.zone_cards(ZoneType::Hand, opponent);
@@ -650,6 +651,7 @@ impl HiddenHandConstraints {
                     // public and pinned; the retained alternatives stay valid.
                 }
                 ActionSpaceKind::Learn
+                | ActionSpaceKind::Scry
                 | ActionSpaceKind::LookAndSelect
                 | ActionSpaceKind::Discard => {
                     let refreshed = branch

@@ -935,13 +935,10 @@ pub enum Effect {
         count: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
-        /// "then attach this Equipment to it" (one token).
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        attach_source: bool,
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
-    AttachSourceTo { target: TargetSpec },
+    AttachSourceTo { what: ObjectSelector },
     /// "Distribute `count` [kind] counters among any number of tapped
     /// creatures your opponents control": the controller places them one
     /// at a time, choosing among the eligible creatures at each placement.
@@ -1333,6 +1330,7 @@ impl Effect {
             | Effect::DealDamage { what, .. }
             | Effect::CounterSpell { what }
             | Effect::CounterAbility { what }
+            | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }
             | Effect::Discard { what, .. } => vec![what],
             Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
@@ -1431,7 +1429,6 @@ impl Effect {
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
-            | Effect::AttachSourceTo { target }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
@@ -1519,7 +1516,8 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
-            | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
+            | Effect::TargetCreaturesDealPowerDamageToLastTarget
+            | Effect::AttachSourceTo { .. } => None,
         }
     }
 
@@ -1646,7 +1644,6 @@ impl Effect {
             token_name: token_name.into(),
             count: count.into(),
             tapped_and_attacking: false,
-            attach_source: false,
         }
     }
 

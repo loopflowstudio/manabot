@@ -1203,7 +1203,7 @@ fn avatar_destiny() -> CardDefinition {
             ],
         }],
         spell_effects: vec![Effect::AttachSourceTo {
-            target: TargetSpec::CreatureYouControl,
+            what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
         }],
         targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
         text_box: text_box.into(),
@@ -3676,7 +3676,7 @@ fn fire_navy_trebuchet() -> CardDefinition {
                     token_name: "Ballistic Boulder".into(),
                     count: EffectValue::Fixed(1),
                     tapped_and_attacking: true,
-                    attach_source: false,
+
                 },
                 Effect::CreateDelayedTrigger {
                     remember: Some(ObjectSelector::CreatedThisWay),
@@ -4275,7 +4275,7 @@ fn glider_staff() -> CardDefinition {
             sorcery_timing: true,
             mana_cost: ManaCost::parse("{2}"),
             effects: vec![Effect::AttachSourceTo {
-                target: TargetSpec::CreatureYouControl,
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
             }],
             ..Default::default()
         }],
@@ -4756,7 +4756,7 @@ fn honest_work() -> CardDefinition {
             ],
         }],
         spell_effects: vec![Effect::AttachSourceTo {
-            target: TargetSpec::CreatureOpponentControls,
+            what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
         }],
         targeting: vec![TargetRequirement::one(TargetSpec::CreatureOpponentControls)],
         text_box: text_box.into(),
@@ -5557,18 +5557,23 @@ fn kyoshi_battle_fan() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: EffectValue::Fixed(1),
-                tapped_and_attacking: false,
-                attach_source: true,
-            }],
+            effects: vec![
+                Effect::create_tokens("Ally", 1),
+                Effect::SelectCards {
+                    from: ObjectSelector::CreatedThisWay,
+                    predicate: CardPredicate::creature(),
+                    min: 1,
+                    max: EffectValue::Fixed(1),
+                    effects: vec![Effect::AttachSourceTo { what: ObjectSelector::Selected }],
+                    if_declined: vec![],
+                },
+            ],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             sorcery_timing: true,
             mana_cost: ManaCost::parse("{2}"),
             effects: vec![Effect::AttachSourceTo {
-                target: TargetSpec::CreatureYouControl,
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
             }],
             ..Default::default()
         }],
@@ -6143,7 +6148,7 @@ fn meteor_sword() -> CardDefinition {
             sorcery_timing: true,
             mana_cost: ManaCost::parse("{3}"),
             effects: vec![Effect::AttachSourceTo {
-                target: TargetSpec::CreatureYouControl,
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
             }],
             ..Default::default()
         }],
@@ -6737,7 +6742,7 @@ fn path_to_redemption() -> CardDefinition {
             ..Default::default()
         }],
         spell_effects: vec![Effect::AttachSourceTo {
-            target: TargetSpec::Creature,
+            what: ObjectSelector::Target(TargetSpec::Creature),
         }],
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         statics: vec![StaticAbility::Restriction(StaticRestriction {
@@ -8279,7 +8284,7 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                 token_name: "Ally".into(),
                 count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
-                attach_source: false,
+
             }],
         }],
         statics: vec![StaticAbility::CharacteristicPower(
@@ -8366,7 +8371,7 @@ fn swampsnare_trap() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         subtypes: vec!["Aura".into()],
         spell_effects: vec![Effect::AttachSourceTo {
-            target: TargetSpec::Creature,
+            what: ObjectSelector::Target(TargetSpec::Creature),
         }],
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         statics: vec![
@@ -9586,7 +9591,7 @@ fn trusty_boomerang() -> CardDefinition {
             sorcery_timing: true,
             mana_cost: ManaCost::parse("{1}"),
             effects: vec![Effect::AttachSourceTo {
-                target: TargetSpec::CreatureYouControl,
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
             }],
             ..Default::default()
         }],
@@ -9695,7 +9700,7 @@ fn twin_blades() -> CardDefinition {
             },
             effects: vec![
                 Effect::AttachSourceTo {
-                    target: TargetSpec::CreatureYouControl,
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
                 },
                 Effect::until_end_of_turn(
                     ObjectSelector::Target(TargetSpec::CreatureYouControl),
@@ -9707,7 +9712,7 @@ fn twin_blades() -> CardDefinition {
             sorcery_timing: true,
             mana_cost: ManaCost::parse("{2}"),
             effects: vec![Effect::AttachSourceTo {
-                target: TargetSpec::CreatureYouControl,
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
             }],
             ..Default::default()
         }],
@@ -10388,7 +10393,7 @@ fn watery_grasp() -> CardDefinition {
             ..Default::default()
         }],
         spell_effects: vec![Effect::AttachSourceTo {
-            target: TargetSpec::Creature,
+            what: ObjectSelector::Target(TargetSpec::Creature),
         }],
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         statics: vec![StaticAbility::Restriction(StaticRestriction {

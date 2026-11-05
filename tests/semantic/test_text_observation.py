@@ -512,6 +512,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",
+        "colors": "colors set to",
+        "keyword_counter_timestamps": "keyword counter timestamp order",
     },
     managym.Card: {
         "id": "the card's alias",
@@ -581,6 +583,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "effects": "Effect:",
     },
     managym.ContinuousEffect: {
+        "program": "complete rules payload rendered by description",
+        "description": "complete modification description",
         "modification": "the effect phrase",
         "power": "+P/+T or base power/toughness",
         "toughness": "+P/+T or base power/toughness",

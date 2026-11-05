@@ -60,22 +60,106 @@ mitigation, final result and remaining limitation. Identify exact tested heads;
 earlier focused passes do not validate later edits. Keep residual risks visible
 and scoped rather than treating the full suite as proof of all interactions.
 
-Current correction (2026-11-04): `91517292c` repairs completed private captures;
-`d77bc8676` integrates the published v8 layer schema. Eleven focused hidden-selection
-tests cover both viewers, all six capture lifetimes, aliases, moved captures,
-privacy, expired control, departed incarnations and selections from Remembered. These establish execution/
-representation properties of binding ownership, not successor policy completeness.
-The final alias correction over `d77bc8676` additionally updates selections from
-Remembered and their legal offers; the restored Command witness passes in both
-samplers. Five focused Python checks pass after atomic extension rebuild.
-The plan's CR 614.16/event-creation correction is a new prerequisite for complete
-retained-payload separation. No new engine timing, model-cost or learning-efficacy
-claim is made, and the inherited MTG-244 regression remains unresolved evidence.
+## Implementation measurements — 2026-11-04
 
-Reconciliation (2026-11-04, `660021431`): two learning-facing risks were found without
-new engine timing. Frozen obligation codes 5/6/7 now read 28 on all input versions,
-unadmitted: open, see the plan. The heuristic anchor stopped cracking fetch lands, a
-silent evaluation distortion: fixed, with the regression passing on `main`. Add to the
-review summary: paired frozen-code witnesses per version, the Capacity overflow rate
-under #426 recovery, and the net cost against main. Sequencing: measure only after
-syncing #427's repair, because `1930146b0` carries the reported regression.
+Raw evidence: `scratch/mtg-241-risk-evidence.tar.gz` (committed gzipped tar). The archive contains
+all four timing rounds, allocation/capacity/model samples, harness, exact optimized
+source delta/new files, base revisions and binary hashes. The pre-optimization
+binary hash and measured tracked delta are retained; its earlier new-file snapshot
+predates the final projection join/summary additions, so only the optimized source
+snapshot is a complete reconstruction. Do not mistake either diagnostic for CI.
+
+The common harness is `managym/examples/bench_execution.rs`: 32 seeded ordinary
+games capped at 500 decisions; two search seeds, six decisions each, two worlds,
+one rollout, 256-step cap. Every leg runs the same 7,300 decisions (four capped
+games), with 36 simulations and ten cap hits per search seed. Legal action counts,
+winning choices and full search-score digests match across all three revisions.
+Three sequential samples rotate the execution order; no parallel measured work.
+Reference is `ea316ff14bc6376dcc302b65d7c9c9330cd512e9`; published layers is
+`beaacaa198acddb4162e5081cd570b1ec133ba05`; combined source is based on
+`457a779facf27b24eb74afec4e8a2edaea22f234` plus the archived delta.
+
+Final-source medians (milliseconds on one runner):
+
+| Revision | Ordinary steps | Search total | Worst sampled reply |
+| --- | ---: | ---: | ---: |
+| Reference | 238.799 | 255.758 | 36.954 |
+| Published layers | 304.753 | 332.923 | 49.815 |
+| Combined | 276.501 | 290.905 | 43.599 |
+
+Thus inherited layers costs +27.6% steps / +30.2% search over reference; combined
+is +15.8% / +13.7%, while execution's incremental comparison is −9.3% / −12.6%
+against layers. Three short samples are noisy and not tail quantiles. The net
+regression is unresolved against the standing 10% budget. No baseline adoption,
+accepted cost or claim of readiness follows. Full same-runner Engine Budget is
+gate's acceptance measure; this work does not supersede the sibling speed repair.
+
+At 32 fixed fork/projection boundaries (two with retained execution), reference /
+layers / combined projection allocations are 3,092 / 3,384 / 3,762, allocating
+805,028 / 886,388 / 926,275 bytes. Forks allocate 2,451 / 2,452 / 2,452 times and
+971,706 / 1,035,338 / 1,036,386 bytes. This isolates the small retained-storage
+increment from the larger inherited clone cost; the corpus has limited nested
+coverage. Reusing the rules-token writer, borrowing static serializer names and
+hashing closing names without a temporary String reduces combined projection
+allocations from 3,858 to 3,762. Before/after combined step/search medians are
+278.044/293.418 → 274.980/287.684 ms, but reference also moved 246.155/263.759 →
+238.757/258.571, so allocation reduction is established; timing improvement is
+not statistically established. The LKI round left sampled allocations unchanged but produced 257.569/274.550
+(reference), 400.459/385.816 (layers) and 314.513/336.055 ms (combined), a large
+shift across every revision. The final admission repair produces the table above.
+All rounds are retained, not selected for a favorable result. The learning
+catalog's exact hash is unchanged.
+
+## Learning and retained-state evidence
+
+Six same-offer native pairs distinguish selected object, iteration progress,
+completion event, counter cause, logical token count and departed-source power. Native/Python arrays and
+LLM text agree, inverse-viewer frames match, forks preserve the capture, old inputs
+reject unrepresentable state, and low capacity produces typed Capacity. Fixed
+nonzero fact readout weights exercise real rows/typed_pool/typed_gru forwards and
+gradients without fitting weights. The completion-event pair exposed a missing
+controller-holder join: the critic separated states while action logits did not.
+The explicit execution-holder edge repairs the original five pairs for all three
+encoders. The final audit found SourcePower reads departed LKI beyond a definition
+join; exact referenced LKI now reaches v8 and the sixth model pair separates it.
+Fresh fact outputs remain zero by design; these checks establish representability,
+not learned use, convergence or strength.
+
+The six-copy nested entry fixture originally used 181/475/512/549/586/623/660 facts
+across seven unique pauses (4/7 overflow at default 512). Ordered replacement
+records, omission of empty batch fields and default entry terms reduce that to
+157/344/373/402/431/460/489 (0/7 overflow), retaining all choices and payloads.
+Relation peak stays 12; no width/capacity change. Under #426 recovery, overflow
+discards games and biases sampling; this small constructed corpus is not an
+estimate of general workload frequency or proof arbitrary nesting fits.
+
+A separate fixed twelve-state forward probe uses one CPU thread, hidden width 16,
+one warm-up and seven alternating full/ablated samples per model. It removes only
+execution facts/reference edges in the ablation, with identical v8 shapes and
+weights: 2,500,416 input bytes, 52–106 occupied facts and 5–7 relation rows per
+state. Full versus ablated batch medians are 6.870/5.861 ms (rows), 9.201/7.642 ms
+(typed_pool), 9.356/7.807 ms (typed_gru). The extra 1.0–1.6 ms buys the distinguishing
+information; it is not a frozen-model or training-throughput comparison. Compact
+projection mitigates active token growth but padded input memory is unchanged.
+No optimizer or training campaign ran.
+
+Twelve hidden-selection witnesses cover both samplers/viewers, six capture
+lifetimes, aliases, moved captures, exact incarnations and inspected-library
+partitions. Real Leaves/Caradora/Doubling Season prove 3-versus-4 ordering and
+cause-sensitive applicability; real doubled token attachment/attack/sacrifice
+and copied-entry choices preserve one suffix/finalization. Actual linked-entry
+mana-cost Commands/forks prove once-only payment. Academy pending-resolution
+reconnect retains the same offers and summaries, rejects a duplicate commit,
+and refreshed authored-match parity covers live/headless/replay. This is retained
+session recovery, not process-crash durability.
+
+Check: focused debug rules/projection/hidden-selection and Python model/text/
+reconnect/trigger-order checks pass; final-head affected suites, admission and
+full budget remain gate-owned. Residuals are net reference cost, general nested
+capacity frequency and whether training learns to use the represented differences.
+
+Frozen-input mitigation: a real Fabled Passage witness found that preserving the
+legacy code alone did not preserve admission: the added LibrarySearched completion
+was still rejected. Matching search/Scry/Surveil obligations now imply their
+completion event on frozen inputs; novel same-offer saved events remain v8-only.
+The native check covers v1–v8 and the real fetch path checks both encoders.

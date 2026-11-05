@@ -68,6 +68,7 @@ impl Game {
             self.determinize_zones(perspective, sample_seed);
             let mut rng = ChaCha8Rng::seed_from_u64(mix_seed(sample_seed, 241));
             if self.refresh_hidden_selections(perspective, &mut rng, &requirements) {
+                self.repin_revealed_library_cards();
                 self.refresh_sampled_decision(perspective);
                 return Ok(());
             }
@@ -112,8 +113,6 @@ impl Game {
             }
         }
         self.shuffle_private_library(perspective, &mut rng);
-
-        self.repin_revealed_library_cards();
     }
 
     fn refresh_sampled_decision(&mut self, perspective: PlayerId) {
@@ -130,6 +129,10 @@ impl Game {
                         && matches!(
                             suspended.decision,
                             Decision::SelectCards { .. }
+                                | Decision::Scry { .. }
+                                | Decision::Surveil { .. }
+                                | Decision::LookAndSelect { .. }
+                                | Decision::OrderLibrary { .. }
                                 | Decision::Learn { .. }
                                 | Decision::Discard { .. }
                                 | Decision::SearchDistinctLands { .. }

@@ -298,18 +298,32 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
-        let card_id = self.prepare_token(name, controller)?;
-        self.move_card_with_entry(
-            card_id,
-            ZoneType::Battlefield,
-            ZoneEntry {
+        let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
+            definition: Box::new(crate::flow::proposed_event::TokenDefinition::Registered(
+                name.into(),
+            )),
+            controller,
+            count: 1,
+            entry: ZoneEntry {
                 tapped: tapped_and_attacking,
-                ..ZoneEntry::default()
+                ..Default::default()
             },
+        }]);
+        assert!(
+            matches!(
+                self.advance_event_batch(&mut batch),
+                crate::flow::proposed_event::BatchProgress::Complete
+            ),
+            "token creation requiring a choice needs a retained caller"
         );
-
-        self.finish_created_token(card_id, tapped_and_attacking);
-        self.state.card_to_permanent[card_id]
+        for object in batch.results.iter().filter_map(|result| result.moved) {
+            self.finish_created_token(CardId::from(object.entity), tapped_and_attacking);
+        }
+        batch
+            .results
+            .iter()
+            .filter_map(|result| result.moved)
+            .find_map(|object| self.lookup_current_permanent(object).ok())
     }
 
     pub(crate) fn prepare_token(&mut self, name: &str, controller: PlayerId) -> Option<CardId> {
@@ -346,11 +360,10 @@ impl Game {
     /// token's `CopyEffect` records both and the definition at the root.
     pub(crate) fn prepare_token_copy(
         &mut self,
-        source: CardId,
+        mut copy: Card,
         controller: PlayerId,
         exceptions: Vec<Modification>,
     ) -> CardId {
-        let mut copy = self.state.cards[source].clone();
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
         // Any write detaches the shared definition (`DerefMut`), so a copy

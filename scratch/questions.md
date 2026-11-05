@@ -16,7 +16,7 @@ stable codes; public-result selection before hidden-zone migration; reconcile
 MTG-244's published v8 at PR #427 (`1930146b0`) without assigning a competing
 layout. The plan retains the exact contracts and materialization constraints. Actual linked-entry
 payment suspension and the migrated hidden selections are now proved. The plan
-records the remaining hidden-state audit, full projection and risk acceptance.
+records the completed hidden-state audit/projection and remaining gate acceptance.
 
 Sync resolution (2026-11-04): keep these MTG-241 decisions as the active
 checkout context. Updated incoming MTG-213 v9 evidence and prospective v10
@@ -29,17 +29,18 @@ Ownership correction (2026-11-04): the frame-only sampling assumption is disprov
 by a completed selection captured into a delayed trigger. Both samplers retain a
 live reference in the wrong zone. The plan records the reproducer, revised binding
 lifetime and required deletion cut. The active implementation repairs those lifetimes with owned bindings and one
-joint assignment; successor projection/admission remains open. No human answer is
+joint assignment; successor projection/admission is implemented in published v8. No human answer is
 required. PR #427's newly reported performance
 regression belongs to MTG-244, while combined-head risk acceptance remains open
 here. Exact shared evidence and the published schema are recorded in the plan.
 
 Event-model correction (2026-11-04): pinned CR 614.16 requires effect-versus-cost/
-turn-action provenance and replacement-produced eligibility. Current counter
-proposals lack that fact, and token creation allocates before any logical creation
+turn-action provenance and replacement-produced eligibility. The original counter
+proposals lacked that fact, and token creation allocated before logical creation
 replacement. The plan records the revised deletion cut; no partial Doubling Season
 definition or successor projection was committed on the insufficient model.
-MTG-244 v8 is integrated at `d77bc8676`; full execution projection remains open.
+MTG-244 v8 is integrated at `d77bc8676`; the later implementation adds causal
+provenance, retained creation and complete execution projection.
 
 Frozen obligation codes (2026-11-04, reversible; recorded by the headless realign
 pass): codes 5/6/7 were live on `main` and now read 28 on every input version, silently.
@@ -48,4 +49,18 @@ successor alone writes 28, and 27/29 are rejected on older versions. Alternative
 review: (a) reject 28 on old versions, which makes fresh v6 unplayable unless the
 fresh default moves; (b) accept the remap as a scoped change, which contradicts
 "preserve frozen input meanings" and needs Jack Heart's explicit approval. The
-[plan](mtg-241-composable-rules-execution.md) records the evidence. Not yet implemented.
+[plan](mtg-241-composable-rules-execution.md) records the evidence. Implemented with per-version witnesses; v1–v7 retain 5/6/7 and v8 alone uses 28.
+
+Projection decision (2026-11-04): reuse published v8 fact-kind 14 for a separate
+retained execution occurrence (ordinal reset), with relation kind 10 for visible
+reference slots; no width/default change. The paired completion-event witness
+exposed a model-routing gap: fact programs reached the critic but focus-free
+logits had no join to their player holder. Each execution occurrence now joins
+its controller explicitly before acceptance continues. The fixed-readout test
+uses nonzero fact weights (fresh output is deliberately zero), without training.
+
+Frozen admission correction (2026-11-04): Fabled Passage preserved code 6 but
+its retained LibrarySearched completion still rejected v6. Completion events
+implied by the matching legacy obligation/player now retain admission; unrelated
+saved events under identical Modal offers require v8. Both encoders agree for
+the real fetch search on v1–v8.

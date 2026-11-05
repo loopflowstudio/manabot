@@ -13457,27 +13457,18 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
 /// Chapter II is one placement event even when each target needs an ordering choice.
 #[test]
 fn leaves_from_the_vine_counter_choices_keep_both_targets_in_one_event() {
-    use managym::state::{card::ReplacementEffect, predicate::CardPredicate};
-
-    let mut s = five_color_setup(&["Leaves from the Vine", "Gray Ogre"]);
+    let mut s = five_color_setup(&[
+        "Leaves from the Vine", "Gray Ogre", "Caradora, Heart of Alacria", "Doubling Season",
+    ]);
     let creatures = [
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
     ];
     enter_saga(&mut s, "Leaves from the Vine");
-    // Construct only the replacement drivers; the chapter, its targets and
-    // its counter instruction are the registered Saga's real definition.
-    for (name, multiplier, additional) in [("Mountain", 1, 1), ("Island", 2, 0)] {
-        let source = s.force_permanent_on_battlefield(0, name);
-        let card = card_of(&s, source);
-        s.game_mut().state.cards[card].replacement_effects =
-            vec![ReplacementEffect::ModifyCounters {
-                kind: Some(CounterKind::PlusOnePlusOne),
-                predicate: CardPredicate::creature(),
-                multiplier,
-                additional,
-            }];
-    }
+    // Sources enter after chapter I, so this witness isolates the real chapter
+    // II's simultaneous placement from Doubling Season's entry-lore behavior.
+    s.force_permanent_on_battlefield(0, "Caradora, Heart of Alacria");
+    s.force_permanent_on_battlefield(0, "Doubling Season");
     next_main_phase(&mut s);
     for creature in creatures {
         assert!(s.choose_target(Target::Permanent(creature)));
@@ -15606,4 +15597,53 @@ fn planetarium_casts_after_joo_dee_surveillance_finishes() {
     select_card(&mut s, top[1]);
     settle(&mut s);
     assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Battlefield));
+}
+
+#[test]
+fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice() {
+    let mut s = five_color_setup(&["Doubling Season", "Kyoshi Battle Fan"]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    let fan_card = cast(&mut s, "Kyoshi Battle Fan");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let fan = s.game().state.card_to_permanent[fan_card].unwrap();
+    let allies = s.battlefield_permanents_named(0, "Ally");
+    assert_eq!(allies.len(), 2);
+    assert_eq!(permanent(&s, fan).attached_to, None);
+    let root = s.game().clone();
+    for ally in allies {
+        let mut branch = root.clone();
+        let card = branch.state.permanents[ally].as_ref().unwrap().card;
+        let action = branch.action_space().unwrap().actions.iter().position(|action|
+            matches!(action, Action::SelectCard { card: candidate, .. } if *candidate == card)
+        ).unwrap();
+        let frame = branch.semantic_decision_frame().unwrap();
+        let command = Command {
+            command_id: format!("fan-attach-{}", card.0),
+            expected_revision: frame.revision, offer_id: frame.offers[action].id.0,
+            answers: vec![], object_preconditions: vec![],
+        };
+        branch.execute_semantic_command(&command).unwrap();
+        assert_eq!(branch.state.permanents[fan].as_ref().unwrap().attached_to, branch.permanent_object_ref(ally));
+        assert_eq!(branch.characteristics(ally).pt(), (2, 1));
+    }
+    assert_eq!(witness(s.game()), witness(&root));
+}
+
+#[test]
+fn doubled_trebuchet_tokens_keep_attack_terms_and_both_delayed_sacrifices() {
+    let mut s = five_color_setup(&["Doubling Season", "Fire Navy Trebuchet", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    s.force_permanent_on_battlefield(0, "Fire Navy Trebuchet");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    attack_and_settle(&mut s, &[ogre], None);
+    let tokens = s.battlefield_permanents_named(0, "Ballistic Boulder");
+    assert_eq!(tokens.len(), 2);
+    for token in &tokens {
+        assert!(permanent(&s, *token).tapped && permanent(&s, *token).attacking);
+        assert!(s.game().state.delayed_triggers[0].remembered.iter().any(|binding|
+            Some(binding.object) == s.game().permanent_object_ref(*token)));
+    }
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, "Ballistic Boulder").is_empty());
 }

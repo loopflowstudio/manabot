@@ -874,7 +874,7 @@ fn effect_witnesses() -> Vec<Effect> {
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
         },
         Effect::AttachSourceTo {
-            target: TargetSpec::CreatureYouControl,
+            what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
         },
         Effect::DistributeCountersToTappedOpponentCreatures {
             kind: CounterKind::Stun,
@@ -2694,6 +2694,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        execution => [Fact(FactKind::ContinuationProgram)],
+        execution_references => [Rows("v8 retained execution reference slots, relation kind 10")],
+        execution_description => [Definition],
+        execution_summary => [Definition],
+        execution_requires_v8 => [Rows("shared version admission before encoding")],
+        legacy_decision => [Rows("v1-v7 obligation class in relation column 28; v8 uses shared selection")],
         program => [Fact(FactKind::ContinuationProgram)],
         program_description => [Definition],
         remembered => [Rows("v5 captured object reference relations, kind 8")],
@@ -4320,7 +4326,7 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 ..Default::default()
             };
             let mut rows = vec![0.0; 64 * RELATION_DIM_V5];
-            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
+            managym::agent::continuation::encode_into(&[frame], 0, 8, &Default::default(), &mut rows)
                 .unwrap();
             assert_eq!(rows[28], 6.0, "event code stays on header");
             assert_eq!(rows[RELATION_DIM_V5], 9.0);
@@ -4331,4 +4337,21 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
             );
         }
     }
+}
+
+/// Replacement definitions reach the same catalog as spell programs; these
+/// two cards differ in both causal applicability and transformation, not text.
+#[test]
+fn counter_and_creation_replacements_reach_learning_tokens() {
+    let doubling = tokens_of(&card_definition("Doubling Season"));
+    let caradora = tokens_of(&card_definition("Caradora, Heart of Alacria"));
+    for variant in ["ReplacementEffect::ModifyCounters", "ReplacementEffect::MultiplyTokens"] {
+        assert!(doubling.contains(&(TokenKind::Variant, name_value(variant))));
+    }
+    assert!(caradora.contains(&(TokenKind::Variant, name_value("ReplacementEffect::ModifyCounters"))));
+    assert!(caradora.contains(&(TokenKind::Text, name_value("Vehicle"))));
+    let mut definition = card_definition("Doubling Season");
+    let managym::state::card::ReplacementEffect::ModifyCounters { effects_only, .. } = &mut definition.replacement_effects[1] else { panic!("counter rule") };
+    *effects_only = false;
+    assert_ne!(doubling, tokens_of(&definition));
 }

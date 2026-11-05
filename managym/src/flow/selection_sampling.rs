@@ -148,6 +148,20 @@ impl Game {
                 fixed.push(binding.object);
             }
         });
+        if let Some(suspended) = &self.state.suspended_decision {
+            for (owner, cards) in suspended
+                .decisions()
+                .filter_map(Decision::library_inspection)
+            {
+                if self.shares_information(viewer, owner) {
+                    fixed.extend(
+                        cards
+                            .iter()
+                            .filter_map(|card| self.current_object_ref(*card)),
+                    );
+                }
+            }
+        }
         fixed.sort_unstable();
         fixed.dedup();
         fixed
@@ -391,6 +405,57 @@ impl Game {
                 }
             }
         }
+        if let Some(suspended) = &self.state.suspended_decision {
+            for decision in suspended.decisions() {
+                let Some((owner, cards)) = decision.library_inspection() else {
+                    continue;
+                };
+                let source = Some(ZoneSelection {
+                    owner,
+                    zone: ZoneType::Library,
+                    predicate: Default::default(),
+                });
+                let objects: Vec<_> = cards
+                    .iter()
+                    .filter_map(|card| self.current_object_ref(*card))
+                    .collect();
+                retain(&source, &objects);
+                if let Decision::LookAndSelect {
+                    predicate,
+                    min_select,
+                    selected,
+                    ..
+                } = decision
+                {
+                    let matches = |object: &&ObjectRef| {
+                        self.card_matches_predicate(object.entity.into(), predicate)
+                    };
+                    let known_matching = objects
+                        .iter()
+                        .filter(matches)
+                        .filter(|object| public.contains(object))
+                        .count();
+                    let needed = min_select
+                        .saturating_sub(*selected)
+                        .saturating_sub(known_matching);
+                    let required: Vec<_> = objects
+                        .iter()
+                        .filter(matches)
+                        .filter(|object| !public.contains(object))
+                        .take(needed)
+                        .copied()
+                        .collect();
+                    retain(
+                        &Some(ZoneSelection {
+                            owner,
+                            zone: ZoneType::Library,
+                            predicate: predicate.clone(),
+                        }),
+                        &required,
+                    );
+                }
+            }
+        }
         // Known exact captures are already excluded by the fixed-object set,
         // including when another owner holds an unknown alias of that capture.
         self.visit_captured_bindings(|binding| {
@@ -528,6 +593,7 @@ impl Game {
         rebind_captures(&mut frame.remembered, mapping);
         rebind(&mut frame.moved, mapping);
         rebind(&mut frame.this_way, mapping);
+        rebind(&mut frame.created, mapping);
         self.rebind_completion_selection(&mut frame.completion, viewer, mapping);
     }
 
@@ -579,6 +645,25 @@ impl Game {
                     rebind(candidates, mapping);
                 }
             }
+            Decision::Scry {
+                looked,
+                remaining,
+                top,
+                bottom,
+                ..
+            } => {
+                for cards in [looked, remaining, top, bottom] {
+                    rebind_cards(cards, mapping);
+                }
+            }
+            Decision::Surveil {
+                looked, graveyard, ..
+            } => {
+                rebind_cards(looked, mapping);
+                rebind_cards(graveyard, mapping);
+            }
+            Decision::LookAndSelect { looked, .. } => rebind_cards(looked, mapping),
+            Decision::OrderLibrary { cards, .. } => rebind_cards(cards, mapping),
             Decision::ManaUpfront {
                 resume: Some(parent),
                 ..
@@ -626,6 +711,17 @@ fn assign<T: Copy + Ord>(
         }
     }
     false
+}
+
+fn rebind_cards(cards: &mut [CardId], mapping: &BTreeMap<ObjectRef, ObjectRef>) {
+    for card in cards {
+        if let Some((_, replacement)) = mapping
+            .iter()
+            .find(|(old, _)| CardId::from(old.entity) == *card)
+        {
+            *card = CardId::from(replacement.entity);
+        }
+    }
 }
 
 fn rebind(objects: &mut [ObjectRef], mapping: &BTreeMap<ObjectRef, ObjectRef>) {

@@ -254,6 +254,9 @@ impl Game {
                     .filter_map(|id| {
                         self.characteristics(id).final_chapter().is_some().then(|| {
                             crate::flow::proposed_event::ProposedEvent::CounterChange {
+                                provenance: crate::flow::proposed_event::CounterProvenance::new(
+                                    crate::flow::proposed_event::EventCause::TurnAction,
+                                ),
                                 target: self.permanent_object_ref(id).expect("battlefield"),
                                 kind: CounterKind::Lore,
                                 delta: 1,
