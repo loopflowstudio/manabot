@@ -71,3 +71,11 @@ matches. No concept, name or API change; nothing new to implement.
 - Budget (Jack Heart, 2026-11-05): 3 arms × 3 seeds × 150 updates, USD20 cap
   incl. evaluation. Training: cohort mtg252 on 07c490-l4, 2 h / USD1.35 per run.
   Evaluation (random-pair vs heuristic + head-to-head) still to be built; ~USD7 left.
+- Launch (2026-11-05 20:39 UTC): quote $11.95 for 9 runs at fe25e6e18; first
+  launch refused (RunPod reports no L4 stock anywhere; nothing rented). A
+  background retry checks every 5 min for up to 3 h, same cohort/cap. Raised
+  `07c490-l4` max 8 → 9 for this cohort; set it back to 8 once mtg252 is up.
+- Evaluation: build on 07c490's unmerged `learning_signal` Design/Pairing
+  (random non-mirror Elemental pairs vs heuristic, fixed pairing seed) once it
+  lands; add a 252-specific design (own reserved deals) and a final-policy
+  head-to-head matchup. Not needed until training finishes.
