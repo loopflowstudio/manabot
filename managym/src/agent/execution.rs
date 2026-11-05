@@ -1,9 +1,13 @@
 //! Viewer-safe retained execution, derived from the native frame and event owners.
 //!
-//! The shared learning-token serializer carries rules payloads and scalar progress.
-//! Object identities are replaced with slots in an explicit visible-reference table;
-//! v8 relation rows join those slots to the same objects used by legal actions.
-//! Neither raw game serialization nor storage IDs enter the policy or text view.
+//! One exhaustive walk over the suspended caller chain writes the policy
+//! occurrence: learning tokens carrying rules payloads and scalar progress, with
+//! object identities replaced by slots in an explicit visible-reference table
+//! that v8 relation rows join to the same objects legal actions use. The same
+//! walk renders the complete text and plain-language summaries, but only when
+//! a decision context or capture asks for them: every policy observation runs
+//! it without strings. Neither raw game serialization nor storage IDs enter
+//! the policy or text view.
 
 use serde::Serialize;
 
@@ -28,6 +32,14 @@ use crate::{
     },
 };
 
+/// The text products of a walk: every fact in `name: value` form for the LLM
+/// view, and the plain-language pending summaries Academy shows.
+#[derive(Default)]
+struct Text {
+    notes: Vec<String>,
+    summary: Vec<String>,
+}
+
 struct Projection<'a> {
     game: &'a Game,
     viewer: PlayerId,
@@ -36,22 +48,32 @@ struct Projection<'a> {
     /// execution occurrence at all: no marker, holder or relation row.
     started: bool,
     references: Vec<VisibleReference>,
-    notes: Vec<String>,
-    summary: Vec<String>,
+    text: Option<Text>,
     last_known: Vec<ObjectRef>,
 }
 
 impl<'a> Projection<'a> {
-    fn new(game: &'a Game, viewer: PlayerId) -> Self {
+    fn new(game: &'a Game, viewer: PlayerId, text: bool) -> Self {
         Self {
             game,
             viewer,
             tokens: TokenWriter::new(default_content_pack()),
             started: false,
             references: Vec::new(),
-            notes: Vec::new(),
-            summary: Vec::new(),
+            text: text.then(Text::default),
             last_known: Vec::new(),
+        }
+    }
+
+    fn note(&mut self, line: impl FnOnce() -> String) {
+        if let Some(text) = &mut self.text {
+            text.notes.push(line());
+        }
+    }
+
+    fn summary(&mut self, line: impl FnOnce() -> String) {
+        if let Some(text) = &mut self.text {
+            text.summary.push(line());
         }
     }
 
@@ -64,7 +86,7 @@ impl<'a> Projection<'a> {
             self.started = true;
             self.field("retained execution", &true);
         }
-        self.notes.push(format!("{name}: {value:?}"));
+        self.note(|| format!("{name}: {value:?}"));
         self.tokens
             .append_rules(&name)
             .and_then(|_| self.tokens.append_rules(value))
@@ -85,7 +107,7 @@ impl<'a> Projection<'a> {
     fn reference(&mut self, name: &str, reference: VisibleReference) {
         let slot = self.reference_slot(reference);
         self.field(name, &slot);
-        self.notes.push(format!("{name}: E{slot}"));
+        self.note(|| format!("{name}: E{slot}"));
     }
 
     fn label(reference: VisibleReference) -> String {
@@ -133,14 +155,17 @@ impl<'a> Projection<'a> {
         if objects.is_empty() {
             return;
         }
-        self.summary.push(format!(
-            "{name}: {}.",
-            objects
-                .iter()
-                .map(|object| Self::label(self.game.visible_reference(*object, self.viewer)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
+        let (game, viewer) = (self.game, self.viewer);
+        self.summary(|| {
+            format!(
+                "{name}: {}.",
+                objects
+                    .iter()
+                    .map(|object| Self::label(game.visible_reference(*object, viewer)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        });
         self.field(name, &objects.len());
         for object in objects {
             self.object(name, *object);
@@ -151,14 +176,17 @@ impl<'a> Projection<'a> {
         if cards.is_empty() {
             return;
         }
-        self.summary.push(format!(
-            "{name}: {}.",
-            cards
-                .iter()
-                .map(|card| Self::label(self.game.card_reference(*card, self.viewer)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
+        let (game, viewer) = (self.game, self.viewer);
+        self.summary(|| {
+            format!(
+                "{name}: {}.",
+                cards
+                    .iter()
+                    .map(|card| Self::label(game.card_reference(*card, viewer)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        });
         self.field(name, &cards.len());
         for card in cards {
             self.card(name, *card);
@@ -167,10 +195,12 @@ impl<'a> Projection<'a> {
 
     fn effects(&mut self, name: &str, effects: &[Effect]) {
         if !effects.is_empty() {
-            let description = format!("{name}: {}", effects_description(effects));
-            self.summary.push(description.clone());
+            if let Some(text) = &mut self.text {
+                let description = format!("{name}: {}", effects_description(effects));
+                text.summary.push(description.clone());
+                text.notes.push(description);
+            }
             self.field(name, &effects);
-            self.notes.push(description);
         }
     }
 
@@ -188,10 +218,17 @@ impl<'a> Projection<'a> {
                 ..Default::default()
             },
         );
-        frame.execution_summary = self.summary;
-        frame.execution = self.tokens.into_rules_tokens();
+        let tokens = self.tokens.into_rules_tokens();
+        debug_assert!(
+            frame.execution.is_empty() || frame.execution == tokens,
+            "the text pass must reproduce the policy occurrence"
+        );
+        frame.execution = tokens;
         frame.execution_references = self.references;
-        frame.execution_description = Some(self.notes.join("; "));
+        if let Some(text) = self.text {
+            frame.execution_summary = text.summary;
+            frame.execution_description = Some(text.notes.join("; "));
+        }
     }
 
     fn completion(&mut self, completion: &FrameCompletion) {
@@ -202,23 +239,20 @@ impl<'a> Projection<'a> {
             FrameCompletion::Priority => {}
             FrameCompletion::Continue => self.field("return", &"turn action"),
             FrameCompletion::CombatNormal => {
-                self.summary
-                    .push("Normal combat damage follows these choices.".into());
+                self.summary(|| "Normal combat damage follows these choices.".into());
                 self.field("return", &"normal combat damage");
             }
             FrameCompletion::StateBased { next } => {
-                self.summary
-                    .push("Finish the pending state-based actions before priority.".into());
+                self.summary(|| "Finish the pending state-based actions before priority.".into());
                 self.field("return", &"finish state-based actions");
                 self.completion(next);
             }
             FrameCompletion::Frame(_) => self.field("return", &"caller frame"),
             FrameCompletion::Decision(_) => self.field("return", &"saved decision"),
             FrameCompletion::Event { event, .. } => {
-                self.summary.push(format!(
-                    "Complete the {:?} event after these choices.",
-                    event.kind()
-                ));
+                self.summary(|| {
+                    format!("Complete the {:?} event after these choices.", event.kind())
+                });
                 self.field("return", &"commit completion event");
                 // These are precisely the operation events retained by
                 // complete_with_event, not arbitrary serialized game events.
@@ -227,11 +261,9 @@ impl<'a> Projection<'a> {
                     | GameEvent::Surveilled { player }
                     | GameEvent::LibrarySearched { player } => {
                         self.field("event", event);
-                        self.notes.push(format!(
-                            "On completion: {:?} for player {}",
-                            event.kind(),
-                            player.0
-                        ));
+                        self.note(|| {
+                            format!("On completion: {:?} for player {}", event.kind(), player.0)
+                        });
                     }
                     _ => unreachable!("only operation completion events are retained"),
                 }
@@ -322,8 +354,9 @@ impl<'a> Projection<'a> {
     }
 
     fn paid_summary(&mut self) {
-        self.summary
-            .push("Paid costs stay committed; finish the announcement after these choices.".into());
+        self.summary(|| {
+            "Paid costs stay committed; finish the announcement after these choices.".into()
+        });
     }
 
     fn lki(&mut self, lki: &ObjectLki) {
@@ -342,12 +375,15 @@ impl<'a> Projection<'a> {
             self.field("snapshot", &"current characteristics");
             return;
         }
-        self.summary.push(format!(
-            "Last known {}: power {}; counters {:?}.",
-            Self::label(self.game.visible_reference(lki.object_ref, self.viewer)),
-            lki.power,
-            lki.counters
-        ));
+        let (game, viewer) = (self.game, self.viewer);
+        self.summary(|| {
+            format!(
+                "Last known {}: power {}; counters {:?}.",
+                Self::label(game.visible_reference(lki.object_ref, viewer)),
+                lki.power,
+                lki.counters
+            )
+        });
         let ObjectLki {
             transforms,
             inherited_from,
@@ -429,12 +465,14 @@ impl<'a> Projection<'a> {
                 batch.events.len(),
             ),
         );
-        self.notes.push(format!(
-            "{} proposed events; {} replacements completed; committed {}",
-            batch.events.len(),
-            batch.cursor,
-            batch.committed
-        ));
+        self.note(|| {
+            format!(
+                "{} proposed events; {} replacements completed; committed {}",
+                batch.events.len(),
+                batch.cursor,
+                batch.committed
+            )
+        });
         for pending in &batch.events {
             self.field("event ordinal", &pending.ordinal);
             match &pending.event {
@@ -456,15 +494,16 @@ impl<'a> Projection<'a> {
                             self.object("damage target", *object)
                         }
                     }
-                    self.notes.push(format!(
-                        "Proposed {}damage: {amount}",
-                        if *combat { "combat " } else { "" }
-                    ));
+                    self.note(|| {
+                        format!(
+                            "Proposed {}damage: {amount}",
+                            if *combat { "combat " } else { "" }
+                        )
+                    });
                 }
                 ProposedEvent::LifeChange { player, delta } => {
                     self.field("life change", &(player, delta));
-                    self.notes
-                        .push(format!("Player {} life change {delta}", player.0));
+                    self.note(|| format!("Player {} life change {delta}", player.0));
                 }
                 ProposedEvent::CounterChange {
                     provenance,
@@ -475,11 +514,14 @@ impl<'a> Projection<'a> {
                 } => {
                     self.object("counter recipient", *target);
                     self.field("counter placement", &(kind, delta, by, provenance));
-                    self.summary.push(format!("Pending: put {delta} {kind:?} counters on {}. No counters in this group are committed until replacement choices finish.", Self::label(self.game.visible_reference(*target, self.viewer))));
-                    self.notes.push(format!(
-                        "{delta} {kind:?} counters; cause {:?}; modified by a replacement {}",
-                        provenance.cause, provenance.replaced
-                    ));
+                    let (game, viewer) = (self.game, self.viewer);
+                    self.summary(|| format!("Pending: put {delta} {kind:?} counters on {}. No counters in this group are committed until replacement choices finish.", Self::label(game.visible_reference(*target, viewer))));
+                    self.note(|| {
+                        format!(
+                            "{delta} {kind:?} counters; cause {:?}; modified by a replacement {}",
+                            provenance.cause, provenance.replaced
+                        )
+                    });
                 }
                 ProposedEvent::ZoneMove {
                     card,
@@ -501,10 +543,12 @@ impl<'a> Projection<'a> {
                     }
                     self.field("zone move", &(from, to));
                     self.entry(entry);
-                    self.notes.push(format!(
-                        "Move {from:?} to {to:?}; tapped {}; entry counters {:?}",
-                        entry.tapped, entry.counters
-                    ));
+                    self.note(|| {
+                        format!(
+                            "Move {from:?} to {to:?}; tapped {}; entry counters {:?}",
+                            entry.tapped, entry.counters
+                        )
+                    });
                 }
                 ProposedEvent::CreateTokens {
                     definition,
@@ -525,8 +569,7 @@ impl<'a> Projection<'a> {
                                     ..Default::default()
                                 },
                             );
-                            self.summary
-                                .push(format!("Pending: create {count} {name} tokens."));
+                            self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
                         TokenDefinition::Copy {
                             definition_id,
@@ -545,10 +588,12 @@ impl<'a> Projection<'a> {
                                 .append_definition(definition)
                                 .expect("copiable definition tokens");
                             self.field("copy exceptions", &(copy, exceptions));
-                            self.notes.push(format!(
-                                "Create {count} token copies of {} with {exceptions:?}",
-                                definition.name
-                            ));
+                            self.note(|| {
+                                format!(
+                                    "Create {count} token copies of {} with {exceptions:?}",
+                                    definition.name
+                                )
+                            });
                         }
                     }
                 }
@@ -620,13 +665,17 @@ impl<'a> Projection<'a> {
     }
 }
 
+/// Project a suspended effect frame's retained work. `text` additionally
+/// renders its description and summaries; the policy occurrence is identical
+/// either way.
 pub(crate) fn project_frame(
     game: &Game,
     effect: &EffectFrame,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
+    text: bool,
 ) {
-    let mut out = Projection::new(game, viewer);
+    let mut out = Projection::new(game, viewer, text);
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
     if let Some(source) = effect.source_ref {
@@ -640,16 +689,16 @@ pub(crate) fn project_frame(
     }
     if !effect.queue.is_empty() {
         out.field("remaining instructions", &effect.queue);
-        let (first, second) = effect.queue.as_slices();
-        out.summary.push(
+        out.summary(|| {
+            let (first, second) = effect.queue.as_slices();
             format!(
                 "After this choice: {} {}",
                 effects_description(first),
                 effects_description(second)
             )
             .trim()
-            .to_string(),
-        );
+            .to_string()
+        });
     }
     out.objects("selected", &effect.selected);
     out.objects("moved", &effect.moved);
@@ -718,13 +767,15 @@ fn completion_requires_v8(game: &Game, completion: &FrameCompletion) -> bool {
     }
 }
 
+/// Project a suspended decision's retained progress; see [`project_frame`].
 pub(crate) fn project_decision(
     game: &Game,
     decision: &Decision,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
+    text: bool,
 ) {
-    let mut out = Projection::new(game, viewer);
+    let mut out = Projection::new(game, viewer, text);
     match decision {
         Decision::SelectCards {
             selected,
@@ -736,10 +787,12 @@ pub(crate) fn project_decision(
         } => {
             out.objects("selected so far", selected);
             out.field("selection limits", &(min, max));
-            out.summary.push(format!(
-                "Selected {} of {min}–{max} permitted cards.",
-                selected.len()
-            ));
+            out.summary(|| {
+                format!(
+                    "Selected {} of {min}–{max} permitted cards.",
+                    selected.len()
+                )
+            });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
             frame.execution_requires_v8 = !selected.is_empty() || frame.legacy_decision.is_none();
@@ -749,7 +802,7 @@ pub(crate) fn project_decision(
                 out.field("replacement option", &index);
                 out.object("replacement source", candidate.source());
                 out.field("replacement", &candidate.effect);
-                out.notes.push(candidate.description());
+                out.note(|| candidate.description());
             }
             frame.execution_requires_v8 = true;
         }

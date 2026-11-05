@@ -83,9 +83,13 @@ pub struct ContinuationFrame {
     /// v8 kind-10 relation rows link the one-based slots in execution tokens.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub execution_references: Vec<VisibleReference>,
+    /// Every retained fact as `name: value` text. Filled only by
+    /// `Game::describe_execution` (decision context and capture); a policy
+    /// observation leaves it absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_description: Option<String>,
-    /// Plain-language pending work for the same viewer-safe Academy decision.
+    /// Plain-language pending work for the same viewer-safe Academy decision,
+    /// filled with `execution_description`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub execution_summary: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -189,7 +193,7 @@ impl ContinuationFrame {
         }
         self.program = crate::cards::tokens::rules_tokens(
             &effects,
-            &crate::cards::content_pack::default_content_pack(),
+            crate::cards::content_pack::default_content_pack(),
         )
         .expect("rules program tokens");
         self.program_description = Some(super::ability_description::effects_description(effects));
@@ -794,8 +798,38 @@ impl Game {
             ..ContinuationFrame::default()
         };
         frame.program(&effect.program);
-        super::execution::project_frame(self, effect, viewer, &mut frame);
+        super::execution::project_frame(self, effect, viewer, &mut frame, false);
         frame
+    }
+
+    /// Render the viewer's own suspended frames' retained execution as text:
+    /// the complete `name: value` description and plain-language summaries.
+    /// This is a presentation product of decision context and capture; the
+    /// policy observation leaves both fields empty and never builds strings.
+    pub(crate) fn describe_execution(&self, viewer: PlayerId, frames: &mut [ContinuationFrame]) {
+        if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
+            || self.is_game_over()
+        {
+            return;
+        }
+        let Some(suspended) = &self.state.suspended_decision else {
+            return;
+        };
+        // Kinds 5 and 6 come only from `append_suspended_frames`, in this order.
+        let mut parts = suspended.continuation().into_iter();
+        for frame in frames.iter_mut().filter(|f| matches!(f.kind, 5 | 6)) {
+            match parts.next() {
+                Some(ResolutionRef::Frame(effect)) => {
+                    debug_assert_eq!(frame.kind, 5);
+                    super::execution::project_frame(self, effect, viewer, frame, true);
+                }
+                Some(ResolutionRef::Decision(decision)) => {
+                    debug_assert_eq!(frame.kind, 6);
+                    super::execution::project_decision(self, decision, viewer, frame, true);
+                }
+                None => unreachable!("suspended frames outnumber the retained caller chain"),
+            }
+        }
     }
 
     fn resolution_decision_frame(
@@ -872,7 +906,7 @@ impl Game {
             }
             _ => {}
         };
-        super::execution::project_decision(self, decision, viewer, &mut frame);
+        super::execution::project_decision(self, decision, viewer, &mut frame, false);
         frame
     }
 

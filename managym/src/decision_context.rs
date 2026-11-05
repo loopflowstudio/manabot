@@ -188,7 +188,8 @@ impl Game {
     /// Only the decision owner receives announcement/private continuation
     /// details. Other viewers receive the public owner/kind and committed facts.
     pub fn decision_context(&self, viewer: PlayerId) -> Option<DecisionContextView> {
-        let frames = self.continuation_frames(viewer);
+        let mut frames = self.continuation_frames(viewer);
+        self.describe_execution(viewer, &mut frames);
         let mut view = self.decision_context_from_frames(viewer, &frames)?;
         view.recent_facts = self
             .state
