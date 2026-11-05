@@ -124,7 +124,8 @@ fn aangs_journey_finds_a_basic_land_and_kicked_also_a_shrine() {
             |a| matches!(a, Action::SelectCard { card, .. } if *card == offered[0]),
         );
         if kicked {
-            assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+            // No Shrine matches, so the second search asks nothing.
+            assert_ne!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
             assert!(offered_cards(&s).is_empty());
         }
         settle(&mut s);

@@ -145,8 +145,19 @@ impl Game {
                         )
             });
         if refresh {
+            // Republishing advances the epoch, which invalidates decoded
+            // Commands; a world that left the offers alone keeps its identity.
             if let Some(space) = self.suspended_decision_action_space() {
-                self.publish_action_space(space);
+                // The published chooser is resolved at publication, so only
+                // the offers themselves are compared.
+                let unchanged = self.current_action_space.as_ref().is_some_and(|current| {
+                    current.kind == space.kind
+                        && current.actions == space.actions
+                        && current.focus == space.focus
+                });
+                if !unchanged {
+                    self.publish_action_space(space);
+                }
             }
         }
     }

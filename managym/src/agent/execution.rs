@@ -557,6 +557,7 @@ impl<'a> Projection<'a> {
                         TokenDefinition::Copy {
                             definition_id,
                             definition,
+                            front,
                             copy,
                             exceptions,
                         } => {
@@ -570,6 +571,15 @@ impl<'a> Projection<'a> {
                             self.tokens
                                 .append_definition(definition)
                                 .expect("copiable definition tokens");
+                            if let Some((front, _)) = front {
+                                self.reference(
+                                    "copy front face",
+                                    VisibleReference {
+                                        definition: Some(front.0),
+                                        ..Default::default()
+                                    },
+                                );
+                            }
                             self.field("copy exceptions", &(copy, exceptions));
                             self.note(|| {
                                 format!(

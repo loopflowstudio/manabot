@@ -2428,6 +2428,9 @@ enum Encoded {
     Rows(&'static str),
     /// Fact rows of this kind, joined to the field's object.
     Fact(FactKind),
+    /// A further ordered occurrence of a fact kind another field owns,
+    /// separated by an ordinal reset.
+    FactOccurrence(FactKind),
     /// Not a decision input, for the stated reason.
     Excluded(&'static str),
 }
@@ -2694,7 +2697,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
-        execution => [Fact(FactKind::ContinuationProgram)],
+        execution => [FactOccurrence(FactKind::ContinuationProgram)],
         execution_references => [Rows("v8 retained execution reference slots, relation kind 10")],
         execution_description => [Definition],
         execution_summary => [Definition],
@@ -2791,6 +2794,10 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
                 Encoded::Fact(kind) => {
                     assert_eq!(fact_field(kind), field, "{kind:?} states another field");
                     fact_kinds.insert(kind as u8);
+                    continue;
+                }
+                Encoded::FactOccurrence(kind) => {
+                    assert_ne!(fact_field(kind), field, "{kind:?} is this field's own");
                     continue;
                 }
                 Encoded::Columns(buffer, start, len) => (buffer, start, len),

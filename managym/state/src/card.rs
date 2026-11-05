@@ -1011,6 +1011,16 @@ impl Card {
         self.front.is_some()
     }
 
+    /// The front face's row while the back face is up.
+    pub fn front_face(&self) -> Option<&(CardDefId, Arc<CardDefinition>)> {
+        self.front.as_ref()
+    }
+
+    /// Carry a copied object's front face, keeping its mana value (CR 712.8).
+    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<CardDefinition>)>) {
+        self.front = front;
+    }
+
     /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
     pub fn turn_back_face_up(&mut self, (id, definition): (CardDefId, Arc<CardDefinition>)) {
         let front = (self.definition_id, Arc::clone(&self.definition));

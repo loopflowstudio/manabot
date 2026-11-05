@@ -101,6 +101,10 @@ pub(crate) enum TokenDefinition {
     Copy {
         definition_id: crate::state::card::CardDefId,
         definition: std::sync::Arc<crate::state::card::CardDefinition>,
+        front: Option<(
+            crate::state::card::CardDefId,
+            std::sync::Arc<crate::state::card::CardDefinition>,
+        )>,
         copy: Option<crate::state::effect::CopyEffect>,
         exceptions: Vec<crate::state::effect::Modification>,
     },
@@ -632,6 +636,7 @@ impl Game {
                 TokenDefinition::Copy {
                     definition_id,
                     definition,
+                    front,
                     copy,
                     exceptions,
                 } => {
@@ -641,6 +646,7 @@ impl Game {
                         *definition_id,
                         std::sync::Arc::clone(definition),
                     );
+                    template.set_front_face(front.clone());
                     template.copy = copy.clone();
                     Some(self.prepare_token_copy(template, controller, exceptions.clone()))
                 }

@@ -497,7 +497,7 @@ impl Game {
             }) { ZoneType::Exile } else { to_zone };
         let object = from.and_then(|_| self.current_object_ref(card));
         entry = entry.for_zone(to_zone);
-        if to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga() {
+        if to_zone == ZoneType::Battlefield && self.enters_as_saga(card, &entry) {
             entry.counters.change(CounterKind::Lore, 1);
         }
         ProposedEvent::ZoneMove {
@@ -507,6 +507,18 @@ impl Game {
             to: to_zone,
             entry,
         }
+    }
+
+    /// Whether the face that enters is a Saga: the back face when it enters
+    /// transformed (CR 712.14), so a Saga returning as a creature gets no lore.
+    fn enters_as_saga(&self, card: CardId, entry: &ZoneEntry) -> bool {
+        let printed = &self.state.cards[card];
+        if entry.transformed {
+            if let Some((_, back)) = default_content_pack().back_face(printed.definition_id) {
+                return back.is_saga();
+            }
+        }
+        printed.is_saga()
     }
 
     pub(crate) fn commit_zone_move(
