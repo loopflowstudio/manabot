@@ -103,6 +103,22 @@ joint criterion; descriptive curves alone cannot qualify improvement. Different
 worlds, populations, inputs, hardware and batch sizes also prevent a controlled
 comparison with MTG-183's historical Elemental learning pace.
 
+## Remaining work and decisions
+
+The preliminary training, admitted checkpoint and endpoint evaluation now exist;
+report and manifest delivery remain with the caller. The two replayed native
+target-selection failures still need rules investigation and independent behavior
+witnesses. Provider estimates remain pending final billing reconciliation.
+
+The 100-update target, complete paired baseline and joint learning criterion
+remain unmet. Elemental-relative learning pace is undetermined. Any further
+study needs an explicit prospective continuation or new-run protocol that accounts
+for the expired wall budget, incomplete baseline and unavailable collector/RNG
+recovery; no such protocol is selected here. It cannot replace missing historical
+games or erase prior costs. The accepted USD10 cumulative cap still applies.
+The choice of that follow-up remains separate from delivery of this bounded
+pilot's results. Larger capacities and representation changes remain proposals.
+
 ## Earlier execution evidence
 
 Each completed initialization comparison below contains eight pairs × four legs.

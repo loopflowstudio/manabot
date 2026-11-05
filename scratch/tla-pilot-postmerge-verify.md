@@ -5,11 +5,6 @@ PR #426 delivered the permanent64/game-local recovery repair at
 recorded 143 focused postmerge tests passed. No executable code changed during
 this continuation.
 
-Delete — do not maintain: duplicate historical validation/placement narration
-and superseded launch instructions in `experiments/tla-trophy-pilot.md` and
-`scratch/questions.md`. These are replaced by receipt/history references; no
-executable symbol, fixture or artifact is removed. No deletion targets remain.
-
 V10 Run `ae76c17951c3` executed that exact merged source on NVIDIA L4 after
 Vast refused a changed price above the approved ceiling. Fresh source freezing,
 inventory, accounting and quote checks succeeded after transient network errors.
@@ -47,10 +42,16 @@ or publication command remains running. Execution has produced a trained,
 evaluated preliminary endpoint; the 100-update target and full scientific
 schedule remain unfulfilled.
 
-Check: `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`
-— reuse prior 1 passed; all 315 added artifact sizes/hashes match, all 28 report
-links resolve, and `git diff --check` passes. `lf context`: scratch and memory are within token and byte limits. Prior 143 focused postmerge checks remain applicable because
-executable code did not change. Review/delivery remains with the caller.
+Reconciliation on 2026-11-05 updated Experiments memory from missing execution
+to the retained v10 outcome. The earlier timeout-only step feedback is superseded
+by these receipts. No child Wave directories or memories exist in this checkout.
+The report's remaining-work section separates delivery, unresolved rules
+failures and incomplete scientific acceptance. No new execution is selected;
+the executed protocol and failed evaluation slot remain frozen.
+
+Check: `git diff --check` — passed; receipt counts and checkpoint digest agree,
+and `lf context` is within both limits. Prior artifact and 143 focused postmerge
+checks are reused because executable code and evidence bytes did not change.
 
 Historical preparation/postmerge notes are preserved as git blob
 `01a688e2094d506fca5dd599133515ad2de1afe5`.

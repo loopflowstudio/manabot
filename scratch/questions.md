@@ -101,6 +101,71 @@ variable-length inputs and GPU transfer changes exploratory. Do not broaden the
 recipe to address rare growth without a separate selection. Retain overflow
 frequency, affected decks and positions for that decision.
 
+## Concept review — 2026-11-05 UTC
+
+Outcome: **no design change and no open product choice for delivery of the
+bounded pilot's results**. This is not Task completion or scientific acceptance.
+The existing report already distinguishes the trained endpoint from the
+unfinished study; keep that usage guidance unchanged. No new skill instructions,
+execution machinery or implementation direction are needed here.
+
+The accepted interaction is: choose the frozen corpus and bounded recipe, run
+self-play, inspect the exported checkpoint and paired results, and retain every
+failure and cost. Jack Heart's game-local recovery decision means a failed game
+is a durable attempt record, not a reason to restart the whole experiment or a
+new kind of checkpoint. Normal sampling can replace its training stream without
+replacing its historical evidence.
+
+| Action | Concept and owner | Existing API / persistence |
+| --- | --- | --- |
+| Train the fixed population within its allowance | Protocol fixes inputs; Etude owns placement; manabot owns learning | `tla_pilot_v10.frozen()` / `runs()`, `TrainingJob`, `execute_regime`; frozen protocol/regime and run receipt |
+| Continue after an admitted game failure | One `GameAttempt`; collector owns both seats' pending rows; ledger owns cumulative allowance | `SeatRoutedCollector._settle_attempt`, `GameErrorState.settle`; append-only attempt ledger and replay input contract |
+| Inspect the early trained endpoint | Exported learner state, distinct from a complete process snapshot | `execute_regime` exports raw/EMA/Adam; checkpoint identity and clocks survive wall-budget pause |
+| Judge full-game evidence | Fixed comparison schedule, not only surviving games | `comparison_schedule`, `play`, `tla_pilot_analysis.analyze`; original failed/missing slots remain expected |
+
+The consequential possible mismatch is calling all of these states “success.”
+Launcher success says the job completed its execution contract; trainer `paused`
+says the update target was not reached; analysis `complete=false, success=null`
+says the joint scientific criterion cannot be judged. Those distinctions protect
+different promises and cannot be merged into one boolean. The report already
+presents them together without requiring readers to reconstruct them from logs.
+
+Normal path: a completed game supplies both seats' retained rows; the bounded
+run exports a checkpoint; endpoint comparisons use the same frozen population
+and matched first-64 support. Failure/recovery: a typed active-step resource
+limit records the position and encoder configuration, removes only that game's
+uncommitted rows, and permits ordinary resampling below the settled-game limit.
+At 25/100 failures collection continues; at 26/100 it stops. Completed updates,
+other games, costs and failure evidence survive. Evaluation never substitutes
+new games for failed slots.
+
+Counterexamples remain decisive: a reset/buffer/provenance failure must not
+enter a recovery loop; a checkpoint without collector/RNG state cannot promise
+an exact process resume; a repaired callback cannot erase its original failed
+match; an 81.25% endpoint score against initialization cannot establish the
+joint improvement criterion with an incomplete baseline and schedule. The
+retained permanent65 and relation65 failures also refute a universal capacity
+claim. Source inspection and the existing receipts agree with these boundaries;
+no new games or load tests were needed for this review.
+
+Latest direction: Task comment `81ec3f17-30e6-4821-a77e-75888b77f65d`
+records Jack Heart's request to review damped learning before a full-TLA
+successor. Preserve v10 and continue reporting/delivery; do not launch that
+successor before the discussion is resolved. The exact future question is:
+**Which objective, behavior/reference KL, iteration versus optimizer/data clocks,
+sample filtering and credit horizon should the next full-TLA recipe freeze?**
+Evidence prompting it is the varying training durations and the unfinished v10
+schedule, not proof that a particular replacement recipe is better. This choice
+is unresolved for that separate prospective outcome and does not block delivery
+of the present results. Capacity enlargement and grouped/sparse representations
+likewise remain unselected.
+
+Next proof for delivery: keep the report's checkpoint identity, endpoint counts,
+missing schedule and retained failures aligned with the published receipts.
+Independent behavior witnesses for the two native target-selection errors and
+final billing reconciliation remain outstanding work already named in the
+report. This review neither resolves them nor selects new work or navigation.
+
 ## Historical context
 
 Completed review drafts, proof requests and CI repair narration no longer direct
