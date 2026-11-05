@@ -49,7 +49,7 @@ def runs(
 
 
 def eval(state: ExperimentState) -> list[Job]:
-    return evaluation_jobs(state, "batch-closure-v1")
+    return evaluation_jobs(state, "batch-closure-v1", hours=0.75, usd=0.96)
 
 
 def report() -> Report:

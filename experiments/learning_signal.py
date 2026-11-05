@@ -53,6 +53,8 @@ MAX_COMMANDS = 10_000
 BOOTSTRAP_SEED = 6510
 SCORED_UPDATES = (20, 40, 75, 150)
 SETUP_SECONDS = 900
+# One single-threaded game per worker on a 32-vCPU rental, leaving room for its host.
+EVALUATION_WORKERS = 28
 FINALIZATION_SECONDS = 300
 
 
@@ -132,15 +134,29 @@ def scheduled_matchups(run: TrainingRun) -> list[Matchup]:
     ]
 
 
-def evaluation_jobs(state: ExperimentState, name: str) -> list[Job]:
-    """Play what is available; Etude skips matches it already holds."""
+def evaluation_jobs(
+    state: ExperimentState, name: str, *, hours: float, usd: float
+) -> list[Job]:
+    """Play what is available; Etude skips matches it already holds.
+
+    A job stopped at its limit keeps its finished matches, and a later pass plays
+    only the rest, so `usd` bounds each pass inside the protocol's evaluation line.
+    """
     matchups = tuple(
         matchup for run in state.runs for matchup in scheduled_matchups(run)
     )
     if not matchups:
         return []
     benchmark = Benchmark(name=name, environment=_environment(), matchups=matchups)
-    return [evaluation(benchmark, play=play_deal, workers=8, max_hours=3.0)]
+    return [
+        evaluation(
+            benchmark,
+            play=play_deal,
+            workers=EVALUATION_WORKERS,
+            max_hours=hours,
+            max_usd=Decimal(str(usd)),
+        )
+    ]
 
 
 def _registration(

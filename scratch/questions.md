@@ -167,6 +167,12 @@ Assumptions, each reversible before scoring:
 - Update 0 unscored: a seed's arms share initial weights, so it compares nothing.
   (`learner_transitions-0` is an Etude checkpoint; the earlier note was wrong.)
 
+Launch record, 2026-11-05: study 1's first queued cohort (six runs at `99d20a416`) ran
+no training. L4 refused three, and three got rentals whose window was too short for
+the frozen regime, because queue mode divides cohort dollars by `parallel - live` (6)
+with 3 pending. Rerunning as per-arm all-or-nothing launches with run ids `<id>-r2`;
+same jobs, seeds and source. Keep the six failed ids in the report's failure table.
+
 Exists: closure separation, docs, tests, both experiment files, calibration.
 Remaining:
 - Commit, then freeze study 1 and study 2 at that revision on `fc6ffb-l4`; reconcile
