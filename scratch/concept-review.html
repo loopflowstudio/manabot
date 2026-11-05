@@ -1,146 +1,69 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark">
-<title>Manabot · Where the compound GRU connects</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-243 concept review — sequential catalog naming</title>
 <style>
-:root{color-scheme:light dark;--bg:#faf9f5;--ink:#252c32;--muted:#606a72;--line:#cdd2d4;--panel:#fff;--shared:#315f96;--sharedbg:#eaf0f8;--flat:#24674f;--flatbg:#eaf3ed;--compound:#98502b;--compoundbg:#faf0e6;--code:#f0f1ed}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,-apple-system,sans-serif}main{max-width:1080px;margin:auto;padding:40px 32px 64px}header,.caption,.source{font-size:13px;color:var(--muted)}h1{font-size:clamp(30px,4.5vw,49px);letter-spacing:-.04em;line-height:1.12;max-width:850px;margin:20px 0}h2{font-size:27px;line-height:1.25;letter-spacing:-.02em;margin:40px 0 14px}h3{font-size:18px;margin:0 0 12px}p{max-width:860px;margin:12px 0}a{color:var(--shared)}.lead{font-size:21px;max-width:820px}.callout{border-left:3px solid var(--compound);padding:3px 0 3px 20px;margin:24px 0}.legend{display:flex;gap:22px;flex-wrap:wrap;font-size:14px;margin:20px 0 8px}.legend span:before{content:'';display:inline-block;width:11px;height:11px;margin-right:8px;background:currentColor;border-radius:2px}.blue{color:var(--shared)}.green{color:var(--flat)}.orange{color:var(--compound)}figure{margin:18px 0}.svgwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}.architecture{display:block;width:100%;min-width:740px;height:auto}.svgwrap:focus-visible{outline:3px solid var(--shared)}svg text{font-family:system-ui,sans-serif;fill:var(--ink)}svg .sub{fill:var(--muted);font-size:14px}svg .title{font-size:18px;font-weight:650}svg .micro{font-size:12px;fill:var(--muted)}svg .box{stroke:var(--line);fill:var(--panel);stroke-width:1.5}svg .shared{fill:var(--sharedbg);stroke:var(--shared)}svg .flat{fill:var(--flatbg);stroke:var(--flat)}svg .compound{fill:var(--compoundbg);stroke:var(--compound)}svg .wire{fill:none;stroke:var(--muted);stroke-width:2;marker-end:url(#arrow)}svg .reuse{fill:none;stroke:var(--shared);stroke-width:2;stroke-dasharray:6 5;marker-end:url(#bluearrow)}figcaption{font-size:14px;color:var(--muted);margin:10px 0}.codegrid{display:grid;grid-template-columns:1fr 1fr;gap:22px}.codecard{min-width:0;padding-top:18px;border-top:3px solid var(--line)}.codecard.flat{border-color:var(--flat)}.codecard.compound{border-color:var(--compound)}pre{background:var(--code);border:1px solid var(--line);border-radius:5px;padding:17px;overflow-x:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;margin:12px 0}code{font: .88em ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}pre code{font:inherit;overflow-wrap:normal}.comment{color:var(--muted)}.stepper{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:20px 0 24px;margin:24px 0}.steps{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}button{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink);padding:8px 14px;cursor:pointer}button[aria-pressed=true]{border-color:var(--compound);background:var(--compoundbg);box-shadow:inset 0 -2px var(--compound)}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--shared);outline-offset:3px}.stepbody{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}.flow{display:block;width:100%;max-width:440px}.readout{padding-top:8px;min-width:0}.readout h3{font-size:21px}.sample{font-size:22px;font-weight:600;color:var(--compound)}.fact{color:var(--muted);font-size:14px}.tablewrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:15px}td,th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600}td:first-child{padding-left:0}details{margin-top:26px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;font-weight:600}footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}.questions{padding-left:24px}.questions li{padding:4px 0}.mobilehint{display:none}
-@media(prefers-color-scheme:dark){:root{--bg:#171d23;--ink:#e9ecef;--muted:#abb6c0;--line:#46525d;--panel:#202831;--shared:#91b8ee;--sharedbg:#24364d;--flat:#95cdb1;--flatbg:#233d33;--compound:#edb187;--compoundbg:#443125;--code:#20262c}}
-@media(max-width:700px){main{padding:24px 18px 40px}.lead{font-size:18px}.codegrid,.stepbody{grid-template-columns:1fr}.mobilehint{display:block;font-size:13px;color:var(--muted)}h2{font-size:24px}.legend{gap:12px;font-size:12px}pre{font-size:12px}.readout{min-height:250px}.architecture{min-width:740px}}
-@media print{main{max-width:none;padding:0}.svgwrap{overflow:visible}.architecture{min-width:0}button,.mobilehint{display:none}pre{white-space:pre-wrap}.codecard,.stepper{break-inside:avoid}}
+  :root { color-scheme: light dark; --fg:#222; --bg:#fbfaf7; --muted:#666; --rule:#ddd; --new:#2f6b3a; --old:#8a4b2a; --code:#f0eee8; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e6e4df; --bg:#1b1a18; --muted:#a09d97; --rule:#3a3835; --new:#8fd19e; --old:#e0a37f; --code:#2a2926; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; margin:0 0 .5rem; } h2 { font-size:1.2rem; margin-top:2.5rem; border-top:1px solid var(--rule); padding-top:1.25rem; }
+  code { font:.85em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; }
+  .lead { font-size:1.1rem; }
+  .flow { display:grid; gap:.75rem; margin:1rem 0; }
+  .step { border-left:3px solid var(--rule); padding:.25rem 0 .25rem 1rem; }
+  .step strong { display:block; }
+  .old { border-color:var(--old); } .new { border-color:var(--new); }
+  .tag { font:.75rem ui-monospace, Menlo, monospace; text-transform:uppercase; letter-spacing:.05em; }
+  .old .tag { color:var(--old); } .new .tag { color:var(--new); }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  td, th { text-align:left; vertical-align:top; padding:.4rem .5rem; border-bottom:1px solid var(--rule); }
+  ol li { margin:.4rem 0; }
 </style>
 </head>
-<body><main>
-<header>Manabot · MTG-243 · Concept review at demo · 5 November 2026<br>Sources: <code>actor_critic.py:349–475</code>, <code>compound.py:40–176</code>, <code>learning/compound.py:106–193</code></header>
-<h1>Accepted direction:<br>one policy, sequential name choices.</h1><div class="callout"><strong>Jack Heart’s decision · 5 November:</strong> remove the active neural compound decoder. The engine will publish ordinary “choose a group” then “choose a name” decisions; each uses the regular head and normal rollout. Only the final name commits the effect. A separate experiments Task will evaluate compound decisions, including mana payment and learning effects.</div><p><strong>The architecture below is historical implementation being retired.</strong> Its code excerpts explain why the change removes a second neural path. Earlier proposals for a names-only neural hybrid are superseded; ordinary sequential engine decisions are accepted.</p>
-<p class="lead">The compound GRU does <strong>not</strong> receive the regular policy head’s output. It belongs to a separate policy path that reuses earlier feature-building modules.</p>
-<div class="callout"><strong>What chooses the path? A model-wide configuration flag.</strong> <code>compound_decisions=false</code> (default) selects the regular path. <code>true</code> selects the compound path for <strong>every decision sent to that policy</strong>. The model does not switch heads when a special game state appears. Native forced decisions skip the policy entirely.</div><p><strong>What does vary by game state?</strong> The engine’s offer structure. Ordinary offers have no extra arguments, so the compound path stops after selecting an offer. Safe grouped attackers/blockers/waterbend offers add candidate choices, so the GRU loop continues. Current naming is still one atomic offer per name. “Regular head for ordinary decisions; hierarchy for names” is our proposed hybrid, not current behavior.</p><div class="tablewrap"><table><thead><tr><th>Game engine owns</th><th>Manabot agent owns</th></tr></thead><tbody><tr><td>Legal actions, candidate lists, selection limits, and which choices can safely be grouped</td><td>Feature encoding, neural scores, sampling, recurrent memory and training</td></tr><tr><td>Offer bindings, stale rejection, validation and lowering a submission into native Commands</td><td>The model-wide flat/compound setting and how to choose a valid submission</td></tr></tbody></table></div>
-<div class="legend" aria-label="Diagram legend"><span class="blue">Reused feature machinery</span><span class="green">Regular policy</span><span class="orange">Compound policy</span></div>
-<p class="mobilehint">The diagram scrolls horizontally so labels stay readable.</p>
-<figure><div class="svgwrap" tabindex="0" role="region" aria-label="Policy architecture diagram; scroll horizontally on narrow screens">
-<svg class="architecture" viewBox="0 0 960 790" role="img" aria-labelledby="arch-title arch-desc">
-<title id="arch-title">Alternative policy paths share feature builders, but have separate scoring heads</title>
-<desc id="arch-desc">Observation enters shared object encoders. Flat mode builds action vectors and uses the regular policy head. Compound mode pools the object vectors, selects an offer with its own scorer, and uses a GRU plus a binary head to fill candidate choices. A dashed connection shows reuse of action features for action-aligned compound offers only. There is no connection from regular policy logits to the GRU.</desc>
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker><marker id="bluearrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--shared)"/></marker></defs>
-<text x="480" y="33" text-anchor="middle" class="title">One viewer-safe observation</text>
-<path d="M480 44V65" class="wire"/>
-<rect x="225" y="70" width="510" height="85" rx="8" class="box shared"/>
-<text x="480" y="101" text-anchor="middle" class="title">Object encoders + attention</text>
-<text x="480" y="128" text-anchor="middle" class="sub">Cards, permanents, players → contextual feature vectors</text>
-<path d="M350 155V185H245V228" class="wire"/>
-<path d="M610 155V185H715V228" class="wire"/>
-<text x="245" y="213" text-anchor="middle" class="micro">FLAT MODE · forward_distribution()</text>
-<text x="715" y="213" text-anchor="middle" class="micro">COMPOUND MODE · compound()</text>
-<rect x="60" y="234" width="370" height="92" rx="8" class="box shared"/>
-<text x="245" y="265" text-anchor="middle" class="title">Build one vector per legal action</text>
-<text x="245" y="291" text-anchor="middle" class="sub">Action features + focused object vectors</text>
-<text x="245" y="313" text-anchor="middle" class="micro">_gather_informed_actions() → [K, H]</text>
-<rect x="530" y="234" width="370" height="92" rx="8" class="box compound"/>
-<text x="715" y="265" text-anchor="middle" class="title">Pool the game-state vectors</text>
-<text x="715" y="291" text-anchor="middle" class="sub">Average valid objects into one vector</text>
-<text x="715" y="313" text-anchor="middle" class="micro">context → initial memory h₀ [H]</text>
-<path d="M245 326V405" class="wire"/>
-<path d="M715 326V405" class="wire"/>
-<path d="M430 280H475V442H530" class="reuse"/>
-<text x="280" y="350" class="micro">Action features reused</text>
-<text x="280" y="368" class="micro">for action-aligned</text>
-<text x="280" y="386" class="micro">offers only.</text>
-<rect x="60" y="410" width="370" height="86" rx="8" class="box flat"/>
-<text x="245" y="441" text-anchor="middle" class="title">Regular policy head</text>
-<text x="245" y="467" text-anchor="middle" class="sub">Same H → H → 1 network for every action</text>
-<rect x="530" y="410" width="370" height="86" rx="8" class="box compound"/>
-<text x="715" y="441" text-anchor="middle" class="title">Separate offer scorer</text>
-<text x="715" y="467" text-anchor="middle" class="sub">Offer features + h₀ → scores → choose offer</text>
-<path d="M245 496V545" class="wire"/>
-<path d="M715 496V545" class="wire"/>
-<rect x="60" y="550" width="370" height="94" rx="8" class="box flat"/>
-<text x="245" y="581" text-anchor="middle" class="title">Choose one complete action</text>
-<text x="245" y="607" text-anchor="middle" class="sub">K scores → categorical distribution → index</text>
-<text x="245" y="630" text-anchor="middle" class="micro">No recurrent selection state</text>
-<rect x="530" y="550" width="370" height="94" rx="8" class="box compound"/>
-<text x="715" y="581" text-anchor="middle" class="title">GRU + include/exclude head</text>
-<text x="715" y="607" text-anchor="middle" class="sub">Remember prefix; make one binary choice</text>
-<text x="715" y="630" text-anchor="middle" class="micro">Repeat for each candidate · detailed below</text>
-<path d="M900 570H923V625H900" class="wire"/>
-<path d="M245 644V687" class="wire"/><path d="M715 644V687" class="wire"/>
-<text x="245" y="714" text-anchor="middle" class="title">Selected native action</text>
-<text x="715" y="714" text-anchor="middle" class="title">Offer ID + selected candidate IDs</text>
-<text x="245" y="743" text-anchor="middle" class="sub">Execute through native authority</text>
-<text x="715" y="743" text-anchor="middle" class="sub">Native lowering → ordinary Commands</text>
-<text x="480" y="778" text-anchor="middle" class="micro">H = feature width · K = number of legal actions · arrows show data flow, not simultaneous execution</text>
-</svg></div><figcaption>These are alternative calls on the model architecture. Both reuse object-encoding modules and the first attention layer; the flat path supports additional configured processing. Grouped attackers, blockers and waterbend omit the dashed action-feature connection.</figcaption></figure>
-<h2>1. The split is explicit in the code</h2>
-<div class="codegrid">
-<article class="codecard flat"><h3 class="green">Regular policy: score action vectors</h3><p>The head outputs one scalar per action. A 64-slot buffer is not a 64-neuron output head.</p><pre><code>informed_actions = self._gather_informed_actions(
-    obs, post_attention_objects, state,
-    batches, slots
-)
-<span class="comment"># Optional FiLM conditioning occurs here.</span>
-scores = self.policy_head(
-    informed_actions
-).squeeze(-1)</code></pre><div class="source">actor_critic.py:366–376 · excerpt, formatting condensed</div></article>
-<article class="codecard compound"><h3 class="orange">Compound policy: seed a separate decoder</h3><p>It passes the game summary and optional action features—not the regular head’s scores.</p><pre><code>context = (
-    objects * valid.unsqueeze(-1)
-).sum(1) / valid.sum(
-    1, keepdim=True
-).clamp_min(1)
+<body>
+<main>
+<header>
+  <h1>Sequential catalog naming: concept review</h1>
+  <p>Task MTG-243 · PR #424 · concept-review step (headless) · 2026-11-05</p>
+  <p>Built from <code>scratch/mtg-243-naming.md</code> (current accepted revision), <code>scratch/questions.md</code>, <code>docs/observation-and-model.md</code>, <code>managym/src/agent/structured_offer.rs</code>, <code>managym/src/python/bindings.rs</code></p>
+</header>
 
-return self.compound_decoder(
-    context[0], batch,
-    offer_features=features,
-    <span class="comment"># sampling / retained-token arguments omitted</span>
-)</code></pre><div class="source">actor_critic.py:452–475 · excerpt, formatting condensed</div></article>
+<p class="lead"><strong>Decision needed: none.</strong> Jack Heart accepted the design. The implementation at <code>9a4eca36d</code> matches it, and the review turned up no new product choice. What remains before the demo is delivery work.</p>
+
+<h2>One interaction: casting The Rise of Sozin with 928 names</h2>
+<div class="flow">
+  <div class="step old"><span class="tag">before (atomic v8)</span><strong>One prompt with 928 names</strong>v8 widened action capacity to the full vocabulary, so the size of every live buffer depended on the catalog.</div>
+  <div class="step new"><span class="tag">now (accepted, implemented)</span><strong>Prompt 1: 15 groups</strong>“Names A through B”. Choosing a group narrows <code>NameScope</code> and commits nothing: no search, no inspection, no exile.</div>
+  <div class="step new"><span class="tag">now</span><strong>Prompt 2: 61–62 names</strong>“Name X”. Only this choice pushes <code>ExileNamed</code>. The private <code>SearchNamed</code> step keeps optional stopping and fail-to-find.</div>
+  <div class="step new"><span class="tag">recovery</span><strong>Reconnect, replay or fork</strong>Each restores whichever prompt is actually pending. A Command bound to the group prompt is rejected as stale once the name prompt is showing. No back or cancel action exists, because none was authorized. Every name is still reachable exactly once.</div>
 </div>
-<pre><code><span class="comment"># At the start of the regular forward path:</span>
-if self.compound_decoder is not None:
-    raise ValueError(
-        "compound checkpoint requires authoritative offers; use ActorCritic.compound"
-    )</code></pre><p class="caption">actor_critic.py:349–353. Today, compound mode replaces the flat output path, including ordinary offers with no arguments.</p>
-<h2>2. Inside the GRU: watch one action take shape</h2>
-<p>Suppose the offer is “declare attackers” and candidates are A, B and C. We select A and C. The <strong>same GRU cell and binary head</strong> are reused for every candidate. The game stays unchanged throughout decoding.</p>
-<div class="stepper">
-<p class="caption">Interactive teaching example · probabilities are illustrative, not model measurements.</p>
-<div class="steps" role="group" aria-label="Choose a decoder stage"><button type="button" data-step="0" aria-pressed="true">0 · Select offer</button><button type="button" data-step="1" aria-pressed="false">1 · Creature A</button><button type="button" data-step="2" aria-pressed="false">2 · Creature B</button><button type="button" data-step="3" aria-pressed="false">3 · Creature C</button></div>
-<div class="stepbody"><svg class="flow" viewBox="0 0 440 460" role="img" aria-labelledby="flow-title flow-desc"><title id="flow-title">One recurrent choice</title><desc id="flow-desc">Earlier memory and current input enter the GRU. A binary scoring head reads the updated memory. The selected answer is fed through the same GRU to prepare memory for the next candidate.</desc>
-<rect x="20" y="12" width="400" height="64" rx="7" class="box shared"/><text x="220" y="37" text-anchor="middle" class="title" id="memory-title">Initial memory</text><text x="220" y="61" text-anchor="middle" class="sub" id="memory-text">Pooled visible game state</text>
-<path d="M220 76V110" class="wire"/><rect x="20" y="115" width="400" height="70" rx="7" class="box compound"/><text x="220" y="142" text-anchor="middle" class="title" id="cell-title">Offer scorer</text><text x="220" y="168" text-anchor="middle" class="sub" id="cell-text">Offer features + initial memory</text>
-<path d="M220 185V219" class="wire"/><rect x="20" y="224" width="400" height="66" rx="7" class="box compound"/><text x="220" y="251" text-anchor="middle" class="title" id="head-title">Choose offer</text><text x="220" y="276" text-anchor="middle" class="sub" id="head-text">Declare attackers: probability 1</text>
-<path d="M220 290V324" class="wire"/><rect x="20" y="329" width="400" height="70" rx="7" class="box compound"/><text x="220" y="357" text-anchor="middle" class="title" id="update-title">GRU remembers selected offer</text><text x="220" y="383" text-anchor="middle" class="sub" id="update-text">Ready to consider creature A</text>
-<path d="M220 399V430" class="wire"/><text x="220" y="452" text-anchor="middle" class="sub" id="flow-end">Carry this memory to the next stage</text></svg>
-<div class="readout" aria-live="polite" aria-atomic="true"><h3 id="step-title">Select “declare attackers”</h3><p id="step-explanation">There is one offer, so its probability is 1. The decoder then feeds that offer’s vector into the GRU. The GRU now knows which kind of choice it is filling in.</p><p class="sample" id="sample">Selected attackers: none yet</p><pre><code id="step-code">offer_index = choose(
-    self.offer_score(
-        torch.tanh(offer_rows + state)
-    ).squeeze(-1)
-)
-state = self.prefix(
-    offer_rows[offer_index], state
-)</code></pre><p class="source" id="step-source">compound.py:122–125 · excerpt, formatting expanded</p><p class="fact" id="probability">Joint probability so far: 1</p></div></div>
-</div>
-<p><strong>Two GRU updates per candidate:</strong> first read the candidate, then read the chosen include/exclude answer. The binary head sits between those updates. The memory resets from a new observation for the next compound decision.</p>
-<pre><code><span class="comment"># These are separately learned layers in CompoundDecoder.</span>
-self.prefix = nn.GRUCell(hidden_dim, hidden_dim)
-self.offer_score = nn.Linear(hidden_dim, 1)
-self.include_score = nn.Linear(hidden_dim, 2)
-self.value = nn.Linear(hidden_dim, 1)</code></pre><p class="caption">compound.py:45–49 · selected declarations. Candidate input currently uses its label embedding plus position/selection-count features; it does not directly gather that candidate’s individual object vector. Board context enters through the pooled root state.</p>
-<h2>3. What gets shared—and what learns?</h2>
-<div class="tablewrap"><table><thead><tr><th>Part</th><th>Regular path</th><th>Compound path</th></tr></thead><tbody><tr><td>Object encoding</td><td colspan="2">Uses the same model modules for player/card/permanent features and the first attention layer</td></tr><tr><td>Action features</td><td>One vector per legal action</td><td>Reuses the builder for action-aligned offers; grouped declarations/payments skip it</td></tr><tr><td>Policy scoring</td><td><code>policy_head</code>: H → H → 1</td><td><code>offer_score</code>: H → 1; <code>include_score</code>: H → 2</td></tr><tr><td>Memory while choosing</td><td>None</td><td><code>prefix</code>: GRU, H → H</td></tr><tr><td>Value prediction</td><td>Regular <code>value_head</code></td><td>Separate decoder <code>value</code> head</td></tr></tbody></table></div>
-<p>Compound loss backpropagates through its heads, recurrent memory and the shared encoders it used. It does <strong>not</strong> train the unused regular policy head. Shared modules do not mean separately trained flat and compound checkpoints automatically have identical weights.</p>
-<h2>4. Earlier hybrid proposal · superseded</h2>
-<div class="callout"><strong>Accepted direction, not implemented:</strong> keep ordinary actions on the regular policy path; give naming bounded internal choices. Reuse the compound learner’s conditional evidence and grouped credit conventions, with explicit integration.</div>
-<p>The new naming decoder would select a group, then a name, and resolve that leaf into one original native naming Command. It need not scan all names with include/exclude choices. Simply enabling today’s compound mode would still score all naming offers and would replace ordinary selection too.</p>
-<details><summary>Shared execution contract and remaining proof</summary><p>Native offers own legality, candidate identity and binding. A compound submission carries an offer ID and typed candidate answers; native lowering rehearses it on an exact fork and emits revision-bound Commands. Decoding does not advance the live game. A stale suffix rejects; earlier committed effects are not rolled back.</p><p>Humans and LLMs currently select ordinary Commands through buttons or text references; neither uses this neural GRU. A human multi-select form or LLM structured response could fill compound offers, but those are not implemented ordinary-play interfaces.</p><p>Names-only work still needs complete bounded groups, useful public features, independent naming transport, stable checkpoint binding, correct joint likelihoods and explicit conditional regularization. The existing compound learner sums KL at retained behavior prefixes; it does not compute exact joint reverse KL over every branch. Equal group sizes do not make learned group probabilities uniform.</p><p>Full end-to-end throughput measurement is not a shipping prerequisite per Jack Heart. Coverage, privacy, replay, stale rejection, gradient correctness and applicable CI remain required. No hierarchy speed or strength gain is established.</p></details>
-<h2>Review questions</h2><ol class="questions"><li><strong>Scope resolved:</strong> ordinary sequential hierarchical engine decisions for names; one regular policy head throughout.</li><li><strong>Engineering work remains:</strong> remove the active alternate decoder; implement complete bounded group/name prompts and prove the ordinary policy/rollout path.</li></ol>
-<footer>MTG-243 remains at interactive review. This page explains inspected source and proposed integration; it changes no runtime code. No merge or strength experiment is authorized. Working decisions: <a href="mtg-243-naming.md">mtg-243-naming.md</a>.</footer>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+  <tr><th>Action</th><th>Concept</th><th>API / data</th></tr>
+  <tr><td>Choose a group</td><td>Ordinary decision over a balanced, contiguous span of sorted names (at most 64 per prompt)</td><td><code>Decision::NameCard{scope}</code>, <code>ActionOption.name_group=[first,last]</code>, v9 <code>name_candidates[A,4]</code> columns 3–4</td></tr>
+  <tr><td>Choose a name</td><td>Leaf decision; the only commit</td><td>v9 columns 1–2 (name row, definition ref); <code>ExileNamed</code></td></tr>
+  <tr><td>Policy learns either choice</td><td>Regular head, rollout, value and learner; one transition per prompt</td><td>Group vector = exact mean of member name vectors; binding <code>public-groups-v1</code> + <code>naming_branching</code></td></tr>
+  <tr><td>Human or LLM plays</td><td>Existing offer controls and text, with no new UI</td><td>Shared offers, Commands and text projection</td></tr>
+</table>
+
+<h2>Points checked, with no change needed</h2>
+<ol>
+  <li><strong>Retained compound-offer bindings.</strong> <code>compound_offers</code> and <code>compound_commands_json</code> have no Python caller. They belong to the live structured-offer family, though: Academy studies and the action benchmark call <code>structured_offers</code>. They also have Rust rule tests, sit in MTG-241's payment domain, and never touch naming. The decision to keep deletion narrowly about the neural compound architecture keeps them.</li>
+  <li><strong>v1–v7.</strong> These versions see groups as anonymous modal choices. They never carried name identity, so this pretends nothing. v8 rejects group prompts explicitly. This is a reversible assumption recorded in <code>questions.md</code>.</li>
+  <li><strong>Names line up across layers:</strong> <code>NameScope</code>, <code>NAME_BRANCHING</code>, <code>name_group</code> and <code>public-groups-v1</code>.</li>
+</ol>
+
+<h2>Remaining (delivery, not design)</h2>
+<ol>
+  <li>Commit the relocated docs section in <code>docs/observation-and-model.md</code> and the retargeted link in the managym README.</li>
+  <li>Update <code>scratch/pr-review.html</code> and <code>scratch/naming-risks.html</code> to describe group → name prompts, v9 and the decoder removal.</li>
+  <li>Read the PR #424 CI result on the new head, then demo and hand off for interactive review. No merge or Auto-Ship.</li>
+</ol>
 </main>
-<script>
-const stages=[
-{memory:'Pooled visible game state',title:'Select “declare attackers”',explanation:'There is one offer, so its probability is 1. The decoder then feeds that offer’s vector into the GRU. The GRU now knows which kind of choice it is filling in.',sample:'Selected attackers: none yet',prob:'Joint probability so far: 1',cellTitle:'Offer scorer',cell:'Offer features + initial memory',headTitle:'Choose offer',head:'Declare attackers: probability 1',updateTitle:'GRU remembers selected offer',update:'Ready to consider creature A',code:'offer_index = choose(\n    self.offer_score(\n        torch.tanh(offer_rows + state)\n    ).squeeze(-1)\n)\nstate = self.prefix(\n    offer_rows[offer_index], state\n)',source:'compound.py:122–125 · excerpt, formatting expanded'},
-{memory:'Board context + selected offer',title:'A: choose include',explanation:'The GRU reads A’s candidate features. The binary head reads the updated memory and produces two scores. We illustrate sampling include, then feed that answer back into the same GRU.',sample:'Selected attackers: A',prob:'Joint probability so far: 1 × 0.75 = 0.75',cell:'Read A’s label + position/count features',head:'Exclude 0.25 · Include 0.75 → include',update:'Remember: A was included',take:1},
-{memory:'Board context + offer + A included',title:'B: choose exclude, given A',explanation:'The weights are unchanged. The hidden memory is different because A was selected. B’s probabilities can therefore depend on the choice about A.',sample:'Selected attackers: A',prob:'Joint probability so far: 1 × 0.75 × 0.80 = 0.60',cell:'Read B’s label + position/count features',head:'Exclude 0.80 · Include 0.20 → exclude',update:'Remember: A included, B excluded',take:0},
-{memory:'Board context + offer + A yes, B no',title:'C: choose include, given A and B',explanation:'C is evaluated with both earlier choices in memory. After recording include, the decoder returns the completed selected set [A, C]. No further model decision is needed for this submission.',sample:'Selected attackers: A, C',prob:'Joint probability: 1 × 0.75 × 0.80 × 0.70 = 0.42',cell:'Read C’s label + position/count features',head:'Exclude 0.30 · Include 0.70 → include',update:'Complete submission: attackers [A, C]',take:1}
-];
-function setStep(index){const s=stages[index];document.querySelectorAll('[data-step]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.step)===index)));const write=(id,v)=>document.getElementById(id).textContent=v;write('memory-title',index?'Memory arriving at this candidate':'Initial memory');write('memory-text',s.memory);write('cell-title',s.cellTitle||'Same GRU: read candidate');write('cell-text',s.cell);write('head-title',s.headTitle||'Same binary head: H → 2');write('head-text',s.head);write('update-title',s.updateTitle||'Same GRU: read chosen answer');write('update-text',s.update);write('flow-end',index===3?'Return submission; live game unchanged':'Carry this memory to the next stage');write('step-title',s.title);write('step-explanation',s.explanation);write('sample',s.sample);write('probability',s.prob);write('step-code',s.code||'state = self.prefix(\n    feature + self.position(position), state\n)\nlogits = self.include_score(state)\ntake = choose(\n    logits.masked_fill(~allowed, -torch.inf)\n)\nstate = self.prefix(\n    self.choice.weight[take], state\n)');write('step-source',s.source||'compound.py:141–157 · excerpt; mask construction and selected-ID append omitted');document.getElementById('flow-desc').textContent=index?s.title+'. '+s.explanation:stages[0].explanation;}
-document.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',()=>setStep(Number(b.dataset.step))));
-</script>
-</body></html>
+</body>
+</html>
