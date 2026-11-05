@@ -30,7 +30,6 @@ from experiments.state_representation_gpu import (
     ProgressWatch,
     StudyJob,
     _run_child,
-    admit_throughput,
     recipe,
     runs as admission_runs,
 )
@@ -242,8 +241,8 @@ def runs(revision: str) -> list[Run]:
                 "-m experiments.state_representation_gpu",
                 "scripts/profile_representation.py --worker",
             ),
-            "until": "updates=4",
-            "max_hours": 1.25,
+            "until": "updates=1",
+            "max_hours": 0.5,
             "max_usd": Decimal("0.50"),
             "config": spec.model_dump_json(),
             "inputs": inputs,
@@ -264,6 +263,7 @@ def worker() -> None:
     check_references(
         Path(os.environ["ETUDE_INPUTS_DIR"]), out / "cuda-parity.json", "cuda"
     )
+    print((out / "cuda-parity.json").read_text(), flush=True)
     with (out / "cuda-routing-tests.txt").open("w") as log:
         subprocess.run(
             [
@@ -281,6 +281,7 @@ def worker() -> None:
             stdout=log,
             stderr=subprocess.STDOUT,
         )
+    print((out / "cuda-routing-tests.txt").read_text(), flush=True)
     for arm in ("typed_pool", "typed_gru"):
         logs = out / f"{arm}-supervision"
         logs.mkdir(parents=True)
@@ -309,12 +310,13 @@ def worker() -> None:
             ),
             child_stop=child_stop,
         )
-    # New children have no patches/cProfile. Their complete phase clocks alone
-    # determine throughput admission; operator-profile clocks are diagnostic.
-    admission = out / "uninstrumented"
-    admission.mkdir()
-    admit_throughput(admission, stop, deadline, spec.admission_limits)
-    atomic_json(out / "etude-result.json", {"clocks": {"updates": 4}})
+        print((out / arm / "diagnosis.json").read_text(), flush=True)
+        for phase in ("inference", "learning"):
+            print(f"{arm} {phase} operators:", flush=True)
+            print((out / arm / f"{phase}.operators.txt").read_text(), flush=True)
+    # Finish this job so Etude publishes the trace inventory before any separate
+    # throughput admission. A lost admission must not erase completed diagnosis.
+    atomic_json(out / "etude-result.json", {"clocks": {"updates": 1}})
 
 
 def main() -> None:
