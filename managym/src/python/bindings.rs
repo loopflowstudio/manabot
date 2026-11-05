@@ -102,7 +102,7 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
-    if config.policy_input_version >= 8 {
+    if config.policy_input_version >= 9 {
         dict.set_item(
             "name_candidates",
             to_numpy_array_f32(
@@ -123,7 +123,10 @@ fn encoded_to_dict<'py>(
             (
                 "effect_details",
                 &encoded.effect_details,
-                [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
+                [
+                    shared_effects::detail_rows(config.policy_input_version),
+                    shared_effects::DETAIL_DIM,
+                ],
             ),
             (
                 "effect_members",
@@ -1196,6 +1199,10 @@ pub struct PyPlayer {
 #[derive(Clone, Default)]
 pub struct PyContinuousEffect {
     #[pyo3(get, set)]
+    pub program: Vec<(u16, i32)>,
+    #[pyo3(get, set)]
+    pub description: Option<String>,
+    #[pyo3(get, set)]
     pub modification: String,
     #[pyo3(get, set)]
     pub power: Option<i32>,
@@ -1232,6 +1239,8 @@ impl PyContinuousEffect {
 impl From<ContinuousEffectData> for PyContinuousEffect {
     fn from(value: ContinuousEffectData) -> Self {
         Self {
+            program: value.program,
+            description: value.description,
             modification: value.modification,
             power: value.power,
             toughness: value.toughness,
@@ -1251,6 +1260,8 @@ impl From<ContinuousEffectData> for PyContinuousEffect {
 impl From<PyContinuousEffect> for ContinuousEffectData {
     fn from(value: PyContinuousEffect) -> Self {
         Self {
+            program: value.program,
+            description: value.description,
             modification: value.modification,
             power: value.power,
             toughness: value.toughness,
@@ -1893,6 +1904,10 @@ impl From<PyKeywords> for KeywordData {
 #[derive(Clone)]
 pub struct PyPermanent {
     #[pyo3(get, set)]
+    pub colors: Option<Vec<String>>,
+    #[pyo3(get, set)]
+    pub keyword_counter_timestamps: BTreeMap<String, i32>,
+    #[pyo3(get, set)]
     pub transforms: u32,
     #[pyo3(get, set)]
     pub id: i32,
@@ -1973,6 +1988,8 @@ pub struct PyPermanent {
 impl From<PermanentData> for PyPermanent {
     fn from(value: PermanentData) -> Self {
         Self {
+            colors: value.colors,
+            keyword_counter_timestamps: value.keyword_counter_timestamps,
             id: value.id,
             registry_key: value.registry_key,
             controller_id: value.controller_id,
@@ -2013,6 +2030,8 @@ impl From<PermanentData> for PyPermanent {
 impl From<PyPermanent> for PermanentData {
     fn from(value: PyPermanent) -> Self {
         Self {
+            colors: value.colors,
+            keyword_counter_timestamps: value.keyword_counter_timestamps,
             id: value.id,
             registry_key: value.registry_key,
             controller_id: value.controller_id,
@@ -4201,16 +4220,7 @@ impl PyEnv {
         }
         let config = ObservationEncoderConfig {
             policy_input_version,
-            max_actions: if policy_input_version == 8 {
-                ObservationEncoderConfig::default().max_actions.max(
-                    crate::cards::content_pack::default_content_pack()
-                        .name_candidates()
-                        .len(),
-                )
-            } else {
-                ObservationEncoderConfig::default().max_actions
-            },
-            max_facts: max_facts.unwrap_or(if policy_input_version >= 7 {
+            max_facts: max_facts.unwrap_or(if policy_input_version == 7 {
                 crate::agent::observation_encoder::V5_FACT_ROWS
             } else {
                 ObservationEncoderConfig::default().max_facts
@@ -4532,6 +4542,12 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 }
 
 #[cfg(feature = "python")]
+#[pyfunction]
+fn validate_policy_input(obs: &PyObservation, version: u8) -> PyResult<()> {
+    crate::agent::observation_encoder::validate_policy_input(&obs.clone().into(), version)
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
@@ -4590,6 +4606,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
     m.add_class::<PySharedEffect>()?;
+    m.add_function(wrap_pyfunction!(validate_policy_input, m)?)?;
     m.add_class::<crate::agent::shared_effects::EffectObject>()?;
     m.add_class::<crate::agent::shared_effects::EffectMembership>()?;
     m.add_class::<PyCopyEffect>()?;

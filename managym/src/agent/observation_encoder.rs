@@ -88,7 +88,7 @@ pub const FACT_SOURCE_INDEX: usize = 10;
 pub const FACT_VALID_INDEX: usize = 11;
 pub const FACT_DIM: usize = 12;
 
-/// What a fact row states; numbering is part of policy input v5.
+/// What a fact row states. Kinds 1–10 are frozen v5; 11–14 require input v8.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FactKind {
@@ -115,10 +115,14 @@ pub enum FactKind {
     Transforms = 9,
     /// Attacker predicate token for a combat continuation (id: frame index).
     CombatRestriction = 10,
+    EffectProgram = 11,
+    EffectiveColor = 12,
+    KeywordCounterTimestamp = 13,
+    ContinuationProgram = 14,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 10] = [
+    pub const ALL: [FactKind; 14] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -129,6 +133,10 @@ impl FactKind {
         FactKind::CopyException,
         FactKind::Transforms,
         FactKind::CombatRestriction,
+        FactKind::EffectProgram,
+        FactKind::EffectiveColor,
+        FactKind::KeywordCounterTimestamp,
+        FactKind::ContinuationProgram,
     ];
 }
 
@@ -182,7 +190,7 @@ pub fn policy_action_count(
     }
     Ok(count.min(capacity))
 }
-pub const NAME_DIM_V8: usize = 2;
+/// v9 name candidate columns per action row.
 pub const NAME_DIM_V9: usize = 4;
 
 /// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
@@ -224,12 +232,12 @@ impl ObservationEncoderConfig {
         self.name_dim() * self.max_actions
     }
 
-    /// v8 rows: name row + 1, definition + 1. v9 appends the first and last
-    /// name rows (+ 1) of a naming group choice; v8 cannot represent groups.
+    /// v9 rows: name row + 1, definition + 1, then the first and last name
+    /// rows (+ 1) of a naming group choice. Earlier inputs carry no name
+    /// identity and see naming prompts as anonymous modal choices.
     pub fn name_dim(&self) -> usize {
         match self.policy_input_version {
             9.. => NAME_DIM_V9,
-            8 => NAME_DIM_V8,
             _ => 0,
         }
     }
@@ -302,7 +310,8 @@ impl ObservationEncoderConfig {
 
     pub fn effect_details_len(&self) -> usize {
         if self.policy_input_version >= 7 {
-            super::shared_effects::DETAIL_ROWS * super::shared_effects::DETAIL_DIM
+            super::shared_effects::detail_rows(self.policy_input_version)
+                * super::shared_effects::DETAIL_DIM
         } else {
             0
         }
@@ -444,6 +453,7 @@ impl EncodedObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
+    UnsupportedLayerInput(u8),
     InvalidShared(&'static str),
     InvalidName(&'static str),
     Capacity {
@@ -462,6 +472,10 @@ impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
+            Self::UnsupportedLayerInput(version) => write!(
+                f,
+                "policy input v{version} cannot represent layer payload; select v8"
+            ),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
                 field,
@@ -522,11 +536,61 @@ pub fn encode(
     Ok(encoded)
 }
 
+/// Input compatibility is independent of card/deck admission. Both encoders
+/// call this before writing buffers, so retained models never silently omit a
+/// new layer payload or fail later on an embedding index.
+pub fn validate_policy_input(obs: &Observation, version: u8) -> Result<(), ObservationEncodeError> {
+    if !(1..=9).contains(&version) {
+        return Err(ObservationEncodeError::InvalidShared(
+            "unsupported policy input version",
+        ));
+    }
+    if version >= 8 {
+        return Ok(());
+    }
+    let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
+    let novel = |e: &ContinuousEffectData| {
+        !e.program.is_empty()
+            || matches!(
+                e.modification.as_str(),
+                "SetCreatureTypes" | "SwitchPt" | "LoseNonManaAbilities"
+            )
+    };
+    let needs_v8 = permanents.clone().any(|p| {
+        p.colors.is_some()
+            || !p.keyword_counter_timestamps.is_empty()
+            || p.effects.iter().any(novel)
+            || p.copy
+                .as_ref()
+                .is_some_and(|c| c.exceptions.iter().any(novel))
+    }) || obs
+        .agent
+        .effects
+        .iter()
+        .chain(&obs.opponent.effects)
+        .any(novel)
+        || obs
+            .shared_effects
+            .iter()
+            .flatten()
+            .any(|r| novel(&r.effect));
+    if needs_v8
+        || obs
+            .continuation
+            .iter()
+            .any(|frame| !frame.program.is_empty())
+    {
+        return Err(ObservationEncodeError::UnsupportedLayerInput(version));
+    }
+    Ok(())
+}
+
 pub fn encode_into(
     obs: &Observation,
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    validate_policy_input(obs, config.policy_input_version)?;
     validate_buffer_len(
         "semantic_cards",
         out.semantic_cards.len(),
@@ -649,11 +713,6 @@ pub fn encode_into(
         }
     }
     for action in obs.action_space.actions.iter().take(config.max_actions) {
-        if action.name_group.is_some() && config.policy_input_version == 8 {
-            return Err(ObservationEncodeError::InvalidName(
-                "policy input v8 offers whole-vocabulary names and cannot represent naming groups",
-            ));
-        }
         if let Some(definition) = action.name_definition {
             if action.name_index.is_none() || definition as usize > MAX_ACTION_SELECTOR {
                 return Err(ObservationEncodeError::InvalidName(
@@ -1252,6 +1311,24 @@ fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
                 *count as f32 / 10.0,
             );
         }
+        if let Some(colors) = &permanent.colors {
+            if colors.is_empty() {
+                push(
+                    object,
+                    FactKind::EffectiveColor,
+                    name_value("Color::Colorless"),
+                    1.0,
+                );
+            }
+            for color in colors {
+                push(
+                    object,
+                    FactKind::EffectiveColor,
+                    name_value(&format!("Color::{color}")),
+                    1.0,
+                );
+            }
+        }
         for subtype in &permanent.temp_subtypes {
             push(object, FactKind::AddedSubtype, name_value(subtype), 1.0);
         }
@@ -1290,6 +1367,20 @@ fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
         }
     }
     for (index, frame) in obs.continuation.iter().enumerate() {
+        for (ordinal, &(kind, value)) in frame.program.iter().enumerate() {
+            out.push(Fact {
+                object: if frame.controller == obs.agent.player_index as usize {
+                    obs.agent.id
+                } else {
+                    obs.opponent.id
+                },
+                kind: FactKind::ContinuationProgram,
+                id: (index + 1) as i32,
+                detail: value,
+                values: [kind as f32, ordinal as f32],
+                effect: None,
+            });
+        }
         if let Some(attackers) = &frame.attackers {
             out.push(Fact {
                 object: if frame.controller == obs.agent.player_index as usize {
@@ -1319,6 +1410,18 @@ fn facts(obs: &Observation, shared: bool) -> Vec<Fact> {
         });
         for exception in &copy.exceptions {
             effect_facts(permanent.id, FactKind::CopyException, exception, &mut out);
+        }
+    }
+    for permanent in permanents() {
+        for (kind, &timestamp) in &permanent.keyword_counter_timestamps {
+            out.push(Fact {
+                object: permanent.id,
+                kind: FactKind::KeywordCounterTimestamp,
+                id: name_value(&format!("CounterKind::{kind}")),
+                detail: 0,
+                values: [0.0, 0.0],
+                effect: Some((0.0, timestamp, None)),
+            });
         }
     }
     if shared {
@@ -1363,6 +1466,16 @@ fn effect_facts(object: i32, kind: FactKind, effect: &ContinuousEffectData, out:
                 .map(|color| name_value(&format!("Color::{color}"))),
         )
         .collect();
+    for (ordinal, &(token_kind, token_value)) in effect.program.iter().enumerate() {
+        out.push(Fact {
+            object,
+            kind: FactKind::EffectProgram,
+            id,
+            detail: token_value,
+            values: [f32::from(token_kind), ordinal as f32],
+            effect: Some((duration, effect.timestamp, effect.source_registry_key)),
+        });
+    }
     for detail in if details.is_empty() { vec![0] } else { details } {
         out.push(Fact {
             object,
@@ -1396,6 +1509,12 @@ fn timestamp_ranks(obs: &Observation, shared: bool) -> BTreeMap<i32, f32> {
                 .map(|effect| effect.timestamp),
         );
     }
+    stamps.extend(
+        obs.agent_permanents
+            .iter()
+            .chain(&obs.opponent_permanents)
+            .flat_map(|p| p.keyword_counter_timestamps.values().copied()),
+    );
     stamps.sort_unstable();
     stamps.dedup();
     stamps
@@ -1479,7 +1598,7 @@ fn encode_actions(
                 name_row[0] = (index + 1) as f32;
                 name_row[1] = action.name_definition.map_or(0.0, |id| (id + 1) as f32);
             }
-            // A group is its public member span; v8 rejected groups above.
+            // A group is its public member span.
             (_, Some([first, last])) if names == NAME_DIM_V9 => {
                 name_row[2] = (first + 1) as f32;
                 name_row[3] = (last + 1) as f32;
@@ -1904,6 +2023,8 @@ mod tests {
 
     fn make_permanent(id: i32, mine: bool) -> PermanentData {
         PermanentData {
+            colors: None,
+            keyword_counter_timestamps: Default::default(),
             id,
             registry_key: 0,
             controller_id: if mine { 10 } else { 20 },

@@ -185,9 +185,9 @@ native scalar/vector buffer shapes, model shape checks and checkpoint receipts.
 
 A native `relations[64,49]` float32 buffer carries ordered stack entries,
 announced targets and clauses, chosen modes and abilities, kicker, reserved
-sacrifices, suspended payments and waiting triggers. V5/v6 player, card and
+sacrifices, suspended payments and waiting triggers. V5–v8 player, card and
 permanent widths are 73/56/38. Native buffers bind relation semantics by width
-(32 for v2/v3, 33 for v4, 49 for v5/v6); validity stays at column 31. The fact
+(32 for v2/v3, 33 for v4, 49 for v5–v8); validity stays at column 31. The fact
 axis binds capacity; at 128 rows v5 and v6 encode identically, while the saved
 configuration still distinguishes their identities. Checkpoints omitting the
 version load as v1 through `ObservationConfig.from_checkpoint`; legacy configs
@@ -200,7 +200,7 @@ truncating. Transport IDs are joins to the card catalog and object table,
 never numeric features. At `Decision::ManaChoice` the activation source is
 unavailable because rules state has discarded it.
 Waiting delayed abilities (frame kind 10) carry event codes independently of
-frequency and expiry. In v5/v6, relation row kind 9 carries frequency in column
+frequency and expiry. In v5–v8, relation row kind 9 carries frequency in column
 28 (1 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
 objects remain kind-8 reference rows, separate from event context. Historical
 captures without a frequency field retain unknown frequency rather than
@@ -228,6 +228,55 @@ and [shared effect inputs](../manabot/README.md#shared-effect-inputs). These
 engineering proofs establish no learning-quality advantage. Persistent memory
 remains future work. Fresh defaults remain v6; frozen v1–v6 checkpoints keep
 their meanings, and the TLA v10 pilot trains on v7.
+
+### Composable layer input v8
+
+For a new run requiring composable layer programs, explicitly select v8 before
+constructing the collector and model. Fresh configurations remain v6. For example,
+this prepares a recipe and its model input without starting training:
+
+```python
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.recipes.local import local_smoke
+
+recipe = local_smoke(steps=1)
+recipe.observation = ObservationConfig(policy_input_version=8)
+space = ObservationSpace(recipe.observation)
+```
+
+Use that same `space` for `SeatRoutedCollector` and
+`ActorCritic(space, recipe.agent)`. The serialized `TrainingRegime` retains the
+selected input. V8 carries structured granted, copy-exception and captured
+continuation programs, changed colors and keyword-counter timestamps. V7 remains
+available for representable shared effects; it cannot encode every new layer
+payload.
+
+The shared `validate_policy_input` boundary rejects unrepresentable v1–v7 layer
+payloads in both native and Python encoders before writing encoded observations,
+selecting an action prefix or running inference. The diagnostic names the
+selected version, for example: `policy input v6 cannot represent layer payload;
+select v8`. A starting state may encode successfully and a later state fail;
+this is observation admission, not whole-game preflight or rollback of an action
+already executed. Defined-card eligibility, input representability and
+checkpoint/world admission are separate checks.
+
+On rejection, preserve the failed run's configuration and evidence. For new work
+requiring these payloads, configure v8 and construct a compatible model. Load saved
+observation configurations through `ObservationConfig.from_checkpoint` and keep
+their saved versions, omissions and model shapes; an absent version means v1.
+Do not edit a checkpoint's input version or reshape its weights to bypass the
+error. Saved-policy evaluation uses that policy's input and normal world
+admission. Successful architecture loading alone does not admit a checkpoint to
+the current world; see [world identity](../manabot/README.md#world-identity).
+Selecting v8 does not restart a failed run or swap its live policy.
+
+V7 and v8 share `effects[128,18]` headers and `effect_members[2048,2]` joins.
+V7 has `effect_details[512,3]` and defaults to `facts[128,12]`; v8 has
+`effect_details[4096,3]` and defaults to `facts[512,12]`. Local fact capacity is
+configurable through `max_facts` in either version. Headers own bounded slices
+of details and members. Allocate and collect every key from the selected
+`ObservationSpace`; overflow rejects rather than truncating a payload.
 
 ### Optional recent public events
 

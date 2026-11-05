@@ -632,6 +632,9 @@ class SideboardCard:
 class ContinuousEffect:
     """One continuous-effect record on a player or permanent (CR 611, 613)."""
 
+    program: list[tuple[int, int]]
+    description: str | None
+
     # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
     # BecomeCreature, Nonlegendary, LoseAllAbilities, Firebending,
     # CantBeBlocked, CantBlock, ExileIfWouldDie, KeepUnspentMana or
@@ -674,6 +677,8 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    colors: list[str] | None
+    keyword_counter_timestamps: dict[str, int]
     transforms: int
     id: int
     registry_key: int
@@ -814,6 +819,8 @@ class ClauseTarget:
     clause: int
 
 class ContinuationFrame:
+    program: list[tuple[int, int]]
+    program_description: str | None
     remembered: list[VisibleReference]
     inherited_from: VisibleReference | None
     attackers: str | None
@@ -858,6 +865,7 @@ class NameCandidate:
     def definition(self) -> int | None: ...
 
 def naming_catalog() -> list[NameCandidate]: ...
+def validate_policy_input(obs: Observation, version: int) -> None: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...

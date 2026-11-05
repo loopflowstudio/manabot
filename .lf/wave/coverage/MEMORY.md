@@ -1,6 +1,7 @@
-# Engine memory
+# Coverage memory
 
-Carried from the legacy `rules` wave (renamed Engine).
+Carried from the legacy `rules` wave, subsequently named Engine and renamed
+`coverage` on 2026-11-04 (`da355b562`).
 
 ## Operating principle
 
@@ -477,6 +478,140 @@ preserves accepted decisions, dated proof limits and source history.
   still allocates a timestamp: they are not complete state/hash no-ops.
   This is the MTG-238/derived-state-cache merge's ownership invariant, not a
   new performance claim.
+
+## Composable layers and successor inputs (2026-11-04; pending review)
+
+- Jack Heart accepted MTG-244 as one layer-evaluation Task: Beorn/Kellan are
+  real definitions, with historical interactions as rules fixtures. The one
+  `Game::characteristics` authority owns type/color/ability/P/T composition and
+  dependency ordering; adjacent execution and mana refactors retain their own
+  responsibilities. Focused witnesses are not exhaustive Magic conformance.
+- Jack Heart approved a new input version on 2026-11-04. The implementation
+  selects explicit v8 while retaining fresh v6 and frozen saved versions.
+  Native/Python parity alone cannot prove compatibility: identical arrays can
+  both exceed a retained model's embedding vocabulary. New payloads need the
+  selected version's model-forward and checkpoint proofs as well as shared
+  pre-inference rejection on older inputs. Card admission stays definition-based.
+- Explicit successor selection and failure recovery are part of the caller's
+  usage contract, following Jack Heart's 2026-11-04 successor-input approval.
+  Select v8 before constructing a new collector/model; observation admission
+  can reject a later state after earlier observations succeed. It is neither
+  whole-game preflight nor rollback of committed actions. Preserve failed-run
+  evidence and load saved configurations through `from_checkpoint`, including
+  absent-version v1 semantics. Architecture loading and current-world admission
+  remain separate; changing a saved version or reshaping weights is not recovery.
+  The recipe and selected-space layouts are documented in
+  `docs/training.md#policy-inputs`; this does not authorize a default migration.
+- An activation offered and paid from layered abilities must resolve the
+  captured program, including after source departure. A printed-definition
+  lookup at resolution discarded a granted activation in the directed witness.
+  Catalog provenance can compress observation input; it is not resolution
+  authority. Pending program projection belongs alongside the retained frame.
+- Program ownership is a model invariant as well as an engine invariant.
+  A GRU spanning all local fact rows let one holder's program influence another.
+  Independent live-program reduction fixes that counterexample and avoids
+  recurrence on ordinary states. The bounded CPU component comparison reduced
+  ordinary inference from 15.36 to 3.94 ms and two-program inference from 15.61
+  to 4.76 ms (batch 16, width 64, 512 facts, ten samples, one thread). Exact
+  receipts/configuration are retained in MTG-244's risk note at
+  `043705783:scratch/mtg-244-risk-validation.md`. These are component costs,
+  not full-policy performance, accelerator behavior or learning-quality results.
+- Jack Heart also required risk measurement and attempted mitigation before
+  review readiness. An anthem board does not exercise same-layer dependency
+  ordering, and combining added games with the old step total conceals the
+  ordinary-workload comparison. Separate workload results, retain complete
+  action/score digests and counts, and attribute rebuild/dependency costs before
+  choosing optimizations. Tap-state predicates require characteristic
+  invalidation when discovered dependencies read them. The implementation
+  at `b2fb06cba` retains the raw board
+  across mana writes unless a discovered layer condition reads mana, including
+  nested conditions and newly granted statics. At that revision, finalized
+  activation outputs and trigger indexes still refresh; debug recomputation
+  remains the correctness oracle. Eight warmed-board pool-write probes fell from 471 to 10 allocations
+  each. Subsequent complete-payment attribution (`fb264f7c7`, retained bundle
+  `88d6abd34d8b56a9606c3ec58696063955d08226`) preserves every legal action,
+  selected action, resource, captured program and digest across eight pool-funded
+  and eight land-funded Cadets activations. Allocations fall 1,176→510 and
+  2,882→1,668 respectively; land payment retains both necessary tap rebuilds.
+  This closes payment attribution for that mitigation, not subsequent cache
+  changes or whole-game throughput acceptance.
+  Neither a digest refresh nor a component speedup waives the 10% Engine Budget.
+  The standard CI budget runs only the original TLA workloads; added dependency
+  and policy harnesses have a separate sequential `layer-risk.yml` producer.
+  Its first publication failed historical-source acquisition before timing.
+  A full branch checkout need not contain a squash-retained reference: verify
+  and fetch exact pinned commits, record provenance before acquisition and
+  retain partial artifacts even on failure, including hidden output paths.
+- MTG-244's first same-runner CI (`41933042842`, 2026-11-04) refutes engine
+  readiness despite component gains: search total 168.192→453.756 s, worst
+  reply 4.909→15.349 s, steps/s 12,817→5,654.8, with matching checked counts
+  and digests. No cost was accepted and the reference remains unchanged.
+  Later contended local measurements cannot supersede that regression.
+  Jack Heart subsequently directed more ambitious hot-path rethinking, aiming
+  to outperform the pre-layer engine; a green 10% budget is only a guard.
+  Immutable source plans and conservative dependency pruning are now implemented
+  (`614a38fc8`): copiable objects/plans bind exact definition identity,
+  incarnation and timestamp across revision rebuilds and forks. Intermediate
+  objects detach on writes; plausible dependency pairs still compare instructions
+  and generating-ability existence. Debug reconstructs fresh plans and checks
+  skipped pairs. Ordinary release probes fell from 40,622 context clones /
+  45,050 semantic comparisons to zero, while board rebuilds remained 205,709.
+  Finer invalidation remains a proposal, with dynamic membership/ownership
+  complexity to justify against residual cost. Exact rules, complete choices,
+  debug oracles and frozen inputs/evidence remain constraints.
+- The incremental repair at `1c3cf1819` separates tap revisions, retains fixed
+  activation views across unrelated pool/tap writes and invalidates trigger
+  kinds from the raw board rather than activation finalization. Nested reads,
+  granted statics and stun-counter removal still invalidate their dependencies.
+  Shared immutable scans avoid per-permanent whole-board debug recomputation
+  while preserving the raw-board oracle and independent finalization checks.
+  This repaired the retained tiny-comparison deadline locally; it establishes
+  no isolated release-speed result. Repaired Academy fixtures preserve Commands
+  and viewer projections after catalog-id resolution. Full-suite acceptance is
+  distinct from these focused repairs. Exact evidence is retained at
+  `1c3cf1819:scratch/mtg-244-ci-repair.md`.
+- Static abilities of one source share a timestamp and apply in definition
+  order, so a definition lists an ability loss before the grant it keeps. Tests
+  written before composable layers can encode pre-layer behavior: Toph and Phoenix
+  Fleet Airship asserted that layer-6 ability loss undoes a layer-4 type effect,
+  contrary to CR 613.6. Check such a failure against the rules before repairing
+  either side; Energybending and Honest Work in the same CI run were real
+  regressions (`c46e4f3d8`, pending CI and Jack Heart's review).
+- A read-only SBA check needs no trigger-source snapshot. `68ef4a63d` defers
+  capture until the first relevant mutation while preserving one pre-batch
+  source set for simultaneous events. Its same-runner Engine Budget
+  `41956687926` (2026-11-05 UTC) improves on `ea316ff14`: search
+  164.461→132.934 s, worst 4.818→3.860 s, steps 7.772806→7.104065 s,
+  with full score/action/step/simulation equality and zero caps. These are
+  gains for the combined source-plan/SBA implementation on ordinary workloads,
+  not attribution to one cut or end-to-end training evidence. Earlier failed
+  budgets remain contrary history; no baseline or tolerance moved. Raw artifact
+  is retained in gzip tar blob `402a408e4d96fee1eba9c561f553116af591c19c`.
+  That head's long integration passes, but Rust/main integration were cancelled. Its complete
+  dependency/policy comparison and later simplification's hosted results remain
+  outstanding. A predecessor's passing job cannot certify a changed head.
+- Exact numeric transport does not guarantee meaningful model separation.
+  V8 integers 4096/8192 shared an embedding bucket and saturated the raw numeric
+  projection to identical local-program outputs. Signed log magnitudes repair
+  that counterexample in local/shared v8 reducers while retained versions keep
+  their paths. Independent shared programs are batched without sharing recurrent
+  state. Join/order/padding/gradient and real collector/checkpoint-selection
+  checks support these mechanisms, not general injectivity or learning quality.
+  Exact receipts and limitations are at
+  `fb264f7c7:scratch/mtg-244-risk-validation.md`. All seven before/after input
+  inventories agree in native/Python arrays, configurations and storage. Completed
+  isolated comparison `41952171271` subsequently measured full CPU policies at
+  `beaacaa19`: v8 program inference 137.41→125.41 ms and forward/backward
+  376.93→337.68 ms (B16/D64, one thread, eight samples after two warmups).
+  Ordinary controls varied/regressed, so the program result is no general
+  speedup. Its engine still regressed. All seven cases and complete payment
+  traces matched. Source-plan run `41955382652` subsequently matched every case
+  and payment, reducing dependency search 14.2605→4.7791 s against the unmitigated
+  source on one runner. Complete receipt: gzip tar blob
+  `2255e42dda6862d97635b359cf08c7f985311dd4`. Later cuts still need their receipts.
+  Inventory parity alone is not timing evidence, and contended local timings
+  establish no acceptance. Training outcomes and accelerator behavior remain
+  unmeasured and need separately authorized work.
 
 ## Architecture convergence (accepted 2026-07-17)
 

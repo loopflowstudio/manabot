@@ -13,6 +13,8 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env.observation import (
+    FACT_KINDS,
+    FACT_KINDS_V8,
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
@@ -281,7 +283,13 @@ class ActorCritic(nn.Module):
             self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
         else:
             self.facts = (
-                FactEncoder(embed_dim, enc.config.fact_rows)
+                FactEncoder(
+                    embed_dim,
+                    enc.config.fact_rows,
+                    kinds=FACT_KINDS_V8
+                    if enc.config.policy_input_version >= 8
+                    else FACT_KINDS,
+                )
                 if enc.shows_everything
                 else None
             )
@@ -290,6 +298,7 @@ class ActorCritic(nn.Module):
             SharedEffectEncoder(
                 embed_dim,
                 "typed_gru" if config.state_encoder == "typed_gru" else "typed_pool",
+                version=enc.config.policy_input_version,
             )
             if enc.config.policy_input_version >= 7
             else None

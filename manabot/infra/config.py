@@ -44,7 +44,7 @@ class ObservationConfig(BaseConfig):
     policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9] = Field(
         default=6, exclude_if=lambda value: value == 1
     )
-    # V6 and v7 carry a configurable local-fact capacity. Omission on older inputs
+    # V6 onward carries a configurable local-fact capacity. Omission on older inputs
     # preserves their serialized architecture receipts, including v1 defaults.
     max_facts: int | None = Field(
         default=None, gt=0, exclude_if=lambda value: value is None
@@ -53,9 +53,8 @@ class ObservationConfig(BaseConfig):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Inputs use this capacity directly, except explicit v8, which also reserves
-    # the installed naming vocabulary; v9 names through bounded group prompts.
-    # A pilot may explicitly retain a legal prefix.
+    # Every input uses this capacity directly; v9 names through bounded group
+    # prompts. A pilot may explicitly retain a legal prefix.
     max_actions: int = Field(default=512, gt=0)
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
@@ -70,7 +69,7 @@ class ObservationConfig(BaseConfig):
     def validate_fact_capacity(self) -> "ObservationConfig":
         if self.policy_input_version >= 6:
             if self.max_facts is None:
-                self.max_facts = 128 if self.policy_input_version >= 7 else 512
+                self.max_facts = 128 if self.policy_input_version == 7 else 512
         elif self.max_facts is not None:
             raise ValueError("max_facts requires policy input v6")
         return self

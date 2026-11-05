@@ -17,7 +17,7 @@ use super::fixtures;
 use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
-    ability::{Ability, Effect, PaymentCost, TriggerCondition, TriggerSubject},
+    ability::{Ability, PaymentCost},
     card::{Card, CardDefId, CardDefinition},
     game_object::{ObjectId, PlayerId},
 };
@@ -151,13 +151,7 @@ impl ContentPack {
         self.digest.take();
         self.public_definitions.take();
         if let Some(ward_cost) = definition.ward().cloned() {
-            definition.abilities.push(Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::BecomesTargeted {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::CounterUnlessPays { cost: ward_cost }],
-            });
+            definition.abilities.push(Ability::ward(ward_cost));
         }
         let definition_id = CardDefId(
             self.definitions

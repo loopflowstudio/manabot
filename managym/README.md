@@ -135,7 +135,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
+[semantic-kernel-w17-v2](../conformance/semantic-kernel-w17-v2/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -211,6 +211,16 @@ battlefield permanent's characteristics, legendary and ward included: the
 legend rule reads its `is_legendary`, and every `CardData` field that states a
 characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
+
+The cached raw layer board tracks discovered reads of mana pools and tapped
+state, including nested predicates and granted statics. Independent pool/tap
+writes retain the board and fixed activations; dynamic activation outputs and
+costs refresh separately. Trigger kinds follow raw layer dependencies. Immutable
+scans use `layer_views` (or `characteristics_many` when activation finalization
+is needed), preserving caller order and validating the shared board once in
+debug. Singular reads retain their cache checks. Opt-in `benchmark`
+instrumentation attributes board, clone and dependency work without adding
+counters to ordinary wheels.
 
 A resolving spell remains on the stack until the zone-move authority commits
 its departure. That authority applies flashback exile replacement and captures

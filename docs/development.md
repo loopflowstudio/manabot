@@ -81,6 +81,11 @@ endpoint checks use injected durations, so never mix host elapsed time into an
 exact-update-count assertion.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
+Collector or batch-closure changes also require
+`uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+Fixtures asserting exact rollout shapes or transition counts must explicitly
+select `batch_closure="exact-quota"` as well as one learning seat; whole-game
+closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
@@ -166,7 +171,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Integration | `manabot-integration.yml` (`main` and `long` groups, Perf report proof, training smoke) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v1` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
@@ -554,3 +559,87 @@ inventory, migration counts and superseded procedures are in the pinned history:
 [validation](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/development/validation.md),
 [repository archive](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/repository-archive.md),
 [clean-machine play](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/clean-machine-play.md).
+
+### Bounded layer/input attribution
+
+Keep the default `bench_steps` (512 curated games) and `bench_search` (seeds
+1–3, 40 decisions each) separate from added positions; their `--layers` option
+runs the overlapping-anthem fixture on its own. Search receipts retain every
+reply sample, legal-action count, simulation/cap count and the full BLAKE3 score
+digest beside the budget's historical 64-bit digest. `bench_steps --tail-samples`
+and the dependency fixture retain the first 128 step durations in execution
+order: sample maxima, not population percentiles. The default Engine Budget path
+is unchanged.
+
+**Dependency fixture.** For a genuine same-layer dependency:
+
+```bash
+cargo build --release -j 2 --manifest-path managym/Cargo.toml --features benchmark --example bench_layers
+managym/target/release/examples/bench_layers [--allocations | --probe-only | --payment-only --allocations]
+```
+
+It asserts Moon/Urborg's dependency, then plays 16 bounded games and eight
+Search-64 replies. `--probe-only` runs eight isolated pool writes and eight taps
+on cloned warmed boards; `--payment-only` runs eight complete Cadets activations
+from a floating pool and eight from two land sources on the dependency board.
+Receipts retain complete legal action sets, selected actions, mana/life/tap
+resources, stack and semantic digests around each action. Setup, forking and
+serialization are outside the measured step. The fixture changes two physical
+cards locally, never the public catalog or frozen worlds. The `benchmark` feature
+adds inclusive, overlapping board/dependency/clone timers; never sum them or
+compare a counting run with an ordinary timing run, and measure allocation
+traffic in the separate `--allocations` run. Engines that fail the asserted
+dependency are not correctness-equivalent timing comparators.
+
+**Policy input cost.** `scripts/bench_layer_input.py` runs the baseline recipe's
+width-64, depth-2 model on CPU float32 (one thread, batch 16, two warmups, eight
+measured calls), without optimizer updates. Run each case sequentially, in a
+fresh process, on an otherwise idle runner:
+
+```bash
+for state in ordinary shared; do for version in 6 7 8; do
+  PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version $version --state $state
+done; done
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 8 --state program
+```
+
+`shared` is a resolved Drill activation representable by all three inputs;
+`program` adds Kellan's live grant and captured combat trigger. Receipts include
+each sample, model/input configuration, native/Python encoding parity, live
+detail/fact counts, observation, batch and parameter bytes, and process peak RSS
+(including imports and warmups). They establish neither accelerator performance
+nor learning efficacy. `--inventory` reports parity, occupancy and storage
+without policy execution or timings, for busy hosts.
+
+**Matched comparison.** `layer-risk.yml` runs `scripts/measure_layer_risk.py`
+on PRs touching its inputs (or via `gh workflow run layer-risk.yml --ref
+<branch>`) and uploads a `layer-risk` artifact, including partial evidence from
+failed runs. One GitHub-hosted VM builds and measures sequentially: the original
+TLA workloads at the Engine Budget reference, pre-mitigation `fb3555ffb` and the
+candidate; dependency workloads, payments and the seven policy cases at the
+latter two. The historical engine receives only the
+`managym/perf/layers-attribution.patch` counters/fixture access, current
+benchmark fixtures and the candidate's card definitions (so state digests compare
+engines over identical content), never a cache or model mitigation. Receipts
+record exact revisions, harness hashes, dirty source diff, CPU/dependency
+metadata, raw samples, full digests/counts and memory. A resource, action or
+digest mismatch between pre-mitigation and candidate fails the comparison; a
+reference-world mismatch is recorded, never labeled a speedup. Each policy case
+must retain eight finite positive samples per operation with matching settings;
+missing, mislabeled or inventory-only receipts cannot satisfy timing comparison.
+The workflow never updates a baseline or accepts a regression; the 10% Engine
+Budget still governs.
+
+For payment attribution on a busy host, omit timing workloads and use a fresh
+output directory:
+
+```bash
+uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-payment
+uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg before --payment-only
+uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg after --payment-only
+uv run --no-sync python scripts/measure_layer_risk.py compare --out .cache/layer-payment --payment-only
+```
+
+Allocation traffic and operation counts stay interpretable under contention;
+elapsed values do not. `model --inventory` builds each revision's wheel and checks
+all seven cases without inference.

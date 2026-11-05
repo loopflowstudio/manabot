@@ -324,6 +324,8 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
 
 def effect_phrase(effect: managym.ContinuousEffect) -> str:
     """What one continuous-effect record does, in the words Academy shows."""
+    if effect.description:
+        return effect.description
     modification = effect.modification
     if modification == "ModifyPt":
         return f"{effect.power:+d}/{effect.toughness:+d}"
@@ -337,6 +339,12 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return "loses " + ", ".join(
             keyword.replace("_", " ") for keyword in effect.keywords
         )
+    if modification == "LoseNonManaAbilities":
+        return "loses all abilities except mana abilities"
+    if modification == "SetCreatureTypes":
+        return f"creature types become {', '.join(effect.subtypes)}"
+    if modification == "SwitchPt":
+        return "power and toughness switched"
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
@@ -613,6 +621,8 @@ class _Renderer:
             details.append(
                 f"source inherits abilities from {self.fact_reference(relation.inherited_from)}"
             )
+        if relation.program_description is not None:
+            details.append(f"captured program: {relation.program_description}")
         if relation.attackers is not None:
             details.append(f"only {relation.attackers} may attack")
         if relation.source_transforms:
@@ -804,6 +814,10 @@ class _Renderer:
             optional = ""
             if permanent.attacking:
                 optional += "; attacking"
+            if permanent.colors is not None:
+                optional += f"; colors {', '.join(permanent.colors) or 'colorless'}"
+            if permanent.keyword_counter_timestamps:
+                optional += f"; keyword counter timestamps {permanent.keyword_counter_timestamps}"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
