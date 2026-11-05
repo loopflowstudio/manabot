@@ -8,9 +8,9 @@ import sys
 import time
 
 from etude.launch.job_file import read_job_file
+from etude.launch.records import Input
 import pytest
 
-from etude.launch.records import Input
 from experiments import state_representation_gpu as gpu, state_representation_v7
 from experiments.state_representation_v7 import (
     compare,
@@ -19,22 +19,22 @@ from experiments.state_representation_v7 import (
     recipe,
 )
 from manabot.env.observation import ObservationConfig
-from manabot.eval.results import RateInterval
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.eval.results import RateInterval
 from manabot.experiment.job import TrainingJob
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.training.regime import (
-    ArtifactReference,
-    DampedPolicyLearning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
 from manabot.training.records import (
     MonitoringCheckpoint,
     StageRecord,
     TrainingCoordinates,
     TrainingRun,
+)
+from manabot.training.regime import (
+    ArtifactReference,
+    DampedPolicyLearning,
+    TrainingRegime,
+    TrainSelfPlay,
 )
 from manabot.verify.store import VerifyStore
 from tests.training.test_monitor_evaluation import _manifest
