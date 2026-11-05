@@ -1,5 +1,92 @@
 # Vast admission diagnosis — 2026-11-04
 
+## Trace-delivery continuation — 2026-11-05 UTC
+
+Fresh 01:55:50 accounting confirms all eight preceding Task rentals absent.
+The sum of each reported/lifetime maximum plus settled L4 is $0.93290824;
+the existing $3.50 compute and $6 ancillary reserves cover it. Diagnostic
+`b153cc2e5a77` reserves another $0.50, leaving $15.00 under the original $25.
+Source `2b2061c8d` and locked Etude `64e9eaabf` are unchanged. The live quote
+is $0.2474074074/hour and $0.18555556 for 30 minutes work plus 15 setup.
+Instance `59191189`, session `c8987cae4da6`, was acquired at 01:56:29.
+All four retained CUDA oracle comparisons passed (maximum absolute error
+7.6294e-5). One of six routing tests failed: pooled parameter gradients differed
+in 1/192 entries by 1.3351e-5, exceeding default float32 atol 1e-5. No learner
+started. Both output files (4,854 bytes) matched the delivered inventory. The
+rental ended at 01:59:30; fresh inventory confirmed absence, charge $0.013
+versus lifetime estimate $0.01240595. These are not final invoices.
+Evidence is manifest-published under `trace-delivery-failure/` in the GPU study
+data directory; local operations remain `.runs/representation/gpu-trace-delivery/`.
+
+`af601877e` compares both float32 paths against independent float64 outputs,
+object/header gradients and parameter gradients, with 2e-5 relative/absolute
+bounds, retaining duplicate membership and poisoned-padding cases. CPU pool/GRU
+pass; CUDA still requires execution. No runtime encoder, scientific recipe or
+frozen receipt changed. Failed routing reports now enter the carried log too.
+Fresh 02:01:57 inventory found all nine prior rentals absent; reported/lifetime
+maxima total $0.95190824. The $4 compute/$6 ancillary reserve plus a new $0.50
+diagnostic commitment leaves $14.50. Run `911423cce90b`, source `af601877e`,
+uses the same $0.18555556 whole-rental quote and is starting on instance
+`59191723` (RTX3090/13.33 vCPU/257.509 GB).
+
+That run succeeded: all four frozen output/gradient comparisons and six CUDA
+routing cases passed. Pool/GRU each completed 256 games, with collection/learning
+42.56/40.15s and 42.38/39.95s. All 59 output files (170,244,006 bytes), including
+both inference and complete learning traces, match their worker hashes. The
+39-byte result envelope was reconstructed from the frozen formatter and transported
+update clock after the SDK requested an absent standalone object; its original
+SHA256 matches. All other files were fetched normally. Evidence and derived
+trace analysis are manifest-published under `cuda-traces/`. The rental ended
+02:08:54; 02:10:42 inventory confirmed absence. Reported $0.030 exceeds the
+$0.02577188 lifetime estimate; no final invoice is claimed.
+
+The first learning minibatch's effect/continuation host scopes sum to
+13.09ms pooled and 15.45ms GRU; CUDA stream waits inside those scopes sum to
+0.099/0.093ms. Across the profiled update, cProfile attributes about 9.15/9.59s
+to these encoders. Host routing/dispatch remains measurable, but stream waits
+do not dominate these captured scopes. First-step kernel loading (133/137ms
+in the learning operator tables), profiler work and sampled gradient/parameter
+health prevent extrapolating trace totals as recurring costs. GPU annotation
+spans include gaps; they are not utilization or sums of kernel execution.
+No further runtime repair is selected before ordinary throughput admission.
+
+Admission `37c1523a98ed` uses the identical `af601877e` source, four updates per
+arm, $14 scientific allowance and $0.26 hourly supervision ceiling. Fresh
+02:11:19 accounting confirmed all ten prior rentals absent; reported/lifetime
+maxima plus settled L4 total $0.98690824. Prior compute reserve $4.50, new
+commitment $0.50 and ancillary $6 leave $14.00. Whole-rental quote $0.371111
+for 75 minutes work plus 15 setup fits the attempt cap. Instance `59192537`,
+session `46dcc516f702`, reports the same RTX3090/13.33vCPU/257.509GB hardware.
+Both arms completed four updates/1,024 games. Their exact collection/learning
+times are 136.4431/122.2212s (pool), 132.4886/111.1156s (GRU), with 516.7714s
+overall admission. All 49 files (131,228,103 bytes) verified and published under
+`batched-admission/`; the result envelope's frozen bytes matched its hash as
+above. Rental ended 02:24:19 and was confirmed absent at 02:25:05; reported
+$0.052 versus lifetime estimate $0.05139499.
+
+The complete phase projection is 55.66970 rental hours / $13.77310. Before the
+result, accounting was corrected to release unused completed-attempt ceilings:
+reserve max($3.50, twice fresh per-rental reported/lifetime maxima plus settled
+L4), $6 ancillary, and all unknown/live commitments. At 02:25:26 all eleven
+prior rentals were absent; the reconciled total was $1.04590824, leaving
+$15.50 for science. No final settlement or new allowance is implied.
+
+The matching live quote admitted scientific Run `e51f61b92931` at the same
+`af601877e` source. Instance `59194544`, session `2b7ebc4aa353`, has the same
+RTX3090/13.33vCPU/257.509GB hardware. Its rental ceiling is $13.77310 and
+deadline 2026-11-07 10:09:07 UTC. The full $15.50 allocation remains reserved.
+At 02:34:17 UTC the provider confirmed this as the sole Task rental, running.
+The carried log reaches `train: typed_pool seed 74211`, proving preceding
+CUDA numerical/hardware gates returned success and the first scientific child
+was launched. Its completed update count is not carried in the parent log;
+there is no final scientific inventory or plateau result yet.
+`batched-plateau/` contains the prospectively frozen allocation/source/quote;
+the protocol retains the unchanged seeds, horizon, endpoint schedule and criteria.
+Etude's documented `Execution.finish` requested delivery and self-deletion after
+the sole job; the worker acknowledged `finish when done` at 02:32:32 UTC.
+The independent deadline remains a backstop. The local wait client was stopped
+after this handoff; eventual final inventory, analysis and teardown remain open.
+
 ## Complete-trace attempt lost — 2026-11-05 UTC
 
 `6c0e33d4b` extends the operator trace from the first grad-enabled forward through
@@ -63,88 +150,27 @@ CUDA cases skipped. The remote routing gate returned success before learning,
 but its report is unavailable. Ruff and the profile-only declaration check pass.
 Gate owns broader suites; no publication/merge or model promotion is performed.
 
-## Operator repair and connectivity block — 2026-11-05 UTC
+## Earlier CPU repair and connectivity evidence
 
-`42709fa1b` adds `scripts/profile_representation.py`: one excluded ordinary
-256-stream update, retained TrainingRun/exports, cProfile and one Torch operator
-trace each for inference and learning. CUDA declaration uses existing Etude
-source binding, progress supervisor, graceful stop and rental deadline; no
-synthetic load or alternative training loop. Its remote execution is unverified.
+`42709fa1b` introduced ordinary-executor profiling; `59ec1bd24` replaced per-record
+CUDA dispatch with host routing admission, batched projections and reducers.
+Matched pooled CPU work (256 games, 51,095 decisions, 200 minibatches) fell from
+202.86s collection/learning to 121.71s; encoder call time fell from 30.36s to
+2.71s. Both used cProfile, the final additionally captured operators. Native
+multi-position outputs and all parameter/object/definition gradients agree with
+pre-change oracles. Duplicate memberships, canonical ordering, padding and None
+gradients for unused Adam parameters survive. The GRU CPU run completed 256 games,
+54,184 decisions and 212 minibatches in 150.12s without a matched CPU baseline.
+These are CPU engineering observations, not GPU affordability or learning quality.
 
-The original CPU batch diagnosis (seed 74200, pooled, width64/depth2, one thread)
-completed 256 games, 51,095 learner decisions and 200 optimizer minibatches.
-Collection/learning: 107.43/95.42s; encoder calls: 30.36s; index validation:
-823,864 calls; reducers: 70,402 calls. Small smoke profiling had understated the
-batch cost (about 0.3–0.4s in the encoders), so it was not used for attribution.
-
-`59ec1bd24` replaces per-record device dispatch with host routing admission and
-batched live-token projections, flat segmented sums/packed GRUs, and membership
-scatter. Numeric features and object/catalog joins still carry gradients. It
-retains all validation, canonical order, source/parent joins and duplicate edges.
-Unused continuation projections retain None gradients, important for Adam's
-momentum behavior. Checkpoint parameters and fixed input contracts are unchanged.
-
-The final pooled CPU diagnosis completed the same game/decision/minibatch counts:
-collection/learning 64.31/57.40s (121.71s versus 202.86s, about 1.67x local speed),
-encoder calls 2.71s versus 30.36s. Both used cProfile; the final run additionally
-captured two operator traces. An interim pass took 117.44s total but preceded the
-absent-gradient repair and is not the final comparison. Saved pre-change native
-multi-position oracles agree on outputs and parameter/object/definition gradients
-for both treatments. This establishes a CPU dispatch improvement, not CUDA
-synchronization cost, a GPU speedup, or learning superiority. The final GRU
-diagnosis also completed: 256 games, 54,184 decisions, 212 minibatches;
-collection/learning 77.51/72.61s. It has no matched full-batch CPU baseline.
-Both final diagnoses exported checkpoints and retained inference/learning traces.
-
-The initial profiler closed at `ActorCritic.forward_distribution`, covering only
-grad-enabled forward. `6c0e33d4b` replaced that boundary with the complete step
-described above. Host metadata copies and routing loops remain; batching does
-not establish synchronization-free CUDA, and retained CUDA traces are still missing.
-
-Fresh 23:21:22 UTC accounting found all seven Task Vast instances absent and
-reported-plus-settled compute $0.8545825939. Existing $3 compute/$6 ancillary
-reservations remain. The compatible 3090 quote was $0.2474074074/hour, $0.19
-for the bounded diagnostic window, capped at $0.50 (temporarily leaving $15.50).
-Launch stopped before any run/rental record: Etude's remote-history Git fetch
-stalled and was terminated. A subsequent bounded exact-ref publication also
-timed out; GitHub SSH and HTTPS were unreachable, and Doppler fell back after
-its API timed out. The second script never reached quote/launch. No provider
-allocation was requested, so that diagnostic commitment is released and $16
-remains under the existing conservative accounting, not a new allowance.
-Remote ref publication is unknown; that cannot create a rental. No final bill
-or fresh provider inventory after the outage is claimed.
-
-Original local evidence paths (the CPU profiles/oracles were subsequently
-manifest-published as recorded above; outage logs remain local):
-`.runs/representation-profile-batch256-before/`,
-`.runs/representation-profile-batch256-after/` (interim),
-`.runs/representation-profile-final-pool/`,
-`.runs/representation-profile-final-gru/`,
-`.runs/representation-parity/`, and
-`.runs/representation/gpu-operator-profile/` (quote/accounting/failure logs).
-No retained experiment receipt was changed. Remaining acceptance is CUDA
-forward/backward profiling/parity and matched two-arm GPU throughput, then the
-unchanged cohort only if complete costs fit. Gate owns broader suites.
-
-Focused validation: 28 encoder tests passed across semantic routing, batched
-forward/backward equivalence, padding/order, absent gradients and checkpoint
-reload selections; strict saved native oracles agree for both treatments; Ruff
-and diff checks pass. The two final CPU learner diagnoses completed normally.
-
-Continuation, Jack Heart, 23:15 UTC: continue the diagnosis into bounded
-operator-level profiling and a justified implementation repair, then matched
-throughput admission toward the original GPU plateau study. The current cost
-projection does not close that remaining implementation work. Any necessary
-diagnostic rental comes from the existing cumulative $25, with fresh accounting,
-a bounded quote and confirmed cleanup; no budget increase or scientific scope
-change. Task comment `f10b962c-1310-435c-a46d-22c9532820aa` records the direction.
-
-Jack Heart's 22:38 UTC direction: diagnose our launch/training implementation
-before assigning host fault, correct fixed-cost extrapolation and add prospective
-startup/progress/affordability stops. Original $25 total and $0.50 admission cap
-remain; no competing rental, scientific shortening, merge or promotion.
-Direction: Task comment `aece955c-e64d-4f51-9336-311898578948`, Session steer
-`ab0fe717-1f66-4671-8aec-a802ac927a60`.
+The initial profiler captured only grad-enabled forward; `6c0e33d4b` expanded it
+through backward, clipping, Adam and health. Earlier GitHub/Doppler outages stopped
+preparation before allocation; no new compute charge or scientific seed resulted.
+The later complete-trace attempt and successful delivery above supersede that
+connectivity block. Full commands, contrary interim timing, references and prior
+validation remain at `af601877e:scratch/vast-host-diagnosis.md`; no frozen evidence
+was rewritten. Manifest-backed CPU profiles and encoder references remain under
+the GPU study's `cpu-operator-profiles/` and `encoder-reference/` directories.
 
 ## Completed admission, scientific objective still unmet
 

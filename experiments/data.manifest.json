@@ -45426,6 +45426,38 @@
    "sha256": "ec632aafe22c12fb27cb8b618f6bf608516fc3a8836e73cbfe78cca895616e12",
    "bytes": 909
   },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/current-logs.json": {
+   "sha256": "bd1e52ed8174c9ec5255d528c29406142db0a55ee3f88109c75d318cf11a1206",
+   "bytes": 16355
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/finish-after-work.json": {
+   "sha256": "192ee43c561473ec3ebebe604f732dcdd257d8518001fe68d39352271d12882f",
+   "bytes": 259
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/finish_after_work.py": {
+   "sha256": "872f5f4661c5f26f1fb7966b88b58e39fc79b693a7e4ded9149d77e8d9176a35",
+   "bytes": 1000
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/job.log": {
+   "sha256": "cf01cfed1a24a72ec87f7e4f8789adb953e01e5c7e61a2ed68f15c49b9cb5449",
+   "bytes": 6920
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/launch-attempt.json": {
+   "sha256": "243504f5d5dfdae75ff3d47e822b1de3be080d562abb8cfc70569c0eef29401b",
+   "bytes": 496
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/launch-handoff.json": {
+   "sha256": "b09e72b903ddd0d7bec0182cd42ecc1897b4cc5a4f66a2559c472f92f696c33a",
+   "bytes": 866
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/launch-status.json": {
+   "sha256": "a8ae76d62ba5331797c4c5382783051d8b9bbfffbce520e744fef99e2c457f8e",
+   "bytes": 406
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/launch.log": {
+   "sha256": "28f3546f51b1e263a3f2caf1529557635d06a98c4f4c7fd34c15d825ba6d6019",
+   "bytes": 13
+  },
   "experiments/data/state-representation-gpu-5da5f4/batched-plateau/prepare.py": {
    "sha256": "2b48a4e25164a6e62617dadeb89c1dbcc58e60a346903f88f95a0c662c84b83f",
    "bytes": 2493
@@ -45438,9 +45470,21 @@
    "sha256": "ceef2a5100cc7297d832fb65c7a301ab35ec96959724077083099c08893c5b27",
    "bytes": 228
   },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/provider.json": {
+   "sha256": "70216940fd02fc87afdb27bf30ec85e7c5c816b75ee608e8853ba38a54818757",
+   "bytes": 305
+  },
   "experiments/data/state-representation-gpu-5da5f4/batched-plateau/quote.json": {
    "sha256": "7496e18b79d7ee16e7934022dc63c6cb7c02b56627fd3e4071f83e36ff500005",
    "bytes": 332
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/rental.json": {
+   "sha256": "6a327ea4a2bd1c28200c94fd9cb76a365bae1f4d26e106302c951e4556e5382e",
+   "bytes": 263
+  },
+  "experiments/data/state-representation-gpu-5da5f4/batched-plateau/session.json": {
+   "sha256": "f39974d5bec22ef3bf79caaff23c82331f6cb743ee13e1351e63bd9ed741a388",
+   "bytes": 501
   },
   "experiments/data/state-representation-gpu-5da5f4/cheaper-3090/accounting.json": {
    "sha256": "dc9e15eda9439a8ccd26c277ad3bca622ba4363554d5c4a25c109bb45c4e7782",

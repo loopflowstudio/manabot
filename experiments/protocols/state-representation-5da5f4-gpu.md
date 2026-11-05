@@ -427,3 +427,11 @@ No score selection, shortened horizon, MTG-213 funds, merge or promotion. The
 Etude session receives a finish-after-work request once its sole job starts;
 its supported courier delivers final files and the worker deletes the rental
 on completion, with the independent rental deadline as a backstop.
+
+Launch observation, 02:34:17 UTC: instance `59194544` is the sole live Task
+rental. The parent log reaches `train: typed_pool seed 74211`; completed
+scientific updates are not exposed in that log. The worker acknowledged
+`finish when done` at 02:32:32 UTC. Its hard rental deadline is
+2026-11-07 10:09:07 UTC. Launch and lifecycle receipts are published alongside
+the allocation; the final scientific inventory, evaluation and teardown remain
+pending. No plateau, improvement or architecture conclusion follows yet.

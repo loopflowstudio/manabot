@@ -1,10 +1,37 @@
 # Decisions and open questions — 5da5f4
 
+- 2026-11-05 accounting decision before admission completes: the diagnostic
+  and admission $0.50 ceilings are live commitments, not charges to accumulate
+  permanently after verified teardown. Jack Heart's existing “keep going”
+  direction expressly rejects holding unused cancelled allowances or double
+  counting quote caps. Before any science purchase, reserve the greater of
+  $3.50 or twice a fresh sum of each completed rental's reported/lifetime
+  maximum (including settled L4), plus the existing $6 ancillary reserve.
+  Add every unknown/live commitment in full. This conservative, score-independent
+  rule releases unused completed-attempt headroom, changes no frozen receipt,
+  requires no final billing watermark, and never raises the original $25 cap.
+
+- 2026-11-05 current continuation: `911423cce90b` retained complete CUDA traces
+  and parity reports, all 59 outputs verified, rental absent. A preceding
+  one-entry float32 gradient discrepancy is retained as failed attempt
+  `b153cc2e5a77`; `af601877e` adds independent float64 checks, passing on CUDA,
+  without changing model code. Matched ordinary admission `37c1523a98ed`
+  completed both four-update arms, all 49 files verified and rental absent.
+  Its $13.77310 complete projection fits the freshly reconciled $15.50.
+  Scientific Run `e51f61b92931` launched pooling seed 74211 at identical source,
+  with finish-after-work acknowledged by the worker, retaining
+  the entire original design. That allocation is fully reserved within $25;
+  no qualified plateau or architecture conclusion exists. The plan
+  and diagnosis own current evidence; older missing-trace statements below
+  describe their historical attempts. No runtime change is inferred solely
+  from first-step profiling; no horizon or gradient-semantic concession.
+
 - 2026-11-05 execution outcome: diagnostic `a46e80b31212` lost its rental after
   both instrumented updates and one uninstrumented pooled update. Parity gates
   returned success, but final outputs/inventory are unavailable. The provider
   confirms absence; cause is unknown. Reported new charge $0.038 and conservative
-  reservations leave $15.50 within the original $25. No further rental/science.
+  reservations leave $15.50 within the original $25. No further rental or science
+  was started after the loss; authorized bounded diagnosis remains outstanding.
   Reversible implementation decision: end the diagnostic before throughput so
   Etude can deliver complete traces; bounded parity/operator summaries also enter
   the carried log. Separate admission remains the existing ordinary runner.
