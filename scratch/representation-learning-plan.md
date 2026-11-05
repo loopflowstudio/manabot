@@ -26,11 +26,13 @@ Graph. Merging PR84 or the study is **not** approved.
 - Fresh quotes and all concurrent commitments must fit the remaining allowance.
   Reusable interruption recovery stays with Etude `ff3d48`.
 
-**Status at `aec9f3940`: none of this is built.** `evaluate_arm` keeps the fixed
-claim, `scientific_cohort` still trains everything first and refuses existing
-directories, the protocol has no amendment, `uv.lock` remains at Etude
-`64e9eaabf` and nothing has been rented or scored. PR421 is open without
-auto-merge. The previous Graph stopped at implement; recovery has had no pass there.
+**Status.** Built at `c8361c675`: `RECOVERY` and the protocol's recovery amendment
+(frozen before any scoring), per-unit Runs with `unit_key` identity, the
+hash-verified ledger, and per-job `concurrent_activity`. `scientific_cohort`,
+`ScientificAllocation` and `evaluate_arm` are gone. Local operations live in
+`.runs/representation/recovery/`: `plan_*.py` run in the Manabot venv, and
+`control.py` in a separate venv pinned to Etude `6bfa114ed`, with workers locked
+to `64e9eaabf`. Execution state is below in **Recovery execution**.
 
 ## Recovery implementation constraints
 
@@ -77,13 +79,11 @@ Verified from code and retained receipts:
   scored. The GRU/pool pair at 74212 may train on different hosts. Require the
   same GPU class, record each learner's host, and state this in the amendment.
 
-**Execution shape (draft, Task operator 2026-11-05; see questions).** One Etude
-Run per learner and per learner's evaluation, instead of one rental for the
-cohort. The locked runtime uploads outputs only at attempt completion, which is
-why `e51f61b92931` delivered nothing. Per-learner Runs bound a loss to about 3.2h
-and $0.80, need no SSH receipt pulls as evidence, and give each unit a natural
-idempotent identity. The extra setup is about 5 × 15 minutes, about $0.31 at the
-last quote. Evaluation Runs for the three retained learners can start first.
+**Execution shape, accepted by the frozen amendment.** One Etude Run per learner
+and per learner's evaluation. The locked runtime uploads outputs only at attempt
+completion, which is why `e51f61b92931` delivered nothing. Learners use Vast RTX
+3090 rentals; evaluators use RunPod CPU rentals, whose launcher still has the
+single-read rule, so an evaluator can be lost and repeated under the ledger's rules.
 
 ## Execution record and remaining work
 

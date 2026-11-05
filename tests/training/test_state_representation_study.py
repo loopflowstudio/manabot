@@ -724,3 +724,10 @@ def test_run_unit_reports_endpoints_through_a_bounded_child(
         "clocks": {"endpoints": 1}
     }
     assert json.loads((tmp_path / "recovery.json").read_text())["failed_run"]
+
+
+def test_work_window_allows_setup_inside_the_attempt_clock() -> None:
+    # A ten-minute setup measured on a Vast host spent this much of a 30-minute limit.
+    gpu.require_window(deadline=1200, now=0, work_hours=0.5)
+    with pytest.raises(ValueError, match="cannot cover declared work"):
+        gpu.require_window(deadline=600, now=0, work_hours=0.5)

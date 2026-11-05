@@ -1054,6 +1054,12 @@ def _run_child(
         )
 
 
+def require_window(deadline: float, now: float, work_hours: float) -> None:
+    """Refuse a window too short for the work; Etude's clock starts before setup."""
+    if deadline - now < work_hours * 3600 - SETUP_SECONDS - 180:
+        raise ValueError("remaining allocation cannot cover declared work")
+
+
 def worker() -> None:
     """Etude owns the capped allocation and the learner or evaluator child."""
     bind_etude_source()
@@ -1062,9 +1068,7 @@ def worker() -> None:
     stop = Path(os.environ["ETUDE_STOP_FILE"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
     work_hours = spec.recovery.max_hours if spec.recovery else ADMISSION_WORK_HOURS
-    required = work_hours * 3600 - 180
-    if deadline - time.time() < required:
-        raise ValueError("remaining allocation cannot cover declared work")
+    require_window(deadline, time.time(), work_hours)
     out.mkdir(parents=True, exist_ok=True)
     atomic_json(out / "host.json", host_record())
     if spec.recovery is not None and isinstance(spec.recovery.unit, EvaluationUnit):
