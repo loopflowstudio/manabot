@@ -4,7 +4,7 @@ The Training Wave was renamed experiments in `9f42e4e58` on 2026-11-04.
 The removed Eval memory (hosted LLM comparisons, inference receipts and evidence
 reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md`; it is historical context,
 not an active scope or new campaign authorization. Filesystem inspection of
-experiments on 2026-11-04 found no immediate child directories or child memories.
+experiments on 2026-11-05 found no immediate child directories or child memories.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 
@@ -41,8 +41,9 @@ within one observation and carries no game memory. Original v5 three-arm
 calibration remains v5 evidence. MTG-213 v4 subsequently passed v7 CUDA
 admission but failed collection before learning at a separate card-object
 capacity boundary. MTG-213 v5 later completed three v7 GPU learner updates
-before a separate action-capacity failure. No scientific replicate or trained
-checkpoint evaluation is established. Active-byte reduction does not imply
+before a separate action-capacity failure. The later v10 pilot below exported
+and evaluated a trained checkpoint; neither it nor those earlier runs establishes
+a replicated representation comparison. Active-byte reduction does not imply
 padded-memory savings: default v7
 effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
 
@@ -65,7 +66,7 @@ Evidence is published under `experiments/data/state-representation-5da5f4/`;
 the Task plan owns remaining acceptance and delivery. Filesystem inspection
 found no immediate Training child memory directories on 2026-11-04.
 
-## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-04 UTC)
+## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-05 UTC)
 
 Jack Heart replaced the deferred full-TLA plan with a preliminary trophy-deck
 self-play pilot and evaluation on the same frozen eligible population. Each seat
@@ -380,7 +381,7 @@ $0.475343889 and conservative reservations $5.101645926 of $10. Vast billing
 remains unavailable, so these are dated estimates, not final invoices or fresh
 inventory. `6dff2e919` and experiments/tla-trophy-pilot.md retain the evidence.
 
-The prospective v10 uses the existing permanent64 axis and fresh initialization,
+The executed v10 uses the existing permanent64 axis and fresh initialization,
 preserving input-v7 effects, card128, matched first64 support, 134 decks, learning
 recipe and evaluation schedule. Old 40 rejects the retained case; exact 41 and 64
 preserve native scalar/vector/Python parity. Airship growth in that replay comes
@@ -407,10 +408,46 @@ separate. 25/100 continues and 26/100 stops. Controlled fixtures support both-se
 isolation, retained-row learning, sharded transport and replay at the encoding
 boundary. Evaluation failures stay failed/incomplete in scheduled slots, never
 replaced by successful games. This introduces selection bias toward games that
-fit runtime limits. Implementation is not empirical learning: v10 still lacks
-paid execution, a trained endpoint and complete paired evaluation. Broader 256/512
-capacities, grouped objects, variable-length inputs and minibatch GPU transfers
-remain design discussion, not selected architecture or recipe changes.
+fit runtime limits. Broader 256/512 capacities, grouped objects, variable-length
+inputs and minibatch GPU transfers remain design discussion, not selected
+architecture or recipe changes.
+
+V10 Run `ae76c17951c3` executed PR #426's merged source
+`fe83a6b068dace2187613e1bf124f9677b077ff3` on NVIDIA L4 on 2026-11-05 UTC.
+The already-authorized configured alternative followed a Vast price refusal;
+it did not change the recipe or scientific schedule. CUDA admission passed,
+16 updates produced 754,114 learner transitions, and the normal wall-budget
+pause exported a trained raw checkpoint, EMA and optimizer state. All 64
+endpoint games completed: 9/32 wins against the matched heuristic and 26/32
+against initialization. These observations supersede the missing-execution
+status, not the scientific acceptance limits. The 100-update target was not
+reached; 192 milestone games and four initialization games remain missing.
+The latter callback omitted `ETUDE_OUTPUT_DIR` before playing and was retained
+as failed, not retried. The full 288-game joint analysis remains incomplete,
+with no qualified learning-gain or Elemental-relative pace claim. A successful
+launcher outcome can therefore coexist with a paused trainer and incomplete
+scientific acceptance; each status has a different owner.
+
+Game-local recovery preserved this run through two native `no legal targets`
+failures and two resource limits (65 relations and 65 permanents, each against
+64). Across 4,205 settled attempts, 4,201 completed and 1,881 failed-game samples
+were discarded; the peak 100-game error rate was 1%. All four retained prefixes
+replayed with matching frame, failure index and error, explicitly admitting
+macOS native bytes against Linux evidence. Target-selection failures remain
+rules follow-up evidence. Zero action-cutoff overflows among 755,995 consumed
+decisions does not establish universal capacity or make the cutoff unnecessary.
+Recovery demonstrates continuity here, not absence of selection bias.
+
+The v10 rental ended at 01:25:19 UTC; the 01:33:52 inventory contained no pilot
+rental or unsettled hardware. Whole-rental cost is estimated at $0.438120592;
+cumulative billed-plus-estimated cost is $0.913464481 and conservative
+reservations $5.839145926 of $10. These are dated receipts, not final invoices
+or current supply. All 315 evidence files are manifest-published under
+`experiments/data/mtg213/gpu-v10-20261105/`; the report owns exact digests,
+scores and remaining work. Advertised `etude-result.json` returned 404, while
+training receipts, tracking, checkpoints and evaluation remain available.
+Policy/optimizer exports do not supply portable collector/RNG recovery, and
+new games cannot fill the historical failed match or unreached milestones.
 
 Agreement on one retained failure is not general encoder parity. The subsequent
 reconciliation found Python mapping `WhileYouControlSource` to indefinite (2)
@@ -444,8 +481,8 @@ projection can omit all-null columns; readers supply defaults only for optional
 fields, preserving required-column failures. Local evidence-writing evaluation
 requires an explicit ETUDE_OUTPUT_DIR. These execution/reader repairs preserve
 the frozen schedule and criterion, not missing experimental outcomes.
-Retained empirical limits live in experiments/tla-trophy-pilot.md. Training has
-no child directories or child memories at this reconciliation (2026-11-04 UTC).
+Retained empirical limits live in experiments/tla-trophy-pilot.md. Experiments has
+no child directories or child memories at this reconciliation (2026-11-05 UTC).
 
 ## Training consolidation and credit (MTG-179, 2026-10-22)
 

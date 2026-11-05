@@ -1,17 +1,10 @@
-# MTG-213 — current decisions and assumptions (2026-11-04 UTC)
+# MTG-213 — current decisions and assumptions (2026-11-05 UTC)
 
-Execution status and remaining acceptance: `scratch/tla-pilot-postmerge-verify.md`.
-Results, costs and retained receipts: `experiments/tla-trophy-pilot.md`.
-Executed contract: `experiments/protocols/tla-trophy-213-v9.md` and its JSON/regime.
-Prospective successor: v10, permanent capacity 64, isolated per-game recovery
-at .25 with window/warmup 100/100, and fresh initialization.
-V9 Run `2171156493ca` executed on the accepted Vast allocation and failed after
-5 updates at 41 permanents against capacity 40. No trained endpoint exists.
-Its 32 initialization games are complete; 256 scheduled games remain missing.
-Verification selects a prospective permanent-capacity repair (64 rows passed
-the retained scalar/Python diagnostic, not a universal bound). Preserve v9 and
-initialize a successor; unchanged GPU retries are not selected. Full evidence,
-cost accounting and teardown are in the report. PR #423 did not complete MTG-213.
+Execution and delivery status: `scratch/tla-pilot-postmerge-verify.md`.
+The report `experiments/tla-trophy-pilot.md` owns results, costs and evidence links.
+V10 has a trained endpoint and all 64 endpoint games; the 100-update target and
+full scientific schedule remain incomplete. No new rental is selected. Preserve
+all executed protocols and artifacts; report delivery remains with the caller.
 
 ## Accepted direction and ownership
 
@@ -26,10 +19,9 @@ available Vast RTX5090 offer at about USD0.963/hour and roughly USD1.19 for
 setup plus the planned run ("that seems fine"). This supersedes the USD1
 per-allocation stop for this attempt; the operator uses USD1.25 as the rounded
 whole-rental ceiling and USD0.97/hour as its offer ceiling. The cumulative USD10
-cap remains unchanged, including failures, setup and teardown. This placement-only amendment governed the executed v9 Run, preserving its
-source, recipe and schedule. The subsequently accepted resource-limit repair
-requires a fresh v10 source freeze before inventory/budget reconciliation and
-execution; unchanged v9 retries are superseded.
+cap remains unchanged, including failures, setup and teardown. This placement-only
+amendment governed the executed v9 Run, preserving its source, recipe and schedule. The subsequently accepted resource-limit repair
+was delivered in PR #426 and executed as v10; unchanged v9 retries are superseded.
 
 Comment 42a12145 approved shared-effect fixed tensors, encoding each effect
 once and routing it to affected object embeddings before attention. Task 5da5f4
@@ -100,11 +92,79 @@ another Task's rental. VAST_API_KEY remains in `etude/prd`; the SSH public key w
 registered. Prior Vast placement used >=6 vCPUs, >=48GB RAM, 80GB disk,
 <=USD0.81/hour and 840 seconds setup plus the unchanged one-hour job.
 
-The operator selected configured RunPod A4000 (20:49 UTC) and A6000 (21:00 UTC)
-as reversible placement alternatives after other supplies refused. These choices
-did not change the protocol or caps; GPU memory/throughput equivalence is not
-assumed. Their quotes, refusals and accounting live in the report's v9 preflight
-and recheck receipts. The plan owns the capacity stop and remaining acceptance.
+V10 retained permanent64 and game-local capacity recovery at .25 with the
+existing 100/100 window/warmup. Comment ca1660e8 authorizes dropping only the
+failed game's uncommitted samples from both seats. Strictly above .25 stops;
+other streams and completed updates survive. Evaluation keeps failed slots.
+Comments 52d6354e/173f02a6/c98cb420 leave 256/512 capacities, grouping,
+variable-length inputs and GPU transfer changes exploratory. Do not broaden the
+recipe to address rare growth without a separate selection. Retain overflow
+frequency, affected decks and positions for that decision.
+
+## Concept review — 2026-11-05 UTC
+
+Outcome: **no design change and no open product choice for delivery of the
+bounded pilot's results**. This is not Task completion or scientific acceptance.
+The existing report already distinguishes the trained endpoint from the
+unfinished study; keep that usage guidance unchanged. No new skill instructions,
+execution machinery or implementation direction are needed here.
+
+The accepted interaction is: choose the frozen corpus and bounded recipe, run
+self-play, inspect the exported checkpoint and paired results, and retain every
+failure and cost. Jack Heart's game-local recovery decision means a failed game
+is a durable attempt record, not a reason to restart the whole experiment or a
+new kind of checkpoint. Normal sampling can replace its training stream without
+replacing its historical evidence.
+
+| Action | Concept and owner | Existing API / persistence |
+| --- | --- | --- |
+| Train the fixed population within its allowance | Protocol fixes inputs; Etude owns placement; manabot owns learning | `tla_pilot_v10.frozen()` / `runs()`, `TrainingJob`, `execute_regime`; frozen protocol/regime and run receipt |
+| Continue after an admitted game failure | One `GameAttempt`; collector owns both seats' pending rows; ledger owns cumulative allowance | `SeatRoutedCollector._settle_attempt`, `GameErrorState.settle`; append-only attempt ledger and replay input contract |
+| Inspect the early trained endpoint | Exported learner state, distinct from a complete process snapshot | `execute_regime` exports raw/EMA/Adam; checkpoint identity and clocks survive wall-budget pause |
+| Judge full-game evidence | Fixed comparison schedule, not only surviving games | `comparison_schedule`, `play`, `tla_pilot_analysis.analyze`; original failed/missing slots remain expected |
+
+The consequential possible mismatch is calling all of these states “success.”
+Launcher success says the job completed its execution contract; trainer `paused`
+says the update target was not reached; analysis `complete=false, success=null`
+says the joint scientific criterion cannot be judged. Those distinctions protect
+different promises and cannot be merged into one boolean. The report already
+presents them together without requiring readers to reconstruct them from logs.
+
+Normal path: a completed game supplies both seats' retained rows; the bounded
+run exports a checkpoint; endpoint comparisons use the same frozen population
+and matched first-64 support. Failure/recovery: a typed active-step resource
+limit records the position and encoder configuration, removes only that game's
+uncommitted rows, and permits ordinary resampling below the settled-game limit.
+At 25/100 failures collection continues; at 26/100 it stops. Completed updates,
+other games, costs and failure evidence survive. Evaluation never substitutes
+new games for failed slots.
+
+Counterexamples remain decisive: a reset/buffer/provenance failure must not
+enter a recovery loop; a checkpoint without collector/RNG state cannot promise
+an exact process resume; a repaired callback cannot erase its original failed
+match; an 81.25% endpoint score against initialization cannot establish the
+joint improvement criterion with an incomplete baseline and schedule. The
+retained permanent65 and relation65 failures also refute a universal capacity
+claim. Source inspection and the existing receipts agree with these boundaries;
+no new games or load tests were needed for this review.
+
+Latest direction: Task comment `81ec3f17-30e6-4821-a77e-75888b77f65d`
+records Jack Heart's request to review damped learning before a full-TLA
+successor. Preserve v10 and continue reporting/delivery; do not launch that
+successor before the discussion is resolved. The exact future question is:
+**Which objective, behavior/reference KL, iteration versus optimizer/data clocks,
+sample filtering and credit horizon should the next full-TLA recipe freeze?**
+Evidence prompting it is the varying training durations and the unfinished v10
+schedule, not proof that a particular replacement recipe is better. This choice
+is unresolved for that separate prospective outcome and does not block delivery
+of the present results. Capacity enlargement and grouped/sparse representations
+likewise remain unselected.
+
+Next proof for delivery: keep the report's checkpoint identity, endpoint counts,
+missing schedule and retained failures aligned with the published receipts.
+Independent behavior witnesses for the two native target-selection errors and
+final billing reconciliation remain outstanding work already named in the
+report. This review neither resolves them nor selects new work or navigation.
 
 ## Historical context
 
@@ -122,21 +182,9 @@ they do not replace MTG-213's direction. Cleared demo/verification plans remain
 at `d2ff60e6a^:scratch/tla-pilot-demo.md` and
 `d2ff60e6a^:scratch/tla-pilot-verify.md`.
 
-## Historical v9 placement envelope — 2026-11-04 22:04 UTC
-
-Etude 0.2.14 includes setup in the job-dollar check, so raising only the supply/cohort ceiling refused launch with “job dollars do not cover the hours.” Apply the already approved USD1.25 to `Job.max_usd` in a separate placement copy; SDK `job_identity` explicitly excludes limits. Assert unchanged identity, Run 2171156493ca, source, scientific config and schedule; retain the original prepared-run.json. This is the simpler launch-only interpretation of the accepted placement amendment, not a new scientific Run.
-
-## Permanent-capacity repair assumption — 2026-11-04
-
-The verification feedback selects the existing 64-row allocation prospectively.
-V10 initially changed permanent capacity and identities. Comment ca1660e8
-subsequently adds explicit per-game capacity recovery and a .25 threshold.
-The recorded USD1.25 allocation ceiling was already accepted; global defaults
-and v9 bytes stay frozen.
-The retained case proves 41 rows are needed, not that 64 is a universal bound.
-The 100-update target and checkpoint cadence remain unchanged; exporting earlier
-checkpoints would be a separate scientific schedule change. Gate/delivery and
-GPU execution remain explicit subsequent Graph work.
+The complete decisions before this reduction, including A4000/A6000 placement
+assumptions and v9's identity-preserving Job.max_usd amendment, remain in git blob
+`79baeb35620eddc7eea26f3978254d2e4b5d2548`.
 
 ## Task fc6ffb — batch closure and lambda (2026-11-04)
 
