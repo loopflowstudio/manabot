@@ -13,6 +13,7 @@ from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.representation import source_effect_root
 import managym
+from tests.retained_decision import assert_retained_frame
 
 
 class RetainedPosition(BaseModel):
@@ -71,11 +72,7 @@ def test_retained_drill_prefix_admits_shared_effects(
         if index == len(game.actions) - 1 and not closed:
             current_json = scalar.semantic_decision_frame_json()
             assert vector.semantic_decision_frames_json()[0] == current_json
-            current, retained = json.loads(current_json), json.loads(game.frame)
-            assert retained.pop("schema_version") == 7
-            assert current.pop("schema_version") == 8
-            assert current.pop("fingerprint") != retained.pop("fingerprint")
-            assert current == retained
+            assert_retained_frame(current_json, game.frame)
         acting_observation, *_ = scalar.step(action)
         vector.step_into_buffers([action])
     actor = scalar.current_agent_index()

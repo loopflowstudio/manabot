@@ -13,8 +13,8 @@ class CatalogShape:
     """Separate catalog dimensions; lengths include expanded definition references.
 
     Counts describe representation cost, not encountered-card diversity or an
-    experimentally established difficulty score. Padding is embedded before
-    packing, while the GRU processes only expanded_tokens positions.
+    experimentally established difficulty score. Only real tokens are embedded
+    and recurrently encoded; padded_tokens describes the stored token table.
     """
 
     definitions: int
@@ -140,11 +140,11 @@ class SemanticCardEncoder(nn.Module):
 
         With `rows` (unique catalog rows + 1, from `referenced_rows`), only
         those programs run through the GRU and the rest of the table is zero.
-        Each program is encoded independently, so selected rows equal the full
-        encoding and parameter gradients are identical: unreferenced rows
-        receive none. Training uses this because the catalog grows with the
-        world while a batch references a small subset; inference caches the
-        full table once per policy scope instead.
+        Each program is encoded independently, so selected rows and parameter
+        gradients agree with full encoding up to floating-point roundoff;
+        unreferenced rows receive none. Training uses this because the catalog
+        grows with the world while a batch references a small subset. Inference
+        caches the full table once per policy scope instead.
         """
         count = len(self.tokens)
         if rows is None:
@@ -154,14 +154,43 @@ class SemanticCardEncoder(nn.Module):
         )
         if len(rows) == 0:
             return table
+        return table.index_copy(0, rows, self._encode_programs(rows))
+
+    def _encode_programs(self, rows: torch.Tensor) -> torch.Tensor:
+        """Encode nonempty one-based catalog rows, preserving their supplied order.
+
+        Packing sorts programs by length. Within each chunk, completed programs
+        occupy the hidden state's suffix; only the active prefix continues.
+        """
+        # Pack integer IDs first: padding needs neither embeddings nor gradients.
         packed = nn.utils.rnn.pack_padded_sequence(
-            self.token_embedding(self.tokens[rows - 1]),
+            self.tokens[rows - 1],
             self.lengths[rows - 1].cpu(),
             batch_first=True,
             enforce_sorted=False,
         )
-        _, state = self.encoder(packed)
-        return table.index_copy(0, rows, state[0])
+        # Packed GRU backward creates a packed-input-sized slice gradient at
+        # each time step. Bound that copying to 64 steps per call. This is full
+        # backpropagation through time: hidden states keep their gradients at
+        # every chunk boundary. The same GRU encodes every real token once.
+        batches = packed.batch_sizes.split(64)
+        sizes = [int(batch.sum()) for batch in batches]
+        chunks = self.token_embedding(packed.data).split(sizes)
+        state: torch.Tensor | None = None
+        finished: list[torch.Tensor] = []
+        for index, (data, batch) in enumerate(zip(chunks, batches, strict=True)):
+            active = int(batch[0])
+            _, state = self.encoder(
+                nn.utils.rnn.PackedSequence(data, batch),
+                None if state is None else state[:, :active],
+            )
+            remaining = int(batches[index + 1][0]) if index + 1 < len(batches) else 0
+            finished.append(state[:, remaining:])
+        # Packed sequences end shortest first. Reverse their completed suffixes
+        # to restore descending-length order, then undo the original sorting.
+        encoded = torch.cat(finished[::-1], dim=1)[0]
+        assert packed.unsorted_indices is not None
+        return encoded[packed.unsorted_indices]
 
     def referenced_rows(self, ids: list[torch.Tensor]) -> torch.Tensor:
         """Unique catalog rows + 1 named by admissible transport IDs in `ids`.

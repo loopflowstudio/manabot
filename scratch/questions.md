@@ -1,52 +1,21 @@
 # MTG-243 assumptions — 2026-11-04
 
-Latest publication validation supersedes the pending-check status below.
-CI `41946199054` passed debug Rust, Academy/browser/protocol/clean-machine,
-long integration, all 1,099 main Linux integration tests and the unchanged
-Engine Budget. Its later evaluation step found two schema-7/schema-8 frame
-assertions (324 other tests passed); the test-only repair preserves all decision
-fields and frozen bytes, and all 48 pilot tests pass locally. Local checks also
-passed 24 naming/recovery/packed-action tests, 91 recovery/admission tests,
-Clippy/formatting, current receipt verification, the headless Perf report proof
-and the bounded CLI smoke. Receipt refresh changed source hashes only. Final-head
-Linux CI is pending publication; this is review readiness, not merge approval.
-The latest paired budget result is a repeatable within-budget CPU cost, not
-explained away by load/order noise. Full evidence and limits are in the plan's
-Publication validation section.
+Accepted decisions, evidence and remaining work live in
+[mtg-243-naming.md](mtg-243-naming.md). Jack Heart's speed direction continues the
+same Task/PR against `b31998cc3`, ending at interactive review. Merge, auto-merge,
+paid execution and strength experiments remain unauthorized.
 
-The following records the prior reconciliation state for provenance.
+Material implementation choice: keep the existing GRU, weights and serialized
+buffers; pack integer tokens before embedding and execute at most 64 recurrent
+steps per call. Carry hidden-state gradients across every boundary. This bounds
+packed backward slice copies without changing model capacity or requiring a
+checkpoint migration. It does not establish GPU throughput or training strength.
 
-Accepted direction, attribution, implementation, contrary evidence and remaining
-validation live in [mtg-243-naming.md](mtg-243-naming.md). No additional product
-input blocks installed-catalog naming. Publication ends at interactive review;
-merge, auto-merge, paid execution and strength experiments remain unauthorized.
+Native profiles overlap active MTG-241/242/244 ownership. Preserve those domains
+and the unchanged budget reference; finish the highest-payoff measured learner
+optimization here. Native measurements are unchanged-code controls. External
+scheduling noise stays in raw evidence, separately from process CPU cost.
 
-Material assumption: an atomic choice, immutable candidate identities and
-catalog-derived explicit v8 capacity preserve complete naming without a multi-step
-protocol. Fresh v6 and frozen inputs remain unchanged. Names outside the real
-supported catalog and default adoption of v8 remain separate decisions.
-
-Main `51b4bd274` is incorporated through configuration-only sync `c52b70a53`;
-the plan records `ee85d6fc8`'s isolated-capacity recovery,
-the naming writer integration repair and MTG-241's unsynced codes 27–29.
-The combined greater-than-512 native/model/vector/Academy fixture passed before
-that sync; the post-sync 25-case run covers native/model/vector and retained
-capacity recovery. PR #424 publishes `c52b70a53` with stale review copy.
-Completed run `41942374422` at `bca261295` passed Engine Budget
-with stable within-budget CPU costs in both orders; the earlier local
-worst-reply failure remains incompletely attributed. Main Linux integration finished with one bitwise float32 logit assertion
-failure (1.49e-7 maximum difference). Its test-only repair requires exact closed
-input equality and bounded output tolerance; committed at `bca3ff438`, it passed
-the local catalog-naming suite. Current-head CI `41945242063` is running, not
-passing evidence. Full repaired Linux validation and current-source acceptance
-remain gate obligations.
-Inherited T7 context is historical at `4463e57f5:scratch/questions.md`.
-The duplicate uncommitted notes are preserved at
-`.lf/logs/naming-risk/questions-before-compress.md`.
-
-The repair uses a fixed candidate/reference/reference/candidate plan and median
-durations to balance run order, with the existing 10% tolerance and digest
-requirements unchanged. This is a measurement-method change for review, not
-permission to reset the reference or explain old CI failures without telemetry.
-
-The sync evidence and MTG-213 historical reference are consolidated in the plan.
+Additional production names, fresh v8 defaults and broad training remain separate
+decisions. Historical detail is at `b31998cc3:scratch/mtg-243-naming.md` and the
+pre-curation uncommitted plan in `.lf/logs/naming-speed/plan-before-curation.md`.

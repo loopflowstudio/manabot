@@ -1,11 +1,12 @@
 """Complete name support, native encoding parity and learned categorical scoring."""
 
 from dataclasses import dataclass
+from functools import partial
 import json
 from pathlib import Path
 from unittest.mock import patch
 
-from naming_reference import DenseActionReference
+from naming_reference import DenseActionReference, packed_definitions
 import numpy as np
 import pytest
 import torch
@@ -444,16 +445,18 @@ def _mixed_naming_batch(
 
 @pytest.mark.parametrize("film", [False, True])
 @pytest.mark.parametrize("attention", [False, True])
+@pytest.mark.parametrize("width", [16, 64])
 def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
     naming_root: managym.Env,
     film: bool,
     attention: bool,
+    width: int,
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(243)
     space, obs = _mixed_naming_batch(naming_root)
     config = ModelConfig(
-        hidden_dim=16,
+        hidden_dim=width,
         world=managym.WORLD_SETUP,
         policy_film=film,
         attention_on=attention,
@@ -471,7 +474,13 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
         obs[key] = obs[key][:, order]
     targets = obs["actions_valid"].argmax(-1)
     actual, values = model.forward_distribution(obs)
-    expected, expected_values = reference.forward_distribution(obs)
+    assert reference.semantic_cards is not None
+    with patch.object(
+        reference.semantic_cards,
+        "definitions",
+        side_effect=partial(packed_definitions, reference.semantic_cards),
+    ):
+        expected, expected_values = reference.forward_distribution(obs)
     torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
     torch.testing.assert_close(values, expected_values, atol=2e-6, rtol=2e-5)
     for net, logits, critic in (

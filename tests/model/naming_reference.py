@@ -1,7 +1,6 @@
 """Dense action reference frozen from 9db184b9 for numerical equivalence tests.
 
-Only the action computation is frozen; shared object encoding uses the current
-model so independent representation improvements do not obscure this comparison.
+Action computation is frozen at 9db184b9; packed program execution at b31998cc3.
 Never imported by product code.
 """
 
@@ -12,6 +11,29 @@ import torch
 from manabot.env.observation import RELATION_VALID_INDEX
 from manabot.model.actor_critic import ActorCritic, EmbeddedObservation
 from manabot.model.inference import PreparedObservation
+from manabot.model.semantic_cards import SemanticCardEncoder
+
+
+def packed_definitions(
+    encoder: SemanticCardEncoder, rows: torch.Tensor | None = None
+) -> torch.Tensor:
+    """Original GRU execution for value and parameter-gradient comparisons."""
+    count = len(encoder.tokens)
+    if rows is None:
+        rows = torch.arange(1, count + 1, device=encoder.tokens.device)
+    table = encoder.token_embedding.weight.new_zeros(
+        (count + 1, encoder.token_embedding.embedding_dim)
+    )
+    if len(rows) == 0:
+        return table
+    packed = torch.nn.utils.rnn.pack_padded_sequence(
+        encoder.token_embedding(encoder.tokens[rows - 1]),
+        encoder.lengths[rows - 1].cpu(),
+        batch_first=True,
+        enforce_sorted=False,
+    )
+    _, state = encoder.encoder(packed)
+    return table.index_copy(0, rows, state[0])
 
 
 class DenseActionReference(ActorCritic):

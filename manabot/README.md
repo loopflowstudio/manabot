@@ -377,8 +377,13 @@ provisioning, scientific evaluation, artifact upload or learning strength.
 independent learned embedding per card. Its `catalog_shape` reports definition
 count, unique token count, total expanded sequence length, longest sequence and
 padded token count. Referenced definitions are expanded into the parent sequence.
-The embedding runs over the padded array; the packed GRU skips padding. These
-counts describe representation cost, not observed learning difficulty.
+Integer token IDs are packed before embedding, so padding receives no embedding
+or gradient work. The same GRU processes at most 64 time steps per call, carrying
+its hidden state and full gradients across calls. This bounds the temporary
+slice-gradient copies in packed CPU GRU backward without truncating a program
+or caching trainable outputs across updates. Completed states return to their
+original definition rows. These counts describe representation cost, not
+observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
 `manabot.semantic.policy_catalog` owns explicit native admission. Policy
 construction checks the engine's learning catalog against the world pool's

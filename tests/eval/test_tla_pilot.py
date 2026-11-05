@@ -24,7 +24,6 @@ from etude.jobs import evaluation_spec
 from etude.run.declaration import declare
 from etude.run.records import ArtifactRef, Clock
 from etude.train.run import track
-from managym.decision import SEMANTIC_DECISION_VERSION
 import numpy as np
 import pytest
 
@@ -48,6 +47,7 @@ from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+from tests.retained_decision import assert_retained_frame
 
 
 @pytest.fixture
@@ -737,14 +737,7 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
         if index == len(game.actions) - 1:
             frame = scalar.semantic_decision_frame_json()
             assert vector.semantic_decision_frames_json()[0] == frame
-            # The retained schema-7 receipt keeps its original identity. Only
-            # the declared schema/hash transition differs in the current replay.
-            current = json.loads(frame)
-            retained = json.loads(game.frame)
-            assert retained.pop("schema_version") == 7
-            assert current.pop("schema_version") == SEMANTIC_DECISION_VERSION
-            assert current.pop("fingerprint") != retained.pop("fingerprint")
-            assert current == retained
+            assert_retained_frame(frame, game.frame)
         observation, *_ = scalar.step(action)
         vector.step_into_buffers([action])
     assert len(observation.agent_cards) == 45
