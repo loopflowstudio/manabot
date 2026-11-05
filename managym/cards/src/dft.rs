@@ -25,22 +25,29 @@ fn caradora_heart_of_alacria() -> CardDefinition {
         power: Some(4),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::This },
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
             intervening_if: None,
-            effects: vec![Effect::Modal { modes: vec![
-                vec![Effect::SelectCards {
-                    from: ObjectSelector::Zone(ZoneType::Library),
-                    predicate: CardPredicate {
-                        subtypes_any: vec!["Mount".into(), "Vehicle".into()],
-                        ..Default::default()
-                    },
-                    min: 0,
-                    max: EffectValue::Fixed(1),
-                    effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                    if_declined: vec![],
-                }, Effect::ShuffleLibrary],
-                vec![],
-            ] }],
+            effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![
+                        Effect::SelectCards {
+                            from: ObjectSelector::Zone(ZoneType::Library),
+                            predicate: CardPredicate {
+                                subtypes_any: vec!["Mount".into(), "Vehicle".into()],
+                                ..Default::default()
+                            },
+                            min: 0,
+                            max: EffectValue::Fixed(1),
+                            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                            if_declined: vec![],
+                        },
+                        Effect::ShuffleLibrary,
+                    ],
+                    vec![],
+                ],
+            }],
         }],
         replacement_effects: vec![ReplacementEffect::ModifyCounters {
             effects_only: false,
