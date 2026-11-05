@@ -90,8 +90,12 @@ prediction and lambda-target mean/standard deviation, explained variance of the
 target by the prediction (bootstrapped targets, not final outcomes), advantage
 standard deviation, the selection threshold actually applied and whether the
 .01 floor set it. Sampled optimizer steps add `gradient_norm_critic_readout`, the
-pre-clip norm over critic-only parameters. Existing rows, retained rows,
-actor/critic exposures, empty-filter skips and selection groups are unchanged.
+pre-clip norm over critic-only parameters (`value_head`, `value_readout`), and in
+the `value_token` arm `gradient_norm_value_token`, the token's own pre-clip norm.
+The token is an unmasked key in object attention, so actor logits read it and
+its gradient mixes policy and value loss; it is shared, not critic-only.
+Existing rows, retained rows, actor/critic exposures, empty-filter skips and
+selection groups are unchanged.
 
 ## Proposed protocol (to be frozen before scoring)
 
@@ -128,6 +132,7 @@ actor/critic exposures, empty-filter skips and selection groups are unchanged.
 | Budget | Not set | No MTG-213 or 5da5f4 allowance is inherited |
 | Learning rule | v10 damped rule as is | The full-TLA successor's learning-rule review may change it; freezing before that review risks a stale baseline |
 | Thresholds | Promotion and rejection rules | Earlier screens used ±5 points with all-seed sign agreement |
+| Shared baseline | Own `masked_mean` runs, or one baseline shared with the sparse-attention study | Sharing needs identical seeds, source and schedule; neither study crosses the other's axis |
 
 Acceptance may be negative or inconclusive. No outcome changes a default
 without a separate decision.

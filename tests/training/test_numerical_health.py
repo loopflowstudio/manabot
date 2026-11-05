@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import time
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -275,6 +276,54 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
         model(torch.ones((1, 1), device=DEVICE)).square().mean(), 1.0
     )
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
+
+
+@pytest.mark.parametrize("aggregation", ["value_token", "masked_mean"])
+def test_critic_readout_norm_excludes_the_shared_value_token(
+    aggregation: Literal["value_token", "masked_mean"],
+) -> None:
+    torch.manual_seed(252)
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(value_aggregation=aggregation)
+    ).to(DEVICE)
+    collector = SeatRoutedCollector(
+        agent.observation_space,
+        Match(MatchConfig()),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=29,
+        device=DEVICE,
+    )
+    batch = collector.collect(agent, 1)
+    obs = {
+        key: torch.from_numpy(value[0]).to(DEVICE) for key, value in batch.obs.items()
+    }
+    optimizer = torch.optim.Adam(agent.parameters())
+
+    def measure(loss: Literal["policy", "value"]) -> NumericalHealth:
+        logits, values = agent.forward_distribution(obs)
+        valid = obs["actions_valid"] > 0
+        objective = (
+            -policy_logs(logits, valid)[valid].mean()
+            if loss == "policy"
+            else values.square().sum()
+        )
+        health = _health()
+        OptimizerHealth(agent, optimizer, health, iteration=1).step(objective, 1e9)
+        return health
+
+    policy = measure("policy")
+    value = measure("value")
+    # A policy-only loss never reaches critic-only parameters; a value-only
+    # loss does.
+    assert policy["gradient_norm_critic_readout"] == 0
+    assert value["gradient_norm_critic_readout"] > 0
+    if aggregation == "value_token":
+        # Actor logits read the token through attention: policy loss reaches it.
+        assert policy["gradient_norm_value_token"] > 0
+        assert value["gradient_norm_value_token"] > 0
+    else:
+        assert "gradient_norm_value_token" not in policy
 
 
 class ExtremeAgent(ActorCritic):
