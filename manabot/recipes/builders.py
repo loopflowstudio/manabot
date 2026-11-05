@@ -11,7 +11,12 @@ cannot change its baseline. TrainingRegime remains the serialized owner.
 from collections.abc import Sequence
 from typing import Literal
 
-from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    ValueAggregation,
+)
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -27,7 +32,6 @@ PACK = "ur-lessons-vs-gw-allies"
 GIB = 1024**3
 
 ValueOutput = Literal["scalar", "categorical_wdl"]
-ValueAggregation = Literal["historical_mean", "masked_mean", "value_token"]
 
 
 # ---------------------------------------------------------------------------

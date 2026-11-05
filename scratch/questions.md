@@ -297,3 +297,17 @@ training (−.019, interval −.076 to +.039); exact quota keeps the `[quota, 25
 fast target path (24 s against 1,114 s of scans per run); the Elemental repeat
 Jack Heart directed has not run. That decision is his and belongs to a separate
 Task. Nothing else is open; the next step for this Task is publication.
+
+## MTG-252 assumptions (2026-11-05 UTC)
+
+The fc6ffb section above is inherited from main and does not direct MTG-252.
+
+- Implemented the optional third arm (`attention_readout`) so the protocol can
+  choose 2 or 3 arms; the brief marks it optional. Reversible: drop the arm.
+- Value-token initialization order left unchanged (it shifts later v7 encoder
+  draws). Moving it would alter fresh initialization of existing token recipes;
+  recorded as a known non-shared-init difference instead.
+- Arms derive from v10's damped rule unchanged; whether to wait for the
+  full-TLA learning-rule review is an open decision in the study doc.
+- The pooling × floor follow-up (w4, 2026-10-06) is prior evidence the Task
+  brief omitted; the study doc cites it.

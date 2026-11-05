@@ -35,6 +35,7 @@ from manabot.training.learning.selection import (
     selected_mean,
     selection_diagnostics,
     selection_mask,
+    value_scale,
 )
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
@@ -287,12 +288,21 @@ def update_damped_iteration(
             .squeeze(2)[..., :ACTION_TYPE_DIM]
             .argmax(-1)
         )
+        predictions = torch.as_tensor(batch.values, device=device)
         diagnostics["selection_groups"] = selection_diagnostics(
             targets.advantages,
-            expected_targets - torch.as_tensor(batch.values, device=device),
+            expected_targets - predictions,
             targets.selected,
             torch.as_tensor(batch.dones, device=device),
             chosen_types,
+        )
+        diagnostics["value_scale"] = value_scale(
+            predictions,
+            expected_targets,
+            targets.advantages,
+            kind=learning.filter_kind,
+            quantile=learning.advantage_quantile,
+            minimum=learning.min_advantage,
         )
     diagnostics["actor_exposures"] = 0
     diagnostics["critic_exposures"] = 0

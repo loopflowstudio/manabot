@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept review — MTG-252 critic readouts</title>
+<style>
+  :root { --bg:#fbf8f2; --fg:#2a251f; --muted:#6d6457; --rule:#ddd3c3; --accent:#8a4b1f; --new:#2f6b3a; --code:#f1ebe0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1a16; --fg:#ece5d9; --muted:#a99f90; --rule:#3a342c; --accent:#e0a070; --new:#8fcf98; --code:#2a2520; }
+  }
+  body { background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; margin:0; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; margin:0 0 .5rem; }
+  h2 { font-size:1.15rem; margin:2.5rem 0 .6rem; border-top:1px solid var(--rule); padding-top:1.2rem; }
+  code { background:var(--code); padding:0 .25em; border-radius:3px; font-size:.88em; }
+  pre { background:var(--code); padding:.8rem 1rem; overflow-x:auto; border-radius:4px; font-size:.85rem; line-height:1.45; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  th, td { text-align:left; padding:.4rem .5rem; border-bottom:1px solid var(--rule); vertical-align:top; }
+  .proposed { color:var(--new); }
+  .proposed::before { content:"proposed · "; font-style:italic; }
+  .callout { border-left:3px solid var(--accent); padding:.2rem 0 .2rem 1rem; }
+  ol li { margin:.4rem 0; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Critic readouts: concepts hold; the token diagnostic is fixed</h1>
+  <p>Task MTG-252 · concept-review step (headless) · 2026-11-05</p>
+  <p>Built from <code>experiments/value-readout-252.md</code>, <code>manabot/model/actor_critic.py</code>, <code>manabot/training/learning/health.py</code>, <code>scratch/value-readout-252.md</code>, Task brief</p>
+</header>
+
+<p><strong>Decision needed:</strong> none for this change. Second pass (after checkpoint <code>dc35969a8</code>): the fix below is implemented in <code>health.py</code> and tested; no new mismatch. Execution still waits on the open protocol choices listed at the end.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+  <tr><th>Researcher action</th><th>Concept</th><th>API</th></tr>
+  <tr><td>Pick what the critic reads</td><td>Arm = one <code>value_aggregation</code></td><td><code>value_readout_252.arm()</code>, <code>require_single_axis</code></td></tr>
+  <tr><td>Check count and order sensitivity</td><td>Witnesses</td><td><code>tests/model/test_value_aggregation.py</code></td></tr>
+  <tr><td>Compare value and advantage scale and the filter</td><td>Per-update value scale</td><td><code>value_scale</code> (EV, threshold, <code>floor_binds</code>)</td></tr>
+  <tr><td>Separate critic gradient from actor gradient</td><td>Critic-only gradient norm</td><td><code>gradient_norm_critic_readout</code></td></tr>
+  <tr><td>Freeze and run</td><td>Protocol JSON + regimes</td><td>not built; waits on decisions</td></tr>
+</table>
+
+<h2>The mismatch</h2>
+<div class="callout">
+<p><code>gradient_norm_critic_readout</code> is documented as the norm over parameters <em>only the critic reads</em>. Its prefix set includes <code>value_token</code>. The token is an unmasked key in both object-attention blocks, so every object output and every actor logit read it. In the token arm, the metric would count policy-loss gradient as critic gradient, and separating the two is the point of the comparison.</p>
+</div>
+<pre>_CRITIC_READOUT = ("value_head.", "value_token", "value_readout.")   # existing</pre>
+<pre class="proposed">_CRITIC_ONLY = ("value_head.", "value_readout.")
+# token arm only: gradient_norm_value_token (shared actor + critic)</pre>
+<p class="proposed">Update the study doc's diagnostics paragraph. Add a health test showing that the token arm's critic-only norm excludes the token, and that the token's gradient is nonzero under a policy-only loss.</p>
+
+<h2>What holds</h2>
+<p>The readout arm is genuinely critic-only at the forward pass. It runs after attention, only <code>_value_from_objects</code> reads it, and it shares every baseline initial value. The arm names describe the summary the critic MLP reads. The concepts need no merging or renaming.</p>
+
+<h2>Open before execution (no approval exists)</h2>
+<ol>
+  <li>Arms: (a) 2 — masked, token; (b) 3 — add the readout.</li>
+  <li>Seeds: (a) 3; (b) more.</li>
+  <li>Updates per run: (a) 25; (b) 50; this sets the budget.</li>
+  <li>Budget: not set; no MTG-213 or 5da5f4 allowance carries over.</li>
+  <li>Learning rule: (a) freeze on v10's damped rule now; (b) wait for the full-TLA learning-rule review.</li>
+  <li>Thresholds: (a) ±5 points with all-seed sign agreement, as before; (b) other.</li>
+  <li>Baseline: (a) own <code>masked_mean</code> runs; (b) share one with Task690c9b.</li>
+</ol>
+</main>
+</body>
+</html>
