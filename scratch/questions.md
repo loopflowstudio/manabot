@@ -179,6 +179,10 @@ The next (`-c`) stopped at 6 of 750 deals: games hit the 120 s limit in durable 
 writes (117 of 120 s) on the container disk, with .7 s of CPU. Its failed deal is
 infrastructure, so it replays; arena journals now run in memory and copy to the run.
 
+Study 2's first evaluation (`lambda-sweep-v1-462d58126cd1-f1`) never booted: no
+bootstrap log, one full window, $.97, no games. Charged to unspent training lines as
+the protocol allows, so evaluation stays inside $2.50. A guard now cancels at 15 minutes.
+
 Exists: closure separation, docs, tests, both experiment files, calibration.
 Remaining:
 - Commit, then freeze study 1 and study 2 at that revision on `fc6ffb-l4`; reconcile
