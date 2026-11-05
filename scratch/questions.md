@@ -43,6 +43,21 @@ budget and results pointer; this file holds working assumptions and open items.
   less batch assembly, times the idle share of stream slots. The one-seat closure study
   gives the direct measurement of finishing games against pausing.
 
+- The calibration run records under experiment `elemental_closure_calibration`
+  (`--calibration`), so no evaluation pass scores it.
+- Each run's dollar limit equals its reservation (window + 15 min setup at $.60); the
+  launcher refused $.36 for a .6 h window. Protocol amended before any run started.
+
+## Log
+
+- 20:07–21:10 UTC: no L4 stock for an hour (launch refusals, no runs, no cost), then the
+  dollar-limit refusal above. 21:12 calibration launched: run 03e5613716a4, revision
+  b2cd4de45, machine 07c490-l4-586f45c56a62. Terminated at 30 min as "never booted",
+  then 21:47 ad86d25e2327 terminated at 15 min the same way. Both were wrong calls:
+  each had a job attempt, and Etude shows `setting_up`/"output not received" until
+  the end even on healthy runs (setup is budgeted 900 s). Charge both full
+  reservations ($1.02) to the cap. "Not booted" means no attempt id in `etude logs`.
+
 ## Open
 
 - Calibration quota (set `CLOSURE_QUOTA` in `experiments/elemental_variants.py`, amend

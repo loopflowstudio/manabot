@@ -8,8 +8,6 @@ experiments/protocols/closure-lambda-elemental-v1.md. Recipe:
 
     uv run etude launch experiments/elemental_closure.py --rent 07c490-l4 \\
         --cohort elemental-closure-exact --parallel 3 --revision COMMIT --arms exact-quota
-    uv run etude launch experiments/elemental_closure.py --rent 07c490-l4 --revision COMMIT \\
-        --arms complete-games --seeds 70100 --updates 30 --hours .6 --usd-per-run .51 --calibration
     uv run etude eval experiments/elemental_closure.py --rent 07c490-cpu32 --source r2://manabot/jobs
     uv run etude report experiments/elemental_closure.py --source r2://manabot/jobs --open
 """
@@ -28,8 +26,6 @@ from experiments.learning_signal import (
 from manabot.training.regime import BatchClosure
 
 EXPERIMENT = "elemental_closure"
-# The unscored calibration run records under its own experiment, so no pass scores it.
-CALIBRATION_EXPERIMENT = "elemental_closure_calibration"
 SEEDS = "70101,70102,70103"
 UPDATES = 150
 # Rental hours and dollars per run at the L4 rate the protocol budgets.
@@ -46,18 +42,14 @@ def runs(
     usd_per_run: float = USD_PER_RUN,
     seeds: str = SEEDS,
     arms: str = ",".join(ARMS),
-    calibration: bool = False,
 ) -> list[Run]:
-    """`arms` and `seeds` are comma-separated, so one arm launches all-or-nothing.
-
-    `--calibration` records the runs outside the scored experiment.
-    """
+    """`arms` and `seeds` are comma-separated, so one arm launches all-or-nothing."""
     chosen = tuple(arm for arm in ARMS if arm in arms.split(","))
     return training_runs(
         (closure_comparison(arm, updates) for arm in chosen),
         updates=updates,
         revision=revision,
-        experiment=CALIBRATION_EXPERIMENT if calibration else EXPERIMENT,
+        experiment=EXPERIMENT,
         seeds=tuple(int(seed) for seed in seeds.split(",")),
         hours=hours,
         usd_per_run=usd_per_run,
