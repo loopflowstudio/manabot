@@ -1,9 +1,3 @@
----
-id: d97e0563-141d-4053-a174-953642dcfe0e
-linear:
-  initiative: 21966203-a6bb-4e2c-a902-f43cbe813053
----
-
 # Academy
 
 ## Objective
