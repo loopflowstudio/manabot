@@ -17,3 +17,10 @@ MTG-244's successor v8 direction without assigning a competing layout. The plan
 retains the exact contracts and materialization constraints. Actual linked-entry
 payment suspension and the migrated hidden selections are now proved. The plan
 records the remaining hidden-state audit, full projection and risk acceptance.
+
+Sync resolution (2026-11-04): keep these MTG-241 decisions as the active
+checkout context. Updated incoming MTG-213 v9 evidence and prospective v10
+capacity/recovery decisions remain preserved at
+`ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md` and in
+`experiments/tla-trophy-pilot.md`. They do not authorize experiments or
+expand this Task; incoming implementation changes remain intact.
