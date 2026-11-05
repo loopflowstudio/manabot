@@ -11,11 +11,13 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.env.failures import read_failure
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
+    ObservationConfig,
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -57,6 +59,7 @@ class ScriptedFailures:
         *,
         always: bool = False,
         failure_generation: int = 0,
+        resource_limit: bool = False,
     ) -> None:
         self.buffers = buffers
         self.positions = [0, 0]
@@ -64,6 +67,7 @@ class ScriptedFailures:
         self.steps = [0, 0]
         self.always = always
         self.failure_generation = failure_generation
+        self.resource_limit = resource_limit
         self.infos: list[dict[str, Any]] = [{}, {}]
         self.encode()
 
@@ -80,7 +84,7 @@ class ScriptedFailures:
         return [row + self.generation[row] * 2 for row in (0, 1)]
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
+        self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None:
         self.buffers["terminated"].fill(0)
         self.buffers["truncated"].fill(0)
@@ -97,6 +101,13 @@ class ScriptedFailures:
                     "game_error": "not enough producible mana",
                     "game_error_class": "AgentError",
                 }
+                if self.resource_limit:
+                    assert recover_capacity
+                    self.infos[row].update(
+                        game_error="observation capacity exceeded: agent_permanents 41 > 40",
+                        game_error_class="ObservationCapacity",
+                        game_error_kind="resource_limit",
+                    )
                 continue
             self.positions[row] += 1
             if self.positions[row] == 5:
@@ -136,6 +147,56 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
     )
 
 
+@pytest.mark.parametrize("error_class", ["ObservationCapacity", "AgentError", None])
+def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
+    error_class: str | None,
+) -> None:
+    evidence = read_failure(
+        Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
+    )
+    (game,) = evidence.games
+    hero, villain = game.players
+    actions: list[int] = []
+    for action in game.actions:
+        assert isinstance(action, int)
+        actions.append(action)
+    row = GameAttempt(
+        stream=game.stream,
+        seed=game.seed,
+        seat=1,
+        matchup=MatchConfig(
+            hero=hero.name,
+            villain=villain.name,
+            hero_deck=hero.decklist,
+            villain_deck=villain.decklist,
+            hero_sideboard=hero.sideboard,
+            villain_sideboard=villain.sideboard,
+            world=hero.world,
+        ),
+        outcome="resource_limit",
+        actions=actions,
+        error_class=error_class,
+        error="observation capacity exceeded: agent_permanents 41 > 40",
+        frame_json=game.frame,
+        observation=ObservationConfig(
+            policy_input_version=7,
+            max_cards_per_player=128,
+            max_permanents_per_player=40,
+            max_actions=64,
+            action_overflow="first-legal",
+        ),
+    )
+    result = replay_attempt(row)
+    assert result["status"] == "failed"
+    assert result["matches_binding"] and result["at_retained_failure"]
+    assert result["matches_error"] is (
+        None if error_class is None else error_class == "ObservationCapacity"
+    )
+    assert result["action_index"] == 370
+    assert "recover_capacity" not in GameErrorPolicy().model_dump()
+    assert "observation" not in attempt(False).model_dump()
+
+
 def _tolerant_collector(
     model: ActorCritic,
     ledger: GameErrorLedger,
@@ -154,34 +215,40 @@ def _tolerant_collector(
     )
 
 
-def test_strict_threshold_window_and_restart(tmp_path: Path) -> None:
-    policy = GameErrorPolicy()
+@pytest.mark.parametrize("threshold", [0.1, 0.25])
+def test_strict_threshold_window_and_restart(tmp_path: Path, threshold: float) -> None:
+    policy = GameErrorPolicy(threshold=threshold)
+    failures = round(threshold * 100)
     ledger = GameErrorLedger(tmp_path / "first.jsonl", policy)
     for index in range(99):
-        ledger.record(attempt(index < 10, index), {})
+        ledger.record(attempt(index < failures, index), {})
     assert ledger.state.stop_reason is None
-    assert ledger.state.error_rate > 0.1  # warmup has not settled
-    assert ledger.state.replacement_samples == ledger.state.discarded_samples == 30
+    assert ledger.state.error_rate > threshold  # warmup has not settled
+    assert (
+        ledger.state.replacement_samples
+        == ledger.state.discarded_samples
+        == failures * 3
+    )
     assert ledger.state.replacement_debt == 0
     restored = GameErrorLedger(
         tmp_path / "second.jsonl", policy, parents=[str(ledger.path)]
     )
     restored.record(attempt(False), {})
-    assert restored.state.error_rate == 0.1
+    assert restored.state.error_rate == threshold
     assert restored.state.stop_reason is None
     restored.record(attempt(True), {})  # oldest failure falls out
-    assert restored.state.error_rate == 0.1
-    for _ in range(9):
+    assert restored.state.error_rate == threshold
+    for _ in range(failures - 1):
         restored.record(attempt(True), {})
     assert restored.state.stop_reason is None
     restored.record(attempt(True), {})
-    assert restored.state.error_rate == 0.11
+    assert restored.state.error_rate == (failures + 1) / 100
     assert restored.state.stop_reason == "game_error_rate_exceeded"
     final = GameErrorLedger(
         tmp_path / "third.jsonl", policy, parents=[str(ledger.path), str(restored.path)]
     )
     assert final.state == restored.state
-    assert final.state.replacement_debt == 33
+    assert final.state.replacement_debt == (failures + 1) * 3
     assert (
         GameErrorState.model_validate_json(final.state.model_dump_json()) == final.state
     )
@@ -189,21 +256,30 @@ def test_strict_threshold_window_and_restart(tmp_path: Path) -> None:
         GameErrorPolicy(window=10)
 
 
+@pytest.mark.parametrize("resource_limit", [False, True])
 @pytest.mark.parametrize("seats", ["one", "both"])
 def test_quarantine_refills_without_leaking_seats_or_returns(
-    tmp_path: Path, seats: Literal["one", "both"]
+    tmp_path: Path, seats: Literal["one", "both"], resource_limit: bool
 ) -> None:
     model = agent()
-    policy = GameErrorPolicy()
+    policy = GameErrorPolicy(threshold=0.25, recover_capacity=resource_limit)
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger, seats=seats)
-    scripted = ScriptedFailures(collector._buffers)
+    scripted = ScriptedFailures(collector._buffers, resource_limit=resource_limit)
     collector._env = scripted
     batch = collector.collect(model, 1)
     markers = batch.obs["agent_player"][:, 0, 0, 0]
     assert not any(10 <= marker < 100 for marker in markers)
     assert scripted.steps == [5, 9]
     assert ledger.state.completed == 2 and ledger.state.crashed == 1
+    attempts = [
+        GameAttempt.model_validate(json.loads(line)["attempt"])
+        for line in ledger.path.read_text().splitlines()
+    ]
+    (failure,) = [row for row in attempts if row.outcome != "completed"]
+    assert failure.outcome == ("resource_limit" if resource_limit else "engine_error")
+    if resource_limit:
+        assert failure.observation == model.observation_space.encoder.config
     assert ledger.state.discarded_samples == (4 if seats == "both" else 2)
     assert collector.stats.learner_transitions == batch.actions.size
     assert int(batch.dones.sum()) == (4 if seats == "both" else 2)
@@ -390,11 +466,18 @@ def test_original_failure_is_immutable_and_cli_replays(
     assert inherited.state.model_dump() == allowance
 
 
-def test_later_crash_preserves_previous_complete_games(tmp_path: Path) -> None:
+@pytest.mark.parametrize("resource_limit", [False, True])
+def test_later_crash_preserves_previous_complete_games(
+    tmp_path: Path, resource_limit: bool
+) -> None:
     model = agent()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
+    ledger = GameErrorLedger(
+        tmp_path / "attempts.jsonl", GameErrorPolicy(recover_capacity=resource_limit)
+    )
     collector = _tolerant_collector(model, ledger)
-    collector._env = ScriptedFailures(collector._buffers, failure_generation=1)
+    collector._env = ScriptedFailures(
+        collector._buffers, failure_generation=1, resource_limit=resource_limit
+    )
     batch = collector.collect(model, 7)
     markers = set(batch.obs["agent_player"][:, 0, 0, 0])
     assert markers == set(range(5)) | set(range(10, 15)) | set(range(100, 105)) | set(
@@ -515,7 +598,7 @@ def test_action_limit_is_a_failed_attempt_and_bounded(tmp_path: Path) -> None:
 def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) -> None:
     class TruncatedGames(ScriptedFailures):
         def step_isolated_into_buffers(
-            self, actions: list[int], active: list[bool]
+            self, actions: list[int], active: list[bool], recover_capacity: bool = False
         ) -> None:
             super().step_isolated_into_buffers(actions, active)
             if "game_error" in self.infos[1]:
