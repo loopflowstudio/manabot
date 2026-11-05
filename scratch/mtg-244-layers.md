@@ -6,11 +6,16 @@ one PR for review; no merge, world freeze or training launch. Jack Heart approve
 a successor policy input the same day: "new input version is totally fine".
 Explicit v8 is implemented; fresh v6 and frozen saved versions remain unchanged.
 
-Status, 2026-11-04: published head `68ef4a63d` includes reusable source
-plans, conservative dependency pruning and lazy pre-mutation SBA snapshots.
-Its long integration passes in CI `41956687926`; the budget, Rust/main
-integration and Layer Risk `41956688122` are still running; the
-preceding `a7b0ddaff` checkpoint failed the unchanged step budget by 10.54%.
+Status, reconciled 2026-11-04 (hosted receipts dated November 5 UTC): published
+head `7851e6765` adds the `ed25b277e` simplification and main's pilot-evidence
+sync to the source-plan/lazy-SBA implementation at `68ef4a63d`. That earlier
+checkpoint now passes the unchanged Engine Budget with matched full scores,
+actions, counts and digests: search 164.461→132.934 s, worst 4.818→3.860 s,
+steps 7.772806→7.104065 s. Its long integration passes; Rust/main integration
+were cancelled, the aggregate failed, and Layer Risk `41956688122` is incomplete.
+Current-head CI `41957935041` and Layer Risk `41957934391` remain running.
+The earlier `a7b0ddaff` failure (10.54% step regression) remains contrary history,
+not the latest budget result. Current-head acceptance is still outstanding.
 [Risk validation](mtg-244-risk-validation.md) owns measurements/limits and
 [CI repair](mtg-244-ci-repair.md) retains earlier failures. No product decision
 is missing and publication does not establish acceptance.
@@ -151,7 +156,7 @@ attribution (368,743 boards, 178,899 context clones, no ordinary dependency edge
 and payment allocation traffic support sharing plans and avoiding impossible
 probes first. Local timing under contention is not acceptance.
 
-Delete — do not maintain (implemented cuts; no remaining deletion target):
+Removed mechanisms (implemented cuts; no remaining deletion target):
 - `ScopeView`, `LayerBasis`, `StaticIndex` and their staged characteristic
   readers: the explicit layer context is the surviving authority.
 - `stacked_activated_ability`: resolve the effects captured at activation;
@@ -187,20 +192,56 @@ by `test_v8_recipe_collector_and_evaluation_select_saved_input`.
 `scratch/concept-review.html` illustrates these separate current-view,
 captured-program and saved-architecture lifetimes; it is not a browser proof.
 
+## Concept review — 2026-11-04, head `7851e6765`
+
+Outcome: nothing further to change; no open product choice. Jack Heart's
+successor-input and speed directions remain the accepted contract. The caller
+selects an input for new work, chooses native legal actions from the current
+view, and continues the captured activation even after its source leaves.
+The existing training guide and package README describe selection and rejection
+recovery adequately; no further usage-doc or skill amendment is needed.
+
+The optimization introduces no caller-owned lifecycle. Source plans are private,
+rebuildable data bound to definition identity, incarnation and timestamp; derived
+views follow revisions and forks detach on writes. These can share storage, but
+cannot merge with the captured program or saved architecture: they survive
+different changes. Catalog provenance cannot replace execution ownership, and
+cache metadata cannot become persistent rules state or a second rules authority.
+The lazy SBA snapshot preserves the pre-mutation source set for the whole batch.
+
+The concrete failure remains a later observation that the selected older input
+cannot represent. Reject before encoding/inference, retain the committed prefix
+and failure evidence, and select v8 with a compatible model for new work; no live
+swap or rollback is implied. Counterexamples remain source sacrifice followed by
+a suspended granted ability, a definition change in a warmed fork, and a tap/mana
+mutation that changes a discovered predicate. The inspected capture, fork and
+invalidation witnesses address those boundaries; this review did not rerun them.
+
+Next proof remains the current-head isolated comparison and Gate checks in
+[Remaining work](#remaining-work), with the risk note retaining contrary results.
+Earlier ordinary gains do not certify the later simplification or learning
+quality. Finer invalidation remains an evidence-dependent implementation candidate,
+not an unresolved product decision or a new redesign instruction. No runtime
+change, publication or Graph navigation is part of this review.
+
 ## Remaining work
 
-1. Inspect final-head Layer Risk `41956688122` and CI `41956687926` for
-   `68ef4a63d`. The redesign is implemented and measured locally; matched isolated
-   timing and the unchanged budget remain unaccepted. Investigate any remaining
-   regression using retained exact counts/digests; do not claim review readiness
-   from measurement checkpoint publication. Further per-component invalidation
-   or instruction borrowing needs residual-cost evidence to justify complexity.
-2. Retain and compare the new isolated receipts with the completed predecessor
-   run `41952171271`. That run validates the producer and all seven policy cases,
-   but its engine still regresses. Local source-plan measurements preserve every
-   full score, action, simulation, payment/resource and step digest. The exact
-   tiny-comparison passes in optimized debug locally (53.24 s); hosted long
-   integration passes at preceding `a7b0ddaff`, while its budget still fails.
+1. Current-head CI `41957935041` and Layer Risk `41957934391` must establish
+   matched ordinary/dependency workloads, complete payments and all seven policy
+   cases for `7851e6765`. The implemented redesign has isolated ordinary gains
+   at `68ef4a63d`; the later simplification has local allocation/digest proofs,
+   not isolated timing acceptance. Further per-component invalidation or
+   instruction borrowing remains a candidate only if residual-cost evidence
+   justifies its dynamic dependency/ownership complexity. A green budget alone
+   does not settle the accepted risk outcome or justify a learning claim.
+2. Layer Risk `41955382652` (`a7b0ddaff`) completed with all comparisons matched;
+   `41956688122` (`68ef4a63d`) remains incomplete. Neither replaces the
+   current-head comparison. Completed predecessor run `41952171271`
+   validates the producer and seven policy cases, but its engine regresses.
+   Local measurements preserve full scores, actions, simulations, payment
+   resources and step digests. The tiny comparison passes locally (53.24 s)
+   and hosted long integration passes at `68ef4a63d`. Cancelled Rust checks
+   supply no pass. Same-runner results must remain paired within each run.
    Source-plan/final evidence bundles are `49f516b3b42188a9e170e59a870907632d17fbcd`
    and `6baa683f7ec901ea243538ec53e91108429f66ed`.
 3. Gate owns affected suites and current-world admission: full debug Rust,
@@ -224,13 +265,16 @@ captured-program and saved-architecture lifetimes; it is not a browser proof.
 
 ## Validation and retained sources
 
-Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2 --manifest-path managym/Cargo.toml` with `--test rules_tests cr_613_continuous_effects`, `--lib flow::statics::cache_tests`, and `--features benchmark --example bench_layers` passes 23 + 2 + 1 tests; `uv run --extra dev pytest tests/model/test_layer_input.py -q -k native_python_text_forward_backward_and_reload` passes 3. Release wheel rebuilt/installed atomically; rustfmt and diff checks pass. Gate owns full suites and isolated performance acceptance.
+Check: `uv run --no-sync python scripts/engine_budget.py compare --artifact .cache/mtg-244-lazy-sba-ci-budget --reference .cache/mtg-244-lazy-sba-ci-budget/reference` — PASS for `68ef4a63d`; current-head full suites and complete isolated comparison remain with Gate/CI.
 
-The reduction preserves all dependency step/search digests and counts, plus all
-16 complete payment traces/resources. Against `68ef4a63d`, allocations fall
-563,724→552,779 for dependency steps and 49,115,896→48,159,001 for dependency
-search; pool/land payment allocations remain 436/509. No timing claim. Exact
-receipts, source patch and binary hashes are retained in gzip tar git blob
+Prior simplification validation passes 23 debug layer cases, two cache cases,
+one benchmark fixture test and three native/Python/text/forward/backward/reload
+cases; release extension rebuilt atomically, rustfmt and diff checks passed.
+No code changed during reconciliation, so those focused tests were not repeated.
+
+The risk note records the simplification's matched dependency/payment allocation
+comparison, without a timing claim. Receipts, source patch and binary hashes are in
+gzip tar git blob
 `928f19c27f4729601867502f72b3da7180a255e6` (`git show <blob> > evidence.tar.gz`).
 
 The complete pre-reduction plan, including uncommitted incoming notes and exact
@@ -238,7 +282,10 @@ prior test/evidence references, is git blob
 `2df8f0bfe2cdec1b230766932598f536e54d0894` (`git show <blob>`). It retains the
 archived implementation draft and previous concept-review/reconciliation history.
 The risk and CI-repair notes keep contrary measurements and remaining obligations
-current. Main sync through `51b4bd274` changed configuration only, not runtime.
+current. Main sync at `7851e6765` adds pilot checkpoint/evaluation evidence from
+`e113602a2`; it changes no engine/model source and authorizes no training here.
+The three engine files changed since `68ef4a63d` belong to the simplification,
+so its hosted evidence cannot be relabeled as current-head proof.
 
 Primary rules fetched 2026-11-04 from
 https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt

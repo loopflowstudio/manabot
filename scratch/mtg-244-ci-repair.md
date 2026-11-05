@@ -97,8 +97,16 @@ subsequently succeeded: every full workload/payment/policy comparison matches,
 but it measures the still-regressed predecessor. Source-plan runtime `614a38fc8`
 is pushed in measurement checkpoint `a7b0ddaff`: CI `41955382680` passes long
 integration, but step time remains 10.54% over reference. Final lazy-SBA head
-`68ef4a63d` is now pushed; CI `41956687926` and Layer Risk `41956688122` are
-pending/running, not accepted. The prior risk run `41955382652` remains live. The source-plan redesign and its measurements are recorded in
+`68ef4a63d` now passes Engine Budget in CI `41956687926`: search
+164.461→132.934 s, worst 4.818→3.860 s, steps 7.772806→7.104065 s,
+with full scores, actions, counts and digests matching. Its long integration
+and all Academy/Python/conformance jobs pass; Rust/main integration were
+cancelled and the aggregate failed. Layer Risk `41956688122` remains incomplete;
+prior risk run `41955382652` now passes all comparisons (risk note retains the
+receipt). Published head is now `7851e6765`, including
+the later simplification and main's pilot-evidence sync; its CI `41957935041`
+and Layer Risk `41957934391` are running. The prior head's pass is not
+current-head acceptance. The source-plan redesign and its measurements are recorded in
 [the risk note](mtg-244-risk-validation.md); local passes cannot replace CI.
 Pre-reconciliation note: blob `e0079911b6f52fdfde8bfd8967d0cf41c0dc537a`.
 

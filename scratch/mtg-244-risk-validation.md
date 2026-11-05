@@ -145,14 +145,9 @@ Per-component invalidation and instruction borrowing could remove more work,
 but add dynamic dependency/ownership complexity; these receipts support the
 source-sharing cut first. No baseline has moved.
 
-Check: 23 focused debug layer cases and both cache cases pass; the exact retained
-tiny-comparison test passes with the optimized debug wheel in 62.89 s (prior
-local pass 97.84 s). Release extension rebuilt and installed atomically. All seven
-policy cases remeasured with matching observations/configuration/storage and
-finite complete samples. Local v8 program native encoding 1.217→1.182 ms,
-inference 56.64→49.79 ms, forward/backward 101.03→87.63 ms; ordinary controls
-vary, so this is not isolated latency acceptance. Gate retains full suites,
-the published-head tiny comparison and unchanged budget.
+Focused debug layer/cache and tiny-comparison checks pass (62.89 s versus
+97.84 s locally); seven policy cases match. Local policy timings remain
+exploratory. Exact commands, samples and prior figures remain in the bundle below.
 
 Exact raw local and hosted receipts, binary hashes, commands, source patch and
 verification logs are preserved in gzip tar blob
@@ -188,14 +183,56 @@ host variability. Per-target instructions and conservative full-board rebuilds
 remain costs; deeper invalidation adds dynamic membership/dependency complexity
 for a smaller remaining layer share. No promised speedup or budget exemption.
 
-Check: 11 focused debug CR704 cases pass, including simultaneous departures and
-fixpoints; exact tiny comparison passes again in 53.24 s with the optimized debug
-wheel. Release wheel rebuilt/installed atomically and all seven policy cases
-remeasured/matched. Exact final patch over `a7b0ddaff`, binary hashes, samples,
-profiles, policy receipts and CI artifact are gzip tar blob
+Eleven debug CR704 cases and the tiny comparison (53.24 s) pass; seven policy
+cases match after atomic release-extension rebuild. Exact patch over `a7b0ddaff`,
+binary hashes, samples, profiles, policy receipts and CI artifact are gzip tar blob
 `6baa683f7ec901ea243538ec53e91108429f66ed`; local copy
 `.cache/mtg-244-lazy-sba-evidence.tar.gz`. This supplements the source-plan bundle,
 not its timing acceptance. Source-plan peak RSS above predates the lazy-SBA cut.
+
+## Isolated ordinary gains at the lazy-SBA checkpoint
+
+Run `41956687926`, job `127013635221`, measures `68ef4a63d` against pinned
+`ea316ff14` on one GitHub Ubuntu 24.04 AMD EPYC 7763 VM (4 vCPU, release).
+The unchanged 10% Engine Budget passes. Search total is 164.461→132.934 s
+(19.17% less time), worst reply 4.818→3.860 s (19.88% less), and steps
+7.772806→7.104065 s (8.60% less; 13,077.6→14,308.7 steps/s). All three full
+score digests, action lists, 120 decisions, 21,504 simulations, zero caps and
+101,650 steps match. This supports ordinary-workload gains beyond merely
+repairing the guard. It does not isolate the lazy snapshot from the source-plan
+cut, establish dependency/model costs, or certify the later simplification.
+
+Raw artifact and provenance: `.cache/mtg-244-lazy-sba-ci-budget`, retained as
+gzip tar blob `402a408e4d96fee1eba9c561f553116af591c19c`.
+The existing comparator passes on the downloaded artifact; full score/action/
+simulation equality was also checked directly. No reference or tolerance moved.
+That head's long integration, Academy UI/integration, clean-machine Play,
+Python Unit and both conformance jobs pass. Rust and main integration were
+cancelled; the aggregate failed and run concluded cancelled. These are individual
+job results, not a green aggregate.
+
+The `ed25b277e` simplification now in published head `7851e6765` removes repeated
+read walks, fixed-node assembly, redundant discovery and temporary static-source
+vectors. It retains 16 complete payment traces and all dependency digests/counts;
+dependency allocations fall 563,724→552,779 (steps) and
+49,115,896→48,159,001 (search) against `68ef4a63d`. Pool/land counts stay 436/509.
+Exact receipts and patch: gzip tar blob `928f19c27f4729601867502f72b3da7180a255e6`.
+This is allocation evidence, not a new latency claim. Main's accompanying
+pilot-evidence sync changes no engine/model source.
+
+Source-plan Layer Risk `41955382652` also completed successfully during
+reconciliation: `ea316ff14` / `fb3555ffb` / `a7b0ddaff`, one AMD EPYC 7763 VM.
+Original steps are 7.784 / 20.955 / 7.898 s; search 167.890 / 544.698 /
+157.258 s; worst 4.910 / 18.167 / 4.588 s. Dependency steps improve
+0.1355→0.05865 s and search 14.2605→4.7791 s against `fb3555ffb`; the old
+reference cannot represent that dependency comparison. All workloads, 16
+payments and seven policy cases match through the comparator. V8 program
+inference is 214.79→205.49 ms and forward/backward 506.58→451.98 ms under
+the same B16/D64 CPU settings; ordinary controls vary, not uniformly improve.
+This receipt does not erase that head's separate 10.54% Engine Budget failure:
+runner-paired comparisons stand on their own. Complete samples/configs/memory
+are in `.cache/mtg-244-source-plan-risk`, gzip tar blob
+`2255e42dda6862d97635b359cf08c7f985311dd4`. It predates lazy SBA and simplification.
 
 ## Producer and remaining acceptance
 
@@ -206,12 +243,13 @@ nonfinite/incomplete samples, different configs/storage, incomplete seed/payment
 identities and changed semantic digests. Eighteen injected-receipt checks cover
 that contract. Inventory-only output cannot satisfy timing comparison.
 
-Required next evidence: final lazy-SBA head `68ef4a63d` is pushed; inspect Layer
-Risk `41956688122` and CI `41956687926` (running/pending) for isolated original/
-dependency search, complete payments and seven policy cases. Source-plan
-CI `41955382680` supplies the failed budget above; Layer Risk `41955382652`
-remains running for that earlier checkpoint. Mitigate any remaining regression;
-measurement checkpoint publication does not establish acceptance. `41952171271` establishes the predecessor's
-comparison only. The full-suite/CI boundary remains with Gate; successful
-measurement execution or a checkpoint publication does not establish acceptance.
-No baseline adoption, merge, training experiment or learning-quality claim.
+Required evidence now belongs to `7851e6765`: CI `41957935041` and Layer Risk
+`41957934391` are running. Intermediate Layer Risk `41956688122`
+(`68ef4a63d`) remains incomplete; `41955382652` establishes only the source-plan
+checkpoint's complete comparison above. The
+ordinary-budget success above does not replace dependency search, complete
+payments, seven full-policy cases or current-head suites. Residual costs still
+include conservative whole-board invalidation and per-target instructions;
+further redesign needs cost evidence and matched remeasurement. Gate retains
+full-suite acceptance. No baseline adoption, merge, training experiment or
+learning-quality claim is authorized.
