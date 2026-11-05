@@ -973,32 +973,23 @@ impl Game {
         });
     }
 
-    fn run_batch_before_decision(
-        &mut self,
-        batch: EventBatch,
-        mut caller: SuspendedResolution,
-        next: Option<Decision>,
-    ) {
-        if let Some(decision) = next {
-            let mut child = EffectFrame::new(caller.frame.controller, Vec::new());
-            child.batch = Some(batch);
-            caller.decision = decision;
-            self.run_before_decision(child, caller);
-        } else {
-            caller.frame.batch = Some(batch);
-            self.run_frame(caller.frame);
-        }
-    }
-
-    /// Suspend the resolution on `next`, or resume its frame when there is
-    /// no further decision.
-    fn continue_resolution(&mut self, mut suspended: SuspendedResolution, next: Option<Decision>) {
+    /// Finish the instruction's batch before exposing its next decision.
+    /// Without a next decision, the frame runs the batch and its remaining effects.
+    fn continue_resolution(&mut self, mut frame: EffectFrame, next: Option<Decision>) {
         match next {
             Some(decision) => {
-                suspended.decision = decision;
-                *self.state.suspended_decision_mut() = Some(suspended);
+                if let Some(batch) = frame.batch.take() {
+                    let child = EffectFrame {
+                        batch: Some(batch),
+                        ..EffectFrame::new(frame.controller, Vec::new())
+                    };
+                    self.run_before_decision(child, SuspendedResolution { frame, decision });
+                } else {
+                    *self.state.suspended_decision_mut() =
+                        Some(SuspendedResolution { frame, decision });
+                }
             }
-            None => self.run_frame(suspended.frame),
+            None => self.run_frame(frame),
         }
     }
 
@@ -1708,7 +1699,7 @@ impl Game {
                     std::mem::take(if_paid),
                     Vec::new(),
                 );
-                self.continue_resolution(suspended, Some(Decision::Payment(payment)));
+                self.continue_resolution(suspended.frame, Some(Decision::Payment(payment)));
                 Ok(())
             }
             (Decision::ChoosePaymentX { .. }, Action::Decline { .. }) => {
@@ -1877,7 +1868,7 @@ impl Game {
                     std::mem::take(chosen),
                     &mut suspended.frame,
                 );
-                self.continue_resolution(suspended, next);
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (Decision::KeepCreatures { .. }, Action::SelectCard { card, .. }) => {
@@ -1900,7 +1891,7 @@ impl Game {
                 let (player, max_total_power, kept) =
                     (*player, *max_total_power, std::mem::take(kept));
                 let next = self.keep_creatures(player, max_total_power, kept, &mut suspended.frame);
-                self.continue_resolution(suspended, next);
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (
@@ -1924,7 +1915,7 @@ impl Game {
                 let next = self
                     .next_retarget(player, object, slot + 1, may_keep)
                     .filter(|_| may_keep);
-                self.continue_resolution(suspended, next);
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (
@@ -1937,7 +1928,7 @@ impl Game {
                 Action::Decline { .. },
             ) => {
                 let next = self.next_retarget(*player, *object, *slot + 1, true);
-                self.continue_resolution(suspended, next);
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (
@@ -1955,7 +1946,7 @@ impl Game {
                     kept,
                     &mut suspended.frame,
                 );
-                self.continue_resolution(suspended, next);
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (
@@ -1983,7 +1974,8 @@ impl Game {
                     },
                 ]);
                 let next = self.distribute_counters(*player, *kind, *remaining - 1);
-                self.run_batch_before_decision(batch, suspended, next);
+                suspended.frame.batch = Some(batch);
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (Decision::Discard { player, remaining }, Action::SelectCard { card, .. }) => {
@@ -2069,7 +2061,7 @@ impl Game {
                 let player = *player;
                 looked.retain(|c| c != card);
                 *selected += 1;
-                let batch = if *to_battlefield {
+                suspended.frame.batch = if *to_battlefield {
                     Some(self.event_batch(vec![self.zone_move_proposal(
                         *card,
                         ZoneType::Battlefield,
@@ -2088,26 +2080,17 @@ impl Game {
                 let more_selectable = looked
                     .iter()
                     .any(|c| self.card_matches_predicate(*c, predicate));
-                if *selected >= *max_select || !more_selectable {
-                    let rest = std::mem::take(looked);
-                    let next = self.library_order_decision(
+                let next = if *selected >= *max_select || !more_selectable {
+                    self.library_order_decision(
                         player,
-                        rest,
+                        std::mem::take(looked),
                         LibraryEnd::Bottom,
                         *random_order,
-                    );
-                    if let Some(batch) = batch {
-                        self.run_batch_before_decision(batch, suspended, next);
-                    } else {
-                        self.continue_resolution(suspended, next);
-                    }
-                } else if let Some(batch) = batch {
-                    let mut child = EffectFrame::new(player, Vec::new());
-                    child.batch = Some(batch);
-                    self.run_before_decision(child, suspended);
+                    )
                 } else {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                }
+                    Some(suspended.decision)
+                };
+                self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (
@@ -2133,7 +2116,7 @@ impl Game {
                 let rest = std::mem::take(looked);
                 let decision =
                     self.library_order_decision(*player, rest, LibraryEnd::Bottom, *random_order);
-                self.continue_resolution(suspended, decision);
+                self.continue_resolution(suspended.frame, decision);
                 Ok(())
             }
             (
@@ -2730,7 +2713,8 @@ impl Game {
         looked.retain(|card| !graveyard.contains(card));
         let next =
             self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);
-        self.run_batch_before_decision(batch, suspended, next);
+        suspended.frame.batch = Some(batch);
+        self.continue_resolution(suspended.frame, next);
     }
 
     /// Reorder inspected library cards, first to draw first. Their exact

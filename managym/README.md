@@ -281,10 +281,13 @@ committed prefix length); code 23 retains its bottom-order meaning.
 
 `EffectFrame::completion` owns the return destination: the interrupted scope,
 a retained caller decision, a completed-operation event, root spell cleanup,
-or root priority. An `EventBatch` on the active frame retains every proposal,
-applied replacement identity, pre-departure facts and result until replacement
-choices and consequent linked returns finish. The affected player chooses each
-replacement; applicability is recomputed after every transformation. No member
+or root priority. Completion events fire before the caller's suffix; Scry and
+Surveil wait for every partition and ordering choice. `continue_resolution` runs
+any pending batch before exposing the next decision. An `EventBatch` on the active
+frame retains every proposal, applied replacement identity, pre-departure facts
+and result until replacement choices and consequent linked returns finish. The
+affected player chooses each replacement; applicability is recomputed after every
+transformation. No member
 commits until the complete batch is ready. Native obligation code 29 names this
 choice, with source-specific labels and focus.
 
@@ -315,9 +318,11 @@ subset constraints: exact weights count only compatible ordered fills, and the
 materializer samples that conditional measure. Commitments are captured before
 zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
 Frozen count-only belief samplers reject these additional constraints before
-inference. Library inspection exposes membership
-in stable definition/object order, never draw order. Prospective battlefield entrants
-are public during replacement choices and remain pinned in both samplers.
+inference. These guarantees cover the retained frame/decision chain; private
+captures that outlive their selecting frame still need binding provenance in both
+samplers. Library inspection exposes membership in stable definition/object order,
+never draw order. Prospective battlefield entrants are public during replacement
+choices and remain pinned in both samplers.
 
 `Effect::Move.library_end` states top/bottom placement without a shuffle; its
 placement commits before linked returns can pause. `put_in_library` authors that
@@ -325,10 +330,6 @@ operation, and `ShuffleLibrary` can follow after all child work. Ordinary `move_
 retains shuffle-into-library behavior. Shared selection has obligation code 28;
 retired codes 5, 6 and 7 keep their historical meanings.
 
-`FrameCompletion::Event` announces a completed operation before its caller
-resumes. Scry and Surveil use it so keyword events wait for every choice;
-Surveil retains its private partition before moving the selected graveyard cards
-as a batch, then finishes kept ordering. `SuspendedResolution::continuation`
-walks the retained frames and decisions root first; observation projection and
-hidden-world sampling share that chain for caller ancestry and inspection
-permissions.
+`SuspendedResolution::continuation` walks retained frames and decisions root first;
+observation projection and hidden-world sampling share that chain for caller
+ancestry and inspection permissions.

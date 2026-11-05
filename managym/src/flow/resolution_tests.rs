@@ -2157,6 +2157,89 @@ fn retained_batch_rechecks_new_entry_replacements_without_reapplying_identity() 
 }
 
 #[test]
+fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() {
+    use crate::flow::decision::{Decision, EffectFrame};
+
+    let player = PlayerId(0);
+    for max_select in [1, 2] {
+        let (mut game, _, _) = fixture(player);
+        counter_replacement_drivers(&mut game, player);
+        let entrant = exiled_counter_entry(&mut game, player);
+        game.move_card(entrant, ZoneType::Library);
+        let looked = game.library_top(player, 4);
+        assert_eq!(looked[0], entrant);
+        game.run_frame(EffectFrame::new(
+            player,
+            vec![
+                Effect::LookAndSelect {
+                    look: EffectValue::Fixed(4),
+                    predicate: CardPredicate::default(),
+                    min_select: 0,
+                    max_select,
+                    reveal: false,
+                    to_battlefield: true,
+                    random_order: false,
+                },
+                Effect::gain_life(3),
+            ],
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        checked_command(
+            &mut game,
+            Action::SelectCard {
+                player,
+                card: entrant,
+            },
+        );
+        assert_eq!(game.state.zones.zone_of(entrant), Some(ZoneType::Library));
+        assert!(matches!(
+            game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::OrderReplacement { .. }
+        ));
+        checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+        assert_eq!(
+            game.state.zones.zone_of(entrant),
+            Some(ZoneType::Battlefield)
+        );
+        if max_select == 2 {
+            assert!(matches!(
+                game.state.suspended_decision.as_ref().unwrap().decision,
+                Decision::LookAndSelect { .. }
+            ));
+            checked_command(
+                &mut game,
+                Action::SelectCard {
+                    player,
+                    card: looked[1],
+                },
+            );
+        }
+        assert!(matches!(
+            game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::OrderLibrary {
+                end: LibraryEnd::Bottom,
+                ..
+            }
+        ));
+        for card in looked[max_select..].iter().rev() {
+            assert_eq!(game.state.players[player.0].life, 20, "suffix still waits");
+            checked_command(
+                &mut game,
+                Action::SelectCard {
+                    player,
+                    card: *card,
+                },
+            );
+        }
+        assert_eq!(game.state.players[player.0].life, 23);
+        assert!(game.state.suspended_decision.is_none());
+        assert!(looked[..max_select]
+            .iter()
+            .all(|card| game.state.zones.zone_of(*card) == Some(ZoneType::Battlefield)));
+    }
+}
+
+#[test]
 fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
     use crate::flow::trigger::ExileLink;

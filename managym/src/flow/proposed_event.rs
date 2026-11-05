@@ -363,8 +363,7 @@ impl Game {
             match candidates.as_slice() {
                 [] => batch.cursor += 1,
                 [candidate] => {
-                    self.apply_replacement(&mut pending.event, candidate);
-                    pending.applied.push(candidate.identity);
+                    self.apply_replacement(pending, candidate);
                 }
                 _ => {
                     return BatchProgress::Choice {
@@ -571,8 +570,7 @@ impl Game {
             self.choose_replacement(child, candidate);
         } else {
             let pending = &mut batch.events[batch.cursor];
-            self.apply_replacement(&mut pending.event, candidate);
-            pending.applied.push(candidate.identity);
+            self.apply_replacement(pending, candidate);
         }
     }
 
@@ -910,8 +908,11 @@ impl Game {
         }
     }
 
-    fn apply_replacement(&self, event: &mut ProposedEvent, candidate: &ReplacementCandidate) {
-        match (event, &candidate.effect) {
+    /// Automatic and player-chosen replacements consume their identity together
+    /// with the transformation, so neither path can offer it a second time.
+    fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
+        pending.applied.push(candidate.identity);
+        match (&mut pending.event, &candidate.effect) {
             (
                 ProposedEvent::CounterChange { delta, .. },
                 ReplacementEffect::ModifyCounters {

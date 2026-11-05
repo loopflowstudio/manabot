@@ -24,3 +24,10 @@ capacity/recovery decisions remain preserved at
 `ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md` and in
 `experiments/tla-trophy-pilot.md`. They do not authorize experiments or
 expand this Task; incoming implementation changes remain intact.
+
+Ownership correction (2026-11-04): the frame-only sampling assumption is disproved
+by a completed selection captured into a delayed trigger. Both samplers retain a
+live reference in the wrong zone. The plan records the reproducer, revised binding
+lifetime and required deletion cut. Dependent implementation stopped at the
+implement skill's architectural-counterexample boundary; no human answer is
+required and no runtime repair is claimed.
