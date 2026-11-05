@@ -13,9 +13,11 @@ failures. The risk reduction is committed at `5a57096f2`, the accepted proof and
 diagnostic repairs at `a643a344b`, and the upstream integration repair at
 `bca261295`. The rounding repair and model, test and documentation
 simplifications were committed at `bca3ff438`; PR #424 now publishes the
-subsequent configuration-only sync `c52b70a53`. Its description and review
-artifacts still describe earlier proof. Current-source
-acceptance and interactive review remain outstanding. No auto-merge, paid
+subsequent configuration-only sync `c52b70a53`. Publication validation below
+supersedes the earlier pending-check status: the Linux main suite and Engine
+Budget pass, and two later schema-transition fixture assertions are repaired
+and pass locally. The final repaired head still needs fresh CI. Interactive
+review remains the endpoint. No auto-merge, paid
 execution or strength experiment is authorized.
 
 The original implementation and publication evidence are retained at
@@ -481,18 +483,88 @@ or merge was performed by this step.
 
 ### Remaining acceptance and review
 
-Gate owns affected suites, full debug Rust/Clippy, current-source receipts,
-browser coverage and Linux validation of the test-only repair, including the
-evaluation/report/smoke steps skipped after the failed integration step. Current
-CI `41945242063` is running on `c52b70a53`; no result from it is claimed.
-Engine Budget passed on `bca261295`, whose native engine and sampler are
-unchanged at the current head. The retained local worst-reply failure still has
-incomplete attribution, and no out-of-budget persistent cost has been accepted.
-Publication preparation still owes PR #424's description and
-review artifacts an account of the repaired tree and remaining limits.
-Interactive review is the accepted endpoint; prior green Graph steps do not
-establish current acceptance. GPU behavior, intended-size throughput and strength
-remain unmeasured. No new product decision is needed for installed-catalog
-naming; additional production names and default v8 adoption remain separate.
+The final test/receipt repairs below require fresh CI after publication; the
+completed run is explicitly not an all-green final-head result. Current-source
+behavior checks, debug Rust, Clippy, browser coverage and the repaired Linux
+naming suite support review publication. Final local report and bounded CLI
+smokes cover the later steps skipped in that CI run. The retained local
+worst-reply failure has incomplete attribution; no out-of-budget persistent cost
+has been accepted. Interactive review is the endpoint, with auto-merge disabled.
+GPU behavior, intended-size throughput and strength remain unmeasured. Additional
+production names and default v8 adoption remain separate decisions.
 
 Check: `uv run --extra dev python scripts/engine_budget.py compare --artifact .lf/logs/naming-budget-final-linux --reference .lf/logs/naming-budget-final-linux/reference` — PASS; same comparison on `.lf/logs/naming-budget-paired` — retained FAIL (worst reply 4.290 s > 2.399 s); no benchmarks rerun. Current-source Linux/full-suite acceptance remains with gate.
+
+### Publication validation — 2026-11-04
+
+`lf sync` checkpointed the four existing documentation edits at `55cde4796`
+and pushed them. Local main `51b4bd274` and GitHub main `fe83a6b06` are both
+ancestors of this head; sync required no conflict repair. No runtime changed.
+That push cancelled unfinished CI `41945242063` and started `41946199054`.
+The cancelled run's retained Linux log confirms all 17 catalog-naming cases
+passed, including the repaired equal-rule/closed-input assertion, but its main
+integration stopped at 91%; later evaluation/report/smoke checks did not run.
+Its completed debug Rust, Academy, browser, protocol and clean-machine jobs passed.
+
+Local publication checks passed 24 naming/model, Academy recovery and packed-action
+tests, Cargo formatting and all-target/all-feature Clippy with debug assertions.
+The first Clippy attempt used an unresolved relative interpreter path; the retry
+used the pinned root environment's absolute interpreter and passed. Ruff check
+passed; Ruff format found one wrapping-only change in the retained native-buffer
+capacity test, now applied.
+
+The nine current authority/parity tests found one stale current authored-match
+receipt (eight passed). Comparing a fresh replay to that receipt proved that
+only six source-file hashes and their aggregate differed; all 135 Commands,
+state witnesses, viewer projections, events and stale proofs were identical.
+Only that source manifest was refreshed, and the three authored-match parity
+tests then passed. Frozen evidence, source bindings, benchmark digests and the
+10% budget were not weakened or reset. The generated comparison is retained at
+`.lf/logs/naming-publish-parity-generated.json`.
+
+The required recovery/admission set passed all 91 tests: training recovery and
+game-error recovery, Elemental world, evaluation models, mirror admission,
+monitor evaluation and choice separability. Ruff check and format now pass for
+all 43 changed Python files; `git diff --check` passes. No runtime code was
+changed in this publication pass.
+
+CI `41946199054` at `55cde4796` passed Engine Budget on one AMD EPYC 7763
+runner, retaining every sample in `.lf/logs/naming-publish-budget-linux`.
+The unchanged reference `ea316ff14` and all exact digests/counts passed:
+worst reply 5.020 → 5.297 s (+5.5%), summed search 170.962 → 179.545 s
+(+5.0%), steps 12,894.6 → 11,908.3/s (-7.6%, +8.3% time/step).
+Candidate search process wall times were 179.043/180.135 s and CPU times
+178.990/180.101 s; reference wall 171.276/170.730 s and CPU
+171.257/170.677 s. Step samples likewise used nearly all elapsed time on CPU.
+The similar candidate cost in both orders is real aggregate engine work within
+budget, not explained by descheduling or ordering noise. This comparison is to
+the older budget reference, not an isolated naming-only delta. Do not compare
+these wall times to the earlier EPYC 9V74 run. Historical violations and their
+incomplete attribution remain recorded above; no reference adoption or sample
+discard occurred.
+
+The completed Linux run passed 1,099 main integration tests (one skipped),
+including all 17 catalog naming tests. The later two-seat/Etude/evaluation step
+passed 324 tests (one skipped) but failed two card-capacity pilot assertions at
+`tests/eval/test_tla_pilot.py:737`. The retained schema-7 frame and current
+schema-8 frame differed only in version and fingerprint; this is a fixture
+compatibility failure, not CPU load, numerical noise or lost card capacity.
+The test now checks exact scalar/vector frame equality and all retained decision
+fields after explicitly checking the declared schema/fingerprint transition.
+The frozen fixture, pilot protocols, live admission and tensor assertions remain
+unchanged. All 48 tests in the repaired pilot module pass locally.
+
+The existing headless `scripts/verify-eval-performance-report` proof passed
+locally, including CLI-generated mixed receipts. The enum smoke passed and the
+standard bounded two-iteration local CLI smoke completed, with checkpoint at
+`.runs/mtg-243-publication-smoke/self-play-raw.pt`. This is production-path smoke
+validation, not a strength experiment. No background process remains from these
+checks. No full green Linux result is claimed for the final test-only repair;
+publication starts its fresh CI and leaves the PR at interactive review.
+
+PR copy must describe the combined 928-name scalar/vector/model/Academy proof,
+legal-row scoring, packed learner evidence, public name identity, explicit v8
+compatibility, unchanged 10% budget and the final-head CI limitation. Remove the
+obsolete claims that the large-vocabulary proofs are separate and that a budget
+digest adoption is required. No digest adoption is needed: both Linux runs
+matched every benchmark digest.

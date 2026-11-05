@@ -1,5 +1,21 @@
 # MTG-243 assumptions — 2026-11-04
 
+Latest publication validation supersedes the pending-check status below.
+CI `41946199054` passed debug Rust, Academy/browser/protocol/clean-machine,
+long integration, all 1,099 main Linux integration tests and the unchanged
+Engine Budget. Its later evaluation step found two schema-7/schema-8 frame
+assertions (324 other tests passed); the test-only repair preserves all decision
+fields and frozen bytes, and all 48 pilot tests pass locally. Local checks also
+passed 24 naming/recovery/packed-action tests, 91 recovery/admission tests,
+Clippy/formatting, current receipt verification, the headless Perf report proof
+and the bounded CLI smoke. Receipt refresh changed source hashes only. Final-head
+Linux CI is pending publication; this is review readiness, not merge approval.
+The latest paired budget result is a repeatable within-budget CPU cost, not
+explained away by load/order noise. Full evidence and limits are in the plan's
+Publication validation section.
+
+The following records the prior reconciliation state for provenance.
+
 Accepted direction, attribution, implementation, contrary evidence and remaining
 validation live in [mtg-243-naming.md](mtg-243-naming.md). No additional product
 input blocks installed-catalog naming. Publication ends at interactive review;
