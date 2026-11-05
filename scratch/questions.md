@@ -1,15 +1,28 @@
 # Decisions and open questions — 5da5f4
 
+- 2026-11-05 execution outcome: diagnostic `a46e80b31212` lost its rental after
+  both instrumented updates and one uninstrumented pooled update. Parity gates
+  returned success, but final outputs/inventory are unavailable. The provider
+  confirms absence; cause is unknown. Reported new charge $0.038 and conservative
+  reservations leave $15.50 within the original $25. No further rental/science.
+  Reversible implementation decision: end the diagnostic before throughput so
+  Etude can deliver complete traces; bounded parity/operator summaries also enter
+  the carried log. Separate admission remains the existing ordinary runner.
+  This does not amend the scientific protocol or establish affordability.
+
 - 2026-11-05 implementation assumption: ordinary CPU profiling can justify a
   dispatch repair, but cannot qualify CUDA synchronization, affordability or
   architecture selection. `59ec1bd24` preserves semantics/gradients and reduces
   matched pooled CPU collection/learning from 202.86s to 121.71s. GPU diagnosis
   failed before allocation because GitHub/Doppler connectivity timed out;
-  no new compute charge, no science, and no change to the $25 cap. Diagnosis
-  owns local evidence paths and outstanding GPU acceptance.
+  no new compute charge, no science, and no change to the $25 cap. The 2026-11-05
+  reconciliation found that the learning operator trace covers forward only;
+  bounded backward/optimizer coverage remains implementation work before CUDA
+  attribution. No new product decision is required for that authorized diagnosis.
+  Diagnosis owns local evidence paths and outstanding GPU acceptance.
 
 - Current result: the cheaper 3090 completed both excluded admission arms;
-  all outputs verified and rental deleted. Corrected full-cohort projection
+  all outputs verified and rental deleted. Corrected pre-repair cohort projection
   $71.82 exceeds the $16 science allowance; even recurring work alone costs
   $47.58. No replacement science or plateau. The live plan owns accounting,
   execution and acceptance; `scratch/vast-host-diagnosis.md` owns measured

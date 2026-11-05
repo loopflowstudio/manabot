@@ -1,5 +1,68 @@
 # Vast admission diagnosis — 2026-11-04
 
+## Complete-trace attempt lost — 2026-11-05 UTC
+
+`6c0e33d4b` extends the operator trace from the first grad-enabled forward through
+backward, clipping, Adam and numerical health. Inference has its own bounded
+trace; failures retain a `.partial` trace. Two focused tests establish actual
+operator coverage and exact weights/gradients across two ordinary updates.
+`66ec957fe` adds both reducers' directed CUDA routing/absent-gradient checks.
+The pre-batching CPU oracles and all four retained CPU profiles are now
+manifest-backed under this study's `encoder-reference/` and
+`cpu-operator-profiles/` data directories. CPU oracle agreement is unchanged.
+
+Run `a46e80b31212`, source `66ec957fea9fe94d6ed919e2e971fb4f63d3f468`,
+used four digest-verified reference inputs. Its Japan RTX3090 quote was
+$0.2474074074/hour, $0.371111 for 75 minutes work plus 15 minutes setup,
+within the $0.50 cap. Instance `59185580` started at 01:03:07 UTC.
+Fresh accounting had confirmed the seven preceding Vast rentals absent.
+The runtime installed locked Torch 2.10.0+cu128 and Etude `64e9eaabf`.
+
+The retained stdout reaches both profile children, proving the preceding
+four CUDA reference comparisons and six CUDA routing tests returned successfully.
+Their detailed JSON/test reports were not delivered. Both one-update profiles
+completed 256 games: pool collection/learning 46.67/45.86s; GRU 48.01/43.53s.
+The separate uninstrumented pooled child then completed one update/256 games,
+41.45/30.29s. These are rounded durable progress clocks, not complete TrainingRun
+receipts, matched four-update admission or recoverable checkpoints.
+
+At 01:12:47 UTC Etude recorded `lost / machine_lost` and deletion, with no
+final exit status or output inventory. Provider absence was confirmed independently,
+including the 01:16:18 reconciliation. No scientific seed or score ran. The
+bucket contains only the incomplete attempt record and contiguous job-log chunks;
+those bytes were recovered separately from the cached controller log. No traces,
+full CUDA parity report, learner receipt or throughput result can be recovered.
+The cause is unknown: no evidence establishes OOM, a host defect or code failure.
+Intermittent local storage-read timeouts do not establish the cause of deletion.
+
+The new reported charge is $0.038 versus $0.03984744 whole-lifetime estimate;
+reported-plus-settled compute is $0.89258259. These are not final invoices.
+The $3.50 compute and $6 ancillary reserves leave **$15.50** within the original
+$25. Task-local inventory uses recorded Etude session labels (provider labels are
+`etude-<session>`, not Task names); all eight Vast instances are absent. No new
+rental or science was started after the loss.
+
+The failed combined job exposed an evidence-delivery boundary: this SDK uploads
+ordinary output files only when an attempt finishes. The maintained diagnostic
+now finishes immediately after the two profiles (one update target, 30-minute
+work bound), so its inventory can be delivered before a separate throughput job.
+It also prints bounded parity/test and operator summaries into the carried log.
+This changes no learner or scientific recipe. Full traces still need a successful
+fresh diagnostic; the code change is not proof of delivery on another host.
+
+Attempt evidence is published under
+`experiments/data/state-representation-gpu-5da5f4/complete-operator-profile/`;
+`.runs/representation/gpu-complete-profile/` retains local operational scripts.
+Remaining acceptance: retained complete CUDA operator evidence, complete matched
+uninstrumented admission, and the unchanged scientific cohort only if affordable.
+The loss does not revoke the authorized bounded diagnosis, replenish the budget,
+change the horizon, justify a model decision or satisfy the plateau objective.
+
+Focused check: two operator tests and six CPU routing cases passed; six local
+CUDA cases skipped. The remote routing gate returned success before learning,
+but its report is unavailable. Ruff and the profile-only declaration check pass.
+Gate owns broader suites; no publication/merge or model promotion is performed.
+
 ## Operator repair and connectivity block — 2026-11-05 UTC
 
 `42709fa1b` adds `scripts/profile_representation.py`: one excluded ordinary
@@ -32,6 +95,13 @@ synchronization cost, a GPU speedup, or learning superiority. The final GRU
 diagnosis also completed: 256 games, 54,184 decisions, 212 minibatches;
 collection/learning 77.51/72.61s. It has no matched full-batch CPU baseline.
 Both final diagnoses exported checkpoints and retained inference/learning traces.
+
+Trace coverage audit, 2026-11-05: `scripts/profile_representation.py` closes its
+Torch profiler when `ActorCritic.forward_distribution` returns. The learning
+trace therefore covers grad-enabled forward only, not backward/clipping or
+optimizer operators. StageRecord retains their aggregate clocks, but causal CUDA
+diagnosis still requires bounded coverage of those phases. Host metadata copies
+and routing loops remain; batching does not establish synchronization-free CUDA.
 
 Fresh 23:21:22 UTC accounting found all seven Task Vast instances absent and
 reported-plus-settled compute $0.8545825939. Existing $3 compute/$6 ancillary

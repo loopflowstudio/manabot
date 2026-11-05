@@ -2,17 +2,29 @@
 
 ## Current direction, result and remaining work
 
-Jack Heart's latest direction (2026-11-04 22:38 UTC): diagnose implementation
+Latest outcome, 2026-11-05: the complete-trace CUDA attempt `a46e80b31212`
+passed its parity/routing gates and completed both instrumented updates, then was
+lost during uninstrumented admission. Provider absence is confirmed; raw output
+files never arrived. The maintained diagnostic now finishes before throughput
+admission so completed traces can be delivered first. No science launched;
+**$15.50 remains** under conservative reservations. The diagnosis owns full
+accounting, retained progress clocks and the unresolved cause.
+
+Jack Heart's direction (2026-11-04 22:38 UTC): diagnose implementation
 before assigning host fault; separate setup, collection/inference, learning,
 exports and unclassified time, and add prospective startup/progress/affordability
 stops. Check actual CUDA, threads, batching, memory and available telemetry with
 ordinary workloads, never synthetic load. Preserve the original **$25 total**
 and **$0.50 attempt cap**; no competing allocation.
 
+His 23:15 UTC continuation explicitly authorizes bounded ordinary-learner
+profiling, measured repairs and matched throughput admission within that same
+allowance. An unaffordable pre-repair projection does not close this work.
+
 The authorized cheaper 3090 admission completed both arms: source `22c10ca55`,
 run `803bcc26e7de`, four updates/1,024 games per arm. All 46 outputs
 (131,204,931 bytes) verified. Instance `59168556` was deleted and confirmed
-absent at 22:58:28 UTC. Corrected full-cohort cost is **$71.82**, or **$47.58**
+absent at 22:58:28 UTC. Corrected pre-repair full-cohort cost is **$71.82**, or **$47.58**
 for recurring training alone without allowances, versus **$16** available.
 No replacement science launched; the requested plateau remains unmet.
 `scratch/vast-host-diagnosis.md` owns measured phases, attribution limits,
@@ -39,11 +51,12 @@ Native multi-position outputs and all parameter/object/definition gradients agre
 with the saved pre-change oracle; focused tests include duplicate memberships,
 canonical ordering, padding and absent gradients for unused Adam parameters.
 
-CUDA profiling is blocked by connectivity: the diagnostic quote was $0.19
+The CUDA profiling attempt failed at source publication: its diagnostic quote was $0.19
 under a $0.50 cap, but Etude source publication stalled on GitHub before any
 run/rental was created. A bounded publication attempt also timed out, and
 GitHub HTTPS/Doppler reads timed out. No new provider allocation or expense
-was incurred. Details and retained local evidence are in the diagnosis.
+was incurred. These are retained outage observations, not a fresh connectivity
+check. Details and retained local evidence are in the diagnosis.
 Matched GPU source/workload admission must still demonstrate affordability
 before the four-paired-seed cohort. Repeating the eight-context
 failure, substituting CPU evidence, shortening the learning objective or treating
@@ -70,17 +83,49 @@ plus `RecordReducer`'s per-sequence padded packing. Malformed-input rejection an
 schema/semantic tests survive on the batched path. Pre-change source remains at
 `42709fa1b`, not as a runtime fallback. No parameters or tensor contracts changed.
 
-### Delete — do not maintain
+### Completed simplification
 
 Removed `RecordReducer`'s list-of-tensors wrapper and separate `reduce_tokens`
 entry point: every caller now supplies a flat token table and record lengths
-through `forward`, including the frozen-v5 `SharedFactEncoder` consumer. Keep
-its semantic and checkpoint tests; no exclusive predecessor fixtures remain.
+through `forward`, including the frozen-v5 `SharedFactEncoder` consumer. Semantic
+and checkpoint coverage remains; no exclusive predecessor fixtures remain.
 One `join_record_rows` helper owns batch offsets and absent one-based references
 for effects, continuation objects and parent frames. Continuation edges are
 grouped once by handle, then sorted by payload; handles never become features.
-No further deletion targets are identified. Frozen receipts and the existing
+The failed combined diagnostic/admission orchestration is also removed: profiling now finishes and delivers before the separate existing admission runner. No further deletion targets are identified. Frozen receipts and the existing
 Wave edits are retained; broader validation belongs to gate.
+
+### Remaining implementation and evidence
+
+1. Completed: `6c0e33d4b` captures the first ordinary forward through backward,
+   clipping, Adam and health checks. Failure retains a partial trace. Focused
+   tests preserve exact updates and verify actual operator coverage.
+2. Connectivity recovered and fresh accounting/quote admitted diagnostic
+   `a46e80b31212` at source `66ec957fe`. Both CUDA reference/routing gates returned
+   successfully and both one-update profile learners completed. The rental then
+   disappeared during uninstrumented admission, after one pooled update. Its
+   detailed outputs never arrived; the retained logs and provider accounting are
+   published. `scratch/vast-host-diagnosis.md` owns the evidence and limitations.
+3. Removed the combined profile-plus-admission job: Etude uploads ordinary output
+   files only at job completion, so the lost admission also lost completed traces.
+   The diagnostic now ends after both one-update profiles and prints bounded
+   summaries into the carried log. Complete diagnostic inventory must be retained
+   before a separate uninstrumented throughput admission. This is an evidence
+   delivery correction, not a learner change or a passed GPU acceptance check.
+4. A fresh bounded diagnosis still needs retained CUDA operator attribution and
+   both reducers' detailed parity reports. Host metadata copies/routing loops
+   remain unmeasured. Further repairs need measured causes and parity.
+5. Complete matched-source four-update throughput for both arms is still missing.
+   One pooled update cannot admit the unchanged four-paired-seed study. It starts
+   only after complete costs fit freshly reconciled funds and the live quote;
+   no scores, horizon, populations or acceptance criteria change.
+
+No scientific allocation was admitted. Instance `59185580` is confirmed absent;
+reported new cost $0.038, whole-lifetime estimate $0.03984744. Existing conservative
+compute reservations now total $3.50, ancillary $6, leaving **$15.50** within $25.
+The cause of machine loss and final delivery failure is unknown. No additional
+rental started after it. Earlier CPU artifacts/oracles are now manifest-published;
+these retain their old source identities and do not replace missing CUDA traces.
 
 ## Budget and dependency authority
 
@@ -89,9 +134,10 @@ gate in historical notes, protocols and Wave memory. The provider supplies no
 finalization watermark. Do not hold cancelled quote caps indefinitely or infer
 settlement from repeated daily totals or deleted instances.
 
-Current conservative reservations: $2 preceding compute, $0.50 for the 4090
-admission, $0.50 for the cheaper 3090 admission, $6 ancillary; **$16 remains**
-within $25. Latest reported-plus-settled compute is $0.85458, not final invoices.
+Current conservative reservations: $2 preceding compute, $0.50 for each of
+the 4090, cheaper-3090 and complete-trace attempts, plus $6 ancillary;
+**$15.50 remains** within $25. Latest reported-plus-settled compute is $0.89258
+at 2026-11-05 01:16 UTC, not final invoices.
 Before another purchase, reconcile a fresh locked-SDK read of Task instances and
 reported charges against whole rental lifetimes, quotes and disk/transfer terms.
 Larger costs reduce the allowance; charges and their reservations count only
@@ -231,6 +277,14 @@ protocol Task is separate design work, not evidence for this comparison or
 authority to replace the fixed Allies/Lessons population. The merge introduces
 research and Wave changes, not an encoder optimization or new GPU result.
 
+The subsequent main sync `a608a9ce7` incorporates `ee85d6fc8` and MTG-213 v10:
+permanent64 and opt-in per-game capacity recovery at .25 with a 100/100
+window/warmup. Those pilot choices do not amend this study's capacities,
+overflow rejection, recovery policy, schedule or separate budget. The shared
+runtime changed, so the next admission needs its actual source/native binding;
+unchanged recipe hashes alone are insufficient. The Wave has no immediate
+child directories or child memories at the 2026-11-05 reconciliation.
+
 Memory, relation splitting, membership interning and semantic coalescing remain
 proposals. Coalescing requires identical future behavior across expiry, sources,
 affected sets/later entrants, intervening grants and additive effects. MTG-240's
@@ -256,4 +310,10 @@ retains the 31 passing focused checks and manifest audit. Gate owns broader
 suites; results demo/review owns scientific judgment. Live watchdog enforcement
 and GPU profiling remain unverified. No rendering proof is claimed.
 
-Validation: `uv run --no-sync pytest tests/model/test_state_records.py tests/model/test_shared_effects.py -q -k 'not treatment_trains and not ordinary_learner'` — 34 passed, 4 deselected; Ruff check/format and diff checks pass. Prior saved native oracles and ordinary CPU learner results remain in the diagnosis. Gate owns broader suites; implementation owns CUDA profiling/parity and matched GPU admission after the documented connectivity failure.
+The preceding pass recorded 34 focused encoder tests passing (4 deselected),
+Ruff checks and saved native-oracle agreement; those checks were not rerun for
+this documentation reconciliation. Retained CPU run JSON confirms the stated
+game/decision/minibatch counts and phase times. Gate owns broader suites;
+implementation owns the trace coverage, CUDA parity and matched admission above.
+
+Check: two operator tests and six CPU routing cases passed; six local CUDA cases skipped. Profile-only declaration, Ruff and diff checks pass; broader validation stays with gate. Remote gates returned success but final detailed artifacts were lost.
