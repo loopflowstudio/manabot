@@ -48,9 +48,18 @@ context at `1546aae3fa7b207b2c5e8ac92a6571af036ddf83:scratch/questions.md`.
 The full preceding decision note is blob
 `8a6de1149523ed8d99031fcc4d1b4797e6bcc287` (`git show <blob>`).
 
-Latest incoming pilot context is retained at
+Earlier incoming pilot context is retained at
 `ee85d6fc82ed631d7b460e68c73e7ac27f0458ff:scratch/questions.md`.
 It records prospective v10 permanent capacity 64 and explicit per-game
 capacity recovery at .25 with window/warmup 100/100, preserving executed v9.
 These MTG-213 decisions remain historical context for this layers Task;
 they do not authorize a pilot launch or change its review boundary.
+
+Incoming main pilot context from this sync is retained at
+`e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md`.
+MTG-213 reports a trained v10 endpoint and all 64 endpoint games; the 100-update
+target and full scientific schedule remain incomplete. Its results, costs and
+evidence links live in `experiments/tla-trophy-pilot.md`. No new rental is
+selected, and a prospective full-TLA successor awaits the separately requested
+damped-learning review. These are historical coordination facts for MTG-244,
+not authorization to launch training or change this Task's review boundary.
