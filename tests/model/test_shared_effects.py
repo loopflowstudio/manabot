@@ -224,4 +224,47 @@ def test_batched_effect_routing_matches_independent_gradients(
     for parameter, reference in zip(
         encoder.parameters(), independent.parameters(), strict=True
     ):
-        torch.testing.assert_close(parameter.grad, reference.grad)
+        # Batched GEMM and separate float32 gradient sums accumulate in different
+        # orders on CUDA. Bound that error against double precision below too,
+        # so agreement between two float32 paths cannot mask a routing defect.
+        torch.testing.assert_close(
+            parameter.grad, reference.grad, rtol=2e-5, atol=2e-5
+        )
+
+    oracle = deepcopy(encoder).cpu().double()
+    oracle.zero_grad(set_to_none=True)
+    oracle_objects = objects.detach().cpu().double().requires_grad_()
+    oracle_headers = headers.detach().cpu().double().requires_grad_()
+    oracle_details, oracle_members = details.cpu().double(), members.cpu().double()
+    precise = torch.cat(
+        [
+            oracle(
+                oracle_headers[i : i + 1],
+                oracle_details[i : i + 1],
+                oracle_members[i : i + 1],
+                oracle_objects[i : i + 1],
+            )
+            for i in range(3)
+        ]
+    )
+    precise.square().sum().backward()
+
+    def compare_precise(value: torch.Tensor, reference: torch.Tensor) -> None:
+        torch.testing.assert_close(
+            value.detach().cpu().double(), reference, rtol=2e-5, atol=2e-5
+        )
+
+    for output, source_objects, source_headers, model in (
+        (actual, objects, headers, encoder),
+        (expected, independent_objects, independent_headers, independent),
+    ):
+        compare_precise(output, precise)
+        assert source_objects.grad is not None and oracle_objects.grad is not None
+        assert source_headers.grad is not None and oracle_headers.grad is not None
+        compare_precise(source_objects.grad, oracle_objects.grad)
+        compare_precise(source_headers.grad, oracle_headers.grad)
+        for parameter, reference in zip(
+            model.parameters(), oracle.parameters(), strict=True
+        ):
+            assert parameter.grad is not None and reference.grad is not None
+            compare_precise(parameter.grad, reference.grad)

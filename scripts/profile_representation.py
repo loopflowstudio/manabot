@@ -268,7 +268,7 @@ def worker() -> None:
     )
     print((out / "cuda-parity.json").read_text(), flush=True)
     with (out / "cuda-routing-tests.txt").open("w") as log:
-        subprocess.run(
+        routing = subprocess.run(
             [
                 sys.executable,
                 "-m",
@@ -279,12 +279,13 @@ def worker() -> None:
                 "cuda and (batched_effect_routing or continuation_batches or unused_continuation)",
                 "-q",
             ],
-            check=True,
+            check=False,
             timeout=120,
             stdout=log,
             stderr=subprocess.STDOUT,
         )
     print((out / "cuda-routing-tests.txt").read_text(), flush=True)
+    routing.check_returncode()
     for arm in ARMS:
         logs = out / f"{arm}-supervision"
         logs.mkdir(parents=True)
