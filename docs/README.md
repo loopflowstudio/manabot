@@ -37,14 +37,12 @@ world versioning lives in [WORLDS.md](../WORLDS.md).
 | [rules/](rules/) | Rules authority: [proposed events](rules/proposed-events-v1.md), [trigger/SBA stabilization](rules/stabilization-v1.md), the comprehensive rules PDF |
 | [architecture/experience-protocol-v1.md](architecture/experience-protocol-v1.md) | The Academy experience protocol |
 | [architecture/match-state-hash-v1.md](architecture/match-state-hash-v1.md) | The deterministic state-hash domain |
-| [benchmarks/](benchmarks/) | Preregistered benchmark contracts, including the search-branching decision (fork by full clone) |
+| [benchmarks/](benchmarks/) | The search-branching contract and decision (fork by full clone) |
 
-## Evidence, research notes and plans
+## Evidence and research
 
-- [evidence/](evidence/) holds dated records that reports cite.
-- [research/](research/) has dated investigations, for example the
+- [evidence/learnability/](evidence/learnability/) holds the learnability
+  qualification records that the nightly baseline and learnability reports cite.
+- [research/](research/) has dated investigations: the
   [engine speed investigation](research/engine-speed-2026-11.md) and the
   [Standard milestone research](research/standard-2026-11/README.md).
-- [plans/](plans/) has cross-cutting plans, for example
-  [training-time cohorts](plans/training-time-cohorts.md). Most plans there
-  predate the October move to self-play and are kept as history.

@@ -15,11 +15,6 @@ outputs. This guide is the network between them.
 
 ![A viewer-safe observation becomes typed object embeddings, mixed by self-attention. Legal actions gather their focus objects to produce one logit each, and pooled objects produce the value estimate.](images/policy-network.svg)
 
-The [illustrated walkthrough](observation-architecture.html) goes further, with
-an interactive tensor explorer and a fact-capacity example. GitHub shows its
-source, so download it or open it from a checkout. It is self-contained and
-works offline.
-
 ## What the network sees
 
 managym owns this boundary. It supplies viewer-safe state and the complete legal

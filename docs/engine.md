@@ -2,9 +2,11 @@
 
 managym is the rules of Magic as a training environment. It runs many games at
 once, decides what is legal at every point, shows each seat only what that seat
-may see, and can copy, replay or re-deal a game exactly. It never chooses an
-action. Every choice comes from outside, whether from a policy, a search
-player, a script or a person.
+may see, and can copy, replay or re-deal a game exactly. It never chooses among
+a learner's legal actions. Forced single actions are played automatically, and
+every other choice comes from outside, whether from a policy, a search player,
+a script or a person; a native scripted opponent (`passive`, `random`) is an
+explicit opt-in.
 
 This guide is for anyone who needs to trust what the engine guarantees.
 Building and testing it is in [managym/README.md](../managym/README.md); the
@@ -51,7 +53,8 @@ if let Some(space) = action_space {
 ```
 
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
-  benchmarks. Turning it off is for debugging only.
+  benchmarks. Turning it off is for explicit debugging and the constructed-position
+  diagnostic fixtures only.
 - Every decision count in these docs excludes forced choices. Decisions per
   game and learner decisions both mean real choices.
 - The readable conformance path surfaces every singleton action so the
@@ -77,7 +80,7 @@ action_space.player = action_space
     .map(|player| self.decision_controller(player));
 ```
 
-- `Decision.player()` says whose rules decision it is; `decision_controller`
+- `Action::player()` (and `Decision::player()`) say whose rules decision it is; `decision_controller`
   resolves who controls that player's choices, which matters for effects that
   grant control.
 - The epoch advances on every publication, so a Command decoded from an
@@ -163,7 +166,8 @@ pub fn fork(&self) -> Result<Env, AgentError> {
 ```
 
 Full clone is the only branching strategy. Undo journals and copy-on-write
-pages were tried, failed their preregistered thresholds and were removed
+pages were tried, failed their preregistered thresholds and were kept out of
+production; their drivers have since been deleted
 ([search branching decision](benchmarks/search-branching-decision-v1.md)). A
 search-state witness of rules facts alone checks that a fork left its source
 untouched ([`search_state.rs`](../managym/src/search_state.rs)).
@@ -183,9 +187,10 @@ def replay_games(
     """
 ```
 
-Replay pins content, engine, match seed, initial state and Commands. RNG
-streams derive from recorded seeds, so thread scheduling can't select an
-outcome.
+Replay pins the deal seed, the match and observation configuration, the
+initial state digest and every Command, and every pre- and post-state digest
+must match. RNG streams derive from recorded seeds, so thread scheduling can't
+select an outcome.
 
 **Determinize.** A search over hidden information redraws what the acting seat
 cannot see and keeps everything it can. From `Game::determinize` in
@@ -201,9 +206,10 @@ pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
     );
 ```
 
-The unseen pool is the opponent's hand and library together. Public facts and
-the viewer's own choices are preserved; only the opponent's private cards are
-redrawn. [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the
+The unseen pool is the opponent's unknown hand cards, library and face-down
+foretold cards; publicly known hand cards stay put. Both library orders are
+reshuffled, since the viewer knows neither, and everything the viewer can see is
+preserved. [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the
 same domain exactly, with compatible-deal counts as weights, for beliefs that
 want more than a uniform redraw ([search and beliefs](search-and-beliefs.md)).
 
@@ -214,10 +220,11 @@ one batch of observations out, so a single forward pass serves every active
 game. `VectorEnv` ([`managym/src/agent/vector_env.rs`](../managym/src/agent/vector_env.rs))
 owns the games and their reset seeds; the Python wrapper is
 [`manabot/env/vector_env.py`](../manabot/env/vector_env.py). A finished slot
-is scored and reset in place, and an observation that exceeds its declared
-capacity is an error, never a silently truncated row.
+is scored and reset in place. By default an observation that exceeds its
+declared capacity is an error; the `first-legal` action-overflow policy and
+isolated capacity recovery are explicit opt-ins.
 
-Collection was 82.5% of active time in the profiled training run
+Collection was 75–83% of active time across the profiled training runs
 ([training time](../experiments/training-time.md)), so engine and inference
 throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
@@ -281,14 +288,15 @@ freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md
   filter-scope screen all 3,600 monitoring and final games replayed
   ([technique screen](../experiments/ataraxos-technique-screen.md)).
 - **The encoding hides no decision.** The learnability search found no clean
-  input collisions, and a nightly check guards it
+  input collisions, and the fixed suite runs on relevant PR updates
   ([learnability](../experiments/learnability-search.md)).
-- **Collection dominates cost.** 82.5% of active training time in the profiled
-  run ([training time](../experiments/training-time.md)).
+- **Collection dominates cost.** 75–83% of active training time across the
+  profiled runs, 82.5% in the L4 run
+  ([training time](../experiments/training-time.md)).
 - **Determinized search fuses strategies.** Flat Monte Carlo over redrawn hands
-  was strong against random and failed a control-deck competency suite, where
-  uniform random beat it on three of five scenarios
-  ([exp-09](../experiments/exp-09-control-competency.md)). The engine makes the
+  beat random 99% of the time ([exp-02](../experiments/exp-02-flat-mc.md)) and
+  failed a control-deck competency suite, where uniform random beat it on three
+  of five scenarios ([exp-09](../experiments/exp-09-control-competency.md)). The engine makes the
   search cheap; it doesn't make it sound.
 - **Hidden-pool ordering once leaked.** Reordering a hidden zone changed search
   evidence between viewer-equivalent states. Viewer equivalence, replay and
@@ -303,7 +311,7 @@ freezing it is a deliberate step with re-run baselines ([WORLDS.md](../WORLDS.md
 | Observations | `Observation::for_player` in [`agent/observation.rs`](../managym/src/agent/observation.rs) |
 | Env, fork, determinize | [`agent/env.rs`](../managym/src/agent/env.rs), [`flow/search.rs`](../managym/src/flow/search.rs) |
 | Batched games | [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs), [`manabot/env/vector_env.py`](../manabot/env/vector_env.py) |
-| Replay verification | [`manabot/sim/replay.py`](../manabot/sim/replay.py), [`canonical_replay.rs`](../managym/src/canonical_replay.rs) |
+| Replay verification and records | [`manabot/sim/replay.py`](../manabot/sim/replay.py), [`canonical_replay.rs`](../managym/src/canonical_replay.rs) (record shape) |
 | Possible worlds | [`possible_worlds.rs`](../managym/src/possible_worlds.rs) |
 | Cards and rules types | [`managym/cards/src/`](../managym/cards/src/), [`managym/state/`](../managym/state/) |
 | Worlds | [`world.rs`](../managym/src/world.rs), [WORLDS.md](../WORLDS.md) |

@@ -5,7 +5,8 @@ Magic against copies of itself, and the only feedback is who won. This guide
 follows one training iteration from the first decision to the weight update,
 and explains how a win at the end of a game becomes a change to the network.
 
-It describes the default recipe, `DampedPolicyLearning`.
+It describes `DampedPolicyLearning`, the rule every current recipe selects
+(the `TrainSelfPlay` field itself still defaults to the PPO `Learning` control).
 [Start here](start-here.md) zooms from the whole system down to this loop; this
 guide goes further, with worked numbers, the questions a batch boundary raises,
 and the exact [departures from the source recipe](#fidelity-to-the-sources).
@@ -71,7 +72,8 @@ It depends on how the batch is closed, and there are two ways.
 **Complete games: no.** This is the default, because two-seat learning always
 uses it. One-seat runs use it too when they set `games_per_stream` or a game
 error policy. `transitions` is a floor on a stream's decisions, counting both
-seats. A stream that has passed the floor stops at the end of its current game.
+seats, unless `games_per_stream` is set, which replaces the floor with a game
+count. A stream that has passed the floor stops at the end of its current game.
 Rows are packed into one `[rows, 1]` column with an end flag after each
 trajectory, and row counts vary by batch. The collector asserts that the last
 row is an end, and `bootstrapped_tail_fraction` is 0.
@@ -287,9 +289,10 @@ one switch at a time. These are the results the guide leans on:
   [technique screen](../experiments/ataraxos-technique-screen.md) and
   [ablations](../experiments/ataraxos-mtg-ablations.md). The recipe is not a
   demonstrated strength result as a whole.
-- **Scale.** The largest run so far is in the
-  [scale ladder](../experiments/scale-ladder.md), summarized in the
-  [README](../README.md#scale).
+- **Scale.** The largest run so far is MTG-183, one seed on ten decks for
+  331M learner decisions ([protocol](../experiments/protocols/elemental-183.md));
+  the one-seat [scale ladder](../experiments/scale-ladder.md) is the largest
+  exact-quota run. Both are summarized in the [README](../README.md#scale).
 
 ## Influences
 
@@ -311,8 +314,8 @@ objects, and paired evaluation were built for this project. The PPO-style
 
 `manabot/training/learning/damped_policy.py` owns the objective; recipes select
 `DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
-inputs decode at the compatibility boundary with their original tag and
-digest. Per retained observation the policy loss is the negative clipped-ratio
+regimes are rejected and need their pinned source; frozen evidence keeps the
+old tag. Per retained observation the policy loss is the negative clipped-ratio
 advantage surrogate plus `collection_kl * KL(current || behavior)` and
 `tau * KL(current || magnet)`, summed over all legal offers. Advantages use
 signed expected outcomes with their own lambda. Outcome targets are three-way
@@ -350,10 +353,10 @@ outputs are selected explicitly at arena registration.
 | Optimizer damping, Table S7 | Adam, clip=.2, collection KL=.1, max norm=.267, value weight=1 | Adam betas .9/.999, epsilon 1e-5 (source unspecified) |
 | Schedules, Table S7 | LR clip(.5 / iteration^1.1, 5e-6, 1e-4); tau=.05 / iteration^.3 | One-based iterations; no elapsed-budget substitution |
 | Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
-| EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation only |
+| EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation output by default, `behavior="ema-self"` opts in |
 | S3.3 setup learning | Not implemented | MTG has no learned setup |
 | S3.5 belief, S3.7 search | Outside this trainer | See [search-and-beliefs.md](search-and-beliefs.md) |
-| S3.6 network scale | Semantic Agent, small width, CPU float32 | The paper uses an 8-layer width-384 network on GPUs |
+| S3.6 network scale | Semantic Agent, small width, float32 on CPU or one GPU | The paper uses an 8-layer width-384 network on GPUs |
 
 **Unresolved source details:** Adam epsilon/betas, iteration origin, EMA
 initialization, quantile interpolation and exact bootstrap pseudocode at a

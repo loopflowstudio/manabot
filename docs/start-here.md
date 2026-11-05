@@ -126,7 +126,7 @@ with λ = .5:
 | 3 | .6 | win | +.4 | .40 |
 
 Ten decisions before the end, the result's weight is about one part in a
-thousand. Priority passes count as decisions, which makes ten a short stretch
+thousand. Priority decisions, whether a pass or an action, count as decisions, which makes ten a short stretch
 of a game. An early land drop or attack learns almost entirely from how the
 value moved afterward, so the value network does most of the teaching.
 
@@ -197,9 +197,13 @@ no gradient travels through game time.
 
 The loss combines established methods, listed under
 [influences](#influences) below. For each retained row, with $r$ the ratio of
-current to behavior probability for the chosen action:
+current to behavior probability for the chosen action, the policy term is:
 
 $$L = -\min\big(rA,\ \mathrm{clip}(r, .8, 1.2)\,A\big) + .1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}})$$
+
+The value loss, mean squared error for a scalar head or cross-entropy for a
+categorical one, is added with weight 1, and both losses reach the shared
+encoder.
 
 ### Behavior policy
 
@@ -292,7 +296,7 @@ beat random in 91.7% to 99% of games, and more simulations made it stronger
 Then a test gave it Pyroclasm against two Gray Ogres, with two more in the
 opponent's hand. Waiting a turn wipes four creatures rather than two, for 4
 damage at 20 life. Search cast it on turn 1 in 300 of 300 runs at every
-strength. Uniform random waited by accident and passed 23% of the time
+strength. Uniform random waited by accident and took the correct line 23% of the time
 ([exp-09](../experiments/exp-09-control-competency.md)).
 
 The likely cause is strategy fusion: each sampled world is judged as if the

@@ -250,8 +250,7 @@ subtypes, names, used abilities and copy exceptions still use `facts` (default
 128 rows). The model encodes each payload once and routes its contribution into
 named objects before attention; action focus remains addressable. Sum reduction
 preserves edge multiplicity and shared gradients; it is learned compression,
-not a proof of injective embeddings or improved play. See the
-[architecture walkthrough](../docs/observation-architecture.html).
+not a proof of injective embeddings or improved play.
 
 The version is explicit in saved observation/configuration identities. Fresh
 construction remains v6/512; frozen v1–v6 inputs and omitted historical fields

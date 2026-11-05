@@ -4,7 +4,7 @@ Decision: **retain compact full clone as the production default**.
 
 Do not integrate either optimized representation. Keep both as conformance/benchmark drivers and remove them from production hot paths.
 
-The decision applies the pre-registered whole-rollout thresholds in `dense-page-cow-prereg-v1.md`. Correctness and matched provenance are absolute gates; clone latency is diagnostic only.
+The decision applies the pre-registered whole-rollout thresholds in the dense-page copy-on-write preregistration (removed with the backend; see git history). Correctness and matched provenance are absolute gates; clone latency is diagnostic only.
 
 ## Matched primary evidence
 
