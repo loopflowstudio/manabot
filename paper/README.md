@@ -70,7 +70,7 @@ passing the corresponding directory instead of `report.md`.
 - [Ordinary baseline](../manabot/recipes/baseline.py) and
   [Elemental recipe](../experiments/regimes/elemental-two-seat-181-v1.json):
   current defaults versus the frozen experiment.
-- [Ataraxos fidelity](../docs/training.md#ataraxos),
+- [Ataraxos fidelity](../docs/learning.md#fidelity-to-the-sources),
   [local search](../docs/search-and-beliefs.md#local-policy-search) and
   [LLM selection](../docs/llm.md): influences, adaptations and limits.
 

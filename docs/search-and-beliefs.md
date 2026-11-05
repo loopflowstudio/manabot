@@ -1,10 +1,17 @@
 # Search and beliefs
 
-Search plans one decision by playing out hidden-world samples on exact copies of
-the match; beliefs supply those samples. managym owns the hidden-hand domain and
-exact branching; manabot owns probability, sampling policy and search. Nothing
-here fits policy parameters; training consumes search targets.
+Search plans one decision by playing out hidden-world samples on exact copies
+of the match, and beliefs supply those samples. Both run end to end on top of a
+frozen policy, and neither has yet shown a strength gain over the policy alone.
+This guide covers what exists, what it has been measured to do, and what it
+hasn't.
 
+The engine owns the hidden-hand domain and exact forking
+([the rules engine](engine.md#forks-replay-and-determinization)); manabot owns
+probability, sampling policy and search. Nothing here fits policy parameters.
+Training consumes search targets.
+
+- [What we know](#what-we-know)
 - [Forking](#forking)
 - [Search players](#search-players)
 - [Local policy search](#local-policy-search)
@@ -12,6 +19,27 @@ here fits policy parameters; training consumes search targets.
 - [Belief sampler](#belief-sampler)
 - [Sampler quality reports](#sampler-quality-reports)
 - [Unsupported and unmeasured](#unsupported-and-unmeasured)
+
+## What we know
+
+- **The pipeline runs.** The 2026-10-04 belief pilot completed three games
+  (303 decisions) in 17.41 s, and its 840 held-out sampled hands had zero
+  support violations. Local search replayed 183 Commands with no mismatch.
+  That is software evidence, not strength.
+- **Determinized search fuses strategies.** Flat Monte Carlo was the strongest
+  cheap player of the search era, 99% against random at 256 rollouts
+  ([exp-02](../experiments/exp-02-flat-mc.md)), and could not play a control
+  deck: it cast Pyroclasm on turn 1 in 300 of 300 runs at every strength
+  ([exp-09](../experiments/exp-09-control-competency.md)). PUCT here is
+  determinized PUCT, not a proof against the same failure
+  ([ARCHITECTURE.md](ARCHITECTURE.md#9-planner-honesty)).
+- **Search gave more than a weak policy had.** In the search era, every early
+  trained policy was weaker than 16-rollout search, and search improved on a
+  near-broken value function ([exp-10](../experiments/exp-10-value-gate.md)).
+  Those numbers predate the current world.
+- **Unmeasured.** Calibration against real opponents, transfer, search
+  strength on top of a current checkpoint, and human play
+  ([unsupported and unmeasured](#unsupported-and-unmeasured)).
 
 ## Forking
 

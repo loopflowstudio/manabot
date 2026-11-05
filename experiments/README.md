@@ -15,7 +15,7 @@ instruments.
 | --- | --- | --- |
 | [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
-| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/training.md#ataraxos)) | `manabot train` |
+| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | `manabot train` |
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
 | [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |

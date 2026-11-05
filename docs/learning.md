@@ -5,10 +5,11 @@ Magic against copies of itself, and the only feedback is who won. This guide
 follows one training iteration from the first decision to the weight update,
 and explains how a win at the end of a game becomes a change to the network.
 
-It describes the default recipe, `DampedPolicyLearning`, which adapts
-[Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) to Magic. For running
-training, see [training.md](training.md). For the line-by-line comparison with
-the paper, see its [fidelity table](training.md#fidelity-table).
+It describes the default recipe, `DampedPolicyLearning`.
+[Start here](start-here.md) zooms from the whole system down to this loop; this
+guide goes further, with worked numbers, the questions a batch boundary raises,
+and the exact [departures from the source recipe](#fidelity-to-the-sources).
+For running training, see [training.md](training.md).
 
 ![One training iteration: play, assign credit, filter and update, then repeat with new weights. Weights also feed an EMA, checkpoints and evaluation, which never feed back into the loss.](images/learning-loop.svg)
 
@@ -22,6 +23,8 @@ the paper, see its [fidelity table](training.md#fidelity-table).
 - [Reading a run](#reading-a-run)
 - [Common questions](#common-questions)
 - [What the evidence says](#what-the-evidence-says)
+- [Influences](#influences)
+- [Fidelity to the sources](#fidelity-to-the-sources)
 - [Where the code lives](#where-the-code-lives)
 
 ## Words used here
@@ -204,6 +207,7 @@ has a separate job:
 - **KL to the magnet** pulls toward a fixed reference: uniform over action
   types, then uniform within a type. A spell with dozens of target choices then
   gets no more prior weight than a single attack. Its strength τ decays.
+  [Influences](#influences) says where each term comes from.
 
 ![Constants from collection feed the policy, damping and value terms. Gradients reach only the live network, through one shared encoder.](images/gradient-flow.svg)
 
@@ -286,6 +290,85 @@ one switch at a time. These are the results the guide leans on:
 - **Scale.** The largest run so far is in the
   [scale ladder](../experiments/scale-ladder.md), summarized in the
   [README](../README.md#scale).
+
+## Influences
+
+None of these methods is new here. Each row says what we took and what changed
+for Magic.
+
+| Source | What we use | What changed |
+| --- | --- | --- |
+| [PPO](https://arxiv.org/abs/1707.06347) | The clipped ratio | One pass in batch order, with no advantage normalization |
+| [GAE](https://arxiv.org/abs/1506.02438) | The advantage recursion | No discounting, and steps are same-seat decisions |
+| [Magnetic mirror descent](https://arxiv.org/abs/2206.05825) | The KL pull toward a fixed reference | The reference is uniform over action types, then over actions |
+| [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) | The combination: both KL terms, filter, schedules, categorical value, EMA | No learned setup, no ordered past moves by default, and a much smaller network |
+
+The rules engine, viewer-safe observations, scoring of legal actions over game
+objects, and paired evaluation were built for this project. The PPO-style
+`Learning` rule remains as a control.
+
+## Fidelity to the sources
+
+`manabot/training/learning/damped_policy.py` owns the objective; recipes select
+`DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
+inputs decode at the compatibility boundary with their original tag and
+digest. Per retained observation the policy loss is the negative clipped-ratio
+advantage surrogate plus `collection_kl * KL(current || behavior)` and
+`tau * KL(current || magnet)`, summed over all legal offers. Advantages use
+signed expected outcomes with their own lambda. Outcome targets are three-way
+lambda mixtures stored in **loss, draw, win** order with one-hot terminals; the
+critic gets cross-entropy, equally weighted with the policy loss. The scalar
+ablation uses squared-error lambda returns instead. Only current logits receive
+gradients: behavior, references, estimates and targets are detached; the
+shared encoder receives both losses.
+
+Collection freezes learner weights within each batch; both-seat and
+`games_per_stream` collection finish games before updating, while one-seat
+quota collection may span updates. One epoch still changes parameters between
+minibatches, so per-action ratios remain necessary. No replay buffer,
+trajectory ratio product or state-occupancy correction is implemented.
+Filtering changes the training-state measure, as in the source, and
+advantages are not renormalized after filtering. Truncation fails rather than
+becoming a draw; opponent actions are traversed, not trained on.
+
+Optional controls: `filter_scope="actor"` keeps all critic rows;
+`behavior="ema-self"` collects and bootstraps with averaged weights
+([protocol](../experiments/ataraxos-omitted-controls.md)). EMA evaluation
+outputs are selected explicitly at arena registration.
+
+### Fidelity table
+
+| Technique / source | Implementation | Boundary |
+| --- | --- | --- |
+| S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; both clipping branches tested | Same loss |
+| Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and magnet | Finite legal log support required; rounded zeros counted, no smoothing |
+| Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control | MTG action types replace piece-then-move groups |
+| Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace same-player positions |
+| Outcome estimator, eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap | Loss/draw/win storage order is a permutation |
+| Value representation, S3.4 | Categorical head with CE | Scalar MSE is an explicit ablation |
+| Filtering, S3.4/Table S7 | Inclusive .75 quantile and .01 minimum; ties included | Torch linear quantile; source interpolation unspecified |
+| Optimizer damping, Table S7 | Adam, clip=.2, collection KL=.1, max norm=.267, value weight=1 | Adam betas .9/.999, epsilon 1e-5 (source unspecified) |
+| Schedules, Table S7 | LR clip(.5 / iteration^1.1, 5e-6, 1e-4); tau=.05 / iteration^.3 | One-based iterations; no elapsed-budget substitution |
+| Batch reuse, S3.4 | One epoch, increasing timestep batches, no shuffle | CPU streams replace 202-step GPU batches of 1536 |
+| EMA, S3.4 | .999 per iteration including empty filter; parameters averaged, buffers copied | Initialized from learner; evaluation only |
+| S3.3 setup learning | Not implemented | MTG has no learned setup |
+| S3.5 belief, S3.7 search | Outside this trainer | See [search-and-beliefs.md](search-and-beliefs.md) |
+| S3.6 network scale | Semantic Agent, small width, CPU float32 | The paper uses an 8-layer width-384 network on GPUs |
+
+**Unresolved source details:** Adam epsilon/betas, iteration origin, EMA
+initialization, quantile interpolation and exact bootstrap pseudocode at a
+collection boundary. The choices above are explicit implementations, not
+recovered details. Supplement S5–S7 recipes are not blended in; DeepNash's
+R-NaD is not implemented. Departures also include post-normalization
+attention (the paper specifies pre-normalization), the value token as a local
+choice, and missing ordered past-move inputs.
+
+Before any scientific comparison of PPO, categorical and scalar move learning,
+freeze a protocol, independent seeds, budgets, world and code identities,
+held-out paired deals with both seat/deck assignments and the raw/EMA choice;
+keep all failures and compare overlapping cost intervals. The technique
+inventory is [ataraxos-technique-screen](../experiments/ataraxos-technique-screen.md);
+ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.md).
 
 ## Where the code lives
 

@@ -1,24 +1,32 @@
 # docs/
 
-Start with [How a manabot learns](learning.md): one training iteration, from a
-game's first decision to the weight update. Then read
-[ARCHITECTURE.md](ARCHITECTURE.md) for the system picture and who owns which
-truth. Experiment reports live in
-[experiments/](../experiments/README.md), and world versioning lives in
-[WORLDS.md](../WORLDS.md).
+Begin with [Start here](start-here.md): the four parts of the system, then one
+training iteration stage by stage, down to the code. Each part has its own
+guide below, written the same way: what it does, one worked example, the key
+terms with the code that implements them, then what we know and where the code
+lives. Experiment reports live in [experiments/](../experiments/README.md), and
+world versioning lives in [WORLDS.md](../WORLDS.md).
 
-## Current system
+## The system
 
 | Doc | What |
 |---|---|
-| [learning.md](learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run |
-| [observation-and-model.md](observation-and-model.md) | What the policy sees and how the network produces action probabilities and values |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Packages, authorities and data flow across managym, manabot and Academy |
-| [development.md](development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
-| [training.md](training.md) | Regimes and stages, experiments, remote training, monitoring, numerical health, recovery, Ataraxos, policy inputs |
-| [evaluation.md](evaluation.md) | Arenas, shared inference, card data, checkpoint scenarios, frozen-policy attacks |
+| [start-here.md](start-here.md) | The overview: the system, one iteration, play, credit, filter, update, what win rate hides, open questions |
+| [engine.md](engine.md) | The rules engine: one decision, forced choices, who chooses, observations, forks, replay, cards as programs, worlds |
+| [observation-and-model.md](observation-and-model.md) | What the policy sees, how it scores legal actions and estimates value, policy input versions |
+| [learning.md](learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, influences and fidelity |
+| [evaluation.md](evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, shared inference, card data |
+| [experiments.md](experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring and executing a comparison |
+| [search-and-beliefs.md](search-and-beliefs.md) | Forking, search players, local policy search, possible worlds, the belief sampler, and what remains unmeasured |
+
+## Operating it
+
+| Doc | What |
+|---|---|
+| [training.md](training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
 | [experiment-metrics.md](experiment-metrics.md) | Metric definitions the experiment reports read |
-| [search-and-beliefs.md](search-and-beliefs.md) | Forking, search players, local policy search, possible worlds, the belief sampler |
+| [development.md](development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Packages, authorities and data flow across managym, manabot and Academy |
 | [llm.md](llm.md) | LLM players: selection protocol, local and hosted models, games, offline inference reports |
 | [academy.md](academy.md) | The browser UI: running it, the shared decision surface, choice navigation, presentation, trained challengers, the proof gate |
 

@@ -49,9 +49,10 @@ paper's authority ([research program](manabot/RESEARCH.md)). Reward is win or
 loss only: our shaped rewards lost to it
 ([exp-04](experiments/exp-04-potential-shaping.md)).
 
-**[Read how a manabot learns](docs/learning.md)** for the full path from a game
-result to a weight change, with worked numbers and answers to questions like
-what happens to games a batch cuts off.
+**[Start here](docs/start-here.md)** zooms from the four parts of the system
+to the code behind each training stage. **[How a manabot learns](docs/learning.md)**
+goes further, with worked numbers and answers to questions like what happens
+to games a batch cuts off.
 
 ## Quickstart
 
@@ -67,8 +68,8 @@ uv run --extra play maturin develop --release \
 uv run manabot train          # small CPU training run, under a minute, local Etude tracking
 ```
 
-`uv run manabot train` trains a small agent and saves checkpoints to
-`.runs/local/`. Training recipes are typed *regimes* composed in Python, one module per
+`uv run manabot train` trains a small agent and saves checkpoints under
+`.runs/`. Training recipes are typed *regimes* composed in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
 [manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
 baseline is
@@ -165,7 +166,8 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
-The observation boundary and network are described in
+The engine's guarantees are in [The rules engine](docs/engine.md), and the
+observation boundary and network in
 [Observations and the policy network](docs/observation-and-model.md).
 
 ## Versioned installs

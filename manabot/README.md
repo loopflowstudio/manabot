@@ -208,7 +208,7 @@ see [PUCT policy/value compatibility](../docs/search-and-beliefs.md#local-policy
 for critic units, retained prefixes and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
-Declare training comparisons with [typed Python experiments](../docs/training.md#experiments).
+Declare training comparisons with [typed Python experiments](../docs/experiments.md#declaring-a-comparison).
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.
 
@@ -239,7 +239,7 @@ custom-deck root requires its exact checkpoint setup binding.
 
 For capacity configuration, component counts, versioned architecture receipts and
 bounded CPU calibration, see [capacity accounting](model/agent.md#capacity-identity-and-accounting)
-and [the calibration command](../docs/training.md#freeze-step-targets).
+and [the calibration command](../docs/experiments.md#freeze-step-targets).
 
 ## Shared effect inputs
 
@@ -318,7 +318,7 @@ Self-play update diagnostics live only in the run's Etude metrics;
 TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
-Optional [public recent-event input](../docs/training.md#policy-inputs) uses the existing
+Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing
 semantic catalog and a bounded native history suffix. Recipe history-on/off is
 independent of capacity and learning rules; comparison plans remain unexecuted.
 

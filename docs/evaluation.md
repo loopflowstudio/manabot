@@ -1,13 +1,19 @@
 # Evaluating manabots
 
-How manabot measures checkpoints: replay-checked arena games, the shared
-inference path that serves checkpoints to them, Etude benchmarks and Duels,
-17Lands-style card data, tactical checkpoint scenarios and frozen-policy
-attacks. Training-time monitoring that calls this machinery is described in
-[training.md](training.md); how to read experiment reports is in
+Evaluation measures strength from outside the training loop, and its scores
+never reach the loss. The unit of measurement is a deal, two players are
+compared on the same deals from both seats with both decks, and only finished
+games that replay exactly count. This guide covers that contract first, then
+the anchors, the bounded ways we probe for weaknesses, and the tools.
+Training-time monitoring that calls this machinery is in
+[training.md](training.md#monitoring); reading reports is in
 [experiment-metrics.md](experiment-metrics.md).
 
-- [Ownership and arena](#ownership-and-arena)
+- [One deal](#one-deal)
+- [What counts](#what-counts)
+- [Anchors and ratings](#anchors-and-ratings)
+- [Beyond win rate](#beyond-win-rate)
+- [What we know](#what-we-know)
 - [Quick local evaluation](#quick-local-evaluation)
 - [Shared inference](#shared-inference)
 - [Continuing an evaluation](#continuing-an-evaluation)
@@ -16,31 +22,126 @@ attacks. Training-time monitoring that calls this machinery is described in
 - [Checkpoint scenarios](#checkpoint-scenarios)
 - [Frozen-policy attacks](#frozen-policy-attacks)
 - [Open direction](#open-direction)
+- [Ownership](#ownership)
 
-## Ownership and arena
+## One deal
 
-Simulation (`manabot.sim`) owns serving, native games and bounded replay.
-Evaluation (`manabot.eval`) owns admission (`eval.admission`), requests and
-results (`eval.evaluation`, `eval.results`), paired cells (`eval.match`),
-ratings (`eval.rating`, seat-aware Bradley-Terry with paired-block bootstrap)
-and callback transport (`eval.endpoint`). Training monitoring is an adapter in
-`manabot.experiment.checkpoint_evaluation`; local execution imports neither it
-nor callback transport. `manabot.eval.models` holds only the identities
-`EvaluationKey` (the arena a game was played in) and `MatchRow` (one played
-leg); wire field names keep their recorded meanings because frozen evidence
-carries them. Tests load the INT-6 fixture's key and anchors through
-`tests/eval/arena_fixture.py`.
+A deal is one seeded shuffle. Two players meet on it four times, swapping decks
+and seats, so the luck of the draw and the advantage of going first cancel in
+the comparison. With mirrors, each player also pilots each deck against itself,
+for eight legs.
 
-One deal is one complete block: four correlated deck/seat legs by default,
-eight with mirrors. Legs are not independent samples; uncertainty is a
-paired-deal bootstrap over whole deals, and a single deal has none. Only
-terminal, replay-verified games score. Draws, crashes, timeouts and failed
-replays are retained by outcome and never earn credit.
+![A seeded deal is played four times between two players, swapping decks and seats, and only finished, replay-verified games are scored, with uncertainty from resampling whole deals.](images/evaluation-deal.svg)
 
-Working anchors are the heuristic player and frozen checkpoints. The code
-anchors `scripted_greedy` and `random` (`manabot.sim.anchors`, frozen v1
-sources) remain admissible for compatibility and diagnostics, not as working
-anchors.
+The seed of every game is derived from the arena, the pair, the deal and the
+player, so the same deal can be replayed or continued exactly.
+
+From `derive_seed` in [`manabot/eval/match.py`](../manabot/eval/match.py):
+
+```python
+identity = canonical_sha256(
+    {
+        "arena_key": seed_key,
+        "pair": sorted(aliases.get(member, member) for member in pair),
+        "deal_seed": deal_seed,
+        "player_id": aliases.get(player_id, player_id),
+    }
+)
+return int(identity[:16], 16)
+```
+
+- Legs of one deal are not independent samples. Uncertainty is a paired-deal
+  bootstrap over whole deals, and a single deal has none.
+- Repeating a deal seed is not a new sample.
+- Held-out deals are never used for training or monitoring. A run's selection
+  rule is `last-complete-raw`, never the best evaluation, so no result is
+  picked by looking at the test.
+
+## What counts
+
+Only terminal, replay-verified games score. Draws, crashes, timeouts and
+failed replays are retained by outcome and never earn credit, and a cohort
+with an unscored game is rejected rather than quietly trimmed.
+
+From `fit_population` in [`manabot/eval/rating.py`](../manabot/eval/rating.py):
+
+```python
+retained = [dict(row) for row in rows]
+if any(row.get("score_a") is None or row.get("truncated") for row in retained):
+    raise ValueError("unscored failures reject the cohort; do not drop attempts")
+```
+
+Uncertainty resamples deals, not games. From `bootstrap_population` in the
+same module:
+
+```python
+for _ in range(replicates):
+    selected = rng.choice(blocks, size=len(blocks), replace=True)
+    counts = {block: int(np.count_nonzero(selected == block)) for block in blocks}
+    weights = np.asarray(
+        [counts[int(block)] for block in row_blocks], dtype=np.float64
+    )
+```
+
+- A replay that doesn't finish within the deadline is unavailable, not a
+  mismatch. Replay verifies Commands, not that two devices compute the same
+  policy.
+- An infrastructure failure, such as a dead inference service, fails the
+  allocation. It is never recorded as a player's forfeit.
+- Game-level intervals describe one checkpoint's evaluation noise. A claim
+  about a training method needs independent training seeds
+  ([experiments](experiments.md#how-a-claim-gets-made)).
+
+## Anchors and ratings
+
+Working anchors are the rule-based `heuristic` player
+([`manabot/sim/heuristic.py`](../manabot/sim/heuristic.py)) and frozen
+checkpoints. The code anchors `scripted_greedy` and `random`
+(`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
+and diagnostics, not as working anchors. Head-to-head
+[Tournament](../experiments/head-to-head.md) files play chosen checkpoints
+against each other on shared deals.
+
+Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
+(`eval.rating`). A rating belongs to one tuple of world, content suite,
+information boundary, compute class and arena version, and never crosses those
+boundaries; one anchor fixes the origin, so differences carry meaning and the
+absolute number doesn't. The full contract, including why the payoff matrix
+stays visible and why search players sit in their own compute class, is the
+[skill rating contract](../manabot/RESEARCH.md#skill-rating-contract).
+
+## Beyond win rate
+
+A win rate can rise while a specific skill is missing, so two bounded probes
+sit beside it:
+
+- **[Checkpoint scenarios](#checkpoint-scenarios)** score retained tactical
+  positions S1–S5, such as holding a counterspell for the bomb or waiting a
+  turn to wipe more creatures. They are local behaviors against a scripted
+  continuation, not strength, and must not be pooled with it.
+- **[Frozen-policy attacks](#frozen-policy-attacks)** train an attacker against
+  a frozen checkpoint under a declared budget and prediction. A failed attack
+  never certifies equilibrium; the result is a lower bound on exploitability
+  from the attacks we can afford.
+
+## What we know
+
+- **The heuristic anchor separates checkpoints that greedy can't.** As UR
+  against MTG-183's update-1,750 GW it rises from 18.3% to 62.0% over 300
+  held-out games, and from 10.8% to 34.3% across all ten decks
+  ([heuristic strength](../experiments/heuristic-strength.md)).
+- **Win rate hid incompetence.** The search pilot of exp-02 beat random 99% of
+  the time and could not play a control deck: uniform random beat it on three
+  of five scenarios ([exp-09](../experiments/exp-09-control-competency.md)).
+- **Matchup tables measure the pilot and the cards.** A four-card swap moved a
+  matchup by 55 points ([exp-08b](../experiments/exp-08b-ancestral-dose.md)).
+- **A matched-budget exploiter reached 23.5–26.0%** against the distilled
+  student in an earlier world, so it was not farmable at that budget; stronger
+  attackers were untested ([exp-11](../experiments/exp-11-curriculum-exploitability.md)).
+- **An N-game evaluation once played one deal.** A seed bug made every game
+  replay the same shuffle, and the seat-advantage claims built on it were
+  retracted ([F1](../paper/understanding.md)). Derived seeds and replay
+  verification are the response.
 
 ## Quick local evaluation
 
@@ -329,3 +430,16 @@ in Etude's launch scheduler and is not implemented. Compute policy, a durable
 Etude priority queue, adaptive allocation and further serving optimizations
 remain unselected designs; see
 [evaluation.md at a74f31828](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/shared-evaluation.md).
+## Ownership
+
+Simulation (`manabot.sim`) owns serving, native games and bounded replay.
+Evaluation (`manabot.eval`) owns admission (`eval.admission`), requests and
+results (`eval.evaluation`, `eval.results`), paired cells (`eval.match`),
+ratings (`eval.rating`, seat-aware Bradley-Terry with paired-block bootstrap)
+and callback transport (`eval.endpoint`). Training monitoring is an adapter in
+`manabot.experiment.checkpoint_evaluation`; local execution imports neither it
+nor callback transport. `manabot.eval.models` holds only the identities
+`EvaluationKey` (the arena a game was played in) and `MatchRow` (one played
+leg); wire field names keep their recorded meanings because frozen evidence
+carries them. Tests load the INT-6 fixture's key and anchors through
+`tests/eval/arena_fixture.py`.

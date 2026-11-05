@@ -179,7 +179,7 @@ Academy legal action sets remain complete. Other capacity excesses still fail.
 Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
 
-The optional [policy-history v1 projection](../docs/training.md#policy-inputs) is a bounded
+The optional [policy-history v1 projection](../docs/observation-and-model.md#policy-inputs) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
 clone and diagnostic injection must preserve its documented lifecycle.
 
@@ -259,7 +259,7 @@ resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
-[the observation input contract](../docs/training.md#policy-inputs).
+[the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-7 viewer JSON is validated by the native observation types.
 
