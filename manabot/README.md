@@ -3,49 +3,9 @@
 The trainable agent of Manabot: environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
 
-<<<<<<< Updated upstream
-## Shared effect inputs
-
-`ObservationConfig(policy_input_version=7)` admits complete resolved effects
-before per-holder fact expansion. `env/shared_effects.py` mirrors the native
-128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
-subtypes, names, used abilities and copy exceptions still use `facts` (default
-128 rows). The model encodes each payload once and routes its contribution into
-named objects before attention; action focus remains addressable. Sum reduction
-preserves edge multiplicity and shared gradients; it is learned compression,
-not a proof of injective embeddings or improved play. See the
-[architecture walkthrough](../docs/observation-architecture.html).
-
-The version is explicit in saved observation/configuration identities. Fresh
-construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
-retain their meanings. Historical captures without shared provenance cannot be
-promoted to v7 by guessing a source/controller. Text representation
-`manabot-text-6` renders each native payload once with exact public source and
-member labels and timestamp ranks. Its within-observation token reducer is not
-persistent game memory.
-
-## Policy action capacity
-
-Observation overflow raises an error by default. The TLA pilot explicitly uses
-`ObservationConfig(max_actions=64, action_overflow="first-legal")` to keep the
-first 64 legal actions in native order. Retained indices and Commands are
-unchanged; the engine and Academy still expose the complete legal set. Learned
-checkpoint evaluation uses the saved policy configuration. The prospective TLA
-benchmark gives its heuristic opponent the same prefix before scoring, including
-its fallback; the chosen original index is never clamped or remapped.
-
-Capture reports count consumed decisions, overflows and dropped actions by
-decision kind across all participating policies, with bounded replay samples.
-These aggregate counts are not learner-only or actor-specific rates.
-Collector/game close and vector
-reseeding flush exact totals, including zero-overflow runs. The approximation
-and its evaluation limits are specified in the
-[TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
-=======
 The central loop is self-play: play a batch, turn game results into per-decision
 credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
 explains it, and [training.md](../docs/training.md) covers running it.
->>>>>>> Stashed changes
 
 ## Quickstart
 
@@ -317,7 +277,7 @@ These aggregate counts are not learner-only or actor-specific rates.
 Collector/game close and vector
 reseeding flush exact totals, including zero-overflow runs. The approximation
 and its evaluation limits are specified in the
-[TLA v9 protocol](../experiments/protocols/tla-trophy-213-v9.md).
+[TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
 
 ## Research program
 
