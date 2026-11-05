@@ -43,3 +43,11 @@ forward/backward probes establish capacity and gradient paths, not RL learning
 or playing strength. Completion and schema integration remain acceptance work.
 Earlier detailed assumptions are retained at
 `13c9ae522e9e7304fb0db738c7efe729c36ae5e3:scratch/questions.md`.
+
+## Main sync context — 2026-11-04
+
+Incoming MTG-213 capacity-recovery and v10 execution notes remain historical
+context at `51b4bd274c34398dc0bf0066dfc3933f26911f87:scratch/questions.md`.
+They do not authorize training or change MTG-242’s review boundary. The sync
+retains main’s permanent-capacity regression tests alongside this branch’s
+v8 native/Python buffer parity coverage.

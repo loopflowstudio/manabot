@@ -16,15 +16,18 @@ from manabot.env.failures import (
 )
 from manabot.env.observation import ObservationEncoder
 from manabot.infra.config import ObservationConfig
+from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 
 
-def _vector_buffers(encoder: ObservationEncoder) -> dict[str, np.ndarray]:
-    buffers = encoder.allocate(1)
+def _vector_buffers(
+    encoder: ObservationEncoder, num_envs: int = 1
+) -> dict[str, np.ndarray]:
+    buffers = encoder.allocate(num_envs)
     buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
+        rewards=np.zeros(num_envs, dtype=np.float64),
+        terminated=np.zeros(num_envs, dtype=np.uint8),
+        truncated=np.zeros(num_envs, dtype=np.uint8),
     )
     return buffers
 
@@ -51,6 +54,122 @@ def _assert_encoding_parity(
         if vector_buffers is not None:
             np.testing.assert_array_equal(vector_buffers[key][0], expected, err_msg=key)
     return reference
+
+
+@pytest.mark.parametrize("capacity", [40, 41, 64])
+def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> None:
+    evidence = read_failure(
+        Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
+    )
+    (game,) = evidence.games
+    assert game.stream == 43 and game.seed == 32624 and len(game.actions) == 371
+    players = [player.native() for player in game.players]
+    scalar = managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
+    vector = managym.VectorEnv(
+        num_envs=1,
+        seed=game.seed,
+        seed_stride=evidence.seed_stride,
+        skip_trivial=evidence.skip_trivial,
+        opponent_policy=evidence.opponent_policy,
+    )
+    encoder = ObservationEncoder(
+        ObservationConfig(
+            policy_input_version=7,
+            max_cards_per_player=128,
+            max_permanents_per_player=capacity,
+            max_actions=64,
+            action_overflow="first-legal",
+        )
+    )
+    buffers = _vector_buffers(encoder)
+    vector.set_buffers(buffers, "first-legal")
+    scalar.reset(players)
+    vector.reset_all_into_buffers(players)
+    for action in game.actions[:-1]:
+        assert isinstance(action, int)
+        scalar.step(action)
+        vector.step_into_buffers([action])
+    assert scalar.semantic_decision_frame_json() == game.frame
+    assert vector.semantic_decision_frames_json()[0] == game.frame
+    last = game.actions[-1]
+    assert isinstance(last, int)
+    obs, *_ = scalar.step(last)
+    assert len(obs.agent_permanents) == 41
+    if capacity == 40:
+        for encode in (
+            lambda: encoder.encode(obs),
+            lambda: scalar.encode_observation_into(
+                obs, encoder.allocate(), "first-legal"
+            ),
+            lambda: vector.step_into_buffers([last]),
+        ):
+            with pytest.raises(Exception, match="permanents 41 > 40"):
+                encode()
+    else:
+        vector.step_into_buffers([last])
+        reference = _assert_encoding_parity(encoder, scalar, obs, buffers)
+        assert reference["agent_permanents_valid"].sum() == 41
+        assert reference["opponent_permanents_valid"].sum() == len(
+            obs.opponent_permanents
+        )
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> None:
+    evidence = read_failure(
+        Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
+    )
+    (game,) = evidence.games
+    encoder = ObservationEncoder(
+        ObservationConfig(
+            policy_input_version=7,
+            max_cards_per_player=128,
+            max_permanents_per_player=40,
+            max_actions=64,
+            action_overflow="first-legal",
+        )
+    )
+    vector = (
+        CapturedVector(num_envs=2, seed=game.seed, skip_trivial=True)
+        if workers == 1
+        else ShardedVectorEnv(num_envs=2, seed=game.seed, workers=workers)
+    )
+    try:
+        buffers = _vector_buffers(encoder, num_envs=2)
+        vector.set_buffers(buffers, "first-legal")
+        vector.reset_each_into_buffers([[p.native() for p in game.players], _players()])
+        for action in game.actions[:-1]:
+            vector.step_into_buffers([action, 0], [True, False])
+        if isinstance(vector, CapturedVector):
+            assert vector.semantic_decision_frames_json()[0] == game.frame
+        control = managym.Env(seed=game.seed + 1, skip_trivial=True)
+        control.reset(_players())
+        obs, *_ = control.step(0)
+        vector.step_isolated_into_buffers([game.actions[-1], 0], [True, True], True)
+        failed, healthy = vector.get_last_info()
+        assert failed["game_error_kind"] == "resource_limit"
+        assert (
+            failed["game_error"]
+            == "observation capacity exceeded: agent_permanents 41 > 40"
+        )
+        assert failed["game_error_frame"] == game.frame
+        assert "game_error" not in healthy
+        assert not buffers["terminated"].any() and not buffers["truncated"].any()
+        assert not buffers["rewards"].any()
+        reference = encoder.encode(obs)
+        for key, value in reference.items():
+            np.testing.assert_array_equal(buffers[key][1], value, err_msg=key)
+        vector.replace_failed_into_buffers([True, False])
+        assert vector.current_game_seeds() == [game.seed + 2, game.seed + 1]
+        if isinstance(vector, CapturedVector):
+            assert (
+                vector.semantic_decision_frames_json()[1]
+                == control.semantic_decision_frame_json()
+            )
+        for key, value in reference.items():
+            np.testing.assert_array_equal(buffers[key][1], value, err_msg=key)
+    finally:
+        vector.close()
 
 
 @pytest.mark.parametrize("version", range(1, 9))
