@@ -1,5 +1,12 @@
 # MTG-244 decisions — 2026-11-04
 
+Latest direction: Jack Heart asked to keep optimizing, said this "needs more
+ambitious rethinking", and requested "make it stupidly fast". The accepted
+architecture/performance direction is in
+[mtg-244-speed-direction.md](mtg-244-speed-direction.md). Rethink the layer/search
+hot path within this Task; merely reaching the existing budget is not the goal.
+Preserve correctness and the review-only delivery boundary.
+
 Jack Heart approved a successor policy input: "new input version is totally
 fine". The implemented version is explicit v8; preserving fresh v6 and frozen
 saved inputs is the operator's rollout choice, not a requested default migration.

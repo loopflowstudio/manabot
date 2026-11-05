@@ -1347,3 +1347,49 @@ fn cr_613_source_relative_alternatives_agree_in_layers_and_rule_restrictions() {
     assert!(s.game().state.permanents[ogre].as_ref().unwrap().tapped);
     assert!(!s.game().state.permanents[land].as_ref().unwrap().tapped);
 }
+
+#[test]
+fn cr_613_keyword_predicate_dependency_overrides_grant_timestamp() {
+    use managym::state::{
+        card::{CardType, StaticScope},
+        predicate::CardPredicate,
+    };
+    for flying_first in [true, false] {
+        let (mut s, ogre) = ogre_scenario();
+        let flying_grant = witness(
+            "Flying grant",
+            &[CardType::Enchantment],
+            "{1}",
+            vec![continuous(
+                StaticScope::All(CardPredicate::creature()),
+                vec![Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))],
+            )],
+        );
+        let trample_grant = witness(
+            "Flying creatures trample",
+            &[CardType::Enchantment],
+            "{1}",
+            vec![continuous(
+                StaticScope::All(CardPredicate {
+                    any_of: vec![CardPredicate {
+                        flying: true,
+                        ..Default::default()
+                    }],
+                    ..CardPredicate::creature()
+                }),
+                vec![Modification::AddKeywords(Keywords::of(&[Keyword::Trample]))],
+            )],
+        );
+        let grants = if flying_first {
+            [flying_grant, trample_grant]
+        } else {
+            [trample_grant, flying_grant]
+        };
+        for grant in grants {
+            layer_fixture(&mut s, "Gray Ogre", grant);
+        }
+        let view = s.game().characteristics(ogre);
+        assert!(view.keywords.has(Keyword::Flying));
+        assert!(view.keywords.has(Keyword::Trample));
+    }
+}

@@ -13263,8 +13263,8 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     );
 }
 
-/// Cached land-type candidates follow entry/departure and clone isolation;
-/// the candidate's counter condition and ability loss remain live reads.
+/// Land-type effects follow counters and departure independently in each fork;
+/// layer-6 ability loss cannot erase a type effect already applied in layer 4.
 #[test]
 fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Abandoned Air Temple"]);
@@ -13284,6 +13284,11 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
         Modification::LoseAllAbilities,
         EffectDuration::EndOfTurn,
     );
+    assert!(fork.characteristics(zhao).abilities_lost);
+    assert!(!s.game().characteristics(zhao).abilities_lost);
+    assert!(fork.characteristics(temple).has_subtype("Mountain"));
+    let zhao_card = card_of(&s, zhao);
+    fork.move_card(zhao_card, ZoneType::Exile);
     assert!(!fork.characteristics(temple).has_subtype("Mountain"));
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
 
@@ -13291,7 +13296,6 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
     set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
-    let zhao_card = card_of(&s, zhao);
     s.game_mut().move_card(zhao_card, ZoneType::Exile);
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
 }

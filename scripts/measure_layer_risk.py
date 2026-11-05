@@ -77,6 +77,18 @@ def source(out: Path, leg: str) -> Path:
     return ROOT if leg == "after" else out / "sources" / leg
 
 
+def ensure_revision(revision: str) -> None:
+    """Fetch a missing pinned commit; never substitute a branch's current tip."""
+    probe = subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+    )
+    if probe.returncode:
+        run(["git", "fetch", "--no-tags", "origin", revision], cwd=ROOT)
+    git("cat-file", "-e", f"{revision}^{{commit}}")
+
+
 def prepare(out: Path) -> None:
     # Never replace earlier receipts or a caller's files.
     out.mkdir(parents=True, exist_ok=False)
@@ -86,6 +98,45 @@ def prepare(out: Path) -> None:
         "before": BEFORE,
         "after": git("rev-parse", "HEAD").decode().strip(),
     }
+    (out / "candidate.patch").write_bytes(
+        git("diff", "HEAD", "--", "managym", "manabot", "scripts")
+    )
+    harnesses = [
+        ROOT / "scripts/measure_layer_risk.py",
+        ROOT / "scripts/bench_layer_input.py",
+        ROOT / "managym/perf/layers-attribution.patch",
+        ROOT / "managym/src/benchmark_layers.rs",
+        ROOT / "manabot/verify/representation.py",
+    ]
+    harnesses += list((ROOT / "managym/examples").glob("bench_*.rs"))
+    harnesses += list((ROOT / "managym/examples/curated").glob("*.rs"))
+    write(
+        out / "measurement.json",
+        {
+            "revisions": revisions,
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "cpu_count": os.cpu_count(),
+            "initial_load": os.getloadavg(),
+            "run_url": os.environ.get("RUN_URL"),
+            "harness_sha256": {
+                str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in harnesses
+            },
+            "limitations": [
+                "Before receives counters/fixture access only, no cache or model fixes.",
+                "Baseline cannot validate dependency semantics; compare its original TLA workloads only.",
+                "Timers on instrumented layer runs overlap; allocation runs are separate.",
+                "Step samples are the first 128 decisions, not a random population sample.",
+                "Policy is CPU float32, B16, one thread, two warmups/eight samples, no optimizer.",
+                "Peak RSS covers the fresh case process; accelerator and learning efficacy are unmeasured.",
+            ],
+        },
+    )
+    # Full branch history need not include a reference retained after a squash.
+    # Acquire both exact historical commits before extracting either source tree.
+    for revision in (reference, BEFORE):
+        ensure_revision(revision)
     for leg in LEGS:
         (out / leg).mkdir()
         if leg == "after":
@@ -139,41 +190,6 @@ def prepare(out: Path) -> None:
         manifest.write(
             '\n[[example]]\nname = "bench_layers"\nrequired-features = ["benchmark"]\ntest = true\n'
         )
-    (out / "candidate.patch").write_bytes(
-        git("diff", "HEAD", "--", "managym", "manabot", "scripts")
-    )
-    harnesses = [
-        ROOT / "scripts/measure_layer_risk.py",
-        ROOT / "scripts/bench_layer_input.py",
-        ROOT / "managym/perf/layers-attribution.patch",
-        ROOT / "managym/src/benchmark_layers.rs",
-        ROOT / "manabot/verify/representation.py",
-    ]
-    harnesses += list((ROOT / "managym/examples").glob("bench_*.rs"))
-    harnesses += list((ROOT / "managym/examples/curated").glob("*.rs"))
-    write(
-        out / "measurement.json",
-        {
-            "revisions": revisions,
-            "platform": platform.platform(),
-            "machine": platform.machine(),
-            "cpu_count": os.cpu_count(),
-            "initial_load": os.getloadavg(),
-            "run_url": os.environ.get("RUN_URL"),
-            "harness_sha256": {
-                str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in harnesses
-            },
-            "limitations": [
-                "Before receives counters/fixture access only, no cache or model fixes.",
-                "Baseline cannot validate dependency semantics; compare its original TLA workloads only.",
-                "Timers on instrumented layer runs overlap; allocation runs are separate.",
-                "Step samples are the first 128 decisions, not a random population sample.",
-                "Policy is CPU float32, B16, one thread, two warmups/eight samples, no optimizer.",
-                "Peak RSS covers the fresh case process; accelerator and learning efficacy are unmeasured.",
-            ],
-        },
-    )
 
 
 def native(out: Path, leg: str, payment_only: bool) -> None:
@@ -192,12 +208,19 @@ def native(out: Path, leg: str, payment_only: bool) -> None:
     binary = tree / "managym/target/release/examples"
     if not payment_only:
         run([*cargo, "--example", "bench_steps", "--example", "bench_search"])
+        native_provenance(receipt, binary, ("bench_steps", "bench_search"))
         for name, args in (("bench_steps", ["--tail-samples"]), ("bench_search", [])):
             run([str(binary / name), *args], tree, receipt / f"{name}.jsonl")
     if leg == "baseline":
-        native_provenance(receipt, binary, ("bench_steps", "bench_search"))
         return
     run([*cargo, "--features", "benchmark", "--example", "bench_layers"])
+    native_provenance(
+        receipt,
+        binary,
+        ("bench_layers",)
+        if payment_only
+        else ("bench_steps", "bench_search", "bench_layers"),
+    )
     run(
         [str(binary / "bench_layers"), "--payment-only", "--allocations"],
         tree,
@@ -210,20 +233,13 @@ def native(out: Path, leg: str, payment_only: bool) -> None:
             tree,
             receipt / "layers-allocations.jsonl",
         )
-    native_provenance(
-        receipt,
-        binary,
-        ("bench_layers",)
-        if payment_only
-        else ("bench_steps", "bench_search", "bench_layers"),
-    )
 
 
 def native_provenance(receipt: Path, binary: Path, names: Sequence[str]) -> None:
     write(
         receipt / "native-provenance.json",
         {
-            "load_after": os.getloadavg(),
+            "load_at_recording": os.getloadavg(),
             "sha256": {
                 p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in binary.iterdir()

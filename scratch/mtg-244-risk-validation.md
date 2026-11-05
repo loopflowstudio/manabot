@@ -245,8 +245,12 @@ samples, missing memory and unmatched warmups/configuration/storage. Seventeen i
 checks pass without running games or training; slower but comparable timings
 remain in the output for inspection, never automatically accepted.
 
-Still required: collect the first isolated artifact, inspect matched results,
-mitigate demonstrated findings and remeasure before review readiness. Gate owns
+First publication produced a large Engine Budget regression and failed risk
+preparation before measurements. [CI repair](mtg-244-ci-repair.md) retains the
+exact jobs, mitigations, contradictory local timing and current verification.
+Reference acquisition and partial-artifact retention are repaired in the worktree.
+Still required: collect the corrected isolated artifact, inspect matched results,
+mitigate any remaining regression and remeasure before review readiness. Gate owns
 full suites and the unchanged 10% same-runner Engine Budget; a green budget alone
 does not close dependency/model risk evidence. No baseline adoption, merge,
 training experiment or learning-quality claim is authorized by these checks.

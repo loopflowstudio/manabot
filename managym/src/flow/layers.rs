@@ -87,6 +87,7 @@ pub(super) struct Context<'a> {
     /// Includes conditional nodes discovered in any layer, even when an earlier
     /// condition short-circuits or a dependency later removes their source.
     pub reads_mana: bool,
+    pub reads_tapped: bool,
 }
 
 /// An effect keeps one identity across layers. `targets` is populated on its
@@ -103,15 +104,19 @@ struct Node {
     targets: Option<Vec<PermanentId>>,
 }
 impl Node {
-    /// P/T setters, modifiers and switches cannot change these instructions
-    /// unless their predicates inspect power. Ordinary anthems therefore need
-    /// no pairwise battlefield clones; debug builds prove that shortcut.
-    fn reads_power(&self) -> bool {
-        fn condition_reads(condition: &Condition) -> bool {
-            match condition {
+    /// Dependencies inspect the same scope/condition/value predicates used to
+    /// resolve instructions. Recurse through alternatives once at this owner.
+    fn reads_predicate(&self, reads: fn(&CardPredicate) -> bool) -> bool {
+        fn predicate_reads(p: &CardPredicate, reads: fn(&CardPredicate) -> bool) -> bool {
+            reads(p) || p.any_of.iter().any(|p| predicate_reads(p, reads))
+        }
+        fn condition_reads(c: &Condition, reads: fn(&CardPredicate) -> bool) -> bool {
+            match c {
                 Condition::ControlsAtLeast { predicate, .. }
-                | Condition::SourceMatches(predicate) => predicate.reads_power(),
-                Condition::AnyOf(conditions) => conditions.iter().any(condition_reads),
+                | Condition::SourceMatches(predicate) => predicate_reads(predicate, reads),
+                Condition::AnyOf(conditions) => {
+                    conditions.iter().any(|c| condition_reads(c, reads))
+                }
                 _ => false,
             }
         }
@@ -120,24 +125,41 @@ impl Node {
             | StaticScope::Other(p)
             | StaticScope::OtherYouControl(p)
             | StaticScope::YouControl(p)
-            | StaticScope::SpellsYouControl(p) => p.reads_power(),
+            | StaticScope::SpellsYouControl(p) => predicate_reads(p, reads),
             StaticScope::This | StaticScope::Attached => false,
         };
         scope_reads
-            || self.condition.as_ref().is_some_and(condition_reads)
+            || self
+                .condition
+                .as_ref()
+                .is_some_and(|c| condition_reads(c, reads))
             || self.parts.iter().any(|(_, op)| match op {
                 Operation::Buff(buff) => {
                     buff.per_color_among
                         .as_ref()
-                        .is_some_and(CardPredicate::reads_power)
+                        .is_some_and(|p| predicate_reads(p, reads))
                         || buff
                             .per_graveyard_matching
                             .as_ref()
-                            .is_some_and(CardPredicate::reads_power)
+                            .is_some_and(|p| predicate_reads(p, reads))
                 }
-                Operation::Power(PowerCda::GraveyardMatching(p)) => p.reads_power(),
+                Operation::Power(cda) => match cda.as_ref() {
+                    PowerCda::GraveyardMatching(p) => predicate_reads(p, reads),
+                    _ => false,
+                },
                 _ => false,
             })
+    }
+
+    fn reads_tapped(&self) -> bool {
+        fn condition_reads(c: &Condition) -> bool {
+            match c {
+                Condition::SourceTapped => true,
+                Condition::AnyOf(conditions) => conditions.iter().any(condition_reads),
+                _ => false,
+            }
+        }
+        self.reads_predicate(|p| p.tapped) || self.condition.as_ref().is_some_and(condition_reads)
     }
 }
 
@@ -146,10 +168,12 @@ enum Operation {
     Modify(Modification<LayerValue>),
     LandType(String),
     Name(String),
-    Power(PowerCda),
-    Buff(crate::state::card::StaticPtBuff),
+    // Expressions resolve before becoming per-target instructions. Indirection
+    // keeps their large predicates out of every small resolved modification.
+    Power(Box<PowerCda>),
+    Buff(Box<crate::state::card::StaticPtBuff>),
     Inherit,
-    CatalogTrigger(crate::state::ability::Ability),
+    CatalogTrigger(Box<crate::state::ability::Ability>),
 }
 #[derive(Clone, Debug, PartialEq)]
 struct Instruction {
@@ -193,6 +217,7 @@ impl<'a> Context<'a> {
             game,
             objects: BTreeMap::new(),
             reads_mana: false,
+            reads_tapped: false,
         };
         let mut nodes = Vec::new();
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
@@ -285,24 +310,10 @@ impl<'a> Context<'a> {
             }
         }
         let mut known = BTreeSet::new();
+        context.discover(&mut nodes, &mut known);
         for layer in Layer::ALL {
             let mut applied = BTreeSet::new();
             loop {
-                // Ability grants can introduce effects during evaluation. Each
-                // occurrence has provenance, so duplicate grants stay distinct.
-                for (&id, object) in &context.objects {
-                    for entry in &object.statics {
-                        if known.insert(entry.key.clone()) {
-                            if let Some(node) = context.node(id, entry) {
-                                context.reads_mana |= node
-                                    .condition
-                                    .as_ref()
-                                    .is_some_and(Condition::reads_mana_pools);
-                                nodes.push(node);
-                            }
-                        }
-                    }
-                }
                 let pending: Vec<_> = nodes
                     .iter()
                     .enumerate()
@@ -320,13 +331,31 @@ impl<'a> Context<'a> {
                     .iter()
                     .map(|&i| context.instructions(&nodes[i], layer))
                     .collect();
-                let selected = context.next_effect(&nodes, &pending, &instructions, layer);
-                let index = pending[selected];
-                if nodes[index].targets.is_none() && !instructions[selected].is_empty() {
-                    nodes[index].targets = Some(context.targets(&nodes[index]));
+                for selected in context.next_effects(&nodes, &pending, &instructions, layer) {
+                    let index = pending[selected];
+                    if nodes[index].targets.is_none()
+                        && nodes[index].parts.iter().any(|(part, _)| *part > layer)
+                        && !instructions[selected].is_empty()
+                    {
+                        // Instructions already resolved the affected set. Retain
+                        // it only for effects that continue into a later layer.
+                        let mut targets: Vec<_> = instructions[selected]
+                            .iter()
+                            .map(|instruction| instruction.target)
+                            .collect();
+                        targets.dedup();
+                        nodes[index].targets = Some(targets);
+                    }
+                    context.apply(&nodes[index], &instructions[selected]);
+                    // Only a static grant introduces layer nodes. Removing abilities
+                    // changes existence, which the pending filter checks directly.
+                    if instructions[selected].iter().any(|i| {
+                        matches!(i.operation, Operation::Modify(Modification::GrantStatic(_)))
+                    }) {
+                        context.discover(&mut nodes, &mut known);
+                    }
+                    applied.insert(index);
                 }
-                context.apply(&nodes[index], &instructions[selected]);
-                applied.insert(index);
             }
             if layer == Layer::ModifyPower {
                 for (&id, object) in &mut context.objects {
@@ -363,23 +392,73 @@ impl<'a> Context<'a> {
         }
         context
     }
+    fn discover(&mut self, nodes: &mut Vec<Node>, known: &mut BTreeSet<Vec<usize>>) {
+        // Occurrence provenance preserves duplicate grants, including statics
+        // discovered during layer 6 that start applying in a later layer.
+        for (&id, object) in &self.objects {
+            for entry in &object.statics {
+                if known.insert(entry.key.clone()) {
+                    if let Some(node) = self.node(id, entry) {
+                        self.reads_mana |= node
+                            .condition
+                            .as_ref()
+                            .is_some_and(Condition::reads_mana_pools);
+                        self.reads_tapped |= node.reads_tapped();
+                        nodes.push(node);
+                    }
+                }
+            }
+        }
+    }
+
     /// Select a pending effect under CR 613.8: dependencies first, then
-    /// characteristic-defining status and timestamps. Return its pending index.
-    fn next_effect(
+    /// characteristic-defining status and timestamps. Independent instructions
+    /// can all apply in one pass; dependent sets return one pending index so
+    /// discovery, applicability and dependency ordering are reevaluated.
+    fn next_effects(
         &self,
         nodes: &[Node],
         pending: &[usize],
         instructions: &[Vec<Instruction>],
         layer: Layer,
-    ) -> usize {
+    ) -> Vec<usize> {
         let timestamp_order = |&a: &usize| {
             let node = &nodes[pending[a]];
             (!node.cda, node.timestamp, &node.key)
         };
-        let pt_independent =
-            layer >= Layer::CharacteristicPower && pending.iter().all(|&i| !nodes[i].reads_power());
-        if pending.len() == 1 || (pt_independent && !cfg!(debug_assertions)) {
-            return (0..pending.len()).min_by_key(timestamp_order).unwrap();
+        let pt_independent = layer >= Layer::CharacteristicPower
+            && pending
+                .iter()
+                .all(|&i| !nodes[i].reads_predicate(CardPredicate::reads_power));
+        // These grants cannot remove generating statics or change instructions.
+        // Flying is the only keyword that a current predicate can inspect.
+        // Loss and static grants retain full dependency evaluation.
+        let ability_independent = layer == Layer::Ability
+            && pending
+                .iter()
+                .all(|&i| !nodes[i].reads_predicate(|p| p.flying))
+            && instructions.iter().flatten().all(|i| {
+                matches!(
+                    i.operation,
+                    Operation::CatalogTrigger(_)
+                        | Operation::Inherit
+                        | Operation::Modify(
+                            Modification::AddKeywords(_)
+                                | Modification::LoseKeywords(_)
+                                | Modification::Firebending(_)
+                                | Modification::GrantActivated(_)
+                                | Modification::GrantTriggered(_)
+                        )
+                )
+            });
+        let independent = pt_independent || ability_independent;
+        let ordered = || {
+            let mut order: Vec<_> = (0..pending.len()).collect();
+            order.sort_by_key(timestamp_order);
+            order
+        };
+        if pending.len() == 1 || (independent && !cfg!(debug_assertions)) {
+            return ordered();
         }
         let mut dependencies = vec![vec![false; pending.len()]; pending.len()];
         #[cfg(feature = "benchmark")]
@@ -409,7 +488,12 @@ impl<'a> Context<'a> {
                 }
             }
         }
-        debug_assert!(!pt_independent || dependencies.iter().flatten().all(|edge| !edge));
+        if independent {
+            // Keep the complete pairwise oracle in debug, once per independent
+            // batch rather than cloning the same board for every suffix.
+            debug_assert!(dependencies.iter().flatten().all(|edge| !edge));
+            return ordered();
+        }
         // Transitive reachability identifies only edges within dependency
         // loops; external prerequisites still precede the loop (CR 613.8b).
         let mut reach = dependencies.clone();
@@ -420,10 +504,10 @@ impl<'a> Context<'a> {
                 }
             }
         }
-        (0..pending.len())
+        vec![(0..pending.len())
             .filter(|&a| !(0..pending.len()).any(|b| dependencies[a][b] && !reach[b][a]))
             .min_by_key(timestamp_order)
-            .expect("dependency graph has a source component")
+            .expect("dependency graph has a source component")]
     }
 
     fn exists(&self, node: &Node) -> bool {
@@ -653,12 +737,14 @@ impl<'a> Context<'a> {
                 node.scope = b.scope.clone();
                 node.condition = b.condition.clone();
                 node.parts
-                    .push((Layer::ModifyPower, Operation::Buff(b.clone())));
+                    .push((Layer::ModifyPower, Operation::Buff(Box::new(b.clone()))));
             }
             StaticAbility::CharacteristicPower(cda) => {
                 node.cda = true;
-                node.parts
-                    .push((Layer::CharacteristicPower, Operation::Power(cda.clone())));
+                node.parts.push((
+                    Layer::CharacteristicPower,
+                    Operation::Power(Box::new(cda.clone())),
+                ));
             }
             StaticAbility::SetsLandType(set) => {
                 node.scope = StaticScope::All(set.predicate.clone());
@@ -711,7 +797,7 @@ impl<'a> Context<'a> {
                 node.scope = grant.scope.clone();
                 node.parts.push((
                     Layer::Ability,
-                    Operation::CatalogTrigger((*grant.ability).clone()),
+                    Operation::CatalogTrigger(grant.ability.clone()),
                 ));
             }
             StaticAbility::GrantsAnyColorManaAbility(predicate) => {
@@ -774,7 +860,7 @@ impl<'a> Context<'a> {
                 }
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
-                        ability: ability.clone(),
+                        ability: (**ability).clone(),
                         program: false,
                     })
                 }

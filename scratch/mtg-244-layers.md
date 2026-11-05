@@ -6,8 +6,9 @@ one PR for review; no merge, world freeze or training launch. Jack Heart approve
 a successor policy input the same day: "new input version is totally fine".
 Explicit v8 is implemented; fresh v6 and frozen saved versions remain unchanged.
 
-Status: implemented with focused correctness and mitigation evidence, awaiting
-isolated timing receipts and combined-head Gate checks. No human decision is
+Status: PR #427 published; first CI found a large engine regression and stale
+current-world Academy fixtures. Repair is in progress; isolated risk receipts
+and combined-head Gate checks remain outstanding. No human decision is
 missing. [Risk validation](mtg-244-risk-validation.md) owns measured results,
 configurations, exact sources and limitations; remaining acceptance is listed below.
 
@@ -19,26 +20,10 @@ replacement proposals and contextual source/entry callers; mana consumes the
 layered abilities, and naming owns large choices. Those adjacent refactors are
 not prerequisites for unrelated simple card definitions.
 
-## Counterexample to the draft design
-
-The pre-v8 design could not extend frozen model architectures in place:
-
-- `manabot/env/observation.py` fixes `FACT_KINDS = 10`.
-  The retained-input paths in `manabot/model/facts.py::FactEncoder` and
-  `manabot/model/state_records.py::SharedFactEncoder` allocate eleven kind
-  embeddings and reject larger IDs.
-- The retained v7 `manabot/model/shared_effects.py::SharedEffectEncoder` allocates four
-  detail-kind embeddings and admits only kinds 1–3 (keyword, subtype, color).
-  The draft's complete granted-ability
-  program needed structured tokens and numeric values beyond those categories.
-- Native/Python tensor parity alone would miss this: both encoders could agree
-  on arrays that policy inference rejects. Enlarging the tables in place changes
-  existing checkpoint parameter shapes; repurposing old kinds changes their
-  meaning. Hashing a whole granted program into one token also loses the shared
-  compositional vocabulary required by the Task.
-
-This counterexample stopped the earlier draft; explicit v8 now resolves it.
-Earlier focused engine passes did not establish end-to-end acceptance.
+The earlier draft could not add program kinds to frozen v5–v7 embeddings
+without changing saved parameter shapes and meanings. Explicit v8 resolves that
+counterexample; tensor parity alone never established model admission. The full
+prior plan is git blob `f8ff5bc693386baa3e247936684437da3ca0443d`.
 
 ## Approved successor input; implementation design
 
@@ -101,14 +86,17 @@ use timestamps inside loops. A continuing multi-layer effect retains its affecte
 set (613.6). Newly granted abilities carry their grant's timestamp (613.7a).
 CDAs precede ordinary setters; switches follow modifiers and counters in 7d.
 Keyword counters need their own timestamp, renewed on addition (613.7c).
-Tap predicates/source conditions require cache invalidation; `tap` now advances
-the characteristic revision, as does `untap`. Trigger candidates consume
+Tap predicates/source conditions require cache invalidation; `tap` and `untap`
+advance a separate tapped revision. Trigger candidates consume
 layered grants and suppression, with exact departed-object ability information.
 Mana writes retain the raw board unless any discovered layer node reads unspent
-mana, including nested conditions and granted statics. Finalized activation
-outputs and trigger indexes still refresh; debug recomputation checks both views.
-The isolated pool-write probe falls from 471 allocations to 10; tap invalidation
-is unchanged. This does not establish whole-game throughput.
+mana, including nested conditions and granted statics. Tap-state reads have the
+same explicit revision treatment. Fixed activations retain finalized views;
+conditional outputs and cost reductions refresh. Trigger event kinds follow raw
+layer dependencies, while matching reads current LKI. Debug recomputation checks
+all cached views and indexes. The earlier isolated pool-write mitigation reduced
+471 allocations to 10; the CI repair also removes independent tap rebuilds.
+These component changes do not establish whole-game throughput acceptance.
 
 ## Implementation correction — 2026-11-04
 
@@ -168,7 +156,31 @@ against the dependency computation.
 
 ## Delete — do not maintain
 
-Completed cuts; no remaining deletion targets identified:
+Completed cuts and current CI repair:
+
+- Replace repeated per-effect discovery scans and independent-effect suffix
+  comparisons with initial/grant-triggered discovery and one ordered independent
+  batch. Preserve dependency reevaluation and the complete debug pairwise oracle.
+- Replace unconditional tap-driven board eviction with a tap revision and
+  discovered reads; preserve dynamic activation refresh, layer-dependent trigger
+  kinds, stun counters, nested predicates and cloned-game isolation.
+- Replace BTreeMap-backed derived lookups with permanent-slot vectors, matching
+  the existing native identity convention. Keep immutable Arc views and holes.
+- Box the large expression/trigger variants of private layer operations so every
+  resolved per-target instruction need not reserve space for an 840-byte buff.
+  Rules payloads and serialized inputs are unchanged.
+- Replace per-permanent whole-board recomputation in trigger, mana, SBA and
+  observation scans with immutable batch reads. Keep scan order, the raw-board
+  oracle on every cache read and independent finalized-view debug comparisons;
+  singular reads retain their existing cache path.
+- Replace repeated board reads in CDA counts, shared-creature-type counts,
+  fixed mana totals and static play permissions/costs with the same batch API.
+  Entry replacements borrow layered abilities and retain their original indexes;
+  remove the cloned ability lists and reuse the play-permission helper for
+  flashback. These readers need no activation finalization. No exclusive tests
+  or fixtures are removed, and no deletion target remains from this cut.
+
+Earlier completed cuts:
 
 - `LayerBasis`, `ScopeView`, recursive stage readers and final-loss-filtered
   discovery are replaced by `layers::Context`. Unused `CardDefinition::has_static`
@@ -197,64 +209,35 @@ Completed cuts; no remaining deletion targets identified:
 
 ## Concept review — 2026-11-04
 
-Accepted amendment: **explicit input selection and failure recovery belong in
-the caller-facing usage contract.** This follows Jack Heart's successor-input
-approval, not a default migration or checkpoint conversion. The review used
-`45d9c7b0f` and the retained risk note; it supplied no new performance proof.
+Accepted amendment: explicit input selection and failure recovery belong in the
+caller-facing usage contract. Implemented in `docs/training.md#policy-inputs`
+and `manabot/README.md`; reconciliation at `64e6bca33` found no open product
+choice. This follows Jack Heart's successor-input approval, not a default
+migration or checkpoint conversion.
 
-Implemented in `docs/training.md#policy-inputs` and `manabot/README.md`:
+New layer-capable work selects v8 before collector/model construction. Older
+inputs reject before buffer writes/action prefix selection; a later observation
+can fail after earlier actions succeed. Preserve failed-run evidence, construct
+a compatible model for new work, and retain saved inputs and world admission.
+No rollback, weight reshaping, live swap or automatic restart is recovery.
+The recipe matches `test_v8_recipe_collector_and_evaluation_select_saved_input`.
 
-- A new layer-capable run explicitly selects v8 before collector/model creation.
-  V7's former “complete resolved effects” claim is scoped to representable payloads.
-- Older inputs reject at `validate_policy_input` before either encoder writes
-  buffers or selects an action prefix. A later state can fail after earlier
-  observations succeed; admission does not preflight a game or roll back actions.
-- Preserve failed-run configuration/evidence. New work can construct a compatible
-  v8 model; saved checkpoints retain saved inputs and ordinary world admission.
-  Version editing, weight reshaping, live swaps and automatic restart are not recovery.
-- Touched layouts match `ObservationSpace`: v5–v8 object widths 73/56/38,
-  relations 64 × 49; v7/v8 shared headers 128 × 18, members 2048 × 2,
-  details 512/4096 × 3 and default local facts 128/512 × 12.
-
-The usage example matches `test_v8_recipe_collector_and_evaluation_select_saved_input`.
-Recipe serialization, documented shapes and fresh/saved defaults were checked
-without playing games. Rejection wording/order was inspected in Python
-`ObservationEncoder.encode` and native `encode_into`/`validate_policy_input`.
-Reconciliation at `64e6bca33` confirms that the earlier review's documentation
-gap is closed, including the subsequent selected-shape and shared-fixture
-simplifications. The retained focused tests below cover those changes; this
-reconciliation adds no engine, policy-performance or learning-quality evidence.
-The retained-input, collector/checkpoint, program-isolation and source-departure
-witnesses cover the distinct failure modes described above. Review illustration:
-`scratch/concept-review.html` (not a browser capture or new execution evidence).
-
-Current concept-review outcome at `64e6bca33`: **nothing further to change;
-no open product choice**. The accepted documentation amendment is implemented,
-not a new implementation request. The review page is refreshed to show that
-disposition rather than its earlier proposed wording.
-
-The concrete interaction remains: select v8 for a new layer-capable run, inspect
-Beorn/Kellan through the shared characteristic view, choose and pay a legal
-activation, and resolve its captured effects even after the source changes.
-An older input can fail on a later observation; preserve its configuration and
-evidence, then construct a compatible v8 model for new work. No committed action
-is undone and no saved policy is relabeled. Current characteristics, captured
-programs and saved architecture identity have distinct lifetimes; merging them
-would revive the source-departure or checkpoint counterexamples. Derived caches
-remain internal machinery, not another caller-owned state model.
-
-Source inspection confirms the documented admission order in both encoders,
-captured-effects resolution, and the existing selection/ownership/rejection
-witnesses. It adds no test run or timing receipt. The next proof remains the
-isolated risk artifact and Gate's combined-head checks below; their absence
-limits readiness, not the settled product contract. No code, default, workflow
-boundary or accepted requirement changes in this review.
+The current view, captured programs and saved architecture have distinct
+lifetimes. Caches remain internal. `scratch/concept-review.html` illustrates
+this contract; it is not a browser capture or performance proof. Exact earlier
+review/check details remain in blob `f8ff5bc693386baa3e247936684437da3ca0443d`.
 
 ## Remaining work
 
-1. The first isolated `layer-risk.yml` artifact remains outstanding, with
-   publication as its execution prerequisite; the Task has no PR as of this
-   reconciliation. The configured producer runs original TLA baseline/before/after,
+Jack Heart's subsequent [speed direction](mtg-244-speed-direction.md) supersedes
+budget-only repair: profile and compare concrete hot-path designs, implement the
+strongest supported design, and aim to beat the pre-layer engine on matched
+ordinary workloads. Realign/loop-or-next must return to implementation as needed;
+this compress pass and a measurement checkpoint are not completion.
+
+1. Repair the failures retained in [CI repair](mtg-244-ci-repair.md). PR #427
+   exists; its first isolated workflow failed to acquire the reference commit.
+   Keep the original performance baseline and collect a corrected run. The configured producer runs original TLA baseline/before/after,
    dependency before/after, complete payments and seven full-policy cases per
    revision. Require full score digests/counts, search samples, bounded 128-step
    prefixes, native/Python encoding, inference/backward throughput and process
@@ -281,20 +264,18 @@ boundary or accepted requirement changes in this review.
    public precommit entrants as pending integration interfaces. That report
    supplies no combined-source proof or independently reserved input version.
 
-Retained validation at `fb264f7c7`: 17 injected-receipt checks, infrastructure
-collection and Ruff/diff checks passed. The unchanged engine/model evidence at
-`b2fb06cba:scratch/mtg-244-layers.md` retains
-27 debug Rust / 22 Python passes (two optimizer cases excluded), and payment
-bundle `88d6abd34d8b56a9606c3ec58696063955d08226` retains the debug payment proof,
-14 inventories, atomic wheel installs, rustfmt/actionlint and prior receipt tests.
-Full suites and isolated timing remain with the producers above. No merge,
-training launch or clean-performance acceptance is implied.
+Earlier validation commands and outcomes remain at
+`64e6bca33731010843531fff4cdabd177d08bb5e:scratch/mtg-244-layers.md` and
+payment bundle `88d6abd34d8b56a9606c3ec58696063955d08226`.
+Current repair results and remaining isolated acceptance are in
+[mtg-244-ci-repair.md](mtg-244-ci-repair.md); earlier passes do not supersede
+its first-publication CI failures.
 
-Retained validation at `64e6bca33`: the layer-input/shared-effect pytest selection
-passed 24 cases, including the two existing bounded learner/export smokes;
-Ruff and diff checks passed. These results were not rerun for reconciliation.
-
-Check (2026-11-04): `uv run --no-sync python -` (extracted documentation recipe, serialization, fresh/saved defaults and v5–v8 ObservationSpace layout assertions) — passed without games or inference; `git diff --check` — passed. Full suites remain with Gate and isolated comparative timing with `layer-risk.yml`.
+Compress validation, debug `CARGO_PROFILE_DEV_OPT_LEVEL=1`, root commands:
+- `cargo test --manifest-path managym/Cargo.toml -j 2 --test rules_tests cr_613_continuous_effects`: 22 passed.
+- `cargo test --manifest-path managym/Cargo.toml -j 2 -p managym-cards --test cards -- iroh hakoda zhao lieutenant suki toph_enters team_avatar beorn kellan`: 25 passed after replacing Zhao's obsolete layer-6-removes-layer-4 assertion with retained type and fork-departure checks.
+- `cargo test --manifest-path managym/Cargo.toml -j 2 --lib -- cache_tests flow::mana::tests`: 3 passed. Format/diff checks pass; Gate owns full suites and isolated timings.
+- Release wheel rebuilt via the documented root command and installed atomically; `uv run --extra dev pytest tests/model/test_layer_input.py -q -k native_python_text_forward_backward_and_reload`: 3 passed.
 
 ## Preserved evidence
 

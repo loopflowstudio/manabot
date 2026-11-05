@@ -307,8 +307,8 @@ impl Game {
         controller: PlayerId,
     ) -> crate::state::mana::Mana {
         let mut produced = crate::state::mana::Mana::default();
-        for permanent_id in self.iter_battlefield_permanents(controller) {
-            for ability in &self.layer_view(permanent_id).triggered_mana_abilities {
+        for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
+            for ability in &view.triggered_mana_abilities {
                 if self.permanent_matches_predicate(tapped, &ability.predicate) {
                     produced.add(&ability.mana);
                 }

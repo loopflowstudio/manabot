@@ -237,6 +237,11 @@ pub enum PendingChoice {
 /// - `mana_pools`: both players' pools, which a static condition may read
 ///   ("as long as you have six or more unspent mana"). The cache compares it
 ///   only while a static source with such a condition is on the battlefield.
+/// - `tapped`: tap/untap state. Layers follow it only when a scope,
+///   condition or value predicate reads it. Dynamic activation finalization
+///   refreshes independently; trigger kinds follow the raw board. Removing a
+///   stun counter also advances
+///   `characteristics`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
 ///
@@ -249,6 +254,7 @@ pub enum PendingChoice {
 pub(crate) struct Revisions {
     pub characteristics: u64,
     pub mana_pools: u64,
+    pub tapped: u64,
     pub triggers: u64,
 }
 
@@ -379,7 +385,7 @@ impl TrackedState {
 
     /// Returns whether the permanent was untapped.
     pub(crate) fn tap(&mut self, permanent_id: PermanentId) -> bool {
-        self.revisions.characteristics += 1;
+        self.revisions.tapped += 1;
         match self.permanent_untracked(permanent_id) {
             Some(permanent) if !permanent.tapped => {
                 permanent.tap();
@@ -391,7 +397,7 @@ impl TrackedState {
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
     pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
-        self.revisions.characteristics += 1;
+        self.revisions.tapped += 1;
         let Some(permanent) = self.permanent_untracked(permanent_id) else {
             return;
         };
@@ -513,6 +519,7 @@ impl DerefMut for TrackedState {
     fn deref_mut(&mut self) -> &mut GameState {
         self.revisions.characteristics += 1;
         self.revisions.mana_pools += 1;
+        self.revisions.tapped += 1;
         self.revisions.triggers += 1;
         &mut self.state
     }
