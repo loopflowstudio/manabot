@@ -66,3 +66,7 @@ def test_discovered_studies_keep_the_evaluation_callback_importable(
     callback = evaluation_spec(job).play
     assert callback.module == "experiments.learning_signal"
     assert callback.load(job.repo) is learning_signal.play_deal
+    # A rented worker installs only what the job names; the writer needs this extra.
+    assert "--extra evaluation" in (job.setup or "")
+    assert "--extra evaluation" in job.command
+    assert job.max_usd is not None

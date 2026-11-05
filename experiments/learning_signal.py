@@ -32,7 +32,7 @@ import torch
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TrainingJob
+from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
@@ -148,15 +148,21 @@ def evaluation_jobs(
     if not matchups:
         return []
     benchmark = Benchmark(name=name, environment=_environment(), matchups=matchups)
-    return [
-        evaluation(
-            benchmark,
-            play=play_deal,
-            workers=EVALUATION_WORKERS,
-            max_hours=hours,
-            max_usd=Decimal(str(usd)),
-        )
-    ]
+    job = evaluation(
+        benchmark,
+        play=play_deal,
+        workers=EVALUATION_WORKERS,
+        max_hours=hours,
+        max_usd=Decimal(str(usd)),
+        setup=machine_setup(" --extra evaluation"),
+    )
+    # Etude's default command omits the extra holding its result writer (duckdb).
+    command = job.command.replace(
+        "uv run python",
+        f"{TOOLCHAIN_ENV}\nuv run --locked --extra evaluation python",
+        1,
+    )
+    return [job.model_copy(update={"command": command})]
 
 
 def _registration(

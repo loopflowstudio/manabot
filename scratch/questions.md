@@ -173,6 +173,9 @@ the frozen regime, because queue mode divides cohort dollars by `parallel - live
 with 3 pending. Rerunning as per-arm all-or-nothing launches with run ids `<id>-r2`;
 same jobs, seeds and source. Keep the six failed ids in the report's failure table.
 
+The first study 1 evaluation job (`batch-closure-v1-fec36e74289b-b`) failed at its
+result writer: the job lacked the `evaluation` extra. Fixed before any game was scored.
+
 Exists: closure separation, docs, tests, both experiment files, calibration.
 Remaining:
 - Commit, then freeze study 1 and study 2 at that revision on `fc6ffb-l4`; reconcile
