@@ -8,14 +8,18 @@ at the frozen runs: its regime ids and this file's experiment keep it out of
 
 Runs after the protocol merges, before `experiments.tla_frontier.runs`:
 
-    uv run etude launch experiments/tla_frontier_calibration.py \
-        --revision COMMIT --rent <gpu> --cohort tla-frontier-c5fba4-calibration \
-        --parallel 2 --max-usd 2
-    uv run python -m experiments.tla_frontier_calibration --source <store>
+    doppler run -p etude -c prd -- doppler run -p manabot -c prd \
+        --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
+        --with "etude-sdk[s3,eval]==0.2.14" etude launch \
+        experiments/tla_frontier_calibration.py --revision COMMIT --rent <gpu> \
+        --cohort tla-frontier-c5fba4-calibration --parallel 2 --max-usd 2
+    doppler run -p manabot -c prd -- uv run --extra artifacts --extra evaluation \
+        python -m experiments.tla_frontier_calibration --source <store>
 
 Update timing starts from a fresh policy, so its games need not last as long as
 a trained policy's. The reading is a median that sets aside the first update's
-warm-up, not a forecast of late-run cost.
+warm-up, not a forecast of late-run cost. The protocol's launch gate compares
+the w256 reading against 1,500 s/update.
 """
 
 from __future__ import annotations
@@ -37,8 +41,8 @@ from manabot.training.regime import TrainingRegime, TrainSelfPlay
 
 EXPERIMENT = Path(__file__).stem
 UPDATES = 5
-# 2,400 s stay usable under the 600 s stop reserve: one update at the slowest
-# cost the protocol would still accept, and all five at MTG-213's 150 s.
+# 2,400 s stay usable under the 600 s stop reserve: one update well past the
+# protocol's 1,500 s launch gate, and all five at MTG-213's 150 s.
 WALL_SECONDS = 3600.0
 # USD2 in total, inside the protocol's reserve. Etude's 15-minute setup allowance
 # and these hours fit one size's ceiling at the USD0.67/hour the training budget

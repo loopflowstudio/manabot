@@ -17,10 +17,14 @@ pilot's source and artifacts, is mirrored here rather than shared.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
 import os
 from pathlib import Path
+import shutil
+from tempfile import TemporaryDirectory
 from typing import Literal
 
 from etude.eval.match import Row, Tables
@@ -66,6 +70,7 @@ GAMES_PER_PAIR = 4
 EVALUATION_WORKERS = 28
 EVALUATION_HOURS = 1.75
 EVALUATION_PASS_USD = Decimal("2")
+EVALUATION_ATTEMPTS = 3
 HEURISTIC: HeuristicSpec = {
     "kind": "heuristic",
     "max_actions": 64,
@@ -341,10 +346,13 @@ def eval(state: ExperimentState) -> list[Job]:
         play=tla_frontier.play,
         workers=EVALUATION_WORKERS,
         max_hours=EVALUATION_HOURS,
-        # One pass's ceiling; the operator keeps the cumulative evaluation
-        # spend under `protocol.evaluation_usd`.
+        # One pass's ceiling across its attempts; the operator keeps the
+        # cumulative evaluation spend under `protocol.evaluation_usd`.
         max_usd=EVALUATION_PASS_USD,
-        max_attempts=1,
+        # Etude retries only lost or refused machines, resuming the same run and
+        # skipping stored matches, so no game result can be replaced, and a lost
+        # rental does not end the watch loop.
+        max_attempts=EVALUATION_ATTEMPTS,
         setup=machine_setup(" --extra evaluation"),
     )
     # Etude's default command omits the extra holding its result writer (duckdb).
@@ -413,6 +421,25 @@ def _registration(
     ), path
 
 
+@contextmanager
+def _memory_journal(retained: Path) -> Iterator[Path]:
+    """A pair's arena directory in memory, copied to `retained` even on failure.
+
+    The arena syncs every record, which a rented container disk serves at about
+    .1 s, and that time counts against the game limit, so a game a slow size
+    could finish would fail instead. `experiments.learning_signal` measured this
+    and is mirrored here because its source is hashed into retained environments.
+    """
+    memory = Path("/dev/shm")
+    with TemporaryDirectory(dir=memory if memory.is_dir() else None) as journal:
+        out_dir = Path(journal) / "deal"
+        try:
+            yield out_dir
+        finally:
+            if out_dir.is_dir():
+                shutil.copytree(out_dir, retained, dirs_exist_ok=True)
+
+
 def play(match: Match) -> Tables:
     """One sampled pair/deal, four policy/deck/seat legs, with failure denominators."""
     torch.set_num_threads(1)
@@ -450,21 +477,23 @@ def play(match: Match) -> Tables:
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
-    result = evaluate(
-        EvaluationRequest(
-            key=key,
-            candidate=candidate,
-            opponent=opponent,
-            checkpoint_paths=paths,
-            deal_seeds=(pair.deal,),
-            authored_matchup=matchup,
-            game_seconds=protocol.game_seconds,
-            max_commands=protocol.max_commands,
-            bootstrap_seed=protocol.bootstrap_seed,
-            purpose="tla-frontier-fixed-corpus",
-        ),
-        out_dir=Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key,
-    )
+    retained = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+    with _memory_journal(retained) as out_dir:
+        result = evaluate(
+            EvaluationRequest(
+                key=key,
+                candidate=candidate,
+                opponent=opponent,
+                checkpoint_paths=paths,
+                deal_seeds=(pair.deal,),
+                authored_matchup=matchup,
+                game_seconds=protocol.game_seconds,
+                max_commands=protocol.max_commands,
+                bootstrap_seed=protocol.bootstrap_seed,
+                purpose="tla-frontier-fixed-corpus",
+            ),
+            out_dir=out_dir,
+        )
     by_leg = {row.leg: row for row in result.rows}
     rows: list[Row] = []
     for leg in range(GAMES_PER_PAIR):

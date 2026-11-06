@@ -8,7 +8,13 @@ missing, because no run can still produce it; every other absent comparison
 leaves the analysis incomplete and its reading unknown. A failed run keeps its
 learning and strength readings at its last stored checkpoint, with `state`
 beside them, but its head-to-head score is not equal compute, so `scale` needs
-both runs finished.
+both runs finished under the wall budget, neither stopped by the update cap.
+
+A failed game stays failed: nothing replaces it and it leaves the denominator
+unchanged. Its comparison has no `score`, but once every pair has a match
+receipt its `result` holds `worst` and `best`, which count each unscored leg as
+a loss and as a win, and readings use those bounds. Bounds rather than
+exclusion, because failures are not neutral: limits and kills fall on long games.
 
 Each pair's four correlated legs move together, and one set of bootstrap
 indices serves every comparison. Etude keeps each checkpoint's wall time only
@@ -52,10 +58,26 @@ from experiments.tla_pilot_analysis import (
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
+from manabot.training.regime import TrainSelfPlay
+
+
+class Bounded(StrictModel):
+    """A played comparison's score and its range over its unscored legs.
+
+    `score` needs every leg valid. `worst` and `best` count each unscored leg
+    as 0 and as 1; with no failures all three are equal.
+    """
+
+    score: RateInterval | None
+    worst: RateInterval
+    best: RateInterval
 
 
 class Comparison(StrictModel):
-    """One scheduled slot. An unreached slot expects no games, so it counts none."""
+    """One scheduled slot. An unreached slot expects no games, so it counts none.
+
+    `result` needs every pair's match receipt; None means not yet played.
+    """
 
     tag: str
     update: int | None
@@ -63,7 +85,7 @@ class Comparison(StrictModel):
     unreached: bool
     counts: Counts = Counts()
     pairs: list[PairResult] = []
-    score: RateInterval | None = None
+    result: Bounded | None = None
 
 
 class TrainingPoint(StrictModel):
@@ -80,8 +102,8 @@ class SizeReading(StrictModel):
     state: str | None
     endpoint: int | None
     training: list[TrainingPoint]
-    against_initial: RateInterval | None
-    against_heuristic: RateInterval | None
+    against_initial: Bounded | None
+    against_heuristic: Bounded | None
     learned: bool | None
 
 
@@ -93,10 +115,34 @@ class FrontierAnalysis(StrictModel):
     comparisons: list[Comparison]
     sizes: list[SizeReading]
     # The large size's score at equal wall-clock compute, the primary scale
-    # reading. None unless both runs finished; `comparisons` keeps the score.
-    scale: RateInterval | None
+    # reading. None unless both runs finished below the update cap;
+    # `comparisons` keeps the score.
+    scale: Bounded | None
     complete: bool
     issues: list[str]
+
+
+def _worst(pair: PairResult) -> float:
+    """The pair's mean game score with every unscored leg counted as a loss."""
+    return (pair.counts.wins + pair.counts.draws / 2) / pair.counts.expected
+
+
+def _best(pair: PairResult) -> float:
+    """The pair's mean game score with every unscored leg counted as a win."""
+    unscored = pair.counts.expected - pair.counts.valid
+    return _worst(pair) + unscored / pair.counts.expected
+
+
+def _bounded(pairs: list[PairResult], indices: npt.NDArray[np.int64]) -> Bounded:
+    """Whole-pair intervals; shared `indices` move a bound only by the legs it reassigns."""
+    scores = [pair.score for pair in pairs if pair.score is not None]
+    return Bounded(
+        score=bootstrap_mean_interval(scores, indices)
+        if len(scores) == len(pairs)
+        else None,
+        worst=bootstrap_mean_interval([_worst(pair) for pair in pairs], indices),
+        best=bootstrap_mean_interval([_best(pair) for pair in pairs], indices),
+    )
 
 
 def _comparison(
@@ -107,7 +153,7 @@ def _comparison(
     columns: tuple[str, ...],
     indices: npt.NDArray[np.int64],
 ) -> Comparison:
-    """Score a whole block of pairs only; a partial block keeps its counts."""
+    """Read a whole block of receipts; a partial block keeps its counts."""
     name = planned.matchup.name if planned.matchup else None
     if planned.unreached:
         return Comparison(
@@ -127,7 +173,7 @@ def _comparison(
         pair_result(db, pair, key, environment_id, columns)
         for pair, key in zip(protocol.pairs, keys, strict=True)
     ]
-    scores = [pair.score for pair in pairs if pair.score is not None]
+    played = all(pair.counts.attempted_matches for pair in pairs)
     return Comparison(
         tag=planned.tag,
         update=planned.update,
@@ -135,10 +181,17 @@ def _comparison(
         unreached=False,
         counts=total_counts([pair.counts for pair in pairs]),
         pairs=pairs,
-        score=bootstrap_mean_interval(scores, indices)
-        if len(scores) == len(pairs)
-        else None,
+        result=_bounded(pairs, indices) if played else None,
     )
+
+
+def _learned(initial: Bounded | None) -> bool | None:
+    """Whether the endpoint beat its initialization under every failed-leg outcome."""
+    if initial is None:
+        return None
+    if initial.worst.lower > 0.5:
+        return True
+    return False if initial.best.lower <= 0.5 else None
 
 
 def _training_points(
@@ -177,15 +230,17 @@ def _reading(
         state=run.state if run else None,
         endpoint=end,
         training=_training_points(db, run),
-        against_initial=initial.score,
-        against_heuristic=heuristic.score,
-        learned=initial.score.lower > 0.5 if initial.score else None,
+        against_initial=initial.result,
+        against_heuristic=heuristic.result,
+        learned=_learned(initial.result),
     )
 
 
 def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAnalysis:
     """Read the whole experiment; the two sizes are one cohort of comparisons."""
-    _, protocol = frozen()
+    regimes, protocol = frozen()
+    stage = regimes[SIZES[0]].stages[0]
+    assert isinstance(stage, TrainSelfPlay)
     environment_id = environment(protocol).identity
     columns = game_columns(db)
     indices = np.random.default_rng(protocol.bootstrap_seed).integers(
@@ -203,16 +258,30 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         for reading in sizes
         if reading.endpoint is None
     ]
-    equal_compute = all(reading.state == "finished" for reading in sizes)
-    if not equal_compute:
+    finished = all(reading.state == "finished" for reading in sizes)
+    if not finished:
         issues.append("A run did not finish; no equal-compute scale reading.")
+    # The cap is a second stop: a size reaching it spent less than the wall budget.
+    capped = any(reading.endpoint == stage.updates for reading in sizes)
+    if capped:
+        issues.append("A run hit the update cap; no equal-compute scale reading.")
     sources = {
         source for c in comparisons for pair in c.pairs for source in pair.sources
     }
     if len(sources) != 1 or None in sources:
         issues.append("Evaluation source is missing or differs across the cohort.")
-    if any(c.score is None and not c.unreached for c in comparisons):
+    if any(c.result is None and not c.unreached for c in comparisons):
         issues.append("The frozen comparison schedule is incomplete.")
+    receipted = [
+        pair.counts
+        for c in comparisons
+        for pair in c.pairs
+        if pair.counts.attempted_matches
+    ]
+    unscored = sum(counts.expected - counts.valid for counts in receipted)
+    if unscored:
+        played = sum(counts.expected for counts in receipted)
+        issues.append(f"{unscored} of {played} played games have no score.")
     endpoints = next(c for c in comparisons if c.tag == "endpoint-head-to-head")
     return FrontierAnalysis(
         protocol_sha256=file_sha256(PROTOCOL),
@@ -220,7 +289,7 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         counts=total_counts([c.counts for c in comparisons]),
         comparisons=comparisons,
         sizes=sizes,
-        scale=endpoints.score if equal_compute else None,
+        scale=endpoints.result if finished and not capped else None,
         complete=not issues,
         issues=issues,
     )

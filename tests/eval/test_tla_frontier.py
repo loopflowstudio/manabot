@@ -8,6 +8,9 @@ import json
 from pathlib import Path
 
 import duckdb
+from etude.eval.match import Tables, evaluate
+from etude.eval.query import statsdb
+from etude.eval.records import Match
 from etude.experiment import (
     Checkpoint,
     Checkpoints,
@@ -19,6 +22,8 @@ from etude.experiment import (
 from etude.jobs import evaluation_spec
 from etude.launch.job_file import read_job_file
 from etude.launch.records import Run
+from etude.page import build, render
+from etude.run.errors import EtudeError
 from etude.run.records import ArtifactRef
 from etude.train.records import Step
 from etude.train.run import track
@@ -39,7 +44,7 @@ from experiments.tla_frontier import (
     runs,
     size_run,
 )
-from experiments.tla_frontier_analysis import analyze
+from experiments.tla_frontier_analysis import FrontierAnalysis, analyze
 from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
     MAX_HOURS,
@@ -128,7 +133,7 @@ def _tracked(
             run.log(metrics, updates=update)
         for update in checkpoints:
             path = source / f"{job.regime.id}-u{update}.pt"
-            path.write_text(f"synthetic export {update}")
+            path.write_text(f"synthetic export {job.regime.id} {update}")
             run.checkpoint(path, updates=update)
     finally:
         run.finish()
@@ -232,7 +237,7 @@ def test_running_runs_evaluate_reached_milestones_only() -> None:
     assert not any("final" in name for name in names)
     (job,) = eval(state)
     assert job.max_usd == Decimal("2")
-    assert job.max_attempts == 1
+    assert job.max_attempts == 3
 
 
 def test_evaluation_job_prepares_a_stock_rented_machine() -> None:
@@ -333,6 +338,20 @@ def test_cuda_peaks_are_absent_off_cuda_and_read_on_it(
     }
 
 
+def test_arena_journal_stays_off_disk_and_is_retained_after_failure(
+    tmp_path: Path,
+) -> None:
+    retained = tmp_path / "arena" / "match"
+    with pytest.raises(RuntimeError):
+        with tla_frontier._memory_journal(retained) as out_dir:
+            assert not out_dir.is_relative_to(tmp_path)
+            out_dir.mkdir()
+            (out_dir / "game.jsonl").write_text("record")
+            raise RuntimeError("the game died")
+    assert not out_dir.exists()
+    assert (retained / "game.jsonl").read_text() == "record"
+
+
 def test_training_runs_admit_milestones_and_wall_budget() -> None:
     launched = runs("HEAD")
     assert [run.job.name for run in launched] == [
@@ -340,6 +359,7 @@ def test_training_runs_admit_milestones_and_wall_budget() -> None:
         "tla-frontier-c5fba4-w256",
     ]
     assert {run.job.until for run in launched} == {"updates=3000"}
+    assert {run.job.max_attempts for run in launched} == {1}
 
 
 def test_discovery_keeps_evaluation_callback_importable() -> None:
@@ -414,6 +434,13 @@ def _outcomes(
     return keys
 
 
+def _endpoint_score(report: FrontierAnalysis) -> float:
+    """The endpoint head-to-head's score, reported even without a scale reading."""
+    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    assert played.result is not None and played.result.score is not None
+    return played.result.score.mean
+
+
 def test_analysis_reads_learning_and_scale_past_unreached_milestones(
     frontier_db: duckdb.DuckDBPyConnection,
 ) -> None:
@@ -421,7 +448,9 @@ def test_analysis_reads_learning_and_scale_past_unreached_milestones(
     keys = _outcomes(frontier_db, state)
     report = analyze(state, frontier_db)
     assert report.complete and report.issues == []
-    assert report.scale is not None and report.scale.mean == 0.75
+    assert report.scale is not None and report.scale.score is not None
+    assert report.scale.score.mean == 0.75
+    assert report.scale.worst == report.scale.best == report.scale.score
     for reading in report.sizes:
         assert reading.learned is True
         assert reading.against_heuristic is not None
@@ -452,8 +481,7 @@ def test_failed_size_keeps_its_reach_but_no_equal_compute_scale(
     assert small.learned is True
     assert report.scale is None and not report.complete
     assert report.issues == ["A run did not finish; no equal-compute scale reading."]
-    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
-    assert played.score is not None and played.score.mean == 0.75
+    assert _endpoint_score(report) == 0.75
 
 
 def test_failed_size_without_checkpoints_has_no_endpoint() -> None:
@@ -501,3 +529,164 @@ def test_analysis_of_running_sizes_claims_nothing(
     assert all(reading.learned is None for reading in report.sizes)
     # While a run may still go on, later milestones are pending, never unreached.
     assert not any(c.unreached for c in report.comparisons)
+
+
+def _fail_leg(db: duckdb.DuckDBPyConnection, key: str, leg: int) -> None:
+    """One leg of a stored match, recorded as a game the limit killed."""
+    db.execute(
+        "UPDATE games SET valid = false, score = NULL, terminated = false, "
+        "failure = 'game limit' WHERE match = ? AND game = ?",
+        [key, leg],
+    )
+
+
+def _fail_match(db: duckdb.DuckDBPyConnection, key: str) -> None:
+    """A match whose callback raised: a failed receipt and no game rows."""
+    db.execute("DELETE FROM games WHERE match = ?", [key])
+    db.execute(
+        "UPDATE matches SET state = 'failed', error = 'died' WHERE match = ?", [key]
+    )
+
+
+def test_failed_legs_bound_readings_instead_of_erasing_them(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state)
+    _fail_leg(frontier_db, keys["w256 final vs w64 final"][0], 0)
+    _fail_leg(frontier_db, keys["w64 final u1300 vs w64 u0"][0], 0)
+    report = analyze(state, frontier_db)
+    played = 64 * len(keys)
+    assert not report.complete
+    assert report.issues == [f"2 of {played} played games have no score."]
+    assert report.counts.expected == played and report.counts.failed == 2
+    scale = report.scale
+    assert scale is not None and scale.score is None
+    # One pair of 16 falls from 3/4 to 2/4, or stays 3/4 if the win had stood.
+    assert scale.worst.mean == 0.75 - 0.25 / 16 and scale.best.mean == 0.75
+    small = report.sizes[0]
+    assert small.learned is True
+    assert small.against_initial is not None and small.against_initial.score is None
+
+
+def test_a_failed_match_with_no_rows_counts_all_its_legs_unscored(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state)
+    _fail_match(frontier_db, keys["w64 final u1300 vs heuristic"][0])
+    report = analyze(state, frontier_db)
+    assert "The frozen comparison schedule is incomplete." not in report.issues
+    assert f"4 of {64 * len(keys)} played games have no score." in report.issues
+    assert report.counts.failed_matches == 1
+    strength = report.sizes[0].against_heuristic
+    assert strength is not None and strength.score is None
+    assert strength.worst.mean == 0.75 - 0.75 / 16
+    assert strength.best.mean == 0.75 + 0.25 / 16
+
+
+def test_a_bound_too_wide_to_decide_leaves_learning_unknown(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state)
+    for key in keys["w64 final u1300 vs w64 u0"][:12]:
+        _fail_match(frontier_db, key)
+    report = analyze(state, frontier_db)
+    small = report.sizes[0]
+    assert small.learned is None
+    assert small.against_initial is not None
+    assert small.against_initial.worst.lower < 0.5 < small.against_initial.best.lower
+
+
+def test_failed_legs_cannot_rescue_a_clear_negative_reading(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state, wins=0)
+    _fail_match(frontier_db, keys["w64 final u1300 vs w64 u0"][0])
+    assert analyze(state, frontier_db).sizes[0].learned is False
+
+
+def test_an_endpoint_at_the_update_cap_is_not_equal_compute(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 3000, LARGE: 450})
+    _outcomes(frontier_db, state)
+    report = analyze(state, frontier_db)
+    assert report.scale is None and not report.complete
+    assert report.issues == [
+        "A run hit the update cap; no equal-compute scale reading."
+    ]
+    assert _endpoint_score(report) == 0.75
+    assert [reading.learned for reading in report.sizes] == [True, True]
+
+
+def _played(match: Match) -> Tables:
+    """Three of four legs won by the first player, in `play`'s result shape."""
+    return {
+        "games": [
+            {
+                "seat": seat,
+                "game": leg,
+                "game_seat": (leg + seat) % 2,
+                "score": float((leg < 3) != bool(seat)),
+                "valid": True,
+                "attempted": True,
+                "terminated": True,
+                "truncated": False,
+                "failure": None,
+                "seconds": 1.0,
+            }
+            for leg in range(4)
+            for seat in (0, 1)
+        ]
+    }
+
+
+def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> None:
+    """`etude report` draws report(), and analysis bounds Etude's real failed match."""
+    file = ROOT / "experiments/tla_frontier.py"
+    small, large = read_job_file(file, ["--revision", "HEAD"])
+    _tracked(small, tmp_path, {50: {"loss": 0.1}}, (0, 25, 50))
+    _tracked(large, tmp_path, {25: {"loss": 0.1}}, (0, 25))
+    state = observe(tmp_path, EXPERIMENT)
+    benchmark = evaluation_spec(eval(state)[0]).tournament
+    matchups = {matchup.name: matchup.matches() for matchup in benchmark.matchups}
+    died = matchups["w256 final vs w64 final"][0]
+
+    def play(match: Match) -> Tables:
+        if match.key == died.key:
+            raise RuntimeError("the worker died")
+        return _played(match)
+
+    def run(name: str, matches: list[Match]) -> None:
+        evaluate(
+            experiment=EXPERIMENT,
+            environment=benchmark.environment,
+            matches=matches,
+            play=play,
+            run=name,
+            directory=tmp_path,
+        )
+
+    # A pass ends at a raising match, so the failure gets its own eval run here.
+    run("fixture-eval", [m for ms in matchups.values() for m in ms if m != died])
+    with pytest.raises(EtudeError, match="match_failed"):
+        run("fixture-failed", [died])
+    page = build(tmp_path, file)
+    assert page.cells
+    html = render(page)
+    for title in (
+        "Width 64 vs fixed heuristic",
+        "Width 256 vs fixed heuristic",
+        "Width 256 vs width 64 at equal updates",
+    ):
+        assert title in html
+    with statsdb(EXPERIMENT, tmp_path) as db:
+        report = analyze(state, db)
+    played = sum(len(ms) for ms in matchups.values()) * 4
+    assert report.issues == [f"4 of {played} played games have no score."]
+    assert report.scale is not None and report.scale.score is None
+    assert report.scale.worst.mean == 0.75 - 0.75 / 16
+    assert report.scale.best.mean == 0.75 + 0.25 / 16

@@ -55,21 +55,32 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   machine at a time, so the launch names two:
 
   ```bash
-  uv run etude launch experiments/tla_frontier.py --revision <frozen> --rent <gpu> \
-      --cohort tla-frontier-c5fba4 --parallel 2 --max-usd 76
+  doppler run -p etude -c prd -- doppler run -p manabot -c prd \
+      --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
+      --with "etude-sdk[s3,eval]==0.2.14" etude launch experiments/tla_frontier.py \
+      --revision <frozen> --rent <gpu> --cohort tla-frontier-c5fba4 \
+      --parallel 2 --max-usd 76
   ```
+
+  The nested Doppler projects supply provider and artifact access. Etude 0.2.14
+  is the control client only: the locked 0.2.12 cannot read the launcher's Vast
+  provider rows, and workers keep 0.2.12.
 - **Hardware.** Both sizes run on the same GPU model, chosen at launch and
   recorded before any score is read; different models void the equal-compute
-  reading. USD38 over 56 hours admits at most USD0.67/hour, which covers
-  the USD0.59/hour L4 and A40 of earlier receipts but not the USD0.96/hour
-  RTX 5090, where the dollar ceiling would stop training first.
+  reading. Etude's GPU templates set a minimum vCPU count, not an exact one, and
+  collection dominates update cost, so the same check records both pods' vCPUs.
+  A difference is reported and does not void the reading: equal wall at one
+  price is still equal dollars. USD38 over 56 hours admits at most USD0.67/hour,
+  which covers the USD0.59/hour L4 and A40 of earlier receipts but not the
+  USD0.96/hour RTX 5090, where the dollar ceiling would stop training first.
 - **Calibration.** Before the training runs, and after this protocol merges,
   `experiments/tla_frontier_calibration.py` runs each size for five updates on
   the chosen GPU: at most USD1 and 1.2 hours per size, USD2 in total, inside the
   reserve. It reads seconds per update and CUDA peak, under its own experiment
-  and regime ids, so it is never a frontier run and plays no comparison. If w256
-  cannot fit or would reach too few updates, the size changes in a new protocol
-  version, still before any scoring.
+  and regime ids, so it is never a frontier run and plays no comparison.
+  W256 launches at 1,500 s/update or less, about 130 updates in 54 hours, which
+  leaves head-to-heads at 25, 50 and 100. If it cannot fit or reads above that
+  line, the size changes in a new protocol version, still before any scoring.
 
 ## Evaluation schedule
 
@@ -90,14 +101,20 @@ failed run, so its reach is still played.
 
 Evaluation runs on rented CPU through Etude while training continues, so
 progress is visible as it goes. Each pass is one 32-vCPU rental with 28
-workers, capped at USD2 and 1.75 hours plus setup; cumulative evaluation spend
-is capped at USD12. Each game has a 600-second wall limit, enforced by killing
-the game and counting it failed. MTG-213's 120 seconds would penalize the
-larger network for its own latency: one thread takes about 0.4 s per w256
-decision against 0.15 s at w64, across games averaging 180 decisions. Milestones
-past a size's endpoint stay in the schedule as unreached slots; failed or
-truncated games stay failed in their scheduled slots and are never replaced, so
-no pass uses Etude's `--retry-failed`.
+workers, capped at USD2 and 1.75 hours plus setup across up to three attempts;
+cumulative evaluation spend is capped at USD12. Etude retries only a refused or
+lost machine, resuming the same run and skipping stored matches, so no game
+result can be replaced; training keeps no automatic retry.
+
+Each game has a 600-second wall limit, enforced by killing the game and counting
+it failed. MTG-213's 120 seconds would penalize the larger network for its own
+latency: one thread takes about 0.4 s per w256 decision against 0.15 s at w64,
+across games averaging 180 decisions. The arena journals in memory and copies
+its files out afterward, because its per-record sync takes about 0.1 s on a
+rented container disk and counts against that limit.
+Milestones past a size's endpoint stay in the schedule as unreached slots; failed
+or truncated games stay failed in their scheduled slots and are never replaced,
+so no pass uses Etude's `--retry-failed`.
 
 ### Evaluation driver
 
@@ -105,15 +122,31 @@ One command drives every pass, from a checkout of the frozen revision on an
 always-on host beside the controller:
 
 ```bash
-uv run etude eval experiments/tla_frontier.py --source <store> --rent <cpu32> --watch 14400
+doppler run -p etude -c prd -- doppler run -p manabot -c prd \
+    --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
+    --with "etude-sdk[s3,eval]==0.2.14" etude eval experiments/tla_frontier.py \
+    --source <store> --rent <cpu32> --watch 14400
 ```
 
 Every pass must run from that revision: a later commit changes `seats.source`,
 which analysis flags as a mixed cohort. The four-hour period batches both sizes'
 new milestones, so each milestone is played within one period of arriving.
 Expect about 15 rentals at USD0.45, setup included and unmeasured, for about
-USD7. Etude does not enforce the USD12 cap across passes: the operator reads
-spend after each pass and stops the loop when it reaches USD12.
+USD7, assuming no dud pods. Etude does not enforce the USD12 cap across passes:
+the operator reads spend after each pass and stops the loop when it reaches
+USD12. That stop and the USD12 reserve cover pods that never boot but still bill.
+
+To see progress at any time, draw the report from the same checkout:
+
+```bash
+doppler run -p etude -c prd -- doppler run -p manabot -c prd \
+    --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
+    --with "etude-sdk[s3,eval]==0.2.14" etude report experiments/tla_frontier.py \
+    --source <store>
+```
+
+The report is descriptive curves by update; `experiments/tla_frontier_analysis.py`
+owns every reading below.
 
 Etude's launch ledger, `~/.etude/experiments/launched.json`, is one file for
 every experiment on the computer, and any entry for a failed pass raises
@@ -134,16 +167,27 @@ candidate's mean game score with 95% whole-pair bootstrap intervals (seed
 w256 first. A milestone past an ended run's endpoint is unreached and expects
 no games; any other absent comparison leaves that reading unknown.
 
-- **Learning**, per size: endpoint vs its initialization above 0.5 with the
-  interval excluding 0.5.
-- **Strength**, per size: the milestone curve and endpoint vs the heuristic.
-- **Scale**: the equal-compute endpoint head-to-head is primary; equal-update
-  head-to-heads describe sample efficiency.
+A failed game narrows a reading rather than erasing it. Once every pair of a
+comparison has a match receipt, including a failed match with no game rows, the
+comparison also reports `worst` and `best`: the same statistic with each unscored
+leg counted as 0 and as 1, bootstrapped with the same indices. Nothing is
+replayed, replaced or dropped from the denominator, because failures are not
+neutral: limits and kills fall on long games. With no failures all three agree.
+Any unscored game leaves the analysis incomplete, with an issue naming the count.
+
+- **Learning**, per size: established when `worst`'s lower bound is above 0.5,
+  rejected when `best`'s lower bound is at or below 0.5, and unknown between.
+- **Strength**, per size: the milestone curve and endpoint vs the heuristic,
+  with the same bounds.
+- **Scale**: the equal-compute endpoint head-to-head is primary, with the same
+  bounds; equal-update head-to-heads describe sample efficiency.
 
 A failed size keeps its learning and strength readings at its last stored
 checkpoint, reported beside the run's state. Its endpoint head-to-head is still
-reported, but not as equal compute: the scale reading needs both runs finished
-and is otherwise absent, with an issue saying so.
+reported, but not as equal compute. The update cap is a second stop, so a size
+reaching it spent less than the wall budget. The scale reading therefore needs
+both runs finished with neither endpoint at the cap, and is otherwise absent,
+with an issue saying so.
 
 Report every attempt, failure, resource-limit discard, unreached milestone and
 cost. One seed per size supports a descriptive frontier reading, not a

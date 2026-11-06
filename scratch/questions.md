@@ -30,3 +30,10 @@ until launch):
   games may cost more.
 - **The USD12 evaluation cap stays an operator check,** as directed; Etude has no
   cross-pass ceiling here.
+- **Launch gate: 1,500 s/update for w256** (second concept review). A rough line,
+  chosen to leave three head-to-head milestones in 54 hours. Reversible until
+  launch. The opposite reading stays with the launch decision: if calibration
+  shows w256 costs little more than w64, because collection dominates, a larger
+  size inside 10–100× is worth a new protocol version before scoring.
+- **Failed legs bound a reading rather than void it** (second concept review).
+  The analysis rule changes before any scoring; the strict `complete` flag stays.

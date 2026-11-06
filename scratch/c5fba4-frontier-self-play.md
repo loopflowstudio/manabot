@@ -1,8 +1,8 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
 Status: protocol v1 drafted 2026-11-05 by the first implement step,
-reconciled twice and concept-reviewed the same day (headless). Nothing has launched
-or spent money. Concept-review directions 1–4 are implemented. Brief: Task c5fba4; direction comment 694f4190 in
+reconciled three times and concept-reviewed twice the same day (headless). Nothing
+has launched or spent money. Directions 1–9 from both reviews are implemented. Brief: Task c5fba4; direction comment 694f4190 in
 [direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
 runner `experiments/tla_frontier.py`; analysis
 `experiments/tla_frontier_analysis.py`; calibration
@@ -24,9 +24,11 @@ runner `experiments/tla_frontier.py`; analysis
   cumulative evaluation USD12; USD12 reserve under the USD100 cap.
 - Both sizes share one GPU model, chosen at launch and recorded before scoring.
   USD38 / 56 h admits at most USD0.67/hour: L4 or A40 at USD0.59, not RTX 5090.
-- Evaluation passes are cpu32 rentals (28 workers, USD2, 1.75 h plus setup, one
-  attempt), prepared with the Rust toolchain and `evaluation` extra. Game limit
-  600 s.
+- Evaluation passes are cpu32 rentals (28 workers, USD2, 1.75 h plus setup, three
+  attempts for lost machines), prepared with the Rust toolchain and `evaluation` extra. Game limit
+  600 s; the arena journals in `/dev/shm` and copies out, as `learning_signal` does.
+- Control commands use the 0.2.14 client with nested Doppler and the `artifacts`
+  and `evaluation` extras. Workers stay on locked 0.2.12.
 
 ## Reconciliation findings (2026-11-05)
 
@@ -51,16 +53,26 @@ Observed:
   skips matches a rented pass still has in flight, so overlapping passes from
   one computer do not duplicate games.
 - The same ledger raises `launched_pass_failed` on every later rented pass once
-  any launched pass ends unsuccessfully, and nothing clears the entry. With
-  `max_attempts=1` and a 1.75 h deadline, one failed rental stops evaluation
-  until someone intervenes. This is untested against a real rental.
+  any launched pass ends unsuccessfully, and nothing clears the entry, so a
+  genuine pass failure stops evaluation until someone intervenes. This is
+  untested against a real rental; direction 6 removes the routine trigger.
 - The GPU model is held in the launcher's session record, shown by `etude
   status`, not in the training store, so analysis cannot check the same-model
   rule. It stays an operator check.
+- `uv run etude ondemands` on locked 0.2.12 fails today on a `vast` provider row;
+  the overlay with nested Doppler lists offers, so the protocol's bare commands
+  could not have launched. Under 0.2.14 the 22 tests pass, and an evaluation job,
+  its environment identity and match keys are byte-identical to 0.2.12's, so a
+  0.2.14 planner, 0.2.12 worker and either analysis agree on keys.
+- Frontier `play` wrote its fsync-per-record arena journal to the rented disk,
+  inside the 600 s limit. MTG-251 found that at about 0.1 s per record and
+  `learning_signal` works around it. Now mirrored; `/dev/shm` capacity with 28
+  workers is inherited from that study, not measured here.
+- `etude launch` loads `runs` through `read_job_file`, so the calibration file
+  needs no `eval`; only `read_experiment` does, and nothing reads it that way.
 
 Estimates, not measurements: w64 about 1,300 updates at v10's 150 s/update (v9
-inputs may cost more); w256 per-update GPU cost and CUDA memory are unknown, so
-the earlier "several hundred updates" claim was removed. About 30 comparisons
+inputs may cost more); w256 per-update GPU cost and CUDA memory are unknown. About 30 comparisons
 (1,900 games, 17 CPU-hours) would cost about USD7 with per-rental setup (see
 direction 4), within the USD12 cap. At
 USD0.59/hour the 54-hour wall spends about USD33 per size, so USD38 is a ceiling,
@@ -69,7 +81,9 @@ not an expected cost.
 Proposed wave memory (not written; this step leaves `.lf/wave/` read-only):
 inherited per-game time limits must be rechecked when model size changes;
 `evaluation()` jobs need explicit setup and the `evaluation` extra to rent; a
-failed rented pass blocks later `etude eval` passes.
+failed rented pass blocks later `etude eval` passes; a protocol's bare `uv run
+etude` commands need checking against the launcher, since a locked client can
+fail on provider rows it cannot parse while tests stay green.
 
 ## Delete — do not maintain
 
@@ -82,51 +96,52 @@ is hashed into retained environments).
 - Review of the protocol before freezing; re-freeze `runtime_world` if the card
   catalog moves before launch (`frozen()` rejects a drifted world).
 - Freeze at a merged revision, run calibration (paid, USD2 ceiling), read it with
-  `uv run python -m experiments.tla_frontier_calibration --source <store>`, then
-  launch the protocol's training command (paid; needs an execution decision) and
-  start its evaluation driver. `etude launch` refuses several runs without
+  the command in `experiments/tla_frontier_calibration.py`, then launch the
+  protocol's training command (paid; needs an execution decision) and start its
+  evaluation driver. `etude launch` refuses several runs without
   `--cohort`, and a cohort's default `--parallel 1` would train w256 only after
   w64's 54 hours, so both commands name a cohort and two machines.
+- Unproven until the first real rental: the evaluation driver delivering to the
+  training store, setup cost per rental, and calibration's stock worker on CUDA.
 - Before reading a score, confirm from `etude status` that both runs had the
-  same GPU model.
+  same GPU model, and record both pods' vCPUs.
 - A retry of a size is a new protocol version with its recorded decision and
   new regime ids, since `size_run` matches the old run's prefix.
 - The final report is written after the runs. `tla_frontier_analysis` gives its
-  numbers: whole-pair intervals, per-size learning, the scale score, hours per
-  checkpoint and every failed, missing or unreached slot. `report()` stays
+  numbers: whole-pair intervals with failed-leg bounds, per-size learning, the
+  scale score, hours per checkpoint and every failed, missing or unreached slot. `report()` stays
   descriptive curves. A repeated match key fails analysis loudly, inherited from
   `pair_result`.
 
 ## Concept review (2026-11-05, headless)
 
-Reviewed against the brief, direction 694f4190 and the implemented change.
-Outcome: the design changed; nothing is open for a person. Directions 1–4 are
-implemented. Nothing in them changes the sizes, recipe, schedule or budget split.
+Reviewed against the brief, direction 694f4190 and the change. It found three
+paths the tests skipped, all now closed, without changing sizes, recipe, schedule
+or budget split:
 
-The experience the brief asks for: launch two sizes, then watch each milestone
-appear as curves against the heuristic and each other, without further action
-unless something fails; finally read where strength stands. Walking that path
-through the code:
+1. **One experiment name.** `etude eval` and `etude launch` name an experiment for
+   its file, so the old `tla_frontier_c5fba4` would have played nothing while
+   training ran, and failed each worker at `track`
+   (`experiment_differs_from_launch`). `EXPERIMENT` is now the stem, `eval` rejects
+   a foreign state, and a store-backed test crosses that seam.
+2. **Reach survives failure.** `endpoint` is the last stored checkpoint of any ended
+   run. Analysis keeps learning and strength beside `state`; `scale` is None with
+   an issue unless both runs finished.
+3. **Calibration is its own job.** Five updates, 3,600 s wall, at most 1.2 h and
+   USD1 per size, numerics gate on, under its own experiment and regime ids.
+   `execute_regime` logs `memory/peak_{allocated,reserved}_cuda_bytes` on each CUDA
+   update, so it needs only the stock worker. If w256 cannot fit or leaves too few
+   updates, the size changes in a new protocol version, before any scoring.
+4. **The evaluation driver is named in the protocol.** One `etude eval --watch
+   14400` from a checkout of the frozen revision on an always-on host. Estimate:
+   about 15 rentals at USD0.45 (setup included, unmeasured), about USD7; one rental
+   per comparison would approach USD10–13. The USD12 cap is an operator check.
 
-**Normal path.** Breaks at the first pass. `etude eval FILE` names the experiment
-for the file: `read_experiment` gives `tla_frontier`, and `advance` calls
-`observe(source, "tla_frontier")`. Runs track under `EXPERIMENT =
-"tla_frontier_c5fba4"` (confirmed by running both). So `eval` sees no runs,
-returns `[]`, and every pass reports nothing to play and exits cleanly while
-USD76 of training proceeds. Tests call `eval` with a hand-built state, so they
-pass. `tla_pilot_v10.py` avoided this: its stem equals its name and its `eval`
-rejects a foreign state.
-
-**Failure path.** A run that fails at hour 30 is `failed`, so `run.final` is None.
-Its endpoint stays None for good: the endpoint comparisons never play and
-analysis reports no learning or strength reading, although its checkpoints are
-stored. The size's spend then buys nothing readable. The brief asks for an honest
-read of where strength stands, so reach survives failure; equal compute does not.
-
-**Recovery path.** The preflight in the previous plan has no way to run. Launching
-w256 for real and cancelling leaves a run that `size_run` refuses to share a
-prefix with, and a fix means new protocol bytes anyway. Reading cost and memory
-is a separate job, not a first attempt at the frozen run.
+`launched_pass_failed` ends the watch loop, and the ledger has no way to clear an
+entry and is shared by every experiment on the computer (today it holds
+`elemental-lambda-v1-6860cc47ef30`; Etude main matches). The protocol records the
+check and recovery. The real fix belongs in Etude (scope the ledger per experiment,
+add an acknowledge step) as a separate change, not required for this launch.
 
 Checked and left unchanged:
 
@@ -137,60 +152,6 @@ Checked and left unchanged:
   every pass runs from the frozen revision.
 - Wall stops record the final raw checkpoint through `experiment.checkpoint`, and
   the run counts as a launcher success, so `run.final` is the real endpoint.
-
-### Implemented direction
-
-All four are in the change, as written below, with these additions found while
-implementing them:
-
-- `etude launch` names an experiment file's runs for its stem and `track` raises
-  `experiment_differs_from_launch` on another name, so the old `EXPERIMENT` would
-  also have failed each worker at start. The seam test reads the real job file.
-- No run record held a CUDA peak, so `execute_regime` now logs
-  `memory/peak_{allocated,reserved}_cuda_bytes` on each CUDA update. Calibration
-  then uses the stock worker and reads everything from the store; the frontier
-  runs carry the same rows.
-- Calibration is five updates, 3,600 s wall, at most 1.2 h and USD1 per size,
-  with the numerics gate on as in the real runs.
-
-1. **One experiment name.** `EXPERIMENT = Path(__file__).stem`, the convention of
-   `elemental.py` and `seat_comparison.py` and the contract in
-   `manabot/experiment/job.py`. Reject a foreign `state.experiment` in `eval`, as
-   v10 does. Add a test that `read_experiment(...).name == EXPERIMENT` and that a
-   store-backed `observe` under that name finds a `TrainingJob`-named run, so the
-   proof crosses the seam the hand-built state skipped.
-2. **Reach survives failure.** `endpoint` is the last stored checkpoint of any
-   ended run, not only a finished one, so the endpoint comparisons play. Analysis
-   keeps `state` beside the endpoint, keeps the learning and strength readings,
-   and sets `scale` to None with an issue unless both runs finished: the
-   comparison is still reported, but not as equal compute. Update the protocol's
-   Reading section to match, and test a failed size.
-3. **Calibration is its own job.** Add a short calibration entry point, under its
-   own experiment and regime ids so `size_run` never sees it: each size for a few
-   updates on the chosen GPU, a USD2 total ceiling inside the reserve, reading
-   seconds per update and CUDA peak. Run it after merge, before `runs()`. If w256
-   cannot fit or leaves too few updates, the size changes in a new protocol
-   version, which is still before any scoring.
-4. **Name the evaluation driver in the protocol.** Regular evaluation is one
-   command, not per-milestone operator work: `etude eval
-   experiments/tla_frontier.py --source <store> --rent <cpu32> --watch 14400`,
-   from a checkout of the frozen revision, on an always-on host beside the
-   controller. A four-hour period batches both sizes' new milestones. Every
-   milestone still gets played, within a period of arriving. Estimate: about 15
-   rentals at USD0.45 (setup included, unmeasured), about USD7. One rental per
-   comparison would approach USD10–13, because each pays setup; the earlier
-   USD1–4 estimate left setup out. The USD12 cap stays an operator check: read
-   spend after each pass and stop the loop when it reaches the cap.
-
-The protocol also records recovery from a failed pass. `launched_pass_failed`
-ends the watch loop by design ("rerun it after looking"), but the ledger has no
-way to clear an entry, and it is one file for every experiment on the computer
-(today it holds `elemental-lambda-v1-6860cc47ef30`; Etude main matches). So
-another experiment's failure can stop this one. Before starting the loop, check
-that entry's status. After a failed pass, look, then remove its entry from
-`~/.etude/experiments/launched.json` and restart the loop. The real fix belongs in
-Etude (scope the ledger per experiment, add an acknowledge step) and is worth
-a separate Etude change; it is not required for this launch.
 
 ### Settled by accepted direction
 
@@ -215,4 +176,58 @@ a separate Etude change; it is not required for this launch.
   the launcher records it, and direction 2 needs an operator read of the stored
   checkpoints.
 
-Check: `uv run --extra dev --extra evaluation pytest tests/eval/test_tla_frontier.py -q` — 21 passed; `frozen()` passes, so `runtime_world` needed no re-freeze.
+## Second concept review (2026-11-05, headless)
+
+Walked three interactions the first review left out: the final read when one
+game failed, the 56-hour watch loop when a rental goes wrong, and what someone
+does at hour 20 to see progress. Sizes, recipe, schedule and budget split stay.
+
+### Directions, implemented
+
+5. **A failed game narrows a reading, it does not erase it.** One unscored leg
+   left its comparison's score None, permanently, since no retry is allowed. A
+   probe on the `_outcomes` fixture gave `scale=None` and `learned=None` from 2
+   failed games of 1,856. At v10's 0.095% failure rate, at least one of 30
+   comparisons loses its score 84% of the time, so this is the normal path.
+   `Comparison.result` holds `score`, `worst` and `best` once every pair has a
+   receipt (each unscored leg as 0 and 1, same bootstrap indices); `learned`,
+   strength and scale read it. `complete` stays False with an issue naming the count. Nothing is
+   replayed or dropped: limits and kills fall on long games, so exclusion would
+   not be neutral. A real Etude store confirms that a raised match keeps its seats
+   and receipt, so it bounds rather than reading as missing.
+6. **Evaluation passes survive machine loss.** Three attempts, Etude's default;
+   training stays at one. Etude retries only `capacity_refused`, `setup_failed`
+   and `machine_lost*`, resuming the same run and skipping stored matches. A
+   raising match ends the run as `failed` and is not retried.
+7. **The mid-run read is named.** The protocol carries the `etude report` command.
+   A test plays a real store and renders `report()`.
+8. **Calibration's launch gate is in the protocol:** 1,500 s/update or less.
+9. **"Equal compute" stays true.** `scale` needs both finished with neither
+   endpoint at the cap, otherwise an issue. The same-GPU operator check records
+   both pods' vCPUs; a difference is reported, not voiding.
+
+### Left alone
+
+- The evaluation estimate of USD7 assumes no dud pods. A pod that never boots
+  held its window in MTG-251, up to USD1.92 here if billed, which is unmeasured.
+  The USD12 operator stop and the USD12 reserve cover it, as the protocol says.
+- `report()`'s head-to-head selection holds both subjects, each the other's
+  mirror (the render shows w256 at 0.75 and w64 at 0.25). Cosmetic; left as is.
+- Both runs ending on one shared milestone make the endpoint head-to-head that
+  milestone's match. Etude plays a shared match once and analysis reads it by key.
+- Ledger scoping stays an Etude change for the launch decision. Direction 6
+  removes its routine trigger, so it stays out of this PR.
+
+No open product choice. Direction 5 keeps every accepted rule (failures stay
+failed, no replacement, incomplete stays incomplete) and adds only a reading the
+brief's "honest read" asks for.
+
+### Counterexamples that would reopen this
+
+- Failures are numerous enough that `best` and `worst` straddle every threshold:
+  the answer is then a rules or capacity fix and a new protocol version, not a
+  looser reading.
+- A real retried pass replays a stored match (`repeated match` in analysis):
+  direction 6's reading of Etude was wrong, and passes go back to one attempt.
+
+Check: `uv run --extra dev --extra evaluation pytest tests/eval/test_tla_frontier.py -q` — 28 passed on 0.2.12 and the 0.2.14 overlay after the compress pass; `frozen()` passes, so `runtime_world` needed no re-freeze. Broader suites stay with gate.
