@@ -71,6 +71,19 @@ budget and results pointer; this file holds working assumptions and open items.
   busy") and resist `etude terminate`; `etude ondemand max 07c490-l4 14` (03:15).
   .8/.8: 6952e8b1391f (s70201, stopped at 72), ff12bf198bb3, 2e45a87e9de4.
   Eval pass 1 (elemental-lambda-v1-6860cc47ef30, 07c490-cpu32): 550 matches, 02:42.
+- All 15 lambda runs succeeded (05:35). Endpoints: 75 except .8/.8 s70201/s70202 at
+  72, .5/.95 s70202 at 64, .8/.95 s70202 at 73 (70-min wall on slow machines: median
+  update ~52–63 s vs ~28–36 s; machine speed is bimodal, so wall-time comparisons are
+  machine-confounded). Idle share .626–.670 in every run; idle bound 747–1249 s,
+  about 29–34% of collection+learning. Capacity overflows: 3 games of ~290k (one each
+  in .5/.8 s70201, .5/.95 s70201, .8/.95 s70203), all recovered.
+- Billed (runpodctl, by pod): calibration $1.19; everything since 00:06 UTC $8.83 by
+  05:59 → $10.01. Ghost `07c490-cpu32-*` records match no pod.
+- Eval: a refused cpu32 create (RunPod 503s ~05:41) left a ghost session that pins
+  the run id Etude derives from the pending set (`{name}-{digest(pending keys)}`);
+  `terminate`/`cancel` don't clear it. Pass 2 played a different set (no u20, a
+  temporary commit since reverted): elemental-lambda-v1-e486e50e04a7, 1200 matches,
+  07:10. The u20 remainder needs one more pass.
 - Ghost `07c490-l4-*` records from refused creates show estimated dollars but no RunPod
   pod exists (`runpodctl pod list` empty); not charged.
 
@@ -78,7 +91,9 @@ budget and results pointer; this file holds working assumptions and open items.
 
 - Study 1 needs a decision beyond the protocol: exact-quota capacity recovery, wider
   continuation relations for both arms, or deleting exact quota.
-- Lambda: 07c490-l4 allows 8 machines at once, so at most two arms (6 runs) run
-  together; launch the rest as machines free.
-- Idle streams: read `idle_stream_steps` from the lambda runs for the two-seat report.
-- Provider bills: reconcile `runpodctl billing pods --grouping podId` per pod.
+- Bills for eval passes 2–3 (07:10–11:00 UTC 2026-11-06) had not posted; the report's
+  ~$4.8 evaluation and ~$13.3 total are estimates from rental windows. Reconcile with
+  `runpodctl billing pods --grouping podId --start-time 2026-11-06T07:00:00Z`.
+- The Etude controller is not running: 0.2.13 (`~/.manabot/etude-controller`) cannot
+  parse the Vast providers; the 0.2.14 overlay run hung on storage reads after ~2 h.
+- `07c490-l4` on-demand max is 14 (raised from 8 for ghost records).

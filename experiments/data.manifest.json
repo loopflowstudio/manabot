@@ -2590,6 +2590,22 @@
    "sha256": "7471dd3676eabc33a9ea5ea7efadac8f970a6fe83f5371495291a37473b0e640",
    "bytes": 9321
   },
+  "experiments/data/closure-lambda-elemental-v1/elemental_lambda-rows-assembly.png": {
+   "sha256": "21d77f093f33834bc2115ac02bf4d20df01abb117ced41935fd090c63e8ec82f",
+   "bytes": 336569
+  },
+  "experiments/data/closure-lambda-elemental-v1/elemental_lambda-strength.png": {
+   "sha256": "f082b984e160e265f3a39ed6970df5a503ccd17c0795bdbd2ffb0bb9eb9bca4d",
+   "bytes": 109997
+  },
+  "experiments/data/closure-lambda-elemental-v1/report.md": {
+   "sha256": "95397a4ddfc634681802d74ed0600c74e975891f16407c9608e201adf8d716be",
+   "bytes": 10683
+  },
+  "experiments/data/closure-lambda-elemental-v1/results.json": {
+   "sha256": "89bc10174ea561eabbf9f0c6988dd8d2071a9f41682254c7d74cd0c9baa0e0cd",
+   "bytes": 114319
+  },
   "experiments/data/closure-lambda-v1/batch_closure-rows-assembly.png": {
    "sha256": "41c189852b483208765ecaa97e7e0505bce8c3bd4fb63021b35cc899d2e4b349",
    "bytes": 191878
