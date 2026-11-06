@@ -375,7 +375,10 @@ when no discovered scope, condition or value predicate reads tap state. Removing
 a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
 layer, static condition or trigger source reads the field; debug builds
 recompute every cached view and index on read and assert they match, so a
-misclassified accessor fails `cargo test` in debug. Continuous-effect records
+misclassified accessor fails `cargo test` in debug. A `BoardScan` narrows this
+for the raw layer board only: it validates the board when it begins, and its
+shared borrow excludes writes, so reads inside it skip the repeat. Hold one
+across `&self` code that reads the board per source or per ability. Continuous-effect records
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
