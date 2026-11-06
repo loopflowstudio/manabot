@@ -160,17 +160,17 @@ def test_self_play_stage_records_both_timing_trees_by_default(tmp_path: Path) ->
     )
     assert collected <= record.collection_seconds
     step = record.collection_timings["Environment step and encoding"]
-    gameplay = record.collection_timings[
+    stepping = record.collection_timings[
         "Environment step and encoding/Native stepping"
     ]
     encoding = record.collection_timings[
         "Environment step and encoding/Observation encoding"
     ]
-    assert gameplay.seconds > 0 and encoding.seconds > 0
+    assert stepping.seconds > 0 and encoding.seconds > 0
     # The engine's clock covers exactly the steps of its phase: the reset that
     # built the collector and any recovery replay sit outside that phase.
-    assert gameplay.calls == encoding.calls == step.calls
-    assert gameplay.seconds + encoding.seconds <= step.seconds
+    assert stepping.calls == encoding.calls == step.calls
+    assert stepping.seconds + encoding.seconds <= step.seconds
     assert record.collection_timings["Stream bookkeeping"].calls >= step.calls
     assert run.host is not None and run.host.logical_cpus == os.cpu_count()
     assert TrainingRun.model_validate_json(run.model_dump_json()).host == run.host
@@ -182,3 +182,10 @@ def test_self_play_stage_records_both_timing_trees_by_default(tmp_path: Path) ->
         for key in panel.keys
         if key.startswith("time/")
     } <= row.keys()
+    # Retained rows and the Python vector have only the parent stepping key.
+    update_time = next(
+        panel
+        for panel in PERF
+        if isinstance(panel, Series) and panel.title == "Update time"
+    )
+    assert "time/collection/environment_step_and_encoding" in update_time.keys

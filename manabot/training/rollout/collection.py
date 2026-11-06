@@ -883,79 +883,78 @@ class SeatRoutedCollector:
                     self._game_actions[row].append(int(actions[row]))
             if sum(map(len, self._game_actions)) > self._game_recovery_limit:
                 raise RuntimeError("current-game recovery journal limit exceeded")
-        if done.any():
-            for row in np.flatnonzero(done):
-                winner = infos[row].get("winner_index")
-                winner = int(winner) if winner is not None else None
-                self.stats.games += 1
-                self.stats.games_by_stream[int(row)] = (
-                    self.stats.games_by_stream.get(int(row), 0) + 1
+        for row in np.flatnonzero(done):
+            winner = infos[row].get("winner_index")
+            winner = int(winner) if winner is not None else None
+            self.stats.games += 1
+            self.stats.games_by_stream[int(row)] = (
+                self.stats.games_by_stream.get(int(row), 0) + 1
+            )
+            if buffers["truncated"][row]:
+                self.stats.truncations += 1
+                self._expose(int(row), "truncated_games")
+                raise RuntimeError(
+                    "collector game truncated; no terminal target available"
                 )
-                if buffers["truncated"][row]:
-                    self.stats.truncations += 1
-                    self._expose(int(row), "truncated_games")
-                    raise RuntimeError(
-                        "collector game truncated; no terminal target available"
+            if self.opponent_mode in ("self", "learning"):
+                self.stats.self_play.record(self._self_play_decks[int(row)], winner)
+            if winner is None:
+                reward = 0.0
+            elif winner == int(self.learner_seat[row]):
+                self.stats.learner_wins += 1
+                reward = self._win_reward
+            else:
+                reward = self._lose_reward
+            self._expose(int(row), "terminal_games")
+            if both:
+                for seat in (0, 1):
+                    slot = 2 * int(row) + seat
+                    seat_reward = (
+                        0.0
+                        if winner is None
+                        else self._win_reward
+                        if winner == seat
+                        else self._lose_reward
                     )
-                if self.opponent_mode in ("self", "learning"):
-                    self.stats.self_play.record(self._self_play_decks[int(row)], winner)
-                if winner is None:
-                    reward = 0.0
-                elif winner == int(self.learner_seat[row]):
-                    self.stats.learner_wins += 1
-                    reward = self._win_reward
-                else:
-                    reward = self._lose_reward
-                self._expose(int(row), "terminal_games")
-                if both:
-                    for seat in (0, 1):
-                        slot = 2 * int(row) + seat
-                        seat_reward = (
-                            0.0
-                            if winner is None
-                            else self._win_reward
-                            if winner == seat
-                            else self._lose_reward
-                        )
-                        if self._pending[slot] is not None:
-                            self._finalize(slot, reward=seat_reward, done=True)
-                elif self._pending[row] is not None:
-                    self._finalize(int(row), reward=reward, done=True)
-                if self.game_errors:
-                    self._settle_attempt(
-                        int(row), seeds[row], int(acting[row]), "completed"
+                    if self._pending[slot] is not None:
+                        self._finalize(slot, reward=seat_reward, done=True)
+            elif self._pending[row] is not None:
+                self._finalize(int(row), reward=reward, done=True)
+            if self.game_errors:
+                self._settle_attempt(
+                    int(row), seeds[row], int(acting[row]), "completed"
+                )
+            if complete_games:
+                games[row] += 1
+                completed[row] = (
+                    games[row] >= self.games_per_stream
+                    if self.games_per_stream is not None
+                    else sum(
+                        len(self._streams[slot]) for slot in self._game_slots(int(row))
                     )
-                if complete_games:
-                    games[row] += 1
-                    completed[row] = (
-                        games[row] >= self.games_per_stream
-                        if self.games_per_stream is not None
-                        else sum(
-                            len(self._streams[slot])
-                            for slot in self._game_slots(int(row))
-                        )
-                        >= num_steps
-                    )
+                    >= num_steps
+                )
 
         if self.game_error_state.stop_reason:
             raise GameErrorLimit(self.game_error_state.stop_reason)
         if replace.any():
             env.replace_failed_into_buffers(replace.tolist())
-        if (done | failed).any():
-            self._refresh_roots(np.flatnonzero(done | failed))
-            for row in np.flatnonzero(done | failed):
+        ended = np.flatnonzero(done | failed)
+        if ended.size:
+            self._refresh_roots(ended)
+            for row in ended:
                 self._expose(int(row), "game_roots")
 
     @contextmanager
     def _native_step_split(self) -> Iterator[None]:
-        """Divide the running step phase by the engine's clock; Python roots have none."""
+        """Split the running step phase by the engine's clock; Python envs have none."""
         if not isinstance(self._env, (ShardedVectorEnv, CapturedVector)):
             yield
             return
-        played, encoded = self._env.buffered_call_timings()
+        stepped, encoded = self._env.buffered_call_timings()
         yield
-        played_after, encoded_after = self._env.buffered_call_timings()
-        self.profiler.record("Native stepping", played_after - played)
+        stepped_after, encoded_after = self._env.buffered_call_timings()
+        self.profiler.record("Native stepping", stepped_after - stepped)
         self.profiler.record("Observation encoding", encoded_after - encoded)
 
     def _game_slots(self, row: int) -> range:

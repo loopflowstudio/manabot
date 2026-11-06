@@ -169,6 +169,13 @@ def test_real_interruption_restores_complete_learning_state(
         assert resumed.prior_watchdog_seconds == failed.watchdog_seconds
         assert resumed.recovery_seconds > 0
         assert resumed.stages[0].cumulative_seconds >= resumed.prior_seconds
+        # Stage timers describe this attempt while counts continue the trajectory.
+        step = "Environment step and encoding"
+        assert resumed.stages[0].updates == whole.stages[0].updates
+        assert (
+            resumed.stages[0].collection_timings[step].calls
+            < whole.stages[0].collection_timings[step].calls
+        )
         a, b = load_update(whole), load_update(resumed)
         for name in (
             "learner",

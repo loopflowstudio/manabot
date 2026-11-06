@@ -91,7 +91,7 @@ manifest and Phase rows are unchanged.
 # Task b015d5 — training seconds per update (2026-11-05)
 
 No design doc: the Task statement is the spec. Status and decisions:
-- Done in the working tree: receipt/panel attribution (native clock split, stream
+- Done and committed: receipt/panel attribution (native clock split, stream
   bookkeeping, `TrainingRun.host`), trajectory-parallel returns, batched rollout
   packing and assembly, `scripts/bench_training_update.py`.
 - Assumption: no GPU is rented for this Task (no spend authorized). GPU attribution
@@ -108,6 +108,42 @@ No design doc: the Task statement is the spec. Status and decisions:
   not. Report states both.
 - `HostFacts.cpu_model` reads `/proc/cpuinfo`, so it is null off Linux; the GPU stays
   in run identities, not `TrainingRun.host`.
-- For gate: rebuilt from HEAD, `test_resource_limit_receipt_replays_its_retained_encoding_boundary`
-  fails on `tests/fixtures/tla-pilot-permanent-capacity.jsonl`: its frame is schema 7,
-  native emits 8. This Task's only Rust change is timing; not repaired here.
+- For gate: `test_resource_limit_receipt_replays_its_retained_encoding_boundary` fails
+  3/3 at `3b5dd2935` after a rebuild, and identically on base `8e5d152ab`:
+  `tests/fixtures/tla-pilot-permanent-capacity.jsonl` retains a schema 7 frame and
+  native emits `SEMANTIC_DECISION_VERSION` 8, so the replay returns `binding_mismatch`.
+  Inherited; this Task's only Rust change is timing. `tests/training/test_game_errors.py`
+  is in no CI selection, which is why main stays green. Not repaired here; it needs
+  its own bug Task, because the fixture is retained evidence.
+- The fixed-hardware rows measured `5d676d6df` and `8e5d152ab`. The sync to `f6f171d34`
+  added engine commit `c59aeee0e` afterward; its effect on native stepping is unmeasured.
+- Proposed infrastructure Wave memory (not written; this step leaves `.lf/wave/`
+  read-only): rented-host CPU class moves update time 1.6-1.8x at a fixed GPU label,
+  so compare `host.cpu_model` and native stepping before attributing a slowdown
+  to a change; a packed ~50,000-row column makes per-time-step device recursions
+  launch-bound, so keep such recursions on the host.
+
+## Concept review b015d5 (2026-11-05)
+
+Walked: rent a pod, read the panel, keep or replace it; a slow host; a recovery
+attempt on another machine. The model stands: one phase tree in the receipt, drawn
+per update; `TrainingRun.host` per attempt; the bench prints the same tree. The clock
+covers every `VectorEnv` buffered path (no rayon; `encode_active`/`step_active` are
+the separate slot env). No open product choice: producers, GPU spend and recipes stay
+outside this Task.
+
+All five review items are in the tree (uncommitted): host screen, parent series,
+one-producer scope, stepping rename, recovery reading. Results:
+- Screen values came from `r2://manabot/jobs` receipts and per-update metric blocks,
+  re-read 2026-11-05: 10 runs, median updates 2-11 at 6.9-7.7 s fast, 10.6-12.4 s slow.
+  Bands 8 s / 9 s are this Task's choice from that gap; they fit 256-stream two-seat
+  Elemental only. Six A40 runs' early medians were not read; their stage means were.
+- Recovery check: stage timers do not carry. `execution.py` zeroes seconds and
+  `collection_timings` on resume while `updates` and decisions continue. Stage means
+  are still the wrong reading, for that reason; `test_recovery.py` pins it.
+- `time_since` lost its "timer went down" branch: every reset precedes the loop's
+  first reading and the learner is never rebuilt inside it.
+- Checks on the rebuilt extension: `tests/training/test_phase_timing.py`,
+  `tests/infra/test_host_facts.py` (11 passed),
+  `test_real_interruption_restores_complete_learning_state` (4 passed). Broader
+  suites stay with gate.

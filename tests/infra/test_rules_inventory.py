@@ -55,9 +55,7 @@ def test_inventory_rejects_missing_body_boundary() -> None:
 def test_committed_inventory_is_complete_unique_and_evidence_is_honest() -> None:
     directory = audit_rules.DIRECTORY
     if not directory.is_dir():
-        pytest.skip(
-            "rules audit lives in the artifact store; fetch experiments/data/rules-audit-2026-10"
-        )
+        pytest.skip("rules audit lives in the artifact store; fetch experiments/data/rules-audit-2026-10")
     metadata = json.loads((directory / "source.json").read_text())
     reviews = json.loads((directory / "reviews.json").read_text())
     rows = [

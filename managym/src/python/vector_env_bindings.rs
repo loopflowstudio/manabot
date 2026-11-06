@@ -82,11 +82,11 @@ pub struct PyVectorEnv {
 }
 
 /// Cumulative wall time inside buffered calls: every step or reset, split into
-/// gameplay (all work in the call except encoding) and observation encoding.
+/// stepping (all work in the call except encoding) and observation encoding.
 #[cfg(feature = "python")]
 #[derive(Default)]
 struct BufferedCallTimings {
-    gameplay_nanos: u64,
+    stepping_nanos: u64,
     encoding_nanos: u64,
 }
 
@@ -390,10 +390,10 @@ impl PyVectorEnv {
             .collect()
     }
 
-    /// Cumulative `(gameplay_seconds, encoding_seconds)` of buffered calls.
+    /// Cumulative `(stepping_seconds, encoding_seconds)` of buffered calls.
     fn buffered_call_timings(&self) -> (f64, f64) {
         (
-            self.timings.gameplay_nanos as f64 / 1e9,
+            self.timings.stepping_nanos as f64 / 1e9,
             self.timings.encoding_nanos as f64 / 1e9,
         )
     }
@@ -762,7 +762,7 @@ impl PyVectorEnv {
         });
         let encoding = ENCODING_NANOS.get();
         self.timings.encoding_nanos += encoding;
-        self.timings.gameplay_nanos +=
+        self.timings.stepping_nanos +=
             (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
         self.buffers = Some(buffers);
         self.last_info = result?;

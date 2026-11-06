@@ -9,12 +9,13 @@ version changed. No GPU was rented: GPU rows are retained receipts, and the
 
 **The slowdown is mostly the rented host, not the world.** The same w13 recipe
 and GPU took 29.8 s on one host and 53.5 s on another. On a fast host, w13 to w17
-costs 10% per update. Training occupies exactly one CPU thread, so the machine's
-single-thread speed sets the pace; extra vCPUs and a larger GPU buy nothing.
+costs 10% per update. With one producer, which `elemental-uniform` requires, training
+occupies exactly one CPU thread, so the machine's single-thread speed sets the pace;
+extra vCPUs and a larger GPU buy nothing.
 
 | Suspect | Verdict |
 |---|---|
-| Host CPU class | **Main cause**: 1.7-1.8x at fixed world and GPU |
+| Host CPU class | **Main cause**: 1.6-1.8x at fixed world and GPU |
 | Current world and input | +28% per decision, +10% per update on a fast host |
 | Longer games | Refuted: games per update flat, decisions per update down 14% |
 | Few vCPUs | Refuted: every run used about one core; the recipe permits one producer |
@@ -28,14 +29,14 @@ single-thread speed sets the pace; extra vCPUs and a larger GPU buy nothing.
 memory and kernel; receipts did not name the CPU model, so "fast" and "slow" are
 inferred. `TrainingRun.host` now records it.
 
-| World | GPU | Node CPUs | Host | Runs | s/update | Decisions | Collection | Learning | Targets |
-|---|---|---|---|---|---|---|---|---|---|
-| w13 | L4 | 48 | fast | 1 | 29.8 | 56,437 | 15.2 | 14.6 | 5.7 |
-| w17 | L4 | 48 | fast | 3 | 32.7 | 48,557 | 17.6 | 15.1 | 5.0 |
-| w17 | L4 | 128 | fast | 2 | 35.0 | 48,547 | 18.9 | 16.1 | 5.4 |
-| w13 | L4 | 128 | slow | 1 | 53.5 | 57,369 | 23.5 | 29.9 | 14.2 |
-| w17 | L4 | 128 | slow | 2 | 55.5 | 45,940 | 28.5 | 27.2 | 11.3 |
-| w17 | A40 | 96 | slow | 9 | 55.7 | 49,343 | 30.1 | 25.5 | 9.4 |
+| World | GPU | Node CPUs | Host | Runs | s/update | Decisions | Collection | Step and encoding | Learning | Targets |
+|---|---|---|---|---|---|---|---|---|---|---|
+| w13 | L4 | 48 | fast | 1 | 29.8 | 56,437 | 15.2 | 4.5 | 14.6 | 5.7 |
+| w17 | L4 | 48 | fast | 3 | 32.7 | 48,557 | 17.6 | 6.5 | 15.1 | 5.0 |
+| w17 | L4 | 128 | fast | 2 | 35.0 | 48,547 | 18.9 | 7.0 | 16.1 | 5.4 |
+| w13 | L4 | 128 | slow | 1 | 53.5 | 57,369 | 23.5 | 7.2 | 29.9 | 14.2 |
+| w17 | L4 | 128 | slow | 2 | 55.5 | 45,940 | 28.5 | 9.6 | 27.2 | 11.3 |
+| w17 | A40 | 96 | slow | 9 | 55.7 | 49,343 | 30.1 | 10.7 | 25.5 | 9.4 |
 
 Node CPU count does not identify the class: 128-CPU nodes appear in both. Kernel
 does not either: A40 nodes on both kernels are slow.
@@ -52,9 +53,11 @@ different decks and was not attributed here.
 ## Fixed-hardware rows
 
 One Apple M4 Max laptop, CPU device, real stage through `execute_regime`, 256
-streams, 2 updates, µs per decision. Other work shared the machine (load 15-30):
-identical code moved 90.8 to 106.3 s/update between `old` runs, so read the ranges,
-not single values. Model phases on CPU are not GPU evidence.
+streams, 2 updates, µs per decision. The 183-era source is `5d676d6df`; current,
+before is `8e5d152ab`. Main's later engine commit `c59aeee0e` is not in these rows.
+Other work shared the machine (load 15-30): identical code moved 90.8 to 106.3
+s/update between `old` runs, so read the ranges, not single values. Model phases on
+CPU are not GPU evidence.
 
 | Phase | 183-era source | Current, before | Current, after |
 |---|---|---|---|
@@ -95,9 +98,11 @@ than the one training rents.
 ## Changes
 
 - **Attribution.** Receipts and the "Update time" Perf panel split collection into
-  native stepping, observation encoding, preparation, inference, bookkeeping and
-  assembly beside learning. `TrainingRun.host` names the CPU, schedulable CPUs
-  and cgroup quota; the GPU stays in run identities. Older rows leave new series blank.
+  the environment step, its native stepping and observation encoding, preparation,
+  inference, bookkeeping and assembly beside learning. `TrainingRun.host` names the
+  CPU, schedulable CPUs and cgroup quota; the GPU stays in run identities. Older rows
+  leave new series blank. They and the Python target-practice vector, which has no
+  engine clock, draw the parent step series, so new and retained runs compare on it.
 - **Targets.** A complete-game batch is one column of ~50,000 rows, so the recursion
   launched ~50,000 dependent device steps. `reverse_waves` advances every trajectory
   at once on the host; each row keeps its float operations and order.
@@ -118,10 +123,29 @@ replaces this with a measurement.
 - **Choose single-thread speed, not vCPUs.** Do not pay for vCPUs above the current
   6-vCPU floor for one run. Lower floors were not tested.
 - **Rent L4, not A40,** for this recipe: A40 was no faster on matching hosts.
-- **Screen hosts.** Compare `time/collection/environment_step_and_encoding/native_stepping`
-  and `host.cpu_model` in the first updates; a run at about 1.7x the expected pace
-  is on a slow host. Once receipts name CPU models, a list of good ones can replace
-  this check.
+- **Screen hosts.** On a 256-stream, two-seat Elemental run, read the median of
+  `time/collection/environment_step_and_encoding` over updates 2-11. Below 8 s is a
+  fast host. Above 9 s is slow, so replace the pod and screen the new one. No retained
+  run fell between; read more updates if one does. Other recipes need their own
+  anchor: most lambda-sweep L4 runs took 2.5-2.9 s, with about 29,000 decisions per
+  update. Record `host.cpu_model` either way; once receipts name CPU models, a list
+  of good ones can replace this.
+
+  | Retained runs | Median, updates 2-11 | Stage mean | µs per decision |
+  |---|---|---|---|
+  | Fast L4 (5) | 6.9-7.7 s | 6.3-7.1 s | 128-146 |
+  | Slow L4 (2) | 10.8 s | 9.4-9.8 s | 205-212 |
+  | Slow A40 (3 of 9) | 10.6-12.4 s | 10.0-12.0 s | 211-239 |
+
+  A40 stage means cover all nine runs; the medians, three. Early updates run above
+  the stage mean, so screen on the early column. These receipts predate the fixes,
+  which moved s/update and collection but barely touched this phase (96-101 against
+  100-104 µs on the laptop). The first run after merge should confirm these bands.
+- **Read per-update rows across a recovery.** A resumed stage restarts its timers
+  while updates and decisions continue, so a receipt's stage totals cover the last
+  attempt only and dividing them by stage counts understates seconds per update.
+  Etude's per-update rows stay correct across attempts, and each attempt's `host`
+  names its own machine, so they are the reading across a host change.
 
 Next levers, not attempted: `elemental-uniform` requires one producer, so stepping
 (about 20% of an update) cannot overlap inference; inference runs ~700 calls of ~76

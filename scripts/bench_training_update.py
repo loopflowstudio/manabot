@@ -24,8 +24,7 @@ from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 import managym
 
-ROOT = Path(__file__).resolve().parents[1]
-RECIPE = ROOT / "experiments/regimes/elemental-long-183-v1.json"
+RECIPE = Path(__file__).parents[1] / "experiments/regimes/elemental-long-183-v1.json"
 
 
 def main() -> None:

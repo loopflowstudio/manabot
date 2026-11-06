@@ -682,7 +682,8 @@ def _execute_regime(
         space = ObservationSpace(regime.observation)
         identities = _runtime_identities(seed, regime, space)
         run.identities = identities
-        run.host = host_facts()
+        host = host_facts()
+        run.host = host
         if snapshot is not None:
             admit_recovery_identities(
                 snapshot.identities, identities, source_repair_reason
@@ -1199,7 +1200,7 @@ def _execute_regime(
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,
                             "identities": run.identities,
-                            "host": run.host.model_dump() if run.host else None,
+                            "host": host.model_dump(),
                         },
                     )
                     run.metrics_run = str(experiment.run.files.root)
