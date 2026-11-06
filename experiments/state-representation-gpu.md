@@ -95,6 +95,25 @@ estimate rather than a settled invoice. No live rentals remain.
 
 ## Evidence
 
+Build the interactive Etude report from the retained evidence (no training or
+evaluation execution):
+
+```sh
+uv run --extra reports python -m scripts.report_representation_gpu
+```
+
+Open `.runs/representation/gpu-report/state_representation_gpu.html`. Its Evals
+tab shows all 72 curve endpoints and eight held-out endpoints, grouped into Pool
+and GRU with four seeds each. Updates align the seeds at equal game exposure;
+bands show the seed range, not the paired confidence interval above.
+
+The adapter verifies the original monitor receipts and projects their saved
+statistics into Etude's page model. It supplies arm grouping in memory without
+rewriting the frozen tracker declarations. Plain `etude report` cannot discover
+these historical monitor evaluations. Perf and ML have detailed logs for only
+five learners (Pool: three, GRU: two); the missing logs are labeled and never
+filled with zeros. Evaluation coverage remains complete for all eight learners.
+
 Manifest-published under
 `experiments/data/state-representation-gpu-5da5f4/recovery-20261105/`:
 `comparison.json` (frozen analysis, attempt counts, scores), `ledger/` (every
