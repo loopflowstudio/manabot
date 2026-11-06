@@ -40,7 +40,12 @@ def _agent(
 
 def _collector(agent: ActorCritic) -> SeatRoutedCollector:
     return SeatRoutedCollector(
-        agent.observation_space, Match(), Reward(RewardConfig()), num_envs=2, seed=17
+        agent.observation_space,
+        Match(),
+        Reward(RewardConfig()),
+        num_envs=2,
+        seed=17,
+        batch_closure="exact-quota",
     )
 
 

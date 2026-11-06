@@ -1196,9 +1196,10 @@ impl Game {
                                 self.invalidate_mana_cache(PlayerId(1));
                             }
                         }
+                        self.capture_resolution(&frame);
                         self.emit(GameEvent::SpellResolved { card });
                     }
-                    FrameCompletion::Priority => {}
+                    FrameCompletion::Priority => self.capture_resolution(&frame),
                 }
                 self.restart_priority_round();
                 return;

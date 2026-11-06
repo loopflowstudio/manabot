@@ -1,0 +1,722 @@
+{
+  "schema_version": 1,
+  "id": "growing-pool-245-v1",
+  "status": "prospective-unexecuted",
+  "world": {
+    "world_version": "w17",
+    "card_digest": "28a0744e5183c1dea6bc766046fe6018bdac415f3bd37370745b68bc930040bd",
+    "engine_source_sha256": "ecaeaf13f7fb51b93ba1ba711c742f5cd46797ce0af35389edebcf96f80e7391"
+  },
+  "manifest": {
+    "id": "reference-league-proxy-v1",
+    "entries": [
+      {
+        "id": "anchor-ur",
+        "deck": {
+          "decklist": {
+            "Abandon Attachments": 2,
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Deserter's Disciple": 1,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 2,
+            "Fabled Passage": 2,
+            "Fire Nation Cadets": 4,
+            "Firebending Lesson": 3,
+            "Gran-Gran": 1,
+            "Igneous Inspiration": 2,
+            "Island": 7,
+            "Lightning Strike": 1,
+            "Monastery Swiftspear": 1,
+            "Mountain": 8,
+            "Octopus Form": 1,
+            "Pop Quiz": 1
+          },
+          "sideboard": {
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Firebending Lesson": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "anchor",
+        "tickets": 2,
+        "construction": "Authored elemental-world-v2/elemental_ur; current-world proxy cohort, not Standard or metagame evidence.",
+        "interaction_cards": [
+          "Firebending Lesson",
+          "Lightning Strike",
+          "Divide by Zero"
+        ],
+        "synergy_cards": [
+          "Fire Nation Cadets",
+          "Dragonfly Swarm"
+        ],
+        "parent": null,
+        "replacements": []
+      },
+      {
+        "id": "anchor-gw",
+        "deck": {
+          "decklist": {
+            "Allies at Last": 2,
+            "Compassionate Healer": 2,
+            "Earth Kingdom Jailer": 2,
+            "Enter the Avatar State": 1,
+            "Fabled Passage": 2,
+            "Fancy Footwork": 1,
+            "Forest": 7,
+            "Haru, Hidden Talent": 1,
+            "Invasion Reinforcements": 3,
+            "Jeong Jeong's Deserters": 1,
+            "Origin of Metalbending": 1,
+            "Ostrich-Horse": 2,
+            "Plains": 8,
+            "Professor of Symbology": 1,
+            "South Pole Voyager": 1,
+            "True Ancestry": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 1,
+            "Yip Yip!": 1
+          },
+          "sideboard": {
+            "Enter the Avatar State": 1,
+            "Origin of Metalbending": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "anchor",
+        "tickets": 2,
+        "construction": "Authored elemental-world-v2/elemental_gw; current-world proxy cohort, not Standard or metagame evidence.",
+        "interaction_cards": [
+          "Earth Kingdom Jailer",
+          "Allies at Last"
+        ],
+        "synergy_cards": [
+          "Invasion Reinforcements",
+          "Water Tribe Rallier"
+        ],
+        "parent": null,
+        "replacements": []
+      },
+      {
+        "id": "new-ub",
+        "deck": {
+          "decklist": {
+            "Abandon Attachments": 1,
+            "Accumulate Wisdom": 1,
+            "Deadly Dispute": 1,
+            "Epic Downfall": 1,
+            "Eyetwitch": 2,
+            "Fabled Passage": 2,
+            "Foggy Swamp Spirit Keeper": 1,
+            "Forecasting Fortune Teller": 3,
+            "Gran-Gran": 1,
+            "Island": 8,
+            "It'll Quench Ya!": 2,
+            "June, Bounty Hunter": 1,
+            "Knowledge Seeker": 2,
+            "Otter-Penguin": 3,
+            "Pop Quiz": 1,
+            "Power Word Kill": 2,
+            "Savor": 1,
+            "Swamp": 7
+          },
+          "sideboard": {
+            "Accumulate Wisdom": 1,
+            "Ozai's Cruelty": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "new",
+        "tickets": 1,
+        "construction": "Authored elemental-world-v2/elemental_ub; current-world proxy cohort, not Standard or metagame evidence.",
+        "interaction_cards": [
+          "Power Word Kill",
+          "Epic Downfall",
+          "Savor"
+        ],
+        "synergy_cards": [
+          "Otter-Penguin",
+          "Knowledge Seeker"
+        ],
+        "parent": null,
+        "replacements": []
+      },
+      {
+        "id": "new-gr",
+        "deck": {
+          "decklist": {
+            "Badgermole Cub": 1,
+            "Deserter's Disciple": 1,
+            "Enthusiastic Study": 1,
+            "Fabled Passage": 2,
+            "Field Trip": 1,
+            "Firebending Lesson": 2,
+            "Fists of Flame": 2,
+            "Forest": 8,
+            "Giant Cindermaw": 1,
+            "Gnarled Professor": 1,
+            "Igneous Inspiration": 1,
+            "Lightning Strike": 2,
+            "Monastery Swiftspear": 1,
+            "Mountain": 7,
+            "Origin of Metalbending": 1,
+            "Ostrich-Horse": 2,
+            "Shared Roots": 1,
+            "Tiger-Dillo": 2,
+            "Toph, the Blind Bandit": 1,
+            "Uncle Iroh": 1,
+            "Wartime Protestors": 1
+          },
+          "sideboard": {
+            "Combustion Technique": 1,
+            "Firebending Lesson": 1,
+            "Origin of Metalbending": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "new",
+        "tickets": 1,
+        "construction": "Authored elemental-world-v2/elemental_gr; current-world proxy cohort, not Standard or metagame evidence.",
+        "interaction_cards": [
+          "Lightning Strike",
+          "Firebending Lesson"
+        ],
+        "synergy_cards": [
+          "Tiger-Dillo",
+          "Ostrich-Horse"
+        ],
+        "parent": null,
+        "replacements": []
+      },
+      {
+        "id": "mixed-ur",
+        "deck": {
+          "decklist": {
+            "Abandon Attachments": 2,
+            "Combustion Technique": 1,
+            "Deserter's Disciple": 1,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 2,
+            "Fabled Passage": 2,
+            "Fire Nation Cadets": 4,
+            "Firebending Lesson": 3,
+            "Gran-Gran": 1,
+            "Igneous Inspiration": 2,
+            "Island": 7,
+            "It'll Quench Ya!": 1,
+            "Lightning Strike": 1,
+            "Monastery Swiftspear": 1,
+            "Mountain": 8,
+            "Octopus Form": 1,
+            "Pop Quiz": 1
+          },
+          "sideboard": {
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Firebending Lesson": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "mixed",
+        "tickets": 1,
+        "construction": "Authored old UR core plus UB interaction; same printed mana cost/type, unchanged lands and Cadets/Swarm package.",
+        "interaction_cards": [
+          "Firebending Lesson",
+          "Lightning Strike",
+          "Divide by Zero"
+        ],
+        "synergy_cards": [
+          "Fire Nation Cadets",
+          "Dragonfly Swarm"
+        ],
+        "parent": "anchor-ur",
+        "replacements": [
+          {
+            "remove": "Accumulate Wisdom",
+            "add": "It'll Quench Ya!",
+            "copies": 1
+          }
+        ]
+      },
+      {
+        "id": "mixed-gw",
+        "deck": {
+          "decklist": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 1,
+            "Compassionate Healer": 2,
+            "Earth Kingdom Jailer": 2,
+            "Enter the Avatar State": 1,
+            "Fabled Passage": 2,
+            "Fancy Footwork": 1,
+            "Forest": 7,
+            "Invasion Reinforcements": 3,
+            "Jeong Jeong's Deserters": 1,
+            "Origin of Metalbending": 1,
+            "Ostrich-Horse": 2,
+            "Plains": 8,
+            "Professor of Symbology": 1,
+            "South Pole Voyager": 1,
+            "True Ancestry": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 1,
+            "Yip Yip!": 1
+          },
+          "sideboard": {
+            "Enter the Avatar State": 1,
+            "Origin of Metalbending": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "mixed",
+        "tickets": 1,
+        "construction": "Authored old GW Ally core plus GR two-drop; same printed mana cost/type, unchanged lands and Ally core.",
+        "interaction_cards": [
+          "Earth Kingdom Jailer",
+          "Allies at Last"
+        ],
+        "synergy_cards": [
+          "Invasion Reinforcements",
+          "Water Tribe Rallier"
+        ],
+        "parent": "anchor-gw",
+        "replacements": [
+          {
+            "remove": "Haru, Hidden Talent",
+            "add": "Badgermole Cub",
+            "copies": 1
+          }
+        ]
+      },
+      {
+        "id": "test-ur-composition",
+        "deck": {
+          "decklist": {
+            "Abandon Attachments": 2,
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Deserter's Disciple": 1,
+            "Divide by Zero": 3,
+            "Dragonfly Swarm": 2,
+            "Fabled Passage": 2,
+            "Fire Nation Cadets": 4,
+            "Firebending Lesson": 3,
+            "Gran-Gran": 1,
+            "Igneous Inspiration": 2,
+            "Island": 7,
+            "Lightning Strike": 1,
+            "Monastery Swiftspear": 1,
+            "Mountain": 8,
+            "Octopus Form": 1
+          },
+          "sideboard": {
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Firebending Lesson": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "test",
+        "tickets": 0,
+        "construction": "Held-out deck composition using only training cards; one same-cost/type change.",
+        "interaction_cards": [
+          "Firebending Lesson",
+          "Lightning Strike",
+          "Divide by Zero"
+        ],
+        "synergy_cards": [
+          "Fire Nation Cadets",
+          "Dragonfly Swarm"
+        ],
+        "parent": "anchor-ur",
+        "replacements": [
+          {
+            "remove": "Pop Quiz",
+            "add": "Divide by Zero",
+            "copies": 1
+          }
+        ]
+      },
+      {
+        "id": "test-ur-card",
+        "deck": {
+          "decklist": {
+            "Abandon Attachments": 2,
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Deserter's Disciple": 1,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 2,
+            "Fabled Passage": 2,
+            "Fire Nation Cadets": 4,
+            "Firebending Lesson": 2,
+            "Gran-Gran": 1,
+            "Igneous Inspiration": 2,
+            "Island": 7,
+            "Lightning Bolt": 1,
+            "Lightning Strike": 1,
+            "Monastery Swiftspear": 1,
+            "Mountain": 8,
+            "Octopus Form": 1,
+            "Pop Quiz": 1
+          },
+          "sideboard": {
+            "Accumulate Wisdom": 1,
+            "Combustion Technique": 1,
+            "Firebending Lesson": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "test",
+        "tickets": 0,
+        "construction": "Held-out card experience: Lightning Bolt definition/tokens visible, never in training main or sideboards.",
+        "interaction_cards": [
+          "Firebending Lesson",
+          "Lightning Strike",
+          "Divide by Zero"
+        ],
+        "synergy_cards": [
+          "Fire Nation Cadets",
+          "Dragonfly Swarm"
+        ],
+        "parent": "anchor-ur",
+        "replacements": [
+          {
+            "remove": "Firebending Lesson",
+            "add": "Lightning Bolt",
+            "copies": 1
+          }
+        ]
+      },
+      {
+        "id": "test-gr-combination",
+        "deck": {
+          "decklist": {
+            "Badgermole Cub": 1,
+            "Deserter's Disciple": 1,
+            "Enthusiastic Study": 1,
+            "Fabled Passage": 2,
+            "Field Trip": 1,
+            "Fire Nation Cadets": 1,
+            "Firebending Lesson": 2,
+            "Fists of Flame": 2,
+            "Forest": 8,
+            "Giant Cindermaw": 1,
+            "Gnarled Professor": 1,
+            "Igneous Inspiration": 1,
+            "Lightning Strike": 2,
+            "Mountain": 7,
+            "Origin of Metalbending": 1,
+            "Ostrich-Horse": 2,
+            "Shared Roots": 1,
+            "Tiger-Dillo": 2,
+            "Toph, the Blind Bandit": 1,
+            "Uncle Iroh": 1,
+            "Wartime Protestors": 1
+          },
+          "sideboard": {
+            "Combustion Technique": 1,
+            "Firebending Lesson": 1,
+            "Origin of Metalbending": 1,
+            "Zuko's Exile": 1
+          }
+        },
+        "group": "test",
+        "tickets": 0,
+        "construction": "Held-out intra-deck Cadets + Tiger-Dillo combination. Cross-seat co-occurrence remains possible in training.",
+        "interaction_cards": [
+          "Lightning Strike",
+          "Firebending Lesson"
+        ],
+        "synergy_cards": [
+          "Tiger-Dillo",
+          "Ostrich-Horse"
+        ],
+        "parent": "new-gr",
+        "replacements": [
+          {
+            "remove": "Monastery Swiftspear",
+            "add": "Fire Nation Cadets",
+            "copies": 1
+          }
+        ]
+      }
+    ],
+    "heldout_cards": [
+      "Lightning Bolt"
+    ],
+    "heldout_combinations": [
+      [
+        "Fire Nation Cadets",
+        "Tiger-Dillo"
+      ]
+    ],
+    "panels": [
+      {
+        "id": "anchors",
+        "kind": "anchor",
+        "entries": [
+          "anchor-ur",
+          "anchor-gw"
+        ],
+        "deals": [
+          2458000,
+          2458001,
+          2458002,
+          2458003
+        ]
+      },
+      {
+        "id": "expanding",
+        "kind": "expanding",
+        "entries": [
+          "new-ub",
+          "new-gr"
+        ],
+        "deals": [
+          2458100,
+          2458101,
+          2458102,
+          2458103
+        ]
+      },
+      {
+        "id": "decks",
+        "kind": "heldout-deck",
+        "entries": [
+          "test-ur-composition",
+          "anchor-gw"
+        ],
+        "deals": [
+          2458200,
+          2458201,
+          2458202,
+          2458203
+        ]
+      },
+      {
+        "id": "cards",
+        "kind": "heldout-card",
+        "entries": [
+          "test-ur-card",
+          "anchor-gw"
+        ],
+        "deals": [
+          2458300,
+          2458301,
+          2458302,
+          2458303
+        ]
+      },
+      {
+        "id": "combinations",
+        "kind": "heldout-combination",
+        "entries": [
+          "test-gr-combination",
+          "anchor-ur"
+        ],
+        "deals": [
+          2458400,
+          2458401,
+          2458402,
+          2458403
+        ]
+      }
+    ]
+  },
+  "observation": {
+    "policy_input_version": 7,
+    "max_facts": 128,
+    "max_cards_per_player": 128,
+    "max_permanents_per_player": 64,
+    "max_actions": 512,
+    "max_focus_objects": 16,
+    "max_events": 32
+  },
+  "observation_shapes": {
+    "relations": [
+      64,
+      49
+    ],
+    "facts": [
+      128,
+      12
+    ],
+    "effects": [
+      128,
+      18
+    ],
+    "effect_details": [
+      512,
+      3
+    ],
+    "effect_members": [
+      2048,
+      2
+    ],
+    "semantic_cards": [
+      2,
+      128
+    ],
+    "known_hand": [
+      2,
+      128,
+      2
+    ],
+    "decklists": [
+      2,
+      128,
+      5
+    ],
+    "agent_player": [
+      1,
+      73
+    ],
+    "opponent_player": [
+      1,
+      73
+    ],
+    "agent_cards": [
+      128,
+      56
+    ],
+    "opponent_cards": [
+      128,
+      56
+    ],
+    "agent_permanents": [
+      64,
+      38
+    ],
+    "opponent_permanents": [
+      64,
+      38
+    ],
+    "actions": [
+      512,
+      22
+    ],
+    "events": [
+      32,
+      7
+    ],
+    "action_focus": [
+      512,
+      16
+    ],
+    "agent_player_valid": [
+      1
+    ],
+    "opponent_player_valid": [
+      1
+    ],
+    "agent_cards_valid": [
+      128
+    ],
+    "opponent_cards_valid": [
+      128
+    ],
+    "agent_permanents_valid": [
+      64
+    ],
+    "opponent_permanents_valid": [
+      64
+    ],
+    "actions_valid": [
+      512
+    ],
+    "events_valid": [
+      32
+    ]
+  },
+  "agent": {
+    "world": "world",
+    "value_kind": "scalar",
+    "value_aggregation": "masked_mean",
+    "policy_film": true,
+    "attention_layers": 2,
+    "hidden_dim": 64,
+    "num_attention_heads": 4,
+    "attention_on": true,
+    "belief_count_buckets": 0,
+    "belief_card_vocab_size": 0,
+    "belief_owner_role_vocab_size": 2,
+    "belief_hidden_zone_vocab_size": 7
+  },
+  "learning": {
+    "gradient": "damped_policy",
+    "policy_lambda": 0.5,
+    "value_lambda": 0.8,
+    "filter_kind": "quantile",
+    "filter_scope": "actor_critic",
+    "advantage_quantile": 0.75,
+    "min_advantage": 0.01,
+    "reference": "action_type_uniform",
+    "clip": 0.2,
+    "collection_kl": 0.1,
+    "learning_rate_scale": 0.5,
+    "learning_rate_power": 1.1,
+    "learning_rate_min": 5e-06,
+    "learning_rate_max": 0.0001,
+    "tau_scale": 0.05,
+    "tau_power": 0.3,
+    "max_grad_norm": 0.267,
+    "ema": 0.999,
+    "iteration_schedule": {
+      "steps": 32,
+      "reference_steps": 2048
+    }
+  },
+  "budget": {
+    "seeds": [
+      2450401,
+      2450402
+    ],
+    "updates": 32,
+    "milestones": [
+      8,
+      16
+    ],
+    "streams": 8,
+    "games_per_stream": 1,
+    "training_seconds": 1800,
+    "training_job_hours": 1.0,
+    "training_usd_per_seed": 1.0,
+    "evaluation_hours": 2.0,
+    "evaluation_usd": 2.0,
+    "reserve_usd": 1.0,
+    "game_seconds": 60.0,
+    "max_commands": 10000,
+    "proposed_total_usd": 5.0
+  },
+  "analysis": {
+    "bootstrap_seed": 2459001,
+    "bootstrap_resamples": 2000,
+    "health_clock": "updates",
+    "parameter_change": "numerical/parameter_relative_delta",
+    "finite_metrics": [
+      "loss",
+      "policy_loss",
+      "value_loss"
+    ],
+    "zero_metrics": [
+      "numerical/nonfinite_count",
+      "numerical/rejected_steps",
+      "numerical/skipped_steps",
+      "numerical/legal_underflow_count",
+      "numerical/empty_actor_batch"
+    ],
+    "sampled_finite_metrics": [
+      "numerical/gradient_norm_before",
+      "numerical/gradient_norm_after"
+    ],
+    "positive_metrics": [
+      "numerical/optimizer_steps"
+    ],
+    "sampled_updates": [
+      1,
+      25
+    ]
+  }
+}

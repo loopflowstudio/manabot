@@ -1,0 +1,7 @@
+- step: {name: card-batch, id: coverage-working}
+- step: {name: implement, id: implement-working}
+- compress
+- graph: refresh
+- concept-review
+- coverage-behavior-review
+- loop: implement-working

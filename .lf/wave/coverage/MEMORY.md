@@ -163,7 +163,7 @@ preserves accepted decisions, dated proof limits and source history.
   digests and counts on one runner. It retained 49.91% less worst-reply time,
   43.93% less total-search time and 30.43% less time per step against
   `4b5e9c0e4`, preserving the 10% tolerance. The baseline and investigation in
-  `docs/development.md` / `docs/research/engine-speed-2026-11.md` own the
+  `docs/development.md` / `.lf/wave/engine-performance/research/engine-speed-2026-11.md` own the
   measurements and rejected approaches. This upstream proof does not certify
   MTG-239's corrected rules or any subsequent merged tree.
 - Rules corrections can change benchmark work even when the decklists stay
@@ -435,6 +435,13 @@ preserves accepted decisions, dated proof limits and source history.
   and viewer projections after catalog-id resolution. Full-suite acceptance is
   distinct from these focused repairs. Exact evidence is retained at
   `1c3cf1819:scratch/mtg-244-ci-repair.md`.
+- Static abilities of one source share a timestamp and apply in definition
+  order, so a definition lists an ability loss before the grant it keeps. Tests
+  written before composable layers can encode pre-layer behavior: Toph and Phoenix
+  Fleet Airship asserted that layer-6 ability loss undoes a layer-4 type effect,
+  contrary to CR 613.6. Check such a failure against the rules before repairing
+  either side; Energybending and Honest Work in the same CI run were real
+  regressions (`c46e4f3d8`, pending CI and Jack Heart's review).
 - A read-only SBA check needs no trigger-source snapshot. `68ef4a63d` defers
   capture until the first relevant mutation while preserving one pre-batch
   source set for simultaneous events. Its same-runner Engine Budget

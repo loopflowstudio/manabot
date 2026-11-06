@@ -14,7 +14,7 @@ or expensive allocation is authorized by their presence. Each requires frozen
 inputs and predictions, a separately approved cost cap, fresh evaluation deals,
 and retained failed attempts before scoring. Compound training (ETU-94, below)
 and the frozen-policy collection and belief fitting stages in item 4 now have
-bounded implementations. See [the sampler guide](../docs/search-and-beliefs.md#belief-sampler) for
+bounded implementations. See [the sampler guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler) for
 the latter; scientific allocations and acceptance comparisons remain unexecuted
 proposals.
 
@@ -110,7 +110,7 @@ number. No mechanism is retained solely because a single seed improved.
 
 ## ETU-95 implementation boundary (2026-10-04)
 
-The [local-search guide](../docs/search-and-beliefs.md#local-policy-search) and executable
+The [local-search guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#local-policy-search) and executable
 [`frozen_policy_local_update()`](recipes/frozen_policy_local_update.py)
 now cover frozen raw/EMA collection, viewer-safe rollouts, the two-KL local
 update, complete target receipts, hard/soft/allocation controls, and cumulative

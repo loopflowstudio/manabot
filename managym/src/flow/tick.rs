@@ -30,12 +30,23 @@ impl Game {
             )));
         }
 
+        let exposure = self.exposure_choice(&action_space, action);
         let selected_action = action_space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
             self.current_action_space = Some(action_space);
             return Err(error);
         }
 
+        if let Some(choice) = exposure {
+            self.card_capture
+                .as_mut()
+                .unwrap()
+                .exposure
+                .as_mut()
+                .unwrap()
+                .choices
+                .push(choice);
+        }
         Ok(self.finish_action_step())
     }
 

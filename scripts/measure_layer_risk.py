@@ -180,10 +180,14 @@ def prepare(out: Path) -> None:
             str(ROOT / "managym/perf/layers-attribution.patch"),
         ]
     )
+    # `before` isolates the engine, so it runs the candidate's card definitions.
+    # State digests bind definitions; a card repair made after BEFORE (Honest
+    # Work's static order) would otherwise differ in every compared receipt.
     for name in (
         "managym/examples/bench_layers.rs",
         "managym/src/benchmark_layers.rs",
         "manabot/verify/representation.py",
+        "managym/cards/src/tla.rs",
     ):
         shutil.copy2(ROOT / name, before / name)
     with (before / "managym/Cargo.toml").open("a") as manifest:

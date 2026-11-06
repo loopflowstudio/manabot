@@ -67,6 +67,11 @@ checkpoints or experiment evidence.
   `managym/README.md`). Avoid transient comments that denote changes; pay
   attention to file headers and README content; propose small, iterative
   changes.
+- Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
+  Compose builtin graphs; use narrowly named forks for domain review placement.
+  Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
+  A nested software verification step must not complete a parent experiment
+  before its scientific outcome; see [work boundaries](docs/workflows.md).
 
 ### Python structure and documentation
 
@@ -298,6 +303,11 @@ id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
 checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
 online, never in CI). Rebuild the extension after card changes.
 
+Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
+table of their categories. Add a new subtype there (the cards crate's
+`every_authored_subtype_has_a_category` fails otherwise), and read creature
+types through `is_creature_type`, never by excluding other subtypes.
+
 Declare a parameterless keyword once in the rules enum's `keywords!` declaration
 and use `Keywords::of`. Storage grows with the vocabulary; append variants to
 preserve present-keyword serialization order and values. When changing storage,
@@ -371,6 +381,8 @@ changes invalidate that source. Intermediate layer objects detach on writes.
 Conservative characteristic read/write summaries skip impossible dependency
 probes; plausible pairs still compare instructions and generating-ability
 existence. Debug rebuilds source plans independently and checks skipped pairs.
+Static abilities of one source share a timestamp and apply in definition order,
+so a definition lists an ability loss before the grant it keeps (Honest Work).
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.
@@ -431,6 +443,10 @@ Etude evaluation tables use `seat` for the participant's index in
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
 group native play/draw reports by `game_seat`. Etude's conversion owns the
 historical `player`/`seat` column rename; never rewrite retained tables for it.
+Every Etude result row names a participant `seat` or a declared `group`; use
+`group: all` for a receipt covering the whole match. `card_plays.game` is the
+native trace's game ID, not its leg index; join evaluator rows to retained card
+blobs by `trace_sha256` within the match, then validate the blob's deal and leg.
 
 ### Offline inference reports
 

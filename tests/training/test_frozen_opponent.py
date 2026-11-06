@@ -34,6 +34,7 @@ def _regime(path: Path) -> TrainingRegime:
                 operation="train_self_play",
                 behavior="frozen",
                 opponent=FrozenOpponent(path=str(path), sha256=file_sha256(path)),
+                batch_closure="exact-quota",
                 streams=2,
                 updates=1,
                 transitions=8,

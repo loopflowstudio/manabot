@@ -1133,6 +1133,32 @@ fn earthbending_lesson_animates_only_an_own_land_with_four_counters() {
     );
 }
 
+/// CR 205.3: Cave is a land type, so an earthbent Secret Tunnel is a creature
+/// with no creature type, and Honest Work's creature-type replacement
+/// (CR 205.1b) keeps the land's Cave subtype.
+#[test]
+fn an_earthbent_cave_keeps_its_land_type_out_of_its_creature_types() {
+    let mut s = five_color_setup(&["Earthbending Lesson", "Secret Tunnel", "Honest Work"]);
+    let tunnel = s.force_permanent_on_battlefield(1, "Secret Tunnel");
+    s.advance_to_active_step(1, StepKind::Main);
+    let lesson = force_new_card_in_hand(&mut s, 1, "Earthbending Lesson");
+    s.set_player_mana_pool(1, "20WWWWUUUUBBBBRRRRGGGG");
+    cast_card(&mut s, lesson);
+    assert!(s.choose_target(Target::Permanent(tunnel)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, tunnel));
+    let view = s.game().characteristics(tunnel);
+    assert!(view.has_subtype("Cave"));
+    assert!(view.creature_types.is_empty(), "{:?}", view.creature_types);
+
+    s.advance_to_active_step(0, StepKind::Main);
+    enchant(&mut s, "Honest Work", "U", tunnel);
+    let view = s.game().characteristics(tunnel);
+    assert!(view.has_subtype("Cave"), "{:?}", view.subtypes);
+    assert!(view.has_subtype("Citizen"));
+    assert_eq!(view.creature_types, vec!["Citizen".to_string()]);
+}
+
 /// Elemental Teachings reveals up to four differently named lands; the
 /// opponent chooses two for the graveyard and the rest enter tapped.
 #[test]
@@ -4752,7 +4778,14 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
     until_end_of_turn(
         &mut s,
         many,
-        Modification::AddSubtypes((0..12).map(|i| format!("Type{i}")).collect()),
+        Modification::AddSubtypes(
+            [
+                "Angel", "Ape", "Archer", "Bear", "Beast", "Bird", "Cat", "Dragon", "Elf", "Fish",
+                "Goblin", "Wolf",
+            ]
+            .map(String::from)
+            .to_vec(),
+        ),
     );
     animate(&mut s, land);
     set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 1);
@@ -8246,7 +8279,10 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
     }
     assert!(!observed(&s, rival).is_animated);
     until_end_of_turn(&mut s, fleet[0], Modification::LoseAllAbilities);
-    assert!(!observed(&s, fleet[0]).is_animated);
+    assert!(
+        observed(&s, fleet[0]).is_animated,
+        "CR 613.6: the layer-4 type effect continues past layer-6 ability loss"
+    );
     assert!(
         observed(&s, fleet[1]).is_animated,
         "ability loss keeps the name"
