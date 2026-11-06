@@ -67,6 +67,11 @@ checkpoints or experiment evidence.
   `managym/README.md`). Avoid transient comments that denote changes; pay
   attention to file headers and README content; propose small, iterative
   changes.
+- Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
+  Compose builtin graphs; use narrowly named forks for domain review placement.
+  Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
+  A nested software verification step must not complete a parent experiment
+  before its scientific outcome; see [work boundaries](docs/workflows.md).
 
 ### Python structure and documentation
 
@@ -159,6 +164,15 @@ checkpoints or experiment evidence.
   the model routes shared vectors before attention, preserving duplicate edges.
   V1–v6 remain frozen and fresh defaults remain v6. Allocate and collect every
   key from the selected `ObservationSpace`, never a global default key list.
+- Explicit input v8 preserves v7 object/relation/shared header/member widths,
+  with 4096 × 3 effect details. Detail kinds 11–19 carry learning-token kinds
+  1–9 and exact signed i32 values in two 16-bit halves. Local fact kinds 11–14
+  carry copy-exception programs, changed colors, keyword-counter timestamps,
+  and captured continuation programs (frame index + 1, token kind/value/ordinal).
+  V8 defaults to 512 local facts; v7 retains 128 and fresh input remains v6.
+  Shared admission rejects new unrepresentable layer payloads on v1–v7 before
+  either encoder writes buffers. A stacked activation owns its chosen effects;
+  catalog joins are observation provenance, never resolution lookup authority.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -283,6 +297,11 @@ id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
 checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
 online, never in CI). Rebuild the extension after card changes.
 
+Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
+table of their categories. Add a new subtype there (the cards crate's
+`every_authored_subtype_has_a_category` fails otherwise), and read creature
+types through `is_creature_type`, never by excluding other subtypes.
+
 Declare a parameterless keyword once in the rules enum's `keywords!` declaration
 and use `Keywords::of`. Storage grows with the vocabulary; append variants to
 preserve present-keyword serialization order and values. When changing storage,
@@ -323,30 +342,41 @@ observation. `force_permanent_on_battlefield` places a permanent without an
 entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
-A permanent's characteristics after continuous effects (name, types, keywords,
-ability loss, activated abilities, power/toughness) are one view,
+A permanent's characteristics after continuous effects (name, types, colors,
+keywords, static/triggered/activated abilities, power/toughness) are one view,
 `Game::characteristics(id)`, which applies static abilities and effect records
-in layer and timestamp order once; callers read its fields, and rules
+in layer, dependency and timestamp order; callers read its fields, and rules
 questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
-Its `activated_abilities` are printed, then granted (e.g. an Equipment's
-`AbilityGrant`); activation, payment and offer code indexes only that list,
-never `card.activated_abilities`. Its `abilities_lost` reads
-continuous-effect records and an Aura's `SetCharacteristics`. Code that the
-layer computation itself calls (static scopes, ability outputs) reads the
-private layer stages in `flow/statics.rs`, never the view.
-The view and its static-source index are computed once per state revision and
-shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` with
-`Revisions` (`characteristics`, `mana_pools`, `triggers`): `DerefMut`
+Its `activated_abilities` follow layer/timestamp order; activation, payment and
+offer code indexes only that list, never `card.activated_abilities`. Resolution
+consumes the effects captured at activation. `flow/layers.rs::Context` evaluates
+the board without calling the public view; `flow/statics.rs` caches that board
+and finalizes activation costs and dynamic mana outputs. Each immutable view is
+shared as an `Arc<Characteristics>`. Whole-board readers use `characteristics_many`
+(or internal `layer_views` when activation finalization is unnecessary), preserving
+their input order and validating the shared board once per immutable scan.
+`Game::state` is a `TrackedState` with
+`Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
 advances every counter, and its typed accessors (`tap`, `mark_damage`,
 `events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
-their field feeds. Route a hot write through a typed accessor only when no
+their field feeds. Tap/untap advances `tapped`; layers retain their board only
+when no discovered scope, condition or value predicate reads tap state. Removing
+a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
 layer, static condition or trigger source reads the field; debug builds
 recompute every cached view and index on read and assert they match, so a
 misclassified accessor fails `cargo test` in debug. Continuous-effect records
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
-(`flow/triggers.rs`), rebuilt on the `triggers` revision; departed-object
+(`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+Layer rebuilds reuse immutable copiable source objects and static plans, bound to
+exact definition identity, incarnation and timestamp; copy/transform definition
+changes invalidate that source. Intermediate layer objects detach on writes.
+Conservative characteristic read/write summaries skip impossible dependency
+probes; plausible pairs still compare instructions and generating-ability
+existence. Debug rebuilds source plans independently and checks skipped pairs.
+Static abilities of one source share a timestamp and apply in definition order,
+so a definition lists an ability loss before the grant it keeps (Honest Work).
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.
@@ -407,6 +437,10 @@ Etude evaluation tables use `seat` for the participant's index in
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
 group native play/draw reports by `game_seat`. Etude's conversion owns the
 historical `player`/`seat` column rename; never rewrite retained tables for it.
+Every Etude result row names a participant `seat` or a declared `group`; use
+`group: all` for a receipt covering the whole match. `card_plays.game` is the
+native trace's game ID, not its leg index; join evaluator rows to retained card
+blobs by `trace_sha256` within the match, then validate the blob's deal and leg.
 
 ### Offline inference reports
 

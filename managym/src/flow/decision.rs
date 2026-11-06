@@ -56,6 +56,10 @@ pub struct ResolutionTarget {
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
+    /// Original dynamically granted program. The queue is its execution cursor;
+    /// this identity survives branch selection and suspension for observation.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub program: Vec<Effect>,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectRef>,
@@ -748,6 +752,7 @@ impl Game {
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
             frame: EffectFrame {
+                program: Vec::new(),
                 remembered: Vec::new(),
                 source: None,
                 source_ref: None,
@@ -803,6 +808,7 @@ impl Game {
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
+        self.capture_resolution(&frame);
         if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
             // A spell that exiled itself ("Exile Avatar's Wrath") has
             // already left the stack (CR 608.2n).
@@ -2334,6 +2340,7 @@ mod learn_tests {
 
     fn learn(game: &mut Game) {
         game.run_frame(EffectFrame {
+            program: Vec::new(),
             remembered: Vec::new(),
             source: None,
             source_ref: None,
@@ -3055,6 +3062,7 @@ mod payment_tests {
             false,
         );
         game.run_frame(EffectFrame {
+            program: Vec::new(),
             remembered: Vec::new(),
             source: None,
             source_ref: None,

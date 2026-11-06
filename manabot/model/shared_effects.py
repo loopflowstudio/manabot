@@ -1,9 +1,10 @@
-"""Encode v7 shared payloads once, then route their gradients into affected objects.
+"""Encode shared payloads once, then route their gradients into affected objects.
 
 Membership is an explicit join, never learned from object IDs. We retain the
 existing unnormalized fact-sum convention: repeated memberships contribute
 repeatedly. A mean would erase multiplicity. This learned sum is compression,
 not an injective semantic representation; tensor transport retains the records.
+V8 adds ordered program tokens; v7 retains its original reducer and embeddings.
 """
 
 import torch
@@ -11,30 +12,37 @@ from torch import nn
 
 from manabot.env.shared_effects import (
     DETAIL_DIM,
-    DETAIL_ROWS,
     EFFECT_DIM,
     EFFECT_ROWS,
     MEMBER_DIM,
     MEMBER_ROWS,
+    shared_effect_shapes,
 )
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
     join_record_rows,
     masked_record_rows,
+    program_number,
     record_indexes,
 )
 
 
 class SharedEffectEncoder(nn.Module):
-    def __init__(self, width: int, reduction: RecordReduction = "typed_pool") -> None:
+    def __init__(
+        self, width: int, reduction: RecordReduction = "typed_pool", *, version: int = 7
+    ) -> None:
         super().__init__()
         self.modification = nn.Embedding(4096, width)
         self.detail = nn.Embedding(4096, width)
-        self.detail_kind = nn.Embedding(4, width)
+        self.version = version
+        self.detail_rows = shared_effect_shapes(version)["effect_details"][0]
+        self.detail_kind = nn.Embedding(20 if version >= 8 else 4, width)
+        if version >= 8:
+            self.detail_number = nn.Linear(1, width)
         self.source = nn.Embedding(4096, width)
         self.header = nn.Linear(8 + 2 * width, width)
-        self.reducer = RecordReducer(width, reduction)
+        self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
 
     def forward(
         self,
@@ -49,7 +57,7 @@ class SharedEffectEncoder(nn.Module):
         batch, object_count, width = objects.shape
         if (
             host.shape[0] != batch
-            or details.shape != (batch, DETAIL_ROWS, DETAIL_DIM)
+            or details.shape != (batch, self.detail_rows, DETAIL_DIM)
             or members.shape != (batch, MEMBER_ROWS, MEMBER_DIM)
         ):
             raise ValueError("invalid shared effect buffer shape")
@@ -65,7 +73,9 @@ class SharedEffectEncoder(nn.Module):
         if (links[:, 0] == 0).any():
             raise ValueError("effect controller is absent")
         offsets = record_indexes(
-            live[:, 13:17], MEMBER_ROWS, "effect CSR offset/count"
+            live[:, 13:17],
+            max(MEMBER_ROWS, self.detail_rows),
+            "effect CSR offset/count",
         ).tolist()
         detail_indexes: list[int] = []
         member_indexes: list[int] = []
@@ -86,7 +96,7 @@ class SharedEffectEncoder(nn.Module):
             if (
                 d != d_end
                 or m != m_end
-                or d + count > DETAIL_ROWS
+                or d + count > self.detail_rows
                 or targets == 0
                 or m + targets > MEMBER_ROWS
             ):
@@ -96,14 +106,18 @@ class SharedEffectEncoder(nn.Module):
             token_indexes.extend(range(3 * i, 3 * i + 3))
             token_indexes.extend(range(detail_start, detail_start + count))
             lengths.append(3 + count)
-            detail_indexes.extend(range(b * DETAIL_ROWS + d, b * DETAIL_ROWS + d_end))
+            detail_indexes.extend(
+                range(b * self.detail_rows + d, b * self.detail_rows + d_end)
+            )
             member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
             member_records.extend([i] * targets)
         # Validate all live details/members together, ignoring poisoned padding.
         detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
-        kinds = record_indexes(detail_host[:, 0], 3, "effect detail kind")
+        kinds = record_indexes(
+            detail_host[:, 0], 19 if self.version >= 8 else 3, "effect detail kind"
+        )
         ids = record_indexes(detail_host[:, 1:], 65535, "effect detail half")
-        if (kinds == 0).any():
+        if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
             raise ValueError("live effect detail has no kind")
         member_host = members.detach().cpu().reshape(-1, MEMBER_DIM)[member_indexes]
         targets = record_indexes(member_host[:, 0], object_count, "effect member")
@@ -131,9 +145,20 @@ class SharedEffectEncoder(nn.Module):
             (((halves[:, 0] << 16) | halves[:, 1]) % 4096).to(device)
         )
         sources = self.source((source % 4096).to(device))
-        detail_tokens = self.detail(
-            (((ids[:, 0] << 16) | ids[:, 1]) % 4096).to(device)
-        ) + self.detail_kind(kinds.to(device))
+        unsigned = (ids[:, 0] << 16) | ids[:, 1]
+        detail_tokens = self.detail((unsigned % 4096).to(device)) + self.detail_kind(
+            kinds.to(device)
+        )
+        if self.version >= 8:
+            # Integer/boolean tokens retain signed numeric meaning;
+            # the GRU retains the ordered shared program structure.
+            signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
+            is_number = ((kinds == 14) | (kinds == 15)).unsqueeze(-1).to(device)
+            detail_tokens = detail_tokens + self.detail_number(
+                program_number(signed.to(device=device, dtype=objects.dtype)).unsqueeze(
+                    -1
+                )
+            ).masked_fill(~is_number, 0)
         tokens = torch.cat(
             (
                 torch.stack((mod, sources, torch.tanh(header)), 1).flatten(0, 1),

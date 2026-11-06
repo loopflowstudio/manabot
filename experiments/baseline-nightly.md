@@ -190,7 +190,7 @@ inconclusive result proof of learning. Further recipe or evaluation-power work
 needs a prospectively declared comparison; it must retain this cohort and must
 not turn arbitrary policy movement into an outcome claim.
 
-The [compact receipt](../docs/evidence/learnability/baseline-qualification.json)
+The compact receipt (`experiments/data/learnability/baseline-qualification.json`, in the artifact store)
 retains all four remote attempts, source revisions, artifact digests, paired
 outcomes, checkpoint hashes, family changes, exposure and costs. Original
 models/traces/reports are in the linked Actions artifacts (14-day retention;

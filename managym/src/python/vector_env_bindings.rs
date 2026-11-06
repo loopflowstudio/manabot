@@ -340,6 +340,18 @@ impl PyVectorEnv {
         })
     }
 
+    fn enable_exposure_capture(&mut self) -> PyResult<()> {
+        self.inner.enable_exposure_capture().map_err(map_agent_err)
+    }
+
+    fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.inner.take_exposure()
+    }
+
+    fn current_exposure(&self) -> PyResult<Vec<String>> {
+        self.inner.current_exposure().map_err(map_agent_err)
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()
@@ -418,7 +430,17 @@ pub(super) fn input_buffer_config(
             }
             config.max_facts = rows;
             if shared_count == 3 {
-                7
+                let details = buffers
+                    .get_item("effect_details")?
+                    .expect("shared buffers present");
+                let detail_shape: Vec<usize> = details.getattr("shape")?.extract()?;
+                if detail_shape.get(detail_shape.len().saturating_sub(2))
+                    == Some(&crate::agent::shared_effects::V8_DETAIL_ROWS)
+                {
+                    8
+                } else {
+                    7
+                }
             } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
                 5
             } else {
@@ -431,7 +453,7 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
-    if shared_count != 0 && config.policy_input_version != 7 {
+    if shared_count != 0 && config.policy_input_version < 7 {
         return Err(PyValueError::new_err("v7 requires current relation width"));
     }
     Ok(config)
@@ -476,7 +498,7 @@ fn read_observation_buffers(
         )?,
         effect_details: shared_buffer(
             "effect_details",
-            crate::agent::shared_effects::DETAIL_ROWS,
+            crate::agent::shared_effects::detail_rows(c.policy_input_version),
             crate::agent::shared_effects::DETAIL_DIM,
         )?,
         effect_members: shared_buffer(

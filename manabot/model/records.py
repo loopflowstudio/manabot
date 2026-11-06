@@ -14,6 +14,16 @@ from torch.nn.utils.rnn import PackedSequence
 RecordReduction = Literal["typed_pool", "typed_gru"]
 
 
+def program_number(value: torch.Tensor) -> torch.Tensor:
+    """Signed log magnitude for v8 integer tokens (the transport stays exact).
+
+    Raw i32 values saturate tanh/GRU gates and erase differences between hash
+    collisions. This monotone scale maps the signed-i32 range into about ±2.15;
+    it retains zero and sign without letting large values dominate embeddings.
+    """
+    return value.sign() * value.abs().log1p() / 10
+
+
 def masked_record_rows(
     value: torch.Tensor, count: int, width: int, valid_column: int
 ) -> torch.Tensor:

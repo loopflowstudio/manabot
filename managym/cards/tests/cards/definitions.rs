@@ -12,6 +12,7 @@ use managym::state::{
     card::{CardDefinition, CardType, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant},
     permanent::CounterKind,
     predicate::CardPredicate,
+    subtype::subtype_category,
 };
 use managym_cards::catalog;
 use serde_json::Value;
@@ -209,7 +210,7 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
     let pool = world_pool();
     let mut identities = BTreeSet::new();
     let (mut faces, mut tokens, mut markers, mut excluded) = (0, 0, 0, 0);
-    for line in include_str!("../../../../docs/rules/tla/allocation.jsonl").lines() {
+    for line in include_str!("../fixtures/tla-allocation.jsonl").lines() {
         let row: Value = serde_json::from_str(line).unwrap();
         let name = row["face_name"].as_str().unwrap();
         match row["kind"].as_str().unwrap() {
@@ -255,4 +256,52 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
         (identities.len(), faces, tokens, markers, excluded),
         (286, 294, 9, 1, 1)
     );
+}
+
+/// Every subtype a definition, token or modification names, as JSON strings
+/// under the fields that hold subtypes.
+fn named_subtypes(value: &Value, key: Option<&str>, found: &mut Vec<String>) {
+    const SUBTYPE_FIELDS: [&str; 6] = [
+        "subtypes",
+        "creature_types",
+        "subtypes_any",
+        "subtype",
+        "AddSubtypes",
+        "SetCreatureTypes",
+    ];
+    match value {
+        Value::String(name) if key.is_some_and(|k| SUBTYPE_FIELDS.contains(&k)) => {
+            found.push(name.clone())
+        }
+        Value::Array(items) => {
+            for item in items {
+                named_subtypes(item, key, found);
+            }
+        }
+        Value::Object(fields) => {
+            for (field, item) in fields {
+                named_subtypes(item, Some(field), found);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// CR 205.3: the shared subtype table classifies every subtype the catalog
+/// names, so no rule infers a creature type from an unlisted name.
+#[test]
+fn every_authored_subtype_has_a_category() {
+    let mut found = Vec::new();
+    for definition in catalog() {
+        let value = serde_json::to_value(definition).expect("definitions serialize");
+        named_subtypes(&value, None, &mut found);
+    }
+    found.sort();
+    found.dedup();
+    assert!(found.len() > 50, "the scan reaches the catalog's subtypes");
+    let missing: Vec<_> = found
+        .iter()
+        .filter(|name| subtype_category(name).is_none())
+        .collect();
+    assert!(missing.is_empty(), "unclassified subtypes: {missing:?}");
 }

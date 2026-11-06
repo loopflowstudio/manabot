@@ -222,9 +222,9 @@ impl Game {
         if delta > 0
             && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
                 self.battlefield_permanents(owner).into_iter().any(|id| {
-                    self.state.permanents[id].as_ref().is_some_and(|p| {
-                        self.state.cards[p.card].has_static(&StaticAbility::PlayersCantGainLife)
-                    })
+                    self.characteristics(id)
+                        .static_abilities
+                        .contains(&StaticAbility::PlayersCantGainLife)
                 })
             })
         {

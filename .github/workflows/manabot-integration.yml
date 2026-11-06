@@ -90,7 +90,10 @@ jobs:
         run: |
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
             tests/training/test_experiment_runner.py \
-            tests/training/test_monitor_evaluation.py
+            tests/training/test_monitor_evaluation.py \
+            tests/training/test_batch_closure.py tests/training/test_credit_assignment.py \
+            tests/training/test_frozen_opponent.py tests/training/test_rl_runtime.py \
+            tests/training/test_recovery.py tests/training/test_elemental_uniform.py
 
       - name: Two-seat and Etude evaluation integration
         if: matrix.group == 'main'
@@ -98,6 +101,7 @@ jobs:
           uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
+            tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py \
             tests/eval/ -q
 
       - name: Evaluation Perf report proof

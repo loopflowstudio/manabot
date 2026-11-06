@@ -20,9 +20,9 @@ impl Game {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
-            for id in self.iter_battlefield_permanents(player) {
+            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
+            {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                let characteristics = self.characteristics(id);
                 if characteristics.is_legendary {
                     names
                         .entry(characteristics.name.clone())
@@ -96,17 +96,13 @@ impl Game {
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
         let mut candidates = Vec::new();
-        for (permanent_id, permanent) in self
-            .state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, perm)| perm.as_ref().map(|p| (PermanentId(idx), p)))
+        for (permanent_id, characteristics) in
+            self.layer_views((0..self.state.permanents.len()).map(PermanentId))
         {
+            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
             // is a 0/0 and dies).
-            let characteristics = self.characteristics(permanent_id);
             let zero_toughness = characteristics.is_creature() && characteristics.toughness <= 0;
             // CR 704.5i/v. No supported battle has a defeat trigger; if one
             // is introduced, its pending trigger must delay this battle SBA.
@@ -140,7 +136,10 @@ impl Game {
         // CR 704.3 — all applicable SBAs are one simultaneous event. Commits
         // have a deterministic ObjectRef order for replay, while every death
         // event sees the same pre-batch trigger-source snapshot.
-        let trigger_sources = self.snapshot_trigger_sources();
+        // An unchanged check emits no events and needs no LKI allocation.
+        // Retain one snapshot immediately before this batch's first mutation.
+        let mut trigger_sources =
+            (performed || !candidates.is_empty()).then(|| self.snapshot_trigger_sources());
         let mut died = Vec::new();
         for (object_ref, event_ref, controller, destroy) in candidates {
             let committed = if destroy {
@@ -176,6 +175,9 @@ impl Game {
                 }) && self.attached_creature(id).is_none()
             })
             .collect();
+        if !detached.is_empty() {
+            trigger_sources.get_or_insert_with(|| self.snapshot_trigger_sources());
+        }
         for permanent_id in detached {
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
@@ -198,6 +200,9 @@ impl Game {
                 Some(_) => tokens_to_remove.push((card_id, card.owner)),
             }
         }
+        if !tokens_to_remove.is_empty() {
+            trigger_sources.get_or_insert_with(|| self.snapshot_trigger_sources());
+        }
         for (card_id, owner) in tokens_to_remove {
             let from = self.state.zones.zone_of(card_id);
             self.state.zones.remove_card(card_id);
@@ -206,7 +211,9 @@ impl Game {
         }
 
         if performed {
-            self.process_game_events_with_sources(&trigger_sources);
+            self.process_game_events_with_sources(
+                &trigger_sources.expect("a changed SBA batch retained its source snapshot"),
+            );
         }
 
         // CR 714.4 — A Saga whose lore counters reach its final chapter is
@@ -221,19 +228,16 @@ impl Game {
     }
 
     fn finished_sagas(&self) -> Vec<PermanentId> {
-        (0..self.state.permanents.len())
-            .map(PermanentId)
-            .filter(|&id| {
-                let Some(permanent) = self.state.permanents[id].as_ref() else {
-                    return false;
-                };
-                let card = &self.state.cards[permanent.card];
-                let Some(last) = card.final_chapter() else {
+        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .filter(|(id, view)| {
+                let permanent = self.state.permanents[*id].as_ref().unwrap();
+                let Some(last) = view.final_chapter() else {
                     return false;
                 };
                 permanent.counter_count(CounterKind::Lore) >= i32::from(last)
                     && !self.chapter_ability_pending(permanent.card)
             })
+            .map(|(id, _)| id)
             .collect()
     }
 

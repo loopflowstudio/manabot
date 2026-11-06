@@ -1,0 +1,18 @@
+- step: {name: experiment-design, id: experiment-design}
+- loop: experiment-design
+  interactive: experiment-design-review
+- xor:
+    router: experiment-route
+    paths:
+      software:
+        graph: experiment-software
+        description: Accepted protocol needs software changes before final freeze
+      ready:
+        description: Existing admitted software can execute the protocol
+- step: {name: experiment-freeze, id: experiment-freeze}
+- loop: experiment-freeze
+  interactive: experiment-execution-review
+- step: {name: pool-validation, id: experiment-execute}
+- experiment-analysis
+- loop: experiment-execute
+  interactive: experiment-evidence-review

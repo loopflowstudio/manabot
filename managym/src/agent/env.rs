@@ -87,9 +87,11 @@ pub struct FlatMcResult {
     pub cap_hits: u64,
 }
 
-/// Private scalar replay input retained only for diagnostics at vector failures.
+/// Private scalar replay input for failure diagnostics and training exposure.
 #[derive(Clone, Debug, serde::Serialize)]
 struct NativeActionTrace {
+    #[serde(skip)]
+    seed: u64,
     player_configs: Vec<PlayerConfig>,
     actions: Vec<usize>,
 }
@@ -99,6 +101,8 @@ pub struct Env {
     game: Option<Game>,
     action_trace: Option<NativeActionTrace>,
     capture_cards: bool,
+    capture_exposure: bool,
+    retained_exposure: Vec<String>,
     skip_trivial: bool,
     seed: u64,
     pub profiler: Profiler,
@@ -184,6 +188,8 @@ impl Env {
             game: None,
             action_trace: None,
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
@@ -210,6 +216,8 @@ impl Env {
             game: Some(game),
             action_trace: None,
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -234,7 +242,11 @@ impl Env {
         crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
+        if self.capture_exposure && self.game.is_some() {
+            self.retained_exposure.push(self.exposure_json()?);
+        }
         self.action_trace = Some(NativeActionTrace {
+            seed: self.seed,
             player_configs: player_configs.clone(),
             actions: Vec::new(),
         });
@@ -243,6 +255,12 @@ impl Env {
         } else {
             Game::new(player_configs, self.seed, self.skip_trivial)
         };
+        if self.capture_exposure {
+            game.card_capture
+                .as_mut()
+                .expect("card capture enabled")
+                .exposure = Some(crate::flow::card_capture::ExposureCapture::default());
+        }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation += 1;
@@ -261,7 +279,36 @@ impl Env {
         Ok(())
     }
 
+    /// Training uses the same card capture, adding consumed choices and completed frames.
+    pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
+        self.enable_card_capture()?;
+        self.capture_exposure = true;
+        Ok(())
+    }
+
+    pub fn exposure_json(&self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("capture before reset".into()))?;
+        serde_json::to_string(&serde_json::json!({
+            "seed": self.action_trace.as_ref().map(|trace| trace.seed),
+            "terminal": game.is_game_over(),
+            "trace": self.action_trace,
+            "cards": self.card_capture_value()?,
+        }))
+        .map_err(|e| AgentError(e.to_string()))
+    }
+
+    pub fn take_exposure(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.retained_exposure)
+    }
+
     pub fn card_capture_json(&self) -> Result<String, AgentError> {
+        serde_json::to_string(&self.card_capture_value()?).map_err(|e| AgentError(e.to_string()))
+    }
+
+    fn card_capture_value(&self) -> Result<serde_json::Value, AgentError> {
         let game = self
             .game
             .as_ref()
@@ -270,12 +317,11 @@ impl Env {
             .card_capture
             .as_ref()
             .ok_or_else(|| AgentError("card capture unavailable".into()))?;
-        serde_json::to_string(&serde_json::json!({
+        Ok(serde_json::json!({
             "capture": capture,
             "final_cards": crate::flow::card_capture::snapshots(game),
             "turn": game.state.turn.turn_number,
         }))
-        .map_err(|e| AgentError(e.to_string()))
     }
 
     pub fn set_seed(&mut self, seed: u64) {
@@ -899,6 +945,8 @@ impl Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -920,6 +968,8 @@ impl Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -1048,6 +1098,13 @@ impl Env {
         self.game
             .as_mut()
             .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
+    }
+
+    /// Fixture access for opt-in native measurement, absent from Python/wheels.
+    /// The harness must refresh priority after changing its constructed board.
+    #[cfg(feature = "benchmark")]
+    pub fn benchmark_game_mut(&mut self) -> &mut Game {
+        self.scenario_game_mut("benchmark_game_mut").unwrap()
     }
 
     fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
