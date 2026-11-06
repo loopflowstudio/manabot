@@ -309,6 +309,17 @@ deck>/<play|draw>/wins`. Offline readers use
 `manabot.training.update_metrics.read_updates`. Selection and belief
 summaries stay in their stage's `diagnostics`.
 
+The Perf panel's "Update time" series shows where an update goes:
+`environment_step_and_encoding`, which compares a run to retained ones, divides by
+the engine's own clock into `native_stepping` and `observation_encoding`, beside
+preparation, inference, `stream_bookkeeping`, assembly and learning.
+`TrainingRun.host` names the machine the attempt got. With one producer
+(`execution.workers` 1, which `elemental-uniform` requires) training occupies one
+CPU thread, so host single-thread speed sets its pace, not vCPU count or GPU size;
+see
+[training update time](../experiments/training-update-time.md) before choosing a
+machine. `scripts/bench_training_update.py` prints the same split for one machine.
+
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
 PPO value loss is half the squared lambda-target residual; categorical move
 learning records its own. Loss, entropy and KL describe the last optimized

@@ -14,6 +14,7 @@ import torch
 
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.inference import transfer
 
 
 class Learner:
@@ -40,10 +41,17 @@ class Learner:
 def observation_tensors(
     obs: dict[str, NDArray[np.generic]], device: torch.device | str
 ) -> dict[str, torch.Tensor]:
-    """Preserve native dtypes except the floating action-focus embedding input."""
-    return {
-        key: torch.as_tensor(value, device=device).float()
-        if key == "action_focus"
-        else torch.as_tensor(value, device=device)
-        for key, value in obs.items()
-    }
+    """Preserve native dtypes except the floating action-focus embedding input.
+
+    Moves one copy per dtype rather than one per key, as collection does.
+    """
+    moved, _ = transfer(
+        {
+            key: torch.as_tensor(value).float()
+            if key == "action_focus"
+            else torch.as_tensor(value)
+            for key, value in obs.items()
+        },
+        torch.device(device),
+    )
+    return moved

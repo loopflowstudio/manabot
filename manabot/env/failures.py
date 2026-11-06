@@ -685,14 +685,18 @@ class CapturedVector(_Capture):
     def _synchronize(self, *, reset: bool = False) -> None:
         self._retain_exposure()
         seeds = self.native.current_game_seeds()
-        if self._sampled_roots and (
-            reset or any(game.seed != seed for game, seed in zip(self.games, seeds))
-        ):
+        restarted = [
+            index
+            for index, (game, seed) in enumerate(zip(self.games, seeds, strict=True))
+            if reset or game.seed != seed
+        ]
+        if self._sampled_roots and restarted:
             # Sampled roots record the native setup actually created.
-            for game, players in zip(
-                self.games, self.native.current_player_configs(), strict=True
-            ):
-                game.players = [PlayerSetup.retain(player) for player in players]
+            players = self.native.current_player_configs()
+            for index in restarted:
+                self.games[index].players = [
+                    PlayerSetup.retain(player) for player in players[index]
+                ]
         for game, seed in zip(self.games, seeds, strict=True):
             if game.seed != seed:
                 game.restart(seed)
