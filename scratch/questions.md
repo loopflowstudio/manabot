@@ -211,3 +211,22 @@ not only the engine). The measured plan and active phase are in
 - Native stepping is an unchanged control here; the engine budget harness owns it.
 - Failure-capture frames and `PolicyInference.check` keep their contracts; only the
   exact single-walk check is a candidate without review.
+
+## experiment-design b015d5 (2026-11-06): training throughput
+
+Design: `experiments/protocols/training-throughput-b015d5-v1.md` (draft). Reversible
+assumptions, for Jack Heart's review:
+- Control = 07c490's `elemental_variants.elemental_recipe` (world relabel + capacity
+  recovery), so the design waits for PR #436 instead of declaring a second copy of the
+  same variant. If #436 stalls, this file can declare the identical two changes under
+  its own ID.
+- Reuses 07c490's 50 `ELEMENTAL_PAIRS` evaluation deals, so scores read against its
+  baseline curve. They stay evaluation-only here; that protocol called them reserved, so
+  sharing them is a choice for review.
+- Packing is judged without strength runs, because processes share only hardware.
+  Spending strength runs on it would buy nothing a digest cannot show.
+- Proposed reservation $24.40; the remaining $25.60 of the cap is held back pending an
+  amendment.
+- An A4000 probe is included as the larger-CPU, cheaper-GPU shape. Etude's `a4000`
+  template lists several rented machines that may be ghost records; check
+  `etude machines` before launch.
