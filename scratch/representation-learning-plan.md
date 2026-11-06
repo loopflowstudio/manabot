@@ -14,8 +14,9 @@ eight learners trained (256 updates × 256 games each) and all 80 endpoints were
 scored with 11,264/11,264 games replayed. The frozen analysis found **no
 qualified plateau** (one of six final-window intervals within ±5) and held-out
 GRU minus pool **−1.95 points [−5.88, +1.98]**: no advantage or equivalence.
-`mtg-249-gpu-report.md` owns the result; the protocol's **Recovery cohort
-result** records it. Evidence is manifest-published under
+[`experiments/state-representation-gpu.md`](../experiments/state-representation-gpu.md)
+owns the result, linked from the README index and the protocol's **Recovery
+cohort result**. Evidence is manifest-published under
 `experiments/data/state-representation-gpu-5da5f4/recovery-20261105/`.
 
 **Accounting.** Recovery spent about $6.75 (Etude estimates, `drive-state.json`
@@ -36,36 +37,15 @@ completed result — no qualified plateau at 256 updates; GRU−pool −1.95
 [−5.88, +1.98]; one job per durable unit with incremental hash-verified ledger
 and parallel CPU evaluation completed the cohort for about $6.75.
 
-## Concept review — 2026-11-05, after the recovery cohort (next implement direction)
+## Concept review — 2026-11-05 (implemented in `22459b4b0`)
 
-Reviewed against the accepted scope below and branch `c7aff6f5e`. Jack Heart's
-accepted direction makes replicated GPU learning, not the CPU comparison, the
-evidence for architecture selection. The branch's durable surfaces still say the
-opposite:
-
-- The GPU answer exists only in `scratch/mtg-249-gpu-report.md`, which
-  `lf pr submit` removes from the diff. It must become a durable report,
-  `experiments/state-representation-gpu.md`, beside the CPU report and linked
-  from the protocol's **Recovery cohort result**. Content stays exactly that
-  result: no qualified plateau; held-out GRU−pool −1.95 [−5.88, +1.98]; limits;
-  attempts/cost; evidence paths.
-- `experiments/README.md` describes `e51f61b92931` as "no plateau or architecture
-  result exists" and indexes the CPU study as the completed answer. Index the GPU
-  study first, with its result, and mark the CPU study as preliminary and
-  insufficient for selection (not superseded evidence; its numbers stay).
-- PR421's title/body describe only the CPU study. Reframe through the delivery
-  step: the GPU cohort is the answer, the CPU study preliminary, and merge
-  still unapproved ("no study merge"). No code change follows from this.
-- Naming: "GRU" compares two reducers within one decision. It is not agent memory.
-  The Task title's "agent memory" remains an unbuilt proposal. Durable text must
-  not describe the result as a memory finding.
-
-Done 2026-11-05 (implement): `experiments/state-representation-gpu.md` exists,
-linked from the README index (first, with result), the README's GPU study
-paragraph and the protocol's Recovery cohort result; the CPU report and index
-entry are marked preliminary with numbers unchanged. PR421 reframing remains for
-the delivery step. Check: `test_experiment_data_untracked.py`,
-`test_experiment_data.py`, `test_ci_selection.py` pass.
+Replicated GPU learning, not the CPU comparison, is the evidence for
+architecture selection. The GPU report is durable and indexed first; the CPU
+report and its index entry are marked preliminary with numbers unchanged.
+"GRU" compares two reducers within one decision; it is not agent memory, and
+the Task title's "agent memory" remains an unbuilt proposal. PR421's title and
+body still describe only the CPU study: the delivery step reframes them (GPU
+cohort is the answer, CPU preliminary, study merge still unapproved).
 
 Unchanged: no default/model promotion (fresh input stays v6), frozen evidence,
 seeds, criteria and the $25 total. The Wave memory update above stays proposed.
