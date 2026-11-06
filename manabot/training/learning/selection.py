@@ -12,6 +12,7 @@ import torch
 from torch import Tensor
 
 from manabot.training.learning.health import NumericalHealth
+from manabot.training.learning.returns import terminal_distances
 from manabot.training.rollout.self_play import SelfPlayOutcome
 
 
@@ -68,16 +69,6 @@ def selection_mask(
 def selected_mean(values: Tensor, selected: Tensor) -> Tensor:
     """Mean over selected rows; empty support yields zero with zero gradient."""
     return values[selected].sum() / selected.sum().clamp_min(1)
-
-
-def terminal_distances(ends: Tensor) -> Tensor:
-    """Return [T,E] distances (terminal=0, censored=-1), reset at each end."""
-    distances = torch.full_like(ends, -1, dtype=torch.long)
-    tail = distances[-1].clone()
-    for step in reversed(range(len(ends))):
-        tail = torch.where(ends[step], 0, torch.where(tail >= 0, tail + 1, -1))
-        distances[step] = tail
-    return distances
 
 
 @torch.no_grad()

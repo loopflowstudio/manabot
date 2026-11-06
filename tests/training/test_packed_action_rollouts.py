@@ -136,3 +136,32 @@ def test_packed_action_checks_reject_corruption_in_original_rows() -> None:
     probabilities[1, np.flatnonzero(obs["actions_valid"][1] == 0)[0]] = 0.1
     with pytest.raises(ValueError, match="illegal_probability_mass"):
         PackedActions.pack(obs, probabilities, logs)
+
+
+def test_rows_of_a_packed_block_reassemble_it_exactly() -> None:
+    obs, logs, probabilities, _ = evidence()
+    packed = PackedActions.pack(obs, probabilities, logs)
+    whole = PackedActions.concatenate([packed.row(index) for index in range(4)])
+    np.testing.assert_array_equal(whole.offsets, packed.offsets)
+    np.testing.assert_array_equal(whole.slots, packed.slots)
+    np.testing.assert_array_equal(whole.probabilities, packed.probabilities)
+    for key, value in packed.fields.items():
+        np.testing.assert_array_equal(whole.fields[key], value)
+
+
+def test_selected_types_read_the_chosen_action_of_every_row() -> None:
+    obs, logs, probabilities, actions = evidence()
+    packed = PackedActions.pack(obs, probabilities, logs)
+    expected = obs["actions"][np.arange(4), actions, :6].argmax(-1)
+    np.testing.assert_array_equal(
+        packed.selected_types(actions.reshape(2, 2), 6), expected.reshape(2, 2)
+    )
+
+
+def test_selected_types_reject_an_action_outside_packed_support() -> None:
+    obs, logs, probabilities, actions = evidence()
+    packed = PackedActions.pack(obs, probabilities, logs)
+    illegal = actions.copy()
+    illegal[2] = np.flatnonzero(obs["actions_valid"][2] == 0)[0]
+    with pytest.raises(ValueError, match="absent from packed support"):
+        packed.selected_types(illegal, 6)
