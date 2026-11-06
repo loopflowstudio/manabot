@@ -197,3 +197,15 @@ update 1. Cancel raises in training ("Cancellation retains failed scientific rec
 and the worker's `_finish` then records the outputs for the courier. This comes from
 reading the code; no cancel was run. No code change: a pod lost outright loses all its
 outputs, which is Etude's delivery contract, not this Task's.
+
+## engine-measure b015d5 (2026-11-06)
+
+Jack Heart's steer moved this Task onto the engine-performance graph (training update,
+not only the engine). The measured plan and active phase are in
+[b015d5-update-measure.md](b015d5-update-measure.md). Assumptions (reversible):
+- Active phase is host-side and exact: one recorded copy per observation row
+  (assembly no longer re-stacks ~4.3 GB/update). GPU launch/sync levers are listed with
+  a named CUDA check and are not implemented without GPU evidence.
+- Native stepping is an unchanged control here; the engine budget harness owns it.
+- Failure-capture frames and `PolicyInference.check` keep their contracts; only the
+  exact single-walk check is a candidate without review.
