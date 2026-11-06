@@ -271,7 +271,9 @@ collection even when the tests pass individually.
   builds with the change's benchmarks is recorded the same way
   ([engine performance budget](docs/development.md#engine-performance-budget));
   wall time is never compared across runners.
-- **CI runs `cargo test` in debug, so validate in debug before landing.**
+- **CI runs the Rust suite in debug, so validate in debug before landing.**
+  The dev profile is opt-level 1 with debug assertions on; CI runs it with
+  `cargo nextest run --profile ci`, which terminates any test after 5 minutes.
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
   pass green in release and still fail CI. `create_token` is the live example —
@@ -373,7 +375,10 @@ when no discovered scope, condition or value predicate reads tap state. Removing
 a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
 layer, static condition or trigger source reads the field; debug builds
 recompute every cached view and index on read and assert they match, so a
-misclassified accessor fails `cargo test` in debug. Continuous-effect records
+misclassified accessor fails `cargo test` in debug. A `BoardScan` narrows this
+for the raw layer board only: it validates the board when it begins, and its
+shared borrow excludes writes, so reads inside it skip the repeat. Hold one
+across `&self` code that reads the board per source or per ability. Continuous-effect records
 live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
