@@ -36,6 +36,40 @@ completed result — no qualified plateau at 256 updates; GRU−pool −1.95
 [−5.88, +1.98]; one job per durable unit with incremental hash-verified ledger
 and parallel CPU evaluation completed the cohort for about $6.75.
 
+## Concept review — 2026-11-05, after the recovery cohort (next implement direction)
+
+Reviewed against the accepted scope below and branch `c7aff6f5e`. Jack Heart's
+accepted direction makes replicated GPU learning, not the CPU comparison, the
+evidence for architecture selection. The branch's durable surfaces still say the
+opposite:
+
+- The GPU answer exists only in `scratch/mtg-249-gpu-report.md`, which
+  `lf pr submit` removes from the diff. It must become a durable report,
+  `experiments/state-representation-gpu.md`, beside the CPU report and linked
+  from the protocol's **Recovery cohort result**. Content stays exactly that
+  result: no qualified plateau; held-out GRU−pool −1.95 [−5.88, +1.98]; limits;
+  attempts/cost; evidence paths.
+- `experiments/README.md` describes `e51f61b92931` as "no plateau or architecture
+  result exists" and indexes the CPU study as the completed answer. Index the GPU
+  study first, with its result, and mark the CPU study as preliminary and
+  insufficient for selection (not superseded evidence; its numbers stay).
+- PR421's title/body describe only the CPU study. Reframe through the delivery
+  step: the GPU cohort is the answer, the CPU study preliminary, and merge
+  still unapproved ("no study merge"). No code change follows from this.
+- Naming: "GRU" compares two reducers within one decision. It is not agent memory.
+  The Task title's "agent memory" remains an unbuilt proposal. Durable text must
+  not describe the result as a memory finding.
+
+Unchanged: no default/model promotion (fresh input stays v6), frozen evidence,
+seeds, criteria and the $25 total. The Wave memory update above stays proposed.
+
+Open product choice, recorded for demo/review rather than this step: with no
+qualified plateau and about $6 left, a 256-update cohort cost about $6.75. Should
+Jack Heart (a) accept the inconclusive result and keep pooling as the simpler
+reducer for later work, (b) fund a prospective longer-horizon amendment, or
+(c) move to the unbuilt memory/relation-splitting questions? No accepted
+decision settles this, and none of the implementation above depends on it.
+
 ## History — how the cohort got here
 
 Recovery operations live in `.runs/representation/recovery/` (`drive.py`,

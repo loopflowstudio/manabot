@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept review — MTG-249 after the recovery cohort</title>
+<style>
+  :root { --fg:#222; --bg:#fbfaf7; --muted:#666; --rule:#ddd; --prop:#7a4b00; --propbg:#fff3df; --ok:#24572f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6e3dc; --bg:#1b1a18; --muted:#a29d93; --rule:#3a3833; --prop:#ffcf85; --propbg:#3a2c14; --ok:#9fd3a8; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; line-height:1.25; margin:0 0 .6rem; }
+  h2 { font-size:1.15rem; margin:2.4rem 0 .6rem; border-top:1px solid var(--rule); padding-top:1.2rem; }
+  code { font:.85em ui-monospace, Menlo, monospace; }
+  .lead { font-size:1.08rem; }
+  .proposed { background:var(--propbg); color:var(--prop); padding:0 .3em; border-radius:3px; font-size:.85em; font-family:ui-sans-serif, system-ui, sans-serif; }
+  .existing { color:var(--ok); font-size:.85em; font-family:ui-sans-serif, system-ui, sans-serif; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  th, td { text-align:left; vertical-align:top; padding:.45rem .5rem; border-bottom:1px solid var(--rule); }
+  th { font-weight:600; }
+  .callout { border-left:3px solid var(--prop); padding:.2rem 0 .2rem 1rem; margin:1.2rem 0; }
+  ol li { margin-bottom:.7rem; }
+  @media (max-width:520px) { table, thead, tbody, tr, th, td { display:block; } thead { display:none; } td { border:0; padding:.2rem 0; } tr { border-bottom:1px solid var(--rule); padding:.5rem 0; display:block; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>The GPU result is the answer, but only scratch says so</h1>
+  <p>Task MTG-249 · 5da5f4 · concept-review step (headless) · 2026-11-05</p>
+  <p>Built from <code>scratch/representation-learning-plan.md</code>, <code>scratch/mtg-249-gpu-report.md</code>, <code>scratch/questions.md</code>, <code>experiments/README.md</code>, <code>experiments/protocols/state-representation-5da5f4-gpu.md</code>, PR #421 body, branch <code>c7aff6f5e</code></p>
+</header>
+
+<p class="lead"><strong>Decision needed at demo/review:</strong> what the inconclusive GPU result means for the next step (question 1). The rest of this page follows from accepted direction and is recorded as the next implement direction.</p>
+
+<h2>What a reader does, before and after</h2>
+<table>
+  <thead><tr><th>Action</th><th>Today on the branch <span class="existing">existing</span></th><th>After <span class="proposed">proposed</span></th></tr></thead>
+  <tbody>
+    <tr><td>Open the experiments index</td><td>CPU study listed as “completed”. The GPU paragraph ends at the lost run: “no plateau or architecture result exists.”</td><td>GPU study listed first with its result. The CPU study is marked preliminary and insufficient for selection.</td></tr>
+    <tr><td>Read the result</td><td><code>scratch/mtg-249-gpu-report.md</code>, which <code>lf pr submit</code> removes from the diff</td><td><code>experiments/state-representation-gpu.md</code>, linked from the protocol's Recovery cohort result</td></tr>
+    <tr><td>Review PR #421</td><td>Title and body describe only the CPU study</td><td>Leads with the GPU cohort and keeps CPU as preliminary evidence. Merge is still not approved.</td></tr>
+    <tr><td>Interpret “GRU”</td><td>The Task title says “agent memory”</td><td>Reducer within one decision. Memory remains an unbuilt proposal.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <p><strong>The consequential mismatch.</strong> You made replicated GPU learning, not the CPU comparison, the evidence for choosing an architecture. The branch's durable surfaces still present the CPU study as the answer. The only text that states the GPU answer would disappear when the PR is submitted.</p>
+</div>
+
+<h2>The result being carried</h2>
+<p>Eight learners trained for 256 updates × 256 games, with 11,264/11,264 scored games replayed. <strong>The plateau did not qualify:</strong> only one of six final-window gain intervals fell inside ±5 points. Held-out GRU minus pooling was <strong>−1.95 points [−5.88, +1.98]</strong>. Neither an advantage nor equivalence is shown. The cohort cost about $6.75, bringing the total to about $18.89 of $25. These are operational estimates, not a settled invoice.</p>
+
+<h2>Unchanged</h2>
+<p>No default or model promotion; fresh input stays v6. Frozen evidence, seeds, criteria and the $25 total are unchanged. There is no code or tensor-contract change. The Wave memory update stays proposed.</p>
+
+<h2>Questions</h2>
+<ol>
+  <li>With no qualified plateau and about $6 left (a full cohort cost about $6.75), what next?
+    <br>(a) Accept the inconclusive result and keep pooling, the simpler reducer, for later work.
+    <br>(b) Fund a prospective longer-horizon amendment.
+    <br>(c) Move to the unbuilt memory and relation-splitting questions.</li>
+  <li>Should the durable GPU report live at <code>experiments/state-representation-gpu.md</code>?
+    <br>(a) Yes. (b) Fold it into <code>state-representation-v7.md</code> as one report.</li>
+</ol>
+</main>
+</body>
+</html>
