@@ -168,6 +168,9 @@ class Env:
     # (manabot/verify/competency.py). Bypass the rules engine: no events,
     # no triggers, no costs. Inject at a priority decision, then call
     # scenario_refresh() once.
+    def scenario_naming_vocabulary(self) -> list[NameCandidate]:
+        """Republish a pending name decision with the checked-in test vocabulary."""
+        ...
     def scenario_set_life(self, player: int, life: int) -> None: ...
     def scenario_clear_hand(self, player: int) -> None: ...
     def scenario_force_card_in_hand(self, player: int, name: str) -> None: ...
@@ -243,6 +246,7 @@ class VectorEnv:
     def set_buffers(
         self, buffers: Dict[str, np.ndarray], action_overflow: str = "error"
     ) -> None: ...
+    def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(self, player_configs: List[PlayerConfig]) -> None: ...
     def reset_each_into_buffers(
         self, player_configs: list[list[PlayerConfig]]
@@ -729,6 +733,10 @@ class Action:
     declared: bool | None
     description: str | None
     mode_index: int | None
+    name_definition: int | None
+    name_index: int | None
+    # First and last vocabulary rows of a naming group choice.
+    name_group: tuple[int, int] | None
     ability_index: int | None
     continuation_index: int | None
 
@@ -797,6 +805,8 @@ class AgentError(RuntimeError): ...
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
+# Most options one naming prompt offers; larger scopes publish groups first.
+NAME_BRANCHING: int
 
 class VisibleReference:
     object: int | None
@@ -845,7 +855,7 @@ class ContinuationFrame:
     delayed_frequency: int | None
     this_turn: bool
 
-def validate_observation_json(text: str) -> None: ...
+def validate_observation_json(text: str, *, schema_version: int = 8) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...
 
 class ManaOutput:
@@ -853,7 +863,14 @@ class ManaOutput:
     mana: list[int]
     lesson: list[int]
 
+class NameCandidate:
+    def __init__(self, name: str, definition: int | None = None) -> None: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def definition(self) -> int | None: ...
 
+def naming_catalog() -> list[NameCandidate]: ...
 def validate_policy_input(obs: Observation, version: int) -> None: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"

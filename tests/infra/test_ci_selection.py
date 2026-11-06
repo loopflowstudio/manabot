@@ -69,6 +69,7 @@ def selected(
         ("managym/state/src/card.rs", JOBS),
         ("managym/cards/src/tla.rs", JOBS),
         ("managym/cards/tests/cards/tla.rs", {"rust", "semantic_conformance"}),
+        ("managym/.config/nextest.toml", {"rust"}),
         ("content/semantic/current/setups.json", JOBS),
         ("uv.lock", JOBS),
         ("pyproject.toml", JOBS),

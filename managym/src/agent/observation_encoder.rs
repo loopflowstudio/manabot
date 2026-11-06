@@ -190,6 +190,9 @@ pub fn policy_action_count(
     }
     Ok(count.min(capacity))
 }
+/// v9 name candidate columns per action row.
+pub const NAME_DIM_V9: usize = 4;
+
 /// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
 /// remaining-sideboard counts (`PlayerData` decklist maps).
 pub const DECKLIST_DIM: usize = 5;
@@ -224,6 +227,21 @@ impl Default for ObservationEncoderConfig {
 }
 
 impl ObservationEncoderConfig {
+    /// Candidate rows share the action axis, but never consume object capacity.
+    pub fn name_candidates_len(&self) -> usize {
+        self.name_dim() * self.max_actions
+    }
+
+    /// v9 rows: name row + 1, definition + 1, then the first and last name
+    /// rows (+ 1) of a naming group choice. Earlier inputs carry no name
+    /// identity and see naming prompts as anonymous modal choices.
+    pub fn name_dim(&self) -> usize {
+        match self.policy_input_version {
+            9.. => NAME_DIM_V9,
+            _ => 0,
+        }
+    }
+
     pub fn relation_dim(&self) -> usize {
         match self.policy_input_version {
             5.. => super::continuation::RELATION_DIM_V5,
@@ -346,6 +364,7 @@ pub struct EncodedObservation {
     pub effects: Vec<f32>,
     pub effect_details: Vec<f32>,
     pub effect_members: Vec<f32>,
+    pub name_candidates: Vec<f32>,
     pub facts: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
@@ -374,6 +393,7 @@ pub struct EncodedObservationMut<'a> {
     pub effects: &'a mut [f32],
     pub effect_details: &'a mut [f32],
     pub effect_members: &'a mut [f32],
+    pub name_candidates: &'a mut [f32],
     pub facts: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
@@ -405,6 +425,7 @@ impl EncodedObservation {
             effects: &mut self.effects,
             effect_details: &mut self.effect_details,
             effect_members: &mut self.effect_members,
+            name_candidates: &mut self.name_candidates,
             facts: &mut self.facts,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
@@ -435,6 +456,7 @@ pub enum ObservationEncodeError {
     UnsupportedLayerInput(u8),
     UnsupportedExecutionInput(u8),
     InvalidShared(&'static str),
+    InvalidName(&'static str),
     Capacity {
         field: &'static str,
         capacity: usize,
@@ -452,8 +474,9 @@ impl fmt::Display for ObservationEncodeError {
         match self {
             Self::UnsupportedExecutionInput(version) => write!(
                 f,
-                "policy input v{version} cannot represent retained execution; select v8"
+                "policy input v{version} cannot represent retained execution; select v8 or later"
             ),
+            Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
             Self::UnsupportedLayerInput(version) => write!(
                 f,
                 "policy input v{version} cannot represent layer payload; select v8"
@@ -490,6 +513,7 @@ pub fn encode(
         effects: vec![0.0; config.effects_len()],
         effect_details: vec![0.0; config.effect_details_len()],
         effect_members: vec![0.0; config.effect_members_len()],
+        name_candidates: vec![0.0; config.name_candidates_len()],
         facts: vec![0.0; config.facts_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
@@ -521,12 +545,12 @@ pub fn encode(
 /// call this before writing buffers, so retained models never silently omit a
 /// new layer payload or fail later on an embedding index.
 pub fn validate_policy_input(obs: &Observation, version: u8) -> Result<(), ObservationEncodeError> {
-    if !(1..=8).contains(&version) {
+    if !(1..=9).contains(&version) {
         return Err(ObservationEncodeError::InvalidShared(
             "unsupported policy input version",
         ));
     }
-    if version == 8 {
+    if version >= 8 {
         return Ok(());
     }
     if obs.continuation.iter().any(|frame| {
@@ -615,6 +639,11 @@ pub fn encode_into(
     )?;
     validate_buffer_len("actions", out.actions.len(), config.actions_len())?;
     validate_buffer_len(
+        "name_candidates",
+        out.name_candidates.len(),
+        config.name_candidates_len(),
+    )?;
+    validate_buffer_len(
         "action_focus",
         out.action_focus.len(),
         config.action_focus_len(),
@@ -697,6 +726,14 @@ pub fn encode_into(
         }
     }
     for action in obs.action_space.actions.iter().take(config.max_actions) {
+        if let Some(definition) = action.name_definition {
+            if action.name_index.is_none() || definition as usize > MAX_ACTION_SELECTOR {
+                return Err(ObservationEncodeError::InvalidName(
+                    "missing identity or definition exceeds exact integer capacity",
+                ));
+            }
+        }
+
         if let Some(index) = action.continuation_index {
             if config.policy_input_version < 2 || index >= obs.continuation.len() {
                 return Err(ObservationEncodeError::Capacity {
@@ -710,9 +747,10 @@ pub fn encode_into(
                 });
             }
         }
-        for index in [action.mode_index, action.ability_index]
+        for index in [action.mode_index, action.ability_index, action.name_index]
             .into_iter()
             .flatten()
+            .chain(action.name_group.into_iter().flatten())
         {
             if index > MAX_ACTION_SELECTOR {
                 return Err(ObservationEncodeError::Capacity {
@@ -740,6 +778,7 @@ pub fn encode_into(
     out.agent_permanents.fill(0.0);
     out.opponent_permanents.fill(0.0);
     out.actions.fill(0.0);
+    out.name_candidates.fill(0.0);
     out.events.fill(0.0);
     out.action_focus.fill(-1);
     out.agent_player_valid.fill(0.0);
@@ -931,13 +970,14 @@ pub fn encode_into(
 
     encode_actions(
         obs,
-        config.max_actions,
-        config.max_focus_objects,
+        config,
         out.actions,
         out.actions_valid,
         out.action_focus,
+        out.name_candidates,
         &object_to_index,
     );
+
     if config.policy_history {
         for (index, row) in
             super::policy_history::encode(obs, config.max_events, config.max_cards_per_player)
@@ -1545,18 +1585,19 @@ fn encode_facts(
 
 fn encode_actions(
     obs: &Observation,
-    max_actions: usize,
-    max_focus_objects: usize,
+    config: &ObservationEncoderConfig,
     out_actions: &mut [f32],
     out_valid: &mut [f32],
     out_focus: &mut [i32],
+    out_names: &mut [f32],
     object_to_index: &HashMap<i32, i32>,
 ) {
+    // encode_into has validated the retained policy support and its focus capacity.
     for (action_index, action) in obs
         .action_space
         .actions
         .iter()
-        .take(max_actions)
+        .take(config.max_actions)
         .enumerate()
     {
         let action_start = action_index * ACTION_DIM;
@@ -1568,7 +1609,23 @@ fn encode_actions(
             row[action_type_index] = 1.0;
         }
         row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
-        row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+        let names = config.name_dim();
+        let name_row = &mut out_names[names * action_index..names * (action_index + 1)];
+        match (action.name_index, action.name_group) {
+            // A name is categorical; its position is never a numeric mode feature.
+            (Some(index), _) if names > 0 => {
+                name_row[0] = (index + 1) as f32;
+                name_row[1] = action.name_definition.map_or(0.0, |id| (id + 1) as f32);
+            }
+            // A group is its public member span.
+            (_, Some([first, last])) if names == NAME_DIM_V9 => {
+                name_row[2] = (first + 1) as f32;
+                name_row[3] = (last + 1) as f32;
+            }
+            _ => {
+                row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+            }
+        }
         row[ACTION_ABILITY_INDEX] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
         row[ACTION_CONTINUATION_INDEX] = action
             .continuation_index
@@ -1576,8 +1633,8 @@ fn encode_actions(
         row[ACTION_DIM - 1] = 1.0;
         out_valid[action_index] = 1.0;
 
-        let focus_start = action_index * max_focus_objects;
-        for (focus_index, focus_id) in action.focus.iter().take(max_focus_objects).enumerate() {
+        let focus_start = action_index * config.max_focus_objects;
+        for (focus_index, focus_id) in action.focus.iter().enumerate() {
             out_focus[focus_start + focus_index] =
                 object_to_index.get(focus_id).copied().unwrap_or(-1);
         }
@@ -1762,6 +1819,9 @@ mod tests {
                         declared: None,
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1771,6 +1831,9 @@ mod tests {
                         declared: None,
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1780,6 +1843,9 @@ mod tests {
                         declared: Some(true),
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -1902,6 +1968,9 @@ mod tests {
                 declared: Some(declared),
                 description: None,
                 mode_index: None,
+                name_definition: None,
+                name_index: None,
+                name_group: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -2071,6 +2140,9 @@ mod tests {
                 declared: None,
                 description: None,
                 mode_index: None,
+                name_definition: None,
+                name_index: None,
+                name_group: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -2143,6 +2215,7 @@ mod tests {
         let mut events_valid = vec![0.0; 1];
 
         let out = EncodedObservationMut {
+            name_candidates: &mut [],
             relations: &mut [],
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,

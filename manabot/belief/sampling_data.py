@@ -299,8 +299,6 @@ def collect_frozen_policy(
                 seed=seed + game_index,
                 options={"match": match if game_index % 2 == 0 else match.swapped()},
             )
-            # The collector owns game boundaries; discard any queued compound suffix.
-            player.start_game(env, seat=0)
             manifest = env._engine.content_pack_manifest()
             if schema is None:
                 # Restrict work to configured definitions; generated out-of-roster

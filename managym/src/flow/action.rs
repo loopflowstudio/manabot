@@ -6,6 +6,7 @@ use crate::agent::ability_description::{
 };
 use crate::state::ability::LibraryEnd;
 
+use crate::cards::names::NameOption;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     cards::content_pack::default_content_pack,
@@ -85,6 +86,14 @@ impl Game {
                             candidate.description()
                         ))
                     }
+                    Decision::NameCard { names, scope, .. } => match scope.option(*mode)? {
+                        NameOption::Group(group) => Some(format!(
+                            "Names {} through {}",
+                            names.get(group.start)?.name,
+                            names.get(group.end - 1)?.name
+                        )),
+                        NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
+                    },
                     Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))
@@ -104,7 +113,6 @@ impl Game {
                                 "On the bottom".into()
                             })
                         }
-                        [Effect::ExileNamed { name, .. }] => Some(format!("Name {name}")),
                         [Effect::SelectCards {
                             from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
                             ..
@@ -212,6 +220,7 @@ impl Game {
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
+        let _scan = self.board_scan();
         let mut actions: Vec<Action> = self
             .priority_candidate_cards(player)
             .filter_map(|card| self.priority_action_for_card(player, card))

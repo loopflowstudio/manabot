@@ -50,7 +50,7 @@ export function stageLabel(stage: string): string {
     additional_cost: 'Choose an additional cost', payment: 'Pay the announced cost',
     mana_color: 'Choose mana to add', declare_attackers: 'Declare attackers',
     declare_blockers: 'Declare blockers', resolution_choice: 'Choose a permanent during resolution',
-    private_search: 'Search cards', learn: 'Learn', private_inspection: 'Inspect cards',
+    name_card: 'Name a card', private_search: 'Search cards', learn: 'Learn', private_inspection: 'Inspect cards',
     scry: 'Scry', surveil: 'Surveil', resolution_payment: 'Pay during resolution', resolution_mode: 'Choose an effect',
     discard: 'Choose a discard', select_milled: 'Choose a milled card', select_cards: 'Choose cards', legend_rule: 'Choose a legend to keep',
     keep_creatures: 'Choose creatures to keep', retarget: 'Choose a new target',

@@ -397,4 +397,6 @@ def test_shared_policy_can_learn_either_choice(
             # mutations are hypotheses, not historical-version evidence.
             a, b = case.candidates
             tied, _ = restored(_remove_discriminant(case, obs))
-            torch.testing.assert_close(tied[0, a], tied[0, b], atol=0, rtol=0)
+            # Legal-row GEMMs can differ by float32 rounding across row tiles.
+            # The behavioral requirement above remains >= 0.95 for either choice.
+            torch.testing.assert_close(tied[0, a], tied[0, b], atol=2e-6, rtol=1e-6)

@@ -9,7 +9,10 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
-    cards::content_pack::{default_content_pack, ContentPackManifest},
+    cards::{
+        content_pack::{default_content_pack, ContentPackManifest},
+        names::NameVocabulary,
+    },
     decision::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
@@ -1092,7 +1095,8 @@ impl Env {
     //
     // FOR TEST AND MEASUREMENT HARNESSES ONLY: bypasses the rules engine.
     // Typical use: reset, inject at the first priority decision, then call
-    // scenario_refresh to recompute the action space and observation.
+    // scenario_refresh to recompute the action space and observation. The
+    // naming fixture requires and republishes an existing naming decision.
     // ------------------------------------------------------------------
 
     fn scenario_game_mut(&mut self, method: &str) -> Result<&mut Game, AgentError> {
@@ -1118,6 +1122,11 @@ impl Env {
             )));
         }
         Ok(PlayerId(player))
+    }
+
+    pub fn scenario_naming_vocabulary(&mut self) -> Result<Arc<NameVocabulary>, AgentError> {
+        self.scenario_game_mut("scenario_naming_vocabulary")?
+            .scenario_naming_vocabulary()
     }
 
     pub fn scenario_set_life(&mut self, player: usize, life: i32) -> Result<(), AgentError> {

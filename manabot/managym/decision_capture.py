@@ -2,7 +2,7 @@
 
 The native handle owns origin and submission. These strict read-only models admit
 serialized evidence for pure rendering; they cannot reconstruct an origin handle.
-Schema-7 Observation and Command retain their existing owners in decision.py.
+Schema-8 Observation and Command retain their existing owners in decision.py.
 Native deserialization validates viewer fields and continuation frames; Python
 keeps only the portable presentation/content envelope.
 """
@@ -148,7 +148,7 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[3, 4]
+    capture_version: Literal[3, 4, 5]
     world_version: str
     content_digest: str
     observation: SkipValidation[Observation]
@@ -161,10 +161,13 @@ class DecisionInput(CaptureModel):
 
     @field_validator("observation", mode="before")
     @classmethod
-    def parse_observation(cls, value: object) -> Observation:
+    def parse_observation(cls, value: object, info: ValidationInfo) -> Observation:
         text = json.dumps(value)
-        managym.validate_observation_json(text)
-        return Observation.from_json(text)
+        # Capture v3/v4 retain schema 7 as historical evidence. This read-only
+        # envelope never creates a native submission handle or current binding.
+        version = 7 if info.data.get("capture_version") in (3, 4) else 8
+        managym.validate_observation_json(text, schema_version=version)
+        return Observation.from_json(text, _expected_version=version)
 
     @field_validator("frames", mode="before")
     @classmethod

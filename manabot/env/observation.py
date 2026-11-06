@@ -44,6 +44,9 @@ ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
+# V9 name candidate columns: name row + 1, definition + 1, then the first and
+# last name rows (+ 1) of a naming group choice.
+NAME_DIM_V9 = 4
 PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
 LEGACY_RELATION_DIM = 32
@@ -212,7 +215,10 @@ class ObservationEncoder:
             self.relation_dim = LEGACY_RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
+        # V9 names through bounded group prompts, so action capacity is
+        # independent of vocabulary size. Earlier inputs carry no name identity.
         self.max_actions = config.max_actions
+        self.name_dim = NAME_DIM_V9 if config.policy_input_version >= 9 else 0
         self.max_focus_objects = config.max_focus_objects
         self.max_events = config.max_events
 
@@ -291,6 +297,11 @@ class ObservationEncoder:
             "opponent_cards": (self.cards_per_player, self.card_dim),
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
             "opponent_permanents": (self.perms_per_player, self.permanent_dim),
+            **(
+                {"name_candidates": (self.max_actions, self.name_dim)}
+                if self.config.policy_input_version >= 9
+                else {}
+            ),
             "actions": (self.max_actions, self.action_dim),
             "events": (self.max_events, self.event_dim),
             "action_focus": (self.max_actions, self.max_focus_objects),
@@ -465,8 +476,7 @@ class ObservationEncoder:
             out[f"{key}_valid"] = out[key][..., -1].astype(np.float32)
 
         # Actionspace
-        out["actions"], out["action_focus"] = self._encode_actions(actions)
-        out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
+        out.update(self._encode_actions(actions))
         if self.config.policy_history_version == 1:
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
@@ -1029,13 +1039,16 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
     # -------------------------------------------------------------------------
-    def _encode_actions(
-        self, actions: list[managym.Action]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _encode_actions(self, actions: list[managym.Action]) -> dict[str, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
         action_focus = np.full(
             (self.max_actions, self.max_focus_objects), -1, dtype=np.int32
+        )
+        candidates = (
+            np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
+            if self.name_dim
+            else None
         )
         for idx, action in enumerate(actions):
             arr[idx, -1] = 1.0
@@ -1056,6 +1069,31 @@ class ObservationEncoder:
                         )
                     arr[idx, column] = selector + 1
 
+            if candidates is not None:
+                if action.name_definition is not None and (
+                    action.name_index is None
+                    or not 0 <= action.name_definition <= MAX_ACTION_SELECTOR
+                ):
+                    raise ValueError("invalid name candidate definition")
+                if action.name_index is not None:
+                    if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name selector")
+                    candidates[idx, :2] = (
+                        action.name_index + 1,
+                        (action.name_definition + 1)
+                        if action.name_definition is not None
+                        else 0,
+                    )
+                    # Names use categorical identity rather than a numeric mode.
+                    arr[idx, ACTION_MODE_INDEX] = 0
+                if action.name_group is not None:
+                    first, last = action.name_group
+                    if not 0 <= first <= last <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name group")
+                    # A group is its public span of sorted names, not a mode.
+                    candidates[idx, 2:] = (first + 1, last + 1)
+                    arr[idx, ACTION_MODE_INDEX] = 0
+
             if len(action.focus) > self.max_focus_objects:
                 raise ValueError("observation capacity exceeded: action focus")
             for focus_index, fid in enumerate(action.focus):
@@ -1066,7 +1104,14 @@ class ObservationEncoder:
                     )
                 action_focus[idx, focus_index] = index
 
-        return arr, action_focus
+        encoded = {
+            "actions": arr,
+            "action_focus": action_focus,
+            "actions_valid": arr[..., -1].astype(np.float32),
+        }
+        if candidates is not None:
+            encoded["name_candidates"] = candidates
+        return encoded
 
     def _encode_events(
         self, events: List[managym.EventData]

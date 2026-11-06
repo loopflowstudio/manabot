@@ -1098,9 +1098,30 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
         )
         if name is not None:
             decision = capture_text_decision(env)
-            assert len(decision.actions) == len(actions) > 64
+            assert len(decision.actions) == len(actions) <= 64
             submit_response(env, decision, decision.actions[name].reference)
             break
+        group = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.name_group is not None
+                and (action.description or "")
+                .removeprefix("Names ")
+                .split(" through ")[0]
+                <= "Gray Ogre"
+                <= (action.description or "").split(" through ")[-1]
+            ),
+            None,
+        )
+        if group is not None:
+            # Choosing a group of names is an ordinary text decision too.
+            decision = capture_text_decision(env)
+            assert "Choosing a group names nothing" in decision.text
+            assert len(decision.actions) == len(actions) <= 64
+            submit_response(env, decision, decision.actions[group].reference)
+            raw = env.observation_for_player(env.current_agent_index())
+            continue
         cast = next(
             (
                 i

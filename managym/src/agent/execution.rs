@@ -955,10 +955,12 @@ pub(crate) fn project_decision(
                 out.field("once each turn ability", &key.1);
             }
         }
-        // Mana output/cost and caller chains are already explicit relation frames.
-        Decision::ManaUpfront { .. } | Decision::ManaChoice { .. } | Decision::Learn { .. } => {
-            return
-        }
+        // Mana output/cost and caller chains are already explicit relation frames;
+        // a naming scope is published only through v9's name candidates.
+        Decision::ManaUpfront { .. }
+        | Decision::ManaChoice { .. }
+        | Decision::Learn { .. }
+        | Decision::NameCard { .. } => return,
     }
     out.finish(frame);
 }

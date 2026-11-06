@@ -98,6 +98,7 @@ _STAGES = frozenset(
         "scry",
         "resolution_payment",
         "resolution_mode",
+        "name_card",
         "discard",
         "select_milled",
         "select_cards",

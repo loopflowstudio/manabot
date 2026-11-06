@@ -102,6 +102,23 @@ impl VectorEnv {
         Ok(())
     }
 
+    /// Scenario-only large naming roots, written through the normal vector encoder.
+    pub fn scenario_naming_vocabulary_into(
+        &mut self,
+        mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
+    ) -> Result<(), AgentError> {
+        self.validate_ready_for_step()?;
+        for (index, env) in self.envs.iter_mut().enumerate() {
+            env.scenario_naming_vocabulary()?;
+            let obs = env.observation_for_player(
+                env.current_agent_index()
+                    .ok_or_else(|| AgentError("naming fixture has no chooser".into()))?,
+            )?;
+            write(index, &obs)?;
+        }
+        Ok(())
+    }
+
     pub fn new(
         num_envs: usize,
         seed: u64,

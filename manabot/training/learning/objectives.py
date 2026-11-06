@@ -9,7 +9,6 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
-    check_behavior,
     clipped_surrogate,
     legal_mask,
     policy_logs,
@@ -68,7 +67,7 @@ def update_iteration(
     dev = learner.device
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
-        obs = observation_tensors(batch.obs, dev)
+        batch.action_data.check(batch.actions, batch.logprobs)
         values = torch.as_tensor(batch.values, device=dev)
         rewards = torch.as_tensor(batch.rewards, device=dev)
         ends = torch.as_tensor(batch.dones, device=dev)
@@ -87,16 +86,9 @@ def update_iteration(
             _, returns = transition_gae(
                 rewards, values, ends, next_value, learning.gamma, learning.value_lambda
             )
-        obs = {k: v.flatten(0, 1) for k, v in obs.items()}
         advantages, returns = advantages.flatten(), returns.flatten()
         actions = torch.as_tensor(batch.actions, device=dev).flatten()
         old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
-        behavior = torch.as_tensor(batch.probabilities, device=dev).flatten(0, 1)
-        behavior_logs = torch.as_tensor(batch.log_probabilities, device=dev).flatten(
-            0, 1
-        )
-        valid = legal_mask(obs["actions_valid"])
-        check_behavior(behavior_logs, behavior, actions, old_logs, valid)
         require(
             torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages
         )
@@ -134,9 +126,9 @@ def update_iteration(
             "return_mean": float(returns.mean()),
             "value_residual_abs_mean": float((returns - values.flatten()).abs().mean()),
         }
-        chosen_types = obs["actions"][
-            torch.arange(len(actions), device=dev), actions, :ACTION_TYPE_DIM
-        ].argmax(-1)
+        chosen_types = torch.as_tensor(
+            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM), device=dev
+        ).flatten()
         diagnostics["action_types"] = torch.bincount(
             chosen_types, minlength=ACTION_TYPE_DIM
         ).tolist()
@@ -151,9 +143,7 @@ def update_iteration(
             chosen_types.reshape_as(ends),
         )
         health = batch_health(
-            behavior_logs,
-            behavior,
-            valid,
+            batch.action_data,
             advantages,
             mask,
             actor_only=learning.filter_scope == "actor",
@@ -174,7 +164,6 @@ def update_iteration(
         ].std(unbiased=False).clamp_min(1e-8)
     for group in learner.optimizer.param_groups:
         group["lr"] = diagnostics["learning_rate"]
-    reference = reference_distribution(obs, learning.reference)
     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
     with track("Minibatches"):
         for _ in range(learning.epochs):
@@ -183,10 +172,13 @@ def update_iteration(
             ]
             for indices in order.split(size):
                 with track("Forward and loss"):
-                    logits, value = learner.agent(
-                        {k: v[indices] for k, v in obs.items()}
-                    )
-                    logs = policy_logs(logits, valid[indices])
+                    rows = batch.observations(indices.cpu().numpy())
+                    obs = observation_tensors(rows.observation, dev)
+                    valid = legal_mask(obs["actions_valid"])
+                    behavior_logs = torch.as_tensor(rows.log_probabilities, device=dev)
+                    reference = reference_distribution(obs, learning.reference)
+                    logits, value = learner.agent(obs)
+                    logs = policy_logs(logits, valid)
                     log_ratio = (
                         logs.gather(-1, actions[indices, None]).squeeze(-1)
                         - old_logs[indices]
@@ -201,13 +193,13 @@ def update_iteration(
                     kl_ref = selected_mean(
                         reverse_kl(
                             logs,
-                            reference[indices].masked_fill(~valid[indices], 1).log(),
-                            valid[indices],
+                            reference.masked_fill(~valid, 1).log(),
+                            valid,
                         ),
                         actor_mask,
                     )
                     kl_behavior = selected_mean(
-                        reverse_kl(logs, behavior_logs[indices], valid[indices]),
+                        reverse_kl(logs, behavior_logs, valid),
                         actor_mask,
                     )
                     value_loss = (
@@ -224,16 +216,16 @@ def update_iteration(
                         return {
                             "logits": logits.detach(),
                             "value_logits": value.detach(),
-                            "valid": valid[indices],
+                            "valid": valid,
                             "actions": actions[indices],
-                            "behavior_logs": behavior_logs[indices],
-                            "reference": reference[indices],
+                            "behavior_logs": behavior_logs,
+                            "reference": reference,
                             "advantages": advantages[indices],
                             "value_targets": returns[indices],
                             "actor_selected": actor_mask,
                             "minibatch_indexes": indices,
                             **{
-                                f"minibatch_observation/{key}": value[indices]
+                                f"minibatch_observation/{key}": value
                                 for key, value in obs.items()
                             },
                         }
@@ -262,7 +254,7 @@ def update_iteration(
                         policy_loss=float(policy.detach()),
                         value_loss=float(value_loss.detach()),
                         entropy=float(
-                            -(logs.exp() * logs.masked_fill(~valid[indices], 0))
+                            -(logs.exp() * logs.masked_fill(~valid, 0))
                             .sum(-1)
                             .mean()
                             .detach()

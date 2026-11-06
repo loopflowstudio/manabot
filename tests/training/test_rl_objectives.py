@@ -15,6 +15,7 @@ from manabot.training.learning.objectives import (
 from manabot.training.learning.returns import transition_gae
 from manabot.training.learning.selection import selected_rows
 from manabot.training.regime import Learning, Schedule
+from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RolloutBatch
 
 
@@ -35,7 +36,7 @@ class TinyPolicy(torch.nn.Module):
         return self(obs)[1]
 
 
-def fixture():
+def fixture() -> tuple[Learner, RolloutBatch]:
     agent = TinyPolicy()
     obs = {
         "actions_valid": np.tile([1, 1, 1, 0], (4, 1)).astype(np.float32),
@@ -54,7 +55,7 @@ def fixture():
         probabilities = logits.softmax(-1).numpy()
     actions = np.array([[0], [1], [2], [0]])
     batch = RolloutBatch(
-        obs={k: v[:, None] for k, v in obs.items()},
+        obs={},  # This fixture has only action fields; the critic is a scalar.
         actions=actions,
         logprobs=np.log(probabilities[np.arange(4), actions[:, 0]])[:, None],
         rewards=np.array([[0], [1], [0], [-1]], dtype=np.float32),
@@ -62,8 +63,9 @@ def fixture():
         values=values.detach().numpy().copy(),
         next_obs={k: v[:1] for k, v in obs.items()},
         next_done=np.array([True]),
-        probabilities=probabilities[:, None],
-        log_probabilities=logits.log_softmax(-1).numpy()[:, None],
+        action_data=PackedActions.pack(
+            obs, probabilities, logits.log_softmax(-1).numpy()
+        ),
     )
     trainer = Learner(agent, "cpu", minibatch_rows=1)
 
@@ -102,7 +104,9 @@ def test_nonzero_values_adjacent_episodes_and_exact_tail():
 
 def test_reference_and_filter_support_order_and_threshold():
     _, batch = fixture()
-    obs = {k: torch.as_tensor(v[:, 0]) for k, v in batch.obs.items()}
+    obs = {
+        k: torch.as_tensor(v[:, 0]) for k, v in batch.observations().observation.items()
+    }
     for kind, expected in [
         ("uniform", [1 / 3, 1 / 3, 1 / 3, 0]),
         ("action_type_uniform", [0.25, 0.25, 0.5, 0]),
@@ -172,7 +176,7 @@ def test_empty_filter_preserves_parameters_and_optimizer_state():
 
 def test_collection_kl_uses_stored_full_distribution():
     trainer, batch = fixture()
-    original = batch.probabilities.copy()
+    original = batch.observations().probabilities.copy()
     same = run(trainer, batch, control(learning_rate=Schedule(initial=0)))
     assert same["collection_kl"] == pytest.approx(0, abs=1e-7)
     with torch.no_grad():
@@ -183,7 +187,7 @@ def test_collection_kl_uses_stored_full_distribution():
     current = trainer.agent.logits[:3].softmax(-1).detach().numpy()
     expected = (current * np.log(current / original[0, 0, :3])).sum()
     assert moved["collection_kl"] == pytest.approx(expected, abs=1e-7)
-    np.testing.assert_array_equal(batch.probabilities, original)
+    np.testing.assert_array_equal(batch.observations().probabilities, original)
 
 
 def test_ema_is_iteration_clocked_and_never_overwrites_learner():
@@ -250,3 +254,24 @@ def test_bootstrap_uses_collection_model() -> None:
     assert diagnostics["advantage_abs_mean"] == pytest.approx(
         float(expected.abs().mean())
     )
+
+
+def test_learning_materializes_only_selected_minibatches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer, batch = fixture()
+    original = RolloutBatch.observations
+    seen: list[int] = []
+
+    def selected_rows_only(
+        self: RolloutBatch, indexes: np.ndarray | None = None
+    ) -> ActionRows:
+        assert indexes is not None
+        assert len(indexes) <= 2
+        seen.append(len(indexes))
+        return original(self, indexes)
+
+    monkeypatch.setattr(RolloutBatch, "observations", selected_rows_only)
+    run(trainer, batch, control(minibatches=2))
+    assert seen == [2, 2]
+    assert "actions" not in batch.obs and "actions_valid" not in batch.obs

@@ -28,3 +28,7 @@ MTG-213 notes at the exact merged revision above. Its v10 trained endpoint and
 64 endpoint games do not complete the 100-update target or scientific schedule.
 The prospective full-TLA recipe discussion remains separate; no new rental or
 experiment is selected. The incoming report and artifact manifest are preserved.
+
+Sync with main `c59aeee0e` (2026-11-06): MTG-244 and MTG-243 landed. #427 was a
+squash, so its source head `369833ee6` was merged first and used as the base for
+main. V9 is the latest input, so retained execution reaches v8 and later.

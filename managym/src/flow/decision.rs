@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 
 use rand::seq::SliceRandom;
 
+use crate::cards::names::NameOption;
 use crate::state::binding::{ObjectBinding, ZoneSelection};
 
 use crate::{
@@ -407,6 +408,17 @@ pub enum Decision {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
     },
+    /// Choose a name from the immutable installed vocabulary, one ordinary
+    /// decision per level: a scope larger than `NAME_BRANCHING` offers its
+    /// balanced child groups, and choosing one narrows `scope` without
+    /// committing anything. Only choosing a name in a leaf scope materializes
+    /// an effect. Clones retain constant-size bookkeeping.
+    NameCard {
+        player: PlayerId,
+        count: usize,
+        names: std::sync::Arc<crate::cards::names::NameVocabulary>,
+        scope: crate::cards::names::NameScope,
+    },
     /// Select the generic X of an optional resolution payment, or decline.
     ChoosePaymentX {
         player: PlayerId,
@@ -622,6 +634,7 @@ impl Decision {
             Decision::Payment(payment) => payment.player,
             Decision::OrderReplacement { player, .. }
             | Decision::ChoosePaymentX { player, .. }
+            | Decision::NameCard { player, .. }
             | Decision::SearchNamed { player, .. }
             | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
@@ -676,6 +689,7 @@ impl Decision {
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
             Decision::ChoosePaymentX { .. }
+            | Decision::NameCard { .. }
             | Decision::SearchNamed { .. }
             | Decision::ManaUpfront { .. }
             | Decision::Payment(_)
@@ -1638,6 +1652,17 @@ impl Game {
                     focus: self.card_focus(looked),
                 }
             }
+            Decision::NameCard { player, scope, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                focus: source_focus,
+                actions: (0..scope.option_count())
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
             Decision::Modal { player, modes } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -2400,6 +2425,36 @@ impl Game {
                 if selected.len() >= *min =>
             {
                 self.finish_card_selection(suspended);
+                Ok(())
+            }
+            (
+                Decision::NameCard {
+                    count,
+                    names,
+                    scope,
+                    ..
+                },
+                Action::ChooseMode { mode, .. },
+            ) => {
+                let candidate = match scope.option(*mode) {
+                    Some(NameOption::Group(child)) => {
+                        // Group navigation narrows the pending prompt only.
+                        *scope = child;
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Ok(());
+                    }
+                    Some(NameOption::Name(row)) => names.get(row),
+                    None => None,
+                };
+                let Some(candidate) = candidate else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("name option out of range".into()));
+                };
+                suspended.frame.queue.push_front(Effect::ExileNamed {
+                    name: candidate.name.clone(),
+                    count: *count,
+                });
+                self.run_frame(suspended.frame);
                 Ok(())
             }
             (Decision::Modal { modes, .. }, Action::ChooseMode { mode, .. }) => {
