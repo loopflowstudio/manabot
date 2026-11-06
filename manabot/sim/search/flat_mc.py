@@ -292,6 +292,7 @@ def make_player(
                     spec.get("branch_driver_id", SELECTED_BRANCH_DRIVER_ID)
                 ),
                 branch_audit=bool(spec.get("branch_audit", False)),
+                world_source=spec.get("world_source", "engine"),
             ),
             obs_space,
         )
@@ -412,7 +413,11 @@ def spec_name(spec: dict[str, Any]) -> str:
     if kind == "determinized_puct":
         return spec.get("name", f"dpuct-{spec['sims']}-w{spec.get('worlds', 4)}")
     if kind == "agent_puct":
-        return spec.get("name", f"agent-puct-{spec['sims']}-w{spec.get('worlds', 4)}")
+        source = spec.get("world_source", "engine")
+        suffix = "" if source == "engine" else f"-{source}"
+        return spec.get(
+            "name", f"agent-puct-{spec['sims']}-w{spec.get('worlds', 4)}{suffix}"
+        )
     if kind == "policy_search":
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":

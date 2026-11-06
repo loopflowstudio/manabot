@@ -13,16 +13,19 @@ information-set-consistent search.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import json
 import math
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Any, Mapping, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Protocol
 
 import numpy as np
 import torch
 
+from manabot.belief.sampling import SamplerInput, sample_physical_deal
 from manabot.env import Env, ObservationSpace
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
@@ -501,6 +504,44 @@ def _simulate(
     return value, hit_cap, depth, added_nodes
 
 
+# How each world's opponent hand is chosen. Libraries are reshuffled in every
+# mode, so no mode reveals future draws:
+# - "engine": the native `determinize` (uniform over the unseen pool);
+# - "uniform": the same physical-deal measure, sampled in Python and
+#   materialized natively, so it differs from "oracle" only in the hand;
+# - "oracle": the opponent's true hand, read from privileged authority. This
+#   bounds what any belief over the opponent's hand can add to this search.
+WorldSource = Literal["engine", "uniform", "oracle"]
+WORLD_SOURCES: tuple[WorldSource, ...] = ("engine", "uniform", "oracle")
+
+
+def _world_hand(
+    root_env: Any, hero: int, source: WorldSource, seed: int
+) -> tuple[str, dict[str, int]]:
+    """Return the root's hand constraints and the opponent hand for one world."""
+    constraints_json = root_env.hidden_hand_constraints_json(hero)
+    if source == "oracle":
+        authority = root_env.observation_for_player(1 - hero)
+        hand = Counter(
+            str(card.name) for card in authority.agent_cards if int(card.zone) == 1
+        )
+        return constraints_json, dict(hand)
+    constraints = json.loads(constraints_json)
+    names = tuple(sorted(constraints["pool"]))
+    inputs = SamplerInput(
+        "puct-uniform-hand/v1",
+        tuple(int(constraints["pool"][name]) for name in names),
+        tuple(int(constraints["known_hand"].get(name, 0)) for name in names),
+        int(constraints["hand_size"]),
+        (),
+    )
+    generator = torch.Generator().manual_seed(seed & 0x7FFF_FFFF_FFFF_FFFF)
+    counts = sample_physical_deal([inputs], generator=generator)[0].tolist()
+    return constraints_json, {
+        name: int(n) for name, n in zip(names, counts, strict=True) if n
+    }
+
+
 def determinized_puct(
     root_env: Any,
     *,
@@ -517,6 +558,7 @@ def determinized_puct(
     branch_match_id: str | None = None,
     compound_cursor: CompoundCursor | None = None,
     deadline: float | None = None,
+    world_source: WorldSource = "engine",
 ) -> PuctResult:
     """Search one decision and return aggregated root visits and values.
 
@@ -536,6 +578,8 @@ def determinized_puct(
         raise ValueError("deadline must be finite")
     if root_env.is_game_over():
         raise ValueError("cannot search a terminal environment")
+    if world_source not in WORLD_SOURCES:
+        raise ValueError(f"unknown world source {world_source!r}")
 
     def check() -> None:
         if deadline is not None and time.perf_counter() >= deadline:
@@ -588,8 +632,17 @@ def determinized_puct(
     for world_index, world_simulations in enumerate(per_world):
         check()
         world_seed = _mix_seed(seed, world_index)
-        world = branch_session.fork_exact(root_env, "world")
-        branch_session.determinize(world, seed=world_seed, perspective=hero)
+        if world_source == "engine":
+            world = branch_session.fork_exact(root_env, "world")
+            branch_session.determinize(world, seed=world_seed, perspective=hero)
+        else:
+            constraints_json, hand = _world_hand(
+                root_env, hero, world_source, world_seed
+            )
+            sampled = root_env.materialize_sampled_hand(
+                hero, constraints_json, hand, world_seed
+            )
+            world = branch_session.fork_exact(sampled, "world")
         if int(world.action_count()) != action_count:
             raise RuntimeError("determinization changed the root legal action count")
         root = _Node.from_env(
@@ -665,7 +718,10 @@ class DeterminizedPuctPlayer:
         evaluator: LeafEvaluator | None = None,
         branch_driver_id: str = SELECTED_BRANCH_DRIVER_ID,
         branch_audit: bool = False,
+        world_source: WorldSource = "engine",
     ) -> None:
+        if world_source not in WORLD_SOURCES:
+            raise ValueError(f"unknown world source {world_source!r}")
         if simulations < 1 or worlds < 1 or worlds > simulations:
             raise ValueError("simulations must be >= 1 and worlds in [1, simulations]")
         if not math.isfinite(c_puct) or c_puct <= 0 or max_steps < 1:
@@ -678,6 +734,7 @@ class DeterminizedPuctPlayer:
         self.evaluator = evaluator or UniformRandomLeafEvaluator()
         self.branch_driver_id = branch_driver_id
         self.branch_audit = branch_audit
+        self.world_source: WorldSource = world_source
         self._seed = seed
         self._calls = 0
         self.stats = PuctSearchStats()
@@ -723,6 +780,7 @@ class DeterminizedPuctPlayer:
             branch_match_id=f"teacher-{self._seed}-{self._calls}",
             compound_cursor=self.compound_cursor,
             deadline=self.deadline,
+            world_source=self.world_source,
         )
         candidates = np.flatnonzero(
             result.visit_counts == int(result.visit_counts.max())
