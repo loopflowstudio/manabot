@@ -71,6 +71,11 @@ pub struct ManaOutput {
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
+    /// Complete originating program when no catalog join can identify it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub program: Vec<(u16, i32)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_description: Option<String>,
     /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<VisibleReference>,
@@ -160,6 +165,17 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
 }
 
 impl ContinuationFrame {
+    fn program(&mut self, effects: &[crate::state::ability::Effect]) {
+        if effects.is_empty() {
+            return;
+        }
+        self.program = crate::cards::tokens::rules_tokens(
+            &effects,
+            crate::cards::content_pack::default_content_pack(),
+        )
+        .expect("rules program tokens");
+        self.program_description = Some(super::ability_description::effects_description(effects));
+    }
     fn cost(&mut self, cost: &ManaCost) {
         self.cost = Some(cost.cost);
         self.hybrid = cost
@@ -172,6 +188,33 @@ impl ContinuationFrame {
 }
 
 impl Game {
+    /// Whether retained inputs can recover an activation from catalog joins.
+    /// Execution always consumes the captured effects, regardless of this answer.
+    pub(crate) fn activation_catalog_program(
+        &self,
+        card: CardId,
+        face: crate::state::card::CardDefId,
+        inherited: Option<crate::state::card::CardDefId>,
+        index: usize,
+        grant: Option<crate::state::card::AbilityGrant>,
+        effects: &[crate::state::ability::Effect],
+    ) -> bool {
+        let definition = if let Some(grant) = grant {
+            self.state.cards[CardId::from(grant.grantor.entity)]
+                .attached_grants()
+                .nth(grant.index)
+        } else {
+            self.source_face(card, face).and_then(|source| {
+                source.activated_abilities.get(index).or_else(|| {
+                    crate::cards::content_pack::default_content_pack()
+                        .definition(inherited?)?
+                        .activated_abilities
+                        .get(index.checked_sub(source.activated_abilities.len())?)
+                })
+            })
+        };
+        definition.is_some_and(|definition| definition.effects == effects)
+    }
     pub(crate) fn visible_reference(
         &self,
         object: ObjectRef,
@@ -446,7 +489,7 @@ impl Game {
                     self.state.cards[trigger.source_card].definition_id.0,
                     |lki| lki.definition_id.0,
                 ));
-                frames.push(ContinuationFrame {
+                let mut frame = ContinuationFrame {
                     kind: if placement
                         .placing
                         .as_ref()
@@ -475,7 +518,11 @@ impl Game {
                     remembered: self.remembered_references(&trigger.remembered, viewer),
                     context: trigger.context.map(|t| self.target_reference(t, viewer)),
                     ..ContinuationFrame::default()
-                });
+                };
+                if trigger.program {
+                    frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
+                }
+                frames.push(frame);
             }
         }
     }
@@ -522,6 +569,9 @@ impl Game {
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
+                if ability.program {
+                    frame.program(&ability.effects);
+                }
                 frame.source = self.visible_reference(ability.source_ref, viewer);
                 frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
@@ -533,6 +583,9 @@ impl Game {
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
+                if ability.program {
+                    frame.program(ability.inline_effects.as_deref().unwrap_or_default());
+                }
                 frame.inherited_from = ability
                     .source_lki
                     .as_ref()
@@ -674,7 +727,7 @@ impl Game {
         } else {
             None
         };
-        let frame = ContinuationFrame {
+        let mut frame = ContinuationFrame {
             kind: 5,
             parent,
             controller: effect.controller.0,
@@ -711,6 +764,7 @@ impl Game {
                 .map(|t| self.target_reference(t, viewer)),
             ..ContinuationFrame::default()
         };
+        frame.program(&effect.program);
         // The native chain starts at the active choice and follows resume
         // obligations. Reverse its projection so each interrupted obligation
         // precedes its child and the current decision is the deepest frame.
@@ -840,7 +894,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::OptionalDiscardDraw { .. } => 7,
         Decision::Scry { .. } => 8,
         Decision::LookAndSelect { .. } => 9,
-        Decision::Modal { .. } => 10,
+        Decision::Modal { .. } | Decision::NameCard { .. } => 10,
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,

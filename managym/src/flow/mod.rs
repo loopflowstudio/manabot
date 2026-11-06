@@ -9,6 +9,7 @@ pub mod effects;
 pub mod event;
 pub mod game;
 pub mod identity;
+mod layers;
 pub mod mana;
 pub mod play;
 pub mod priority;
@@ -26,3 +27,6 @@ pub mod trigger;
 pub mod triggers;
 pub mod turn;
 pub mod zones;
+
+#[cfg(test)]
+mod naming_tests;

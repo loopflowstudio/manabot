@@ -49,6 +49,7 @@ from manabot.sim.rollout import (
 )
 from manabot.training.decks import UniformDecks, pair_match
 from manabot.training.regime import BatchClosure
+from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
@@ -80,8 +81,7 @@ class _Pending:
     action: int
     logprob: float
     value: float
-    probabilities: np.ndarray
-    log_probabilities: np.ndarray
+    action_data: PackedActions
     outcome_probabilities: np.ndarray | None = None
 
 
@@ -96,7 +96,11 @@ class _Transition:
 
 @dataclass
 class RolloutBatch:
-    """On-policy rows [time, trajectory]; complete games may be packed [rows, 1]."""
+    """On-policy rows [time, trajectory]; complete games may be packed [rows, 1].
+
+    `obs` retains non-action fields; `action_data` owns legal action rows and
+    behavior distributions in time-major order. `observations` reunites them.
+    """
 
     obs: dict[str, np.ndarray]
     actions: np.ndarray
@@ -106,10 +110,37 @@ class RolloutBatch:
     values: np.ndarray
     next_obs: dict[str, np.ndarray]
     next_done: np.ndarray
-    probabilities: np.ndarray
-    log_probabilities: np.ndarray
+    action_data: PackedActions
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
     outcome_probabilities: np.ndarray | None = None
+
+    def observations(self, indexes: np.ndarray | None = None) -> ActionRows:
+        """Materialize only requested flat rollout rows on CPU.
+
+        Explicit indexes return [batch,...]; omitting them restores
+        [time,trajectory,...] for bounded inspection. Learners always select a
+        minibatch. Object data and compact actions are the only retained owners.
+        """
+        trajectory_shape = self.actions.shape if indexes is None else None
+        if indexes is None:
+            indexes = np.arange(self.actions.size)
+        rows = self.action_data.unpack(indexes)
+        rows.observation.update(
+            {
+                key: value.reshape(-1, *value.shape[2:])[indexes]
+                for key, value in self.obs.items()
+            }
+        )
+        if trajectory_shape is not None:
+            rows.observation = {
+                key: value.reshape(*trajectory_shape, *value.shape[1:])
+                for key, value in rows.observation.items()
+            }
+            rows.probabilities = rows.probabilities.reshape(*trajectory_shape, -1)
+            rows.log_probabilities = rows.log_probabilities.reshape(
+                *trajectory_shape, -1
+            )
+        return rows
 
 
 ExposureKind = Literal[
@@ -989,8 +1020,9 @@ class SeatRoutedCollector:
         with self.profiler.track("Rollout recording"):
             # One copied slice per key; per-row dicts view into it.
             obs_rows = {
-                key: self._buffers[key][rows].copy()
+                key: self._buffers[key][rows]
                 for key in self.observation_space.shapes
+                if key not in ACTION_FIELDS
             }
             for j, row in enumerate(rows):
                 slot = (
@@ -999,14 +1031,19 @@ class SeatRoutedCollector:
                     else int(row)
                 )
                 self._pending[slot] = _Pending(
-                    obs={
-                        key: obs_rows[key][j] for key in self.observation_space.shapes
-                    },
+                    obs={key: value[j] for key, value in obs_rows.items()},
                     action=int(acts[j]),
                     logprob=float(logprobs[j]),
                     value=float(values[j]),
-                    probabilities=probabilities[j].copy(),
-                    log_probabilities=log_probabilities[j].copy(),
+                    action_data=PackedActions.pack(
+                        {
+                            key: self._buffers[key][row : row + 1]
+                            for key in ACTION_FIELDS
+                            if key in self._buffers
+                        },
+                        probabilities[j : j + 1],
+                        log_probabilities[j : j + 1],
+                    ),
                     outcome_probabilities=(
                         None if outcomes is None else outcomes[j].copy()
                     ),
@@ -1042,6 +1079,7 @@ class SeatRoutedCollector:
         obs = {
             key: np.zeros((num_steps, num_envs) + value.shape[1:], dtype=value.dtype)
             for key, value in shapes.items()
+            if key not in ACTION_FIELDS
         }
         actions = np.zeros((num_steps, num_envs), dtype=np.int64)
         logprobs = np.zeros((num_steps, num_envs), dtype=np.float32)
@@ -1053,8 +1091,14 @@ class SeatRoutedCollector:
             for key, value in shapes.items()
         }
         next_done = np.zeros((num_envs,), dtype=bool)
-        probabilities = np.zeros_like(obs["actions_valid"])
-        log_probabilities = np.full_like(probabilities, -np.inf)
+        # Flatten in time-major order, matching scalar credit/selected actions.
+        action_data = PackedActions.concatenate(
+            [
+                streams[env][step].pending.action_data
+                for step in range(num_steps)
+                for env in range(num_envs)
+            ]
+        )
         outcome_probabilities = (
             np.zeros((num_steps, num_envs, 3), dtype=np.float32)
             if streams[0][0].pending.outcome_probabilities is not None
@@ -1066,14 +1110,12 @@ class SeatRoutedCollector:
             for step in range(num_steps):
                 transition = stream[step]
                 pending = transition.pending
-                probabilities[step, env_index] = pending.probabilities
-                log_probabilities[step, env_index] = pending.log_probabilities
                 if outcome_probabilities is not None:
                     assert pending.outcome_probabilities is not None
                     outcome_probabilities[step, env_index] = (
                         pending.outcome_probabilities
                     )
-                for key in self.observation_space.shapes:
+                for key in obs:
                     obs[key][step, env_index] = pending.obs[key]
                 actions[step, env_index] = pending.action
                 logprobs[step, env_index] = pending.logprob
@@ -1097,7 +1139,6 @@ class SeatRoutedCollector:
             values=values,
             next_obs=next_obs,
             next_done=next_done,
-            probabilities=probabilities,
-            log_probabilities=log_probabilities,
+            action_data=action_data,
             outcome_probabilities=outcome_probabilities,
         )

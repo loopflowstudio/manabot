@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history | `world` (the default pack): every defined card (336 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, explicit v9 name/group joins | `world` (the default pack): every defined card (336 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -52,6 +52,17 @@ paths to them below name those revisions. Frozen receipts and checkpoints are
 never rewritten.
 
 ## w17: one card representation and TLA casting (open)
+
+MTG-243 makes naming ordinary group-then-name decisions of at most 64 options
+and adds explicit policy input v9: public name/definition joins and group spans
+at ordinary action capacity, with separate trainable name identities. The
+default naming universe is unchanged. Naming state now holds one immutable
+vocabulary, a scope and a count instead of an owned effect branch per name;
+state hash contract **16** includes its digest. Semantic Observation **8** and
+capture **5** carry the new action joins. These contract changes invalidate
+current identity receipts even for ordinary traces whose choices did not change;
+no strength or historical checkpoint comparability is inferred. Fresh inputs
+remain v6, and frozen v1–v7 tensor layouts remain unchanged.
 
 Each card is a function returning the engine's own `CardDefinition`, written in
 its rules types, in the set file of its first printing; the authoring language
@@ -643,3 +654,21 @@ Fresh `experiments/data/archive/conformance/semantic-kernel-w15-v1` receipts and
 the integrated source. Earlier corpora, demos, authored packs and experiment
 artifacts remain unchanged. These bounded fixtures do not establish exhaustive
 rules correctness, scientific baselines or final release certification.
+
+### Open w17 — composable characteristic layers
+
+Layer evaluation uses dependency and timestamp order across types, colors,
+abilities and P/T, including keyword-counter timestamps and surviving grants.
+Beorn the Fierce and Kellan, Planar Trailblazer are defined cards. Prior checkpoints retain their identities; their exact world bindings reject
+changed rules, content and input contracts. No world freeze is inferred.
+
+Explicit policy input v8 retains v7 object, relation, header and membership
+widths, with 4096 × 3 ordered effect-detail tokens. Detail kinds 11–19 carry
+the catalog's token kinds 1–9; signed i32 values use exact 16-bit halves.
+Kinds 12/13 of local facts state changed effective colors and keyword-counter
+timestamp ranks; copy-exception programs use kind 11. Kind 14 joins captured
+activation/trigger programs to continuation frame indices, retaining them after
+source departure and suspension. Local facts default to 512 rows and remain
+configurable. V8 program reducers preserve token order and signed numeric inputs. V1–v7 parameter shapes and meanings remain
+frozen; fresh configuration still selects v6. Both encoders reject unsupported
+layer payloads before inference, naming the selected version and required v8.

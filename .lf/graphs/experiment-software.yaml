@@ -1,0 +1,8 @@
+# Narrow code fork: builtin verify can complete a Task before its experiment.
+# Keep delivery; verify integration here without completing the parent outcome.
+- graph: pursue
+- loop: implement
+  interactive: demo
+- graph: deliver
+- loop: implement
+  interactive: experiment-software-review

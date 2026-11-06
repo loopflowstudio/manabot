@@ -260,29 +260,26 @@ impl Game {
                 // condition reads that player's battlefield before the move.
                 let entering_controller = self.state.cards[*card].owner;
                 // "[predicate] permanents enter tapped" from the battlefield.
-                let static_tapped = [PlayerId(0), PlayerId(1)]
+                let ids = [PlayerId(0), PlayerId(1)]
                     .into_iter()
-                    .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| !self.characteristics(*id).abilities_lost)
-                    .flat_map(|id| {
-                        let permanent = self.state.permanents[id].as_ref().unwrap();
-                        self.state.cards[permanent.card]
-                            .statics
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, ability)| {
-                                matches!(ability, StaticAbility::EntersTapped(predicate)
-                                    if self.card_matches_predicate(*card, predicate))
-                            })
-                            .filter_map(move |(index, _)| {
-                                Some(ReplacementCandidate {
-                                    source: self.permanent_object_ref(id)?,
-                                    definition_index: index,
-                                    effect: ReplacementEffect::EntersTapped,
-                                })
-                            })
-                    })
-                    .collect::<Vec<_>>();
+                    .flat_map(|player| self.iter_battlefield_permanents(player));
+                let mut static_tapped = Vec::new();
+                for (id, view) in self.layer_views(ids) {
+                    let Some(source) = self.permanent_object_ref(id) else {
+                        continue;
+                    };
+                    for (definition_index, ability) in view.static_abilities.iter().enumerate() {
+                        if matches!(ability, StaticAbility::EntersTapped(predicate)
+                            if self.card_matches_predicate(*card, predicate))
+                        {
+                            static_tapped.push(ReplacementCandidate {
+                                source,
+                                definition_index,
+                                effect: ReplacementEffect::EntersTapped,
+                            });
+                        }
+                    }
+                }
                 let mut own: Vec<_> = self.state.cards[*card]
                     .replacement_effects
                     .iter()
@@ -449,10 +446,21 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {
                     return false;
                 };
+                let timestamp = (delta > 0 && kind.keyword().is_some())
+                    .then(|| self.state.id_gen_mut().next_id());
                 let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                     return false;
                 };
-                permanent.change_counters(kind, delta)
+                let changed = permanent.change_counters(kind, delta);
+                if changed {
+                    if let Some(timestamp) = timestamp {
+                        permanent.keyword_counter_timestamps.insert(kind, timestamp);
+                    }
+                }
+                if permanent.counter_count(kind) == 0 {
+                    permanent.keyword_counter_timestamps.remove(&kind);
+                }
+                changed
             }
             ProposedEvent::ZoneMove {
                 card,

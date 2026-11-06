@@ -77,8 +77,12 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
     batch = collector.collect(agent, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
-    objects, owners, valid, history, frames = agent._gather_object_embeddings(obs)
+    obs = {
+        key: torch.from_numpy(value[0])
+        for key, value in batch.observations().observation.items()
+    }
+    state = agent._gather_object_embeddings(obs)
+    objects, owners, valid = state.objects, state.is_agent, state.validity
     encoded = agent._attend_objects(objects, owners, valid)
     assert encoded.shape[1] == objects.shape[1] + 1
     # Probe each real-object index, including the final slot, and absent focus.
@@ -96,7 +100,8 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         ).squeeze(-1)
         expected = expected.masked_fill(obs["actions_valid"] == 0, -1e8)
         actual, _ = agent.forward_distribution(obs)
-        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        # Dense and legal-row matrix multiplies can round differently in float32.
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-9)
 
 
 @pytest.mark.parametrize(
@@ -104,8 +109,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     [
         {"value_aggregation": "value_token", "attention_on": False},
         {"attention_layers": 2, "attention_on": False},
-        {"value_aggregation": "masked_mean", "compound_decisions": True},
-        {"attention_layers": 2, "compound_decisions": True},
+        {"compound_decisions": True},
         {"hidden_dim": 7, "num_attention_heads": 4},
         {"attention_layers": 0},
     ],
@@ -142,7 +146,10 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
         agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
     batch = collector.collect(agent, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
+    obs = {
+        key: torch.from_numpy(value[0])
+        for key, value in batch.observations().observation.items()
+    }
     expected = agent.forward_distribution(obs)
     changed = {key: value.clone() for key, value in obs.items()}
     for key in (
@@ -161,13 +168,16 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
     for left, right in zip(expected, actual, strict=True):
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     if aggregation == "historical_mean":
-        objects, owners, valid, history, frames = agent._gather_object_embeddings(obs)
+        state = agent._gather_object_embeddings(obs)
+        objects, owners, valid = state.objects, state.is_agent, state.validity
         post = agent.attention(objects, owners, valid == 0)
         value = agent.value_head(post)
-        logits = agent.policy_head(
-            agent._gather_informed_actions(obs, post, history, frames)
+        batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
+        scores = agent.policy_head(
+            agent._gather_informed_actions(obs, post, state, batches, slots)
         ).squeeze(-1)
-        logits = logits.masked_fill(obs["actions_valid"] == 0, -1e8)
+        logits = scores.new_full(obs["actions_valid"].shape, -1e8)
+        logits[batches, slots] = scores
         torch.testing.assert_close(expected[0], logits, rtol=0, atol=0)
         torch.testing.assert_close(expected[1], value, rtol=0, atol=0)
     else:

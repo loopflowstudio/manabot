@@ -47,6 +47,7 @@ from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+from tests.retained_decision import assert_retained_frame
 
 
 @pytest.fixture
@@ -688,6 +689,7 @@ def test_pilot_rejects_changed_observation_binding(
         frozen()
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_rejects_changed_cutoff_with_identical_shapes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -734,8 +736,9 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
     for index, action in enumerate(game.actions):
         assert isinstance(action, int)
         if index == len(game.actions) - 1:
-            assert scalar.semantic_decision_frame_json() == game.frame
-            assert vector.semantic_decision_frames_json()[0] == game.frame
+            frame = scalar.semantic_decision_frame_json()
+            assert vector.semantic_decision_frames_json()[0] == frame
+            assert_retained_frame(frame, game.frame)
         observation, *_ = scalar.step(action)
         vector.step_into_buffers([action])
     assert len(observation.agent_cards) == 45
@@ -756,9 +759,19 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
         scalar.encode_observation_into(observation, old.allocate())
 
 
-def test_prospective_pilot_admits_current_runtime_without_fixtures() -> None:
-    _, protocol = frozen()
-    assert protocol.runtime_world.model_dump() == managym.world_identity()
+@pytest.mark.parametrize("entry", ["frozen", "runs", "eval"])
+def test_executed_v10_protocol_rejects_a_changed_runtime_catalog(entry: str) -> None:
+    """v10 executed on its pinned w17 catalog; a changed open catalog never
+    reruns under that protocol. A successor protocol owns any later run."""
+    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
+    assert managym.world_identity() != protocol.runtime_world.model_dump()
+    with pytest.raises(ValueError, match="runtime world differs"):
+        if entry == "frozen":
+            frozen()
+        elif entry == "runs":
+            tla_pilot_v10.runs("HEAD")
+        else:
+            eval(_state())
 
 
 def test_prepared_v8_rejects_integrated_runtime(
@@ -774,6 +787,7 @@ def test_prepared_v8_rejects_integrated_runtime(
         frozen()
 
 
+@pytest.mark.usefixtures("pilot_world")
 def test_pilot_rejects_asymmetric_support(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -786,6 +800,7 @@ def test_pilot_rejects_asymmetric_support(
         frozen()
 
 
+@pytest.mark.usefixtures("pilot_world")
 @pytest.mark.parametrize(
     "field,value", [("threshold", 0.1), ("recover_capacity", False), ("warmup", 50)]
 )

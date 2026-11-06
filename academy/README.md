@@ -185,9 +185,9 @@ marked unavailable. Local-update receipts expose only policy/search vectors
 and an acting-view belief summary, never private sampled hands or branch audits.
 
 `TraceEvent.bot_decision` records the actual policy/value/search outputs at
-choice time. Compound checkpoints record their conditional root-sequence
-factors and values; these are labeled separately from native microchoice
-marginals. Anchors without critics have no value estimate. Watch's acting-view
+choice time. Traces from the removed compound-decision policies may retain
+conditional root-sequence factors and values; these remain labeled separately
+from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
 private analysis observation supplies **Show both hands**, available explicitly
 for bot spectators, including during active watches. Active inspection requires

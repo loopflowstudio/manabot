@@ -12,8 +12,6 @@ jobs:
   academy-integration:
     name: Academy Integration (${{ inputs.runner }})
     runs-on: ${{ inputs.runner }}
-    env:
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
     steps:
       - uses: actions/checkout@v4
 
@@ -62,5 +60,4 @@ jobs:
       - name: Frozen-policy search fixtures
         run: |
           uv run --python 3.12 --extra dev pytest -q \
-            tests/sim/test_local_update_sampling.py \
-            tests/sim/test_local_update_compound.py
+            tests/sim/test_local_update_sampling.py

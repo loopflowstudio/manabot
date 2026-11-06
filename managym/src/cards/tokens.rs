@@ -114,6 +114,20 @@ pub fn definition_tokens(
         .collect())
 }
 
+/// Serialize a resolved rules value with the same vocabulary as card programs.
+pub fn rules_tokens<T: Serialize>(
+    value: &T,
+    pack: &ContentPack,
+) -> Result<Vec<(u16, i32)>, ContentError> {
+    let mut writer = TokenWriter::new(pack);
+    value.serialize(&mut writer)?;
+    Ok(writer
+        .tokens
+        .into_iter()
+        .map(|(kind, value, _)| (kind as u16, value))
+        .collect())
+}
+
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
 pub fn learning_catalog(pack: &ContentPack) -> Result<LearningCatalog, ContentError> {
     let mut out = LearningCatalog::default();

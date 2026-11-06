@@ -116,6 +116,61 @@ bindings that can change future behavior.
 
 ## Policy inputs
 
+### Catalog naming input
+
+Naming a card is a sequence of ordinary native decisions. A prompt over at most
+`managym.NAME_BRANCHING` (64) names offers those names; a larger prompt offers a
+deterministic, balanced, complete partition of its sorted names into at most 64
+contiguous groups, recursively. With 928 names that is 15 groups of 61 or 62,
+then one name prompt; the installed 344-name catalog uses 6 groups. Choosing a
+group narrows the pending prompt and commits nothing: no search, inspection or
+exile. Only choosing a name resumes the effect. Each prompt is one learner
+transition through the ordinary policy, value estimate, rollout and learner,
+with the standard discount and credit; no reward is assigned to group choices.
+The extra decision is real temporal structure, so learning is not claimed to
+equal one flat choice over every name. Single-option prompts follow the native
+trivial-decision skip. Reconnect, replay and forks restore the actual current
+prompt; Commands bound to an earlier prompt are stale.
+
+`ObservationConfig(policy_input_version=9)` retains v7's object, relation and
+shared-effect layouts and adds `name_candidates[A,4]` at the ordinary action
+capacity `A = max_actions`: one-based public name row, optional one-based
+definition reference, then the one-based first and last name rows of a group
+choice (zero means absent). Sorted names make the span a viewer-safe identity
+of every member. No card/permanent row is fabricated for a name or group. These
+rows suppress the positional mode feature, so identity comes from categorical
+joins, never from magnitude.
+
+The policy adds a trainable vector per name and, where present, the
+definition's learning-program embedding from the table used by game objects. A
+group's vector is the mean of its members' name vectors, computed exactly from
+a prefix sum over the name table: every member receives the group's gradient,
+and no member programs are encoded for a group prompt. V9 joins name vectors to
+viewer-visible program references before card, known-hand and decklist pooling,
+so equal-rule cards with different public names support different preferences;
+closed native decklist rows contribute no identities. Action networks score
+only legal rows, and rollouts pack legal action fields and complete behavior
+probabilities with original coordinates.
+
+The checkpoint binding includes the ordered naming vocabulary with definition
+joins, `naming_representation="public-groups-v1"` and `naming_branching`, in
+addition to tensor shapes and the content manifest. A changed vocabulary,
+order, join or branching bound fails admission; there is no warm start or
+remapping.
+
+V9 composes the [v8 layer layout](#composable-layer-input-v8) with
+`name_candidates[A,4]`. V1–v8 have no name identity: group and name choices
+appear as ordinary modal choices, within their capacities. Missing-checkpoint defaults and fresh v6
+defaults are unchanged; using v9 is explicit. The semantic observation/capture
+contracts are 8/5, so earlier semantic world bindings are rejected for current
+execution.
+
+The default universe remains real non-token catalog names, including back faces.
+A separate immutable vocabulary can hold validated names without playable card
+definitions; this is exercised only by the offline large-vocabulary fixture.
+This does not claim that the supported catalog exhausts every name legal under
+Magic's rules, and does not broaden deck admission.
+
 ### Current continuation input
 
 Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.
@@ -128,9 +183,9 @@ native scalar/vector buffer shapes, model shape checks and checkpoint receipts.
 
 A native `relations[64,49]` float32 buffer carries ordered stack entries,
 announced targets and clauses, chosen modes and abilities, kicker, reserved
-sacrifices, suspended payments and waiting triggers. V5/v6 player, card and
+sacrifices, suspended payments and waiting triggers. V5–v8 player, card and
 permanent widths are 73/56/38. Native buffers bind relation semantics by width
-(32 for v2/v3, 33 for v4, 49 for v5/v6); validity stays at column 31. The fact
+(32 for v2/v3, 33 for v4, 49 for v5–v8); validity stays at column 31. The fact
 axis binds capacity; at 128 rows v5 and v6 encode identically, while the saved
 configuration still distinguishes their identities. Checkpoints omitting the
 version load as v1 through `ObservationConfig.from_checkpoint`; legacy configs
@@ -143,7 +198,7 @@ truncating. Transport IDs are joins to the card catalog and object table,
 never numeric features. At `Decision::ManaChoice` the activation source is
 unavailable because rules state has discarded it.
 Waiting delayed abilities (frame kind 10) carry event codes independently of
-frequency and expiry. In v5/v6, relation row kind 9 carries frequency in column
+frequency and expiry. In v5–v8, relation row kind 9 carries frequency in column
 28 (1 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
 objects remain kind-8 reference rows, separate from event context. Historical
 captures without a frequency field retain unknown frequency rather than
@@ -171,6 +226,55 @@ and [shared effect inputs](../manabot/README.md#shared-effect-inputs). These
 engineering proofs establish no learning-quality advantage. Persistent memory
 remains future work. Fresh defaults remain v6; frozen v1–v6 checkpoints keep
 their meanings, and the TLA v10 pilot trains on v7.
+
+### Composable layer input v8
+
+For a new run requiring composable layer programs, explicitly select v8 before
+constructing the collector and model. Fresh configurations remain v6. For example,
+this prepares a recipe and its model input without starting training:
+
+```python
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.recipes.local import local_smoke
+
+recipe = local_smoke(steps=1)
+recipe.observation = ObservationConfig(policy_input_version=8)
+space = ObservationSpace(recipe.observation)
+```
+
+Use that same `space` for `SeatRoutedCollector` and
+`ActorCritic(space, recipe.agent)`. The serialized `TrainingRegime` retains the
+selected input. V8 carries structured granted, copy-exception and captured
+continuation programs, changed colors and keyword-counter timestamps. V7 remains
+available for representable shared effects; it cannot encode every new layer
+payload.
+
+The shared `validate_policy_input` boundary rejects unrepresentable v1–v7 layer
+payloads in both native and Python encoders before writing encoded observations,
+selecting an action prefix or running inference. The diagnostic names the
+selected version, for example: `policy input v6 cannot represent layer payload;
+select v8`. A starting state may encode successfully and a later state fail;
+this is observation admission, not whole-game preflight or rollback of an action
+already executed. Defined-card eligibility, input representability and
+checkpoint/world admission are separate checks.
+
+On rejection, preserve the failed run's configuration and evidence. For new work
+requiring these payloads, configure v8 and construct a compatible model. Load saved
+observation configurations through `ObservationConfig.from_checkpoint` and keep
+their saved versions, omissions and model shapes; an absent version means v1.
+Do not edit a checkpoint's input version or reshape its weights to bypass the
+error. Saved-policy evaluation uses that policy's input and normal world
+admission. Successful architecture loading alone does not admit a checkpoint to
+the current world; see [world identity](../manabot/README.md#world-identity).
+Selecting v8 does not restart a failed run or swap its live policy.
+
+V7 and v8 share `effects[128,18]` headers and `effect_members[2048,2]` joins.
+V7 has `effect_details[512,3]` and defaults to `facts[128,12]`; v8 has
+`effect_details[4096,3]` and defaults to `facts[512,12]`. Local fact capacity is
+configurable through `max_facts` in either version. Headers own bounded slices
+of details and members. Allocate and collect every key from the selected
+`ObservationSpace`; overflow rejects rather than truncating a payload.
 
 ### Optional recent public events
 

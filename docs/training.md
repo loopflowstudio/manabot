@@ -79,7 +79,6 @@ interpretation and serialized identity.
 | Operation | Purpose |
 | --- | --- |
 | `train_self_play` | Ordinary self-play learner (PPO-style `Learning` or `DampedPolicyLearning`). |
-| `train_compound` | Ragged compound-decision policy; see [compound decisions](#compound-decisions). |
 | `import_policy` | Admit a frozen TrainingRun export's raw or EMA checkpoint without training. |
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
 | `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](../README.md#beside-the-loop). |
@@ -165,49 +164,22 @@ published artifacts. Reproducibility means resolved settings and artifact
 provenance, not byte-identical stochastic training. A fresh execution owns
 fresh costs; no pre-existing corpus is free.
 
-### Compound decisions
+### Compound decisions (removed)
 
-`ModelConfig.compound_decisions=true` selects the learned ragged policy;
-`train_compound` collects complete self-play games before each update. The
-recipes are `experiments/compound_decisions.py` variants
-`{sequential,grouped}_{bootstrap,outcome}`.
-
-managym's `compound_offers` supplies the legal surface: complete attacker
-declarations and simple single-target casts; complete remaining blocker
-declarations when each blocker's legal targets are independent (menace stays
-sequential); and waterbend payments with fixed tap/mana economics. Kicker,
-ward, mana abilities and triggers remain sequential decisions. A native
-`compound_commands_json` call lowers a sampled submission on an exact fork into
-ordinary revision-bound Commands; the live root is untouched, and interruption
-rejects a stale suffix. No Python code reconstructs these rules.
-
-A small GRU conditions include/exclude logits on the selected prefix over the
-shared viewer encoder. Candidates are visited once in native order with
-cardinality masks, so each subset has one encoding; joint log probability is
-the sum of normalized conditional log probabilities, and forced tokens have
-log probability zero. Conditional entropy and KL terms are sampled-prefix
-regularizers, not exact joint quantities. `grouping=grouped` uses one joint
-ratio and root value per submission; `sequential` uses per-factor ratios and
-prefix values. `estimator=outcome` uses terminal Monte Carlo returns;
-`bootstrapped` uses transition-end GAE. Recipes fix gamma=1. Raw weights only;
-EMA is unsupported. Native `skip_trivial` stays on; report complete-game wall
-cost, since fewer exposed prompts alone are not a speedup.
-
-```bash
-OMP_NUM_THREADS=1 uv run --extra notebook python -m experiments.compound_decisions --profile smoke --out .runs/compound-smoke
-uv run --extra notebook python -m experiments.compound_decisions --report-only .runs/compound-smoke
-```
-
-The smoke is one seed; a scientific comparison needs independent training
-seeds, fresh deals, equal wall budgets and measured inference cost.
+The learned compound-decision policy (`compound_decisions` models and
+`train_compound` stages) has been removed. Saved configurations, checkpoints
+and regimes that select it fail validation rather than loading as flat
+policies; reproduce them from source commit
+`ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`. Retained receipts and reports
+that record compound fields remain readable.
 
 ### Selection diagnostics
 
 `collect_selection` freezes a prior self-play stage's raw or EMA checkpoint
 (optionally from another run in the same store via `source_run`) and collects
 a declared population with unique seeds and whole-game development/held-out
-splits. Scalar and categorical values are supported; compound and belief-input
-sources are not. The protocol is in
+splits. Scalar and categorical values are supported; belief-input sources
+are not. The protocol is in
 [ataraxos-omitted-controls](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
 results are frozen-policy associations, not causal filter benefits.
 
@@ -334,7 +306,7 @@ phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), `selection_groups/<action
 type>/<terminal distance>/rows` and `self_play_outcomes/<deck>/<opponent
 deck>/<play|draw>/wins`. Offline readers use
-`manabot.training.update_metrics.read_updates`. Compound, selection and belief
+`manabot.training.update_metrics.read_updates`. Selection and belief
 summaries stay in their stage's `diagnostics`.
 
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
@@ -353,7 +325,7 @@ milestone. `ExperimentSchedule` and `PlannedRun` default to 1,000 updates, an
 authoring default rather than an hourly estimate. Portable continuation keeps
 the absolute grid (resuming at 26,000 with interval 1,000 first exports at
 27,000). Step cadence requires one step-target self-play stage; multi-stage
-and compound recipes keep explicit legacy cadence. `--checkpoint-seconds`
+recipes keep explicit legacy cadence. `--checkpoint-seconds`
 preserves historical elapsed-time cadence for frozen recipes.
 
 ### Checkpoint evaluation
@@ -657,7 +629,7 @@ under the TrainingRun's `failures/` directory or `.runs/game-failures/`
 elsewhere. Files are create-only, mode 0600 and fsynced; a storage failure is
 attached to the original exception. Coverage includes strict self-play,
 `sim.rollout` and vector environments, search players (flat-MC and rollout
-pool roots), compound/selection journals, and arena evaluation, which journals
+pool roots), selection journals, and arena evaluation, which journals
 each pending Command under `failures/` before execution (pass
 `keep_game_logs=True` to keep journals of successful games).
 

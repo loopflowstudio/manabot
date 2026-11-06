@@ -1,7 +1,8 @@
 # Task 07c490 — closure and lambda on the ten-deck Elemental recipe (2026-11-05 UTC)
 
 Inherited MTG-213 and fc6ffb notes no longer direct this work; they remain at
-`ac539b38d:scratch/questions.md`. The protocol
+`ac539b38d:scratch/questions.md`, and main's MTG-243 naming notes at
+`f6f171d34:scratch/questions.md`. The protocol
 `experiments/protocols/closure-lambda-elemental-v1.md` owns the design, predictions,
 budget and results pointer; this file holds working assumptions and open items.
 

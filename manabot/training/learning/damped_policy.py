@@ -17,7 +17,6 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
-    check_behavior,
     check_logs,
     check_probabilities,
     clipped_surrogate,
@@ -231,13 +230,8 @@ def update_damped_iteration(
     device = learner.device
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
-        observations = observation_tensors(batch.obs, device)
+        batch.action_data.check(batch.actions, batch.logprobs)
         actions = torch.as_tensor(batch.actions, device=device)
-        behavior = torch.as_tensor(batch.probabilities, device=device)
-        old_logs = torch.as_tensor(batch.logprobs, device=device)
-        behavior_logs = torch.as_tensor(batch.log_probabilities, device=device)
-        valid = legal_mask(observations["actions_valid"])
-        check_behavior(behavior_logs, behavior, actions, old_logs, valid)
     with track("Targets"):
         targets = _targets(learner, batch, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
@@ -260,9 +254,7 @@ def update_damped_iteration(
     }
     with track("Selection and health diagnostics"):
         health = batch_health(
-            behavior_logs,
-            behavior,
-            valid,
+            batch.action_data,
             targets.advantages,
             targets.selected,
             actor_only=learning.filter_scope == "actor",
@@ -276,16 +268,9 @@ def update_damped_iteration(
             if learner.agent.config.value_kind == "categorical_wdl"
             else targets.values
         )
-        chosen_types = (
-            observations["actions"]
-            .gather(
-                2,
-                actions[..., None, None].expand(
-                    *actions.shape, 1, observations["actions"].shape[-1]
-                ),
-            )
-            .squeeze(2)[..., :ACTION_TYPE_DIM]
-            .argmax(-1)
+        chosen_types = torch.as_tensor(
+            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
+            device=device,
         )
         diagnostics["selection_groups"] = selection_diagnostics(
             targets.advantages,
@@ -303,10 +288,7 @@ def update_damped_iteration(
     # rollouts are packed into one column; use the same native stream count
     # rather than accidentally taking one optimizer step per recorded decision.
     width = learner.minibatch_rows
-    observations = {key: value.flatten(0, 1) for key, value in observations.items()}
     actions = actions.flatten(0, 1)
-    behavior_logs = behavior_logs.flatten(0, 1)
-    valid = valid.flatten(0, 1)
     targets = DampedTargets(
         targets.advantages.flatten(0, 1),
         targets.values.flatten(0, 1),
@@ -331,16 +313,19 @@ def update_damped_iteration(
                 indexes = torch.arange(start, start + len(selected), device=device)[
                     selected
                 ]
-                obs = {key: value[indexes] for key, value in observations.items()}
+                rows = batch.observations(indexes.cpu().numpy())
+                obs = observation_tensors(rows.observation, device)
+                valid = legal_mask(obs["actions_valid"])
+                behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
                 logits, value_logits = learner.agent.forward_distribution(obs)
                 reference = reference_distribution(obs, learning.reference)
                 policy_loss = damped_policy_loss(
                     logits,
                     actions[indexes],
                     targets.advantages[indexes],
-                    behavior_logs[indexes],
+                    behavior_logs,
                     reference,
-                    valid[indexes],
+                    valid,
                     clip=learning.clip,
                     collection_kl=learning.collection_kl,
                     tau=tau,
@@ -366,9 +351,9 @@ def update_damped_iteration(
                     return {
                         "logits": logits.detach(),
                         "value_logits": value_logits.detach(),
-                        "valid": valid[indexes],
+                        "valid": valid,
                         "actions": actions[indexes],
-                        "behavior_logs": behavior_logs[indexes],
+                        "behavior_logs": behavior_logs,
                         "reference": reference,
                         "advantages": targets.advantages[indexes],
                         "value_targets": targets.values[indexes],
@@ -395,25 +380,23 @@ def update_damped_iteration(
                 diagnostics["actor_exposures"] += int(actor_mask.sum())
                 diagnostics["critic_exposures"] += int(selected.sum())
                 with torch.no_grad():
-                    logs = policy_logs(logits, valid[indexes])
+                    logs = policy_logs(logits, valid)
                     probabilities = logs.exp()
                     diagnostics["entropy"] = float(
-                        -(probabilities * logs.masked_fill(~valid[indexes], 0))
-                        .sum(-1)
-                        .mean()
+                        -(probabilities * logs.masked_fill(~valid, 0)).sum(-1).mean()
                     )
                     diagnostics["collection_kl"] = float(
-                        reverse_kl(logs, behavior_logs[indexes], valid[indexes]).mean()
+                        reverse_kl(logs, behavior_logs, valid).mean()
                     )
                     diagnostics["reference_kl"] = float(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid[indexes], 1).log(),
-                            valid[indexes],
+                            reference.masked_fill(~valid, 1).log(),
+                            valid,
                         ).mean()
                     )
                     ratio_logs = (
-                        (logs - behavior_logs[indexes])
+                        (logs - behavior_logs)
                         .gather(-1, actions[indexes, None])
                         .squeeze(-1)
                     )

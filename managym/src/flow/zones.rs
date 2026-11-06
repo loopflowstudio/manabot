@@ -1,6 +1,8 @@
 // zones.rs
 // Zone management, card movement, and utility methods on Game.
 
+use std::sync::Arc;
+
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
@@ -8,6 +10,7 @@ use crate::{
         event::GameEvent,
         game::{CastChoices, Game},
         proposed_event::{ProposedEvent, ZoneEntry},
+        statics::Characteristics,
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -234,13 +237,12 @@ impl Game {
     pub(crate) fn untap_during_other_untap_steps(&mut self, active: PlayerId) {
         let other = PlayerId(1 - active.0);
         for permanent_id in self.battlefield_permanents(other) {
-            let card = self.state.permanents[permanent_id].as_ref().map(|p| p.card);
-            let Some(card) = card else { continue };
-            let untaps = self.state.cards[card]
-                .statics
+            let untaps = self
+                .characteristics(permanent_id)
+                .static_abilities
                 .iter()
                 .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
-            if untaps && !self.characteristics(permanent_id).abilities_lost {
+            if untaps {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                     permanent.untap();
                 }
@@ -307,10 +309,27 @@ impl Game {
         tapped: PermanentId,
         controller: PlayerId,
     ) -> crate::state::mana::Mana {
+        self.tap_mana_bonus_from(&self.tap_bonus_sources(controller), tapped)
+    }
+
+    /// `controller`'s permanents with triggered mana abilities, read from one
+    /// board. A scan pricing several sources at one immutable state reads this
+    /// once, so debug validates the board per scan rather than per source.
+    pub(crate) fn tap_bonus_sources(&self, controller: PlayerId) -> Vec<Arc<Characteristics>> {
+        self.layer_views(self.iter_battlefield_permanents(controller))
+            .map(|(_, view)| view)
+            .filter(|view| !view.triggered_mana_abilities.is_empty())
+            .collect()
+    }
+
+    pub(crate) fn tap_mana_bonus_from(
+        &self,
+        sources: &[Arc<Characteristics>],
+        tapped: PermanentId,
+    ) -> crate::state::mana::Mana {
         let mut produced = crate::state::mana::Mana::default();
-        for permanent_id in self.iter_battlefield_permanents(controller) {
-            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
-            for ability in &self.state.cards[permanent.card].triggered_mana_abilities {
+        for view in sources {
+            for ability in &view.triggered_mana_abilities {
                 if self.permanent_matches_predicate(tapped, &ability.predicate) {
                     produced.add(&ability.mana);
                 }

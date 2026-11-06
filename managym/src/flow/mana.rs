@@ -4,9 +4,11 @@
 // Game owns their events and explicit Decision continuations. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
+use std::sync::Arc;
+
 use crate::{
     agent::action::AgentError,
-    flow::game::Game,
+    flow::{game::Game, statics::Characteristics},
     state::{
         ability::Effect,
         card::{ActivatedAbilityDefinition, ReplacementEffect},
@@ -510,6 +512,7 @@ impl Game {
     }
 
     fn payment_model(&self, player: PlayerId, sacrifice: Option<PermanentId>) -> PaymentModel {
+        let _scan = self.board_scan();
         let mut reserved = Vec::new();
         if let Some(source) = sacrifice {
             reserved.push(SourceReservation {
@@ -573,17 +576,15 @@ impl Game {
         if let Some(suspended) = &self.state.suspended_decision {
             reserve(&suspended.decision, self, &mut reserved);
         }
+        let bonus_sources = self.tap_bonus_sources(player);
         let sources = self
-            .iter_battlefield_permanents(player)
-            .map(|permanent| {
+            .characteristics_many(self.iter_battlefield_permanents(player))
+            .map(|(permanent, characteristics)| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
-                let card = &self.state.cards[source.card];
-                let characteristics = self.characteristics(permanent);
                 // A source that lost its abilities offers no zero-mana tap.
                 let can_tap = self.permanent_can_tap(permanent);
-                let fixed =
-                    (can_tap && !card.mana_abilities.is_empty() && !characteristics.abilities_lost)
-                        .then(|| self.fixed_source_mana(permanent));
+                let fixed = (can_tap && !characteristics.mana_abilities.is_empty())
+                    .then(|| self.fixed_source_mana(permanent, &characteristics, &bonus_sources));
                 let abilities = characteristics
                     .activated_abilities
                     .iter()
@@ -596,8 +597,9 @@ impl Game {
                     .filter_map(|(index, ability)| {
                         let mut outputs = ability.mana_choices()?;
                         if ability.tap_source {
+                            let bonus = self.tap_mana_bonus_from(&bonus_sources, permanent);
                             for output in &mut outputs {
-                                output.add(&self.tap_mana_bonus(permanent, player));
+                                output.add(&bonus);
                             }
                         }
                         Some(ManaActivation {
@@ -615,7 +617,7 @@ impl Game {
                     fixed,
                     abilities,
                     waterbend: !source.tapped
-                        && (card.types.is_artifact() || card.types.is_creature()),
+                        && (characteristics.types.is_artifact() || characteristics.is_creature()),
                 }
             })
             .collect();
@@ -1016,8 +1018,8 @@ impl Game {
     }
 
     fn tap_fixed_mana_source(&mut self, player: PlayerId, permanent: PermanentId) {
-        let source = self.state.permanents[permanent].as_ref().unwrap();
-        let produced = self.state.cards[source.card]
+        let produced = self
+            .characteristics(permanent)
             .mana_abilities
             .iter()
             .map(|ability| ability.mana.clone())
@@ -1032,14 +1034,17 @@ impl Game {
     /// in the payment search until the player selects a color. Callers check
     /// that the source has mana abilities, can tap and has not lost its
     /// abilities, reading its characteristics once.
-    fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
-        let source = self.state.permanents[permanent].as_ref().unwrap();
-        let card = &self.state.cards[source.card];
+    fn fixed_source_mana(
+        &self,
+        permanent: PermanentId,
+        view: &Characteristics,
+        bonus_sources: &[Arc<Characteristics>],
+    ) -> Mana {
         let mut output = Mana::default();
-        for ability in &card.mana_abilities {
+        for ability in &view.mana_abilities {
             output.add(&ability.mana);
         }
-        output.add(&self.tap_mana_bonus(permanent, source.controller));
+        output.add(&self.tap_mana_bonus_from(bonus_sources, permanent));
         output
     }
 
@@ -1157,15 +1162,12 @@ impl Game {
 
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
-        for permanent_id in self.iter_battlefield_permanents(player) {
-            let source = self.state.permanents[permanent_id].as_ref().unwrap();
-            if self.state.cards[source.card].mana_abilities.is_empty()
-                || !self.permanent_can_tap(permanent_id)
-                || self.characteristics(permanent_id).abilities_lost
-            {
+        let bonus_sources = self.tap_bonus_sources(player);
+        for (permanent_id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+            if view.mana_abilities.is_empty() || !self.permanent_can_tap(permanent_id) {
                 continue;
             }
-            total.add(&self.fixed_source_mana(permanent_id));
+            total.add(&self.fixed_source_mana(permanent_id, &view, &bonus_sources));
         }
         total
     }

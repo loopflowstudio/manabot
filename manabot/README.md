@@ -89,7 +89,7 @@ It retains private replay inputs, discards both seats' uncommitted experience fr
 failed games and regathers under the same policy. A persisted rolling error rate
 strictly above the declared threshold stops training; evaluation remains strict.
 Strict scalar/vector training and data-generation paths automatically retain
-private native failure inputs before propagating errors. Compound/selection and
+private native failure inputs before propagating errors. Selection and
 simulation retain pending Commands before execution. The same bounded replay command
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
@@ -174,7 +174,7 @@ world. The cross-package contracts are in the
 2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
    `manabot.training` owns the regime executor and `Learner`
 3. **`manabot.sim`**: players and game runners.
-   `sim/action` owns structured offers and compound-action execution.
+   `sim/action` owns the structured-offer prototype decoder and its benchmark.
    `sim/search` owns frozen-policy planning, world sampling and search evidence:
    `puct.py` implements tree search; `conditional.py` compares its action estimates
    under different hidden-information assumptions at the same decision.
@@ -206,9 +206,9 @@ foreign-opponent calibration or search strength.
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.
 
-The existing `agent_puct` player accepts current flat and compound checkpoints;
+The existing `agent_puct` player accepts flat checkpoints;
 see [PUCT policy/value compatibility](../README.md#beside-the-loop)
-for critic units, retained prefixes and evaluation registration. This is a search
+for critic units and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
 Declare training comparisons with [typed Python experiments](../docs/experiments.md#declaring-a-comparison).
@@ -219,6 +219,24 @@ Each current experiment is one module in [experiments/](../experiments/), holdin
 its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
+
+The prospective [growing-pool reference league](../experiments/protocols/growing-pool-245-v1.md)
+freezes authored decks, sampling tickets and held-out experience splits through
+the existing deck source, training job and replay evaluator. Its read-only
+`uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
+checks admission without playing games; v1 rejects the changed engine source.
+Task 04 owns the integrated freeze and actual pilot results. The frozen proxy
+is not evidence of learning.
+
+The reference league's TrainingJob enables private exposure capture through the
+ordinary native vector collector. Digest-bound game receipts preserve actual
+sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
+card draws and completed effect frames. They live under `training/exposure`,
+separate from checkpoints and evaluation evidence. The offline analysis accepts
+these downloaded directories with `--training-evidence`; missing or interrupted
+capture leaves the report incomplete. Focus opportunities and completed frames
+are measurements of decisions/program completion, not strategic benefit. Other
+jobs keep capture disabled unless they explicitly select it.
 
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in
@@ -246,8 +264,9 @@ and [the calibration command](../docs/experiments.md#freeze-step-targets).
 
 ## Shared effect inputs
 
-`ObservationConfig(policy_input_version=7)` admits complete resolved effects
-before per-holder fact expansion. `env/shared_effects.py` mirrors the native
+`ObservationConfig(policy_input_version=7)` encodes representable resolved effects
+once, before per-holder fact expansion. It cannot encode every composable layer
+payload. `env/shared_effects.py` mirrors the native
 128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
 subtypes, names, used abilities and copy exceptions still use `facts` (default
 128 rows). The model encodes each payload once and routes its contribution into
@@ -255,8 +274,18 @@ named objects before attention; action focus remains addressable. Sum reduction
 preserves edge multiplicity and shared gradients; it is learned compression,
 not a proof of injective embeddings or improved play.
 
+For new runs requiring structured granted, copy-exception or continuation
+programs, changed colors or keyword-counter timestamps, explicitly select
+`ObservationConfig(policy_input_version=8)` before constructing the model and
+collector. V8 keeps v7's header/member layouts, expands details to 4,096 × 3
+and defaults to 512 local fact rows. Both encoders reject unrepresentable
+v1–v7 layer payloads before inference, naming v8 as the required input.
+Defined-card eligibility does not guarantee policy-input compatibility. See
+[input v8](../docs/observation-and-model.md#composable-layer-input-v8) for a recipe
+example and the separate saved-checkpoint/world admission requirements.
+
 The version is explicit in saved observation/configuration identities. Fresh
-construction remains v6/512; frozen v1–v6 inputs and omitted historical fields
+construction remains v6/512; frozen v1–v7 inputs and omitted historical fields
 retain their meanings. Historical captures without shared provenance cannot be
 promoted to v7 by guessing a source/controller. Text representation
 `manabot-text-6` renders each native payload once with exact public source and
@@ -311,10 +340,9 @@ from manabot.env.observation import ObservationSpace
 from .sibling import Thing
 ```
 
-Compound checkpoints use an autoregressive legal-offer decoder and execute via
-ordinary checkpoint players. Their complete-game training stages, credit
-boundaries and separate comparison recipes are documented under
-[compound decisions](../docs/training.md#regimes-and-stages).
+The learned compound-decision decoder has been removed; checkpoints and
+regimes that select it fail validation. See
+[compound decisions](../docs/training.md#compound-decisions-removed).
 
 Self-play update diagnostics live only in the run's Etude metrics;
 TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
@@ -373,8 +401,13 @@ provisioning, scientific evaluation, artifact upload or learning strength.
 independent learned embedding per card. Its `catalog_shape` reports definition
 count, unique token count, total expanded sequence length, longest sequence and
 padded token count. Referenced definitions are expanded into the parent sequence.
-The embedding runs over the padded array; the packed GRU skips padding. These
-counts describe representation cost, not observed learning difficulty.
+Integer token IDs are packed before embedding, so padding receives no embedding
+or gradient work. The same GRU processes at most 64 time steps per call, carrying
+its hidden state and full gradients across calls. This bounds the temporary
+slice-gradient copies in packed CPU GRU backward without truncating a program
+or caching trainable outputs across updates. Completed states return to their
+original definition rows. These counts describe representation cost, not
+observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
 `manabot.semantic.policy_catalog` owns explicit native admission. Policy
 construction checks the engine's learning catalog against the world pool's
@@ -426,9 +459,9 @@ with those packages blocked.
   `regime.py` declares recipes; `records.py` holds measured run records.
   `execution.py` sequences stages and owns the run lifecycle.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
-  complete-game accounting. Compound collection and replay live here.
+  complete-game accounting.
 - `training/learning/`: Learner, optimization rules, per-seat returns, sample
-  selection and numerical health. Compound credit and parameter updates live here.
+  selection and numerical health.
 - `training/state/`: policy admission, exact learning snapshots, recovery and
   retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;
