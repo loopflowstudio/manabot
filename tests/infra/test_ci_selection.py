@@ -44,9 +44,8 @@ def selected(
     ("path", "expected"),
     [
         ("docs/design.md", set()),
-        ("docs/rules/audit-2026-10/index.jsonl", {"python_unit"}),
         ("scripts/audit_rules.py", {"python_unit"}),
-        ("docs/rules/elemental/decks.json", {"academy_integration"}),
+        ("tests/semantic/fixtures/elemental/decks.json", {"academy_integration"}),
         ("academy/README.md", set()),
         ("scratch/notes.md", set()),
         ("website/app.py", {"python_unit"}),

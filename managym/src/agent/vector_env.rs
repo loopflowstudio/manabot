@@ -102,6 +102,23 @@ impl VectorEnv {
         Ok(())
     }
 
+    /// Scenario-only large naming roots, written through the normal vector encoder.
+    pub fn scenario_naming_vocabulary_into(
+        &mut self,
+        mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
+    ) -> Result<(), AgentError> {
+        self.validate_ready_for_step()?;
+        for (index, env) in self.envs.iter_mut().enumerate() {
+            env.scenario_naming_vocabulary()?;
+            let obs = env.observation_for_player(
+                env.current_agent_index()
+                    .ok_or_else(|| AgentError("naming fixture has no chooser".into()))?,
+            )?;
+            write(index, &obs)?;
+        }
+        Ok(())
+    }
+
     pub fn new(
         num_envs: usize,
         seed: u64,
@@ -124,6 +141,26 @@ impl VectorEnv {
             uniform_roster: RootRoster::default(),
             skip_trivial,
         }
+    }
+
+    pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
+        if !self.player_configs.is_empty() {
+            return Err(AgentError(
+                "exposure capture must be enabled before reset".into(),
+            ));
+        }
+        for env in &mut self.envs {
+            env.enable_exposure_capture()?;
+        }
+        Ok(())
+    }
+
+    pub fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.envs.iter_mut().map(Env::take_exposure).collect()
+    }
+
+    pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
+        self.envs.iter().map(Env::exposure_json).collect()
     }
 
     /// Configure only before allocation of roots; native authored setups are the authority.
@@ -828,6 +865,33 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn exposure_capture_retains_old_seed_before_reset() {
+        let players: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
+            .collect();
+        let mut vector = VectorEnv::new(1, 245, true, OpponentPolicy::None);
+        vector.enable_exposure_capture().unwrap();
+        vector.reset_all(players.clone()).unwrap();
+        vector.step(&[0]).unwrap();
+        vector.reset_all(players).unwrap();
+        let retained = vector.take_exposure();
+        assert_eq!(retained[0].len(), 1);
+        let receipt: serde_json::Value = serde_json::from_str(&retained[0][0]).unwrap();
+        assert_eq!(receipt["seed"], 245);
+        assert_eq!(receipt["trace"]["actions"], serde_json::json!([0]));
+        assert_eq!(
+            receipt["cards"]["capture"]["exposure"]["choices"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_ne!(vector.current_game_seeds()[0], 245);
+        assert!(vector.take_exposure()[0].is_empty());
+    }
 
     #[test]
     fn first_legal_policy_prefix_keeps_vector_execution_identity() {

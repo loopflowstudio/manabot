@@ -512,6 +512,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",
+        "colors": "colors",
+        "keyword_counter_timestamps": "keyword counter timestamps",
     },
     managym.Card: {
         "id": "the card's alias",
@@ -581,6 +583,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "effects": "Effect:",
     },
     managym.ContinuousEffect: {
+        "description": "the effect phrase of a rules payload",
+        "program": "the same payload's tokens, stated by its description",
         "modification": "the effect phrase",
         "power": "+P/+T or base power/toughness",
         "toughness": "+P/+T or base power/toughness",
@@ -665,6 +669,34 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
         "their control; drew 1 card." in text
     )
+
+
+def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    mountain, ogre = state["agent_permanents"]
+    ogre |= {
+        "colors": ["Blue", "Black"],
+        "keyword_counter_timestamps": {"flying": 77},
+    }
+    mountain["colors"] = []
+    ogre["effects"] = [
+        {
+            "program": [[3, 1]],
+            "description": "It is blue and black.",
+            "modification": "SetColors",
+            "duration": "Indefinite",
+            "timestamp": 90,
+        }
+    ]
+    state.pop("shared_effects")
+    text = render_decision(_redigest(payload)).text
+    assert "; colors Blue, Black;" in text
+    assert "; colors colorless" in text
+    assert "keyword counter timestamps {'flying': 77}" in text
+    assert "It is blue and black." in text
 
 
 @pytest.mark.parametrize("historical", (False, True))
@@ -1066,9 +1098,30 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
         )
         if name is not None:
             decision = capture_text_decision(env)
-            assert len(decision.actions) == len(actions) > 64
+            assert len(decision.actions) == len(actions) <= 64
             submit_response(env, decision, decision.actions[name].reference)
             break
+        group = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.name_group is not None
+                and (action.description or "")
+                .removeprefix("Names ")
+                .split(" through ")[0]
+                <= "Gray Ogre"
+                <= (action.description or "").split(" through ")[-1]
+            ),
+            None,
+        )
+        if group is not None:
+            # Choosing a group of names is an ordinary text decision too.
+            decision = capture_text_decision(env)
+            assert "Choosing a group names nothing" in decision.text
+            assert len(decision.actions) == len(actions) <= 64
+            submit_response(env, decision, decision.actions[group].reference)
+            raw = env.observation_for_player(env.current_agent_index())
+            continue
         cast = next(
             (
                 i

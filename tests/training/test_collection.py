@@ -2,12 +2,13 @@
 
 import numpy as np
 import pytest
+import torch
 
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.verify.games import INTERACTIVE_DECK
 
 
@@ -36,6 +37,7 @@ def _make_collector(
         seed=seed,
         opponent_mode=opponent_mode,
         learning_seats="one",
+        batch_closure="exact-quota",
         opponent_agent=opponent_agent,
         recovery_max_game_microsteps=recovery_max_game_microsteps,
     )
@@ -45,11 +47,12 @@ def _make_agent():
     return ActorCritic(ObservationSpace(), ModelConfig(attention_on=False))
 
 
-def _check_batch(batch, num_steps, num_envs):
+def _check_batch(batch: RolloutBatch, num_steps: int, num_envs: int) -> None:
+    obs = batch.observations().observation
     shapes = ObservationSpace().shapes
-    assert batch.obs.keys() == batch.next_obs.keys() == shapes.keys()
+    assert obs.keys() == batch.next_obs.keys() == shapes.keys()
     for key, shape in shapes.items():
-        assert batch.obs[key].shape == (num_steps, num_envs, *shape)
+        assert obs[key].shape == (num_steps, num_envs, *shape)
         assert batch.next_obs[key].shape == (num_envs, *shape)
     assert batch.actions.shape == (num_steps, num_envs)
     assert batch.logprobs.shape == (num_steps, num_envs)
@@ -57,7 +60,7 @@ def _check_batch(batch, num_steps, num_envs):
     assert batch.dones.shape == (num_steps, num_envs)
     assert batch.values.shape == (num_steps, num_envs)
     assert batch.next_done.shape == (num_envs,)
-    assert batch.obs["agent_player"].shape[:2] == (num_steps, num_envs)
+    assert obs["agent_player"].shape[:2] == (num_steps, num_envs)
     assert batch.next_obs["agent_player"].shape[0] == num_envs
 
     # Terminal-only reward: nonzero rewards only on done transitions, and
@@ -67,10 +70,10 @@ def _check_batch(batch, num_steps, num_envs):
     assert set(np.unique(batch.rewards[nonzero])).issubset({1.0, -1.0})
 
     # Every stored learner observation has at least one valid action.
-    assert np.all(batch.obs["actions_valid"].sum(axis=-1) >= 1)
+    assert np.all(obs["actions_valid"].sum(axis=-1) >= 1)
     # Chosen actions were valid at the time.
     steps, envs = np.meshgrid(np.arange(num_steps), np.arange(num_envs), indexing="ij")
-    assert np.all(batch.obs["actions_valid"][steps, envs, batch.actions] > 0)
+    assert np.all(obs["actions_valid"][steps, envs, batch.actions] > 0)
 
 
 @pytest.mark.parametrize("mode", ["random", "self"])
@@ -105,8 +108,6 @@ def test_collector_requires_opponent_agent_for_frozen():
 
 
 def test_terminal_credit_and_bootstrap():
-    import torch
-
     from manabot.training.learning.returns import transition_gae
 
     rewards = torch.tensor([[0.0], [1.0], [-1.0], [0.0]])
@@ -147,26 +148,26 @@ def test_paused_buffer_rows_are_unchanged_and_clear_step_flags():
             np.testing.assert_array_equal(collector._buffers[key][0], before[key])
 
 
-def test_collection_probabilities_and_bootstrap_survive_weight_change():
-    import torch
-
+def test_collection_probabilities_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
     first = collector.collect(agent, 7)
-    first_probabilities = first.probabilities.copy()
+    first_probabilities = first.observations().probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)
         agent.value_head[-1].bias.add_(3.0)
     second = collector.collect(agent, 7)
+    rows = second.observations()
     # Nonterminal streams resume at precisely the bootstrap state, under new
     # weights. Terminal streams may route the new episode's opponent first.
-    for key in second.obs:
+    for key in rows.observation:
         np.testing.assert_array_equal(
-            second.obs[key][0, ~first.next_done], first.next_obs[key][~first.next_done]
+            rows.observation[key][0, ~first.next_done],
+            first.next_obs[key][~first.next_done],
         )
     flat = {
         k: torch.as_tensor(v.reshape((-1,) + v.shape[2:]))
-        for k, v in second.obs.items()
+        for k, v in rows.observation.items()
     }
     with torch.no_grad():
         logits, values = agent(flat)
@@ -174,14 +175,16 @@ def test_collection_probabilities_and_bootstrap_survive_weight_change():
         second.values.flatten(), values.numpy().flatten(), atol=1e-5
     )
     np.testing.assert_allclose(
-        second.probabilities.reshape(logits.shape),
+        rows.probabilities.reshape(logits.shape),
         logits.softmax(-1).numpy(),
         atol=1e-6,
     )
     selected = np.take_along_axis(
-        second.probabilities, second.actions[..., None], axis=-1
+        rows.probabilities, second.actions[..., None], axis=-1
     )[..., 0]
     np.testing.assert_allclose(second.logprobs, np.log(selected), atol=1e-6)
-    assert np.all(second.probabilities[second.obs["actions_valid"] == 0] == 0)
-    np.testing.assert_array_equal(first.probabilities, first_probabilities)
+    assert np.all(rows.probabilities[rows.observation["actions_valid"] == 0] == 0)
+    np.testing.assert_array_equal(
+        first.observations().probabilities, first_probabilities
+    )
     assert collector.stats.learner_transitions == 56

@@ -85,6 +85,11 @@ endpoint checks use injected durations, so never mix host elapsed time into an
 exact-update-count assertion.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
+Collector or batch-closure changes also require
+`uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+Fixtures asserting exact rollout shapes or transition counts must explicitly
+select `batch_closure="exact-quota"` as well as one learning seat; whole-game
+closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
@@ -114,6 +119,12 @@ exact paths in `.github/workflows/manabot-integration.yml` and run
 Training CLI changes need the installed-wheel smoke from
 [Build and verify](#build-and-verify); a source-tree smoke cannot verify the
 installed entry point.
+
+**Loopflow workflows.** With `lf` installed, run
+`uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
+It uses real compilation/discovery and checks iteration, delivery and experiment
+review boundaries without launching agents, games or training. The
+[work boundaries](workflows.md) document defaults and migration limits.
 
 **New Python test modules.** Basenames must be unique across unpackaged test
 directories. Collect new modules with the existing tests of their CI invocation
@@ -164,7 +175,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Integration | `manabot-integration.yml` (`core`, `evaluation` and `long` groups on separate runners; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v1` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
@@ -235,9 +246,11 @@ their own and compares a change with the reference commit named in
 GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
 the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
 Intel Xeon 6973P-C (2026-11-02), so wall time is never compared across runs.
-The job builds and runs the candidate, then builds the reference commit
-with the change's benchmarks and runs it on the one machine, and
-fails the PR when the candidate is more than 10% slower than the reference on
+The job builds both commits with the change's benchmarks before timing, then
+runs candidate/reference/reference/candidate on that machine. It compares the
+median duration of the two samples per engine (including each seed's worst
+reply; step throughput is the inverse median time per step) and fails the PR
+when the candidate is more than 10% slower than the reference on
 any timing or either run's digests differ from the committed ones (two runs
 of one engine on separate EPYC 7763 machines agreed within 2.5%). So a
 speedup that changes search results fails until the reference moves, and so
@@ -247,16 +260,21 @@ only.
 
 **Moving the reference.** Every run is a recording of its candidate: the
 `engine-budget` artifact holds the candidate's output and a `measurement.json`
-naming the candidate commit, date, run and runner CPU, written before the
-reference is built. A PR adopts its own run as the reference, saying why in
+naming the candidate commit, date, run and runner CPU. Raw samples and
+`sampling.json` retain both orders, CPU time, context switches, and host load /
+Linux CPU-pressure counters. These can show scheduling noise; without historical
+telemetry they cannot establish the cause of an earlier failure. There are no
+adaptive retries. A failed reference build still records the candidate before
+failing the check. A PR adopts its own run as the reference, saying why in
 the commit, for one of three reasons: a digest moved (a rules change reaching
 these decks, or a change to the benchmarks or the curated lists); a measured
 cost is accepted; or a speedup is kept, so later slowdowns are budgeted
 against the faster engine rather than allowed back up to the old reference.
 The PR body cites the delta from the run it adopts; the recording commit's
 own run then compares the same engine with that reference and passes. When
-both digests match and the engine did not change, investigate the failure and
-re-run the job before attributing it to runner noise; do not widen the tolerance.
+digests match but timing fails, inspect the retained samples and scheduling
+evidence before attributing the failure to runner noise. An unexplained failure
+remains a failure; do not retry until green or widen the tolerance.
 
 ```bash
 gh run download <run-id> --name engine-budget --dir .cache/engine-budget
@@ -269,7 +287,7 @@ commit, and a PR head stays fetchable after a squash merge. The benchmarks
 use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
 `is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
 that the reference commit no longer compiles with still records the
-candidate (the reference is built afterwards) and moves the reference in the
+candidate despite the failed reference build and moves the reference in the
 same PR like any other move. For a commit that has no PR, the `measure`
 dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
@@ -293,7 +311,7 @@ the step digest changed, with 101,650 steps instead of 99,923 across 512 games
 These are the two measurements from that one runner. Timing checks passed;
 changed gameplay prevents treating the delta as equivalent-workload speedup
 evidence. The rules change moves the reference while preserving the **10%
-tolerance**. The [MTG-238 investigation record](research/engine-speed-2026-11.md)
+tolerance**. The [MTG-238 investigation record](../.lf/wave/engine-performance/research/engine-speed-2026-11.md)
 retains the preceding engine improvements and their evidence.
 
 **Previous reference: derived-state caching.** Commit `4b5e9c0e4` was adopted from
@@ -420,7 +438,7 @@ tags publish. Tag builds reject inconsistent versions, commits not on main and
 already-published versions. Only the publish job gets OIDC `id-token: write`;
 no PyPI token is stored, and uploads carry attestations. The trusted publisher
 is project `manabot`, owner `loopflowstudio`, repository `manabot`, workflow
-`release.yml`, environment `pypi`. The pending publisher submitted by Jack Heart
+`release.yml`, environment `pypi`. The pending publisher
 was used successfully on 2026-10-22; the GitHub `pypi` environment restricts
 deployment to `v*` tags and requires review. Verify these settings before
 tagging.
@@ -465,7 +483,7 @@ Chromium context shows a connected WebSocket, the default Search 64 opponent,
 `UR Lessons vs GW Allies`, an enabled authoritative legal action, and pack
 treatments for every visible card with no fallback. The budget is 90,000 ms. It
 was 60,000 ms until 2026-09-30; the release native build alone had reached about
-52 s on GitHub's runner, so Jack Heart accepted 90 s. The receipt records
+52 s on GitHub's runner, so the budget became 90 s. The receipt records
 `elapsed_to_playable_ms`, `budget_ms` and `within_budget`; CI reports the time
 and warns, but does not fail, when over budget, because runner variance decides
 it. The proof fails if the launch is not ready within 600 s or any playable or
@@ -546,3 +564,87 @@ inventory, migration counts and superseded procedures are in the pinned history:
 [validation](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/development/validation.md),
 [repository archive](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/repository-archive.md),
 [clean-machine play](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/clean-machine-play.md).
+
+### Bounded layer/input attribution
+
+Keep the default `bench_steps` (512 curated games) and `bench_search` (seeds
+1–3, 40 decisions each) separate from added positions; their `--layers` option
+runs the overlapping-anthem fixture on its own. Search receipts retain every
+reply sample, legal-action count, simulation/cap count and the full BLAKE3 score
+digest beside the budget's historical 64-bit digest. `bench_steps --tail-samples`
+and the dependency fixture retain the first 128 step durations in execution
+order: sample maxima, not population percentiles. The default Engine Budget path
+is unchanged.
+
+**Dependency fixture.** For a genuine same-layer dependency:
+
+```bash
+cargo build --release -j 2 --manifest-path managym/Cargo.toml --features benchmark --example bench_layers
+managym/target/release/examples/bench_layers [--allocations | --probe-only | --payment-only --allocations]
+```
+
+It asserts Moon/Urborg's dependency, then plays 16 bounded games and eight
+Search-64 replies. `--probe-only` runs eight isolated pool writes and eight taps
+on cloned warmed boards; `--payment-only` runs eight complete Cadets activations
+from a floating pool and eight from two land sources on the dependency board.
+Receipts retain complete legal action sets, selected actions, mana/life/tap
+resources, stack and semantic digests around each action. Setup, forking and
+serialization are outside the measured step. The fixture changes two physical
+cards locally, never the public catalog or frozen worlds. The `benchmark` feature
+adds inclusive, overlapping board/dependency/clone timers; never sum them or
+compare a counting run with an ordinary timing run, and measure allocation
+traffic in the separate `--allocations` run. Engines that fail the asserted
+dependency are not correctness-equivalent timing comparators.
+
+**Policy input cost.** `scripts/bench_layer_input.py` runs the baseline recipe's
+width-64, depth-2 model on CPU float32 (one thread, batch 16, two warmups, eight
+measured calls), without optimizer updates. Run each case sequentially, in a
+fresh process, on an otherwise idle runner:
+
+```bash
+for state in ordinary shared; do for version in 6 7 8; do
+  PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version $version --state $state
+done; done
+PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 8 --state program
+```
+
+`shared` is a resolved Drill activation representable by all three inputs;
+`program` adds Kellan's live grant and captured combat trigger. Receipts include
+each sample, model/input configuration, native/Python encoding parity, live
+detail/fact counts, observation, batch and parameter bytes, and process peak RSS
+(including imports and warmups). They establish neither accelerator performance
+nor learning efficacy. `--inventory` reports parity, occupancy and storage
+without policy execution or timings, for busy hosts.
+
+**Matched comparison.** `layer-risk.yml` runs `scripts/measure_layer_risk.py`
+on PRs touching its inputs (or via `gh workflow run layer-risk.yml --ref
+<branch>`) and uploads a `layer-risk` artifact, including partial evidence from
+failed runs. One GitHub-hosted VM builds and measures sequentially: the original
+TLA workloads at the Engine Budget reference, pre-mitigation `fb3555ffb` and the
+candidate; dependency workloads, payments and the seven policy cases at the
+latter two. The historical engine receives only the
+`managym/perf/layers-attribution.patch` counters/fixture access, current
+benchmark fixtures and the candidate's card definitions (so state digests compare
+engines over identical content), never a cache or model mitigation. Receipts
+record exact revisions, harness hashes, dirty source diff, CPU/dependency
+metadata, raw samples, full digests/counts and memory. A resource, action or
+digest mismatch between pre-mitigation and candidate fails the comparison; a
+reference-world mismatch is recorded, never labeled a speedup. Each policy case
+must retain eight finite positive samples per operation with matching settings;
+missing, mislabeled or inventory-only receipts cannot satisfy timing comparison.
+The workflow never updates a baseline or accepts a regression; the 10% Engine
+Budget still governs.
+
+For payment attribution on a busy host, omit timing workloads and use a fresh
+output directory:
+
+```bash
+uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-payment
+uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg before --payment-only
+uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg after --payment-only
+uv run --no-sync python scripts/measure_layer_risk.py compare --out .cache/layer-payment --payment-only
+```
+
+Allocation traffic and operation counts stay interpretable under contention;
+elapsed values do not. `model --inventory` builds each revision's wheel and checks
+all seven cases without inference.

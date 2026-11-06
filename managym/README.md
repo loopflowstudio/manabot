@@ -15,7 +15,7 @@ timing, trustworthy learning evidence, and measured runtime/search performance.
 managym is Manabot's authoritative world: match execution, semantic
 Commands, viewer Observations, deterministic replay, exact forks, and the
 meaning and materialization of possible worlds. The cross-package contracts
-and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+are in the [README](../README.md#contracts-the-code-enforces).
 
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
@@ -42,13 +42,6 @@ Dependencies flow: python → agent → flow → state/infra, and across crates
 `managym` → `managym-cards` → `managym-state`. `cargo test` in this directory
 runs all three (the workspace's default members).
 
-[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md) is the
-dated 2026-07-15 research record on typed card programs, exact object identity,
-structured offers and proposed events; conformance fixtures live under
-[conformance/](../conformance/). Its undo, journal and page-COW sections were
-superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
-and the w2-182/198/199 benchmark reports under `experiments/`).
-
 Authored setups come from `AuthoredSetup::player_config` (Python:
 `managym.authored_deck_setup(setup, deck_key)`, naming the setup by preset or
 by the `pack_key` frozen evidence records). Carry that complete config
@@ -74,6 +67,19 @@ Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 512 × 3 and 2048 × 2; every capacity fails explicitly. V1–v6 still use their
 frozen per-holder fact projection, while v7 local facts exclude active effects.
 Projection never mutates or semantically coalesces the engine’s records.
+
+Catalog naming uses `Decision::NameCard` over a shared immutable `NameVocabulary`.
+The catalog builds sorted real names once, including back faces and excluding
+tokens and rules fixtures. Decisions/forks share that allocation; canonical state
+records its digest. A decision holds a `NameScope`; a scope over
+`NAME_BRANCHING` (64) names offers a deterministic balanced partition into
+contiguous groups, and choosing one only narrows the scope. Selecting a name
+constructs one `ExileNamed` effect, then enters the existing private search
+continuation. Public names and optional learning definition references are not
+in-game card objects or deck admission. Explicit policy input v9 carries name
+joins and group spans in `name_candidates[A,4]` at ordinary action capacity,
+beside v8's layer layout; v1–v8 layouts and fresh v6 defaults are frozen.
+See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
 
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
@@ -128,7 +134,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
+[semantic-kernel-w17-v2](../conformance/semantic-kernel-w17-v2/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -137,7 +143,7 @@ uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
 
-The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+The [pinned Comprehensive Rules audit](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.
 Card-shell checks and replay agreement do not independently prove rules
 correctness. Prefer directed tests with independently specified outcomes and
@@ -151,7 +157,7 @@ The Prism/Treasure audit probe now follows explicit nested payment decisions
 and passes its final mana, sacrifice and empty-stack assertions. Its original
 failure remains historical evidence; this bounded pass does not certify all
 payment rules. See the audit's
-[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+[ownership review](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/unification.md)
 before using its historical Task attribution.
 
 ## Style
@@ -179,7 +185,7 @@ Academy legal action sets remain complete. Other capacity excesses still fail.
 Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
 
-The optional [policy-history v1 projection](../docs/training.md#policy-inputs) is a bounded
+The optional [policy-history v1 projection](../docs/observation-and-model.md#policy-inputs) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
 clone and diagnostic injection must preserve its documented lifecycle.
 
@@ -189,7 +195,7 @@ order, so authored setups are decklists over the world pool, not packs.
 `PlayerConfig.submitted` (Python: `world="world"`, `managym.WORLD_SETUP`, set by
 `Deck.player()`) submits a deck to the installed world: it must pass
 `development-v1` admission against the world's supported cards (see [decklist
-import](../docs/decklist-import.md)) or reset fails. Fixed setups and tests leave
+import](../docs/engine.md#decks)) or reset fails. Fixed setups and tests leave
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 
@@ -205,6 +211,16 @@ legend rule reads its `is_legendary`, and every `CardData` field that states a
 characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 
+The cached raw layer board tracks discovered reads of mana pools and tapped
+state, including nested predicates and granted statics. Independent pool/tap
+writes retain the board and fixed activations; dynamic activation outputs and
+costs refresh separately. Trigger kinds follow raw layer dependencies. Immutable
+scans use `layer_views` (or `characteristics_many` when activation finalization
+is needed), preserving caller order and validating the shared board once in
+debug. Singular reads retain their cache checks. Opt-in `benchmark`
+instrumentation attributes board, clone and dependency work without adding
+counters to ordinary wheels.
+
 A resolving spell remains on the stack until the zone-move authority commits
 its departure. That authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
@@ -213,7 +229,7 @@ the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
 
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
-Their [ownership and authoring contract](../docs/rules/optional-payments.md)
+Their [ownership and authoring contract](../docs/engine.md#resolution-contracts)
 covers both ordinary mana and waterbend without a card-specific decision.
 `OptionalManaPaymentX` first chooses an affordable X, then uses the same payment
 progress. Its `WhenYouDo` branch creates a distinct occurrence retaining X;
@@ -239,12 +255,12 @@ still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v4: the schema-7 semantic Observation, shared native continuation frames, bound public card
+v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
 `DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;
-`SEMANTIC_DECISION_VERSION` owns embedded schema 7. Historical captures retain
+`SEMANTIC_DECISION_VERSION` owns embedded schema 8. Historical captures retain
 their original schema; w14 deliberately changes the current action contract.
 
 The opaque native capture binds an Env and reset generation. Use
@@ -259,9 +275,9 @@ resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
-[the observation input contract](../docs/training.md#policy-inputs).
+[the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
-portable schema-7 viewer JSON is validated by the native observation types.
+portable schema-8 viewer JSON is validated by the native observation types.
 
 `Game::card_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's

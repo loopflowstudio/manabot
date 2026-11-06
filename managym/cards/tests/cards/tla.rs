@@ -1132,6 +1132,32 @@ fn earthbending_lesson_animates_only_an_own_land_with_four_counters() {
     );
 }
 
+/// CR 205.3: Cave is a land type, so an earthbent Secret Tunnel is a creature
+/// with no creature type, and Honest Work's creature-type replacement
+/// (CR 205.1b) keeps the land's Cave subtype.
+#[test]
+fn an_earthbent_cave_keeps_its_land_type_out_of_its_creature_types() {
+    let mut s = five_color_setup(&["Earthbending Lesson", "Secret Tunnel", "Honest Work"]);
+    let tunnel = s.force_permanent_on_battlefield(1, "Secret Tunnel");
+    s.advance_to_active_step(1, StepKind::Main);
+    let lesson = force_new_card_in_hand(&mut s, 1, "Earthbending Lesson");
+    s.set_player_mana_pool(1, "20WWWWUUUUBBBBRRRRGGGG");
+    cast_card(&mut s, lesson);
+    assert!(s.choose_target(Target::Permanent(tunnel)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, tunnel));
+    let view = s.game().characteristics(tunnel);
+    assert!(view.has_subtype("Cave"));
+    assert!(view.creature_types.is_empty(), "{:?}", view.creature_types);
+
+    s.advance_to_active_step(0, StepKind::Main);
+    enchant(&mut s, "Honest Work", "U", tunnel);
+    let view = s.game().characteristics(tunnel);
+    assert!(view.has_subtype("Cave"), "{:?}", view.subtypes);
+    assert!(view.has_subtype("Citizen"));
+    assert_eq!(view.creature_types, vec!["Citizen".to_string()]);
+}
+
 /// Elemental Teachings reveals up to four differently named lands; the
 /// opponent chooses two for the graveyard and the rest enter tapped.
 #[test]
@@ -4747,7 +4773,14 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
     until_end_of_turn(
         &mut s,
         many,
-        Modification::AddSubtypes((0..12).map(|i| format!("Type{i}")).collect()),
+        Modification::AddSubtypes(
+            [
+                "Angel", "Ape", "Archer", "Bear", "Beast", "Bird", "Cat", "Dragon", "Elf", "Fish",
+                "Goblin", "Wolf",
+            ]
+            .map(String::from)
+            .to_vec(),
+        ),
     );
     animate(&mut s, land);
     set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 1);
@@ -8241,7 +8274,10 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
     }
     assert!(!observed(&s, rival).is_animated);
     until_end_of_turn(&mut s, fleet[0], Modification::LoseAllAbilities);
-    assert!(!observed(&s, fleet[0]).is_animated);
+    assert!(
+        observed(&s, fleet[0]).is_animated,
+        "CR 613.6: the layer-4 type effect continues past layer-6 ability loss"
+    );
     assert!(
         observed(&s, fleet[1]).is_animated,
         "ability loss keeps the name"
@@ -13263,8 +13299,8 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     );
 }
 
-/// Cached land-type candidates follow entry/departure and clone isolation;
-/// the candidate's counter condition and ability loss remain live reads.
+/// Land-type effects follow counters and departure independently in each fork;
+/// layer-6 ability loss cannot erase a type effect already applied in layer 4.
 #[test]
 fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Abandoned Air Temple"]);
@@ -13284,6 +13320,11 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
         Modification::LoseAllAbilities,
         EffectDuration::EndOfTurn,
     );
+    assert!(fork.characteristics(zhao).abilities_lost);
+    assert!(!s.game().characteristics(zhao).abilities_lost);
+    assert!(fork.characteristics(temple).has_subtype("Mountain"));
+    let zhao_card = card_of(&s, zhao);
+    fork.move_card(zhao_card, ZoneType::Exile);
     assert!(!fork.characteristics(temple).has_subtype("Mountain"));
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
 
@@ -13291,7 +13332,6 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
     set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
-    let zhao_card = card_of(&s, zhao);
     s.game_mut().move_card(zhao_card, ZoneType::Exile);
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
 }
@@ -14160,8 +14200,9 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     next_main_phase(&mut s);
     target_opponent(&mut s);
     pass_until(&mut s, ActionSpaceKind::Modal);
-    let names = s.action_space().actions.len();
-    assert!(names > 200, "every card name in the world: {names}");
+    // Every card name in the world, offered as at most 64 balanced groups.
+    let groups = s.action_space().actions.len();
+    assert!((2..=64).contains(&groups), "naming groups: {groups}");
     sozin_name(&mut s, "Gray Ogre");
     for _ in 0..4 {
         choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
@@ -14603,17 +14644,36 @@ fn fire_lord_sozin_declining_and_zero_payment_are_distinct() {
     assert_eq!(zone_of(&s, nonzero), Some(ZoneType::Graveyard));
 }
 
+/// Name a card through the ordinary group prompts, then the leaf prompt. Each
+/// prompt fits the fresh policy input; groups span sorted names.
 fn sozin_name(s: &mut Scenario, name: &str) {
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    managym::agent::observation_encoder::encode(&observation, &Default::default())
-        .expect("all names fit the fresh policy input");
-    let index = observation
-        .action_space
-        .actions
-        .iter()
-        .position(|a| a.description.as_deref() == Some(&format!("Name {name}")))
-        .expect("unrestricted card name");
-    s.step_action(index);
+    loop {
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        managym::agent::observation_encoder::encode(&observation, &Default::default())
+            .expect("every naming prompt fits the fresh policy input");
+        let descriptions = observation
+            .action_space
+            .actions
+            .iter()
+            .map(|a| a.description.clone().unwrap_or_default());
+        if let Some(index) = descriptions
+            .clone()
+            .position(|description| description == format!("Name {name}"))
+        {
+            s.step_action(index);
+            return;
+        }
+        let group = descriptions
+            .clone()
+            .position(|description| {
+                description
+                    .strip_prefix("Names ")
+                    .and_then(|span| span.split_once(" through "))
+                    .is_some_and(|(first, last)| first <= name && name <= last)
+            })
+            .expect("unrestricted card name");
+        s.step_action(group);
+    }
 }
 
 #[test]

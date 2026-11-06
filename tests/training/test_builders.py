@@ -87,10 +87,10 @@ def test_invalid_value_cross_fails_without_mutating_baseline() -> None:
 def test_variations_revalidate_mutated_input_objects() -> None:
     base = _baseline()
     agent = ModelConfig()
-    agent.compound_decisions = True
-    with pytest.raises(ValidationError, match="compound"):
+    agent.hidden_dim = 65
+    with pytest.raises(ValidationError, match="divisible"):
         with_agent(base, id="invalid", agent=agent)
-    assert not base.agent.compound_decisions
+    assert base.agent.hidden_dim != 65
     assert base.id == "ataraxos-move-scalar"
 
 

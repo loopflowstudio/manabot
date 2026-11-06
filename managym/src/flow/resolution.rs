@@ -24,7 +24,7 @@ use crate::{
             LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
             TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardDefId, CardDefinition},
+        card::{CardDefId, CardDefinition},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Counters, Permanent},
@@ -170,6 +170,7 @@ impl Game {
         };
 
         let frame = EffectFrame {
+            program: Vec::new(),
             remembered: Vec::new(),
             source: Some(card),
             source_ref: self.current_object_ref(card),
@@ -239,35 +240,13 @@ impl Game {
         }
     }
 
-    /// The definition retained by an activation, shared by resolution and
-    /// retargeting. Printed, inherited and attached grants keep their source
-    /// even when that source leaves or the permanent chooses new abilities.
-    pub(crate) fn stacked_activated_ability(
-        &self,
-        ability: &ActivatedAbilityOnStack,
-    ) -> Option<&ActivatedAbilityDefinition> {
-        if let Some(grant) = ability.granted_by {
-            return self.state.cards[CardId::from(grant.grantor.entity)]
-                .attached_grants()
-                .nth(grant.index);
-        }
-        let printed = &self
-            .source_face(ability.source_card, ability.source_definition_id)?
-            .activated_abilities;
-        printed.get(ability.ability_index).or_else(|| {
-            default_content_pack()
-                .definition(ability.inherited_from?)?
-                .activated_abilities
-                .get(ability.ability_index - printed.len())
-        })
-    }
-
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        let Some(definition) = self.stacked_activated_ability(&ability).cloned() else {
-            return;
+        let effects = ability.effects;
+        let program = if ability.program {
+            effects.clone()
+        } else {
+            Vec::new()
         };
-
-        let effects = definition.effects;
         let requirements = crate::state::ability::effect_target_requirements(&effects);
         // The object an Aura or Equipment was attached to as the ability was
         // activated (last known information once the source has left).
@@ -287,6 +266,7 @@ impl Game {
         let source_ref = Some(ability.source_ref);
 
         let frame = EffectFrame {
+            program,
             remembered: Vec::new(),
             source: Some(ability.source_card),
             source_ref,
@@ -314,6 +294,11 @@ impl Game {
     }
 
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
+        let program = if triggered.program {
+            triggered.inline_effects.clone().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let source_card = triggered
             .source_lki
             .as_ref()
@@ -380,6 +365,7 @@ impl Game {
         let resolutions_this_turn = *count;
 
         let frame = EffectFrame {
+            program,
             remembered: triggered.remembered,
             source: Some(source_card),
             source_ref: triggered.source_ref,
@@ -1550,27 +1536,12 @@ impl Game {
                 None
             }
             Effect::NameAndExileFromTargetPlayer { count } => {
-                // Every name a deck may hold; names are public knowledge.
-                let names: std::collections::BTreeSet<String> = default_content_pack()
-                    .definition_entries()
-                    .filter(|(id, definition)| {
-                        !definition.is_token
-                            && (!definition.key.is_empty()
-                                || default_content_pack().front_face(*id).is_some())
-                    })
-                    .map(|(_, definition)| definition.name.clone())
-                    .collect();
-                Some(Decision::Modal {
+                let names = default_content_pack().name_candidates();
+                Some(Decision::NameCard {
+                    scope: names.root(),
+                    names,
                     player: frame.controller,
-                    modes: names
-                        .into_iter()
-                        .map(|name| {
-                            vec![Effect::ExileNamed {
-                                name,
-                                count: *count,
-                            }]
-                        })
-                        .collect(),
+                    count: *count,
                 })
             }
             Effect::ExileNamed { name, count } => {
@@ -1842,6 +1813,7 @@ impl Game {
                 // target as the primary. Inner effects must not suspend.
                 for target in frame.active_targets() {
                     let mut sub = EffectFrame {
+                        program: frame.program.clone(),
                         remembered: frame.remembered.clone(),
                         source: frame.source,
                         source_ref: frame.source_ref,

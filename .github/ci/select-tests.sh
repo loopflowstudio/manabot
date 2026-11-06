@@ -30,12 +30,11 @@ else
         select_jobs engine_budget ;;
       scripts/engine_budget.py) select_jobs python_unit engine_budget ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
-      scripts/audit_rules.py|docs/rules/audit-2026-10/*)
-        select_jobs python_unit ;;
+      scripts/audit_rules.py) select_jobs python_unit ;;
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
       content/*|conformance/*|manabot/managym/*|managym/src/*|managym/state/src/*|managym/cards/src/*|managym/*.py|managym/*.pyi)
         all ;;
-      docs/rules/elemental/decks.json|docs/rules/elemental/cube-snapshot.csv) select_jobs academy_integration ;;
+      tests/semantic/fixtures/elemental/*) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;
       managym/tests/*|managym/cards/tests/*) select_jobs rust semantic_conformance ;;
       managym/.config/nextest.toml) select_jobs rust ;;

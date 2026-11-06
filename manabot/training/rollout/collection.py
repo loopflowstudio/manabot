@@ -1,13 +1,14 @@
 """Seat-routed on-policy collection for shared RL learning rules.
 
 ``SeatRoutedCollector`` owns native game streams and frozen behavior scopes.
-One-seat collection alternates learner seats by stream and pauses at an exact
-learner-decision quota. This remains the control and the random/frozen-opponent
-path. Default both-seat self-play collection keeps a separate trajectory for each seat,
-collects at least the requested total decisions per native stream, then finishes
-its current game. Complete trajectories are packed in one column, separated by
-terminal flags: GAE cannot cross players or games, and no behavior sample or
-pending action survives an update. Batch row counts may exceed the quota.
+Who learns and when a batch closes are separate declarations. One-seat collection
+alternates learner seats by stream; default both-seat self-play keeps a separate
+trajectory for each seat. Complete-game closure collects at least the requested
+decisions per native stream, then finishes its current game. Complete trajectories
+are packed in one column, separated by terminal flags: GAE cannot cross players or
+games, and no behavior sample or pending action survives an update. Batch row
+counts may exceed the quota. Exact-quota closure, one seat only, pauses each stream
+at the learner-decision quota and carries the game across the update.
 
 Self-play uses one live model for both seats. ``collect_pair`` instead returns
 one batch per learning model, with seats balanced across streams; each model's
@@ -47,6 +48,8 @@ from manabot.sim.rollout import (
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.regime import BatchClosure
+from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
@@ -78,8 +81,7 @@ class _Pending:
     action: int
     logprob: float
     value: float
-    probabilities: np.ndarray
-    log_probabilities: np.ndarray
+    action_data: PackedActions
     outcome_probabilities: np.ndarray | None = None
 
 
@@ -94,7 +96,11 @@ class _Transition:
 
 @dataclass
 class RolloutBatch:
-    """On-policy rows [time, trajectory]; complete games may be packed [rows, 1]."""
+    """On-policy rows [time, trajectory]; complete games may be packed [rows, 1].
+
+    `obs` retains non-action fields; `action_data` owns legal action rows and
+    behavior distributions in time-major order. `observations` reunites them.
+    """
 
     obs: dict[str, np.ndarray]
     actions: np.ndarray
@@ -104,10 +110,37 @@ class RolloutBatch:
     values: np.ndarray
     next_obs: dict[str, np.ndarray]
     next_done: np.ndarray
-    probabilities: np.ndarray
-    log_probabilities: np.ndarray
+    action_data: PackedActions
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
     outcome_probabilities: np.ndarray | None = None
+
+    def observations(self, indexes: np.ndarray | None = None) -> ActionRows:
+        """Materialize only requested flat rollout rows on CPU.
+
+        Explicit indexes return [batch,...]; omitting them restores
+        [time,trajectory,...] for bounded inspection. Learners always select a
+        minibatch. Object data and compact actions are the only retained owners.
+        """
+        trajectory_shape = self.actions.shape if indexes is None else None
+        if indexes is None:
+            indexes = np.arange(self.actions.size)
+        rows = self.action_data.unpack(indexes)
+        rows.observation.update(
+            {
+                key: value.reshape(-1, *value.shape[2:])[indexes]
+                for key, value in self.obs.items()
+            }
+        )
+        if trajectory_shape is not None:
+            rows.observation = {
+                key: value.reshape(*trajectory_shape, *value.shape[1:])
+                for key, value in rows.observation.items()
+            }
+            rows.probabilities = rows.probabilities.reshape(*trajectory_shape, -1)
+            rows.log_probabilities = rows.log_probabilities.reshape(
+                *trajectory_shape, -1
+            )
+        return rows
 
 
 ExposureKind = Literal[
@@ -132,6 +165,8 @@ class CollectorStats:
     """Cumulative accounting, including the opponent fingerprint."""
 
     micro_steps: int = 0
+    # Stream slots left unstepped while another stream finished its batch share.
+    idle_stream_steps: int = 0
     learner_transitions: int = 0
     opponent_decisions: int = 0
     games: int = 0
@@ -149,6 +184,7 @@ class CollectorStats:
         return {
             "micro_steps": self.micro_steps,
             "environment_decisions": self.micro_steps,
+            "idle_stream_steps": self.idle_stream_steps,
             "learner_transitions": self.learner_transitions,
             "opponent_decisions": self.opponent_decisions,
             "games": self.games,
@@ -196,7 +232,9 @@ class SeatRoutedCollector:
 
     ``learning_seats="both"`` is the default for ``self``
     (one shared model) or ``learning`` (two distinct models). ``one`` retains
-    the exact-quota, learner-only control, including in self-play.
+    the learner-only control, including in self-play. ``batch_closure`` says
+    separately when a batch ends: after whole games, or at an exact one-seat
+    quota that bootstraps its mid-game tail from the critic.
     """
 
     def __init__(
@@ -210,6 +248,7 @@ class SeatRoutedCollector:
         opponent_mode: str = "random",
         opponent_agent: ActorCritic | None = None,
         learning_seats: Literal["one", "both"] | None = None,
+        batch_closure: BatchClosure = "complete-games",
         games_per_stream: int | None = None,
         device: str = "cpu",
         recovery_max_microsteps: int | None = None,
@@ -260,6 +299,12 @@ class SeatRoutedCollector:
             raise ValueError("learning opponents require both learning seats")
         if opponent_mode in ("frozen", "learning") and opponent_agent is None:
             raise ValueError(f"opponent_mode={opponent_mode!r} requires opponent_agent")
+        if batch_closure == "exact-quota" and (
+            learning_seats == "both"
+            or games_per_stream is not None
+            or game_errors is not None
+        ):
+            raise ValueError("exact quota requires one seat and no per-game accounting")
 
         self.observation_space = observation_space
         self.match = match
@@ -267,6 +312,7 @@ class SeatRoutedCollector:
         self.num_envs = num_envs
         self.opponent_mode = opponent_mode
         self.learning_seats = learning_seats
+        self.batch_closure = batch_closure
         self.games_per_stream = games_per_stream
         self.opponent_agent = opponent_agent
         self.device = torch.device(device)
@@ -561,11 +607,13 @@ class SeatRoutedCollector:
         deadline_monotonic: float | None = None,
         check: Callable[[], None] | None = None,
     ) -> RolloutBatch:
-        """Collect exact one-seat quotas or complete-game two-seat batches.
+        """Collect a batch closed at an exact quota or after complete games.
 
-        With games_per_stream, both controls stop after that many whole games
-        in each stream. Otherwise two-seat num_steps is a total-decision floor.
-        No sampled action crosses the update boundary.
+        Exact quota pauses each stream at num_steps learner rows, and its game
+        continues in the next batch. Complete games treat num_steps as a floor on
+        the stream's retained decisions, the total across seats when both learn;
+        games_per_stream replaces the floor with that many whole games, and no
+        sampled action crosses the update boundary.
         """
 
         if self.opponent_mode == "learning":
@@ -629,9 +677,7 @@ class SeatRoutedCollector:
         num_envs = self.num_envs
 
         both = self.learning_seats == "both"
-        complete_games = (
-            both or self.games_per_stream is not None or self.game_errors is not None
-        )
+        complete_games = self.batch_closure == "complete-games"
         if self.game_error_state.stop_reason:
             raise GameErrorLimit(self.game_error_state.stop_reason)
         completed = np.zeros(num_envs, dtype=bool)
@@ -686,6 +732,7 @@ class SeatRoutedCollector:
             )
             if not active.any():
                 break
+            self.stats.idle_stream_steps += num_envs - int(active.sum())
             actions = np.zeros(num_envs, dtype=np.int64)
             learner_rows = np.flatnonzero(active & (acting == self.learner_seat))
             opp_rows = np.flatnonzero(active & (acting != self.learner_seat))
@@ -973,8 +1020,9 @@ class SeatRoutedCollector:
         with self.profiler.track("Rollout recording"):
             # One copied slice per key; per-row dicts view into it.
             obs_rows = {
-                key: self._buffers[key][rows].copy()
+                key: self._buffers[key][rows]
                 for key in self.observation_space.shapes
+                if key not in ACTION_FIELDS
             }
             for j, row in enumerate(rows):
                 slot = (
@@ -983,14 +1031,19 @@ class SeatRoutedCollector:
                     else int(row)
                 )
                 self._pending[slot] = _Pending(
-                    obs={
-                        key: obs_rows[key][j] for key in self.observation_space.shapes
-                    },
+                    obs={key: value[j] for key, value in obs_rows.items()},
                     action=int(acts[j]),
                     logprob=float(logprobs[j]),
                     value=float(values[j]),
-                    probabilities=probabilities[j].copy(),
-                    log_probabilities=log_probabilities[j].copy(),
+                    action_data=PackedActions.pack(
+                        {
+                            key: self._buffers[key][row : row + 1]
+                            for key in ACTION_FIELDS
+                            if key in self._buffers
+                        },
+                        probabilities[j : j + 1],
+                        log_probabilities[j : j + 1],
+                    ),
                     outcome_probabilities=(
                         None if outcomes is None else outcomes[j].copy()
                     ),
@@ -1026,6 +1079,7 @@ class SeatRoutedCollector:
         obs = {
             key: np.zeros((num_steps, num_envs) + value.shape[1:], dtype=value.dtype)
             for key, value in shapes.items()
+            if key not in ACTION_FIELDS
         }
         actions = np.zeros((num_steps, num_envs), dtype=np.int64)
         logprobs = np.zeros((num_steps, num_envs), dtype=np.float32)
@@ -1037,8 +1091,14 @@ class SeatRoutedCollector:
             for key, value in shapes.items()
         }
         next_done = np.zeros((num_envs,), dtype=bool)
-        probabilities = np.zeros_like(obs["actions_valid"])
-        log_probabilities = np.full_like(probabilities, -np.inf)
+        # Flatten in time-major order, matching scalar credit/selected actions.
+        action_data = PackedActions.concatenate(
+            [
+                streams[env][step].pending.action_data
+                for step in range(num_steps)
+                for env in range(num_envs)
+            ]
+        )
         outcome_probabilities = (
             np.zeros((num_steps, num_envs, 3), dtype=np.float32)
             if streams[0][0].pending.outcome_probabilities is not None
@@ -1050,14 +1110,12 @@ class SeatRoutedCollector:
             for step in range(num_steps):
                 transition = stream[step]
                 pending = transition.pending
-                probabilities[step, env_index] = pending.probabilities
-                log_probabilities[step, env_index] = pending.log_probabilities
                 if outcome_probabilities is not None:
                     assert pending.outcome_probabilities is not None
                     outcome_probabilities[step, env_index] = (
                         pending.outcome_probabilities
                     )
-                for key in self.observation_space.shapes:
+                for key in obs:
                     obs[key][step, env_index] = pending.obs[key]
                 actions[step, env_index] = pending.action
                 logprobs[step, env_index] = pending.logprob
@@ -1081,7 +1139,6 @@ class SeatRoutedCollector:
             values=values,
             next_obs=next_obs,
             next_done=next_done,
-            probabilities=probabilities,
-            log_probabilities=log_probabilities,
+            action_data=action_data,
             outcome_probabilities=outcome_probabilities,
         )

@@ -1,0 +1,52 @@
+--- a/managym/src/agent/env.rs
++++ b/managym/src/agent/env.rs
+@@ -1050,0 +1051,7 @@
++    }
++
++    /// Fixture access for opt-in native measurement, absent from Python/wheels.
++    /// The harness must refresh priority after changing its constructed board.
++    #[cfg(feature = "benchmark")]
++    pub fn benchmark_game_mut(&mut self) -> &mut Game {
++        self.scenario_game_mut("benchmark_game_mut").unwrap()
+--- a/managym/src/lib.rs
++++ b/managym/src/lib.rs
+@@ -3,0 +4,2 @@
++#[cfg(feature = "benchmark")]
++pub mod benchmark_layers;
+--- a/managym/src/flow/layers.rs
++++ b/managym/src/flow/layers.rs
+@@ -183,0 +184,5 @@
++        #[cfg(feature = "benchmark")]
++        let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
++            m.boards += 1;
++            m.board_ns += ns;
++        });
+@@ -371,0 +377,5 @@
++        #[cfg(feature = "benchmark")]
++        let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
++            m.dependency_passes += 1;
++            m.dependency_ns += ns;
++        });
+@@ -373 +383,8 @@
+-            let mut after = self.clone();
++            let mut after = {
++                #[cfg(feature = "benchmark")]
++                let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
++                    m.contexts_cloned += 1;
++                    m.clone_ns += ns;
++                });
++                self.clone()
++            };
+@@ -378,0 +396,5 @@
++                    #[cfg(feature = "benchmark")]
++                    crate::benchmark_layers::record(|m| {
++                        m.comparisons += 1;
++                        m.edges += u64::from(dependencies[a][b]);
++                    });
+--- a/managym/src/flow/statics.rs
++++ b/managym/src/flow/statics.rs
+@@ -124,0 +125,4 @@
++        #[cfg(feature = "benchmark")]
++        if self.revisions.mana_pools != revisions.mana_pools {
++            crate::benchmark_layers::record(|m| m.mana_invalidations += 1);
++        }

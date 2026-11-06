@@ -4723,16 +4723,16 @@ fn honest_work() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         subtypes: vec!["Aura".into()],
         statics: vec![
-            StaticAbility::AttachedHas(ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::add_mana(Mana::parse("1"))],
-                ..Default::default()
-            }),
             StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
                 named: "Humble Merchant".into(),
                 creature_types: vec!["Citizen".into()],
                 power: 1,
                 toughness: 1,
+            }),
+            StaticAbility::AttachedHas(ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::add_mana(Mana::parse("1"))],
+                ..Default::default()
             }),
         ],
         abilities: vec![Ability::Triggered {

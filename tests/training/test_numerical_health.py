@@ -297,13 +297,14 @@ def test_extreme_real_collector_to_learner() -> None:
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
-        # This numerical fixture needs four decisions per stream. Two-seat
-        # collection waits for whole games, which this extreme policy can stall.
+        # This numerical fixture needs four decisions per stream. Complete-game
+        # closure waits for whole games, which this extreme policy can stall.
         learning_seats="one",
+        batch_closure="exact-quota",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
-    assert np.isfinite(batch.log_probabilities[batch.obs["actions_valid"] > 0]).all()
+    assert np.isfinite(batch.action_data.log_probabilities).all()
     trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
 
     learning = DampedPolicyLearning(
@@ -347,6 +348,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     # Fault accounting needs two tiny updates, not completion of sampled games.
     # Keep the workload bounded as well as the injected accounting clock.
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.execution.device = DEVICE
     stage.learning.min_advantage = 0
     # Charge only injected durations in the executor. Keep watchdogs and the
@@ -365,12 +367,13 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
             return result
         clock.elapsed += 0.25
         batch = args[1]
-        probabilities = torch.as_tensor(batch.probabilities).clone()
+        rows = batch.observations()
+        probabilities = torch.as_tensor(rows.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")
         corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
         check_probabilities(
             probabilities,
-            torch.as_tensor(batch.obs["actions_valid"]) > 0,
+            torch.as_tensor(rows.observation["actions_valid"]) > 0,
             positive=False,
         )
         raise AssertionError("expected invariant failure")
@@ -430,6 +433,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         Path(artifacts["numerical/incident.json"]["path"]).read_text()
     )
     assert metadata["iteration"] == 2 and metadata["completed_updates"] == 1
+    assert metadata["schema"] == 2
+    assert "packed_actions/offsets" in metadata["tensors"]
+    assert "packed_actions/slots" in metadata["tensors"]
+    assert "packed_actions/log_probabilities" in metadata["tensors"]
     assert metadata["source"]["training_source_sha256"]
     tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
     assert torch.isnan(tensors["probabilities"]).any()

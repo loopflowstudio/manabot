@@ -24,7 +24,6 @@ from manabot.training.regime import (
     ImportPolicy,
     PretrainedPolicy,
     ProducerCost,
-    TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -111,13 +110,11 @@ def admit_policy(
     )
     record = next((s for s in source.stages if s.id == stage.source_stage), None)
     if (
-        not isinstance(definition, (TrainSelfPlay, TrainCompound))
+        not isinstance(definition, TrainSelfPlay)
         or record is None
         or record.status != "completed"
     ):
         raise ValueError("published policy requires a completed producer policy stage")
-    if pretrained and not isinstance(definition, TrainSelfPlay):
-        raise ValueError("pretrained self-play weights require a self-play producer")
     if record.cumulative_seconds is None:
         raise ValueError("published producer cost is unavailable")
     # A producer segment's own clock excludes the state it started from.
