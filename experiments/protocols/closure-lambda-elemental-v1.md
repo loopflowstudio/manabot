@@ -264,7 +264,10 @@ deadline after the controller died, so the cap is charged its $.60 reservation.
 ## Results
 
 `experiments/data/closure-lambda-elemental-v1/report.md` (artifact store; manifest in
-`experiments/data.manifest.json`). Study 1 has no result; study 2's four predictions
-held; two-seat idle slots were .63–.67 of stream slots, at most 29–34% of training wall.
-Spend was about $14.9 of the $25 cap; evaluation's ~$4.8 passed its $3.00 line and drew
-on the reserve.
+`experiments/data.manifest.json`). Study 1: at 1.93M learner decisions complete games
+scored .035 below exact quota (seed interval −.161 to +.091), and .071 below at matched
+wall time and cost, mostly through the packed single-column target computation; its
+first prediction missed narrowly, the collection-time prediction held (host-confounded)
+and the idle-share prediction was marginal. Study 2's four predictions held; two-seat
+idle slots were .63–.67 of stream slots, at most 29–34% of training wall. Spend was
+about $20.1 of the $25 cap.

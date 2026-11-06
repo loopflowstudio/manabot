@@ -92,41 +92,20 @@ budget and results pointer; this file holds working assumptions and open items.
 - Ghost `07c490-l4-*` records from refused creates show estimated dollars but no RunPod
   pod exists (`runpodctl pod list` empty); not charged.
 
-## State (realigned 2026-11-06)
+## State (2026-11-06, after the closure study)
 
-Done: lambda comparison, critic residuals by distance from game end, two-seat idle
-report, published report. Spend about $14.9 of $25 (calibration $1.19 and training
-$8.94 billed; evaluation ~$4.8 estimated), leaving about $10.
+Done: both comparisons, critic residuals, two-seat idle report, published report
+(`experiments/data/closure-lambda-elemental-v1/`, 4 entries republished). Closure:
+exact 3/3 at 75 updates, complete 59/69/64 on the wall; eval elemental-closure-v1-
+2ca6abbbae66, 900/900 pairings (`out_of_time` after finishing; the controller did not
+close it). Spend ~$20.1 of $25: closure calibration $.54 and training $3.95 billed
+(bills were still settling: the 17:00 bucket rose from $1.55 to $2.49), eval ~$.71
+(Etude), ≤$1.20 cap. No machines rented; the overlay controller started here was stopped.
 
-Not done: **the closure comparison, half of the Task's outcome.** The report says so;
-nothing here settles it. No machines are running.
-
-## Decision needed (Jack Heart)
-
-How to get a closure result, the protocol's three routes:
-
-1. Capacity recovery under exact quota: discard a paused stream's unfinished rows. Code
-   change; the rejection stands today.
-2. Wider continuation-relation capacity for both arms. Departs further from the
-   recipe's v1 input.
-3. Decide exact quota's future without this measurement. Deleting it is out of this
-   Task's scope.
-
-Sizing for 1 or 2, from the only one-seat pace measured (~70 s per opening update, which
-may fall as games settle): 150 updates is about 2.9 h per run, about $10 for six runs
-before evaluation, over what remains. 75 updates fits (six 1.5 h runs reserved at $6.30,
-plus calibration and evaluation), at about half the two-seat decisions per update, so
-earlier training than the lambda study reached. Either route also needs its calibration
-rerun and quota set before launch, by protocol amendment.
-
-## Assumption taken at the decision pass (2026-11-06)
-
-Route 1, reversible and inside the $25 and the Task's outcome: both closure arms keep
-`recover_capacity`, and exact quota discards an overflowing game's unfinished rows
-(rows already learned from in earlier updates stay). It keeps the v1 input and brings
-both arms closer to the recipe. 75 updates; reservation $.51 + $6.30 + $1.20 on ~$14.9
-leaves ~$2.09. Route 3 (exact quota's future) stays Jack Heart's. If calibration fails
-or the quota cannot match within 10%, study 1 stops and the report says so.
+Assumption (decision pass, 2026-11-06): route 1 of three (capacity recovery under exact
+quota; the others were a wider continuation capacity for both arms, or deciding exact
+quota's future). It is reversible branch code that keeps the v1 input and stays inside
+the $25; protocol amendments record it. Exact quota's future stays Jack Heart's. The new recovery path never fired in a scored run (no exact-quota overflow).
 
 ## Open
 
@@ -138,6 +117,11 @@ or the quota cannot match within 10%, study 1 stops and the report says so.
 - `07c490-l4` on-demand max is 14 (raised from 8 for ghost records).
 
 ## Proposed Wave memory (`.lf/wave/` left unchanged; `realign` here is not its curation)
+
+- Elemental w17, one seat, 1.9–2.3M decisions: exact quota (121) ≥ complete games per
+  decision (−.035, CI spans 0) and clearly ahead per wall second (−.071), because
+  complete-game targets run serially over one packed column (~7 s/update vs .06 s).
+  Fixing that packing would remove most of complete games' wall cost.
 
 - Elemental w17, two-seat, 3.1–3.8M decisions: no lambda arm beat .5/.8; .95/1 scored
   .158 below it. Early training, three seeds.
