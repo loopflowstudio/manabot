@@ -422,9 +422,9 @@ class TrainSelfPlay(Stage):
     # every return ends at a real result. "exact-quota" pauses each stream at
     # `transitions` learner rows, usually mid-game, and bootstraps from
     # V(next_obs). Under capacity recovery a failed game loses only the rows no
-    # update has learned from and its stream refills. A new stage defaults here; a saved one that omits the field is
-    # resolved by TrainingRegime, so it serializes only when `_implied_closure`
-    # would say otherwise.
+    # update has learned from and its stream refills. A new stage defaults here; a
+    # saved one that omits the field is resolved by TrainingRegime, so it serializes
+    # only when `_implied_closure` would say otherwise.
     batch_closure: BatchClosure = "complete-games"
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"

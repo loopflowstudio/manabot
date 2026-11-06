@@ -905,7 +905,9 @@ class SeatRoutedCollector:
                 for row in np.flatnonzero(done | failed):
                     self._expose(int(row), "game_roots")
 
-        if self.game_errors:
+        if self.game_errors and not complete_games:
+            # A paused game's rows so far are learned from by this batch; a later
+            # failure of that game must not discard them.
             for slot, stream in enumerate(self._streams):
                 rows = len(stream) - self._game_start_rows[slot]
                 if rows:
