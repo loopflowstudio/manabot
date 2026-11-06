@@ -50,32 +50,38 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   regime wall budget is 54 hours (194,400 s) and the update cap 3,000. Training
   stops at whichever comes first and exports the last complete raw learner.
   The sizes therefore receive equal wall-clock compute, not equal updates.
-  Training seed 21501 for both. No automatic retry. Both sizes train at once,
-  so equal-update comparisons appear as they go; a cohort's default is one
-  machine at a time, so the launch names two:
+  Training seed 21501 for both. No automatic retry. Every command in this
+  protocol runs through one control prefix. The nested Doppler projects supply
+  provider and artifact access. Etude 0.2.14 is the control client only: the
+  locked 0.2.12 cannot read the launcher's Vast provider rows, and workers keep
+  0.2.12. It is an array, not a function, so `caffeinate` can run it:
 
   ```bash
-  doppler run -p etude -c prd -- doppler run -p manabot -c prd \
-      --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
-      --with "etude-sdk[s3,eval]==0.2.14" etude launch experiments/tla_frontier.py \
-      --revision <frozen> --rent <gpu> --cohort tla-frontier-c5fba4 \
-      --parallel 2 --max-usd 76
+  control=(doppler run -p etude -c prd -- doppler run -p manabot -c prd
+      --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation
+      --with "etude-sdk[s3,eval]==0.2.14")
   ```
 
-  The nested Doppler projects supply provider and artifact access. Etude 0.2.14
-  is the control client only: the locked 0.2.12 cannot read the launcher's Vast
-  provider rows, and workers keep 0.2.12.
+  Both sizes train at once, so equal-update comparisons appear as they go; a
+  cohort's default is one machine at a time, so the launch names two:
+
+  ```bash
+  "${control[@]}" etude launch experiments/tla_frontier.py --revision <frozen> \
+      --rent l4 --cohort tla-frontier-c5fba4 --parallel 2 --max-usd 76
+  ```
 - **Exports.** Each size exports its raw learner every 25 updates and at every
   milestone. Only milestones and endpoints are played; the other exports bound
   what a lost rental can cost, to 25 updates: about 1 hour at 150 s/update and
   10.4 hours at the 1,500 s/update launch gate.
 - **Hardware.** Both sizes run on the same GPU model, chosen at launch and
   recorded before any score is read; different models void the equal-compute
-  reading. The protocol rents L4, and A40 only if L4 stock is empty: on retained
-  Elemental runs A40 was no faster at the same price, and every A40 host read
-  slow. This regime has one worker, so one CPU thread sets the pace. At a fixed
-  GPU label update time moved 1.6–1.8× with the host, and vCPU count explained
-  none of it. The check therefore records each pod's host speed: its median
+  reading. The protocol rents the `l4` on-demand, and `mtg252-a40` only if L4 stock
+  is empty, in which case that name replaces `l4` in every command of the launch
+  and calibration reruns on it. On retained Elemental runs A40 was no faster at
+  the same price, and every A40 host read slow. This regime has one worker, so
+  one CPU thread sets the pace. At a fixed GPU label update time moved 1.6–1.8×
+  with the host, and vCPU count explained none of it. The check therefore records
+  each pod's host speed: its median
   `time/collection/environment_step_and_encoding` per row over updates 2–6, a
   phase with no network work, so w64's pod compares directly with w256's. It also
   records `host.cpu_model` from `training/run.json` when the revision has it.
@@ -86,12 +92,20 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 - **Calibration.** Before the training runs, and after this protocol merges,
   `experiments/tla_frontier_calibration.py` runs each size for five updates on
   the chosen GPU: at most USD1 and 1.2 hours per size, USD2 in total, inside the
-  reserve. It reads seconds per update, CUDA peak, peak host memory, median
-  rows per update and host speed (updates 2–5 of its five), under its own
-  experiment and regime ids, so it is never a frontier run and plays no
-  comparison. Each stored run is named by its launcher id, so a reading shows its
-  job name. Host memory and rows add no gate; they show how far the regime's
-  40 GiB stop is from a fresh policy's reading.
+  reserve:
+
+  ```bash
+  "${control[@]}" etude launch experiments/tla_frontier_calibration.py \
+      --revision <frozen> --rent l4 --cohort tla-frontier-c5fba4-calibration \
+      --parallel 2 --max-usd 2
+  "${control[@]}" python -m experiments.tla_frontier_calibration --source <store>
+  ```
+
+  It reads seconds per update, CUDA peak, peak host memory, median rows per
+  update and host speed (updates 2–5 of its five), under its own experiment and
+  regime ids, so it is never a frontier run. Each stored run is named by its
+  launcher id, so a reading shows its job name. Host memory and rows add no gate;
+  they show how far the regime's 40 GiB stop is from a fresh policy's reading.
   W256 launches at 1,500 s/update or less, about 130 updates in 54 hours. That
   reach is an upper estimate: calibration times a fresh policy, and MTG-183
   slowed 1.55× between windows (confounded by a host change), which would leave
@@ -100,6 +114,34 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   above that line, the size changes in a new protocol version, still before any
   scoring. A gate reading depends on its host: a slow pod reads up to 1.8× above
   a fast one, so read the size's cost beside its pod's host speed.
+- **Evaluation rehearsal.** A game past its limit is stored as a delivered match
+  and is never replayed, so the first rented evaluation pass must not be a scored
+  one. Once both calibration runs have ended, calibration plays one pass of its
+  own through the same job as a frontier pass: `tla_frontier.play`, a `cpu32`
+  rental, 28 workers, the journal in `/dev/shm`, the 600-second limit and the USD2
+  pass ceiling. Its two comparisons on the frozen pairs, 32 matches, keep every
+  worker busy: w256's last checkpoint vs its update 0, the heaviest shape, and
+  w256's last vs w64's last. Runs are selected by their
+  `tla-frontier-c5fba4-calibration-*` regime tags, which also proves a tag on a
+  really delivered checkpoint. These games sit under calibration's experiment and
+  an environment of their own, so they touch no frontier slot, match key or score.
+
+  ```bash
+  "${control[@]}" etude eval experiments/tla_frontier_calibration.py \
+      --source <store> --rent cpu32
+  "${control[@]}" python -m experiments.tla_frontier_calibration \
+      --source <store> --rehearsal
+  ```
+
+  The reading shows games, invalid games, median and slowest game seconds and the
+  pass's cost. The second launch gate is a rough line like the first: all 128 games
+  valid, so none killed, and the slowest under 300 seconds, half the limit.
+  Otherwise `game_seconds` or the size changes in a new protocol version, before
+  any scoring. The policies are nearly fresh, so the reading shows what a pass does
+  on a rental, not how long a trained policy's games run. If w256 stored nothing past
+  update 0 the rehearsal refuses to play, because the first gate has already failed.
+  A failed rehearsal pass leaves a launch ledger entry, and clearing it, as under
+  [Evaluation driver](#evaluation-driver), rehearses that recovery too.
 - **Host screen.** Over 54 hours a slow pod costs a size up to about 40% of its
   updates, so before any scoring the operator reads each pod's host speed and
   replaces a slow one. This is a declared operator step, not an automatic retry:
@@ -114,8 +156,8 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
     store holds. A pod found slow only later is kept and reported.
 
     ```bash
-    doppler run -p manabot -c prd -- uv run --extra artifacts --extra evaluation \
-        python -m experiments.tla_frontier_calibration --source <store> --screen
+    "${control[@]}" python -m experiments.tla_frontier_calibration \
+        --source <store> --screen
     ```
 
   - A pod reads slow above 1.3× the lowest host speed among this launch's pods
@@ -126,13 +168,12 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
     that from `state` in the screen's output before relaunching, because `size_run`
     admits one live run per size. A pod lost outright records no end, so its size
     is not relaunched; any retry is then a new protocol version. Otherwise relaunch
-    that size once, alone, under its own USD38 ceiling and with no cohort:
+    that size once, alone and with no cohort. Its job carries the USD38 ceiling, and
+    `--max-usd` is a cohort limit that Etude refuses without a cohort:
 
     ```bash
-    doppler run -p etude -c prd -- doppler run -p manabot -c prd \
-        --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
-        --with "etude-sdk[s3,eval]==0.2.14" etude launch experiments/tla_frontier.py \
-        --revision <frozen> --size <w64|w256> --rent <gpu> --max-usd 38
+    "${control[@]}" etude launch experiments/tla_frontier.py --revision <frozen> \
+        --size <w64|w256> --rent l4
     ```
 
   - A size that reads slow twice keeps its second run. A replacement starts from
@@ -140,9 +181,31 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
     reserve.
   - A run that ends below the first milestone is set aside. It is no size's run,
     plays nothing, and analysis lists it, since every attempt is reported.
+  - A pod that never started stores no run and trained nothing, so it is not the
+    screen's one replacement. Relaunch that size with the command above, and report
+    the launcher's record of the pod with the attempts. A refused cohort launch
+    leaves no cohort and boots nothing that stays, so it reruns unchanged.
   - The screen holds only if the step phase is steady on one pod. If calibration
     shows `step_spread` above 1.3× on either pod, there is no screen for this
     launch and host speed is reported only.
+
+## Launch sequence
+
+1. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
+   supply with none holds its whole window: for training, a size silently not
+   training for up to 56 hours. `l4` has 900 seconds; set the others where absent.
+   `cpu32` allows one machine, which fits one pass at a time.
+
+   ```bash
+   "${control[@]}" etude ondemand startup cpu32 --seconds 900
+   "${control[@]}" etude ondemand startup mtg252-a40 --seconds 900
+   ```
+
+2. Calibration, then the evaluation rehearsal.
+3. Both launch gates: w256 at 1,500 s/update or less, and the rehearsal's.
+4. The training launch.
+5. The host screen.
+6. The evaluation driver.
 
 ## Evaluation schedule
 
@@ -182,13 +245,14 @@ so no pass uses Etude's `--retry-failed`.
 ### Evaluation driver
 
 One command drives every pass, from a checkout of the frozen revision on an
-always-on host beside the controller. It starts after the host screen:
+always-on host beside the controller. It starts after the host screen. If that
+host is a laptop, prefix it with `caffeinate -is`, and check from `etude status` that
+the controller is ticking. A booted pod ends itself at its deadline or budget, but
+only a ticking controller ends a pod that never booted and hands passes on:
 
 ```bash
-doppler run -p etude -c prd -- doppler run -p manabot -c prd \
-    --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
-    --with "etude-sdk[s3,eval]==0.2.14" etude eval experiments/tla_frontier.py \
-    --source <store> --rent <cpu32> --watch 14400
+"${control[@]}" etude eval experiments/tla_frontier.py --source <store> \
+    --rent cpu32 --watch 14400
 ```
 
 Every pass must run from that revision: a later commit changes `seats.source`,
@@ -203,14 +267,16 @@ USD12. That stop and the USD12 reserve cover pods that never boot but still bill
 To see progress at any time, draw the report from the same checkout:
 
 ```bash
-doppler run -p etude -c prd -- doppler run -p manabot -c prd \
-    --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
-    --with "etude-sdk[s3,eval]==0.2.14" etude report experiments/tla_frontier.py \
-    --source <store>
+"${control[@]}" etude report experiments/tla_frontier.py --source <store>
 ```
 
 The report is descriptive curves by update; `experiments/tla_frontier_analysis.py`
 owns every reading below.
+
+Reading progress changes nothing. Past the host screen, no run is cancelled,
+relaunched or extended because of a score. A stop for cost, a dead run or any
+outside reason is a recorded decision that keeps its evidence and has no scale
+reading.
 
 Etude's launch ledger, `~/.etude/experiments/launched.json`, is one file for
 every experiment on the computer, and any entry for a failed pass raises
@@ -283,6 +349,7 @@ This version does not build that path, and two limits stand in its way.
 
 The Task's ceiling is USD100 including setup, failures, retries and evaluation:
 2 × USD38 training + USD12 evaluation = USD88, leaving USD12 for calibration
-(USD2), cancelled pods at the host screen (about USD3 at most), setup and failure
-costs. Any retry needs a recorded decision that keeps
-the total within USD100. Evaluation never runs on a laptop.
+(USD2), the evaluation rehearsal (a USD2 ceiling, about USD0.50 expected),
+cancelled pods at the host screen (about USD3 at most), setup and failure costs.
+Any retry needs a recorded decision that keeps the total within USD100.
+Evaluation never runs on a laptop.

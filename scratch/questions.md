@@ -55,3 +55,11 @@ until launch):
 - **A pod past update 25 is kept, not replaced** (2026-11-06). The simpler choice over
   teaching `size_run` a replacement order, which `TrainingRun` has no start time to
   support. Reversible until launch.
+- **Evaluation rehearsal in calibration, gated at 300 s** (sixth concept review). Up to USD2
+  of the reserve; the 300 s line is half the limit and rough. Reversible until launch.
+- **`startup_seconds` 900 on every rented on-demand** (sixth concept review). Taken from
+  `l4` and `07c490-cpu32`. The launcher setting stays an operator step at launch.
+- **Rehearsal gate wider than "no killed game"** (2026-11-06). All 128 games stored and valid, so a
+  truncated or missing game also fails it. Reversible until launch.
+- **The 600 s limit's 0.4 s rationale may be high** (2026-11-06). A real fresh w256 match here took
+  about 0.05 s a decision. The limit stays; the rehearsal's rented reading decides.

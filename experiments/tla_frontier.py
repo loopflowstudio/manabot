@@ -50,9 +50,8 @@ from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Report, Score
-from etude.run.listing import as_storage
 from etude.run.storage import Storage
-from etude.train.read import RunData, read_all
+from etude.train.read import RunData
 import torch
 
 from experiments import tla_frontier
@@ -233,6 +232,11 @@ def _source() -> list[Path]:
     ]
 
 
+def checkpoint_inference() -> Inference:
+    """How a stored checkpoint plays, for frontier passes and calibration's rehearsal."""
+    return Inference(source=_source())
+
+
 def environment(protocol: Protocol) -> Environment:
     return Environment(
         name="tla-frontier-c5fba4-v1",
@@ -284,16 +288,6 @@ def host_speed(data: RunData, storage: Storage) -> HostSpeed:
     )
 
 
-def read_hosts(source: Storage | Path | str) -> dict[str, HostSpeed]:
-    """Every frontier run's host speed by stored run name."""
-    storage = as_storage(source)
-    return {
-        data.name: host_speed(data, storage)
-        for data in read_all(storage)
-        if data.experiment == EXPERIMENT
-    }
-
-
 # -- Evaluation schedule ------------------------------------------------------
 
 
@@ -311,6 +305,19 @@ class ScheduledComparison:
     update: int | None
     matchup: Matchup | None
     unreached: bool = False
+
+
+def paired_matchup(
+    name: str, players: tuple[Model, Model | Code], tag: str, protocol: Protocol
+) -> Matchup:
+    """One comparison: every frozen pair, four legs each, as `play` admits."""
+    return Matchup(
+        name=name,
+        players=players,
+        conditions=tuple(pair.model_dump(mode="json") for pair in protocol.pairs),
+        games=GAMES_PER_PAIR,
+        tags=(tag,),
+    )
 
 
 def size_label(run: TrainingRun) -> SizeLabel | None:
@@ -365,10 +372,8 @@ def comparison_schedule(
     analysis can report how far each size reached. A milestone that is also an
     endpoint is scheduled once, as a milestone.
     """
-    source = _source()
-    inference = Inference(source=source)
-    heuristic = Code(name="heuristic", source=source, config=HEURISTIC)
-    conditions = tuple(pair.model_dump(mode="json") for pair in protocol.pairs)
+    inference = checkpoint_inference()
+    heuristic = Code(name="heuristic", source=_source(), config=HEURISTIC)
     trained = {label: size_run(state, label, protocol) for label in SIZES}
     endpoints = {label: endpoint(run) for label, run in trained.items()}
     saved: dict[SizeLabel, dict[int, Checkpoint]] = {
@@ -396,13 +401,7 @@ def comparison_schedule(
             ScheduledComparison(
                 tag=tag,
                 update=update,
-                matchup=Matchup(
-                    name=name,
-                    players=(candidate, opponent),
-                    conditions=conditions,
-                    games=GAMES_PER_PAIR,
-                    tags=(tag,),
-                )
+                matchup=paired_matchup(name, (candidate, opponent), tag, protocol)
                 if candidate is not None and opponent is not None
                 else None,
                 unreached=unreached,
@@ -473,12 +472,21 @@ def eval(state: ExperimentState) -> list[Job]:
     )
     if not matchups:
         return []
+    return [
+        evaluation_pass(
+            Benchmark(
+                name="tla-frontier-c5fba4-paired-v1",
+                environment=environment(protocol),
+                matchups=matchups,
+            )
+        )
+    ]
+
+
+def evaluation_pass(benchmark: Benchmark) -> Job:
+    """One rented pass of `play`; calibration's rehearsal launches this same job."""
     job = evaluation(
-        Benchmark(
-            name="tla-frontier-c5fba4-paired-v1",
-            environment=environment(protocol),
-            matchups=matchups,
-        ),
+        benchmark,
         # Etude discovers this file with runpy; callbacks need an importable
         # module identity even when eval itself came from <run_path>.
         play=tla_frontier.play,
@@ -499,7 +507,7 @@ def eval(state: ExperimentState) -> list[Job]:
         f"{TOOLCHAIN_ENV}\nuv run --locked --extra evaluation python",
         1,
     )
-    return [job.model_copy(update={"command": command})]
+    return job.model_copy(update={"command": command})
 
 
 # -- Evaluation callback ------------------------------------------------------

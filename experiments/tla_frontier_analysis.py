@@ -40,6 +40,9 @@ from typing import TYPE_CHECKING
 
 from etude.eval.query import statsdb
 from etude.experiment import ExperimentState, TrainingRun, observe
+from etude.run.listing import as_storage
+from etude.run.storage import Storage
+from etude.train.read import read_all
 import numpy as np
 import numpy.typing as npt
 
@@ -55,9 +58,9 @@ from experiments.tla_frontier import (
     endpoint,
     environment,
     frozen,
+    host_speed,
     is_set_aside,
     last_update,
-    read_hosts,
     size_label,
     size_run,
     update_cap,
@@ -66,10 +69,10 @@ from experiments.tla_pilot_analysis import (
     BOOTSTRAP_RESAMPLES,
     Counts,
     PairResult,
+    field_totals,
     game_columns,
     pair_result,
     stored_game_columns,
-    total_counts,
 )
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
@@ -212,15 +215,6 @@ def _policy_actions_by_match(
     }
 
 
-def _total_policy_actions(totals: list[PolicyActions]) -> PolicyActions:
-    return PolicyActions(
-        **{
-            field: sum(getattr(total, field) for total in totals)
-            for field in PolicyActions.model_fields
-        }
-    )
-
-
 def _comparison(
     planned: ScheduledComparison,
     db: duckdb.DuckDBPyConnection,
@@ -256,11 +250,11 @@ def _comparison(
         update=planned.update,
         name=name,
         unreached=False,
-        counts=total_counts([pair.counts for pair in pairs]),
+        counts=field_totals(Counts, [pair.counts for pair in pairs]),
         pairs=pairs,
         result=_bounded(pairs, indices) if played else None,
-        policy_actions=_total_policy_actions(
-            [actions[key] for key in keys if key in actions]
+        policy_actions=field_totals(
+            PolicyActions, [actions[key] for key in keys if key in actions]
         ),
     )
 
@@ -373,8 +367,10 @@ def analyze(
     return FrontierAnalysis(
         protocol_sha256=file_sha256(PROTOCOL),
         bootstrap_seed=protocol.bootstrap_seed,
-        counts=total_counts([c.counts for c in comparisons]),
-        policy_actions=_total_policy_actions([c.policy_actions for c in comparisons]),
+        counts=field_totals(Counts, [c.counts for c in comparisons]),
+        policy_actions=field_totals(
+            PolicyActions, [c.policy_actions for c in comparisons]
+        ),
         comparisons=comparisons,
         sizes=sizes,
         set_aside=[
@@ -391,6 +387,16 @@ def analyze(
         complete=not issues,
         issues=issues,
     )
+
+
+def read_hosts(source: Storage | Path | str) -> dict[str, HostSpeed]:
+    """Every frontier run's host speed by stored run name."""
+    storage = as_storage(source)
+    return {
+        data.name: host_speed(data, storage)
+        for data in read_all(storage)
+        if data.experiment == EXPERIMENT
+    }
 
 
 def main() -> None:

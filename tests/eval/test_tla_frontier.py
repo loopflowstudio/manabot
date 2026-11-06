@@ -1,7 +1,7 @@
 """The c5fba4 frontier protocol pins two sizes and a milestone evaluation schedule."""
 
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from decimal import Decimal
 import json
@@ -12,12 +12,13 @@ from uuid import uuid4
 import duckdb
 from etude.eval.match import Tables, evaluate
 from etude.eval.query import statsdb
-from etude.eval.records import Inference, Match, Matchup
+from etude.eval.records import Inference, Match, Matchup, Model
 from etude.experiment import (
     Checkpoint,
     Checkpoints,
     ExperimentState,
     TrainingRun,
+    advance,
     observe,
     read_experiment,
 )
@@ -27,6 +28,7 @@ from etude.launch.job_file import read_job_file
 from etude.launch.records import Run
 from etude.page import build, render
 from etude.run.errors import EtudeError
+from etude.run.listing import as_storage
 from etude.run.records import ArtifactRef
 import pytest
 
@@ -44,7 +46,6 @@ from experiments.tla_frontier import (
     eval,
     export_updates,
     frozen,
-    read_hosts,
     runs,
     size_run,
 )
@@ -54,6 +55,7 @@ from experiments.tla_frontier_analysis import (
     PolicyActions,
     SetAside,
     analyze,
+    read_hosts,
 )
 from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
@@ -61,7 +63,9 @@ from experiments.tla_frontier_calibration import (
     MAX_USD_PER_SIZE,
     UPDATES,
     calibration_regime,
+    eval as calibration_eval,
     read_calibration,
+    read_rehearsal,
     read_screen,
     runs as calibration_runs,
 )
@@ -77,6 +81,7 @@ from manabot.training.execution import cuda_peak_metrics, execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
+CALIBRATION_FILE = ROOT / "experiments/tla_frontier_calibration.py"
 # What a launcher hands a worker: `uuid4().hex[:12]`, never the job's name.
 RUN_NAMES: dict[SizeLabel, str] = {SMALL: "0f3a9c1d2b4e", LARGE: "7be2d40a61c5"}
 
@@ -371,6 +376,11 @@ def test_regime_tags_stay_out_of_match_keys() -> None:
     assert keys(tagged) == keys(tagged.model_copy(update={"tags": ()}))
 
 
+def _protocol_blocks() -> list[str]:
+    protocol = (ROOT / "experiments/protocols/tla-frontier-c5fba4-v1.md").read_text()
+    return protocol.split("```")[1::2]
+
+
 def test_one_size_relaunches_alone_with_its_own_ceiling() -> None:
     file = ROOT / "experiments/tla_frontier.py"
     (alone,) = read_job_file(file, ["--revision", "HEAD", "--size", LARGE])
@@ -379,6 +389,33 @@ def test_one_size_relaunches_alone_with_its_own_ceiling() -> None:
     assert alone.job.max_attempts == 1
     with pytest.raises(LauncherError, match="size must be"):
         read_job_file(file, ["--revision", "HEAD", "--size", "w128"])
+
+
+def test_protocol_launches_set_cohort_limits_only_on_a_cohort() -> None:
+    """`etude launch` refuses `--max-usd` or `--parallel` without `--cohort`."""
+    launches = [block for block in _protocol_blocks() if "etude launch" in block]
+    assert len(launches) == 3
+    for block in launches:
+        assert "--cohort" in block or not {"--max-usd", "--parallel"} & set(
+            block.split()
+        )
+
+
+def test_protocol_commands_name_their_rentals() -> None:
+    """A copied command rents a named on-demand, never a placeholder."""
+    blocks = _protocol_blocks()
+    # One prefix owns the control client.
+    assert sum("etude-sdk" in block for block in blocks) == 1
+    commands = [
+        command.split()
+        for block in blocks
+        for command in block.split('"${control[@]}"')
+        if "--rent" in command
+    ]
+    assert len(commands) == 5
+    for command in commands:
+        rented = command[command.index("--rent") + 1]
+        assert rented == ("l4" if "launch" in command else "cpu32")
 
 
 def test_a_replaced_pod_is_set_aside_and_listed(
@@ -431,11 +468,8 @@ def test_calibration_changes_only_length_and_identity() -> None:
 
 
 def test_calibration_fits_its_ceiling_on_the_admitted_gpus() -> None:
-    launched = read_job_file(
-        ROOT / "experiments/tla_frontier_calibration.py", ["--revision", "HEAD"]
-    )
+    launched = read_job_file(CALIBRATION_FILE, ["--revision", "HEAD"])
     assert len(launched) == 2
-    # Calibration has no eval, so its worker's config alone names the experiment.
     jobs = [TrainingJob.model_validate_json(run.job.config) for run in launched]
     assert {job.experiment for job in jobs} == {CALIBRATION}
     assert {run.job.until for run in launched} == {f"updates={UPDATES}"}
@@ -508,6 +542,231 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     protocol = frozen()[1]
     assert size_run(misnamed, SMALL, protocol) is None
     assert size_run(misnamed, LARGE, protocol) is None
+
+
+def _calibrated(source: Path, last: int = 5) -> tuple[str, str]:
+    """Both calibration runs, ended, stored through the worker's path."""
+    small, large = calibration_runs("HEAD")
+    return (
+        _tracked(small, source, {last: {"loss": 0.1}}, (0, last)),
+        _tracked(large, source, {last: {"loss": 0.1}}, (0, last)),
+    )
+
+
+def _rehearsal_matchups(source: Path) -> dict[str, Matchup]:
+    (job,) = read_experiment(CALIBRATION_FILE).eval(observe(source, CALIBRATION))
+    benchmark = evaluation_spec(job).tournament
+    return {matchup.name: matchup for matchup in benchmark.matchups}
+
+
+def test_etude_eval_reads_calibration_and_launches_the_rehearsal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`etude eval`'s real pass over a store of calibration runs, up to the rental."""
+    small, large = _calibrated(tmp_path / "store")
+    launched: list[tuple[Run, str | None]] = []
+
+    def launch(run: Run, pool: str | None, *, rent: str | None) -> str:
+        launched.append((run, rent))
+        return run.id
+
+    monkeypatch.setattr("etude.experiment.client.launch", launch)
+    (done,) = advance(
+        read_experiment(CALIBRATION_FILE),
+        source=as_storage(tmp_path / "store"),
+        rent="cpu32",
+        directory=tmp_path / "home",
+    )
+    assert done.new == 32 and done.launched is not None
+    ((run, rent),) = launched
+    assert rent == "cpu32"
+    spec = evaluation_spec(run.job)
+    assert spec.experiment == CALIBRATION
+    assert spec.play.module == "experiments.tla_frontier"
+    assert callable(spec.play.load(run.job.repo))
+    assert spec.matches is not None and len(spec.matches) == 32
+    seated = {
+        player.checkpoint.key.run
+        for match in spec.matches
+        for player in match.players
+        if isinstance(player, Model)
+    }
+    assert seated == {small, large}
+
+
+def test_rehearsal_is_a_frontier_pass_of_calibration_checkpoints(
+    tmp_path: Path,
+) -> None:
+    small, large = _calibrated(tmp_path)
+    matchups = _rehearsal_matchups(tmp_path)
+    assert set(matchups) == {"w256 last vs w256 u0", "w256 last vs w64 last"}
+    protocol = frozen()[1]
+    pairs = [pair.model_dump(mode="json") for pair in protocol.pairs]
+    for matchup in matchups.values():
+        matches = matchup.matches()
+        assert len(matches) == len(protocol.pairs)
+        # `play` refuses anything but the frozen pairs at four legs.
+        assert all(m.conditions in pairs and m.games == 4 for m in matches)
+    last, first = (p.checkpoint.key for p in matchups["w256 last vs w256 u0"].players)
+    assert (last.run, first.run) == (large, large)
+    assert last.name != first.name
+    across = matchups["w256 last vs w64 last"].players
+    assert [player.checkpoint.key.run for player in across] == [large, small]
+
+    (job,) = calibration_eval(observe(tmp_path, CALIBRATION))
+    pinned = _state({SMALL: 25, LARGE: 25}, finished=False)
+    (pass_job,) = eval(pinned)
+    # Only what is played differs from a frontier pass.
+    for field in ("command", "setup", "max_hours", "max_usd", "max_attempts"):
+        assert getattr(job, field) == getattr(pass_job, field)
+    assert evaluation_spec(job).workers == evaluation_spec(pass_job).workers == 28
+    assert evaluation_spec(job).play == evaluation_spec(pass_job).play
+    # Nothing it plays can reach a frontier slot.
+    held = evaluation_spec(job).tournament.environment
+    assert held != evaluation_spec(pass_job).tournament.environment
+
+
+def test_rehearsal_waits_for_both_runs_to_end(tmp_path: Path) -> None:
+    assert calibration_eval(ExperimentState(experiment=CALIBRATION)) == []
+    small, large = calibration_runs("HEAD")
+    _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
+    _tracked(large, tmp_path, {3: {"loss": 0.1}}, (0, 3), end=None)
+    assert calibration_eval(observe(tmp_path, CALIBRATION)) == []
+
+
+def test_rehearsal_refuses_a_size_with_no_distinct_pair(tmp_path: Path) -> None:
+    small, large = calibration_runs("HEAD")
+    _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
+    _tracked(large, tmp_path, {}, (0,), end="failed")
+    with pytest.raises(ValueError, match="w256 stored no update past 0"):
+        calibration_eval(observe(tmp_path, CALIBRATION))
+
+
+def test_rehearsal_rejects_a_foreign_experiment() -> None:
+    with pytest.raises(ValueError, match="calibration's runs"):
+        calibration_eval(ExperimentState(experiment=EXPERIMENT))
+
+
+def _rehearsed(
+    source: Path, played: Callable[[Match], Tables], run: str = "rehearsal-pass"
+) -> None:
+    """Play the rehearsal's matches through Etude's real match writer."""
+    matches = [
+        m for each in _rehearsal_matchups(source).values() for m in each.matches()
+    ]
+    (job,) = calibration_eval(observe(source, CALIBRATION))
+    evaluate(
+        experiment=CALIBRATION,
+        environment=evaluation_spec(job).tournament.environment,
+        matches=matches,
+        play=played,
+        run=run,
+        directory=source,
+    )
+
+
+# What `play` stores for a game killed at its limit.
+_KILLED = {
+    "valid": False,
+    "score": None,
+    "seconds": None,
+    "failure": "game limit",
+    "terminated": False,
+    "policy_decisions": None,
+    "policy_dropped_actions": None,
+}
+
+
+def _free(run: str) -> Decimal:
+    return Decimal(0)
+
+
+def _timed(seconds: float) -> Callable[[Match], Tables]:
+    def played(match: Match) -> Tables:
+        return {
+            "games": [
+                row | {"seconds": seconds + row["game"]}
+                for row in _played(match)["games"]
+            ]
+        }
+
+    return played
+
+
+def test_rehearsal_reader_passes_a_clean_pass_and_keeps_training_readings_apart(
+    tmp_path: Path,
+) -> None:
+    _calibrated(tmp_path)
+    _rehearsed(tmp_path, _timed(100.0))
+    reading = read_rehearsal(tmp_path, lambda run: Decimal("0.48"))
+    assert reading.runs == ("rehearsal-pass",)
+    assert (reading.matches, reading.failed_matches) == (32, 0)
+    assert (reading.games, reading.invalid_games) == (128, 0)
+    assert reading.median_game_seconds == 101.5
+    assert reading.slowest_game_seconds == 103
+    assert reading.pass_usd == Decimal("0.48")
+    assert reading.passed
+    # A pass is a stored run of this experiment, and no training reading.
+    assert len(read_calibration(tmp_path)) == 2
+    assert len(read_screen(tmp_path)) == 2
+
+
+def test_rehearsal_fails_at_the_game_line(tmp_path: Path) -> None:
+    _calibrated(tmp_path)
+    _rehearsed(tmp_path, _timed(297.0))
+    reading = read_rehearsal(tmp_path, _free)
+    assert reading.slowest_game_seconds == 300 and not reading.passed
+
+
+def test_rehearsal_fails_on_one_killed_game(tmp_path: Path) -> None:
+    _calibrated(tmp_path)
+    killed: list[str] = []
+
+    def played(match: Match) -> Tables:
+        tables = _timed(100.0)(match)
+        if not killed:
+            killed.append(match.key)
+            for row in tables["games"]:
+                if row["game"] == 3:
+                    row |= _KILLED
+        return tables
+
+    _rehearsed(tmp_path, played)
+    reading = read_rehearsal(tmp_path, _free)
+    assert (reading.games, reading.invalid_games) == (128, 1)
+    assert reading.slowest_game_seconds == 103 and not reading.passed
+
+
+def test_rehearsal_fails_when_every_game_was_killed(tmp_path: Path) -> None:
+    """Etude then stores no `seconds` column at all."""
+    _calibrated(tmp_path)
+
+    def played(match: Match) -> Tables:
+        return {"games": [row | _KILLED for row in _played(match)["games"]]}
+
+    _rehearsed(tmp_path, played)
+    reading = read_rehearsal(tmp_path, _free)
+    assert (reading.games, reading.invalid_games) == (128, 128)
+    assert reading.slowest_game_seconds is None and not reading.passed
+
+
+def test_rehearsal_fails_with_a_raising_match_or_nothing_played(tmp_path: Path) -> None:
+    empty = read_rehearsal(tmp_path, _free)
+    assert empty.games == 0 and empty.runs == () and not empty.passed
+    _calibrated(tmp_path)
+    keys: list[str] = []
+
+    def played(match: Match) -> Tables:
+        keys.append(match.key)
+        if len(keys) == 5:
+            raise RuntimeError("the worker died")
+        return _timed(100.0)(match)
+
+    with pytest.raises(EtudeError, match="match_failed"):
+        _rehearsed(tmp_path, played)
+    reading = read_rehearsal(tmp_path, lambda run: Decimal("0.2"))
+    assert reading.failed_matches == 1 and reading.games < 128
+    assert reading.pass_usd == Decimal("0.2") and not reading.passed
 
 
 def test_a_finished_receipt_names_the_cpu_when_its_revision_records_it(

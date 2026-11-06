@@ -111,11 +111,12 @@ class _Receipt(StrictModel):
     error: str | None
 
 
-def total_counts(counts: list[Counts]) -> Counts:
-    return Counts(
+def field_totals[T: StrictModel](model: type[T], rows: list[T]) -> T:
+    """Each field's sum over `rows`; `model` names the type of an empty list."""
+    return model(
         **{
-            field: sum(getattr(count, field) for count in counts)
-            for field in Counts.model_fields
+            field: sum(getattr(row, field) for row in rows)
+            for field in model.model_fields
         }
     )
 
@@ -276,7 +277,7 @@ def analyze(
                     endpoint=planned.endpoint,
                     checkpoint=str(checkpoint.key) if checkpoint else None,
                     clocks=checkpoint.clocks if checkpoint else {},
-                    counts=total_counts([pair.counts for pair in pairs]),
+                    counts=field_totals(Counts, [pair.counts for pair in pairs]),
                     pairs=pairs,
                 )
             )
@@ -312,7 +313,9 @@ def analyze(
                 state=run.state,
                 protocol_sha256=file_sha256(PROTOCOL),
                 bootstrap_seed=protocol.bootstrap_seed,
-                counts=total_counts([comparison.counts for comparison in comparisons]),
+                counts=field_totals(
+                    Counts, [comparison.counts for comparison in comparisons]
+                ),
                 comparisons=comparisons,
                 complete=complete,
                 success=success,

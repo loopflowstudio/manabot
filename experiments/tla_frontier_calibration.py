@@ -1,63 +1,71 @@
-"""Task c5fba4 calibration: per-update cost and memory of both frontier sizes.
+"""Task c5fba4 calibration: per-update cost, memory and a rehearsed evaluation pass.
 
 Each size runs its frozen regime for a few updates on the GPU chosen for the
 frontier runs, so a size that cannot fit, or would reach too few updates, changes
 in a new protocol version before any scoring. Calibration is not a first attempt
 at the frozen runs: its regime ids and this file's experiment keep it out of
-`experiments.tla_frontier.size_run`, and it plays no evaluation.
-
-Runs after the protocol merges, before `experiments.tla_frontier.runs`:
-
-    doppler run -p etude -c prd -- doppler run -p manabot -c prd \
-        --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation \
-        --with "etude-sdk[s3,eval]==0.2.14" etude launch \
-        experiments/tla_frontier_calibration.py --revision COMMIT --rent <gpu> \
-        --cohort tla-frontier-c5fba4-calibration --parallel 2 --max-usd 2
-    doppler run -p manabot -c prd -- uv run --extra artifacts --extra evaluation \
-        python -m experiments.tla_frontier_calibration --source <store>
+`experiments.tla_frontier.size_run`, and its games touch no frontier slot. The
+protocol's Launch sequence owns the commands and both launch gates.
 
 Update timing starts from a fresh policy, so its games need not last as long as
 a trained policy's. The reading is a median that sets aside the first update's
-warm-up, not a forecast of late-run cost. The protocol's launch gate compares
-the w256 reading against 1,500 s/update. Host memory follows rows per update,
+warm-up, not a forecast of late-run cost. Host memory follows rows per update,
 and an update is about one game per stream, so longer late-run games raise it:
 `peak_rss_bytes` and `median_rows_per_update` show how far the regime's 40 GiB
 stop is from a fresh policy's reading. Neither is a gate.
 
-A stored run is named by its launcher id, so each reading shows its job name.
-A gate reading depends on its host: a slow pod reads up to 1.8× above a fast one,
-so a reading shows its pod's step speed beside it. `read_screen` applies the
-protocol's host screen to calibration's pods and a launch's, reading the same
-step speed; `--screen` prints it:
+A stored run is named by its launcher id, so each reading shows its job name. A
+gate reading depends on its host, so it shows its pod's step speed beside it, and
+`read_screen` (`--screen`) applies the protocol's host screen to calibration's
+pods and a launch's.
 
-    doppler run -p manabot -c prd -- uv run --extra artifacts --extra evaluation \
-        python -m experiments.tla_frontier_calibration --source <store> --screen
+A failed game is never replayed, so the first rented evaluation pass must not be
+a scored one. Once both calibration runs have ended, `eval` plays the frontier's
+own pass job over calibration's checkpoints, and `read_rehearsal` (`--rehearsal`)
+reads it against the second launch gate. The launcher holds a pass's cost, so that
+read takes the control client. These checkpoints are nearly fresh policies, so
+the reading says what the pass does on a rental, not how long a trained policy's
+games run.
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from decimal import Decimal
 import json
 from pathlib import Path
 from statistics import median
 
-from etude.launch.records import Run
+from etude.eval.query import statsdb
+from etude.eval.records import Benchmark, Environment, Matchup
+from etude.experiment import ExperimentState, TrainingRun
+from etude.launch import client
+from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
 from etude.run.storage import Storage
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
     EXPERIMENT as FRONTIER,
+    GAMES_PER_PAIR,
     HOST_UPDATES,
+    LARGE,
     SMALL,
     HostSpeed,
+    Protocol,
     SizeLabel,
     capped_runs,
+    checkpoint_inference,
+    evaluation_pass,
     frozen,
     host_speed,
+    last_update,
+    paired_matchup,
 )
-from manabot.infra.identity import StrictModel
+from experiments.tla_pilot_analysis import stored_game_columns
+from manabot.infra.identity import StrictModel, canonical_sha256
+from manabot.infra.runtime import regime_tag
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 
 EXPERIMENT = Path(__file__).stem
@@ -73,6 +81,9 @@ MAX_USD_PER_SIZE = Decimal("1")
 # A pod reads slow above this multiple of the lowest step speed in the store. A
 # rough line from Elemental's fast and slow bands; TLA has no anchor of its own.
 SLOW_HOST_RATIO = 1.3
+# The second launch gate, a rough line at half the protocol's 600 s game limit.
+REHEARSAL_GAME_SECONDS = 300.0
+REHEARSAL_COMPARISONS = 2
 
 
 class Calibration(StrictModel):
@@ -111,13 +122,36 @@ class ScreenReading(StrictModel):
     slow: bool | None
 
 
+class Rehearsal(StrictModel):
+    """Every evaluation pass under this experiment, against the second launch gate.
+
+    A pass that delivered nothing has no stored run, so `etude status` holds it
+    and its cost; `runs` and `pass_usd` cover the passes that reached the store.
+    """
+
+    runs: tuple[str, ...]
+    matches: int
+    failed_matches: int
+    games: int
+    # Killed, truncated or never finished: nothing a scored pass could replay.
+    invalid_games: int
+    median_game_seconds: float | None
+    slowest_game_seconds: float | None
+    pass_usd: Decimal
+    passed: bool
+
+
+def _regime_id(label: SizeLabel) -> str:
+    return f"tla-frontier-c5fba4-calibration-{label}"
+
+
 def calibration_regime(regime: TrainingRegime, label: SizeLabel) -> TrainingRegime:
     """The frozen regime, changed only in its identity, update target and wall."""
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     return regime.model_copy(
         update={
-            "id": f"tla-frontier-c5fba4-calibration-{label}",
+            "id": _regime_id(label),
             "wall_seconds": WALL_SECONDS,
             "stages": [
                 stage.model_copy(
@@ -148,6 +182,86 @@ def runs(revision: str) -> list[Run]:
             max_usd=MAX_USD_PER_SIZE,
         )
     ]
+
+
+# -- Evaluation rehearsal -----------------------------------------------------
+
+
+def _furthest_run(state: ExperimentState, label: SizeLabel) -> TrainingRun:
+    """The size's run that got furthest, known by its tag since stored names are ids.
+
+    A failed calibration can be launched again, and any of its runs may have
+    stored checkpoints; the rehearsal wants the heaviest evidence of the size.
+    """
+    tag = regime_tag(_regime_id(label))
+    found = [run for run in state.runs if run.checkpoints.tagged(tag)]
+    if not found:
+        raise ValueError(f"no {label} calibration checkpoint: {label} fails its gate")
+    return max(found, key=lambda run: last_update(run) or 0)
+
+
+def rehearsal_matchups(
+    state: ExperimentState, protocol: Protocol
+) -> tuple[Matchup, Matchup]:
+    """W256 against its own start, then against w64; both last checkpoints.
+
+    W256 in both seats is the slowest game the frontier schedules. A w256 that
+    stored only update 0 has no distinct pair, and no training reading for the
+    first gate either, so that is refused rather than rehearsed.
+    """
+    large = _furthest_run(state, LARGE)
+    small = _furthest_run(state, SMALL)
+    first = large.checkpoints.at("updates", 0)
+    last = large.checkpoints.last
+    if not first or last is None or last_update(large) == 0:
+        raise ValueError(f"{LARGE} stored no update past 0: it fails its gate")
+    opponent = small.checkpoints.last
+    assert opponent is not None
+    inference = checkpoint_inference()
+    candidate = last.model(inference)
+    return (
+        paired_matchup(
+            f"{LARGE} last vs {LARGE} u0",
+            (candidate, first[0].model(inference)),
+            "rehearsal-initial",
+            protocol,
+        ),
+        paired_matchup(
+            f"{LARGE} last vs {SMALL} last",
+            (candidate, opponent.model(inference)),
+            "rehearsal-head-to-head",
+            protocol,
+        ),
+    )
+
+
+def _rehearsal_environment(protocol: Protocol) -> Environment:
+    return Environment(
+        name="tla-frontier-c5fba4-calibration-v1",
+        files=canonical_sha256(protocol.model_dump(mode="json")),
+        config={"purpose": "evaluation-rehearsal-not-scored"},
+    )
+
+
+def eval(state: ExperimentState) -> list[Job]:
+    """The rehearsal, once no calibration run can still save a later checkpoint."""
+    if state.experiment != EXPERIMENT:
+        raise ValueError("rehearsal requires calibration's runs")
+    if not state.runs or not all(run.ended for run in state.runs):
+        return []
+    _, protocol = frozen()
+    return [
+        evaluation_pass(
+            Benchmark(
+                name="tla-frontier-c5fba4-rehearsal-v1",
+                environment=_rehearsal_environment(protocol),
+                matchups=rehearsal_matchups(state, protocol),
+            )
+        )
+    ]
+
+
+# -- Readings -----------------------------------------------------------------
 
 
 def _peak(data: RunData, metric: str) -> int | None:
@@ -189,14 +303,23 @@ def _calibration(data: RunData, storage: Storage, wall_seconds: float) -> Calibr
     )
 
 
+def _training_data(storage: Storage, *experiments: str) -> list[RunData]:
+    """The experiments' training runs; the rehearsal's passes are runs here too."""
+    return [
+        data
+        for data in read_all(storage)
+        if data.experiment in experiments
+        and (data.file is None or data.file.declaration.kind != "evaluation")
+    ]
+
+
 def read_calibration(source: Storage | Path | str) -> list[Calibration]:
     """Every calibration run under `source`, retries included."""
     storage = as_storage(source)
     wall_seconds = frozen()[0][SMALL].wall_seconds
     return [
         _calibration(data, storage, wall_seconds)
-        for data in read_all(storage)
-        if data.experiment == EXPERIMENT
+        for data in _training_data(storage, EXPERIMENT)
     ]
 
 
@@ -209,8 +332,7 @@ def read_screen(source: Storage | Path | str) -> list[ScreenReading]:
     storage = as_storage(source)
     found = [
         (data, host_speed(data, storage))
-        for data in read_all(storage)
-        if data.experiment in (EXPERIMENT, FRONTIER)
+        for data in _training_data(storage, EXPERIMENT, FRONTIER)
     ]
     speeds = [
         host.step_us_per_row for _, host in found if host.step_us_per_row is not None
@@ -239,13 +361,70 @@ def read_screen(source: Storage | Path | str) -> list[ScreenReading]:
     return [reading(data, host) for data, host in found]
 
 
+def _launcher_usd(run: str) -> Decimal:
+    return client.status(run).usd
+
+
+def read_rehearsal(
+    source: Storage | Path | str, usd: Callable[[str], Decimal] = _launcher_usd
+) -> Rehearsal:
+    """The rehearsal's games and cost, and whether they pass the second launch gate.
+
+    It passes only with every scheduled game played, valid and under the line.
+    Each game repeats on both seats, so seat 0 reads it. `usd` is the launcher's
+    cost of one stored pass.
+    """
+    with statsdb(EXPERIMENT, source) as db:
+        receipts = db.execute("SELECT run, state FROM matches").fetchall()
+        columns = stored_game_columns(db)
+        # Etude omits an all-null column, as when every game was killed.
+        seconds_column = "seconds" if "seconds" in columns else "NULL"
+        games = (
+            db.execute(
+                f"SELECT valid, {seconds_column} FROM games WHERE seat = 0"
+            ).fetchall()
+            if columns
+            else []
+        )
+    runs = tuple(sorted({run for run, _ in receipts}))
+    failed = sum(state != "done" for _, state in receipts)
+    invalid = sum(not valid for valid, _ in games)
+    seconds = [float(each) for _, each in games if each is not None]
+    slowest = max(seconds, default=None)
+    scheduled = REHEARSAL_COMPARISONS * len(frozen()[1].pairs) * GAMES_PER_PAIR
+    return Rehearsal(
+        runs=runs,
+        matches=len(receipts),
+        failed_matches=failed,
+        games=len(games),
+        invalid_games=invalid,
+        median_game_seconds=median(seconds) if seconds else None,
+        slowest_game_seconds=slowest,
+        pass_usd=sum((usd(run) for run in runs), Decimal(0)),
+        passed=(
+            len(games) == scheduled
+            and not failed
+            and not invalid
+            and slowest is not None
+            and slowest < REHEARSAL_GAME_SECONDS
+        ),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, help="Etude training store")
-    parser.add_argument(
+    reading = parser.add_mutually_exclusive_group()
+    reading.add_argument(
         "--screen", action="store_true", help="read the pre-scoring host screen"
     )
+    reading.add_argument(
+        "--rehearsal", action="store_true", help="read the evaluation rehearsal"
+    )
     args = parser.parse_args()
+    if args.rehearsal:
+        print(read_rehearsal(args.source).model_dump_json(indent=2))
+        return
     readings = (read_screen if args.screen else read_calibration)(args.source)
     print(json.dumps([reading.model_dump() for reading in readings], indent=2))
 
