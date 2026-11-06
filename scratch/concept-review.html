@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concept review — catalog fact/effect ids</title>
+<style>
+:root{--fg:#222;--bg:#fbf8f2;--mute:#6b6458;--line:#ddd3c2;--warn:#8a3b12;--ok:#2f5d3a;--code:#f1ebdf}
+@media(prefers-color-scheme:dark){:root{--fg:#e8e2d6;--bg:#1d1b18;--mute:#a59d8f;--line:#3d382f;--warn:#e9a07a;--ok:#9bcca5;--code:#2a2722}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,serif}
+main{max-width:46rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
+h1{font-size:1.5rem;margin:.2rem 0 1rem}h2{font-size:1.15rem;margin-top:2.4rem}
+.meta{color:var(--mute);font-size:.88rem}
+code,pre{font:.86rem/1.5 ui-monospace,Menlo,monospace;background:var(--code)}
+code{padding:0 .2em}pre{padding:.8rem 1rem;overflow-x:auto;border-left:3px solid var(--line)}
+.mismatch{border-left:4px solid var(--warn);padding:.2rem 1rem;margin:1.5rem 0}
+.proposed{color:var(--ok);font-style:italic}.existing{color:var(--mute);font-style:italic}
+table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1px solid var(--line);padding:.4rem .3rem;text-align:left;vertical-align:top}
+</style></head><body><main>
+<p class="meta">Task 30df0c · step: concept-review (headless) · 2026-11-06<br>
+Built from: Task brief; <code>scratch/questions.md</code>; <code>manabot/infra/config.py</code>, <code>manabot/model/checkpoint.py</code>,
+<code>manabot/training/state/admission.py</code>, <code>learning_state.py</code>, <code>training/execution.py</code>.</p>
+
+<h1>Fresh models read the catalog; old checkpoints must still match their own regimes</h1>
+<p><strong>Decision needed:</strong> none. The accepted requirement settles the fix. The design changed, so the graph goes back to implement.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+<tr><th>Action</th><th>Concept</th><th>API</th></tr>
+<tr><td>Train a fresh v8/v9 model</td><td>catalog record vocabulary (shared token rows)</td><td><code>ModelConfig()</code> → <code>record_vocabulary="catalog"</code>, omitted from the regime</td></tr>
+<tr><td>Save a checkpoint</td><td>the vocabulary is written explicitly</td><td><code>checkpoint_payload()</code></td></tr>
+<tr><td>Load a frozen checkpoint</td><td>an omitted field means hashed</td><td><code>ModelConfig.from_checkpoint</code></td></tr>
+<tr><td>Admit or resume a checkpoint under its regime</td><td>loaded config == regime config</td><td><code>agent.config != regime.agent</code> → reject</td></tr>
+</table>
+
+<div class="mismatch">
+<h2>The mismatch</h2>
+<p>An omitted field means different things to the two readers. A regime reads it as <code>"catalog"</code> and a checkpoint reads it as <code>"hashed"</code>. The field also takes a value on v1–v7 and on world-less models, where both layouts build the same model.</p>
+<pre>&gt;&gt;&gt; ModelConfig.from_checkpoint(ModelConfig().model_dump()) == ModelConfig()
+False   # hashed vs catalog, for a v6 model whose layout is identical either way</pre>
+<p class="existing">Existing on this branch: every checkpoint written before the branch, including all v6 ones, fails the
+admission, learning-state and selection checks against its own regime. The branch's tests pass only because they save checkpoints with the new <code>checkpoint_payload()</code>.</p>
+</div>
+
+<h2>After</h2>
+<p class="proposed">Proposed: an omitted field means hashed only where there is a real choice between layouts.</p>
+<pre>ModelConfig.from_checkpoint(payload, policy_input_version)
+  # absent + world + v8+  → "hashed"   (frozen layout)
+  # absent otherwise      → fresh default (identical model, so equal configs mean equal architectures)</pre>
+<p><code>load_checkpoint</code> builds the observation space before the model, so the version is already available there. Proof: a pre-branch v6 <code>agent_hypers</code> loads equal to <code>ModelConfig()</code>, and a pre-branch v8 payload with a world still loads hashed.</p>
+<p>Unchanged: a pre-branch v8/v9 checkpoint is still rejected loudly against a regime that now reads catalog. No such regime is frozen in the repository.</p>
+
+<h2>Questions</h2>
+<ol><li>None open. The working design in <code>scratch/questions.md</code> records the direction.</li></ol>
+</main></body></html>

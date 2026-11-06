@@ -139,7 +139,10 @@ def load_checkpoint(
     )
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent = ActorCritic(obs_space, ModelConfig.from_checkpoint(config["agent_hypers"]))
+    agent_config = ModelConfig.from_checkpoint(
+        config["agent_hypers"], obs_space.encoder.config.policy_input_version
+    )
+    agent = ActorCritic(obs_space, agent_config)
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):

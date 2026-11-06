@@ -198,6 +198,33 @@ def test_architecture_identity_names_catalog_only_where_it_applies() -> None:
 
     assert identity(6, "catalog") == identity(6, "hashed")
     assert identity(9, "catalog") != identity(9, "hashed")
-    assert ModelConfig.from_checkpoint({}).record_vocabulary == "hashed"
     # Regimes keep their bytes: the fresh default is omitted.
     assert "record_vocabulary" not in ModelConfig().model_dump()
+
+
+def test_checkpoints_without_the_field_read_hashed_only_where_it_applies() -> None:
+    world = {"world": managym.WORLD_SETUP}
+    assert ModelConfig.from_checkpoint(world, 8).record_vocabulary == "hashed"
+    assert ModelConfig.from_checkpoint(world, 9).record_vocabulary == "hashed"
+    # Elsewhere both layouts build one model; omission equals the regime's.
+    assert ModelConfig.from_checkpoint({}, 9) == ModelConfig()
+    assert ModelConfig.from_checkpoint(world, 7) == ModelConfig(**world)
+    explicit = ModelConfig(**world).checkpoint_payload()
+    assert ModelConfig.from_checkpoint(explicit, 9).record_vocabulary == "catalog"
+
+
+def test_pre_field_v6_checkpoint_equals_its_regime(tmp_path: Path) -> None:
+    """A checkpoint saved before the field existed passes the raw
+    `agent.config != regime.agent` admission and learning-state checks."""
+    torch.set_num_threads(1)
+    regime = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)
+    space = ObservationSpace(ObservationConfig(policy_input_version=6))
+    path = tmp_path / "v6.pt"
+    save_checkpoint(ActorCritic(space, regime), space, path, player_configs=None)
+    checkpoint = torch.load(path, weights_only=False)
+    checkpoint["hypers"]["agent_hypers"] = regime.model_dump()
+    assert "record_vocabulary" not in checkpoint["hypers"]["agent_hypers"]
+    torch.save(checkpoint, path)
+    restored, restored_space = load_checkpoint(str(path))
+    assert restored.config == regime
+    assert restored_space.encoder.config == space.encoder.config

@@ -256,9 +256,9 @@ class ModelConfig(BaseConfig):
     # How fact and shared-effect ids embed on explicit inputs v8 onward:
     # `catalog` reads the card encoder's exact token rows and definition
     # rows; `hashed` learns 4096 hashed rows per id column. Earlier inputs and
-    # models without a world have only the hashed layout. Saved checkpoints
-    # that omit the field are hashed (`from_checkpoint`); regimes omit the
-    # fresh default.
+    # models without a world have only the hashed layout. Saved v8+ world
+    # checkpoints that omit the field are hashed (`from_checkpoint`); regimes
+    # omit the fresh default.
     record_vocabulary: Literal["hashed", "catalog"] = Field(
         default="catalog", exclude_if=lambda value: value == "catalog"
     )
@@ -287,9 +287,21 @@ class ModelConfig(BaseConfig):
         return data
 
     @classmethod
-    def from_checkpoint(cls, payload: dict[str, Any]) -> "ModelConfig":
-        """Missing record vocabulary means the frozen hashed ids."""
-        return cls(**{"record_vocabulary": "hashed", **payload})
+    def from_checkpoint(
+        cls, payload: dict[str, Any], policy_input_version: int
+    ) -> "ModelConfig":
+        """Read a saved configuration for its saved policy input version.
+
+        A checkpoint that omits the record vocabulary predates the choice, so
+        it means the frozen hashed ids where the choice exists (v8+ with a
+        world). Elsewhere both values build the same model, and omission
+        reads as the fresh default so it equals its regime's configuration.
+        """
+        config = cls(**payload)
+        predates_choice = "record_vocabulary" not in payload
+        if predates_choice and config.world is not None and policy_input_version >= 8:
+            return cls(**{**payload, "record_vocabulary": "hashed"})
+        return config
 
     def checkpoint_payload(self) -> dict[str, Any]:
         """The serialized configuration with the record vocabulary explicit, so

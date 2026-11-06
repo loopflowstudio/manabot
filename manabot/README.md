@@ -418,8 +418,9 @@ hash. Each reads the row of the card token for the same concept (a granted
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. Checkpoints that omit
-the field load the `hashed` layout through `ModelConfig.from_checkpoint`: 4096
+ordinals are numbers. An id outside the vocabulary fails. V8+ world checkpoints
+that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
+(elsewhere both values build the same model and omission reads as the default): 4096
 learned rows per id column, which held 80% of a w64 L2 v9 model (1,958,402
 parameters; 412,482 with catalog ids) and 42% at w160 L8 h8 (9,470,402;
 5,605,602). Inputs before v8 and models without a world keep only the hashed

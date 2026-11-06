@@ -21,7 +21,7 @@ Material implementation choices (reversible, for review):
   tokens or appended record tokens, else rejected.
 - Serialization: `record_vocabulary` defaults to `catalog` and is omitted when
   catalog, so regime bytes are unchanged; checkpoints write it explicitly and
-  `ModelConfig.from_checkpoint` reads omission as hashed. Architecture identity
+  `ModelConfig.from_checkpoint` reads omission as hashed on v8+ with a world. Architecture identity
   names catalog only where it applies (v8+ with a world). No v8/v9 regime is
   frozen in the repository; one saved elsewhere before this change would now
   read catalog.
@@ -32,3 +32,29 @@ set-characteristic names; ad-hoc script, not retained.
 
 Parameters (total; v9): w64 L2 h4 1,958,402 → 412,482; w160 L8 h8 9,470,402 →
 5,605,602 (v8: 1,936,194 → 390,274; 9,414,882 → 5,550,082).
+
+Status (2026-11-06): implementation covers every acceptance item in code and
+`tests/model/test_record_vocabulary.py` (one row per record name, shared
+printed/granted row, gradients from fact and effect paths, unknown-id
+rejection, checkpoint hashed fallback (v8+ world only), architecture identity); encoders are
+untouched, so parity rests on the existing parity suites. Remaining: the
+model/observation validation in `docs/development.md` and the CLAUDE.md
+current-world arena admission suite have not been recorded on this branch.
+The all-emitted-ids sweep above is unretained; the retained tests check the
+native name list and real captured programs, not a played-game sweep.
+
+Check: `uv run --extra dev pytest tests/model/test_record_vocabulary.py -q` — 8 passed (2026-11-06, after the from_checkpoint fix); broader validation deferred to gate.
+
+## Concept review (2026-11-06) — resolved
+
+The review found that omission read "catalog" in regimes but "hashed" in
+`from_checkpoint`, so every pre-branch checkpoint (even v6, identical layouts)
+failed the raw `agent.config != regime.agent` checks (admission.py,
+learning_state.py, execution.py). Fixed: `ModelConfig.from_checkpoint(payload,
+policy_input_version)` resolves omission to hashed only for v8+ with a world,
+else the fresh default; `load_checkpoint` passes the saved input version.
+Regression tests cover a pre-field v6 checkpoint equal to its regime and
+v8/v9 world omission reading hashed. Kept: a pre-branch v8/v9 checkpoint loads
+hashed and is rejected loudly against a catalog regime; none is frozen here.
+
+No open product choice.
