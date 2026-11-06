@@ -4,7 +4,7 @@ Rented machines sharing a GPU label differ by 1.6-1.8x in update time, because
 with one producer, which `elemental-uniform` requires, training's critical path is
 one CPU thread. A receipt therefore names the CPU and the share of it the container
 may use; the GPU is already a run identity. These facts describe a run; they are
-not identities and never gate recovery onto another machine.
+not identities and take no part in recovery admission.
 """
 
 import os

@@ -144,8 +144,8 @@ replaces this with a measurement.
 - **Read per-update rows across a recovery.** A resumed stage restarts its timers
   while updates and decisions continue, so a receipt's stage totals cover the last
   attempt only and dividing them by stage counts understates seconds per update.
-  Etude's per-update rows stay correct across attempts, and each attempt's `host`
-  names its own machine, so they are the reading across a host change.
+  Etude's per-update rows stay correct across attempts. Recovery stays on its host;
+  the screen's "replace the pod" is a new launch from update 0.
 
 Next levers, not attempted: `elemental-uniform` requires one producer, so stepping
 (about 20% of an update) cannot overlap inference; inference runs ~700 calls of ~76

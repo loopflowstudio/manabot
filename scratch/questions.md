@@ -126,14 +126,15 @@ No design doc: the Task statement is the spec. Status and decisions:
 ## Concept review b015d5 (2026-11-05)
 
 Walked: rent a pod, read the panel, keep or replace it; a slow host; a recovery
-attempt on another machine. The model stands: one phase tree in the receipt, drawn
+attempt (the "another machine" case was wrong; see the re-review below). The model stands: one phase tree in the receipt, drawn
 per update; `TrainingRun.host` per attempt; the bench prints the same tree. The clock
 covers every `VectorEnv` buffered path (no rayon; `encode_active`/`step_active` are
 the separate slot env). No open product choice: producers, GPU spend and recipes stay
 outside this Task.
 
-All five review items are in the tree (uncommitted): host screen, parent series,
-one-producer scope, stepping rename, recovery reading. Results:
+All five review items are committed at `1201df60e`: host screen, parent series,
+one-producer scope, stepping rename, recovery reading. A later review that read the
+earlier tree called them undone; each was rechecked at that commit. Results:
 - Screen values came from `r2://manabot/jobs` receipts and per-update metric blocks,
   re-read 2026-11-05: 10 runs, median updates 2-11 at 6.9-7.7 s fast, 10.6-12.4 s slow.
   Bands 8 s / 9 s are this Task's choice from that gap; they fit 256-stream two-seat
@@ -147,3 +148,28 @@ one-producer scope, stepping rename, recovery reading. Results:
   `tests/infra/test_host_facts.py` (11 passed),
   `test_real_interruption_restores_complete_learning_state` (4 passed). Broader
   suites stay with gate.
+
+## Concept re-review b015d5 (2026-11-05, at `1201df60e`)
+
+Normal path and failure re-walked against the code. The phase tree, native clock,
+panel, bench and machine recommendation stand; no open product choice. One
+correction to the model, and one fact it makes redundant.
+
+Correction: **a run never changes machines.** `settle_orphan` raises "recovery lease
+belongs to a different host"; launched jobs are `max_attempts=1`; `RunContext`
+refuses a launcher retry that finds checkpoints. Replacing a slow pod therefore
+means a new launch and a new run, so a run has one host. Resuming does not refuse
+on a changed config: Etude keeps the stored declaration, so nothing there gates.
+
+Applied 2026-11-05 (no receipt shape change, no rerun of measurements): the report
+says recovery stays on its host and "replace the pod" is a new launch from update 0;
+the `host.py` docstring says the facts take no part in recovery admission; `"host"`
+left `resolved_config`, so `TrainingRun.host` is the one owner and reaches
+`ETUDE_OUTPUT_DIR` as the job's receipt. No test read the Etude copy.
+
+What would invalidate 3: an Etude page or report needing the CPU without the receipt.
+None exists today. If one appears, the gap belongs on Etude's `Attempt`, which already
+holds per-attempt `host` and `pod`; that is an Etude change, not part of this Task.
+Check: `tests/training/test_phase_timing.py`, `tests/infra/test_host_facts.py` and
+`test_real_interruption_restores_complete_learning_state` pass (15 selected, 4 of them
+the recovery test's parameters). Post-merge verification has not run: nothing is merged.

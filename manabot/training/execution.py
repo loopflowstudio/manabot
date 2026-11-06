@@ -1200,7 +1200,6 @@ def _execute_regime(
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,
                             "identities": run.identities,
-                            "host": host.model_dump(),
                         },
                     )
                     run.metrics_run = str(experiment.run.files.root)
