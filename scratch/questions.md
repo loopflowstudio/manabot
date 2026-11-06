@@ -78,23 +78,70 @@ budget and results pointer; this file holds working assumptions and open items.
   machine-confounded). Idle share .626–.670 in every run; idle bound 747–1249 s,
   about 29–34% of collection+learning. Capacity overflows: 3 games of ~290k (one each
   in .5/.8 s70201, .5/.95 s70201, .8/.95 s70203), all recovered.
-- Billed (runpodctl, by pod): calibration $1.19; everything since 00:06 UTC $8.83 by
-  05:59 → $10.01. Ghost `07c490-cpu32-*` records match no pod.
+- Billed (`runpodctl billing pods`, GPU pods only, hourly buckets): calibration $1.19
+  (four pods); 00:00–05:59 UTC 2026-11-06 $8.94, all L4 at $.585/h (15 run pods $8.81,
+  short boots $.13). Eval CPU pods never appear there, so none of it is evaluation. The
+  ten ~2.1 h pods at 21–23 UTC 2026-11-05 are MTG-252's. Ghost `07c490-cpu32-*` records
+  match no pod.
 - Eval: a refused cpu32 create (RunPod 503s ~05:41) left a ghost session that pins
   the run id Etude derives from the pending set (`{name}-{digest(pending keys)}`);
   `terminate`/`cancel` don't clear it. Pass 2 played a different set (no u20, a
   temporary commit since reverted): elemental-lambda-v1-e486e50e04a7, 1200 matches,
-  07:10. The u20 remainder needs one more pass.
+  07:10. Pass 3 (elemental-lambda-v1-05e863276951, 500 matches) played the u20
+  remainder; all 2,250 pairings are scored.
 - Ghost `07c490-l4-*` records from refused creates show estimated dollars but no RunPod
   pod exists (`runpodctl pod list` empty); not charged.
 
+## State (realigned 2026-11-06)
+
+Done: lambda comparison, critic residuals by distance from game end, two-seat idle
+report, published report. Spend about $14.9 of $25 (calibration $1.19 and training
+$8.94 billed; evaluation ~$4.8 estimated), leaving about $10.
+
+Not done: **the closure comparison, half of the Task's outcome.** The report says so;
+nothing here settles it. No machines are running.
+
+## Decision needed (Jack Heart)
+
+How to get a closure result, the protocol's three routes:
+
+1. Capacity recovery under exact quota: discard a paused stream's unfinished rows. Code
+   change; the rejection stands today.
+2. Wider continuation-relation capacity for both arms. Departs further from the
+   recipe's v1 input.
+3. Decide exact quota's future without this measurement. Deleting it is out of this
+   Task's scope.
+
+Sizing for 1 or 2, from the only one-seat pace measured (~70 s per opening update, which
+may fall as games settle): 150 updates is about 2.9 h per run, about $10 for six runs
+before evaluation, over what remains. 75 updates fits (six 1.5 h runs reserved at $6.30,
+plus calibration and evaluation), at about half the two-seat decisions per update, so
+earlier training than the lambda study reached. Either route also needs its calibration
+rerun and quota set before launch, by protocol amendment.
+
+## Assumption taken at the decision pass (2026-11-06)
+
+Route 1, reversible and inside the $25 and the Task's outcome: both closure arms keep
+`recover_capacity`, and exact quota discards an overflowing game's unfinished rows
+(rows already learned from in earlier updates stay). It keeps the v1 input and brings
+both arms closer to the recipe. 75 updates; reservation $.51 + $6.30 + $1.20 on ~$14.9
+leaves ~$2.09. Route 3 (exact quota's future) stays Jack Heart's. If calibration fails
+or the quota cannot match within 10%, study 1 stops and the report says so.
+
 ## Open
 
-- Study 1 needs a decision beyond the protocol: exact-quota capacity recovery, wider
-  continuation relations for both arms, or deleting exact quota.
-- Bills for eval passes 2–3 (07:10–11:00 UTC 2026-11-06) had not posted; the report's
-  ~$4.8 evaluation and ~$13.3 total are estimates from rental windows. Reconcile with
-  `runpodctl billing pods --grouping podId --start-time 2026-11-06T07:00:00Z`.
+- Evaluation dollars cannot be reconciled: `runpodctl billing pods` is GPU-only, and
+  neither the REST billing endpoint nor the Etude ledger ($2.07) gives a bill. Check the
+  RunPod console if the exact figure matters.
 - The Etude controller is not running: 0.2.13 (`~/.manabot/etude-controller`) cannot
   parse the Vast providers; the 0.2.14 overlay run hung on storage reads after ~2 h.
 - `07c490-l4` on-demand max is 14 (raised from 8 for ghost records).
+
+## Proposed Wave memory (`.lf/wave/` left unchanged; `realign` here is not its curation)
+
+- Elemental w17, two-seat, 3.1–3.8M decisions: no lambda arm beat .5/.8; .95/1 scored
+  .158 below it. Early training, three seeds.
+- The recipe's v1 input overflows at 65 continuation relations on w17, so runs need
+  `recover_capacity`, which exact quota rejects.
+- RunPod pod billing omits CPU pods; L4 host speed is bimodal (~2×), so wall and dollar
+  comparisons across arms are confounded.

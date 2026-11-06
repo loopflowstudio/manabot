@@ -212,3 +212,5 @@ Study 1's predictions and analysis above stay as written and are not scored.
 `experiments/data/closure-lambda-elemental-v1/report.md` (artifact store; manifest in
 `experiments/data.manifest.json`). Study 1 has no result; study 2's four predictions
 held; two-seat idle slots were .63–.67 of stream slots, at most 29–34% of training wall.
+Spend was about $14.9 of the $25 cap; evaluation's ~$4.8 passed its $3.00 line and drew
+on the reserve.
