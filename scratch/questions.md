@@ -142,3 +142,14 @@ Assumption (realign, 2026-11-05): the `code` Graph does not call for Wave memory
 maintenance, so `.lf/wave/` stays read-only here and the update remains proposed
 in the plan. Replayed steers from earlier passes are history; none adds direction
 beyond the completed recovery cohort.
+
+## Report correction — 2026-11-06
+
+Jack Heart: "No evals. Also, the seeds arent grouped by arm". Correct the Etude
+report using retained evidence: all 72 curve and eight held-out endpoints, Pool
+and GRU each containing four seeds, aligned on equal-game training updates.
+`scripts/report_representation_gpu.py` provides the reproducible offline adapter;
+it verifies monitor receipts and supplies read-side grouping without changing
+frozen declarations or running new games. Detailed training telemetry remains
+available for only five learners and is explicitly labeled. Study merge and
+further spending remain unapproved.
