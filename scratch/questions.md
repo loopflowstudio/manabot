@@ -128,6 +128,24 @@ both arms closer to the recipe. 75 updates; reservation $.51 + $6.30 + $1.20 on 
 leaves ~$2.09. Route 3 (exact quota's future) stays Jack Heart's. If calibration fails
 or the quota cannot match within 10%, study 1 stops and the report says so.
 
+## Closure reopened (2026-11-06)
+
+- e6acf3ba4: exact quota accepts `game_errors` with `recover_capacity`; `learned_samples`
+  counts a failed game's rows earlier updates learned from. Scripted test plus a real
+  Elemental smoke (permanent capacity 9: 86 failures, every batch exactly full).
+- `tests/training/test_game_errors.py` resource-limit replay (3 params) and
+  `test_game_error_recovery.py::test_repaired_restart...` fail on clean HEAD too (local
+  load ~200; arena `lost_worker` flips to `timeout` the same way). Left to gate/CI.
+- The installed controller is live again (0.2.13, last loop seconds ago, another Task's
+  start); launches ride on it. Report bytes re-fetched from the store: digest matches.
+- Calibration fbcb3fd57b2c launched 14:27 UTC, window .75 h ($.60 reserved).
+- Calibration succeeded (30 updates, ~36 s each, 121.3 rows/stream over u11–30): quota
+  121 (ff22606f0). Its machine outlived the run (controller dead); restarted the 0.2.14
+  overlay controller under caffeinate (`/tmp/07c490w/controller2.log`).
+- Closure arms on ff22606f0 (16:22–16:39 UTC): exact 39e3894e9e26/82f93a640977/
+  ef6e7797c69b (per seed after three stock refusals), complete 16a3a7acd88f/fad70fa39a72/
+  20456553dc67 (one cohort). `07c490-l4` on-demand max raised 14 → 22 ("it is busy").
+
 ## Open
 
 - Evaluation dollars cannot be reconciled: `runpodctl billing pods` is GPU-only, and
