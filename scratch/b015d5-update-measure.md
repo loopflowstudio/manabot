@@ -128,4 +128,9 @@ not GPU evidence. The named CUDA check is the next producer of evidence.
 - Native stepping: engine budget harness, owned by the engine Tasks.
 
 Compress 2026-11-06: `_build_batch` copies `next_obs` straight from the buffers
-(no `allocate(1)` template). Focused training suites: 181 passed.
+(no `allocate(1)` template). Focused training suites: 181 passed. Realign
+2026-11-06 re-ran the digest at `aa592dfa0` (no Rust change since `76e71abc3`):
+raw/EMA/optimizer/attempts `76e926e3ea4fcde1` / `2a31f25602a86b9c` /
+`05eb51c04b5e2d14` / `cb230744dcd7c850`, identical to base (`keep-head`).
+The 256-stream timing rows were taken at `b958f3a00`; the compress change only
+moves the final-observation copy and was not re-timed.

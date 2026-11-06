@@ -116,7 +116,9 @@ No design doc: the Task statement is the spec. Status and decisions:
   is in no CI selection, which is why main stays green. Not repaired here; it needs
   its own bug Task, because the fixture is retained evidence.
 - The fixed-hardware rows measured `5d676d6df` and `8e5d152ab`. The sync to `f6f171d34`
-  added engine commit `c59aeee0e` afterward; its effect on native stepping is unmeasured.
+  added engine commit `c59aeee0e` afterward. The 2026-11-06 rows at `76e71abc3`
+  include it (native stepping 52.6-64.3 µs/decision), but no before/after pair
+  isolates it; the engine budget harness owns that comparison.
 - Proposed infrastructure Wave memory (not written; this step leaves `.lf/wave/`
   read-only): rented-host CPU class moves update time 1.6-1.8x at a fixed GPU label,
   so compare `host.cpu_model` and native stepping before attributing a slowdown
