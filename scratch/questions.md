@@ -111,6 +111,12 @@ Assumption: the `/verify` commit instruction was not applied to Etude PR #84,
 because that skill checks merged work and this PR is an unmerged draft. The same
 applies to commits on PR421's branch.
 
+Assumption (compress, reversible through git): admission and CUDA profiling are
+not required behavior once the cohort is complete; recovery units never used
+them. A future amendment restores them from `d57c5c9e7` and freezes its own
+identity. `runs()` now requires `--unit`. Retained job configs still carrying
+`admission_limits` are historical and are never re-read by `StudyJob`.
+
 ## Main sync — MTG-213 context (2026-11-05 UTC)
 
 MTG-213 decisions stay at `e113602a2dc1c866af513ff0953598db390db9f2:scratch/questions.md`

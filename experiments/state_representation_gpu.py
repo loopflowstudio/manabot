@@ -1,9 +1,8 @@
-"""GPU admission and the recovery cohort of the representation plateau study.
+"""The recovery cohort of the representation plateau study.
 
-The same complete-game executor owns excluded throughput admission and each
-scientific learner. After Run `e51f61b92931` was lost, `RECOVERY` freezes the
-amendment that lets three retained learners be evaluated while the other five
-train. `SCORING` is untouched: it stays the evaluator's identity.
+After Run `e51f61b92931` was lost, `RECOVERY` froze the amendment that let three
+retained learners be evaluated while the other five trained. `SCORING` is
+untouched: it stays the evaluator's identity.
 
 Every recovery unit is its own Etude Run, because outputs are delivered only when
 an attempt ends. `LearnerUnit` trains one fresh learner on one GPU;
@@ -73,16 +72,8 @@ STREAMS = 256
 UPDATES = 256
 CADENCE = 32
 POINTS = tuple(range(0, UPDATES + 1, CADENCE))
-ADMISSION_UPDATES = 4
-ADMISSION_SEED = 74200
-# Four ordinary updates must fit alongside the executor's finalization reserve.
-# The outer child deadline also leaves time for export and process shutdown.
-ADMISSION_ARM_SECONDS = 1800
-ADMISSION_WORK_HOURS = 1.25
 SETUP_SECONDS = 900
-EVALUATION_SECONDS = 5400
 TEARDOWN_SECONDS = 120
-RENTAL_OVERHEAD_SECONDS = SETUP_SECONDS + EVALUATION_SECONDS + TEARDOWN_SECONDS
 CURVE_DEALS = tuple(range(85001, 85033))
 HELDOUT_DEALS = tuple(range(86001, 86065))
 SCORING = {
@@ -186,24 +177,6 @@ def recipe(arm: Arm) -> TrainingRegime:
     return TrainingRegime.model_validate(regime.model_dump())
 
 
-def excluded_recipe(
-    arm: Arm,
-    regime_id: str,
-    updates: int,
-    seconds: int,
-    device: Literal["cpu", "cuda"] = "cuda",
-) -> TrainingRegime:
-    """The study recipe under a short excluded horizon; never a scored learner."""
-    regime = recipe(arm)
-    regime.id = regime_id
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = updates
-    stage.execution.device = device
-    stage.execution.wall_seconds = regime.wall_seconds = seconds
-    return TrainingRegime.model_validate(regime.model_dump())
-
-
 def recipe_digests() -> dict[Arm, str]:
     return {arm: canonical_sha256(recipe(arm).model_dump(mode="json")) for arm in ARMS}
 
@@ -219,180 +192,6 @@ def evaluation_protocol(*, heldout: bool = False) -> MonitorProtocol:
         bootstrap_seed=85000,
         bootstrap_replicates=2000,
     )
-
-
-class ArmThroughput(BaseModel):
-    """Measured costs for one ordinary learner, in host wall seconds.
-
-    Collection, learning and unclassified in-stage bookkeeping recur per update.
-    Child imports/setup/close and initial/final exports occur once per learner.
-    Admission's entire export bundle bounds each later raw checkpoint export;
-    this is conservative, not a measurement of that checkpoint's exact cost.
-    """
-
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    arm: Arm
-    updates: int = Field(ge=1)
-    collection_seconds: float = Field(ge=0)
-    learning_seconds: float = Field(ge=0)
-    bookkeeping_seconds: float = Field(ge=0)
-    fixed_seconds: float = Field(ge=0)
-    export_seconds: float = Field(ge=0)
-
-    @property
-    def recurring_seconds(self) -> float:
-        return (
-            self.collection_seconds + self.learning_seconds + self.bookkeeping_seconds
-        )
-
-    @property
-    def elapsed_seconds(self) -> float:
-        return self.recurring_seconds + self.fixed_seconds + self.export_seconds
-
-    @classmethod
-    def from_run(cls, arm: Arm, run: TrainingRun, elapsed: float) -> "ArmThroughput":
-        if len(run.stages) != 1:
-            raise ValueError("throughput needs one training stage")
-        stage = run.stages[0]
-        if stage.actual_device != "cuda:0" or stage.actual_threads != 1:
-            raise ValueError("throughput requires the declared CUDA/thread placement")
-        if stage.updates < 1 or stage.games != stage.updates * STREAMS:
-            raise ValueError("throughput needs complete ordinary game batches")
-        stage_seconds = (
-            max(0, run.seconds - run.setup_seconds)
-            if stage.status == "running"
-            else stage.seconds
-        )
-        if elapsed < stage_seconds:
-            raise ValueError("child elapsed time cannot be shorter than its stage")
-        active = stage.collection_seconds + stage.learning_seconds
-        if active <= 0 or active + stage.export_seconds > stage_seconds + 0.01:
-            raise ValueError("inconsistent stage timings")
-        return cls(
-            arm=arm,
-            updates=stage.updates,
-            collection_seconds=stage.collection_seconds,
-            learning_seconds=stage.learning_seconds,
-            bookkeeping_seconds=max(0, stage_seconds - active - stage.export_seconds),
-            fixed_seconds=elapsed - stage_seconds,
-            export_seconds=stage.export_seconds,
-        )
-
-    def cohort_seconds(self) -> float:
-        recurring = self.recurring_seconds * UPDATES / self.updates
-        # Seven intermediate raw exports; initial/final exports count once.
-        checkpoints = len(POINTS[1:-1]) * self.export_seconds
-        return len(SEEDS) * (
-            1.5 * recurring + self.fixed_seconds + self.export_seconds + checkpoints
-        )
-
-
-class ThroughputAdmission(BaseModel):
-    """Both arms' phase costs; fixed costs never scale with the update horizon."""
-
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    concurrency: Literal[1]
-    elapsed_seconds: float = Field(gt=0)
-    arms: tuple[ArmThroughput, ArmThroughput]
-
-    @model_validator(mode="after")
-    def complete(self) -> "ThroughputAdmission":
-        if {item.arm for item in self.arms} != set(ARMS):
-            raise ValueError("throughput requires both distinct arms")
-        if any(item.updates != ADMISSION_UPDATES for item in self.arms):
-            raise ValueError("throughput requires every admission update")
-        measured = sum(arm.elapsed_seconds for arm in self.arms)
-        if measured > self.elapsed_seconds + 0.01:
-            raise ValueError("arm costs exceed admission elapsed time")
-        return self
-
-    def cohort_hours(self) -> float:
-        measured = sum(arm.elapsed_seconds for arm in self.arms)
-        orchestration = max(0, self.elapsed_seconds - measured) * len(SEEDS)
-        return (
-            sum(arm.cohort_seconds() for arm in self.arms)
-            + orchestration
-            + RENTAL_OVERHEAD_SECONDS
-        ) / 3600
-
-    def projected_usd(self, hourly_usd: Decimal) -> Decimal:
-        if not hourly_usd.is_finite() or hourly_usd <= 0:
-            raise ValueError("hourly price must be finite and positive")
-        return Decimal(str(self.cohort_hours())) * hourly_usd
-
-
-class AdmissionLimits(BaseModel):
-    """Prospective execution policy, independent of model scores.
-
-    The quote ceiling and remaining scientific allowance determine the affordable
-    mean update time. Four times that pace permits variation within one complete
-    game batch. Two completed updates are required before a phase-cost stop;
-    startup and no-completed-update stops retain distinct reasons.
-    """
-
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    scientific_usd: Decimal = Field(default=Decimal("16"), gt=0, le=16)
-    hourly_usd: Decimal = Field(default=Decimal("0.26"), gt=0)
-    startup_seconds: float = Field(default=180, gt=0)
-    grace_seconds: float = Field(default=120, gt=0)
-
-    @property
-    def progress_seconds(self) -> float:
-        seconds = float(self.scientific_usd / self.hourly_usd) * 3600
-        per_update = max(0, seconds - RENTAL_OVERHEAD_SECONDS) / (
-            len(SEEDS) * len(ARMS) * UPDATES
-        )
-        return max(300, 4 * per_update)
-
-
-@dataclass
-class ProgressWatch:
-    """Observe durable update boundaries using an injected monotonic clock."""
-
-    arm: Arm
-    path: Path
-    # Touching this file asks the child to flush its evidence and exit.
-    stop: Path
-    limits: AdmissionLimits
-    started: float
-    # None means no ready CUDA record has been observed yet.
-    last_progress: float | None = None
-    updates: int = 0
-
-    def observe(self, run: TrainingRun | None, now: float) -> str | None:
-        if run is not None and run.stages:
-            stage = run.stages[0]
-            if (stage.actual_device is not None or stage.updates > 0) and (
-                stage.actual_device != "cuda:0" or stage.actual_threads != 1
-            ):
-                return "training differs from declared CUDA/thread placement"
-            if self.last_progress is None and stage.actual_device is not None:
-                self.last_progress = now
-            if stage.updates < self.updates:
-                raise ValueError("training progress regressed")
-            if stage.updates > self.updates:
-                self.updates = stage.updates
-                self.last_progress = now
-                if stage.updates >= 2:
-                    costs = ArmThroughput.from_run(
-                        self.arm, run, max(now - self.started, stage.seconds)
-                    )
-                    # Only this arm, with the other arm optimistically free. This
-                    # is a predeclared capacity policy, not a bad-host diagnosis.
-                    projected = (
-                        costs.cohort_seconds() + RENTAL_OVERHEAD_SECONDS
-                    ) / 3600
-                    if (
-                        Decimal(str(projected)) * self.limits.hourly_usd
-                        > self.limits.scientific_usd
-                    ):
-                        return "measured arm exceeds scientific allocation"
-        if self.last_progress is None:
-            if now - self.started >= self.limits.startup_seconds:
-                return "startup produced no ready training record"
-        elif now - self.last_progress >= self.limits.progress_seconds:
-            return "no completed update within workload allowance"
-        return None
 
 
 class Endpoint(BaseModel):
@@ -493,69 +292,41 @@ class RecoveryAllocation(BaseModel):
 
 
 class StudyJob(BaseModel):
-    """Source identity and, for a recovery unit, its frozen allocation."""
+    """Source identity and the unit's frozen allocation."""
 
     model_config = ConfigDict(extra="forbid")
     source_bundle: SourceBundle
-    recovery: RecoveryAllocation | None = None
-    admission_limits: AdmissionLimits = Field(default_factory=AdmissionLimits)
+    recovery: RecoveryAllocation
 
 
 # Job declaration and independent learner/evaluator entry points.
 
 
-def runs(revision: str, unit: str = "", admission_limits: str = "") -> list[Run]:
-    """Default to admission; a recovery unit requires its frozen allocation file."""
+def runs(revision: str, unit: str) -> list[Run]:
+    """One recovery unit, read from its frozen allocation file."""
     root = Path(__file__).resolve().parents[1]
-    allocated = (
-        RecoveryAllocation.model_validate_json(Path(unit).read_bytes())
-        if unit
-        else None
-    )
-    limits = (
-        AdmissionLimits.model_validate_json(Path(admission_limits).read_bytes())
-        if admission_limits
-        else AdmissionLimits()
-    )
-    spec = StudyJob(
-        source_bundle=bundle_at(root, revision),
-        recovery=allocated,
-        admission_limits=limits,
-    )
-    name, until, hours, usd, inputs = (
-        EXPERIMENT,
-        f"updates={ADMISSION_UPDATES}",
-        ADMISSION_WORK_HOURS,
-        Decimal("0.50"),
-        (),
-    )
-    if allocated is not None:
-        work = allocated.unit
-        hours, usd, inputs = allocated.max_hours, allocated.max_usd, allocated.inputs
-        name = f"{EXPERIMENT}-{work.kind}-{work.arm}-{work.seed}"
-        until = (
-            f"updates={UPDATES}"
-            if isinstance(work, LearnerUnit)
-            else f"endpoints={len(work.endpoints)}"
-        )
+    allocated = RecoveryAllocation.model_validate_json(Path(unit).read_bytes())
+    work = allocated.unit
+    spec = StudyJob(source_bundle=bundle_at(root, revision), recovery=allocated)
     job = Job(
-        name=name,
+        name=f"{EXPERIMENT}-{work.kind}-{work.arm}-{work.seed}",
         experiment=EXPERIMENT,
         setup=machine_setup(UV_EXTRAS),
         command=f"{TOOLCHAIN_ENV}\nuv run --locked{UV_EXTRAS} python -m experiments.{EXPERIMENT}",
         repo=str(root),
         revision=revision,
         config=spec.model_dump_json(),
-        until=until,
-        max_hours=hours,
-        max_usd=usd,
+        until=(
+            f"updates={UPDATES}"
+            if isinstance(work, LearnerUnit)
+            else f"endpoints={len(work.endpoints)}"
+        ),
+        max_hours=allocated.max_hours,
+        max_usd=allocated.max_usd,
         max_attempts=1,
-        inputs=inputs,
+        inputs=allocated.inputs,
     )
-    return [
-        run.model_copy(update={"id": unit_key(allocated.unit)}) if allocated else run
-        for run in job.runs(0)
-    ]
+    return [run.model_copy(update={"id": unit_key(work)}) for run in job.runs(0)]
 
 
 def checkpoints(run: TrainingRun) -> list[Checkpoint]:
@@ -591,40 +362,27 @@ def checkpoints(run: TrainingRun) -> list[Checkpoint]:
     return points
 
 
-def train_arm(
-    arm: Arm, seed: int, out: Path, stop: Path, *, admission: bool = False
-) -> None:
-    """One fresh learner owns CUDA, execution and receipts in either mode.
+def train_arm(arm: Arm, seed: int, out: Path, stop: Path) -> None:
+    """One fresh learner owns CUDA, execution and receipts.
 
-    Admission uses an excluded seed and short horizon without curve milestones;
-    science requires every declared export before evaluation can begin. A restart
-    uses a fresh Run, so `out` never holds an earlier attempt.
+    Every declared export is required before evaluation can begin. A restart uses
+    a fresh Run, so `out` never holds an earlier attempt.
     """
-    if seed not in ((ADMISSION_SEED,) if admission else SEEDS):
+    if seed not in SEEDS:
         raise ValueError("undeclared training seed")
     if not torch.cuda.is_available():
         raise RuntimeError("this study requires CUDA")
     # One learner owns the device; leave room for contexts and workspaces.
     torch.cuda.set_per_process_memory_fraction(0.80)
-    regime = (
-        excluded_recipe(
-            arm,
-            f"representation-gpu-admission-{arm}",
-            ADMISSION_UPDATES,
-            ADMISSION_ARM_SECONDS,
-        )
-        if admission
-        else recipe(arm)
-    )
     out.mkdir(parents=True, exist_ok=False)
     with VerifyStore(out / "training.sqlite") as store:
         run = execute_regime(
-            regime,
+            recipe(arm),
             seed,
             out / "training",
             store,
-            experiment=f"{EXPERIMENT}_admission" if admission else EXPERIMENT,
-            checkpoint_updates=() if admission else POINTS[1:-1],
+            experiment=EXPERIMENT,
+            checkpoint_updates=POINTS[1:-1],
             stop_path=stop,
             stop_reserve_seconds=120,
         )
@@ -637,11 +395,7 @@ def train_arm(
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
         },
     )
-    if admission:
-        if run.status != "completed" or run.updates_through() != ADMISSION_UPDATES:
-            raise RuntimeError(f"incomplete admission: {run.status}: {run.error}")
-    else:
-        checkpoints(run)
+    checkpoints(run)
 
 
 def checkpoint_input(artifact: ArtifactReference) -> str:
@@ -903,76 +657,8 @@ def run_unit(
     atomic_json(out / "etude-result.json", {"clocks": clock})
 
 
-def admit_throughput(
-    out: Path, stop: Path, deadline: float, limits: AdmissionLimits
-) -> None:
-    """Measure a complete two-arm sequential batch without scoring."""
-    phase = out / "admission-1"
-    phase.mkdir()
-    started = time.monotonic()
-    costs: list[ArmThroughput] = []
-    atomic_json(out / "admission-limits.json", limits.model_dump(mode="json"))
-    for index, arm in enumerate(ARMS):
-        batch = phase / f"batch-{index}"
-        batch.mkdir()
-        print(
-            f"admission: {arm}, {STREAMS} streams, {ADMISSION_UPDATES} updates",
-            flush=True,
-        )
-        child_started = time.monotonic()
-        watch = ProgressWatch(
-            arm,
-            phase / arm / "training/run.json",
-            batch / "stop",
-            limits,
-            child_started,
-        )
-        command = [
-            *_CHILD,
-            "--admit-arm",
-            arm,
-            "--out",
-            str(phase / arm),
-            "--stop",
-            str(watch.stop),
-        ]
-        _run_child(
-            command,
-            batch,
-            stop,
-            min(
-                deadline - TEARDOWN_SECONDS,
-                time.time() + ADMISSION_ARM_SECONDS + limits.grace_seconds,
-            ),
-            watch=watch,
-        )
-        run = TrainingRun.model_validate_json(watch.path.read_bytes())
-        if run.status != "completed":
-            raise RuntimeError("admission learner did not complete")
-        costs.append(ArmThroughput.from_run(arm, run, time.monotonic() - child_started))
-        print(f"admission: {arm} completed", flush=True)
-    result = ThroughputAdmission(
-        concurrency=1,
-        elapsed_seconds=time.monotonic() - started,
-        arms=(costs[0], costs[1]),
-    )
-    atomic_json(out / "throughput.json", [result.model_dump()])
-    atomic_json(out / "etude-result.json", {"clocks": {"updates": ADMISSION_UPDATES}})
-
-
-def _run_child(
-    command: list[str],
-    out: Path,
-    stop: Path,
-    deadline: float,
-    *,
-    watch: ProgressWatch | None = None,
-) -> None:
-    """Bound one worker and its descendants by the rental on every exit.
-
-    A watched child gets a graceful stop and its grace period; any other child
-    is terminated directly.
-    """
+def _run_child(command: list[str], out: Path, stop: Path, deadline: float) -> None:
+    """Bound one worker and its descendants by the rental on every exit."""
     # The learner owns local tracking; it must not attach to the launcher run.
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("ETUDE_")
@@ -989,45 +675,11 @@ def _run_child(
         except OSError:
             atomic_json(out / "processes.json", {"exit_codes": []})
             raise
-    grace = watch.limits.grace_seconds if watch else 0
     try:
         while child.poll() is None:
-            reason = None
-            if stop.exists() or time.time() >= deadline - grace:
+            if stop.exists() or time.time() >= deadline:
                 reason = "worker cancelled or allocation expired"
-            elif watch is not None:
-                run = (
-                    TrainingRun.model_validate_json(watch.path.read_bytes())
-                    if watch.path.exists()
-                    else None
-                )
-                previous = (watch.last_progress, watch.updates)
-                reason = watch.observe(run, time.monotonic())
-                if run is not None and previous != (watch.last_progress, watch.updates):
-                    atomic_json(out / "progress.json", run.model_dump(mode="json"))
-                    stage = run.stages[0]
-                    print(
-                        f"admission: {watch.arm} updates={stage.updates} "
-                        f"games={stage.games} collection={stage.collection_seconds:.2f}s "
-                        f"learning={stage.learning_seconds:.2f}s "
-                        f"exports={stage.export_seconds:.2f}s",
-                        flush=True,
-                    )
-            if reason is not None:
-                atomic_json(
-                    out / "supervision.json",
-                    {
-                        "reason": reason,
-                        "grace_seconds": grace,
-                        "updates": watch.updates if watch else None,
-                    },
-                )
-                if watch is not None:
-                    watch.stop.touch()
-                    # Once stopped, only evidence flush and exit remain. Waiting
-                    # here avoids a second polling state and cannot extend the lease.
-                    with suppress(subprocess.TimeoutExpired):
-                        child.wait(timeout=max(0, min(grace, deadline - time.time())))
+                atomic_json(out / "supervision.json", {"reason": reason})
                 raise RuntimeError(reason)
             time.sleep(1)
         if child.returncode != 0:
@@ -1064,26 +716,23 @@ def worker() -> None:
     """Etude owns the capped allocation and the learner or evaluator child."""
     bind_etude_source()
     spec = StudyJob.model_validate_json(Path(os.environ["ETUDE_CONFIG"]).read_bytes())
+    unit = spec.recovery.unit
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     stop = Path(os.environ["ETUDE_STOP_FILE"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
-    work_hours = spec.recovery.max_hours if spec.recovery else ADMISSION_WORK_HOURS
-    require_window(deadline, time.time(), work_hours)
+    require_window(deadline, time.time(), spec.recovery.max_hours)
     out.mkdir(parents=True, exist_ok=True)
     atomic_json(out / "host.json", host_record())
-    if spec.recovery is not None and isinstance(spec.recovery.unit, EvaluationUnit):
+    if isinstance(unit, EvaluationUnit):
         inputs = Path(os.environ["ETUDE_INPUTS_DIR"])
-        run_unit(spec.recovery.unit, out, inputs, stop, deadline)
+        run_unit(unit, out, inputs, stop, deadline)
         return
     gate = check_numerics(out, min(time.time() + 300, deadline))
     if gate.status != "completed":
         raise RuntimeError("CUDA numerical admission failed")
-    if spec.recovery is None:
-        admit_throughput(out, stop, deadline, spec.admission_limits)
-        return
     if torch.cuda.get_device_name(0) != GPU_CLASS:
         raise ValueError("learner hardware differs from the amendment's GPU class")
-    run_unit(spec.recovery.unit, out, None, stop, deadline)
+    run_unit(unit, out, None, stop, deadline)
 
 
 # Complete-cohort analysis; no partial successes or checkpoint selection.
@@ -1155,7 +804,6 @@ def report() -> Report:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--admit-arm", choices=ARMS)
     mode.add_argument("--train-arm", choices=ARMS)
     mode.add_argument("--evaluate-unit", type=Path)
     parser.add_argument("--seed", type=int)
@@ -1164,11 +812,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--stop", type=Path)
     args = parser.parse_args()
-    if args.admit_arm:
-        if args.out is None or args.stop is None:
-            parser.error("admission needs output and stop path")
-        train_arm(args.admit_arm, ADMISSION_SEED, args.out, args.stop, admission=True)
-    elif args.train_arm:
+    if args.train_arm:
         if args.seed is None or args.out is None or args.stop is None:
             parser.error("training needs seed, output and stop path")
         train_arm(args.train_arm, args.seed, args.out, args.stop)

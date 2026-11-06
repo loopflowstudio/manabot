@@ -95,29 +95,30 @@ failed attempt; no score-based retries, survivor-only conclusions or shortened s
 
 ## Delete — do not maintain
 
-These cuts are complete; frozen learner code stays untouched for the recovery
-cohort. `evaluate_arm`, `scientific_cohort` and `ScientificAllocation` are gone.
-Keep the replacements below; recover predecessors only from git:
+These cuts are complete. `evaluate_arm`, `scientific_cohort` and
+`ScientificAllocation` are gone. Recover predecessors only from git:
+
+- The admission and CUDA diagnosis paths, finished with the cohort (retained at
+  `d57c5c9e7`): `ArmThroughput`, `ThroughputAdmission`, `AdmissionLimits`,
+  `ProgressWatch`, `admit_throughput`, `excluded_recipe`, `--admit-arm`,
+  `_run_child`'s watch/grace, `runs()`'s default declaration,
+  `scripts/profile_representation.py` and its operator-trace test. Recovery units
+  never used them. Scoring, recovery and recipe identities are unchanged; a new
+  amendment recovers what it needs and freezes its own admission. The retained
+  `encoder-reference/` evidence stays published.
 
 - Per-sample/per-frame projections in `TypedContinuationEncoder.forward` and
   `SharedEffectEncoder.forward`, and per-sequence padded packing in
   `RecordReducer` (`59ec1bd24`). The pre-change implementation is retained at
   `42709fa1b`, not as a fallback. Live-row validation, canonical order, duplicate
   memberships and input/parameter gradients remain required on the batched path.
-- The combined diagnostic/admission job. `scripts/profile_representation.py`
-  ends after two one-update profiles so Etude delivers traces before separate
-  throughput work. Keep bounded log summaries, failure traces and verification
-  of the final inventory; a progress log alone is insufficient.
-- Total-elapsed horizon scaling and its exclusive expected-value fixture;
-  `ArmThroughput` separates recurring and fixed costs. The duplicate `admit_arm`
-  executor, eight-context launcher (`27a126422`), and v5 timing/canary runner
-  (`9dc32125f`) remain historical. Keep native effect fixtures used by transport
-  and model tests, frozen-v5 compatibility, and archived study recipes.
+- The duplicate `admit_arm` executor, eight-context launcher (`27a126422`), and
+  v5 timing/canary runner (`9dc32125f`) remain historical. Keep native effect
+  fixtures used by transport and model tests, frozen-v5 compatibility, and
+  archived study recipes.
 - Registry-only SDK pins and daily-charge timestamp-to-final-coverage conversion.
   Locked source selection and honest reported/lifetime accounting survive.
-- Study-runner duplication: `compare_cohort` owns both paired comparisons,
-  `excluded_recipe` both short horizons, and `ProgressWatch.stop` replaces
-  `_run_child`'s separate `child_stop`. Recipe digests and job commands are unchanged.
+- Study-runner duplication: `compare_cohort` owns both paired comparisons.
 
 `RecordReducer` consumes flat tokens and lengths for every caller, including
 `SharedFactEncoder`; `join_record_rows` owns batch offsets and absent one-based
@@ -126,12 +127,7 @@ sequences without per-record device operations. They are routing, not features.
 Unused continuation modules retain absent gradients: Adam treats None differently
 from zero with existing momentum. No parameters or tensor contracts changed.
 
-`OperatorTraces` captures the first ordinary forward through backward, clipping,
-Adam and numerical health, with separate inference and partial-failure traces.
-Four retained reference inputs and both reducers' CUDA routing gates precede
-profiles. The diagnostic has a 30-minute work bound, one attempt and $0.50 ceiling;
-setup/teardown and other rental costs still need a fresh whole-rental quote.
-Measured CPU/CUDA costs and delivery evidence belong in `vast-host-diagnosis.md`.
+Measured CPU/CUDA costs and delivery evidence are in `vast-host-diagnosis.md`.
 
 ## Budget and dependency authority
 
@@ -168,14 +164,9 @@ Task-local and separate from MTG-213.
 
 ## Surviving execution and acceptance
 
-`experiments/state_representation_gpu.py` owns declaration, admission, the
-`RECOVERY` unit declarations and analysis. Discovery defaults to excluded admission:
-seed 74200, four complete-game updates per arm, 256 streams, CUDA float32, one
-thread. Each learner has 1,800 seconds, 24 GiB host allowance and 80% CUDA
-allocator allowance. Rental work is 75 minutes plus 15 minutes setup, capped at
-$0.50. The longer bound avoids the earlier 600-second finalization failure;
-future startup/progress/cost rules can stop it earlier and retain evidence.
-No current offer or admission pass is implied by these declarations.
+`experiments/state_representation_gpu.py` owns the `RECOVERY` unit declarations
+and analysis; `runs()` needs one unit's frozen allocation file. Each learner has
+a 24 GiB host allowance and 80% CUDA allocator allowance.
 
 The recovery cohort ran one Etude Run per learner and per evaluation, keyed by
 `unit_key` and admitted through the hash-verified ledger; each purchase had to
@@ -197,15 +188,8 @@ intervals must each have both arms' four-seed 95% t gain intervals wholly inside
 plateau in poor play still establishes no competence. Missing seeds, games or
 checkpoints prevent a qualified result. No best-checkpoint selection or shortened horizon.
 
-`ArmThroughput` scales only recurring collection/learning/bookkeeping with the
-update horizon and 50% allowance; initialization/close, exports, outer orchestration,
-setup, evaluation and teardown remain charged. `ProgressWatch` distinguishes
-startup, completed-update progress and phase cost, rejects wrong placement,
-retains its reason, requests stop once and reaps the child group within grace and
-rental bounds. The ordinary collector consumes the executor stop/resource callback.
-Fixture validation establishes these controls, not live enforcement on frozen
-rentals. `ArmEvaluation.score_for` owns complete-row/protocol/recipe admission;
-analyses own their schedules and duplicate detection.
+`ArmEvaluation.score_for` owns complete-row/protocol/recipe admission; analyses
+own their schedules and duplicate detection.
 
 ## Attempt denominator and frozen evidence
 
@@ -295,3 +279,4 @@ traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
 Check: drive-state.json reconciles with the report ($6.747674, no live units, eval/train queues empty) at `2ca9a0d14`; broader validation to gate, scientific judgment to demo/review.
+Compress: study, experiment-discovery, Etude job and model suites pass after the admission cut; `/verify` and full suites remain gate's.

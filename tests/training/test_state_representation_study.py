@@ -114,17 +114,6 @@ def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
         assert stage.learning.iteration_schedule.steps == 256
         assert stage.learning.iteration_schedule.reference_steps == 2048
         assert stage.learning.rates(1)[0] == stage.learning.rates(256)[0] == 1e-4
-    runs = read_job_file(Path(gpu.__file__), ["--revision", "HEAD"])
-    assert len(runs) == 1
-    run = runs[0]
-    config = gpu.StudyJob.model_validate_json(run.job.config or "")
-    assert config.source_bundle.commit
-    assert run.job.experiment == gpu.EXPERIMENT
-    assert run.job.max_attempts == 1
-    assert run.job.max_usd == Decimal("0.50")
-    assert run.job.max_hours == 1.25
-    assert run.job.until == "updates=4"
-    assert gpu.ADMISSION_SEED not in gpu.SEEDS
     assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
 
 
@@ -145,7 +134,7 @@ def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None
 
 
 @pytest.mark.parametrize("exit_code", (0, 7))
-def test_gpu_admission_retains_child_exit(tmp_path: Path, exit_code: int) -> None:
+def test_child_retains_its_exit(tmp_path: Path, exit_code: int) -> None:
     command = [sys.executable, "-c", f"raise SystemExit({exit_code})"]
     if exit_code:
         with pytest.raises(RuntimeError, match="child failed: exit 7"):
@@ -157,7 +146,7 @@ def test_gpu_admission_retains_child_exit(tmp_path: Path, exit_code: int) -> Non
 
 
 @pytest.mark.parametrize("cancelled", (False, True))
-def test_gpu_admission_reaps_child_on_stop(tmp_path: Path, cancelled: bool) -> None:
+def test_child_is_reaped_on_stop(tmp_path: Path, cancelled: bool) -> None:
     stop = tmp_path / "stop"
     if cancelled:
         stop.touch()
@@ -170,7 +159,7 @@ def test_gpu_admission_reaps_child_on_stop(tmp_path: Path, cancelled: bool) -> N
     assert exit_code is not None and exit_code != 0
 
 
-def test_gpu_admission_retains_failed_start(tmp_path: Path) -> None:
+def test_child_retains_failed_start(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         gpu._run_child(
             [str(tmp_path / "missing-worker")],
@@ -180,57 +169,6 @@ def test_gpu_admission_retains_failed_start(tmp_path: Path) -> None:
         )
     receipt = json.loads((tmp_path / "processes.json").read_text())
     assert receipt["exit_codes"] == []
-
-
-def _throughput(*, fixed_seconds: float = 10) -> gpu.ThroughputAdmission:
-    arms = tuple(
-        gpu.ArmThroughput(
-            arm=arm,
-            updates=4,
-            collection_seconds=20,
-            learning_seconds=10,
-            bookkeeping_seconds=2,
-            fixed_seconds=fixed_seconds,
-            export_seconds=5,
-        )
-        for arm in gpu.ARMS
-    )
-    return gpu.ThroughputAdmission(
-        concurrency=1,
-        elapsed_seconds=2 * (37 + fixed_seconds),
-        arms=(arms[0], arms[1]),
-    )
-
-
-def test_throughput_separates_fixed_costs_and_periodic_checkpoints() -> None:
-    measured = _throughput(fixed_seconds=1000)
-    # Eight learners: 256 updates each at 8 recurring seconds/update, with
-    # 50% allowance; 1000 seconds startup each; initial/final export plus
-    # seven intermediate checkpoints bounded by the measured 5-second bundle.
-    expected_seconds = 8 * (256 * 8 * 1.5 + 1000 + 5 * 8) + 900 + 5400 + 120
-    assert measured.cohort_hours() == expected_seconds / 3600
-    assert measured.projected_usd(Decimal("0.25")) == pytest.approx(
-        Decimal(str(expected_seconds / 3600)) * Decimal("0.25")
-    )
-    assert measured.cohort_hours() - _throughput().cohort_hours() == pytest.approx(
-        8 * 990 / 3600
-    )
-    with pytest.raises(ValueError, match="finite and positive"):
-        measured.projected_usd(Decimal("NaN"))
-    with pytest.raises(ValueError):
-        gpu.ThroughputAdmission(
-            concurrency=1, elapsed_seconds=math.inf, arms=measured.arms
-        )
-    with pytest.raises(ValueError, match="both distinct"):
-        gpu.ThroughputAdmission(
-            concurrency=1,
-            elapsed_seconds=2074,
-            arms=(measured.arms[0], measured.arms[0]),
-        )
-    with pytest.raises(ValueError):
-        gpu.ThroughputAdmission.model_validate(
-            {"concurrency": 1, "elapsed_seconds": 320, "updates_per_arm": 4}
-        )
 
 
 def _curve_run() -> TrainingRun:
@@ -272,12 +210,11 @@ def _curve_run() -> TrainingRun:
     )
 
 
-@pytest.mark.parametrize("admission", (False, True))
 @pytest.mark.parametrize("completed", (False, True))
-def test_gpu_training_preserves_admission_boundary(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, admission: bool, completed: bool
+def test_gpu_training_requires_every_declared_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, completed: bool
 ) -> None:
-    seed = gpu.ADMISSION_SEED if admission else gpu.SEEDS[0]
+    seed = gpu.SEEDS[0]
     stop = tmp_path / "stop"
     out = tmp_path / "learner"
 
@@ -296,13 +233,11 @@ def test_gpu_training_preserves_admission_boundary(
         assert directory == out / "training"
         assert stop_path == stop and stop_reserve_seconds == 120
         stage = regime.stages[0]
-        assert stage.updates == (4 if admission else 256)
-        assert regime.wall_seconds == (1800 if admission else 66000)
+        assert stage.updates == 256
+        assert regime.wall_seconds == 66000
         assert stage.execution.wall_seconds == regime.wall_seconds
-        assert checkpoint_updates == (() if admission else gpu.POINTS[1:-1])
-        assert experiment == (
-            f"{gpu.EXPERIMENT}_admission" if admission else gpu.EXPERIMENT
-        )
+        assert checkpoint_updates == gpu.POINTS[1:-1]
+        assert experiment == gpu.EXPERIMENT
         run = _curve_run()
         run.stages[0].updates = stage.updates if completed else stage.updates - 1
         run.status = "completed" if completed else "paused"
@@ -319,15 +254,13 @@ def test_gpu_training_preserves_admission_boundary(
     monkeypatch.setattr(gpu.torch.cuda, "get_device_name", lambda index: "fixture-gpu")
     monkeypatch.setattr(gpu.torch.cuda, "max_memory_reserved", lambda: 1024)
     if completed:
-        gpu.train_arm("typed_pool", seed, out, stop, admission=admission)
+        gpu.train_arm("typed_pool", seed, out, stop)
     else:
-        error = RuntimeError if admission else ValueError
-        with pytest.raises(error, match="incomplete admission|completed training"):
-            gpu.train_arm("typed_pool", seed, out, stop, admission=admission)
+        with pytest.raises(ValueError, match="completed training"):
+            gpu.train_arm("typed_pool", seed, out, stop)
     assert json.loads((out / "device.json").read_text())["device"] == "fixture-gpu"
-    wrong_seed = gpu.SEEDS[0] if admission else gpu.ADMISSION_SEED
     with pytest.raises(ValueError, match="undeclared training seed"):
-        gpu.train_arm("typed_pool", wrong_seed, out, stop, admission=admission)
+        gpu.train_arm("typed_pool", 74200, out, stop)
 
 
 def test_gpu_curve_requires_every_export_and_keeps_exposure() -> None:
@@ -358,120 +291,6 @@ def test_gpu_curve_refuses_failed_or_duplicate_endpoints(failure: str) -> None:
 def test_gpu_heldout_requires_all_seeds() -> None:
     with pytest.raises(ValueError, match="every declared"):
         gpu.compare_heldout([])
-
-
-def _progress(updates: int, active_seconds: float) -> TrainingRun:
-    run = _curve_run()
-    run.status = "running"
-    run.seconds = 10 + active_seconds
-    run.setup_seconds = 10
-    run.stages = [
-        StageRecord(
-            id="self-play",
-            status="running",
-            actual_device="cuda:0",
-            actual_threads=1,
-            updates=updates,
-            games=updates * gpu.STREAMS,
-            collection_seconds=active_seconds * 0.7,
-            learning_seconds=active_seconds * 0.3,
-        )
-    ]
-    return run
-
-
-def _watch(directory: Path, limits: gpu.AdmissionLimits) -> gpu.ProgressWatch:
-    return gpu.ProgressWatch(
-        "typed_pool", directory / "run.json", directory / "child-stop", limits, 0
-    )
-
-
-def test_admission_watchdog_distinguishes_startup_progress_and_cost(
-    tmp_path: Path,
-) -> None:
-    limits = gpu.AdmissionLimits()
-    watch = _watch(tmp_path, limits)
-    assert watch.observe(None, 179) is None
-    assert watch.observe(None, 180) == "startup produced no ready training record"
-    watch = _watch(tmp_path, limits)
-    assert watch.observe(_progress(0, 0), 10) is None
-    assert watch.observe(_progress(1, 40), 50) is None
-    assert watch.observe(_progress(2, 80), 90) is None
-    # A fresh observation alone is not progress; completed updates reset the clock.
-    assert (
-        watch.observe(_progress(2, 80), 90 + limits.progress_seconds)
-        == "no completed update within workload allowance"
-    )
-    expensive = _watch(tmp_path, limits)
-    # One slow first update cannot choose a treatment or trigger the cost rule.
-    assert expensive.observe(_progress(1, 400), 410) is None
-    assert (
-        expensive.observe(_progress(2, 800), 810)
-        == "measured arm exceeds scientific allocation"
-    )
-    for device in ("cpu", None):
-        misplaced = _progress(1, 40)
-        misplaced.stages[0].actual_device = device
-        assert (
-            watch.observe(misplaced, 50)
-            == "training differs from declared CUDA/thread placement"
-        )
-
-
-def test_arm_throughput_keeps_running_phase_costs_and_rejects_wrong_placement() -> None:
-    run = _progress(2, 80)
-    costs = gpu.ArmThroughput.from_run("typed_pool", run, 95)
-    assert costs.recurring_seconds == 80
-    assert costs.fixed_seconds == 15
-    run.stages[0].actual_device = "cpu"
-    with pytest.raises(ValueError, match="CUDA/thread"):
-        gpu.ArmThroughput.from_run("typed_pool", run, 95)
-
-
-def test_supervisor_gives_cancelled_child_time_to_retain_evidence(
-    tmp_path: Path,
-) -> None:
-    stop = tmp_path / "cancel"
-    stop.touch()
-    watch = _watch(tmp_path, gpu.AdmissionLimits())
-    retained = tmp_path / "retained.json"
-    # Bounded sleeping fixture; it performs no training or synthetic load.
-    script = (
-        "from pathlib import Path; import sys,time; "
-        "stop,retained=map(Path,sys.argv[1:]); "
-        "\nfor _ in range(100):\n"
-        " if stop.exists():\n  retained.write_text('saved'); break\n"
-        " time.sleep(0.01)\n"
-    )
-    command = [sys.executable, "-c", script, str(watch.stop), str(retained)]
-    with pytest.raises(RuntimeError, match="cancelled"):
-        gpu._run_child(command, tmp_path, stop, time.time() + 10, watch=watch)
-    assert retained.read_text() == "saved"
-    receipt = json.loads((tmp_path / "processes.json").read_text())
-    assert receipt["exit_codes"] == [0]
-    assert not receipt["forced_termination"]
-
-
-@pytest.mark.parametrize("expired", (False, True))
-def test_supervisor_reaps_child_that_ignores_graceful_stop(
-    tmp_path: Path, expired: bool
-) -> None:
-    stop = tmp_path / "cancel"
-    if not expired:
-        stop.touch()
-    # An expired rental cannot spend the configured grace period waiting.
-    limits = gpu.AdmissionLimits(grace_seconds=120 if expired else 0.01)
-    watch = _watch(tmp_path, limits)
-    with pytest.raises(RuntimeError, match="cancelled or allocation expired"):
-        gpu._run_child(
-            [sys.executable, "-c", "import time; time.sleep(20)"],
-            tmp_path,
-            stop,
-            time.time() - 1 if expired else time.time() + 10,
-            watch=watch,
-        )
-    receipt = json.loads((tmp_path / "processes.json").read_text())
-    assert receipt["forced_termination"] and receipt["exit_codes"][0] != 0
 
 
 # Recovery cohort: amendment binding, unit identity and the evaluation ledger.
@@ -575,6 +394,8 @@ def test_unit_allocation_binds_one_identified_run(tmp_path: Path) -> None:
     assert run.job.inputs == (given,)
     assert (run.job.max_hours, run.job.max_usd) == (1.5, Decimal("0.40"))
     assert run.job.max_attempts == 1
+    assert run.job.experiment == gpu.EXPERIMENT
+    assert spec.source_bundle.commit
     with pytest.raises(ValueError, match="delivered checkpoints"):
         gpu.RecoveryAllocation(unit=unit, max_hours=1, max_usd=Decimal(1))
     with pytest.raises(ValueError, match="delivered checkpoints"):

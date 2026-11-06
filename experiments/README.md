@@ -196,10 +196,10 @@ The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu
 retains four paired CUDA seeds, initialization and periodic evaluation, a
 sustained-plateau criterion, and separate held-out scoring. Its first cohort
 was cancelled before scoring when measured concurrent GPU throughput invalidated
-the allocation budget. `state_representation_gpu.py` defaults to a capped,
-excluded two-arm throughput admission for sequential 256-stream learners;
-science requires an explicit frozen allocation backed by measured affordability.
-Wider batches change optimization; the prospective recipe retains the original
+the allocation budget. `state_representation_gpu.py` declares one recovery unit
+per frozen allocation file; the throughput admission and CUDA operator profiler
+that qualified it ended with the cohort and remain at source `d57c5c9e7`. Wider
+batches change optimization; the prospective recipe retains the original
 complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
 on 2026-11-05 after three of eight learners completed, with no curve or held-out
 endpoint; that record is unchanged. The recovery amendment completed the cohort
