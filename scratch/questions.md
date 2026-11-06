@@ -68,3 +68,6 @@ until launch):
   one helper. Its unknown-run error means analysis and `etude report` need launcher access.
 - **`C5FBA4_PASS_ATTEMPT` names a relaunched pass** (seventh concept review). The same trade,
   against a fresh id from `advance`. Reversible until launch; absent, names are unchanged.
+- **Equal-hours head-to-head after a loss, declared now and built only if needed** (eighth concept
+  review). Implied by "matched updates/compute" once a loss is about as likely as not; the survivor's
+  last export at or before the lost run's hours. Reversible until launch.

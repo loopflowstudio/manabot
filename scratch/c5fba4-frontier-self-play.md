@@ -1,14 +1,14 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
-Status: protocol v1 drafted 2026-11-05 (headless), concept-reviewed seven times through
-2026-11-06. Nothing has launched or spent money. Directions 1–24 are implemented. `frozen()`
+Status: protocol v1 drafted 2026-11-05 (headless), concept-reviewed eight times through
+2026-11-06. Nothing has launched or spent money. Directions 1–25 are implemented. `frozen()`
 passes, so `runtime_world` needed no re-freeze. Brief: Task c5fba4; direction comment 694f4190
 in [direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
 runner `experiments/tla_frontier.py`; analysis `experiments/tla_frontier_analysis.py`; calibration
 `experiments/tla_frontier_calibration.py`; tests `tests/eval/test_tla_frontier.py`. Full text of the
 earlier reviews: `1ef23d800:scratch/c5fba4-frontier-self-play.md`.
 
-Check: `uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_tla_frontier.py -q`: 68 passed on locked 0.2.12 and under the 0.2.14 control client; `frozen()` passes; ruff clean (2026-11-06). Gate owns wider suites.
+Check: `uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_tla_frontier.py -q`: 68 passed on locked 0.2.12, `frozen()` passes and ruff clean (2026-11-06, rerun after direction 25); 68 passed under the 0.2.14 control client at `eeae53b0c`. Gate owns wider suites.
 
 ## Design (as implemented)
 
@@ -217,6 +217,9 @@ Implementation notes (2026-11-06):
 - A rehearsal match stored as failed stays failed, so the attempt recovers a pass that delivered
   nothing or part, never a failed match; that reading fails the gate. The protocol says so.
 - `etude ondemand max cpu32 2` and `etude wait <run>` match the real 0.2.14 `--help`.
+- `read_rehearsal` finds its runs from match receipts, so `pass_usd` omits a pass that stored nothing,
+  the case the attempt recovers. The gate reads no cost, so the protocol names the gap and sends
+  that pass's cost to `etude status`.
 - The endpoint head-to-head's name, `w256 final vs w64 final`, carries no updates. A late delivery
   moving an endpoint would define that name two ways, so Etude would raise `matchup_conflict` and end
   the driver, not merely leave games unread (read from source, not run). A dead pod delivers nothing
@@ -238,6 +241,50 @@ Implementation notes (2026-11-06):
   a local one): 23 needs the Etude change first.
 - A late delivery moves an endpoint after its comparisons played: report the unread games, and give
   the endpoint head-to-head's name its updates so the driver keeps running.
+
+## Eighth concept review (2026-11-06, headless)
+
+Walked the normal path, a lost pod and recovery against the brief and direction 694f4190, looking
+past recovery mechanics to what the experiment can still say. The schedule, gates and recovery hold.
+The checks were not rerun for this review beyond the frontier tests: 68 passed at this worktree.
+Main has not moved, and PR #435 is still open.
+
+One mismatch. The first review kept equal-compute head-to-head at the endpoint only, with equal-hour
+pairs left "if someone later wants" them, and that reasoning assumed both runs finish. The third review
+then estimated a loss over 108 pod-hours at about 47% (1 − exp(−108/170.5), one event, crude). So the
+primary scale reading is absent about as often as present, while the evidence to read equal compute
+after a loss is already stored: every 25-update export, and each checkpoint's wall time, which
+`TrainingPoint.hours` reads. Nothing needs building now, since the comparison can be played after the
+loss. What cannot wait is the rule: a pair chosen after seeing curves is the choice this protocol exists
+to prevent, so it has to be written before scoring. This narrows the first review's decision and does
+not reverse it; `scale` and the runner stay as they are.
+
+### Direction, implemented
+
+25. Add to the protocol's "Lost rental" section, with no code change. If a run ends unfinished, whatever
+    the scores show, one equal-hours head-to-head is played: the lost run's endpoint against the other
+    size's last export at or before the same `TrainingPoint.hours`, on the 16 frozen pairs and four legs,
+    w256 first, read with the same bounds. It is a descriptive secondary reading: `scale` stays absent,
+    and both hours are reported. The pairing never gives the survivor more compute, so the gap favors the
+    lost run, by up to 10.4 hours when w256 is the survivor at the gate speed; say so. If both runs are
+    lost, the earlier-ending run is the one paired. The survivor's export need only be stored, so the
+    game can wait for the survivor's run to pass that hour. It costs one comparison, inside the USD12.
+    Like continuation, this version does not build the path: a small follow-up file plays it through
+    `tla_frontier.play`'s conditions, and its environment is its own, as the rehearsal's is.
+
+### Left alone
+
+- Mid-run equal-hour pairs on the normal path: still the first review's decision. Both heuristic curves
+  and `TrainingPoint.hours` show strength per hour; a reading of more than that wants a `wall_ms` on
+  `ExperimentState`, an Etude proposal.
+- A `hours` clock on checkpoints would let `eval` schedule this pair itself, at the cost of a change to
+  shared training code for a conditional reading.
+- `<store>` is a placeholder through the protocol. Launch names it, like `<frozen>`.
+
+### Counterexample that would reopen this
+
+- A real loss whose survivor export sits too far from the lost run's hours to mean anything: report the
+  gap and leave the reading out rather than move the rule.
 
 ## Proposed wave memory (not written)
 

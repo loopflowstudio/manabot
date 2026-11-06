@@ -139,7 +139,8 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   unproven against a real rental, like the rest of this block.
 
   The reading shows games, invalid games, median and slowest game seconds and the
-  pass's cost. The second launch gate is a rough line like the first: all 128 games
+  cost of the passes that stored a match; a pass that stored none still billed, and
+  its cost comes from `etude status <run>`. The second launch gate is a rough line like the first: all 128 games
   valid, so none killed, and the slowest under 300 seconds, half the limit.
   Otherwise `game_seconds` or the size changes in a new protocol version, before
   any scoring. The policies are nearly fresh, so the reading shows what a pass does
@@ -403,6 +404,23 @@ This version does not build that path, and two limits stand in its way.
 `size_run` admits one run per size, so the new version must read a chain of runs.
 `stage_monitoring` in `experiments/elemental_long.py` needs the parent's
 `run.json`, which a truly dead pod may not have delivered; this is unproven.
+
+If a run ends unfinished, whatever the scores show, one equal-hours head-to-head
+is played: the lost run's endpoint against the other size's last export at or
+before the same `TrainingPoint.hours`, the time since each run's first checkpoint.
+It uses the 16 frozen pairs and four legs, w256 first, and is read with the same
+bounds. If both runs are lost, the earlier-ending run is the one paired. This pair
+is fixed here because one chosen after seeing curves would be chosen by its result.
+
+It is a descriptive secondary reading: `scale` stays absent, and both hours are
+reported. The pairing never gives the survivor more compute, so the gap favors the
+lost run, by up to 10.4 hours when w256 survives at the launch gate's speed.
+
+The survivor's export need only be stored, so the game can wait until its run
+passes that hour. It costs one comparison, inside the USD12. This version does not
+build this path either: a small follow-up file plays it through
+`tla_frontier.play`'s conditions, and its environment is its own, as the
+rehearsal's is.
 
 ## Budget
 
