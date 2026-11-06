@@ -10,6 +10,7 @@ outputs. This guide is the network between them.
 - [What the network does](#what-the-network-does)
 - [Sizes in the TLA pilot](#sizes-in-the-tla-pilot)
 - [Policy inputs](#policy-inputs)
+- [Proposed: state, records, history and memory](#proposed-state-records-history-and-memory)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
 
@@ -239,8 +240,8 @@ complete decision history, and no training benefit has been measured.
 ## Proposed: state, records, history and memory
 
 **Proposed, not accepted and not built.** This section records a contract under
-review. Everything above describes shipped behavior; nothing here changes a
-tensor, model, default or checkpoint.
+review. The rest of this guide describes shipped behavior; nothing here changes
+a tensor, model, default or checkpoint.
 
 ### Recommendation
 
@@ -285,7 +286,9 @@ Unless marked, the anchor shows the rule; it is not a paired-observation proof.
   `ran_and_shaw_copy_ignores_the_sources_status_counters_and_effects`.
 - **Ability loss.** Effective activated-ability order fixes activation and
   payment indices, so losing a grant can remove an action while power,
-  toughness and keywords stay equal.
+  toughness and keywords stay equal. The lost-abilities status alone is paired
+  (`a_creature_that_lost_its_abilities_differs_only_in_v5`, on a creature with
+  no abilities to lose); the action difference is reasoned.
 - **History eviction.** Paired native positions on real Commands fill the
   window with equal rows while their v7 headers differ, and only one record
   survives cleanup:
@@ -355,9 +358,9 @@ is not evidence for any of them:
 - The GPU comparison found no qualified plateau and no pool-versus-GRU
   difference (−1.95 points, 95% [−5.88, +1.98]). It covers v7 on one matchup, so
   it selects no reducer.
-- No paired observation test exists for losing an activated ability, or for a
-  source that leaves and re-enters as the same physical card. Those cases rest
-  on rules anchors and reasoning.
+- No paired observation test shows a lost activated ability removing an action,
+  or a source that leaves and re-enters as the same physical card. Those cases
+  rest on rules anchors and reasoning.
 - Fixed padded capacity against packed variable length is open. V7's effect
   arrays use 31,744 bytes against 12,288 for v6's 256-row facts, and natural
   length distributions have not been gathered.
