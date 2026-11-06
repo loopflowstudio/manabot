@@ -66,6 +66,11 @@ budget and results pointer; this file holds working assumptions and open items.
   vs floor 64). Idle share .637–.650; idle collection bound 771–799 s of 1279–1356 s
   collection (+1087–1193 s learning). Controller died 00:43 (0.2.13 can't parse Vast
   providers); restarted from the 0.2.14 overlay (`/tmp/e07c490 controller run`).
+- Lambda arms launch one seed per launch (`/tmp/07c490w/launch_seeds.sh`): L4 stock
+  rarely covers three at once. Six ghost records filled the 8-machine limit ("it is
+  busy") and resist `etude terminate`; `etude ondemand max 07c490-l4 14` (03:15).
+  .8/.8: 6952e8b1391f (s70201, stopped at 72), ff12bf198bb3, 2e45a87e9de4.
+  Eval pass 1 (elemental-lambda-v1-6860cc47ef30, 07c490-cpu32): 550 matches, 02:42.
 - Ghost `07c490-l4-*` records from refused creates show estimated dollars but no RunPod
   pod exists (`runpodctl pod list` empty); not charged.
 

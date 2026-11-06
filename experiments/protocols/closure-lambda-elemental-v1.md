@@ -145,7 +145,7 @@ and $.84), because Etude refuses a launch whose limit does not cover that; amend
 2026-11-05 before any run started, after the calibration launch was refused for it.
 The table's totals already reserved these amounts. Each arm launches as its own all-or-nothing cohort (MTG-251's queue mode undersized
 windows). Evaluation passes pass their own limits from the experiment files ($1.20 and
-$1.80) inside the line. Ceilings are reservations; an unspent line may cover a failed
+$1.80) inside the line; the lambda pass limit became 2 hours and $2.40 on 2026-11-06 after a refused create pinned the earlier pass identity. Ceilings are reservations; an unspent line may cover a failed
 attempt elsewhere, and the total may not move.
 
 ## Kill criteria

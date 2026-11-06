@@ -571,6 +571,10 @@ def main() -> None:
     results: dict[str, object] = {}
     for study in chosen.studies:
         records = training_records(storage, study.experiment)
+        if not records:
+            # A study stopped before training (its protocol says why) has no arms.
+            results[study.experiment] = {"title": study.title, "runs": []}
+            continue
         scored = scored_runs(storage, study.experiment, chosen.legs)
         result = analyze(study, records, scored)
         result["assembly"] = _assembly_series(records)

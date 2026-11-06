@@ -70,7 +70,7 @@ def runs(
 
 def eval(state: ExperimentState) -> list[Job]:
     return evaluation_jobs(
-        state, "elemental-lambda-v1", ELEMENTAL_PAIRS, hours=1.5, usd=1.8
+        state, "elemental-lambda-v1", ELEMENTAL_PAIRS, hours=2.0, usd=2.4
     )
 
 
