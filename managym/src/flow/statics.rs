@@ -129,6 +129,38 @@ pub(crate) struct DerivedCache {
     /// Indexed by PermanentId, as are the authoritative permanent slots.
     characteristics: Vec<Option<Arc<Characteristics>>>,
     pub(super) trigger_index: Option<Arc<TriggerIndex>>,
+    /// Live `BoardScan`s of this game; a fork starts with none.
+    #[cfg(debug_assertions)]
+    scans: ScanCount,
+}
+
+/// Clones to zero: a `BoardScan` borrows one game and says nothing of its forks.
+#[cfg(debug_assertions)]
+#[derive(Default)]
+struct ScanCount(u32);
+#[cfg(debug_assertions)]
+impl Clone for ScanCount {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+/// One immutable scan of the game. Debug recomputes the cached board on read to
+/// catch a write that advanced no revision. The guard's shared borrow excludes
+/// every such write while it lives, so the board is validated when the scan
+/// begins and its reads skip the repeat. Scans that read the board per source or
+/// per ability would otherwise rebuild it hundreds of times per decision.
+pub(crate) struct BoardScan<'a> {
+    #[cfg(debug_assertions)]
+    game: &'a Game,
+    #[cfg(not(debug_assertions))]
+    game: std::marker::PhantomData<&'a Game>,
+}
+#[cfg(debug_assertions)]
+impl Drop for BoardScan<'_> {
+    fn drop(&mut self) {
+        self.game.derived.borrow_mut().scans.0 -= 1;
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -204,11 +236,27 @@ impl Game {
             },
         }
     }
+    /// Begin an immutable scan; see `BoardScan`. Release builds do nothing.
+    pub(crate) fn board_scan(&self) -> BoardScan<'_> {
+        #[cfg(debug_assertions)]
+        {
+            self.layer_board();
+            self.derived.borrow_mut().scans.0 += 1;
+            BoardScan { game: self }
+        }
+        #[cfg(not(debug_assertions))]
+        BoardScan {
+            game: std::marker::PhantomData,
+        }
+    }
     fn layer_board(&self) -> Arc<LayerBoard> {
         let revisions = self.state.revisions();
         let cached = self.derived.borrow_mut().at(revisions).board.clone();
         if let Some(board) = cached {
-            debug_assert_eq!(*board, self.compute_board(None), "stale layer context");
+            #[cfg(debug_assertions)]
+            if self.derived.borrow().scans.0 == 0 {
+                assert_eq!(*board, self.compute_board(None), "stale layer context");
+            }
             return board;
         }
         let mut sources = std::mem::take(&mut self.derived.borrow_mut().sources);
@@ -757,6 +805,85 @@ mod cache_tests {
         mana::Mana,
         player::PlayerConfig,
     };
+
+    /// A game whose cached board disagrees with its state at the same
+    /// revisions, as a write that advanced no revision would leave it.
+    #[cfg(debug_assertions)]
+    fn with_stale_board(game: &Game) {
+        let board = game.layer_board();
+        game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
+            objects: board.objects.clone(),
+            reads_mana: !board.reads_mana,
+            reads_tapped: board.reads_tapped,
+            dynamic_activations: board.dynamic_activations,
+        }));
+    }
+
+    #[cfg(debug_assertions)]
+    fn scan_fixture() -> Game {
+        let deck: std::collections::BTreeMap<String, usize> = [("Mountain".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        game
+    }
+
+    #[cfg(debug_assertions)]
+    fn rejects_stale_board(read: impl FnOnce()) -> bool {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(read)).is_err_and(|panic| {
+            panic
+                .downcast_ref::<String>()
+                .is_some_and(|m| m.contains("stale"))
+        })
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn a_stale_board_is_rejected_by_a_plain_read_and_by_a_new_scan() {
+        let game = scan_fixture();
+        with_stale_board(&game);
+        assert!(rejects_stale_board(|| {
+            game.layer_board();
+        }));
+        assert!(rejects_stale_board(|| {
+            let _scan = game.board_scan();
+        }));
+        assert_eq!(game.derived.borrow().scans.0, 0);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn validation_resumes_only_when_every_nested_scan_ends() {
+        let game = scan_fixture();
+        let outer = game.board_scan();
+        let inner = game.board_scan();
+        with_stale_board(&game);
+        game.layer_board();
+        drop(inner);
+        game.layer_board();
+        drop(outer);
+        assert!(rejects_stale_board(|| {
+            game.layer_board();
+        }));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn a_fork_taken_during_a_scan_validates_its_own_reads() {
+        let game = scan_fixture();
+        let _scan = game.board_scan();
+        let fork = game.clone();
+        with_stale_board(&fork);
+        assert!(rejects_stale_board(|| {
+            fork.layer_board();
+        }));
+    }
 
     #[test]
     fn mana_revision_reuses_independent_board_but_reprices_dynamic_outputs() {

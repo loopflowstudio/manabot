@@ -13,7 +13,11 @@ default-members = [".", "state", "cards"]
 
 # Agent worktrees build this crate once or twice, then disappear. Keep file and
 # line debugging without retaining a full incremental compiler graph per clone.
+# opt-level 1 keeps debug assertions and overflow checks (both stay on in dev
+# and test) while running the debug suite about 3x faster; `test` inherits it,
+# so local `cargo test`, CI and `maturin develop` share one debug engine.
 [profile.dev]
+opt-level = 1
 debug = 1
 incremental = false
 
