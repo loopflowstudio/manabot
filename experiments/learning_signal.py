@@ -267,10 +267,7 @@ def evaluation_jobs(
     only the rest, so `usd` bounds each pass inside the protocol's evaluation line.
     """
     matchups = tuple(
-        matchup
-        for run in state.runs
-        for matchup in scheduled_matchups(run, design)
-        if not matchup.name.endswith(" u20 vs heuristic")
+        matchup for run in state.runs for matchup in scheduled_matchups(run, design)
     )
     if not matchups:
         return []
