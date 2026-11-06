@@ -11,6 +11,106 @@ Rules leads with playable curated worlds and real search/Study consumers.
 Conformance, fuzzing, benchmarks, and micro-katas are instruments for observed
 ambiguity or safety-critical invariants, not substitute products.
 
+## Standard direction and catalog naming (2026-11-04)
+
+- Jack Heart selected full post-rotation Standard, shared rules/performance
+  foundations first and FDN as the first set closure. The published
+  [roadmap](../../../docs/research/standard-2026-11/milestone.md) at main
+  `1546aae3f` supersedes the earlier Allies/Lessons-only expansion boundary;
+  its sequence and API sketches remain proposals. The [engine principles](../../../managym/PRINCIPLES.md)
+  preserve one authority, observable choices and scoped evidence. Coverage is
+  the renamed engine directory; engine-performance and infrastructure are
+  sibling scopes. No immediate child memory directories existed at this
+  reconciliation; those sibling memories contained no lessons yet.
+- Jack Heart authorized MTG-243 as one reviewable naming PR, followed by
+  measurement and amelioration of its risks. Merge, auto-merge and training
+  experiments remain unauthorized for that Task. Broader roadmap campaigns
+  and MTG-245 methodology do not confer execution authority on engine work.
+- The review-pending implementation (risk reduction `5a57096f2`, combined-proof
+  repair `a643a344b`, upstream integration `bca261295`)
+  shares an immutable name vocabulary and constructs only the chosen effect.
+  Names are public vocabulary, not game objects; optional definition joins
+  carry semantics without inventing unsupported cards. Explicit v8 reserves
+  the complete installed vocabulary independently of configured action slots;
+  fresh v6 and frozen v1–v7 shapes stay unchanged. Default overflow rejects;
+  explicit legacy first-legal behavior is not complete naming support.
+- Distinct action vectors alone do not establish contextual learnability.
+  Equal-rule definitions yielded identical public-state logits until v8 joined
+  name identities into visible object/knowledge inputs. A paired linear-head
+  fit then expressed opposite preferences, retained them under reordering and
+  lost the distinction under closed disclosure. A preceding 16-step Adam probe
+  failed to converge. This proves representability, not learning efficiency or
+  strength. The unreleased v8 binding now includes `public-identity-v1` and
+  rejects earlier previews before loading weights.
+- Legal-row scoring and compact retained action/distribution storage preserve
+  original slots and behavior evidence through both learners and incidents;
+  only selected minibatches expand onto the device. Four controlled observations
+  used 81.8% fewer retained action bytes, but live buffers/logits remain dense.
+  Initial program encoding/backprop dominated measured cost; the later speed
+  pass below addresses it without establishing end-to-end throughput. The
+  928-name fixture mostly adds names without programs, so it cannot stand for
+  928 executable definitions. The
+  original split proofs missed combined native/vector/Academy behavior above
+  512. Jack Heart accepted that repair on November 4 (comment d4db22c5): one
+  controlled native scenario now supplies all paths, including a policy-selected
+  choice above 511 through Academy's WebSocket, scalar replay and vector buffers.
+  This establishes headless consumer agreement, not browser geometry or strength;
+  full acceptance and final-source CI remain outstanding.
+- A representability fixture's solver can fail independently of model capacity.
+  The exported equal-rule feature matrix has rank 2 with exact zero columns;
+  pinned x86 Linux Torch 2.10 CPU `gelsy` reported rank 0, while explicit `gelsd`
+  retained rank 2 and negligible residual. macOS 2.10 and ARM Linux 2.15 did
+  not reproduce the QR failure. Checked SVD repairs this platform-sensitive
+  test without a CPU-load explanation or a claim that SGD converges. Reordered
+  legal-row GEMMs also need float32 tolerance for erased-channel ties while
+  learned-preference thresholds, privacy and execution checks stay strict.
+  Later Linux run `41942374422` passed those solver/learning assertions but
+  rejected bitwise closed-information logits (maximum difference 1.49e-7).
+  The repair checks closed inputs bitwise and bounds outputs with the existing
+  float32 tolerance. A pinned Linux final-layer-only probe did not reproduce
+  the difference, so its exact operation remains unisolated; this is not
+  evidence of CPU load or a privacy leak. Linux run `41951255376` at
+  `b31998cc3` subsequently passed all jobs, including main/long integration
+  and Engine Budget. That validates the repaired baseline, not the later
+  program-encoding optimization.
+- Main `ee85d6fc8` adds opt-in isolated observation-capacity recovery with
+  retained input contracts; default rejection and fatal buffer/payload errors
+  stay intact. The shared writer now returns typed `ObservationWriteError`;
+  ordinary naming scenario writes convert through `AgentError::from` rather
+  than inheriting recovery semantics. The combined source needs its own gate
+  evidence even when pre-sync model/Academy tests passed.
+- Historical capture 3/4 uses schema 7 for read-only validation while live
+  naming uses schema 8/capture 5/hash 16. Compatibility readers preserve old
+  identity and reject new name references under schema 7; they do not admit an
+  old checkpoint to the new world. Public projection changes require explicit
+  comparisons, not rewriting frozen captures to make bytes match.
+- Jack Heart requested a substantial measured speedup on 2026-11-04 (comment
+  86384701), against `b31998cc3`, with complete choices, learning gradients,
+  exact digests and the existing budget preserved. Profiling found packed-GRU
+  slice-gradient allocation traffic dominated naming backward. Packing IDs
+  before embedding and splitting the same GRU into at most 64 recurrent steps
+  bounds that traffic while carrying full hidden-state gradients. It adds no
+  weights, checkpoint buffers, detached cache or policy-input version. The
+  replaced execution remains only as a numerical test reference.
+- Balanced same-host measurements of real observations at width 64 showed
+  roughly 5.8–6.6x lower mixed/naming learning-batch CPU cost and 91% less
+  naming slice-backward allocation traffic. Those are measured batch costs
+  with materialization, loss and backward, not peak RSS, optimizer/update
+  throughput or strength. Width-16 ordinary PPO/damped CPU costs increased;
+  CPU/wall divergence proves some scheduling variation, not a universal gain.
+  The 344 referenced naming programs are distinct from the 928-name vocabulary.
+  GPU and larger batches remain unmeasured. The recurrent loop was later
+  extracted into a helper without changing arithmetic; equivalence checks
+  cover that layout, while archived timing sources retain the earlier layout.
+- Chunking changes floating-point gradient reduction order. The unnormalized
+  whole-catalog float32 oracle failed one input-weight entry despite equal
+  outputs; float64 recomputation reduced maximum error to 2.88e-13. Algebraic
+  value/gradient checks use float64, while actual float32 policy losses retain
+  strict tolerances across both measured widths and sparse/reordered actions.
+  This diagnoses numerical roundoff separately from lost cross-chunk gradients
+  and from CPU load. Raw failures and the rejected dense-bucket prototype stay
+  in the Task's evidence archive; focused equivalence is not full-head acceptance.
+
 ## Learn decisions and current evidence
 
 - On 2026-10-04 Jack Heart authorized autonomous implementation/publication/
@@ -71,10 +171,12 @@ preserves accepted decisions, dated proof limits and source history.
   delivery blockers; do not rewrite them to make the branch green.
   ETU-75 stays open. No trained-challenger admission, missing human tapes,
   strength or runtime-budget result is supplied by synthetic checkpoint tests.
-- Changed rules invalidate compatible-looking old evidence. Preserve frozen
-  receipts and register all 16 seed/seat attempts before scoring the corrected
-  world. Human interaction acceptance and consumer conformance are separate
-  claims. No strength or numeric runtime-budget result follows from this work.
+- Changed Learn rules require new evidence for affected claims. The retained
+  corrected-world protocol registers all 16 seed/seat attempts before scoring;
+  frozen receipts remain intact. Human interaction acceptance and consumer
+  conformance are separate claims. No strength or numeric runtime-budget result
+  follows from this work, and unrelated run conclusions are not automatically
+  invalidated by a defect.
 
 ## Shipped substrate
 
@@ -139,14 +241,46 @@ preserves accepted decisions, dated proof limits and source history.
   throughput comparison correctly and retained a downloadable, adoptable
   artifact. Its search timings and all digests/counts passed; 65 focused
   tests cover the controlled pipeline and recovery paths.
-- Record the candidate before building the reference so an incompatible
-  reference still leaves an adoptable measurement; upload follows in the final
-  always-run step. A controlled reference-build failure proves local adoption
+- Retain a candidate measurement even when the reference fails to build;
+  upload follows in the final always-run step. MTG-243's pending workflow now
+  builds both engines before timing, then records the candidate alone if the
+  reference build failed and still fails the job. This replaces the earlier
+  candidate-timing/build-reference/reference-timing sequence. A controlled
+  reference-build failure proves local adoption
   with the real recording CLI. Hosted transport and adoption after comparison
   failure are proven by run 41552162812; hosted reference-build failure
   remains unexercised. Moving digests, accepting a cost or
   retaining a speedup requires a reason and the candidate's own CI artifact.
   Measure the durable PR head, not the ephemeral merge commit.
+- MTG-243's November 4 failure diagnosis separates scheduling evidence from
+  regression claims. Its fixed candidate/reference/reference/candidate sampler
+  keeps every raw sample and scheduling counters and compares median durations;
+  tolerance stays 10%, digests/counts remain exact and the reference is unchanged.
+  The old CI step failure has no utilization telemetry, so contention is
+  unproven. In the pre-sync local pair, step throughput and total search passed
+  but worst reply failed (4.290 s versus a 2.399 s limit). CPU/wall divergence
+  and more context switches show scheduling contributed to variation, without
+  per-reply attribution of the full spike. Reference process-launch delays did
+  not enter the timed step loop. Neither noise nor ordering balance clears a
+  failed budget, proves a naming-only cost, or justifies retrying until green.
+  Subsequent Linux run `41942374422` at `bca261295` passed the unchanged budget:
+  worst reply +5.1%, total search +4.8%, time/step +8.0%, with exact digests.
+  Both orders had consistent process CPU and wall durations, so scheduling
+  does not explain that repeatable within-budget cost. The comparison includes
+  engine changes since reference `ea316ff14`, not naming alone. It neither
+  explains the earlier failures nor certifies later source; final-source CI
+  remains necessary. Detailed raw evidence and limits remain in MTG-243's plan,
+  `.lf/logs/naming-budget-paired/` and `.lf/logs/naming-budget-final-linux/`.
+- The later MTG-243 speed pass supplies an unchanged-binary native control,
+  not a native optimization: hashes, decision/search digests and counts match,
+  but median worst reply still failed the unchanged threshold (2.977 to
+  3.3495 seconds). Identical executable bytes rule out a code regression in
+  that control. CPU/wall divergence and switches identify scheduling variation
+  without explaining every outlier or old different-source failures. No retry
+  or baseline/tolerance change cleared it. Native profiles pointed into
+  stabilization, action generation and active MTG-241/242/244 ownership;
+  speculative cache changes were not folded into the learner speedup. Current
+  source still needs its own Linux budget result and interactive review.
 - Main `51fbacbbf` subsequently merged MTG-236's derived-state revisions,
   indexed records and cache-carrying clones. Run 41555845634 (2026-11-03 UTC)
   measured that engine at `4b5e9c0e4` against `88dc8c1ad` on one runner:
@@ -199,8 +333,9 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Durable design decisions
 
-- The destination is the creator's selected decks and matchups, not general
-  Magic or Commander support.
+- Coverage follows Jack Heart's selected scope: the November 4 Standard
+  direction broadens the earlier selected-deck boundary, without implying
+  arbitrary Magic formats or Commander support.
 - Steal Phase's invariants, not its shapes: incarnation and LKI, typed meaning,
   proposed-event replacement flow, explicit legal interaction, and viewer-safe
   projection.

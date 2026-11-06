@@ -26,8 +26,8 @@ def _agent(seed: int, film: bool) -> ActorCritic:
 def test_disabled_film_preserves_serialized_spec() -> None:
     assert "policy_film" not in ModelConfig(**SPEC).model_dump()
     assert ModelConfig(**SPEC, policy_film=True).model_dump()["policy_film"] is True
-    with pytest.raises(ValueError, match="compound"):
-        ModelConfig(compound_decisions=True, policy_film=True)
+    with pytest.raises(ValueError, match="no longer executable"):
+        ModelConfig.model_validate({"compound_decisions": True, "policy_film": True})
 
 
 def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:

@@ -1536,27 +1536,12 @@ impl Game {
                 None
             }
             Effect::NameAndExileFromTargetPlayer { count } => {
-                // Every name a deck may hold; names are public knowledge.
-                let names: std::collections::BTreeSet<String> = default_content_pack()
-                    .definition_entries()
-                    .filter(|(id, definition)| {
-                        !definition.is_token
-                            && (!definition.key.is_empty()
-                                || default_content_pack().front_face(*id).is_some())
-                    })
-                    .map(|(_, definition)| definition.name.clone())
-                    .collect();
-                Some(Decision::Modal {
+                let names = default_content_pack().name_candidates();
+                Some(Decision::NameCard {
+                    scope: names.root(),
+                    names,
                     player: frame.controller,
-                    modes: names
-                        .into_iter()
-                        .map(|name| {
-                            vec![Effect::ExileNamed {
-                                name,
-                                count: *count,
-                            }]
-                        })
-                        .collect(),
+                    count: *count,
                 })
             }
             Effect::ExileNamed { name, count } => {

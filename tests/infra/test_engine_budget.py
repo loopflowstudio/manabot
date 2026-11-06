@@ -349,27 +349,171 @@ def test_workflow_comparison_propagates_failure_through_tee(
 
 @pytest.mark.parametrize("side", ["candidate", "reference"])
 @pytest.mark.parametrize("benchmark", ["bench_steps", "bench_search"])
-def test_workflow_benchmark_failure_survives_tee(
+def test_workflow_benchmark_failure_retains_raw_output(
     tmp_path: Path, side: str, benchmark: str
 ) -> None:
-    candidate = "managym" if side == "candidate" else "other/managym"
-    for name in ("bench_steps", "bench_search"):
-        _executable(
-            tmp_path / candidate / "target/release/examples" / name,
-            f"echo '{name}: controlled output'\nexit {17 if name == benchmark else 0}",
-        )
-
-    result = _workflow_run(f"Run the {side}", tmp_path, CANDIDATE=candidate)
-
-    assert result.returncode == 17, result.stdout + result.stderr
-    artifact = tmp_path / ".cache/engine-budget"
-    if side == "reference":
-        artifact /= "reference"
-    assert (artifact / f"{benchmark}.jsonl").read_text() == (
-        f"{benchmark}: controlled output\n"
+    fixture = _write_run(tmp_path / "fixture")
+    (tmp_path / "scripts").mkdir()
+    shutil.copy2(SCRIPT, tmp_path / "scripts/engine_budget.py")
+    for role, tree in (("candidate", "managym"), ("reference", "other/managym")):
+        for name in ("bench_steps", "bench_search"):
+            failure = role == side and name == benchmark
+            _executable(
+                tmp_path / tree / "target/release/examples" / name,
+                f"cat {shlex.quote(str(fixture / f'{name}.jsonl'))}\nexit {17 if failure else 0}",
+            )
+    result = _workflow_run(
+        "Run the paired benchmarks",
+        tmp_path,
+        CANDIDATE="managym",
+        MEASURE="",
+        REFERENCE_BUILD="success",
     )
+    assert result.returncode == 17, result.stdout + result.stderr
+    ordinal = 0 if side == "candidate" else 1
+    artifact = tmp_path / ".cache/engine-budget"
+    raw = artifact / "samples" / f"{ordinal}-{side}"
+    assert (raw / f"{benchmark}.jsonl").read_text() == (
+        fixture / f"{benchmark}.jsonl"
+    ).read_text()
+    evidence = json.loads((artifact / "sampling.json").read_text())
+    assert evidence["samples"][-1]["exit_code"] == 17
     if benchmark == "bench_steps":
-        assert not (artifact / "bench_search.jsonl").exists()
+        assert not (raw / "bench_search.jsonl").exists()
+    assert "if: always()" in _workflow_step("Record the measurement")
+    if side == "reference":
+        binaries = tmp_path / "metadata-bin"
+        _executable(binaries / "git", "echo " + "a" * 40)
+        _executable(binaries / "lscpu", "echo 'Model name: controlled CPU'")
+        _executable(binaries / "nproc", "echo 4")
+        recorded = _workflow_run(
+            "Record the measurement",
+            tmp_path,
+            PATH=f"{binaries}{os.pathsep}{os.environ['PATH']}",
+            CANDIDATE="managym",
+            RUN_URL="https://example.test/run",
+            RUNNER_OS="Linux",
+        )
+        assert recorded.returncode == 0, recorded.stderr
+        assert (artifact / "measurement.json").exists()
+
+
+def test_paired_sampling_retains_both_orders_and_rejects_a_changed_digest(
+    tmp_path: Path,
+) -> None:
+    candidate = _write_run(tmp_path / "candidate", scale=1.2)
+    reference = _write_run(tmp_path / "reference")
+    for side, source in (("candidate", candidate), ("reference", reference)):
+        for name in ("bench_steps", "bench_search"):
+            _executable(
+                tmp_path / "bin" / side / name,
+                f"cat {shlex.quote(str(source / f'{name}.jsonl'))}",
+            )
+    artifact = tmp_path / "artifact"
+    code, output = _run(
+        "sample",
+        "--candidate",
+        tmp_path / "bin/candidate",
+        "--reference",
+        tmp_path / "bin/reference",
+        "--artifact",
+        artifact,
+    )
+    assert code == 0, output
+    evidence = json.loads((artifact / "sampling.json").read_text())
+    assert evidence["order"] == ["candidate", "reference", "reference", "candidate"]
+    assert len(evidence["samples"]) == 8
+    assert all("involuntary_switches" in sample for sample in evidence["samples"])
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(BASE))
+    code, output = _run(
+        "compare",
+        "--artifact",
+        artifact,
+        "--reference",
+        artifact / "reference",
+        "--baseline",
+        baseline,
+    )
+    assert code == 1 and "FAIL: 3 check(s)" in output
+    retained = (artifact / "sampling.json").read_bytes()
+    code, output = _run(
+        "sample",
+        "--candidate",
+        tmp_path / "bin/candidate",
+        "--reference",
+        tmp_path / "bin/reference",
+        "--artifact",
+        artifact,
+    )
+    assert code != 0 and "fresh artifact directory" in output
+    assert (artifact / "sampling.json").read_bytes() == retained
+    # A differing second sample cannot disappear behind averaging.
+    changed = _write_run(tmp_path / "changed", steps_digest=45)
+    _executable(
+        tmp_path / "bin/candidate/bench_steps",
+        f"if [ -f {shlex.quote(str(tmp_path / 'seen'))} ]; then cat {shlex.quote(str(changed / 'bench_steps.jsonl'))}; "
+        f"else touch {shlex.quote(str(tmp_path / 'seen'))}; cat {shlex.quote(str(candidate / 'bench_steps.jsonl'))}; fi",
+    )
+    code, output = _run(
+        "sample",
+        "--candidate",
+        tmp_path / "bin/candidate",
+        "--reference",
+        tmp_path / "bin/reference",
+        "--artifact",
+        tmp_path / "changed-artifact",
+    )
+    assert code != 0 and "disagree on workload or digest" in output
+
+
+def test_order_balanced_sampling_uses_both_durations(tmp_path: Path) -> None:
+    for side, scales in (("candidate", (1.2, 0.8)), ("reference", (0.9, 1.1))):
+        sources = [
+            _write_run(tmp_path / f"{side}-{i}", scale=scale)
+            for i, scale in enumerate(scales)
+        ]
+        for name in ("bench_steps", "bench_search"):
+            seen = shlex.quote(str(tmp_path / f"{side}-{name}-seen"))
+            first, second = [
+                shlex.quote(str(source / f"{name}.jsonl")) for source in sources
+            ]
+            _executable(
+                tmp_path / "bin" / side / name,
+                f"if [ -f {seen} ]; then cat {second}; else touch {seen}; cat {first}; fi",
+            )
+    artifact = tmp_path / "artifact"
+    code, output = _run(
+        "sample",
+        "--candidate",
+        tmp_path / "bin/candidate",
+        "--reference",
+        tmp_path / "bin/reference",
+        "--artifact",
+        artifact,
+    )
+    assert code == 0, output
+    for directory in (artifact, artifact / "reference"):
+        steps = json.loads((directory / "bench_steps.jsonl").read_text())
+        # Benchmark rates are published to 0.1/s before conversion to durations.
+        assert steps["steps_per_s"] == pytest.approx(5000, abs=0.1)
+        seeds = [
+            json.loads(line)
+            for line in (directory / "bench_search.jsonl").read_text().splitlines()
+        ]
+        assert sum(seed["total_s"] for seed in seeds) == pytest.approx(300)
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(BASE))
+    code, output = _run(
+        "compare",
+        "--artifact",
+        artifact,
+        "--reference",
+        artifact / "reference",
+        "--baseline",
+        baseline,
+    )
+    assert code == 0, output
 
 
 def test_reference_build_failure_leaves_an_adoptable_candidate(tmp_path: Path) -> None:
@@ -379,6 +523,8 @@ def test_reference_build_failure_leaves_an_adoptable_candidate(tmp_path: Path) -
     GitHub's artifact transport itself still requires PR-path verification.
     """
     fixture = _write_run(tmp_path / "fixture", scale=1.2)
+    (tmp_path / "scripts").mkdir()
+    shutil.copy2(SCRIPT, tmp_path / "scripts/engine_budget.py")
     for name in ("bench_steps", "bench_search"):
         _executable(
             tmp_path / "managym/target/release/examples" / name,
@@ -401,18 +547,23 @@ def test_reference_build_failure_leaves_an_adoptable_candidate(tmp_path: Path) -
         "CANDIDATE": "managym",
         "RUN_URL": "https://github.com/loopflowstudio/manabot/actions/runs/1",
         "RUNNER_OS": "Linux",
+        "MEASURE": "",
+        "REFERENCE_BUILD": "failure",
     }
-    # Use source order so moving the reference build before recording breaks
-    # recovery. After a failed run, ordinary subsequent Actions steps are skipped.
+    # Follow source order and the reference build's explicit continue-on-error.
+    # Its failure is enforced only after the candidate recording is retained.
     names = re.findall(r"^      - name: (.+)$", WORKFLOW.read_text(), re.MULTILINE)
     for name in names[names.index("Build the candidate benchmarks") :]:
         if name == "Upload the measurement":
             pytest.fail("The controlled reference failure did not occur")
         result = _workflow_run(name, tmp_path, **environment)
         if result.returncode:
-            assert name == "Build the reference benchmarks", result.stderr
-            assert result.returncode == 42
-            assert "controlled reference build failure" in result.stderr
+            if name == "Build the reference benchmarks":
+                assert result.returncode == 42
+                assert "continue-on-error: true" in _workflow_step(name)
+                continue
+            assert name == "Require the reference build", result.stderr
+            assert result.returncode == 1
             break
     upload = _workflow_step("Upload the measurement")
     assert "if: always()" in upload

@@ -92,15 +92,19 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     assert run.selected_artifact == run.stages[-1].artifacts["raw"]
 
 
-def test_compound_opponent_is_rejected_before_training(tmp_path: Path) -> None:
+def test_removed_compound_opponent_is_rejected_before_training(
+    tmp_path: Path,
+) -> None:
     space = ObservationSpace()
-    opponent = ActorCritic(
-        space, ModelConfig(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
-    )
+    opponent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     path = tmp_path / "compound.pt"
     save_checkpoint(
         opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
+    # A historical compound checkpoint differs from a flat one in its hypers.
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    payload["hypers"]["agent_hypers"]["compound_decisions"] = True
+    torch.save(payload, path)
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(ValueError, match="compound opponent submissions"):
+        with pytest.raises(ValueError, match="no longer executable"):
             execute_regime(_regime(path), 41, tmp_path / "run", store)

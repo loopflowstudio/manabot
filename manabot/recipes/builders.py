@@ -226,7 +226,7 @@ def with_capacity(
     """Select delivered width/depth/head fields without changing information inputs.
 
     Omission preserves the baseline expansion; None restores heads × width.
-    Invalid head divisibility and compound combinations fail ordinary ModelConfig validation.
+    Invalid head divisibility fails ordinary ModelConfig validation.
     """
     expansion = (
         {}

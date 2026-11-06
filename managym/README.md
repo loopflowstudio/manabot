@@ -68,6 +68,19 @@ Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 frozen per-holder fact projection, while v7 local facts exclude active effects.
 Projection never mutates or semantically coalesces the engine’s records.
 
+Catalog naming uses `Decision::NameCard` over a shared immutable `NameVocabulary`.
+The catalog builds sorted real names once, including back faces and excluding
+tokens and rules fixtures. Decisions/forks share that allocation; canonical state
+records its digest. A decision holds a `NameScope`; a scope over
+`NAME_BRANCHING` (64) names offers a deterministic balanced partition into
+contiguous groups, and choosing one only narrows the scope. Selecting a name
+constructs one `ExileNamed` effect, then enters the existing private search
+continuation. Public names and optional learning definition references are not
+in-game card objects or deck admission. Explicit policy input v9 carries name
+joins and group spans in `name_candidates[A,4]` at ordinary action capacity,
+beside v8's layer layout; v1–v8 layouts and fresh v6 defaults are frozen.
+See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
+
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
 Repeated specs in separate clauses may choose the same object. A resolving
@@ -242,12 +255,12 @@ still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v4: the schema-7 semantic Observation, shared native continuation frames, bound public card
+v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
 `DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;
-`SEMANTIC_DECISION_VERSION` owns embedded schema 7. Historical captures retain
+`SEMANTIC_DECISION_VERSION` owns embedded schema 8. Historical captures retain
 their original schema; w14 deliberately changes the current action contract.
 
 The opaque native capture binds an Env and reset generation. Use
@@ -264,7 +277,7 @@ mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
-portable schema-7 viewer JSON is validated by the native observation types.
+portable schema-8 viewer JSON is validated by the native observation types.
 
 `Game::card_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's

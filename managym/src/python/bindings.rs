@@ -102,6 +102,17 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
+    if config.policy_input_version >= 9 {
+        dict.set_item(
+            "name_candidates",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.name_candidates,
+                &[config.max_actions, config.name_dim()],
+            )?,
+        )?;
+    }
     if config.policy_input_version >= 7 {
         for (name, values, shape) in [
             (
@@ -2072,6 +2083,13 @@ pub struct PyAction {
     #[pyo3(get, set)]
     pub mode_index: Option<usize>,
     #[pyo3(get, set)]
+    pub name_definition: Option<u32>,
+    #[pyo3(get, set)]
+    pub name_index: Option<usize>,
+    /// First and last vocabulary rows of a naming group choice.
+    #[pyo3(get, set)]
+    pub name_group: Option<[usize; 2]>,
+    #[pyo3(get, set)]
     pub ability_index: Option<usize>,
     #[pyo3(get)]
     pub continuation_index: Option<usize>,
@@ -2183,6 +2201,9 @@ impl From<ActionOption> for PyAction {
             declared: value.declared,
             description: value.description,
             mode_index: value.mode_index,
+            name_definition: value.name_definition,
+            name_index: value.name_index,
+            name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
         }
@@ -2198,6 +2219,9 @@ impl From<PyAction> for ActionOption {
             declared: value.declared,
             description: value.description,
             mode_index: value.mode_index,
+            name_definition: value.name_definition,
+            name_index: value.name_index,
+            name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
         }
@@ -3960,8 +3984,20 @@ impl PyEnv {
     // FOR TEST AND MEASUREMENT HARNESSES ONLY — they mutate state directly,
     // bypassing the rules engine (no events, no triggers, no costs). Used by
     // manabot/verify/competency.py to construct scored mid-game positions.
-    // Inject at a priority decision, then call scenario_refresh() once.
+    // Priority injections need scenario_refresh() once. The naming fixture
+    // instead requires a pending name decision and republishes it directly.
     // ------------------------------------------------------------------
+
+    /// Scenario harness only: install the checked-in large naming vocabulary.
+    fn scenario_naming_vocabulary(&self) -> PyResult<Vec<crate::cards::names::NameCandidate>> {
+        self.reject_guarded_mutation("scenario_naming_vocabulary")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .scenario_naming_vocabulary()
+            .map(|names| names.iter().cloned().collect())
+            .map_err(map_agent_err)
+    }
 
     /// Scenario harness: set a player's life total directly.
     fn scenario_set_life(&self, player: usize, life: i32) -> PyResult<()> {
@@ -4174,7 +4210,7 @@ impl PyEnv {
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=8) {
+        if !matches!(policy_input_version, 1..=9) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
@@ -4236,6 +4272,43 @@ fn authored_setup(name: &str) -> PyResult<&'static crate::cards::setups::Authore
 #[pyfunction]
 fn unsupported_cards(names: Vec<String>) -> Vec<String> {
     crate::world::unsupported_cards(names.iter().map(String::as_str))
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl crate::cards::names::NameCandidate {
+    #[new]
+    #[pyo3(signature = (name, definition=None))]
+    fn py_new(name: String, definition: Option<u32>) -> PyResult<Self> {
+        if name.is_empty() {
+            return Err(PyValueError::new_err("empty card name"));
+        }
+        Ok(Self {
+            name,
+            definition: definition.map(crate::state::card::CardDefId),
+        })
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[getter]
+    fn definition(&self) -> Option<u32> {
+        self.definition.map(|id| id.0)
+    }
+}
+
+/// Public naming vocabulary in Command order, with learning definition joins.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn naming_catalog() -> Vec<crate::cards::names::NameCandidate> {
+    crate::cards::content_pack::default_content_pack()
+        .name_candidates()
+        .iter()
+        .cloned()
+        .collect()
 }
 
 /// Learning tokens for every catalog definition, derived from the engine's card
@@ -4406,23 +4479,44 @@ fn parse_continuation_frames_json(
 }
 
 #[cfg(feature = "python")]
-#[pyfunction]
-fn validate_observation_json(text: &str) -> PyResult<()> {
+#[pyfunction(signature = (text, *, schema_version=crate::decision::SEMANTIC_DECISION_VERSION))]
+fn validate_observation_json(text: &str, schema_version: u16) -> PyResult<()> {
+    // Historical capture readers explicitly select 7. Live readers keep the
+    // current default; validation grants no origin or execution authority.
+    if !matches!(
+        schema_version,
+        7 | crate::decision::SEMANTIC_DECISION_VERSION
+    ) {
+        return Err(PyValueError::new_err(
+            "unsupported semantic observation schema",
+        ));
+    }
     let value: serde_json::Value =
         serde_json::from_str(text).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let observation: crate::decision::Observation =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if serde_json::to_value(&observation).unwrap() != value
-        || observation.identity.schema_version != crate::decision::SEMANTIC_DECISION_VERSION
+        || observation.identity.schema_version != schema_version
         || observation
             .decision
             .as_ref()
-            .is_some_and(|frame| frame.schema_version != crate::decision::SEMANTIC_DECISION_VERSION)
+            .is_some_and(|frame| frame.schema_version != schema_version)
     {
         return Err(PyValueError::new_err("noncanonical semantic observation"));
     }
-    crate::agent::observation_json::parse(&observation.viewer_state.to_string())
+    let viewer = crate::agent::observation_json::parse(&observation.viewer_state.to_string())
         .map_err(PyValueError::new_err)?;
+    if schema_version == 7
+        && viewer.action_space.actions.iter().any(|action| {
+            action.name_index.is_some()
+                || action.name_definition.is_some()
+                || action.name_group.is_some()
+        })
+    {
+        return Err(PyValueError::new_err(
+            "schema 7 has no public name references",
+        ));
+    }
     Ok(())
 }
 
@@ -4465,6 +4559,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         "CARD_DEFINITION_COUNT",
         crate::cards::content_pack::default_content_pack().len(),
     )?;
+    m.add("NAME_BRANCHING", crate::cards::names::NAME_BRANCHING)?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
 
     m.add_class::<ZoneEnum>()?;
@@ -4485,6 +4580,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(world_identity, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(naming_catalog, m)?)?;
+    m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
     m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;

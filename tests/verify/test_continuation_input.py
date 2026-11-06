@@ -338,3 +338,16 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     batch["actions"][0, 0, -2] = 64
     with pytest.raises(ValueError, match="reference has no frame"):
         agent(batch)
+
+
+def test_retained_capture_schema_cannot_admit_current_name_references() -> None:
+    payload = _eligibility_evidence()[0].capture
+    payload["observation"]["viewer_state"]["action_space"]["actions"][0].update(
+        name_index=0, name_definition=0
+    )
+    with pytest.raises(ValueError):
+        DecisionInput.model_validate_json(json.dumps(payload))
+    fresh = _eligibility_evidence()[0].capture
+    fresh["capture_version"] = 5
+    with pytest.raises(ValueError, match="noncanonical semantic observation"):
+        DecisionInput.model_validate_json(json.dumps(fresh))

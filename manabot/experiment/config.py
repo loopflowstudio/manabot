@@ -270,10 +270,8 @@ def _fields(prefix: Path, model: BaseModel, source: str) -> list[_Write]:
     values = _object(model, explicit=True)
     # Compatibility defaults may be omitted from saved files, but an explicit
     # False remains an authored override (including switching a treatment off).
-    if isinstance(model, ModelConfig):
-        for field in ("compound_decisions", "recent_events"):
-            if field in model.model_fields_set:
-                values[field] = getattr(model, field)
+    if isinstance(model, ModelConfig) and "recent_events" in model.model_fields_set:
+        values["recent_events"] = model.recent_events
     return [_Write((*prefix, key), value, source) for key, value in values.items()]
 
 
@@ -479,7 +477,6 @@ class Experiment:
                 effective = _object(resolved)
                 agent = effective["agent"]
                 assert isinstance(agent, dict)
-                agent["compound_decisions"] = resolved.agent.compound_decisions
                 if any(write.path == ("agent", "recent_events") for write in writes):
                     agent["recent_events"] = resolved.agent.recent_events
                     observation = effective["observation"]
