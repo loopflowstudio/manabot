@@ -214,6 +214,7 @@ impl Game {
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
+        let _scan = self.board_scan();
         let mut actions: Vec<Action> = self
             .priority_candidate_cards(player)
             .filter_map(|card| self.priority_action_for_card(player, card))
