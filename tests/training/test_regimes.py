@@ -24,7 +24,7 @@ from manabot.training.learning.selection import selected_rows
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
-from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
@@ -133,7 +133,9 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
         logits, values = agent({k: torch.as_tensor(v) for k, v in obs.items()})
         probs = logits.softmax(-1).numpy()
     batch = RolloutBatch(
-        obs={k: v[:, None] for k, v in obs.items() if k not in ACTION_FIELDS},
+        recorded=RecordedObservations(
+            {k: v for k, v in obs.items() if k not in ACTION_FIELDS}, np.arange(2)
+        ),
         actions=np.zeros((2, 1), dtype=np.int64),
         logprobs=np.log(probs[:, 0, None]),
         rewards=np.array([[0.0], [1.0]], dtype=np.float32),

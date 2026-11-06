@@ -73,6 +73,13 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     batch = first.collect(agent, 128)
     assert first.stats.games > 0
     assert first._env.current_matchup_indices() != initial_pairs
+    for match, players in zip(
+        first.stream_matches, first._env.current_player_configs(), strict=True
+    ):
+        assert (match.hero_deck, match.villain_deck) == (
+            players[0].decklist,
+            players[1].decklist,
+        )
     exposure = first.stats.exposure
     assert (
         sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
@@ -140,8 +147,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     restored.restore(first.snapshot(), lambda: None)
     assert first._self_play_decks == restored._self_play_decks
     left, right = first.collect(agent, 64), restored.collect(agent, 64)
-    for key in left.obs:
-        np.testing.assert_array_equal(left.obs[key], right.obs[key])
+    expected, actual = left.ordered_obs(), right.ordered_obs()
+    for key in expected:
+        np.testing.assert_array_equal(expected[key], actual[key])
     np.testing.assert_array_equal(left.actions, right.actions)
     np.testing.assert_array_equal(left.rewards, right.rewards)
     assert first.stats.exposure == restored.stats.exposure

@@ -174,8 +174,10 @@ class OptimizerHealth:
     def _optimize(self, parameters: list[nn.Parameter], measured: bool) -> None:
         before = [p.detach().clone() for p in parameters] if measured else []
         self.optimizer.step()
-        finite = torch.stack([torch.isfinite(p).all() for p in parameters]).all()
-        if not finite:
+        # One flat read: per-tensor checks cost two launches per parameter tensor.
+        if not torch.isfinite(
+            torch.cat([p.detach().flatten() for p in parameters])
+        ).all():
             raise NumericalError(
                 "nonfinite_parameters_after_step",
                 {f"parameter/{name}": p for name, p in self.model.named_parameters()},

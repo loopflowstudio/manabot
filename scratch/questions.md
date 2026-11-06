@@ -58,3 +58,7 @@ v8/v9 world omission reading hashed. Kept: a pre-branch v8/v9 checkpoint loads
 hashed and is rejected loudly against a catalog regime; none is frozen here.
 
 No open product choice.
+
+Sync 2026-11-06: main `dc8512bec` carries the merged b015d5 (training
+update time) and earlier MTG-243 notes in this file, retained at
+`dc8512bec:scratch/questions.md`; they confer nothing on this Task.
