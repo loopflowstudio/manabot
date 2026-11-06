@@ -129,3 +129,9 @@ the $25; protocol amendments record it. Exact quota's future stays Jack Heart's.
   `recover_capacity`, which exact quota rejects.
 - RunPod pod billing omits CPU pods; L4 host speed is bimodal (~2×), so wall and dollar
   comparisons across arms are confounded.
+- Local `test_game_errors.py::test_resource_limit_receipt_replays_its_retained_encoding_boundary`
+  (3 cases) returns `binding_mismatch` against the retained TLA fixture frame with this
+  checkout's extension, at base f6f171d34 as well; the branch changes no Rust and main's CI
+  passed at c59aeee0e. Treated as a local-extension mismatch; CI owns the check.
+
+Check (realign 2026-11-06): `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_batch_closure.py tests/training/test_elemental_closure_lambda.py -q` → 66 passed, 3 failed (local-extension replay cases above); `manabot.data publish experiments/data/closure-lambda-elemental-v1` → 0 manifest entries changed.
