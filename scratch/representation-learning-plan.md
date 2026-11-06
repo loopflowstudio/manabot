@@ -1,215 +1,69 @@
 # V7 representation learning — Task 5da5f4
 
-## Latest direction — recovery cohort, routed to implement
+## Current state — recovery cohort complete (2026-11-05 22:29 UTC)
 
 Jack Heart, 2026-11-05: "can we schedule soem evals in paralell with the
-additional training". This selects option A below and supersedes the
-failure-only/no-survivor-scoring stop for a prospectively amended recovery
-cohort, within the original $25. Implement and execute it; do not launch another
-Graph. Merging PR84 or the study is **not** approved.
+additional training" selected recovery option A (keep the three completed
+learners, restart pool/74212 from initialization on its seed, train the rest,
+evaluate alongside training) within the original $25. Merging Etude PR84 or the
+study is **not** approved.
 
-- Preserve the three completed learners and the failed attempt; the original
-  protocol stays immutable. Train the five missing learners, restarting
-  pool/74212 from initialization on its original seed.
-- Before any scoring, freeze the amendment, retained-run admission and unchanged
-  seeds, horizon, evaluator and plateau criteria. Interim scores select no
-  treatment, retry, horizon or checkpoint; partial curves are labelled descriptive.
-- Dispatch independent CPU evaluation jobs from durable checkpoints alongside the
-  GPU learner, with bounded resources that avoid GPU contention. Require fresh
-  actual-runtime/world compatibility and replay validation.
-- Replace `evaluate_arm`'s hardcoded `concurrent_activity`, which claims all
-  training finished. Persist each evaluation and training unit incrementally with
-  hashes and idempotent job identity; do not wait for all eight learners.
-- Use the launcher liveness repair before another rental. SDK repair is authorized;
-  a tested exact control-client source pin may avoid changing frozen learner code.
-  Expose any real compatibility or approval dependency rather than assuming merge.
-- Fresh quotes and all concurrent commitments must fit the remaining allowance.
-  Reusable interruption recovery stays with Etude `ff3d48`.
+**Done.** Amendment frozen at `051d51b50` before any scoring; units ran from
+`de65a1600` (`RECOVERY` SHA256 `a0383ac7…f86f7be`, `SCORING` unchanged). All
+eight learners trained (256 updates × 256 games each) and all 80 endpoints were
+scored with 11,264/11,264 games replayed. The frozen analysis found **no
+qualified plateau** (one of six final-window intervals within ±5) and held-out
+GRU minus pool **−1.95 points [−5.88, +1.98]**: no advantage or equivalence.
+`mtg-249-gpu-report.md` owns the result; the protocol's **Recovery cohort
+result** records it. Evidence is manifest-published under
+`experiments/data/state-representation-gpu-5da5f4/recovery-20261105/`.
 
-**Status.** Built at `c8361c675`: `RECOVERY` and the protocol's recovery amendment
-(frozen before any scoring), per-unit Runs with `unit_key` identity, the
-hash-verified ledger, and per-job `concurrent_activity`. `scientific_cohort`,
-`ScientificAllocation` and `evaluate_arm` are gone. Local operations live in
-`.runs/representation/recovery/`: `plan_*.py` run in the Manabot venv, and
-`control.py` in a separate venv pinned to Etude `6bfa114ed`, with workers locked
-to `64e9eaabf`. Execution state is below in **Recovery execution**.
+**Accounting.** Recovery spent about $6.75 (Etude estimates, `drive-state.json`
+`ended_usd`); with $12.14 accounted before it, about **$18.89 of $25**. This is
+operational, not a settled invoice. No rentals or local drivers are live.
+`664f44738f35` stays an unscored attempt (`collect_failed`).
 
-## Recovery implementation constraints
+**Remaining.** Demo/review judgment of the negative result. Any longer horizon,
+more seeds or another matchup needs its own prospective amendment and funds
+(about $6 remains); none is authorized. Etude defects for their owners
+(`ff3d48` / PR84): a Vast HTTP 400 create is retained as an unknown create and
+blocks the Run id (questions.md); the single-read liveness rule still applies
+outside PR84's launcher.
 
-Verified from code and retained receipts:
+Proposed Experiments Wave memory update (not written; standalone realign):
+replace "The plan owns remaining acceptance" in the recovery paragraph with the
+completed result — no qualified plateau at 256 updates; GRU−pool −1.95
+[−5.88, +1.98]; one job per durable unit with incremental hash-verified ledger
+and parallel CPU evaluation completed the cohort for about $6.75.
 
-- **Runtime equivalence, rechecked.** `managym/` and `monitor` sources are
-  unchanged since `af601877e`. The only runtime module diff is
-  `manabot/model/shared_effects.py`: token-index construction yielding the same
-  integers. The study runner did change in compress, structurally only: recipe
-  digests at HEAD match all seven retained receipts and the job command text is
-  the same. Unwatched `supervision.json` now records grace 0 rather than an
-  unused 120, and the recovery runner will change again, so new learners bind
-  by these identities, not by source hash equality.
-- **Pool/74212 restart.** Compare its `initial_raw` SHA256 with the retained one
-  and record the result; a mismatch needs explanation before that learner is
-  scored. The GRU/pool pair at 74212 may train on different hosts. Require the
-  same GPU class, record each learner's host, and state this in the amendment.
+## History — how the cohort got here
 
-## Recovery execution
+Recovery operations live in `.runs/representation/recovery/` (`drive.py`,
+`drive-state.json`, `ledger/`, `deliveries/`, `units/`); `control.py` used a
+separate venv pinned to Etude `6bfa114ed`, workers locked to `64e9eaabf`. The
+restarted pool/74212 initialization differs from the lost run's only by host QR
+rounding (≤1.04e-6), receipt `init-comparison-typed_pool-74212.json`. Paired
+learners of a seed ran on different hosts of the same GPU class.
 
-Frozen amendment at `051d51b50`; units run from `de65a1600` (`RECOVERY` SHA256
-`a0383ac7…f86f7be`). A score-free pass admitted all 30 retained endpoints at this
-runtime. PR84 opened the launcher store, launched and delivered with workers at
-`64e9eaabf`: pairing proven live on Vast. Its outage path has had no live trigger.
+Original scientific Run `e51f61b92931` (`af601877e`) ended `lost / machine_lost`
+at 13:09:07 UTC with three learners complete and pool/74212 at 83 updates; our
+launcher deleted the rental after one unhealthy status read (Vast audit log,
+`batched-plateau/recovery-audit-20261105/`). The rental was on-demand. Interrupted
+learners could not continue exactly (no Adam/EMA/RNG saved). Full narrative,
+options considered and the pre-recovery accounting ($12.13946664 accounted,
+$12.86053336 remaining): `6889cdd65:scratch/representation-learning-plan.md`.
 
-Attempts so far, all in the denominator (`ledger/.../lost.json` where nothing
-delivered): `8cc6b5e185b0` RunPod CPU pod never reached the worker in 15 minutes
-($0.061; cause unknown, no logs, so evaluators moved to Vast). `0023d7a98de6`
-failed our worker's window check, which ignored setup inside Etude's attempt clock
-($0.061; fixed `de65a1600`). `9f47df75e15b` was cancelled before learning, doomed
-by the same check ($0.053). `0fb1f9d4a613` scored pool/74211 update 0 through the
-real relocated path: 128/128 games, 203.6s, 136 CPU-s, $0.071, hash-verified. Host
-Ryzen 9900X with an unused 5060 Ti. Full learner about 37 minutes; evaluators get
-1.5h and $0.50 each, one at a time. The first endpoint was measured after one
-learner had been dispatched, not before; the CPU allocation followed it.
-
-**Cohort complete, 2026-11-05 22:29 UTC.** All eight learners trained and all 80
-endpoints were scored and verified. The frozen analysis found **no qualified
-plateau** (one of six window intervals within ±5) and held-out GRU minus pool of
-−1.95 points [−5.88, +1.98]. `mtg-249-gpu-report.md` owns the result; the
-protocol's **Recovery cohort result** records it. Remaining: demo/review
-judgment. A longer horizon would need its own prospective amendment and funds
-(about $6 of the $25 remains). Etude defect: a Vast 400 is retained as an unknown
-create (questions.md).
-
-Operations: `.runs/representation/recovery/`: `drive.py` (state `drive-state.json`,
-log `drive-*.log`), `commitments.md`, `units/`, `deliveries/`, `ledger/`. Resume with
-`ETUDE_HOME=$PWD/.runs/representation/etude SCRIPT=.runs/representation/recovery/drive.py
-.runs/representation/recovery/d <seconds>`. It reads costs and timing, never scores.
-Each learner is capped at 5.75h with setup inside; each purchase must fit
-$12.86053336 with live caps and a $1 evaluation reserve. Supply is the limit: Vast
-often shows no matching 3090 (8 vCPU, 30 GB, under $0.40).
-
-## Execution record and remaining work
-
-Scientific Run **`e51f61b92931` ended `lost / machine_lost` at 2026-11-05
-13:09:07 UTC**, at unchanged frozen source `af601877e`. The launcher retained no
-child exit code or final output inventory. The provider confirmed rental
-`59194544` absent and no Task rentals live at 13:09:35 UTC. No cancellation was
-requested, and the frozen deadline was still two days away. The recovery audit
-below supersedes the earlier "cause unknown" reading: our own launcher deleted
-the rental. What the provider reported first remains unknown.
-
-The last hash-verified receipts, 13:00:43 UTC, retain three completed learners
-(pool/GRU seed 74211 and GRU seed 74212), each with 256 updates and 65,536 games.
-Pool seed 74212 had reached 83 updates and 21,248 games. Recorded exposure is
-**851 updates, 217,856 games and 27,682,451 learner transitions**; work after that
-snapshot is unknown. All **36 backed-up artifacts / 371,853,657 bytes** match
-their receipt sizes/SHA256, including all nine scheduled raw checkpoints for
-each completed learner and initialization/update-32/update-64 for the fourth.
-These backups are partial recovery, not a delivered final inventory.
-
-No curve or held-out endpoints were retained. Five learners remain uncompleted
-in the evidence, and all 72 curve and eight held-out endpoints are missing.
-The study therefore has **no qualified plateau, improvement or architecture
-result**. No survivor analysis, scoring, retry, shortened horizon or replacement
-allocation ran. The scientific objective remains unmet; this failed cohort and
-its identities stay preserved under the recovery direction above.
-
-Fresh accounting reports $2.603 for this rental versus a conservative full-life
-estimate of $2.63946664. Prior per-rental reported/lifetime maxima plus settled
-L4 remain $1.04590824, covered by the existing $3.50 prior-compute reserve.
-Including $6 ancillary and the larger current-rental figure gives **$12.13946664
-accounted/reserved**, leaving $12.86053336 under the original $25 ceiling. There
-are no live commitments. This is operational accounting, not a final invoice
-or authorization to spend the remainder.
-
-Evidence is manifest-backed under
-`experiments/data/state-representation-gpu-5da5f4/batched-plateau/`.
-`terminal-20261105T130907Z/` retains the terminal attempt/status, carried logs,
-empty delivered inventory, final accounting, all collected progress receipts,
-36 independently reverified backups and operational helpers. Earlier launch
-and progress directories remain immutable, including the published first
-completed learner in `progress-20261105T071645Z/`.
-Operational helpers remain in `.runs/representation/gpu-plateau-batched/`;
-`collect.py` retained the failed terminal outcome, `final_account.py` confirmed
-absence/costs, and `analyze.py` was not run because success and every endpoint
-are prerequisites. The foreground watcher exited normally on machine loss;
-no local monitoring command remains running. Launcher state remains owned by
-`.runs/representation/etude`. Exported weights alone do not satisfy an evaluated
-endpoint.
-
-Diagnostic `911423cce90b` passed four frozen comparisons and six CUDA routing
-tests, retaining both complete profiles and all 59 verified outputs. Separate
-admission `37c1523a98ed` completed four updates per arm with all 49 outputs
-verified. Both rentals are absent. The 55.66970-hour / $13.77310 full-cohort
-projection qualified the $15.50 allocation at the same `af601877e` source.
-`85cf29970:scratch/vast-host-diagnosis.md` owns detailed measurements;
-completed diagnosis/admission remain engineering evidence, not scientific results.
-
-## Recovery audit and options — 2026-11-05
-
-Evidence: `batched-plateau/recovery-audit-20261105/` (read-only, $0, no scoring).
-
-**Who ended the rental.** Vast's audit log shows `api.instance_DELETE` for
-`59194544` at 13:09:07.30 from account key `36003339` at the launcher's address.
-The same holds for the other two `machine_lost` rentals, `59185580` and
-`59152469`. Normal completions self-delete with instance-scoped keys. The
-launcher's "deletion confirmed" followed 0.48s later. `VastMachines.alive` treats
-one `offline`/`exited`/`stopped`/`error` status or a missing read as dead, and the
-scheduler then calls `end()`, destroying the disk. The worker's `out/ended` was
-404 at 13:09:05.96, and pool/74212 last recorded progress at 13:00:26. The
-triggering status was never retained, so a host fault is neither shown nor
-excluded; whether the host would have returned is unknown.
-
-**Rental mode.** On-demand by construction: the search uses `type: ondemand` and
-the create request carries no bid price. No retained provider field reads this
-back. Interruption by a higher bid is not the mechanism. Account credit was
-$96.20 at the audit read, so depletion is unlikely.
-
-**Delivery fix.** Etude draft PR
-[#84](https://github.com/loopflowstudio/etude/pull/84) keeps a Vast rental through
-a 15-minute outage and retains the status that opened it. It is unmerged and not
-in `uv.lock`, so no rental has this protection yet. RunPod and Lium keep the
-single-read rule. Durable training recovery stays with Etude Task `ff3d48`.
-
-**What the backups restore** (`restore-check.json`):
-
-| Learner | State | Result |
-|---|---|---|
-| pool/74211, GRU/74211, GRU/74212 | 256 updates; raw, EMA, Adam, all nine curve points | Pass the study's curve admission, hashes and loader after path rebasing. Evaluation can use them without retraining. Max Adam step equals each receipt; lower per-parameter steps match absent gradients. |
-| pool/74212 | 83 updates recorded; raw at 0/32/64 only | Exact continuation is **unavailable**: no Adam, EMA or RNG was saved. Updates 65–83 have no checkpoint at all. |
-
-Recipe digests match this checkout. `training.sqlite` was not retained; evaluation
-reads only `run.json`, but nothing has been run end to end on rebased paths.
-
-**Selected: option A.** Keep the three learners, rerun pool/74212 from update 0 on
-its seed, train the other four and evaluate all eight: about 17.7h, or 25.6h with
-the 50% allowance; about $4.37, or a $6.34 ceiling, at the 3.18h measured learner
-mean and $0.2474/hour. No fresh quote was taken. With per-learner setup this fits
-the $12.86053336 remainder. It is not selection, because no endpoint has been
-scored. Rejected: continuing from raw update 64 (resets Adam, EMA and RNG in one
-arm of one pair, saving about $0.20); evaluating only the three (descriptive,
-cannot meet the four-seed criterion); stopping (objective stays unmet).
-
-## Accepted scope and remaining work
+## Accepted scope
 
 Jack Heart requires actual GPU training to the beginning of a sustained plateau;
 the completed CPU comparison is insufficient for architecture selection. His
-2026-11-04 22:38 direction and 23:15 continuation authorize diagnosing implementation,
-measured repairs and bounded admission within the original **$25 total**, with
-**$0.50 per diagnostic/admission attempt**. Necessary Etude SDK work and Vast use
-are authorized. Diagnose ordinary workloads without synthetic load. Results stop
-at demo/review: no study merge, model/default promotion, temporal memory
-implementation or MTG-213 spending. Earlier “ship it” applied to PR419.
-
-The complete CUDA profiles, parity reports and matched four-update admission
-are now retained. No further runtime repair is justified by the first-step
-profiles alone. The scientific run ended in machine loss; its missing training
-and evaluations cannot be repaired by analyzing surviving learners. Teardown is
-confirmed. Preserve seeds, horizon, score/plateau criteria and every failed
-attempt. A missing endpoint stays missing until the amended cohort scores it; no
-score-based retries, survivor-only conclusions or shortened study.
-The launcher's delete of `59185580` is explained in the recovery audit; what it
-observed first is not. `b153cc2e5a77` failed a
-float32 tolerance before learning; independent float64 checks in `af601877e`
-passed in the successful diagnostic without changing learner semantics.
+2026-11-04 directions authorize diagnosing implementation, measured repairs and
+bounded admission within the original **$25 total**, with **$0.50 per
+diagnostic/admission attempt**; necessary Etude SDK work and Vast use are
+authorized. No synthetic load. Results stop at demo/review: no study merge,
+model/default promotion, temporal memory implementation or MTG-213 spending.
+Earlier "ship it" applied to PR419. Preserve seeds, horizon, criteria and every
+failed attempt; no score-based retries, survivor-only conclusions or shortened study.
 
 ## Delete — do not maintain
 
@@ -286,8 +140,8 @@ Task-local and separate from MTG-213.
 
 ## Surviving execution and acceptance
 
-`experiments/state_representation_gpu.py` owns declaration, admission, sequential
-scientific orchestration and analysis. Discovery defaults to excluded admission:
+`experiments/state_representation_gpu.py` owns declaration, admission, the
+`RECOVERY` unit declarations and analysis. Discovery defaults to excluded admission:
 seed 74200, four complete-game updates per arm, 256 streams, CUDA float32, one
 thread. Each learner has 1,800 seconds, 24 GiB host allowance and 80% CUDA
 allocator allowance. Rental work is 75 minutes plus 15 minutes setup, capped at
@@ -295,10 +149,10 @@ $0.50. The longer bound avoids the earlier 600-second finalization failure;
 future startup/progress/cost rules can stop it earlier and retain evidence.
 No current offer or admission pass is implied by these declarations.
 
-Science requires an explicit frozen `ScientificAllocation`, binding measured
-phase costs, retained admission digest, matching hardware and remaining cap;
-Etude separately checks the live quote. One learner owns the GPU at a time,
-balancing arm order over paired seeds 74211–74214. Each runs 256 updates × 256
+The recovery cohort ran one Etude Run per learner and per evaluation, keyed by
+`unit_key` and admitted through the hash-verified ledger; each purchase had to
+fit the remaining cap, and Etude checked the live quote. One learner owns a GPU,
+over paired seeds 74211–74214. Each runs 256 updates × 256
 complete games = 65,536 games. `IterationSchedule(steps=256,
 reference_steps=2048)` follows game exposure with nonzero rates. Wider batches
 change optimization and require fresh identity; this is not numerically
@@ -412,4 +266,4 @@ Original design/diagram:
 traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: `pytest tests/training/test_state_representation_study.py` 42 passed at `de65a1600`; broader validation to gate, scientific judgment to demo/review.
+Check: drive-state.json reconciles with the report ($6.747674, no live units, eval/train queues empty) at `2ca9a0d14`; broader validation to gate, scientific judgment to demo/review.
