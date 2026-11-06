@@ -125,11 +125,14 @@ replaces this with a measurement.
 - **Rent L4, not A40,** for this recipe: A40 was no faster on matching hosts.
 - **Screen hosts.** On a 256-stream, two-seat Elemental run, read the median of
   `time/collection/environment_step_and_encoding` over updates 2-11. Below 8 s is a
-  fast host. Above 9 s is slow, so replace the pod and screen the new one. No retained
-  run fell between; read more updates if one does. Other recipes need their own
-  anchor: most lambda-sweep L4 runs took 2.5-2.9 s, with about 29,000 decisions per
-  update. Record `host.cpu_model` either way; once receipts name CPU models, a list
-  of good ones can replace this.
+  fast host. Above 9 s is slow: replace it with `etude cancel <run>`, then relaunch
+  and screen the new pod. Do not delete the pod first; that loses its receipt, and a
+  list of good CPUs built only from surviving runs would be biased. No retained run
+  fell between; read more updates if one does. Other recipes need their own anchor:
+  most lambda-sweep L4 runs took 2.5-2.9 s, with about 29,000 decisions per update.
+  The update-time series is what the screen reads live. `host.cpu_model` is readable
+  from `training/run.json` once the attempt finishes, not during the screen. Record it
+  either way; once receipts name CPU models, a list of good ones can replace this.
 
   | Retained runs | Median, updates 2-11 | Stage mean | µs per decision |
   |---|---|---|---|

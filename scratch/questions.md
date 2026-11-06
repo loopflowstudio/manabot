@@ -173,3 +173,27 @@ holds per-attempt `host` and `pod`; that is an Etude change, not part of this Ta
 Check: `tests/training/test_phase_timing.py`, `tests/infra/test_host_facts.py` and
 `test_real_interruption_restores_complete_learning_state` pass (15 selected, 4 of them
 the recovery test's parameters). Post-merge verification has not run: nothing is merged.
+
+## Concept review b015d5 (2026-11-05, at `426317204`)
+
+Re-walked "screen a pod, replace it, keep the evidence". The phase tree, native clock,
+panel, bench and machine recommendation stand, and `TrainingRun.host` stays the one
+owner. No open product choice. One correction, to the report's wording only.
+
+Gap: the report says "replace the pod" and "Record `host.cpu_model` either way", but
+not how to replace it. Removing `"host"` from `resolved_config` left no live copy of
+the CPU model, and Etude's courier publishes attempt outputs only once `finished.json`
+exists (`_carry_attempt`). Deleting a slow pod therefore loses its receipt. Those are
+the runs a good-CPU list most needs, and the list would be built from survivors.
+
+Next implement direction, one edit to "Screen hosts" in
+`experiments/training-update-time.md`: replace a slow pod with `etude cancel <run>`,
+then relaunch; do not delete the pod first. The CPU model is readable from
+`training/run.json` once the attempt finishes, not during the screen. The update-time
+series is what the screen reads live.
+
+Why cancel is enough: `persist()` exports `run.json`, host included, at setup, before
+update 1. Cancel raises in training ("Cancellation retains failed scientific receipts")
+and the worker's `_finish` then records the outputs for the courier. This comes from
+reading the code; no cancel was run. No code change: a pod lost outright loses all its
+outputs, which is Etude's delivery contract, not this Task's.
