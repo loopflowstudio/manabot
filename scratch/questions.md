@@ -186,7 +186,7 @@ the CPU model, and Etude's courier publishes attempt outputs only once `finished
 exists (`_carry_attempt`). Deleting a slow pod therefore loses its receipt. Those are
 the runs a good-CPU list most needs, and the list would be built from survivors.
 
-Next implement direction, one edit to "Screen hosts" in
+Applied at `524691050`, one edit to "Screen hosts" in
 `experiments/training-update-time.md`: replace a slow pod with `etude cancel <run>`,
 then relaunch; do not delete the pod first. The CPU model is readable from
 `training/run.json` once the attempt finishes, not during the screen. The update-time
