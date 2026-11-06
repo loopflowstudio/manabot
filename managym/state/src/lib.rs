@@ -13,6 +13,7 @@ pub mod mana;
 pub mod permanent;
 pub mod predicate;
 pub mod stack_object;
+pub mod subtype;
 pub mod target;
 pub mod zone;
 

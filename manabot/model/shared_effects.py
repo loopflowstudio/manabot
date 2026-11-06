@@ -1,9 +1,10 @@
-"""Encode v7 shared payloads once, then route their gradients into affected objects.
+"""Encode shared payloads once, then route their gradients into affected objects.
 
 Membership is an explicit join, never learned from object IDs. We retain the
 existing unnormalized fact-sum convention: repeated memberships contribute
 repeatedly. A mean would erase multiplicity. This learned sum is compression,
 not an injective semantic representation; tensor transport retains the records.
+V8 adds ordered program tokens; v7 retains its original reducer and embeddings.
 """
 
 import torch
@@ -11,30 +12,61 @@ from torch import nn
 
 from manabot.env.shared_effects import (
     DETAIL_DIM,
-    DETAIL_ROWS,
     EFFECT_DIM,
     EFFECT_ROWS,
     MEMBER_DIM,
     MEMBER_ROWS,
+    shared_effect_shapes,
 )
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
     join_rows,
     masked_record_rows,
+    program_number,
     record_indexes,
 )
 
 
 class SharedEffectEncoder(nn.Module):
-    def __init__(self, width: int, reduction: RecordReduction = "typed_pool") -> None:
+    def __init__(
+        self, width: int, reduction: RecordReduction = "typed_pool", *, version: int = 7
+    ) -> None:
         super().__init__()
         self.modification = nn.Embedding(4096, width)
         self.detail = nn.Embedding(4096, width)
-        self.detail_kind = nn.Embedding(4, width)
+        self.version = version
+        self.detail_rows = shared_effect_shapes(version)["effect_details"][0]
+        self.detail_kind = nn.Embedding(20 if version >= 8 else 4, width)
+        if version >= 8:
+            self.detail_number = nn.Linear(1, width)
         self.source = nn.Embedding(4096, width)
         self.header = nn.Linear(8 + 2 * width, width)
-        self.reducer = RecordReducer(width, reduction)
+        self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
+
+    def _route(
+        self,
+        records: list[torch.Tensor],
+        routes: list[torch.Tensor],
+        objects: torch.Tensor,
+    ) -> torch.Tensor:
+        """Reduce independent programs and sum each membership into [N,D] objects."""
+        encoded = self.reducer(records)
+        if self.version >= 8:
+            repeated = torch.repeat_interleave(
+                encoded,
+                torch.tensor([len(route) for route in routes], device=objects.device),
+                dim=0,
+            )
+        else:
+            repeated = torch.cat(
+                [encoded[i].expand(len(route), -1) for i, route in enumerate(routes)]
+            )
+        # Duplicate memberships accumulate; every target's gradient reaches the
+        # same payload. Retained v7 keeps its original expansion and reduction.
+        return objects + torch.zeros_like(objects).index_add(
+            0, torch.cat(routes), repeated
+        )
 
     def forward(
         self,
@@ -47,11 +79,13 @@ class SharedEffectEncoder(nn.Module):
         batch = len(objects)
         if (
             headers.shape[0] != batch
-            or details.shape != (batch, DETAIL_ROWS, DETAIL_DIM)
+            or details.shape != (batch, self.detail_rows, DETAIL_DIM)
             or members.shape != (batch, MEMBER_ROWS, MEMBER_DIM)
         ):
             raise ValueError("invalid shared effect buffer shape")
         results = list(objects.unbind(0))
+        all_records: list[torch.Tensor] = []
+        all_routes: list[torch.Tensor] = []
         for b in headers[..., 17].bool().any(-1).nonzero().flatten().tolist():
             live = headers[b, headers[b, :, 17].bool()]
             halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
@@ -76,7 +110,9 @@ class SharedEffectEncoder(nn.Module):
             mod = self.modification(((halves[:, 0] << 16) | halves[:, 1]) % 4096)
             sources = self.source(source % 4096)
             offsets = record_indexes(
-                live[:, 13:17], MEMBER_ROWS, "effect CSR offset/count"
+                live[:, 13:17],
+                max(MEMBER_ROWS, self.detail_rows),
+                "effect CSR offset/count",
             ).tolist()
             records: list[torch.Tensor] = []
             routes: list[torch.Tensor] = []
@@ -86,20 +122,29 @@ class SharedEffectEncoder(nn.Module):
                 if (
                     d != d_end
                     or m != m_end
-                    or d + count > DETAIL_ROWS
+                    or d + count > self.detail_rows
                     or targets == 0
                     or m + targets > MEMBER_ROWS
                 ):
                     raise ValueError("invalid effect CSR partition")
                 d_end, m_end = d + count, m + targets
                 tokens = details[b, d:d_end]
-                kinds = record_indexes(tokens[:, 0], 3, "effect detail kind")
+                kinds = record_indexes(
+                    tokens[:, 0], 19 if self.version >= 8 else 3, "effect detail kind"
+                )
                 ids = record_indexes(tokens[:, 1:], 65535, "effect detail half")
-                if (kinds == 0).any():
+                if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
                     raise ValueError("live effect detail has no kind")
-                encoded_details = self.detail(
-                    ((ids[:, 0] << 16) | ids[:, 1]) % 4096
-                ) + self.detail_kind(kinds)
+                unsigned = (ids[:, 0] << 16) | ids[:, 1]
+                encoded_details = self.detail(unsigned % 4096) + self.detail_kind(kinds)
+                if self.version >= 8:
+                    # Integer/boolean tokens retain signed numeric meaning;
+                    # the GRU retains the ordered shared program structure.
+                    signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
+                    numeric = ((kinds == 14) | (kinds == 15)).unsqueeze(-1)
+                    encoded_details = encoded_details + self.detail_number(
+                        program_number(signed.to(objects.dtype)).unsqueeze(-1)
+                    ).masked_fill(~numeric, 0)
                 records.append(
                     torch.cat(
                         (
@@ -124,14 +169,15 @@ class SharedEffectEncoder(nn.Module):
             orders = torch.cat(member_orders)
             if len(orders.unique()) != len(orders):
                 raise ValueError("duplicate effect membership order")
-            encoded = self.reducer(records)
-            # index_add accumulates duplicate memberships and all target losses
-            # flow through the same encoded payload and shared encoder parameters.
-            repeated = torch.cat(
-                [encoded[i].expand(len(route), -1) for i, route in enumerate(routes)]
-            )
-            delta = torch.zeros_like(objects[b]).index_add(
-                0, torch.cat(routes), repeated
-            )
-            results[b] = objects[b] + delta
+            if self.version >= 8:
+                # Programs remain independent packed sequences. One reduction
+                # across the batch avoids a separate GRU dispatch per sample.
+                all_records.extend(records)
+                all_routes.extend(route + b * objects.shape[1] for route in routes)
+                continue
+            results[b] = self._route(records, routes, objects[b])
+        if self.version >= 8 and all_records:
+            return self._route(
+                all_records, all_routes, objects.flatten(0, 1)
+            ).reshape_as(objects)
         return torch.stack(results)
