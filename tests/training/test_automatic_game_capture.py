@@ -1,6 +1,5 @@
 """Strict paths retain replay inputs without opting into tolerance or recovery."""
 
-from dataclasses import replace
 import json
 from pathlib import Path
 import subprocess
@@ -33,19 +32,16 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout import compound, selection_data
+from manabot.training.rollout import selection_data
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 
 
-def _model(*, compound_decisions: bool = False) -> ActorCritic:
+def _model() -> ActorCritic:
     torch.set_num_threads(1)
     return ActorCritic(
-        ObservationSpace(),
-        ModelConfig(
-            hidden_dim=8, attention_on=False, compound_decisions=compound_decisions
-        ),
+        ObservationSpace(), ModelConfig(hidden_dim=8, attention_on=False)
     )
 
 
@@ -327,55 +323,29 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
     assert _bounded(paths[0])["results"][0]["matches_error"]
 
 
-@pytest.mark.parametrize("kind", ["compound", "selection"])
 def test_semantic_training_retains_rejected_command_and_offer_frame(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    kind: str,
 ) -> None:
     scope = CaptureScope(tmp_path / "private")
-    if kind == "compound":
-        original = compound.sample_compound
 
-        def sample(*args: Any, **kwargs: Any) -> Any:
-            decision = original(*args, **kwargs)
-            command = decision.commands[0]
-            return replace(
-                decision,
-                commands=(Command("reject", command.expected_revision, 999999),),
-            )
+    def invalid_command(command_id: str, revision: int, offer_id: int) -> Command:
+        return Command(command_id, revision, 999999)
 
-        monkeypatch.setattr(compound, "sample_compound", sample)
-    else:
-
-        def invalid_command(command_id: str, revision: int, offer_id: int) -> Command:
-            return Command(command_id, revision, 999999)
-
-        monkeypatch.setattr(selection_data, "Command", invalid_command)
+    monkeypatch.setattr(selection_data, "Command", invalid_command)
     with capture_scope(scope), pytest.raises(managym.AgentError):
-        if kind == "compound":
-            compound.collect_game(
-                _model(compound_decisions=True),
-                Match(),
-                24,
-                torch.Generator().manual_seed(1),
-                tmp_path / "complete.jsonl",
-                max_commands=100,
-                check=lambda: None,
-            )
-        else:
-            selection_data.collect_selection_game(
-                _model(),
-                ObservationSpace(),
-                Match(),
-                SelectionGameSpec(
-                    seed=24, action_seed=1, assignment=0, split="development"
-                ),
-                tmp_path / "complete.jsonl",
-                reference="uniform",
-                max_steps=100,
-                check=lambda: None,
-            )
+        selection_data.collect_selection_game(
+            _model(),
+            ObservationSpace(),
+            Match(),
+            SelectionGameSpec(
+                seed=24, action_seed=1, assignment=0, split="development"
+            ),
+            tmp_path / "complete.jsonl",
+            reference="uniform",
+            max_steps=100,
+            check=lambda: None,
+        )
     evidence = read_failure(scope.paths[0])
     assert evidence.games[0].frame
     assert json.loads(evidence.games[0].frame)["offers"]

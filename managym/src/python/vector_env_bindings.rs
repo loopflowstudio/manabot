@@ -43,6 +43,7 @@ struct ObservationBuffers {
     effects: Option<Py<PyAny>>,
     effect_details: Option<Py<PyAny>>,
     effect_members: Option<Py<PyAny>>,
+    name_candidates: Option<Py<PyAny>>,
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
@@ -170,6 +171,18 @@ impl PyVectorEnv {
         self.config = config;
         self.buffers = Some(buffers);
         Ok(())
+    }
+
+    /// Scenario harness only; does not change deck admission or future resets.
+    fn scenario_naming_vocabulary_into_buffers(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.scenario_naming_vocabulary_into(|index, obs| {
+                write_buffers
+                    .write_encoded_row(index, obs, 0.0, false, false, &config)
+                    .map_err(AgentError::from)
+            })?;
+            Ok(vec![InfoDict::new(); inner.len()])
+        })
     }
 
     fn reset_all_into_buffers(
@@ -404,6 +417,7 @@ pub(super) fn input_buffer_config(
         policy_history,
         ..ObservationEncoderConfig::default()
     };
+    let naming = buffers.contains("name_candidates")?;
     let mut shared_count = 0;
     for name in ["effects", "effect_details", "effect_members"] {
         shared_count += usize::from(buffers.contains(name)?);
@@ -414,7 +428,7 @@ pub(super) fn input_buffer_config(
         ));
     }
     if !buffers.contains("relations")? {
-        if shared_count != 0 {
+        if shared_count != 0 || naming {
             return Err(PyValueError::new_err("v7 requires relations"));
         }
         config.policy_input_version = 1;
@@ -456,6 +470,18 @@ pub(super) fn input_buffer_config(
     if shared_count != 0 && config.policy_input_version < 7 {
         return Err(PyValueError::new_err("v7 requires current relation width"));
     }
+    if naming {
+        // Naming composes the v8 layer layout with name and group-span rows.
+        if config.policy_input_version != 8 {
+            return Err(PyValueError::new_err(
+                "v9 requires the v8 shared-effect layout",
+            ));
+        }
+        if shape("name_candidates")?[1] != crate::agent::observation_encoder::NAME_DIM_V9 {
+            return Err(PyValueError::new_err("invalid name candidate width"));
+        }
+        config.policy_input_version = 9;
+    }
     Ok(config)
 }
 
@@ -474,6 +500,19 @@ fn read_observation_buffers(
         ))
     };
     Ok(ObservationBuffers {
+        name_candidates: if c.policy_input_version >= 9 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "name_candidates",
+                    &[n, c.max_actions, c.name_dim()],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
         relations: if c.policy_input_version >= 2 {
             Some(
                 require_numpy_array(
@@ -956,6 +995,7 @@ struct SendObservationFieldSlices {
     effects: Option<SendSlice<f32>>,
     effect_details: Option<SendSlice<f32>>,
     effect_members: Option<SendSlice<f32>>,
+    name_candidates: Option<SendSlice<f32>>,
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
@@ -1054,6 +1094,17 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.effect_details_len())?,
                         config.effect_details_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            name_candidates: if let Some(buffer) = self.name_candidates {
+                // SAFETY: registered buffers partition environments into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.name_candidates_len())?,
+                        config.name_candidates_len(),
                     )
                 }
             } else {
@@ -1239,6 +1290,11 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_details"))
         .transpose()?;
+    let name_candidates_buffer = buffers
+        .name_candidates
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "name_candidates"))
+        .transpose()?;
     let effect_members_buffer = buffers
         .effect_members
         .as_ref()
@@ -1307,6 +1363,10 @@ fn with_send_write_buffers<R>(
         effect_details: effect_details_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "effect_details"))
+            .transpose()?,
+        name_candidates: name_candidates_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "name_candidates"))
             .transpose()?,
         effect_members: effect_members_buffer
             .as_ref()

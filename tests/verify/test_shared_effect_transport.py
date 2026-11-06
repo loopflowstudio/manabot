@@ -17,6 +17,7 @@ from manabot.verify.representation import (
     source_effect_root,
 )
 import managym
+from tests.retained_decision import assert_retained_frame
 
 
 class RetainedPosition(BaseModel):
@@ -73,8 +74,9 @@ def test_retained_drill_prefix_admits_shared_effects(
     for index, action in enumerate(game.actions):
         assert isinstance(action, int)
         if index == len(game.actions) - 1 and not closed:
-            assert scalar.semantic_decision_frame_json() == game.frame
-            assert vector.semantic_decision_frames_json()[0] == game.frame
+            current_json = scalar.semantic_decision_frame_json()
+            assert vector.semantic_decision_frames_json()[0] == current_json
+            assert_retained_frame(current_json, game.frame)
         acting_observation, *_ = scalar.step(action)
         vector.step_into_buffers([action])
     actor = scalar.current_agent_index()

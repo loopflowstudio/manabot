@@ -47,6 +47,7 @@ from manabot.infra.identity import file_sha256
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
+from tests.retained_decision import assert_retained_frame
 
 
 @pytest.fixture
@@ -735,8 +736,9 @@ def test_pilot_retains_generated_cards_and_sideboard_in_all_encoders(
     for index, action in enumerate(game.actions):
         assert isinstance(action, int)
         if index == len(game.actions) - 1:
-            assert scalar.semantic_decision_frame_json() == game.frame
-            assert vector.semantic_decision_frames_json()[0] == game.frame
+            frame = scalar.semantic_decision_frame_json()
+            assert vector.semantic_decision_frames_json()[0] == frame
+            assert_retained_frame(frame, game.frame)
         observation, *_ = scalar.step(action)
         vector.step_into_buffers([action])
     assert len(observation.agent_cards) == 45

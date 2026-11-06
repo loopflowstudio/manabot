@@ -1,3 +1,4 @@
+use crate::cards::names::NameOption;
 use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
@@ -804,6 +805,16 @@ pub struct ActionOption {
     /// Native yes/no declaration, shared by learning and experience consumers.
     pub declared: Option<bool>,
     pub mode_index: Option<usize>,
+    /// Public definition named by this vocabulary choice; never an object ID.
+    #[serde(default)]
+    pub name_definition: Option<u32>,
+    /// Vocabulary row, independent of executable definitions and physical objects.
+    #[serde(default)]
+    pub name_index: Option<usize>,
+    /// First and last vocabulary rows of a naming group choice. Rows are sorted
+    /// public names, so the pair identifies every member without hidden state.
+    #[serde(default)]
+    pub name_group: Option<[usize; 2]>,
     pub ability_index: Option<usize>,
     /// Decision-local continuation frame; occurrence IDs never enter policy features.
     pub continuation_index: Option<usize>,
@@ -906,30 +917,60 @@ impl Observation {
                     space
                         .actions
                         .iter()
-                        .map(|action| ActionOption {
-                            description: game.action_description(action),
-                            continuation_index: game.trigger_action_frame(action, agent_player),
-                            action_type: action.action_type(),
-                            focus: Self::action_focus(game, action)
-                                .into_iter()
-                                .map(|id| id.0 as i32)
-                                .collect(),
-                            declared: match action {
-                                Action::DeclareAttacker { attack, .. } => Some(*attack),
-                                Action::DeclareBlocker { attacker, .. } => Some(attacker.is_some()),
-                                _ => None,
-                            },
-                            mode_index: match action {
-                                Action::ChooseMode { mode, .. } => Some(*mode),
-                                _ => None,
-                            },
-                            ability_index: match action {
-                                Action::ActivateAbility { ability_index, .. }
-                                | Action::ActivateCardAbility { ability_index, .. } => {
-                                    Some(*ability_index)
-                                }
-                                _ => None,
-                            },
+                        .map(|action| {
+                            let (name_index, name_definition, name_group) = match (
+                                action,
+                                game.state.suspended_decision.as_ref().map(|s| &s.decision),
+                            ) {
+                                (
+                                    Action::ChooseMode { mode, .. },
+                                    Some(Decision::NameCard { names, scope, .. }),
+                                ) => match scope.option(*mode) {
+                                    Some(NameOption::Group(group)) => {
+                                        (None, None, Some([group.start, group.end - 1]))
+                                    }
+                                    Some(NameOption::Name(row)) => (
+                                        Some(row),
+                                        names
+                                            .get(row)
+                                            .and_then(|candidate| candidate.definition)
+                                            .map(|id| id.0),
+                                        None,
+                                    ),
+                                    None => (None, None, None),
+                                },
+                                _ => (None, None, None),
+                            };
+                            ActionOption {
+                                description: game.action_description(action),
+                                continuation_index: game.trigger_action_frame(action, agent_player),
+                                action_type: action.action_type(),
+                                focus: Self::action_focus(game, action)
+                                    .into_iter()
+                                    .map(|id| id.0 as i32)
+                                    .collect(),
+                                declared: match action {
+                                    Action::DeclareAttacker { attack, .. } => Some(*attack),
+                                    Action::DeclareBlocker { attacker, .. } => {
+                                        Some(attacker.is_some())
+                                    }
+                                    _ => None,
+                                },
+                                name_index,
+                                name_definition,
+                                name_group,
+                                mode_index: match action {
+                                    Action::ChooseMode { mode, .. } => Some(*mode),
+                                    _ => None,
+                                },
+                                ability_index: match action {
+                                    Action::ActivateAbility { ability_index, .. }
+                                    | Action::ActivateCardAbility { ability_index, .. } => {
+                                        Some(*ability_index)
+                                    }
+                                    _ => None,
+                                },
+                            }
                         })
                         .collect()
                 } else {
@@ -2088,6 +2129,15 @@ impl Observation {
                     "ability_index": action.ability_index,
                     "continuation_index": action.continuation_index,
                 });
+                if let Some(index) = action.name_index {
+                    value["name_index"] = json!(index);
+                }
+                if let Some(group) = action.name_group {
+                    value["name_group"] = json!(group);
+                }
+                if let Some(definition) = action.name_definition {
+                    value["name_definition"] = json!(definition);
+                }
                 if let Some(description) = &action.description {
                     value["description"] = serde_json::Value::String(description.clone());
                 }

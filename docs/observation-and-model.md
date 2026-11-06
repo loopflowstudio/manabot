@@ -117,6 +117,61 @@ bindings that can change future behavior.
 
 ## Policy inputs
 
+### Catalog naming input
+
+Naming a card is a sequence of ordinary native decisions. A prompt over at most
+`managym.NAME_BRANCHING` (64) names offers those names; a larger prompt offers a
+deterministic, balanced, complete partition of its sorted names into at most 64
+contiguous groups, recursively. With 928 names that is 15 groups of 61 or 62,
+then one name prompt; the installed 344-name catalog uses 6 groups. Choosing a
+group narrows the pending prompt and commits nothing: no search, inspection or
+exile. Only choosing a name resumes the effect. Each prompt is one learner
+transition through the ordinary policy, value estimate, rollout and learner,
+with the standard discount and credit; no reward is assigned to group choices.
+The extra decision is real temporal structure, so learning is not claimed to
+equal one flat choice over every name. Single-option prompts follow the native
+trivial-decision skip. Reconnect, replay and forks restore the actual current
+prompt; Commands bound to an earlier prompt are stale.
+
+`ObservationConfig(policy_input_version=9)` retains v7's object, relation and
+shared-effect layouts and adds `name_candidates[A,4]` at the ordinary action
+capacity `A = max_actions`: one-based public name row, optional one-based
+definition reference, then the one-based first and last name rows of a group
+choice (zero means absent). Sorted names make the span a viewer-safe identity
+of every member. No card/permanent row is fabricated for a name or group. These
+rows suppress the positional mode feature, so identity comes from categorical
+joins, never from magnitude.
+
+The policy adds a trainable vector per name and, where present, the
+definition's learning-program embedding from the table used by game objects. A
+group's vector is the mean of its members' name vectors, computed exactly from
+a prefix sum over the name table: every member receives the group's gradient,
+and no member programs are encoded for a group prompt. V9 joins name vectors to
+viewer-visible program references before card, known-hand and decklist pooling,
+so equal-rule cards with different public names support different preferences;
+closed native decklist rows contribute no identities. Action networks score
+only legal rows, and rollouts pack legal action fields and complete behavior
+probabilities with original coordinates.
+
+The checkpoint binding includes the ordered naming vocabulary with definition
+joins, `naming_representation="public-groups-v1"` and `naming_branching`, in
+addition to tensor shapes and the content manifest. A changed vocabulary,
+order, join or branching bound fails admission; there is no warm start or
+remapping.
+
+V9 composes the [v8 layer layout](#composable-layer-input-v8) with
+`name_candidates[A,4]`. V1–v8 have no name identity: group and name choices
+appear as ordinary modal choices, within their capacities. Missing-checkpoint defaults and fresh v6
+defaults are unchanged; using v9 is explicit. The semantic observation/capture
+contracts are 8/5, so earlier semantic world bindings are rejected for current
+execution.
+
+The default universe remains real non-token catalog names, including back faces.
+A separate immutable vocabulary can hold validated names without playable card
+definitions; this is exercised only by the offline large-vocabulary fixture.
+This does not claim that the supported catalog exhausts every name legal under
+Magic's rules, and does not broaden deck admission.
+
 ### Current continuation input
 
 Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.

@@ -130,7 +130,7 @@ class CheckpointOpponent:
         started = time.monotonic()
         verify_file(path, sha256, size)
         self.agent, self.space = load_checkpoint(str(path))
-        if self.agent.config.compound_decisions or self.agent.belief_count_buckets:
+        if self.agent.belief_count_buckets:
             raise ValueError("this comparison requires the flat stateless checkpoint")
         self.agent.eval()
         self.load_seconds = time.monotonic() - started
