@@ -134,3 +134,32 @@ raw/EMA/optimizer/attempts `76e926e3ea4fcde1` / `2a31f25602a86b9c` /
 `05eb51c04b5e2d14` / `cb230744dcd7c850`, identical to base (`keep-head`).
 The 256-stream timing rows were taken at `b958f3a00`; the compress change only
 moves the final-observation copy and was not re-timed.
+
+## Concept review 2026-11-06 (at `cd77e2ed1`): rollout storage
+
+Walked: collect → learner minibatch → incident save → test reader. Phase tree,
+host facts, bench and machine recommendation stand; no open product choice.
+
+Mismatch: `RolloutBatch.obs` kept its name but changed meaning, from time-major
+`[T, E, ...]` to unordered recorded rows `[N, ...]` that need `obs_rows` to mean
+anything. Old readers still run, just on the wrong axes. Counterexample, run here:
+`tests/model/test_layer_input.py::test_v8_recipe_collector_and_evaluation_select_saved_input`
+asserts `(1, 1, 4096, 3)`, and `tests/model/test_recent_events.py` sums `events_valid`
+over `(-1, -2)`, which now collapses rows, then passes recorded-row numbers to the
+time-major `observations(indexes)`. Result: 8 failed, 2 passed. manabot-integration
+CI runs `tests/model/`, so PR #435 would fail there. The focused training suites
+missed it.
+
+Next implement direction (follows from one owner per fact and named types):
+- Replace the `obs` + `obs_rows` pair with one typed owner, e.g.
+  `RecordedObservations` (`rows: dict[str, ndarray]` `[N, ...]`, `index` `[T*E]`),
+  next to `action_data: PackedActions`. Give it `gather(indexes)` (time-major
+  indexes in, rows out) and `ordered(shape)` (the `[T, E, ...]` copy that
+  incidents and tests use). `RolloutBatch.observations()` and `ordered_obs()`
+  delegate to it. Drop the field name `obs` so a stale reader fails with
+  AttributeError instead of reading the wrong axes.
+- Move the two `tests/model` readers to `batch.ordered_obs()` (or `observations`),
+  keeping their assertions. Run all of `tests/model/` and `tests/training/` before
+  gate, not only the focused suites.
+- No behavior change: digests stay `76e926e3ea4fcde1` / `2a31f25602a86b9c` /
+  `05eb51c04b5e2d14` / `cb230744dcd7c850`, and timing rows are not re-taken.
